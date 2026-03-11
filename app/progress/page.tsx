@@ -54,8 +54,10 @@ function getPlannedWeeks(range: ProgressRange): number | null {
   return null;
 }
 
-function routineKindLabel(kind: "CHECK" | "WORKOUT" | "CARDIO") {
+function routineKindLabel(kind: string) {
+  if (kind === "COMPLETION") return "COMPLETION";
   if (kind === "CARDIO") return "CARDIO";
+  if (kind === "WORKOUT") return "WORKOUT";
   return kind;
 }
 
@@ -122,13 +124,13 @@ export default async function ProgressPage(props: {
         name: string;
         category: string;
         cardioType: string | null;
-        kind: "CHECK" | "WORKOUT" | "CARDIO";
+        kind: string;
         timesPerWeek: number | null;
         isActive: number | boolean;
         exerciseCount: number;
       }>
     >(
-      'SELECT r."id", r."name", r."category", r."cardioType", r."kind", r."timesPerWeek", r."isActive", COUNT(re."id") as "exerciseCount" FROM "Routine" r LEFT JOIN "RoutineExercise" re ON re."routineId" = r."id" WHERE r."isDeleted" = 0 GROUP BY r."id", r."name", r."category", r."cardioType", r."kind", r."timesPerWeek", r."isActive" ORDER BY r."category" ASC, r."name" ASC'
+      'SELECT r."id", r."name", r."category", r."subtype" as "cardioType", r."kind", r."timesPerWeek", r."isActive", COUNT(re."id") as "exerciseCount" FROM "Routine" r LEFT JOIN "RoutineExercise" re ON re."routineId" = r."id" WHERE r."isDeleted" = false GROUP BY r."id", r."name", r."category", r."subtype", r."kind", r."timesPerWeek", r."isActive" ORDER BY r."category" ASC, r."name" ASC'
     ),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },

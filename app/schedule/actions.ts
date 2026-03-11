@@ -39,13 +39,13 @@ export async function createCyclePlan(formData: FormData) {
       planId,
       name,
       cycleLengthDays,
-      0
+      false
     );
     await tx.$executeRawUnsafe(
       'INSERT INTO "SchedulePlanActivation" ("id","schedulePlanId","isEnabled","startDate","createdAt","updatedAt") VALUES (?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
       activationId,
       planId,
-      0,
+      false,
       startDateIso
     );
   });
@@ -99,7 +99,7 @@ export async function setCycleActivation(formData: FormData) {
   if (existing[0]) {
     await prisma.$executeRawUnsafe(
       'UPDATE "SchedulePlanActivation" SET "isEnabled" = ?, "startDate" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "schedulePlanId" = ?',
-      isEnabled ? 1 : 0,
+      isEnabled,
       startDateIso,
       planId
     );
@@ -108,7 +108,7 @@ export async function setCycleActivation(formData: FormData) {
       'INSERT INTO "SchedulePlanActivation" ("id","schedulePlanId","isEnabled","startDate","createdAt","updatedAt") VALUES (?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
       makeId(),
       planId,
-      isEnabled ? 1 : 0,
+      isEnabled,
       startDateIso
     );
   }
@@ -161,7 +161,7 @@ export async function saveCycleEntries(formData: FormData) {
   if (routineIds.length > 0) {
     const placeholders = routineIds.map(() => "?").join(",");
     const validRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT "id" FROM "Routine" WHERE "isDeleted" = 0 AND "id" IN (${placeholders})`,
+      `SELECT "id" FROM "Routine" WHERE "isDeleted" = false AND "id" IN (${placeholders})`,
       ...routineIds
     );
     const validSet = new Set(validRows.map((row) => row.id));
@@ -224,7 +224,7 @@ export async function saveManualEntries(formData: FormData) {
   if (routineIds.length > 0) {
     const placeholders = routineIds.map(() => "?").join(",");
     const validRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT "id" FROM "Routine" WHERE "isDeleted" = 0 AND "id" IN (${placeholders})`,
+      `SELECT "id" FROM "Routine" WHERE "isDeleted" = false AND "id" IN (${placeholders})`,
       ...routineIds
     );
     const validSet = new Set(validRows.map((row) => row.id));
@@ -267,7 +267,7 @@ export async function quickAddManualEntry(formData: FormData) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) throw new Error("Invalid scheduled date.");
 
   const routine = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    'SELECT "id" FROM "Routine" WHERE "id" = ? AND "isDeleted" = 0 LIMIT 1',
+    'SELECT "id" FROM "Routine" WHERE "id" = ? AND "isDeleted" = false LIMIT 1',
     routineId
   );
   if (!routine[0]) throw new Error("Routine not found.");

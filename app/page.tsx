@@ -177,7 +177,7 @@ export default async function HomePage() {
         timesPerWeek: number | null;
       }>
     >(
-      'SELECT "id","name","category","subtype","kind","timesPerWeek" FROM "Routine" WHERE "isDeleted" = 0 AND "isActive" = 1 ORDER BY "kind" ASC, "category" ASC, "name" ASC'
+      'SELECT "id","name","category","subtype","kind","timesPerWeek" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
     ),
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
@@ -213,7 +213,7 @@ export default async function HomePage() {
       select: { id: true, name: true },
     }),
     prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
-      'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = 1'
+      'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
     ),
     prisma.$queryRawUnsafe<Array<{ routineId: string; scheduledDate: string; sortOrder: number }>>(
       'SELECT "routineId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
