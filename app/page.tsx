@@ -454,14 +454,14 @@ export default async function HomePage() {
   }));
 
   return (
-    <div style={page}>
-      <section style={mainGrid}>
-        <div style={{ display: "grid", gap: 14 }}>
+    <div className="mobileHomePage" style={page}>
+      <section className="mobileHomeMainGrid" style={mainGrid}>
+        <div className="mobileHomePrimaryColumn" style={{ display: "grid", gap: 14 }}>
           <section style={panel}>
             <div style={panelHeader}>TODAY&apos;S FOCUS</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
               <div style={sectionSub}>{formatDayLabel(today)}</div>
-              <div style={summaryGrid}>
+              <div className="mobileHomeSummaryGrid" style={summaryGrid}>
                 <div style={summaryCard}>
                   <div style={summaryLabel}>Today Planned/Done</div>
                   <div style={summaryValue}>{todayPlannedTotal}/{todayDoneRoutines}</div>
@@ -486,14 +486,14 @@ export default async function HomePage() {
               {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
               {todayFocus.map((item) => (
                 <div key={item.routineId} style={item.logged > 0 ? focusDoneCard : focusCard}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
+                  <div className="mobileHomeFocusHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
                     <div>
                       <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
                       <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
                         {item.category} | {item.kind}
                       </div>
                     </div>
-                    <div style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
+                    <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
                       {item.logged > 0 ? "DONE" : "PLANNED"}
                     </div>
                   </div>
@@ -506,11 +506,31 @@ export default async function HomePage() {
           </section>
 
           <section style={panel}>
+            <div style={panelHeader}>TOMORROW PREVIEW</div>
+            <div style={{ padding: 14, display: "grid", gap: 10 }}>
+              <div style={sectionSub}>{formatDayLabel(tomorrow)}</div>
+              <div style={summaryCard}>
+                <div style={summaryLabel}>Tomorrow Planned</div>
+                <div style={summaryValue}>{tomorrowPlannedTotal}</div>
+                <div style={summarySub}>planned entries tomorrow</div>
+              </div>
+              {tomorrowPlan.length === 0 && <div style={emptyState}>Nothing planned yet for tomorrow.</div>}
+              <div className="mobileHomeTomorrowGrid" style={tomorrowPreviewGrid}>
+                {tomorrowPlan.slice(0, 8).map((item) => (
+                  <div key={`tomorrow-${item.routineId}`} style={metricChip}>
+                    {item.routineName} ({item.kind}) | planned {item.planned}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section style={panel}>
             <div style={panelHeader}>RECENT ACTIVITY</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
               {recentItems.length === 0 && <div style={emptyState}>No logs yet.</div>}
               {recentItems.map((item) => (
-                <div key={item.id} style={activityRow}>
+                <div key={item.id} className="mobileHomeActivityRow" style={activityRow}>
                   <div style={activityDot(item.kind)} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800 }}>{item.name}</div>
@@ -518,7 +538,7 @@ export default async function HomePage() {
                       {item.category} | {item.detail}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
+                  <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
                 </div>
               ))}
               <Link href="/manual-log" style={secondaryLinkBlock}>Open Manual Log</Link>
@@ -526,28 +546,16 @@ export default async function HomePage() {
           </section>
         </div>
 
-        <div style={{ display: "grid", gap: 14 }}>
+        <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
           <section style={panel}>
             <div style={panelHeader}>WEEKLY MOMENTUM</div>
             <div style={{ padding: 14, display: "grid", gap: 14 }}>
               <div style={{ display: "grid", gap: 8 }}>
-                <div style={weeklySubheaderRow}>
+                <div className="mobileHomeWeeklyHeader" style={weeklySubheaderRow}>
                   <div style={weeklySubheader}>This Week</div>
                   <SessionFractionRing current={weekLoggedTotal} target={weekSessionTargetTotal} />
                 </div>
                 <div style={sectionSub}>{weekDateRangeLabel}</div>
-              </div>
-
-              <div style={{ ...subPanel, minWidth: 0 }}>
-                <div style={subPanelTitle}>Tomorrow Preview ({formatDayLabel(tomorrow)})</div>
-                {tomorrowPlan.length === 0 && <div style={emptyState}>Nothing planned yet for tomorrow.</div>}
-                <div style={tomorrowPreviewGrid}>
-                  {tomorrowPlan.slice(0, 8).map((item) => (
-                    <div key={`tomorrow-${item.routineId}`} style={metricChip}>
-                      {item.routineName} ({item.kind}) | planned {item.planned}
-                    </div>
-                  ))}
-                </div>
               </div>
 
               <div style={mileageBand}>
@@ -564,7 +572,7 @@ export default async function HomePage() {
                     {cardioTypeGroups.length === 0 && <div style={emptyState}>No cardio logged this week.</div>}
                     {cardioTypeGroups.map((group) => (
                       <div key={group.type} style={cardioGroupCard}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                        <div className="mobileHomeCardioRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                           <div style={{ fontWeight: 900 }}>{group.type}</div>
                           <div style={cardioMilesPill}>{group.miles.toFixed(1)} mi</div>
                         </div>
@@ -595,7 +603,7 @@ export default async function HomePage() {
                     points={sparklinePoints(weeklySeries.map((item) => item.sessions), 220, 84, 8)}
                   />
                 </svg>
-                <div style={sparkMetaRow}>
+                <div className="mobileHomeSparkMeta" style={sparkMetaRow}>
                   {weeklySeries.map((item) => (
                     <div key={item.label} style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 11, opacity: 0.66 }}>{formatDayLabel(item.label)}</div>
@@ -606,7 +614,7 @@ export default async function HomePage() {
                 </div>
               </div>
 
-              <div style={twoColGrid}>
+              <div className="mobileHomeTwoCol" style={twoColGrid}>
                 <div style={subPanel}>
                   <div style={subPanelTitle}>On Track</div>
                   <div style={{ display: "grid", gap: 8 }}>
@@ -661,7 +669,7 @@ export default async function HomePage() {
           <section style={panel}>
             <div style={panelHeader}>QUICK PATHS</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              <div style={quickGrid}>
+              <div className="mobileHomeQuickGrid" style={quickGrid}>
                 <Link href="/routines/new" style={quickCard}>
                   <div style={quickTitle}>New Routine</div>
                   <div style={quickSub}>Add a workout, cardio, or check routine.</div>

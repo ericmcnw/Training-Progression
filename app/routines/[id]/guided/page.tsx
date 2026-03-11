@@ -29,13 +29,13 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
   if (!isGuidedKind(routine.kind)) return <div style={{ padding: 20 }}>This page is for GUIDED routines only.</div>;
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+    <div className="mobileGuidedTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+      <div className="mobileGuidedTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Guided Steps: {routine.name}</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.category}</div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="mobileGuidedTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href={`/routines/${routineId}/edit`} style={linkBtn}>
             Back To Edit
           </Link>
@@ -47,7 +47,7 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
 
       <section style={panel}>
         <div style={panelHeader}>ADD STEP</div>
-        <form action={addGuidedStep} style={{ padding: 14, display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr auto", alignItems: "end" }}>
+        <form className="mobileGuidedTemplateGrid" action={addGuidedStep} style={{ padding: 14, display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr auto", alignItems: "end" }}>
           <input type="hidden" name="routineId" value={routineId} />
           <label style={field}>
             <span>Title</span>
@@ -74,7 +74,7 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
               <input type="hidden" name="routineId" value={routineId} />
               <input type="hidden" name="stepId" value={step.id} />
               <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.8 }}>Step {step.sortOrder + 1}</div>
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr auto auto", alignItems: "end" }}>
+              <div className="mobileGuidedTemplateGrid" style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr auto auto", alignItems: "end" }}>
                 <label style={field}>
                   <span>Title</span>
                   <input name="title" defaultValue={step.title} style={input} />

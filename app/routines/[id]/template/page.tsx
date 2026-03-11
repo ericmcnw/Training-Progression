@@ -39,8 +39,8 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
   const available = allExercises.filter((x) => !attachedIds.has(x.id));
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+    <div className="mobileRoutineTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+      <div className="mobileRoutineTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Template: {routine.name}</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
@@ -48,7 +48,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <form id="template-save-form" action={saveRoutineTemplate}>
             <input type="hidden" name="routineId" value={routineId} />
             <button type="submit" style={saveBtn}>
@@ -90,7 +90,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
         <div style={{ padding: 12, display: "grid", gap: 10 }}>
           {attached.map((re, i) => (
             <div key={re.id} style={{ border: border, borderRadius: 12, padding: 12, background: "rgba(128,128,128,0.06)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div className="mobileRoutineTemplateCardRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 900, fontSize: 16 }}>
                     {i + 1}. {re.exercise.name}
@@ -100,7 +100,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <TemplateMetricControl
                     routineId={routineId}
                     routineExerciseId={re.id}
@@ -121,12 +121,13 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
                     <button type="submit" style={btnSmall}>Down</button>
                   </form>
 
-                  <form action={setDefaultSets} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <form className="mobileRoutineTemplateDefaultSets" action={setDefaultSets} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input type="hidden" name="routineId" value={routineId} />
                     <input type="hidden" name="routineExerciseId" value={re.id} />
                     <label style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>Default sets</label>
                     <input
                       name="defaultSets"
+                      className="mobileRoutineTemplateInput"
                       style={{ ...inputStyle, width: 90 }}
                       inputMode="numeric"
                       defaultValue={re.defaultSets}

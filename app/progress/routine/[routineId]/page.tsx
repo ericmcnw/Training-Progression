@@ -134,22 +134,22 @@ export default async function ProgressRoutineDetailPage(props: {
     const weeklyMileageSeries = mileageRows.map(([week, miles]) => ({ label: week, value: miles }));
 
     return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+      <div className="mobileRoutineDetailPage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+        <div className="mobileRoutineDetailTopRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{routine.name} Progress</h1>
             <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
               {routine.category} | CARDIO
             </div>
           </div>
-          <Link href={`/progress?view=progression&range=${range}`} style={linkBtn}>
+          <Link href={`/progress?view=progression&range=${range}`} className="mobileRoutineDetailBack" style={linkBtn}>
             Back
           </Link>
         </div>
 
         <section style={panel}>
           <div style={panelHeader}>CARDIO CHARTS</div>
-          <div style={{ padding: 12, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          <div className="mobileRoutineDetailChartGrid" style={{ padding: 12, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             <MetricLineChart
               title="Distance per session"
               yLabel="Miles"
@@ -223,15 +223,15 @@ export default async function ProgressRoutineDetailPage(props: {
     });
 
     return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+      <div className="mobileRoutineDetailPage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+        <div className="mobileRoutineDetailTopRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{routine.name} Completion History</h1>
             <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
               {routine.category} | COMPLETION
             </div>
           </div>
-          <Link href={`/progress?view=progression&range=${range}`} style={linkBtn}>
+          <Link href={`/progress?view=progression&range=${range}`} className="mobileRoutineDetailBack" style={linkBtn}>
             Back
           </Link>
         </div>
@@ -274,15 +274,15 @@ export default async function ProgressRoutineDetailPage(props: {
       .map((log) => ({ label: dateYmd(log.performedAt), value: log.durationSec }));
 
     return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+      <div className="mobileRoutineDetailPage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+        <div className="mobileRoutineDetailTopRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{routine.name} Progress</h1>
             <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
               {routine.category} | {routine.kind}
             </div>
           </div>
-          <Link href={`/progress?view=progression&range=${range}`} style={linkBtn}>
+          <Link href={`/progress?view=progression&range=${range}`} className="mobileRoutineDetailBack" style={linkBtn}>
             Back
           </Link>
         </div>
@@ -408,25 +408,30 @@ export default async function ProgressRoutineDetailPage(props: {
   const selectedVolumePoints = selectedRows.map((row) => ({ label: row.label, value: row.totalVolume }));
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+    <div className="mobileRoutineDetailPage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+      <div className="mobileRoutineDetailTopRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{routine.name} Progress</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
             {routine.category} | WORKOUT
           </div>
         </div>
-        <Link href={`/progress?view=progression&range=${range}`} style={linkBtn}>
+        <Link href={`/progress?view=progression&range=${range}`} className="mobileRoutineDetailBack" style={linkBtn}>
           Back
         </Link>
       </div>
 
-      <section style={panel}>
-        <div style={panelHeader}>EXERCISE SELECTOR (QUICK FIND)</div>
-        <div style={{ padding: 12 }}>
-          <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <section style={panel}>
+          <div style={panelHeader}>EXERCISE SELECTOR (QUICK FIND)</div>
+          <div style={{ padding: 12 }}>
+          <form className="mobileRoutineDetailSelectRow" method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input type="hidden" name="range" value={range} />
-            <select name="exerciseId" defaultValue={activeExerciseId} style={{ minWidth: 280, background: "#111b2e", color: "rgba(255,255,255,0.92)" }}>
+            <select
+              className="mobileRoutineDetailSelect"
+              name="exerciseId"
+              defaultValue={activeExerciseId}
+              style={{ minWidth: 0, background: "#111b2e", color: "rgba(255,255,255,0.92)", flex: 1 }}
+            >
               <option value="">Select an exercise</option>
               {exerciseOptions.map((exercise) => (
                 <option key={exercise.id} value={exercise.id}>

@@ -21,6 +21,10 @@ body{
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
+*{
+  box-sizing: border-box;
+}
+
 a{ color: var(--text); text-decoration: none; }
 a:hover{ color: var(--success); }
 
@@ -77,7 +81,6 @@ button:hover{
   background: rgba(51,255,122,0.06);
 }
 
-/* Optional: makes the clicked/active page stand out if you add aria-current="page" later */
 .navLink[aria-current="page"]{
   color: var(--success);
   border-color: rgba(51,255,122,0.35);
@@ -96,11 +99,253 @@ summary[data-collapsible-summary]::-webkit-details-marker{
 }
 
 summary[data-collapsible-summary]::before{
-  content: "▾";
+  content: "\25BE";
   font-size: 12px;
   opacity: 0.78;
 }
 
 details[open] > summary[data-collapsible-summary]::before{
-  content: "▴";
+  content: "\25B4";
+}
+
+.appHeader{
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.appHeaderInner{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.appBrand{
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.appNav{
+  display: flex;
+  gap: 14px;
+  opacity: 0.95;
+  flex-wrap: wrap;
+}
+
+.appMain{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+@media (max-width: 900px){
+  .mobileHomeMainGrid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileHomePrimaryColumn,
+  .mobileHomeSecondaryColumn{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileHomeSparkMeta,
+  .mobileHomeSummaryGrid,
+  .mobileHomeQuickGrid,
+  .mobileHomeTwoCol,
+  .mobileHomeTomorrowGrid{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px){
+  .appHeaderInner{
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .appNav{
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .appMain{
+    padding: 14px;
+  }
+
+  .mobileHomePage,
+  .mobileSchedulePage{
+    padding: 0 !important;
+  }
+
+  .mobileHomeSummaryGrid,
+  .mobileHomeQuickGrid,
+  .mobileHomeTwoCol,
+  .mobileHomeSparkMeta{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileHomeActivityRow{
+    grid-template-columns: 14px minmax(0, 1fr) !important;
+  }
+
+  .mobileHomeActivityStamp{
+    grid-column: 2;
+    text-align: left !important;
+  }
+
+  .mobileHomeWeeklyHeader,
+  .mobileHomeFocusHeader,
+  .mobileHomeCardioRow{
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .mobileHomeKindPill{
+    align-self: flex-start;
+  }
+
+  .mobileScheduleTopRow,
+  .mobileScheduleToolbar,
+  .mobileScheduleMonthPicker,
+  .mobileScheduleDayRow,
+  .mobileScheduleInlineRow{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .mobileScheduleDayLabel{
+    min-width: 0 !important;
+  }
+
+  .mobileScheduleQuickAdd{
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .mobileScheduleQuickAddButton,
+  .mobileScheduleMonthSelect{
+    width: 100%;
+  }
+
+  .mobileScheduleCalendarScroller{
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .mobileScheduleCalendar{
+    min-width: 760px;
+  }
+
+  .mobileRoutinesPage,
+  .mobileProgressPage,
+  .mobileRoutineDetailPage,
+  .mobileRoutineTemplatePage,
+  .mobileGuidedTemplatePage{
+    padding: 0 !important;
+  }
+
+  .mobileRoutinesTopRow,
+  .mobileRoutinesHeader,
+  .mobileRoutinesCardShell,
+  .mobileRoutinesCardMain,
+  .mobileRoutinesCardHeading,
+  .mobileRoutinesCardActions,
+  .mobileRoutinesCardMeta,
+  .mobileProgressTopRow,
+  .mobileProgressFilterRow,
+  .mobileProgressGoalHeader,
+  .mobileProgressRoutineHeader,
+  .mobileProgressGroupHeader,
+  .mobileProgressStats,
+  .mobileRoutineDetailTopRow,
+  .mobileRoutineTemplateTopRow,
+  .mobileGuidedTemplateTopRow,
+  .mobileRoutineTemplateCardRow{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .mobileRoutinesPrimaryCta,
+  .mobileRoutinesQuickDate,
+  .mobileProgressSearch,
+  .mobileProgressSearchRow,
+  .mobileRoutineDetailSelect,
+  .mobileRoutineTemplateInput{
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .mobileRoutinesCardInfo,
+  .mobileRoutinesQuickDate{
+    min-width: 0 !important;
+  }
+
+  .mobileRoutinesCardMeta{
+    margin-left: 0 !important;
+  }
+
+  .mobileRoutinesCardShell,
+  .mobileRoutinesCardMain{
+    gap: 12px !important;
+  }
+
+  .mobileRoutinesCardMain{
+    align-items: stretch !important;
+  }
+
+  .mobileRoutinesCardInfo{
+    width: 100%;
+  }
+
+  .mobileRoutinesCardMeta{
+    justify-content: space-between;
+  }
+
+  .mobileRoutinesQuickDate details{
+    width: 100%;
+  }
+
+  .mobileProgressFilterGrid,
+  .mobileProgressGoalChips,
+  .mobileProgressExerciseStats,
+  .mobileProgressRoutineGrid,
+  .mobileProgressExerciseRoutineGrid,
+  .mobileRoutineDetailChartGrid,
+  .mobileGuidedTemplateGrid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileProgressSearchRow{
+    display: grid !important;
+    gap: 8px !important;
+  }
+
+  .mobileProgressFilterActions,
+  .mobileRoutineDetailSelectRow,
+  .mobileRoutineTemplateActions,
+  .mobileRoutineTemplateDefaultSets,
+  .mobileGuidedTemplateActions{
+    display: grid !important;
+    gap: 8px !important;
+  }
+
+  .mobileProgressSearchButton{
+    width: 100%;
+  }
+
+  .mobileProgressStats{
+    text-align: left !important;
+  }
+
+  .mobileRoutineDetailBack,
+  .mobileRoutineTemplateActions > *,
+  .mobileGuidedTemplateActions > *{
+    width: 100%;
+  }
 }

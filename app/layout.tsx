@@ -15,30 +15,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <header style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
-          <div
-            style={{
-              maxWidth: 980,
-              margin: "0 auto",
-              padding: "14px 18px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <Link href="/" style={{ fontWeight: 900, letterSpacing: 0.3 }}>
+        <header className="appHeader">
+          <div className="appHeaderInner">
+            <Link href="/" className="appBrand">
               Progression
             </Link>
 
-            <nav
-              style={{
-                display: "flex",
-                gap: 14,
-                opacity: 0.95,
-                flexWrap: "wrap",
-              }}
-            >
+            <nav className="appNav">
               <Link className="navLink" href="/">
                 Dashboard
               </Link>
@@ -61,9 +44,7 @@ export default function RootLayout({
           </div>
         </header>
 
-        <main style={{ maxWidth: 980, margin: "0 auto", padding: "18px" }}>
-          {children}
-        </main>
+        <main className="appMain">{children}</main>
       </body>
     </html>
   );

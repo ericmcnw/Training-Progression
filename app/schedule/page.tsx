@@ -302,8 +302,8 @@ export default async function SchedulePage({
   }
 
   return (
-    <div style={container}>
-      <div style={topRow}>
+    <div className="mobileSchedulePage" style={container}>
+      <div className="mobileScheduleTopRow" style={topRow}>
         <div>
           <h1 style={title}>Schedule</h1>
           <div style={subText}>Rolling schedule context plus a month browser so you can plan from recent history without cluttering the main board.</div>
@@ -327,7 +327,7 @@ export default async function SchedulePage({
           <section style={panel}>
             <div style={panelHeader}>ROLLING TIMELINE</div>
             <div style={{ padding: 12, display: "grid", gap: 12 }}>
-              <div style={toolbar}>
+              <div className="mobileScheduleToolbar" style={toolbar}>
                 <div style={{ fontSize: 13, opacity: 0.82 }}>
                   Showing {rangeStartLabel} through {rangeEndLabel}
                 </div>
@@ -339,8 +339,8 @@ export default async function SchedulePage({
               </div>
               <div style={{ display: "grid", gap: 10 }}>
                 {agenda.map((dayItem) => (
-                  <div key={dayItem.day} style={dayRow}>
-                    <div style={{ minWidth: 190 }}>
+                  <div key={dayItem.day} className="mobileScheduleDayRow" style={dayRow}>
+                    <div className="mobileScheduleDayLabel" style={{ minWidth: 190 }}>
                       <div style={{ fontWeight: 900 }}>{formatDayTitle(dayItem.day)}</div>
                       <div style={{ fontSize: 12, opacity: 0.75 }}>{dayItem.day}</div>
                     </div>
@@ -359,7 +359,7 @@ export default async function SchedulePage({
                         </div>
                       ))}
                     </div>
-                    <form action={quickAddManualEntry} style={quickAddForm}>
+                    <form action={quickAddManualEntry} className="mobileScheduleQuickAdd" style={quickAddForm}>
                       <input type="hidden" name="scheduledDate" value={dayItem.day} />
                       <input type="hidden" name="returnStart" value={timelineStart} />
                       <input type="hidden" name="returnMonth" value={selectedMonth} />
@@ -373,7 +373,7 @@ export default async function SchedulePage({
                           </option>
                         ))}
                       </select>
-                      <button type="submit" style={quickAddBtn}>Add</button>
+                      <button type="submit" className="mobileScheduleQuickAddButton" style={quickAddBtn}>Add</button>
                     </form>
                   </div>
                 ))}
@@ -384,7 +384,7 @@ export default async function SchedulePage({
           <section style={panel}>
             <div style={panelHeader}>MONTH HISTORY</div>
             <div style={{ padding: 12, display: "grid", gap: 12 }}>
-              <div style={toolbar}>
+              <div className="mobileScheduleToolbar" style={toolbar}>
                 <div style={{ fontSize: 13, opacity: 0.82 }}>
                   Full month view for schedule history and planning context.
                 </div>
@@ -392,11 +392,11 @@ export default async function SchedulePage({
                   <div style={monthPill}>{formatMonthLabel(selectedMonth)}</div>
                 </div>
               </div>
-              <form method="get" style={monthPickerRow}>
+              <form method="get" className="mobileScheduleMonthPicker" style={monthPickerRow}>
                 <input type="hidden" name="start" value={timelineStart} />
                 <label style={monthPickerLabel}>
                   Month
-                  <select name="month" defaultValue={selectedMonth} style={monthSelect}>
+                  <select name="month" defaultValue={selectedMonth} className="mobileScheduleMonthSelect" style={monthSelect}>
                     {monthOptions.map((month) => (
                       <option key={month} value={month}>
                         {formatMonthLabel(month)}
@@ -406,13 +406,14 @@ export default async function SchedulePage({
                 </label>
                 <button type="submit" style={smallControlBtn}>Show Month</button>
               </form>
-              <div style={calendarWrap}>
-                {weekdays.map((weekday) => (
-                  <div key={weekday} style={calendarWeekday}>{weekday}</div>
-                ))}
-                {monthCalendarCells.map((dayItem, index) =>
-                  dayItem ? (
-                    <div key={dayItem.day} style={calendarDay}>
+              <div className="mobileScheduleCalendarScroller">
+                <div className="mobileScheduleCalendar" style={calendarWrap}>
+                  {weekdays.map((weekday) => (
+                    <div key={weekday} style={calendarWeekday}>{weekday}</div>
+                  ))}
+                  {monthCalendarCells.map((dayItem, index) =>
+                    dayItem ? (
+                      <div key={dayItem.day} style={calendarDay}>
                       <div style={calendarDayHeader}>
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
                         <div style={{ fontSize: 11, opacity: 0.72 }}>{dayItem.day}</div>
@@ -448,11 +449,12 @@ export default async function SchedulePage({
                           </div>
                         ))}
                       </div>
-                    </div>
-                  ) : (
-                    <div key={`empty-${index}`} style={calendarFiller} />
-                  )
-                )}
+                      </div>
+                    ) : (
+                      <div key={`empty-${index}`} style={calendarFiller} />
+                    )
+                  )}
+                </div>
               </div>
             </div>
           </section>
@@ -463,7 +465,7 @@ export default async function SchedulePage({
         <>
           <section style={panel}>
             <div style={panelHeader}>EDITOR</div>
-            <div style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="mobileScheduleInlineRow" style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Link href="/schedule?mode=edit&tab=board" style={editTab === "board" ? tabBtnActive : tabBtn}>
                 Schedule Board
               </Link>
@@ -484,7 +486,7 @@ export default async function SchedulePage({
                         <div style={{ fontSize: 13, fontWeight: 800 }}>
                           {plan.name} ({plan.cycleLengthDays} days)
                         </div>
-                        <form action={setCycleActivation} style={row}>
+                        <form action={setCycleActivation} className="mobileScheduleInlineRow" style={row}>
                           <input type="hidden" name="planId" value={plan.id} />
                           <input type="hidden" name="returnMode" value="edit" />
                           <label style={inlineLabel}>
@@ -532,7 +534,7 @@ export default async function SchedulePage({
               <section style={panel}>
                 <div style={panelHeader}>CREATE CYCLE</div>
                 <div style={{ padding: 14 }}>
-                  <form action={createCyclePlan} style={row}>
+                  <form action={createCyclePlan} className="mobileScheduleInlineRow" style={row}>
                     <input type="hidden" name="returnMode" value="edit" />
                     <input name="name" placeholder="Cycle name" style={{ ...input, minWidth: 180 }} />
                     <label style={inlineLabel}>
@@ -552,7 +554,7 @@ export default async function SchedulePage({
                 <section style={{ ...panel, marginTop: 14 }}>
                   <div style={panelHeader}>EDIT CYCLE</div>
                   <div style={{ padding: 14, display: "grid", gap: 10 }}>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div className="mobileScheduleInlineRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {plans.map((plan) => (
                         <Link key={plan.id} href={`/schedule?mode=edit&tab=cycles&planId=${plan.id}`} style={smallLink}>
                           {selectedPlanId === plan.id ? "[Editing]" : "[Open]"} {plan.name}
@@ -562,7 +564,7 @@ export default async function SchedulePage({
 
                     {selectedPlan && (
                       <>
-                        <form action={updateCyclePlan} style={row}>
+                        <form action={updateCyclePlan} className="mobileScheduleInlineRow" style={row}>
                           <input type="hidden" name="planId" value={selectedPlan.id} />
                           <input type="hidden" name="returnMode" value="edit" />
                           <input name="name" defaultValue={selectedPlan.name} style={{ ...input, minWidth: 200 }} />

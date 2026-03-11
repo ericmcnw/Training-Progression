@@ -42,7 +42,7 @@ export default function ExerciseSearch({
   }
 
   return (
-    <div style={{ display: "grid", gap: 6, minWidth: 320 }}>
+    <div className="mobileProgressSearch" style={{ display: "grid", gap: 6, minWidth: 0 }}>
       <label style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Exercise Search</label>
 
       <input
@@ -51,7 +51,7 @@ export default function ExerciseSearch({
         placeholder="Search exercise..."
       />
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className="mobileProgressSearchRow" style={{ display: "flex", gap: 8 }}>
         <select
           value={activeId}
           onChange={(e) => setSelectedId(e.target.value)}
@@ -66,7 +66,7 @@ export default function ExerciseSearch({
           ))}
         </select>
 
-        <button type="button" onClick={submit}>
+        <button type="button" className="mobileProgressSearchButton" onClick={submit}>
           Show Charts
         </button>
       </div>
