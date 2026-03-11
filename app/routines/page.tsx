@@ -16,6 +16,14 @@ import DeleteRoutineButton from "./DeleteRoutineButton";
 
 export const dynamic = "force-dynamic";
 
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function getParam(params: SearchParams, key: string) {
+  const value = params[key];
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
 function ProgressRing({
   current,
   target,
@@ -84,6 +92,8 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "baseline",
     color: "inherit",
+    cursor: "pointer",
+    listStyle: "none",
   },
   card: {
     border: "1px solid rgba(128,128,128,0.35)",
@@ -174,14 +184,14 @@ function RoutineCard({
 
   return (
     <div key={routine.id} style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
-        <div style={{ flex: 1, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div className="mobileRoutinesCardShell" style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
+        <div className="mobileRoutinesCardMain" style={{ flex: 1, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
           <ProgressRing current={String(count)} target={target ? String(target) : "-"} fraction={fraction} strokeColor={strokeColor} />
 
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
-              <div style={{ display: "grid", gap: 6, flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="mobileRoutinesCardInfo" style={{ flex: 1, minWidth: 0 }}>
+            <div className="mobileRoutinesCardHeading" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gap: 6, flex: 1, minWidth: 0 }}>
+                <div className="mobileRoutinesCardActions" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
                   <div style={{ fontSize: 12, opacity: 0.75 }}>
                     {routine.category} | {formatRoutineTypeLabel(kind)}
@@ -190,7 +200,7 @@ function RoutineCard({
                 </div>
 
                 {allowLogging && (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Link href={loggingHref(routine)} style={styles.btnLink}>
                       {loggingLabel(kind)}
                     </Link>
@@ -232,7 +242,7 @@ function RoutineCard({
                 )}
               </div>
 
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+              <div className="mobileRoutinesCardMeta" style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
                 <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
                   Edit
                 </Link>
@@ -247,7 +257,7 @@ function RoutineCard({
         </div>
 
         {allowLogging && isCompletionKind(kind) && (
-          <div style={{ minWidth: 240 }}>
+          <div className="mobileRoutinesQuickDate" style={{ minWidth: 0, width: "100%", maxWidth: 280 }}>
             <details style={styles.detailsBox}>
               <summary data-collapsible-summary style={styles.detailsSummary}>
                 Quick log with custom date/time
@@ -273,7 +283,12 @@ function RoutineCard({
   );
 }
 
-export default async function RoutinesPage() {
+export default async function RoutinesPage(props: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
+  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const searchQuery = (getParam(searchParams, "q") ?? "").trim();
+  const normalizedSearchQuery = searchQuery.toLowerCase();
   const { start, end } = getWeekBoundsSunday(new Date());
 
   const [routines, weeklyCounts, activeGoals] = await Promise.all([
@@ -302,8 +317,13 @@ export default async function RoutinesPage() {
       .filter((entry): entry is readonly [string, number] => entry !== null)
   );
 
-  const active = routines.filter((routine) => routine.isActive);
-  const archived = routines.filter((routine) => !routine.isActive);
+  const filteredRoutines = routines.filter((routine) => {
+    if (!normalizedSearchQuery) return true;
+    return routine.name.toLowerCase().includes(normalizedSearchQuery);
+  });
+
+  const active = filteredRoutines.filter((routine) => routine.isActive);
+  const archived = filteredRoutines.filter((routine) => !routine.isActive);
 
   const groups = new Map<string, typeof active>();
   for (const routine of active) {
@@ -315,8 +335,8 @@ export default async function RoutinesPage() {
   const orderedCategories = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topRow}>
+    <div className="mobileRoutinesPage" style={styles.container}>
+      <div className="mobileRoutinesTopRow" style={styles.topRow}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Routines</h1>
           <div style={styles.subText}>
@@ -324,55 +344,87 @@ export default async function RoutinesPage() {
           </div>
         </div>
 
-        <Link href="/routines/new" style={styles.primaryLink}>
+        <Link href="/routines/new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
           + New Routine
         </Link>
       </div>
 
+      <form method="get" style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+        <label style={{ flex: "1 1 280px", display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>Search</span>
+          <input
+            type="search"
+            name="q"
+            defaultValue={searchQuery}
+            placeholder="Search routines by name"
+            style={styles.input}
+          />
+        </label>
+        <button type="submit" style={{ ...styles.btnLink, minWidth: 110 }}>
+          Search
+        </button>
+        {searchQuery ? (
+          <Link href="/routines" style={styles.btnLink}>
+            Clear
+          </Link>
+        ) : null}
+      </form>
+
       <div style={{ marginTop: 18, display: "grid", gap: 18 }}>
+        {searchQuery && filteredRoutines.length === 0 ? (
+          <section style={styles.section}>
+            <div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>
+              No routines match <b>{searchQuery}</b>.
+            </div>
+          </section>
+        ) : null}
         {orderedCategories.map((category) => {
           const list = groups.get(category)!;
           return (
             <section key={category} style={styles.section}>
-              <div style={styles.sectionHeader}>
-                <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{category.toUpperCase()}</div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
-              </div>
-              <div style={{ padding: 12, display: "grid", gap: 10 }}>
-                {list.map((routine) => (
-                  <RoutineCard
-                    key={routine.id}
-                    routine={routine}
-                    weeklyMap={weeklyMap}
-                    routineCompletionGoalMap={routineCompletionGoalMap}
-                    allowLogging={true}
-                  />
-                ))}
-              </div>
+              <details open>
+                <summary data-collapsible-summary className="mobileRoutinesHeader" style={styles.sectionHeader}>
+                  <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{category.toUpperCase()}</div>
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
+                </summary>
+                <div style={{ padding: 12, display: "grid", gap: 10 }}>
+                  {list.map((routine) => (
+                    <RoutineCard
+                      key={routine.id}
+                      routine={routine}
+                      weeklyMap={weeklyMap}
+                      routineCompletionGoalMap={routineCompletionGoalMap}
+                      allowLogging={true}
+                    />
+                  ))}
+                </div>
+              </details>
             </section>
           );
         })}
 
         {archived.length > 0 && (
           <section style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>ARCHIVED</div>
-              <div style={{ fontSize: 12, opacity: 0.75 }}>{archived.length} routines</div>
-            </div>
-            <div style={{ padding: 12, display: "grid", gap: 10 }}>
-              {archived
-                .slice()
-                .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
-                .map((routine) => (
-                  <RoutineCard
-                    key={routine.id}
-                    routine={routine}
-                    weeklyMap={weeklyMap}
-                    routineCompletionGoalMap={routineCompletionGoalMap}
-                    allowLogging={false}
-                  />
-                ))}
-            </div>
+            <details open>
+              <summary data-collapsible-summary className="mobileRoutinesHeader" style={styles.sectionHeader}>
+                <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>ARCHIVED</div>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>{archived.length} routines</div>
+              </summary>
+              <div style={{ padding: 12, display: "grid", gap: 10 }}>
+                {archived
+                  .slice()
+                  .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+                  .map((routine) => (
+                    <RoutineCard
+                      key={routine.id}
+                      routine={routine}
+                      weeklyMap={weeklyMap}
+                      routineCompletionGoalMap={routineCompletionGoalMap}
+                      allowLogging={false}
+                    />
+                  ))}
+              </div>
+            </details>
           </section>
         )}
       </div>

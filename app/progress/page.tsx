@@ -109,15 +109,13 @@ export default async function ProgressPage(props: {
   const includeArchived = getParam(searchParams, "includeArchived") === "1";
   const exerciseQuery = getParam(searchParams, "exercise") ?? "";
   const selectedExerciseId = getParam(searchParams, "exerciseId") ?? "";
-  const requestedRoutineId = getParam(searchParams, "routineId") ?? "";
-  const requestedMetricsRoutineId = getParam(searchParams, "metricsRoutineId") ?? "";
 
   const now = new Date();
   const ytdStart = new Date(now.getFullYear(), 0, 1);
   const plannedWeeks = getPlannedWeeks(range);
   const performedAt = toPerformedAtFilter(range);
 
-  const [allRoutines, exercises, routineExerciseDefs] = await Promise.all([
+  const [allRoutines, exercises] = await Promise.all([
     prisma.$queryRawUnsafe<
       Array<{
         id: string;
@@ -135,15 +133,6 @@ export default async function ProgressPage(props: {
     prisma.exercise.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, unit: true, supportsWeight: true },
-    }),
-    prisma.routineExercise.findMany({
-      orderBy: [{ routineId: "asc" }, { sortOrder: "asc" }],
-      select: {
-        routineId: true,
-        sortOrder: true,
-        defaultSets: true,
-        exercise: { select: { id: true, name: true, unit: true, supportsWeight: true } },
-      },
     }),
   ]);
 
@@ -163,7 +152,7 @@ export default async function ProgressPage(props: {
     return true;
   });
 
-  const completionRoutines = filteredRoutines;
+  const completionRoutines = filteredRoutines.filter((r) => r.kind === "COMPLETION");
   const progressionRoutines = filteredRoutines.filter((r) => r.kind === "CARDIO" || r.kind === "WORKOUT");
   const routineById = new Map(allRoutines.map((routine) => [routine.id, routine]));
   const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
@@ -309,24 +298,6 @@ export default async function ProgressPage(props: {
     const weeksMet = Array.from(routineWeeks.values()).filter((count) => count >= target).length;
     weeksMetMap.set(routine.id, weeksMet);
   }
-
-  const selectedRoutineId =
-    (requestedRoutineId && completionRoutines.some((routine) => routine.id === requestedRoutineId) ? requestedRoutineId : "") ||
-    completionRoutines[0]?.id ||
-    "";
-  const selectedCompletionRoutine = completionRoutines.find((routine) => routine.id === selectedRoutineId);
-  const selectedRoutineWeeklyPoints = selectedRoutineId
-    ? Array.from((weeklyCountMap.get(selectedRoutineId) ?? new Map<string, number>()).entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([label, value]) => ({ label, value }))
-    : [];
-  const selectedRoutineYAxisTicks =
-    selectedRoutineWeeklyPoints.length > 0
-      ? Array.from(
-          { length: Math.max(...selectedRoutineWeeklyPoints.map((point) => point.value), selectedCompletionRoutine?.timesPerWeek ?? 0) + 1 },
-          (_, index) => index
-        )
-      : [];
 
   const runStatsMap = new Map<string, ReturnType<typeof aggregateRunStats>>();
   const runLongestMap = new Map<string, number>();
@@ -546,14 +517,16 @@ export default async function ProgressPage(props: {
     workoutTotalsMap.set(routineId, current);
   }
 
-  const progressionGroups = new Map<string, typeof progressionRoutines>();
-  for (const r of progressionRoutines) {
-    const key = (r.category || "General").trim() || "General";
-    if (!progressionGroups.has(key)) progressionGroups.set(key, []);
-    progressionGroups.get(key)!.push(r);
-  }
+  const cardioRoutines = progressionRoutines
+    .filter((routine) => routine.kind === "CARDIO")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const workoutRoutines = progressionRoutines
+    .filter((routine) => routine.kind === "WORKOUT")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const orderedCompletionRoutines = [...completionRoutines].sort(
+    (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)
+  );
 
-  const orderedProgressionCategories = Array.from(progressionGroups.keys()).sort((a, b) => a.localeCompare(b));
   const cardioTypePreviewMap = new Map<string, Array<{ label: string; value: number }>>();
   const cardioTypeStatsMap = new Map<string, ReturnType<typeof aggregateRunStats>>();
   const scopedRunWeeklySeriesMap = new Map<string, Array<{ label: string; value: number }>>();
@@ -594,25 +567,15 @@ export default async function ProgressPage(props: {
     scopedRunDistanceSeriesMap.set(key, runDistanceSeriesMap.get(routineId) ?? []);
   }
 
-  for (const [categoryKey, groupedRoutines] of progressionGroups.entries()) {
-    const cardioTypes = Array.from(
-      new Set(
-        groupedRoutines
-          .filter((routine) => routine.kind === "CARDIO")
-          .map((routine) => (routine.cardioType || "Cardio").trim() || "Cardio")
-      )
+  for (const cardioType of cardioTypes) {
+    const routineIds = new Set(
+      cardioRoutines
+        .filter((routine) => ((routine.cardioType || "Cardio").trim() || "Cardio") === cardioType)
+        .map((routine) => routine.id)
     );
-
-    for (const cardioType of cardioTypes) {
-      const routineIds = new Set(
-        groupedRoutines
-          .filter((routine) => routine.kind === "CARDIO" && ((routine.cardioType || "Cardio").trim() || "Cardio") === cardioType)
-          .map((routine) => routine.id)
-      );
-      const logs = runLogs.filter((log) => routineIds.has(log.routineId));
-      cardioTypePreviewMap.set(`${categoryKey}|${cardioType}`, aggregateWeeklyMileageSeries(logs));
-      cardioTypeStatsMap.set(`${categoryKey}|${cardioType}`, aggregateRunStats(logs));
-    }
+    const logs = runLogs.filter((log) => routineIds.has(log.routineId));
+    cardioTypePreviewMap.set(cardioType, aggregateWeeklyMileageSeries(logs));
+    cardioTypeStatsMap.set(cardioType, aggregateRunStats(logs));
   }
 
   const currentWeekKey = dateYmd(getWeekBoundsSunday(now).start);
@@ -896,75 +859,9 @@ export default async function ProgressPage(props: {
   const orderedActiveGoalCategories = Array.from(activeGoalGroups.keys()).sort(
     (a, b) => goalCategoryRank(a) - goalCategoryRank(b) || a.localeCompare(b)
   );
-  const metricsRoutineOptions = filteredRoutines.filter((routine) =>
-    routineExerciseDefs.some((entry) => entry.routineId === routine.id)
-  );
-  const selectedMetricsRoutine =
-    metricsRoutineOptions.find((routine) => routine.id === requestedMetricsRoutineId) ??
-    metricsRoutineOptions[0] ??
-    null;
-  const selectedMetricsRoutineDefs = selectedMetricsRoutine
-    ? routineExerciseDefs.filter((entry) => entry.routineId === selectedMetricsRoutine.id)
-    : [];
-  const selectedMetricsRoutineSessions =
-    selectedMetricsRoutine
-      ? await prisma.sessionExercise.findMany({
-          where: {
-            routineLog: {
-              routineId: selectedMetricsRoutine.id,
-              ...(performedAt ? { performedAt } : {}),
-              ...((category !== "all" || !includeArchived)
-                ? {
-                    routine: {
-                      ...(category !== "all" ? { category } : {}),
-                      ...(!includeArchived ? { isActive: true } : {}),
-                    },
-                  }
-                : {}),
-            },
-          },
-          orderBy: { routineLog: { performedAt: "desc" } },
-          select: {
-            exerciseId: true,
-            routineLog: { select: { performedAt: true } },
-            sets: { orderBy: { setNumber: "asc" }, select: { reps: true, seconds: true, weightLb: true } },
-          },
-        })
-      : [];
-  const selectedMetricsExerciseCards = selectedMetricsRoutineDefs.map((entry) => {
-    const sessions = selectedMetricsRoutineSessions.filter((session) => session.exerciseId === entry.exercise.id);
-    const weights = sessions.flatMap((session) =>
-      session.sets.map((set) => set.weightLb).filter((value): value is number => Number.isFinite(value))
-    );
-    const reps = sessions.flatMap((session) =>
-      session.sets.map((set) => set.reps).filter((value): value is number => Number.isFinite(value))
-    );
-    const seconds = sessions.flatMap((session) =>
-      session.sets.map((set) => set.seconds).filter((value): value is number => Number.isFinite(value))
-    );
-    const totalSets = sessions.reduce((sum, session) => sum + session.sets.length, 0);
-    const totalReps = reps.reduce((sum, value) => sum + value, 0);
-    const totalVolume = sessions.reduce(
-      (sum, session) => sum + session.sets.reduce((setSum, set) => setSum + (set.reps ?? 0) * (set.weightLb ?? 0), 0),
-      0
-    );
-    return {
-      exercise: entry.exercise,
-      defaultSets: entry.defaultSets,
-      sessionsCount: sessions.length,
-      totalSets,
-      totalReps,
-      totalVolume,
-      avgRepsPerSet: totalSets > 0 ? totalReps / totalSets : 0,
-      topWeight: Math.max(0, ...weights),
-      maxTimeSeconds: Math.max(0, ...seconds),
-      latestPerformedAt: sessions[0]?.routineLog.performedAt ?? null,
-    };
-  });
-
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+    <div className="mobileProgressPage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+      <div className="mobileProgressTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>Progress</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
@@ -976,7 +873,7 @@ export default async function ProgressPage(props: {
       <div style={{ marginTop: 16, border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, padding: 14 }}>
         <form method="get" style={{ display: "grid", gap: 14 }}>
           <input type="hidden" name="view" value="progression" />
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
+          <div className="mobileProgressFilterRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
             <ExerciseSearch
               exercises={exercises}
               initialQuery={exerciseQuery}
@@ -984,7 +881,7 @@ export default async function ProgressPage(props: {
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+          <div className="mobileProgressFilterGrid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontSize: 12, opacity: 0.65, fontWeight: 800 }}>Category</span>
               <select
@@ -1048,14 +945,14 @@ export default async function ProgressPage(props: {
                 <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
                   {(activeGoalGroups.get(categoryName) ?? []).map((goal) => (
                     <div key={goal.id} style={goalCardStyle}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <div className="mobileProgressGoalHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 900 }}>{goal.heading}</div>
                           <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>{goal.subheading}</div>
                         </div>
                         <div style={{ fontSize: 12, opacity: 0.8, maxWidth: 320 }}>{goal.summary}</div>
                       </div>
-                      <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                      <div className="mobileProgressGoalChips" style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
                         {goal.chips.map((chip) => (
                           <div key={`${goal.id}-${chip}`} style={metricChip}>
                             {chip}
@@ -1072,468 +969,353 @@ export default async function ProgressPage(props: {
         </details>
       </section>
 
-      <section style={{ marginTop: 16, border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
-        <details open style={sectionDetails}>
-          <summary data-collapsible-summary style={sectionSummary}>EXERCISE BY ROUTINE</summary>
-          <div style={{ padding: 12, display: "grid", gap: 12 }}>
-            {metricsRoutineOptions.length === 0 ? (
-              <div style={{ opacity: 0.75, fontSize: 13 }}>No routines with exercises in the current filter.</div>
-            ) : (
-              <>
-                <form method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-                  <input type="hidden" name="view" value={view} />
-                  <input type="hidden" name="category" value={category} />
-                  <input type="hidden" name="range" value={range} />
-                  <input type="hidden" name="includeArchived" value={includeArchived ? "1" : "0"} />
-                  <input type="hidden" name="exercise" value={exerciseQuery} />
-                  <input type="hidden" name="exerciseId" value={selectedExerciseId} />
-                  <input type="hidden" name="routineId" value={selectedRoutineId} />
-                  <label style={{ display: "grid", gap: 6, minWidth: 280 }}>
-                    <span style={{ fontSize: 12, opacity: 0.65, fontWeight: 800 }}>Routine</span>
-                    <select
-                      name="metricsRoutineId"
-                      defaultValue={selectedMetricsRoutine?.id ?? ""}
-                      style={{ background: "#111b2e", color: "rgba(255,255,255,0.92)", opacity: 0.95 }}
-                    >
-                      {metricsRoutineOptions.map((routine) => (
-                        <option key={routine.id} value={routine.id}>
-                          {routine.name} | {routine.category || "General"} | {routine.kind}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" style={filterButtonStyle}>
-                    Show routine
-                  </button>
-                </form>
-
-                {selectedMetricsRoutine && (
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div style={goalCategoryHeader}>
-                      {selectedMetricsRoutine.name.toUpperCase()} ({selectedMetricsExerciseCards.length} EXERCISES)
-                    </div>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {selectedMetricsExerciseCards.map((card) => (
-                        <div key={card.exercise.id} style={exerciseMetricCardStyle}>
-                          <div>
-                            <div style={{ fontSize: 16, fontWeight: 900 }}>{card.exercise.name}</div>
-                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                              {card.exercise.unit}
-                              {card.exercise.supportsWeight ? " + weight" : ""} | Default sets: {card.defaultSets}
-                            </div>
-                          </div>
-                          <div style={exerciseMetricGridStyle}>
-                            <div style={metricChip}>Sessions: {card.sessionsCount}</div>
-                            <div style={metricChip}>Total sets: {card.totalSets}</div>
-                            <div style={metricChip}>Top weight: {card.topWeight.toFixed(1)} lb</div>
-                            <div style={metricChip}>Max time: {formatDuration(card.maxTimeSeconds)}</div>
-                            <div style={metricChip}>Avg reps/set: {card.avgRepsPerSet.toFixed(1)}</div>
-                            <div style={metricChip}>Total reps: {card.totalReps}</div>
-                            <div style={metricChip}>Volume: {card.totalVolume.toFixed(1)}</div>
-                            <div style={metricChip}>
-                              Latest: {card.latestPerformedAt ? new Date(card.latestPerformedAt).toLocaleDateString() : "-"}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </details>
-      </section>
-
       {selectedExercise && (
         <section style={{ marginTop: 16, border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "rgba(128,128,128,0.14)",
-              borderBottom: "1px solid rgba(128,128,128,0.25)",
-              fontWeight: 900,
-              letterSpacing: 0.4,
-            }}
-          >
-            EXERCISE SNAPSHOT: {selectedExercise.name}
-          </div>
-          <div style={{ padding: 12, display: "grid", gap: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
-              <div style={metricChip}>Sessions: {selectedExerciseRows.length}</div>
-              <div style={metricChip}>Top weight: {selectedTopWeight.toFixed(1)} lb</div>
-              <div style={metricChip}>Max time: {selectedMaxTime.toFixed(0)} sec</div>
-              <div style={metricChip}>Total reps: {selectedTotalReps}</div>
-              <div style={metricChip}>Total volume: {selectedTotalVolume.toFixed(1)}</div>
-              {exerciseWeightGoalMap.has(selectedExercise.id) && (
-                <div style={metricChip}>
-                  Goal {selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "time" : "weight"}:{" "}
-                  {exerciseWeightGoalMap.get(selectedExercise.id)?.toFixed(
-                    selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1
-                  )}{" "}
-                  {selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
-                </div>
-              )}
-              {exerciseAvgRepsGoalMap.has(selectedExercise.id) && (
-                <div style={metricChip}>Goal avg reps/set: {exerciseAvgRepsGoalMap.get(selectedExercise.id)?.toFixed(1)}</div>
-              )}
-              {exerciseRepsAtWeightGoalMap.has(selectedExercise.id) && (
-                <div style={metricChip}>
-                  Goal reps @ wt: {exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.repsTarget.toFixed(0)} @{" "}
-                  {exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.weightLb.toFixed(1)} lb
-                </div>
-              )}
-            </div>
+          <details open style={sectionDetails}>
+            <summary data-collapsible-summary style={sectionSummary}>
+              EXERCISE SNAPSHOT: {selectedExercise.name}
+            </summary>
+            <div style={{ padding: 12, display: "grid", gap: 10 }}>
+            <div className="mobileProgressExerciseStats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+                <div style={metricChip}>Sessions: {selectedExerciseRows.length}</div>
+                <div style={metricChip}>Top weight: {selectedTopWeight.toFixed(1)} lb</div>
+                <div style={metricChip}>Max time: {selectedMaxTime.toFixed(0)} sec</div>
+                <div style={metricChip}>Total reps: {selectedTotalReps}</div>
+                <div style={metricChip}>Total volume: {selectedTotalVolume.toFixed(1)}</div>
+                {exerciseWeightGoalMap.has(selectedExercise.id) && (
+                  <div style={metricChip}>
+                    Goal {selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "time" : "weight"}:{" "}
+                    {exerciseWeightGoalMap.get(selectedExercise.id)?.toFixed(
+                      selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1
+                    )}{" "}
+                    {selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
+                  </div>
+                )}
+                {exerciseAvgRepsGoalMap.has(selectedExercise.id) && (
+                  <div style={metricChip}>Goal avg reps/set: {exerciseAvgRepsGoalMap.get(selectedExercise.id)?.toFixed(1)}</div>
+                )}
+                {exerciseRepsAtWeightGoalMap.has(selectedExercise.id) && (
+                  <div style={metricChip}>
+                    Goal reps @ wt: {exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.repsTarget.toFixed(0)} @{" "}
+                    {exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.weightLb.toFixed(1)} lb
+                  </div>
+                )}
+              </div>
 
-            <div style={{ display: "grid", gap: 10 }}>
-              <MetricLineChart
-                title={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
-                yLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
-                xLabel="Session"
-                points={selectedPrimaryPoints}
-                valueLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
-                unit={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
-                decimals={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1}
-                targetValue={
-                  exerciseWeightGoalMap.get(selectedExercise.id) ??
-                  exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.weightLb
-                }
-                targetLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time goal" : "Weight goal"}
-                targetUnit={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
-                targetDecimals={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1}
-                compact={true}
-              />
-              {selectedIsTimeAndWeight ? (
+              <div style={{ display: "grid", gap: 10 }}>
                 <MetricLineChart
-                  title="Avg Time per Set"
-                  yLabel="Time/Set"
+                  title={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
+                  yLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
                   xLabel="Session"
-                  points={selectedAvgTimePerSetPoints}
-                  valueLabel="Avg Time/Set"
-                  unit="sec"
+                  points={selectedPrimaryPoints}
+                  valueLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time" : "Weight"}
+                  unit={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
+                  decimals={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1}
+                  targetValue={
+                    exerciseWeightGoalMap.get(selectedExercise.id) ??
+                    exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.weightLb
+                  }
+                  targetLabel={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "Time goal" : "Weight goal"}
+                  targetUnit={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? "sec" : "lb"}
+                  targetDecimals={selectedExercise.unit === "TIME" && !selectedExercise.supportsWeight ? 0 : 1}
+                  compact={true}
+                />
+                {selectedIsTimeAndWeight ? (
+                  <MetricLineChart
+                    title="Avg Time per Set"
+                    yLabel="Time/Set"
+                    xLabel="Session"
+                    points={selectedAvgTimePerSetPoints}
+                    valueLabel="Avg Time/Set"
+                    unit="sec"
+                    decimals={1}
+                    compact={true}
+                  />
+                ) : (
+                  <>
+                    <MetricLineChart
+                      title="Total Reps"
+                      yLabel="Reps"
+                      xLabel="Session"
+                      points={selectedRepsPoints}
+                      valueLabel="Reps"
+                      decimals={0}
+                      compact={true}
+                    />
+                    <MetricLineChart
+                      title="Avg Reps per Set"
+                      yLabel="Reps/Set"
+                      xLabel="Session"
+                      points={selectedAvgRepsPoints}
+                      valueLabel="Avg Reps/Set"
+                      decimals={1}
+                      targetValue={
+                        exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.repsTarget ??
+                        exerciseAvgRepsGoalMap.get(selectedExercise.id)
+                      }
+                      targetLabel={
+                        exerciseRepsAtWeightGoalMap.has(selectedExercise.id) ? "Reps goal @ weight" : "Avg reps goal"
+                      }
+                      targetDecimals={1}
+                      compact={true}
+                    />
+                  </>
+                )}
+                <MetricLineChart
+                  title="Total Volume"
+                  yLabel="Volume"
+                  xLabel="Session"
+                  points={selectedVolumePoints}
+                  valueLabel="Volume"
                   decimals={1}
                   compact={true}
                 />
-              ) : (
-                <>
-                  <MetricLineChart
-                    title="Total Reps"
-                    yLabel="Reps"
-                    xLabel="Session"
-                    points={selectedRepsPoints}
-                    valueLabel="Reps"
-                    decimals={0}
-                    compact={true}
-                  />
-                  <MetricLineChart
-                    title="Avg Reps per Set"
-                    yLabel="Reps/Set"
-                    xLabel="Session"
-                    points={selectedAvgRepsPoints}
-                    valueLabel="Avg Reps/Set"
-                    decimals={1}
-                    targetValue={
-                      exerciseRepsAtWeightGoalMap.get(selectedExercise.id)?.repsTarget ??
-                      exerciseAvgRepsGoalMap.get(selectedExercise.id)
-                    }
-                    targetLabel={
-                      exerciseRepsAtWeightGoalMap.has(selectedExercise.id) ? "Reps goal @ weight" : "Avg reps goal"
-                    }
-                    targetDecimals={1}
-                    compact={true}
-                  />
-                </>
-              )}
-              <MetricLineChart
-                title="Total Volume"
-                yLabel="Volume"
-                xLabel="Session"
-                points={selectedVolumePoints}
-                valueLabel="Volume"
-                decimals={1}
-                compact={true}
-              />
-            </div>
+              </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>ROUTINES USING THIS EXERCISE</div>
-              {selectedExerciseRoutines.length === 0 && (
-                <div style={{ opacity: 0.75, fontSize: 13 }}>No matching sessions for this exercise in the selected filters.</div>
-              )}
-              <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-                {selectedExerciseRoutines.map((routine) => (
-                  <Link
-                    key={routine.id}
-                    href={`/progress/routine/${routine.id}?${queryString({ category, range, view: "progression", includeArchived })}`}
-                    style={metricChip}
-                  >
-                    {routine.name} | {routine.category}
-                  </Link>
-                ))}
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>ROUTINES USING THIS EXERCISE</div>
+                {selectedExerciseRoutines.length === 0 && (
+                  <div style={{ opacity: 0.75, fontSize: 13 }}>No matching sessions for this exercise in the selected filters.</div>
+                )}
+              <div className="mobileProgressExerciseRoutineGrid" style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                  {selectedExerciseRoutines.map((routine) => (
+                    <Link
+                      key={routine.id}
+                      href={`/progress/routine/${routine.id}?${queryString({ category, range, view: "progression", includeArchived })}`}
+                      style={metricChip}
+                    >
+                      {routine.name} | {routine.category}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </details>
         </section>
       )}
 
-      <section style={{ marginTop: 16, border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, padding: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>ROUTINE COMPLETION TREND</div>
-            <div style={{ marginTop: 4, fontSize: 14, opacity: 0.85 }}>
-              Weekly completion counts for a selected routine inside the main progression page.
-            </div>
-          </div>
-          <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
-            <input type="hidden" name="view" value={view} />
-            <input type="hidden" name="category" value={category} />
-            <input type="hidden" name="range" value={range} />
-            <input type="hidden" name="includeArchived" value={includeArchived ? "1" : "0"} />
-            <input type="hidden" name="exercise" value={exerciseQuery} />
-            <input type="hidden" name="exerciseId" value={selectedExerciseId} />
-            <label style={{ display: "grid", gap: 6, minWidth: 280 }}>
-              <span style={{ fontSize: 12, opacity: 0.65, fontWeight: 800 }}>Routine</span>
-              <select
-                name="routineId"
-                defaultValue={selectedRoutineId}
-                style={{ background: "#111b2e", color: "rgba(255,255,255,0.92)", opacity: 0.95 }}
-              >
-                {completionRoutines.map((routine) => (
-                  <option key={routine.id} value={routine.id}>
-                    {routine.name} | {routine.category || "General"} | {routine.kind}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit" style={filterButtonStyle}>
-              Show routine
-            </button>
-          </form>
-        </div>
-
-        {selectedCompletionRoutine ? (
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
-              <div style={metricChip}>Routine: {selectedCompletionRoutine.name}</div>
-              <div style={metricChip}>Category: {selectedCompletionRoutine.category || "General"}</div>
-              <div style={metricChip}>Type: {selectedCompletionRoutine.kind}</div>
-              <div style={metricChip}>
-                Completed ({rangeLabel(range)}): {completionMap.get(selectedCompletionRoutine.id) ?? 0}
-              </div>
-              <div style={metricChip}>
-                Weekly target:{" "}
-                {routineCompletionGoalMap.get(selectedCompletionRoutine.id) ??
-                  selectedCompletionRoutine.timesPerWeek ??
-                  "-"}
-              </div>
-              <div style={metricChip}>
-                Weeks goal met: {weeksMetMap.get(selectedCompletionRoutine.id) ?? 0}
-                {plannedWeeks ? ` / ${plannedWeeks}` : ""}
-              </div>
-              <div style={metricChip}>YTD sessions: {ytdMap.get(selectedCompletionRoutine.id) ?? 0}</div>
-              <div style={metricChip}>
-                Last completed:{" "}
-                {latestDateMap.get(selectedCompletionRoutine.id)
-                  ? new Date(latestDateMap.get(selectedCompletionRoutine.id)!).toLocaleDateString()
-                  : "-"}
-              </div>
-            </div>
-
-            {selectedRoutineWeeklyPoints.length > 0 ? (
-              <MetricLineChart
-                title="Routine completions per week"
-                yLabel="Completions"
-                xLabel="Week"
-                points={selectedRoutineWeeklyPoints}
-                valueLabel="Completions"
-                decimals={0}
-                yAxisTicks={selectedRoutineYAxisTicks}
-                targetValue={
-                  routineCompletionGoalMap.get(selectedCompletionRoutine.id) ?? selectedCompletionRoutine.timesPerWeek ?? undefined
-                }
-                targetLabel="Weekly completion goal"
-                targetDecimals={0}
-                compact={true}
-              />
-            ) : (
-              <div style={{ ...metricChip, fontSize: 13 }}>
-                No logged completions for this routine in {range === "all" ? "the available history" : rangeLabel(range).toLowerCase()}.
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ marginTop: 12, opacity: 0.75 }}>No routines match the current filters.</div>
-        )}
-      </section>
-
       <div style={{ marginTop: 16, display: "grid", gap: 16 }}>
-        {orderedProgressionCategories.length === 0 && (
-          <div style={{ opacity: 0.75 }}>No CARDIO or WORKOUT routines in this filter.</div>
-        )}
+        <section style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
+          <details open style={sectionDetails}>
+            <summary data-collapsible-summary style={typeHeader}>
+              <span>CARDIO</span>
+              <span style={{ fontSize: 12, opacity: 0.75 }}>{cardioRoutines.length} routines</span>
+            </summary>
+            <div style={{ padding: 12, display: "grid", gap: 10 }}>
+              {cardioRoutines.length === 0 && <div style={{ opacity: 0.75 }}>No cardio routines in this filter.</div>}
+              {cardioTypes.map((cardioType) => {
+              const preview = cardioTypePreviewMap.get(cardioType) ?? [];
+              const stats = cardioTypeStatsMap.get(cardioType) ?? {
+                runCount: 0,
+                totalMiles: 0,
+                totalDurationSec: 0,
+                avgPaceSecPerMi: null,
+              };
 
-        {orderedProgressionCategories.map((cat) => {
-          const routines = progressionGroups.get(cat) ?? [];
-          return (
-            <section key={cat} style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
-              <div
-                style={{
-                  padding: "10px 14px",
-                  background: "rgba(128,128,128,0.14)",
-                  borderBottom: "1px solid rgba(128,128,128,0.25)",
-                  fontWeight: 900,
-                  letterSpacing: 0.4,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <span>{cat.toUpperCase()}</span>
-                <span style={{ fontSize: 12, opacity: 0.75 }}>{routines.length} routines</span>
-              </div>
-
-              <div style={{ padding: 12, display: "grid", gap: 10 }}>
-                {Array.from(
-                  new Set(
-                    routines
-                      .filter((routine) => routine.kind === "CARDIO")
-                      .map((routine) => (routine.cardioType || "Cardio").trim() || "Cardio")
-                  )
-                )
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((cardioType) => {
-                    const preview = cardioTypePreviewMap.get(`${cat}|${cardioType}`) ?? [];
-                    const stats = cardioTypeStatsMap.get(`${cat}|${cardioType}`) ?? {
-                      runCount: 0,
-                      totalMiles: 0,
-                      totalDurationSec: 0,
-                      avgPaceSecPerMi: null,
-                    };
-
-                    return (
-                      <div key={`${cat}-${cardioType}`} style={groupCardStyle}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                          <div>
-                            <div style={{ fontSize: 16, fontWeight: 900 }}>{cardioType} Cardio Group</div>
-                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                              Weekly mileage combined across cardio routines with this type.
-                            </div>
-                          </div>
-                          <div style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
-                            <div>Sessions: {stats.runCount}</div>
-                            <div>Miles: {stats.totalMiles.toFixed(2)}</div>
-                            <div>Avg pace: {formatPace(stats.avgPaceSecPerMi)}</div>
-                          </div>
-                        </div>
-
-                        <div style={{ marginTop: 8 }}>
-                          <MetricLineChart
-                            title="Weekly mileage by cardio group"
-                            yLabel="Miles"
-                            xLabel="Week"
-                            points={preview}
-                            valueLabel="Miles"
-                            unit="mi"
-                            decimals={2}
-                            compact={true}
-                          />
-                        </div>
+              return (
+                <div key={cardioType} style={groupCardStyle}>
+                  <div className="mobileProgressGroupHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>{cardioType}</div>
+                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                        Important group metrics for this cardio subtype.
                       </div>
-                    );
-                  })}
+                    </div>
+                    <div className="mobileProgressStats" style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
+                      <div>Sessions: {stats.runCount}</div>
+                      <div>Miles: {stats.totalMiles.toFixed(2)}</div>
+                      <div>Avg pace: {formatPace(stats.avgPaceSecPerMi)}</div>
+                    </div>
+                  </div>
 
-                {routines.map((routine) => {
-                  const selectedSessions = selectedProgressSessionMap.get(routine.id)?.sessions ?? 0;
-                  const lastPerformedAt = selectedProgressSessionMap.get(routine.id)?.lastPerformedAt ?? null;
-                  const ytdSessions = ytdMap.get(routine.id) ?? 0;
+                  <div style={{ marginTop: 8 }}>
+                    <MetricLineChart
+                      title="Weekly mileage"
+                      yLabel="Miles"
+                      xLabel="Week"
+                      points={preview}
+                      valueLabel="Miles"
+                      unit="mi"
+                      decimals={2}
+                      compact={true}
+                    />
+                  </div>
+                </div>
+              );
+              })}
 
-                  const runStats = runStatsMap.get(routine.id) ?? {
-                    runCount: 0,
-                    totalMiles: 0,
-                    totalDurationSec: 0,
-                    avgPaceSecPerMi: null,
-                  };
-                  const longestRun = runLongestMap.get(routine.id) ?? 0;
-                  const runPreview = runPreviewSeriesMap.get(routine.id) ?? [];
+              {cardioRoutines.map((routine) => {
+              const selectedSessions = selectedProgressSessionMap.get(routine.id)?.sessions ?? 0;
+              const lastPerformedAt = selectedProgressSessionMap.get(routine.id)?.lastPerformedAt ?? null;
+              const ytdSessions = ytdMap.get(routine.id) ?? 0;
+              const runStats = runStatsMap.get(routine.id) ?? {
+                runCount: 0,
+                totalMiles: 0,
+                totalDurationSec: 0,
+                avgPaceSecPerMi: null,
+              };
+              const longestRun = runLongestMap.get(routine.id) ?? 0;
+              const runPreview = runPreviewSeriesMap.get(routine.id) ?? [];
+              const detailHref = `/progress/routine/${routine.id}?${queryString({
+                category,
+                range,
+                view,
+                includeArchived,
+              })}`;
 
-                  const workoutTotals = workoutTotalsMap.get(routine.id) ?? {
-                    totalSets: 0,
-                    totalReps: 0,
-                    totalVolume: 0,
-                  };
-
-                  const detailHref = `/progress/routine/${routine.id}?${queryString({
-                    category,
-                    range,
-                    view,
-                    includeArchived,
-                  })}`;
-
-                  return (
-                    <Link key={routine.id} href={detailHref} style={{ ...cardStyle, display: "block" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                        <div>
-                          <div style={{ fontSize: 16, fontWeight: 900 }}>{routine.name}</div>
-                          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                            {routine.kind === "CARDIO"
-                              ? `${routineKindLabel(routine.kind)} | ${(routine.cardioType || "Cardio").trim() || "Cardio"}`
-                              : `${routineKindLabel(routine.kind)} | Exercises tracked: ${routine.exerciseCount}`}
-                          </div>
-                        </div>
-                        <div style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
-                          <div>Sessions ({rangeLabel(range)}): {selectedSessions}</div>
-                          <div>YTD sessions: {ytdSessions}</div>
-                          <div>Last session: {lastPerformedAt ? new Date(lastPerformedAt).toLocaleDateString() : "-"}</div>
-                        </div>
+              return (
+                <Link key={routine.id} href={detailHref} style={{ ...cardStyle, display: "block" }}>
+                  <div className="mobileProgressRoutineHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>{routine.name}</div>
+                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                        {(routine.cardioType || "Cardio").trim() || "Cardio"} | {routine.category || "General"}
                       </div>
+                    </div>
+                    <div className="mobileProgressStats" style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
+                      <div>Sessions ({rangeLabel(range)}): {selectedSessions}</div>
+                      <div>YTD sessions: {ytdSessions}</div>
+                      <div>Last session: {lastPerformedAt ? new Date(lastPerformedAt).toLocaleDateString() : "-"}</div>
+                    </div>
+                  </div>
 
-                      <div style={{ marginTop: 10, fontSize: 13, opacity: 0.92 }}>
-                        {routine.kind === "CARDIO" ? (
-                          <>
-                            <div>
-                              Sessions: {runStats.runCount} | Miles: {runStats.totalMiles.toFixed(2)} | Longest: {longestRun.toFixed(2)} mi | Avg pace: {formatPace(runStats.avgPaceSecPerMi)} | Duration: {formatDuration(runStats.totalDurationSec)}
-                            </div>
-                            {(runWeeklyGoalMap.has(routine.id) || runLongestGoalMap.has(routine.id)) && (
-                              <div style={{ marginTop: 4 }}>
-                                {runWeeklyGoalMap.has(routine.id)
-                                  ? `Weekly goal: ${runWeeklyGoalMap.get(routine.id)?.toFixed(1)} mi`
-                                  : ""}
-                                {runWeeklyGoalMap.has(routine.id) && runLongestGoalMap.has(routine.id) ? " | " : ""}
-                                {runLongestGoalMap.has(routine.id)
-                                  ? `Longest goal: ${runLongestGoalMap.get(routine.id)?.toFixed(1)} mi`
-                                  : ""}
-                              </div>
-                            )}
-                            <div style={{ marginTop: 8 }}>
-                              <MetricLineChart
-                                title="Weekly mileage preview"
-                                yLabel="Miles"
-                                xLabel="Week"
-                                points={runPreview}
-                                valueLabel="Miles"
-                                unit="mi"
-                                decimals={2}
-                                targetValue={runWeeklyGoalMap.get(routine.id)}
-                                targetLabel="Weekly cardio mileage goal"
-                                targetUnit="mi"
-                                targetDecimals={2}
-                                compact={true}
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <div>
-                            Sets: {workoutTotals.totalSets} | Reps: {workoutTotals.totalReps} | Volume: {workoutTotals.totalVolume.toFixed(1)}
-                          </div>
-                        )}
+                  <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                    <div className="mobileProgressRoutineGrid" style={routineMetricsGrid}>
+                      <div style={metricChip}>Miles: {runStats.totalMiles.toFixed(2)}</div>
+                      <div style={metricChip}>Longest: {longestRun.toFixed(2)} mi</div>
+                      <div style={metricChip}>Avg pace: {formatPace(runStats.avgPaceSecPerMi)}</div>
+                      <div style={metricChip}>Duration: {formatDuration(runStats.totalDurationSec)}</div>
+                    </div>
+                    <MetricLineChart
+                      title="Weekly mileage preview"
+                      yLabel="Miles"
+                      xLabel="Week"
+                      points={runPreview}
+                      valueLabel="Miles"
+                      unit="mi"
+                      decimals={2}
+                      targetValue={runWeeklyGoalMap.get(routine.id)}
+                      targetLabel="Weekly mileage goal"
+                      targetUnit="mi"
+                      targetDecimals={2}
+                      compact={true}
+                    />
+                  </div>
+                </Link>
+              );
+              })}
+            </div>
+          </details>
+        </section>
+
+        <section style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
+          <details open style={sectionDetails}>
+            <summary data-collapsible-summary style={typeHeader}>
+              <span>WORKOUT</span>
+              <span style={{ fontSize: 12, opacity: 0.75 }}>{workoutRoutines.length} routines</span>
+            </summary>
+            <div style={{ padding: 12, display: "grid", gap: 10 }}>
+              {workoutRoutines.length === 0 && <div style={{ opacity: 0.75 }}>No workout routines in this filter.</div>}
+              {workoutRoutines.map((routine) => {
+              const selectedSessions = selectedProgressSessionMap.get(routine.id)?.sessions ?? 0;
+              const lastPerformedAt = selectedProgressSessionMap.get(routine.id)?.lastPerformedAt ?? null;
+              const ytdSessions = ytdMap.get(routine.id) ?? 0;
+              const workoutTotals = workoutTotalsMap.get(routine.id) ?? {
+                totalSets: 0,
+                totalReps: 0,
+                totalVolume: 0,
+              };
+              const avgRepsPerSet =
+                workoutTotals.totalSets > 0 ? workoutTotals.totalReps / workoutTotals.totalSets : 0;
+              const detailHref = `/progress/routine/${routine.id}?${queryString({
+                category,
+                range,
+                view,
+                includeArchived,
+              })}`;
+
+              return (
+                <Link key={routine.id} href={detailHref} style={{ ...cardStyle, display: "block" }}>
+                  <div className="mobileProgressRoutineHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>{routine.name}</div>
+                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                        Exercises tracked: {routine.exerciseCount} | {routine.category || "General"}
                       </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+                    </div>
+                    <div className="mobileProgressStats" style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
+                      <div>Sessions ({rangeLabel(range)}): {selectedSessions}</div>
+                      <div>YTD sessions: {ytdSessions}</div>
+                      <div>Last session: {lastPerformedAt ? new Date(lastPerformedAt).toLocaleDateString() : "-"}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <div className="mobileProgressRoutineGrid" style={routineMetricsGrid}>
+                      <div style={metricChip}>Sets: {workoutTotals.totalSets}</div>
+                      <div style={metricChip}>Reps: {workoutTotals.totalReps}</div>
+                      <div style={metricChip}>Avg reps/set: {avgRepsPerSet.toFixed(1)}</div>
+                      <div style={metricChip}>Volume: {workoutTotals.totalVolume.toFixed(1)}</div>
+                    </div>
+                  </div>
+                </Link>
+              );
+              })}
+            </div>
+          </details>
+        </section>
+
+        <section style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
+          <details open style={sectionDetails}>
+            <summary data-collapsible-summary style={typeHeader}>
+              <span>COMPLETION</span>
+              <span style={{ fontSize: 12, opacity: 0.75 }}>{orderedCompletionRoutines.length} routines</span>
+            </summary>
+            <div style={{ padding: 12, display: "grid", gap: 10 }}>
+              {orderedCompletionRoutines.length === 0 && <div style={{ opacity: 0.75 }}>No completion routines in this filter.</div>}
+              {orderedCompletionRoutines.map((routine) => {
+              const completed = completionMap.get(routine.id) ?? 0;
+              const ytdSessions = ytdMap.get(routine.id) ?? 0;
+              const weeklyTarget = routineCompletionGoalMap.get(routine.id) ?? routine.timesPerWeek ?? 0;
+              const streak = currentRoutineStreak(routine.id);
+              const lastCompleted = latestDateMap.get(routine.id);
+              const detailHref = `/progress/routine/${routine.id}?${queryString({
+                category,
+                range,
+                view,
+                includeArchived,
+              })}`;
+
+              return (
+                <Link key={routine.id} href={detailHref} style={{ ...cardStyle, display: "block" }}>
+                  <div className="mobileProgressRoutineHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>{routine.name}</div>
+                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                        {routine.category || "General"} | Completion tracking
+                      </div>
+                    </div>
+                    <div className="mobileProgressStats" style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>
+                      <div>Completed ({rangeLabel(range)}): {completed}</div>
+                      <div>YTD sessions: {ytdSessions}</div>
+                      <div>Last completed: {lastCompleted ? new Date(lastCompleted).toLocaleDateString() : "-"}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <div className="mobileProgressRoutineGrid" style={routineMetricsGrid}>
+                      <div style={metricChip}>Weekly target: {weeklyTarget}</div>
+                      <div style={metricChip}>Weeks goal met: {weeksMetMap.get(routine.id) ?? 0}</div>
+                      <div style={metricChip}>Current streak: {streak}</div>
+                      <div style={metricChip}>Range completions: {completed}</div>
+                    </div>
+                  </div>
+                </Link>
+              );
+              })}
+            </div>
+          </details>
+        </section>
       </div>
     </div>
   );
@@ -1552,17 +1334,22 @@ const groupCardStyle: React.CSSProperties = {
   background: "linear-gradient(180deg, rgba(76,163,255,0.10), rgba(128,128,128,0.06))",
 };
 
+const typeHeader: React.CSSProperties = {
+  padding: "10px 14px",
+  background: "rgba(128,128,128,0.14)",
+  borderBottom: "1px solid rgba(128,128,128,0.25)",
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
 const goalCardStyle: React.CSSProperties = {
   ...cardStyle,
   borderColor: "rgba(255,199,92,0.32)",
   background: "linear-gradient(180deg, rgba(255,199,92,0.10), rgba(128,128,128,0.06))",
-};
-
-const goalCategoryHeader: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 900,
-  letterSpacing: 0.4,
-  opacity: 0.78,
 };
 
 const goalCategoryDetailsStyle: React.CSSProperties = {
@@ -1603,23 +1390,7 @@ const metricChip: React.CSSProperties = {
   background: "rgba(128,128,128,0.08)",
 };
 
-const filterButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.35)",
-  borderRadius: 10,
-  padding: "10px 14px",
-  background: "rgba(51,255,122,0.14)",
-  color: "inherit",
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const exerciseMetricCardStyle: React.CSSProperties = {
-  ...cardStyle,
-  display: "grid",
-  gap: 10,
-};
-
-const exerciseMetricGridStyle: React.CSSProperties = {
+const routineMetricsGrid: React.CSSProperties = {
   display: "grid",
   gap: 8,
   gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
