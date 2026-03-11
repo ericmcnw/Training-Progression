@@ -262,7 +262,6 @@ export default async function SchedulePage({
             remaining: Math.max(0, planned - logged),
           };
         })
-        .filter((task) => (isPastOrToday ? task.logged > 0 : true))
         .sort((a, b) => a.routineName.localeCompare(b.routineName));
 
       return { day, tasks, isPastOrToday };
@@ -347,7 +346,7 @@ export default async function SchedulePage({
                     <div style={{ display: "grid", gap: 6, flex: 1 }}>
                       {dayItem.tasks.length === 0 && (
                         <div style={{ fontSize: 13, opacity: 0.65 }}>
-                          {dayItem.isPastOrToday ? "No routines completed." : "No routines planned."}
+                          {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
@@ -437,7 +436,7 @@ export default async function SchedulePage({
                       <div style={{ display: "grid", gap: 6 }}>
                         {dayItem.tasks.length === 0 && (
                           <div style={calendarEmptyText}>
-                            {dayItem.isPastOrToday ? "No routines completed." : "No routines planned."}
+                            {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
                           </div>
                         )}
                         {dayItem.tasks.map((task) => (

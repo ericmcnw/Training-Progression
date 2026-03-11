@@ -6,7 +6,7 @@ import {
   parseRunWeeklyMileageGoalType,
   sparklinePoints,
 } from "@/lib/progress";
-import { formatRoutineSubtype, routineKindColor } from "@/lib/routines";
+import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +106,15 @@ function formatGoalType(type: string, routineMap: Map<string, { name: string }>,
 
 function kindAccent(kind: string) {
   return routineKindColor(kind);
+}
+
+function loggingHref(routine: { routineId: string; kind: string }) {
+  const kind = normalizeRoutineKind(routine.kind);
+  if (kind === "WORKOUT") return `/routines/${routine.routineId}/log`;
+  if (kind === "CARDIO") return `/routines/${routine.routineId}/log-cardio`;
+  if (kind === "GUIDED") return `/routines/${routine.routineId}/log-guided`;
+  if (kind === "SESSION") return `/routines/${routine.routineId}/log-session`;
+  return `/routines/${routine.routineId}/log-completion`;
 }
 
 function SessionFractionRing({ current, target }: { current: number; target: number }) {
@@ -363,7 +372,7 @@ export default async function HomePage() {
     });
 
   const weeklyCardioBreakdown = routines
-    .filter((routine) => routine.kind === "CARDIO")
+    .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
     .map((routine) => ({
       id: routine.id,
       name: routine.name,
@@ -490,7 +499,7 @@ export default async function HomePage() {
                     <div>
                       <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
                       <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
-                        {item.category} | {item.kind}
+                        {item.category} | {formatRoutineTypeLabel(item.kind)}
                       </div>
                     </div>
                     <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
@@ -500,6 +509,13 @@ export default async function HomePage() {
                   <div style={{ marginTop: 10, fontSize: 13, opacity: 0.88 }}>
                     Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
                   </div>
+                  {item.planned > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <Link href={loggingHref(item)} style={focusActionLink}>
+                        Log
+                      </Link>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -777,6 +793,20 @@ const focusDoneCard: React.CSSProperties = {
   border: "1px solid rgba(84,203,130,0.72)",
   background: "rgba(84,203,130,0.10)",
   boxShadow: "0 0 0 1px rgba(84,203,130,0.14), 0 0 18px rgba(84,203,130,0.18)",
+};
+
+const focusActionLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.08)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 13,
+  fontWeight: 800,
 };
 
 const kindPill: React.CSSProperties = {

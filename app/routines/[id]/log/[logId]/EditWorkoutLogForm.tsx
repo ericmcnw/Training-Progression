@@ -35,6 +35,7 @@ export default function EditWorkoutLogForm({
 }) {
   return (
     <WorkoutExerciseEditor
+      routineId={routineId}
       initialNotes={initialNotes}
       initialPerformedAt={toLocalInputValue(initialPerformedAt)}
       initialBlocks={initialExercises}

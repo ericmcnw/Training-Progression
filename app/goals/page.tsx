@@ -20,7 +20,7 @@ import {
   parseRunLongestGoalType,
   parseRunWeeklyMileageGoalType,
 } from "@/lib/progress";
-import { formatRoutineSubtype } from "@/lib/routines";
+import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -357,7 +357,7 @@ export default async function GoalsPage({
     _max: { distanceMi: true },
   });
   const longestRunMap = new Map(longestRuns.map((x) => [x.routineId, x._max.distanceMi ?? 0]));
-  const cardioRoutines = routines.filter((routine) => routine.kind === "CARDIO");
+  const cardioRoutines = routines.filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO");
   const weeklyMileageByCardioType = new Map<string, number>();
   const longestByCardioType = new Map<string, number>();
   let weeklyMileageAllCardio = 0;

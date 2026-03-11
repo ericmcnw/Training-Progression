@@ -16,6 +16,7 @@ import {
   type ProgressRange,
   type ProgressView,
 } from "@/lib/progress";
+import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
 import ExerciseSearch from "./ExerciseSearch";
 import MetricLineChart from "./MetricLineChart";
 
@@ -55,10 +56,11 @@ function getPlannedWeeks(range: ProgressRange): number | null {
 }
 
 function routineKindLabel(kind: string) {
-  if (kind === "COMPLETION") return "COMPLETION";
-  if (kind === "CARDIO") return "CARDIO";
-  if (kind === "WORKOUT") return "WORKOUT";
-  return kind;
+  return normalizeRoutineKind(kind);
+}
+
+function cardioTypeLabel(value: string | null | undefined) {
+  return formatRoutineSubtype(value) || "Cardio";
 }
 
 function cardioScopeKey(scope: { kind: "routine"; routineId: string } | { kind: "cardioType"; cardioType: string } | { kind: "allCardio" }) {
@@ -152,15 +154,18 @@ export default async function ProgressPage(props: {
     return true;
   });
 
-  const completionRoutines = filteredRoutines.filter((r) => r.kind === "COMPLETION");
-  const progressionRoutines = filteredRoutines.filter((r) => r.kind === "CARDIO" || r.kind === "WORKOUT");
+  const completionRoutines = filteredRoutines.filter((r) => normalizeRoutineKind(r.kind) === "COMPLETION");
+  const progressionRoutines = filteredRoutines.filter((r) => {
+    const kind = normalizeRoutineKind(r.kind);
+    return kind === "CARDIO" || kind === "WORKOUT";
+  });
   const routineById = new Map(allRoutines.map((routine) => [routine.id, routine]));
   const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
   const completionRoutineIds = completionRoutines.map((r) => r.id);
   const progressionRoutineIds = progressionRoutines.map((r) => r.id);
-  const runRoutineIds = progressionRoutines.filter((r) => r.kind === "CARDIO").map((r) => r.id);
-  const workoutRoutineIds = progressionRoutines.filter((r) => r.kind === "WORKOUT").map((r) => r.id);
+  const runRoutineIds = progressionRoutines.filter((r) => normalizeRoutineKind(r.kind) === "CARDIO").map((r) => r.id);
+  const workoutRoutineIds = progressionRoutines.filter((r) => normalizeRoutineKind(r.kind) === "WORKOUT").map((r) => r.id);
   const activeExerciseGoalIds = Array.from(
     new Set(
       activeGoals
@@ -518,10 +523,10 @@ export default async function ProgressPage(props: {
   }
 
   const cardioRoutines = progressionRoutines
-    .filter((routine) => routine.kind === "CARDIO")
+    .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
     .sort((a, b) => a.name.localeCompare(b.name));
   const workoutRoutines = progressionRoutines
-    .filter((routine) => routine.kind === "WORKOUT")
+    .filter((routine) => normalizeRoutineKind(routine.kind) === "WORKOUT")
     .sort((a, b) => a.name.localeCompare(b.name));
   const orderedCompletionRoutines = [...completionRoutines].sort(
     (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)
@@ -543,14 +548,18 @@ export default async function ProgressPage(props: {
   const cardioTypes = Array.from(
     new Set(
       progressionRoutines
-        .filter((routine) => routine.kind === "CARDIO")
-        .map((routine) => (routine.cardioType || "Cardio").trim() || "Cardio")
+        .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
+        .map((routine) => cardioTypeLabel(routine.cardioType))
     )
   ).sort((a, b) => a.localeCompare(b));
   for (const cardioType of cardioTypes) {
     const typeRoutineIds = new Set(
       progressionRoutines
-        .filter((routine) => routine.kind === "CARDIO" && ((routine.cardioType || "Cardio").trim() || "Cardio") === cardioType)
+        .filter(
+          (routine) =>
+            normalizeRoutineKind(routine.kind) === "CARDIO" &&
+            cardioTypeLabel(routine.cardioType) === cardioType
+        )
         .map((routine) => routine.id)
     );
     const typeLogs = runLogs.filter((log) => typeRoutineIds.has(log.routineId));
@@ -570,7 +579,7 @@ export default async function ProgressPage(props: {
   for (const cardioType of cardioTypes) {
     const routineIds = new Set(
       cardioRoutines
-        .filter((routine) => ((routine.cardioType || "Cardio").trim() || "Cardio") === cardioType)
+        .filter((routine) => cardioTypeLabel(routine.cardioType) === cardioType)
         .map((routine) => routine.id)
     );
     const logs = runLogs.filter((log) => routineIds.has(log.routineId));
@@ -1169,7 +1178,7 @@ export default async function ProgressPage(props: {
                     <div>
                       <div style={{ fontSize: 16, fontWeight: 900 }}>{routine.name}</div>
                       <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                        {(routine.cardioType || "Cardio").trim() || "Cardio"} | {routine.category || "General"}
+                        {cardioTypeLabel(routine.cardioType)} | {routine.category || "General"}
                       </div>
                     </div>
                     <div className="mobileProgressStats" style={{ display: "grid", gap: 4, fontSize: 12, opacity: 0.88, textAlign: "right" }}>

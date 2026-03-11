@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { createWorkoutExerciseOption } from "@/app/routines/actions";
 
 export type ExerciseOption = {
   id: string;
@@ -45,7 +46,12 @@ function defaultRows(count = 3) {
   }));
 }
 
+function normalizeName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export default function WorkoutExerciseEditor({
+  routineId,
   initialNotes,
   initialPerformedAt,
   initialBlocks,
@@ -55,6 +61,7 @@ export default function WorkoutExerciseEditor({
   backHref,
   onSave,
 }: {
+  routineId: string;
   initialNotes: string;
   initialPerformedAt: string;
   initialBlocks: WorkoutBlock[];
@@ -67,21 +74,40 @@ export default function WorkoutExerciseEditor({
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt);
   const [saving, setSaving] = useState(false);
+  const [creatingExercise, startCreateExercise] = useTransition();
   const [exerciseQuery, setExerciseQuery] = useState("");
+  const [selectedExerciseId, setSelectedExerciseId] = useState("");
+  const [customUnit, setCustomUnit] = useState<"REPS" | "TIME">("REPS");
+  const [customSupportsWeight, setCustomSupportsWeight] = useState(false);
+  const [exerciseError, setExerciseError] = useState("");
+  const [exerciseOptions, setExerciseOptions] = useState(availableExercises);
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
 
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
     const query = exerciseQuery.trim().toLowerCase();
-    return availableExercises.filter((exercise) => {
+    return exerciseOptions.filter((exercise) => {
       if (activeIds.has(exercise.id)) return false;
       if (!query) return true;
       return exercise.name.toLowerCase().includes(query);
     });
-  }, [availableExercises, blocks, exerciseQuery]);
+  }, [exerciseOptions, blocks, exerciseQuery]);
+
+  const hasExactMatch = useMemo(() => {
+    const normalizedQuery = normalizeName(exerciseQuery);
+    if (!normalizedQuery) return false;
+    return exerciseOptions.some((exercise) => normalizeName(exercise.name) === normalizedQuery);
+  }, [exerciseOptions, exerciseQuery]);
+
+  const activeSelectedExerciseId = useMemo(() => {
+    if (availableToAdd.some((exercise) => exercise.id === selectedExerciseId)) {
+      return selectedExerciseId;
+    }
+    return availableToAdd[0]?.id ?? "";
+  }, [availableToAdd, selectedExerciseId]);
 
   function addExercise(exerciseId: string) {
-    const exercise = availableExercises.find((item) => item.id === exerciseId);
+    const exercise = exerciseOptions.find((item) => item.id === exerciseId);
     if (!exercise) return;
 
     setBlocks((prev) => [
@@ -95,6 +121,8 @@ export default function WorkoutExerciseEditor({
       },
     ]);
     setExerciseQuery("");
+    setSelectedExerciseId("");
+    setExerciseError("");
   }
 
   function removeExercise(exerciseId: string) {
@@ -162,6 +190,51 @@ export default function WorkoutExerciseEditor({
     }
   }
 
+  function handleAddSelectedExercise() {
+    if (!activeSelectedExerciseId) return;
+    addExercise(activeSelectedExerciseId);
+  }
+
+  function handleCreateExercise() {
+    const name = exerciseQuery.trim();
+    if (!name) {
+      setExerciseError("Enter an exercise name.");
+      return;
+    }
+
+    setExerciseError("");
+    startCreateExercise(async () => {
+      try {
+        const created = await createWorkoutExerciseOption({
+          routineId,
+          name,
+          unit: customUnit,
+          supportsWeight: customSupportsWeight,
+        });
+
+        setExerciseOptions((prev) => {
+          if (prev.some((exercise) => exercise.id === created.id)) return prev;
+          return [...prev, created].sort((a, b) => a.name.localeCompare(b.name));
+        });
+        setBlocks((prev) => [
+          ...prev,
+          {
+            exerciseId: created.id,
+            name: created.name,
+            unit: created.unit,
+            supportsWeight: created.supportsWeight,
+            rows: defaultRows(),
+          },
+        ]);
+        setExerciseQuery("");
+        setSelectedExerciseId("");
+        setExerciseError("");
+      } catch (error) {
+        setExerciseError(error instanceof Error ? error.message : "Could not create exercise.");
+      }
+    });
+  }
+
   return (
     <div style={{ marginTop: 12, display: "grid", gap: 16 }}>
       <div>
@@ -194,22 +267,55 @@ export default function WorkoutExerciseEditor({
           style={{ ...styles.input, minWidth: 260 }}
           value={exerciseQuery}
           onChange={(event) => setExerciseQuery(event.target.value)}
-          placeholder="Filter exercises..."
+          placeholder="Search exercises..."
         />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {availableToAdd.slice(0, 10).map((exercise) => (
-            <button
-              key={exercise.id}
-              type="button"
-              onClick={() => addExercise(exercise.id)}
-              style={styles.smallBtn}
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <select
+              value={activeSelectedExerciseId}
+              onChange={(event) => setSelectedExerciseId(event.target.value)}
+              style={{ ...styles.input, minWidth: 280, maxWidth: 420 }}
+              disabled={availableToAdd.length === 0}
             >
-              + {exercise.name}
+              {availableToAdd.length === 0 && <option value="">No matches</option>}
+              {availableToAdd.slice(0, 20).map((exercise) => (
+                <option key={exercise.id} value={exercise.id}>
+                  {exercise.name} ({exercise.unit}{exercise.supportsWeight ? "+wt" : ""})
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={handleAddSelectedExercise} style={styles.smallBtn} disabled={!activeSelectedExerciseId}>
+              Add Selected
             </button>
-          ))}
-          {availableToAdd.length === 0 && (
+          </div>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.82 }}>Create Custom</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <select value={customUnit} onChange={(event) => setCustomUnit(event.target.value as "REPS" | "TIME")} style={{ ...styles.input, width: 110 }}>
+                <option value="REPS">REPS</option>
+                <option value="TIME">TIME</option>
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
+                <input
+                  type="checkbox"
+                  checked={customSupportsWeight}
+                  onChange={(event) => setCustomSupportsWeight(event.target.checked)}
+                />
+                Supports Weight
+              </label>
+              <button type="button" onClick={handleCreateExercise} style={styles.smallBtn} disabled={!exerciseQuery.trim() || creatingExercise}>
+                {creatingExercise ? "Creating..." : hasExactMatch ? "Use Matching Name" : "Create Custom"}
+              </button>
+            </div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
-              No matching exercises available. Create one in Exercises if needed.
+              Creating here saves the exercise for future workouts and adds it to this routine now.
+            </div>
+          </div>
+
+          {exerciseError && (
+            <div style={{ fontSize: 12, color: "#fca5a5" }}>
+              {exerciseError}
             </div>
           )}
         </div>

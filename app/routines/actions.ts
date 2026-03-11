@@ -480,6 +480,69 @@ export async function logWorkout(params: {
   revalidateRoutineSurfaces(params.routineId);
 }
 
+export async function createWorkoutExerciseOption(params: {
+  routineId: string;
+  name: string;
+  unit: "REPS" | "TIME";
+  supportsWeight?: boolean;
+}) {
+  await ensureRoutineKind(params.routineId, "WORKOUT");
+
+  const name = normalizeExerciseName(params.name || "");
+  const unit = params.unit === "TIME" ? "TIME" : "REPS";
+  if (!name) throw new Error("Exercise name is required.");
+
+  const exercise = await prisma.$transaction(async (tx) => {
+    const exerciseId = await ensureExerciseExists(tx, {
+      exerciseId: "",
+      customName: name,
+      unit,
+      supportsWeight: Boolean(params.supportsWeight),
+    });
+
+    const existing = await tx.routineExercise.findUnique({
+      where: {
+        routineId_exerciseId: {
+          routineId: params.routineId,
+          exerciseId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      const max = await tx.routineExercise.aggregate({
+        where: { routineId: params.routineId },
+        _max: { sortOrder: true },
+      });
+
+      await tx.routineExercise.create({
+        data: {
+          routineId: params.routineId,
+          exerciseId,
+          sortOrder: (max._max.sortOrder ?? 0) + 1,
+          defaultSets: 3,
+        },
+      });
+    }
+
+    return tx.exercise.findUniqueOrThrow({
+      where: { id: exerciseId },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        supportsWeight: true,
+      },
+    });
+  });
+
+  revalidateRoutineSurfaces(params.routineId);
+  revalidatePath("/exercises");
+
+  return exercise;
+}
+
 export async function logCardio(params: {
   routineId: string;
   distanceMi: number;
