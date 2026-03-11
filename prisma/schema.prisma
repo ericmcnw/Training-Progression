@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum RoutineKind {
+  COMPLETION
+  WORKOUT
+  CARDIO
+  GUIDED
+  SESSION
+}
+
+enum ExerciseUnit {
+  REPS
+  TIME
+}
+
+model Routine {
+  id           String      @id @default(cuid())
+  name         String
+  category     String      @default("General")
+  subtype      String?
+  domain       String      @default("general")
+  kind         RoutineKind @default(COMPLETION)
+  timesPerWeek Int?
+  isActive     Boolean     @default(true)
+
+  // soft delete (hide from UI, keep logs for progress)
+  isDeleted    Boolean     @default(false)
+  deletedAt    DateTime?
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  logs         RoutineLog[]
+  exercises    RoutineExercise[]
+  guidedSteps  GuidedStep[]
+  cardioDetails CardioRoutineDetails?
+  sessionDetails SessionRoutineDetails?
+  scheduleEntries ScheduleEntry[]
+  manualScheduleEntries ScheduleManualEntry[]
+
+  @@index([isActive])
+  @@index([isDeleted])
+  @@index([category])
+  @@index([kind, subtype])
+}
+
+model SchedulePlan {
+  id               String          @id @default(cuid())
+  name             String
+  cycleLengthDays  Int             @default(7)
+  isActive         Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  entries          ScheduleEntry[]
+  activation       SchedulePlanActivation?
+}
+
+model ScheduleEntry {
+  id             String       @id @default(cuid())
+  schedulePlanId String
+  routineId      String
+  dayOffset      Int
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  schedulePlan   SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
+  routine        Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([schedulePlanId, dayOffset, sortOrder])
+  @@index([routineId])
+}
+
+model SchedulePlanActivation {
+  id             String       @id @default(cuid())
+  schedulePlanId String       @unique
+  isEnabled      Boolean      @default(false)
+  startDate      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  schedulePlan   SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
+}
+
+model ScheduleManualEntry {
+  id            String   @id @default(cuid())
+  routineId     String
+  scheduledDate DateTime
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  routine       Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledDate, sortOrder])
+  @@index([routineId])
+}
+
+model RoutineLog {
+  id              String   @id @default(cuid())
+  routineId       String
+  performedAt     DateTime @default(now())
+  notes           String?
+  completionCount Int?
+  durationSec     Int?
+  distanceMi      Float?
+  location        String?
+
+  routine         Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  exercises       SessionExercise[]
+  guidedSteps     GuidedStepLog[]
+  metrics         RoutineLogMetric[]
+
+  createdAt       DateTime @default(now())
+
+  @@index([routineId, performedAt])
+}
+
+model GuidedStep {
+  id          String   @id @default(cuid())
+  routineId   String
+  title       String
+  durationSec Int?
+  restSec     Int?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  routine     Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  logSteps    GuidedStepLog[]
+
+  @@index([routineId, sortOrder])
+}
+
+model GuidedStepLog {
+  id            String      @id @default(cuid())
+  routineLogId   String
+  guidedStepId   String?
+  title          String
+  durationSec    Int?
+  restSec        Int?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  routineLog     RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  guidedStep     GuidedStep? @relation(fields: [guidedStepId], references: [id], onDelete: SetNull)
+
+  @@index([routineLogId, sortOrder])
+  @@index([guidedStepId])
+}
+
+model RoutineLogMetric {
+  id           String   @id @default(cuid())
+  routineLogId String
+  name         String
+  value        Float
+  unit         String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  routineLog   RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+
+  @@index([routineLogId, sortOrder])
+}
+
+model CardioRoutineDetails {
+  id                 String   @id @default(cuid())
+  routineId          String   @unique
+  defaultDistanceUnit String  @default("mi")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  routine            Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+}
+
+model SessionRoutineDetails {
+  id             String   @id @default(cuid())
+  routineId      String   @unique
+  supportsLocation Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  routine        Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+}
+
+model Exercise {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  unit           ExerciseUnit @default(REPS)
+  supportsWeight Boolean      @default(false)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  routines        RoutineExercise[]
+  sessionExercises SessionExercise[]
+}
+
+model RoutineExercise {
+  id          String   @id @default(cuid())
+  routineId   String
+  exerciseId  String
+  sortOrder   Int      @default(0)
+
+  // this is the "remember 4 rows next time" value
+  defaultSets Int      @default(3)
+
+  routine     Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([routineId, exerciseId])
+  @@index([routineId, sortOrder])
+}
+
+model SessionExercise {
+  id            String   @id @default(cuid())
+  routineLogId  String
+  exerciseId    String
+
+  routineLog    RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  exercise      Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  sets          SetEntry[]
+
+  createdAt     DateTime @default(now())
+
+  @@index([routineLogId])
+  @@index([exerciseId])
+}
+
+model SetEntry {
+  id                String   @id @default(cuid())
+  sessionExerciseId String
+  setNumber         Int
+
+  reps              Int?
+  seconds           Int?
+  weightLb          Float?
+
+  sessionExercise   SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime @default(now())
+
+  @@unique([sessionExerciseId, setNumber])
+  @@index([sessionExerciseId])
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  type        String
+  targetValue Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
