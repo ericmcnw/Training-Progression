@@ -1,5 +1,5 @@
 import { ProgressShell, SectionCard, SectionLinkButton, StatGrid, TargetCard } from "./ui";
-import { getExerciseIndex, getMetadataIndex, getRoutineIndex, getRoutineLogs, summarizeRoutineLogs } from "./data";
+import { getExerciseIndex, getMetadataIndex, getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "./data";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,26 @@ export default async function ProgressOverviewPage() {
     .slice(0, 6);
 
   const cardioGroups = groups.filter((group) => group.kind === "CARDIO_ACTIVITY");
+  const cardioQuickCandidates = cardioGroups.filter((group) => group.slug !== "climbing");
+  const cardioGroupPreviews = await Promise.all(
+    cardioQuickCandidates.map(async (group) => ({
+      group,
+      target: await resolveGroupTarget(group.slug, "4w"),
+    }))
+  );
+  const sortedQuickCardioTargets = cardioGroupPreviews.sort((a, b) => {
+    const aHasData = (a.target?.logs.length ?? 0) > 0 ? 1 : 0;
+    const bHasData = (b.target?.logs.length ?? 0) > 0 ? 1 : 0;
+    if (bHasData !== aHasData) return bHasData - aHasData;
+    if (a.group.slug === "running" && b.group.slug !== "running") return -1;
+    if (b.group.slug === "running" && a.group.slug !== "running") return 1;
+    return (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label);
+  });
+  const quickCardioTargets = sortedQuickCardioTargets.slice(0, 6);
+  const runningTarget = sortedQuickCardioTargets.find((entry) => entry.group.slug === "running");
+  if (runningTarget && !quickCardioTargets.some((entry) => entry.group.slug === "running")) {
+    quickCardioTargets[quickCardioTargets.length - 1] = runningTarget;
+  }
   const featuredGroups = groups
     .filter((group) => group.appliesToRoutine || group.appliesToExercise)
     .slice(0, 8);
@@ -76,12 +96,12 @@ export default async function ProgressOverviewPage() {
 
       <SectionCard title="Quick Cardio Targets">
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          {cardioGroups.slice(0, 6).map((group) => (
+          {quickCardioTargets.map(({ group, target }) => (
             <TargetCard
               key={group.id}
               href={`/progress/cardio/${group.slug}?tab=overview&range=4w`}
               title={group.label}
-              subtitle="Cardio rollup target"
+              subtitle={(target?.logs.length ?? 0) > 0 ? "Cardio rollup target" : "Cardio rollup target | no recent data"}
             />
           ))}
           {cardioRoutines.slice(0, 2).map((routine) => (

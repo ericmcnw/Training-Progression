@@ -1,4 +1,4 @@
-import { formatUtcDateLabel, toAppYmd } from "@/lib/dates";
+import { addDaysYmd, formatUtcDateLabel, toAppYmd } from "@/lib/dates";
 import { getWorkoutSessionMetrics, normalizeProgressRange, toPerformedAtFilter, type ProgressRange } from "@/lib/progress";
 import { getWeekBoundsSunday } from "@/lib/week";
 
@@ -71,7 +71,10 @@ export function weekKey(date: Date) {
 }
 
 export function formatWeekLabel(ymd: string) {
-  return formatUtcDateLabel(ymd, { month: "short", day: "numeric" });
+  const endYmd = addDaysYmd(ymd, 6);
+  const start = formatUtcDateLabel(ymd, { month: "numeric", day: "numeric" });
+  const end = formatUtcDateLabel(endYmd, { month: "numeric", day: "numeric" });
+  return `${start}-${end}`;
 }
 
 export function fillWeeklySeries(

@@ -310,3 +310,39 @@ export async function quickAddManualEntry(formData: FormData) {
   if (/^\d{4}-\d{2}$/.test(returnMonth)) params.set("month", returnMonth);
   redirect(params.size > 0 ? `/schedule?${params.toString()}` : "/schedule");
 }
+
+export async function removeManualEntry(formData: FormData) {
+  const entryId = String(formData.get("entryId") || "").trim();
+  const returnStart = String(formData.get("returnStart") || "").trim();
+  const returnMonth = String(formData.get("returnMonth") || "").trim();
+
+  if (!entryId) throw new Error("Missing entryId.");
+
+  const existing = await prisma.scheduleManualEntry.findUnique({
+    where: { id: entryId },
+    select: { id: true, scheduledDate: true, sortOrder: true },
+  });
+  if (!existing) throw new Error("Scheduled entry not found.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.scheduleManualEntry.delete({
+      where: { id: entryId },
+    });
+
+    await tx.scheduleManualEntry.updateMany({
+      where: {
+        scheduledDate: existing.scheduledDate,
+        sortOrder: { gt: existing.sortOrder },
+      },
+      data: {
+        sortOrder: { decrement: 1 },
+      },
+    });
+  });
+
+  revalidatePath("/schedule");
+  const params = new URLSearchParams();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(returnStart)) params.set("start", returnStart);
+  if (/^\d{4}-\d{2}$/.test(returnMonth)) params.set("month", returnMonth);
+  redirect(params.size > 0 ? `/schedule?${params.toString()}` : "/schedule");
+}

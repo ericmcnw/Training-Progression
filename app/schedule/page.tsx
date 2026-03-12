@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import ScheduleBoard from "./ScheduleBoard";
 import CycleBuilder from "./CycleBuilder";
-import { createCyclePlan, quickAddManualEntry, setCycleActivation, updateCyclePlan } from "./actions";
+import { createCyclePlan, quickAddManualEntry, removeManualEntry, setCycleActivation, updateCyclePlan } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -218,9 +218,16 @@ export default async function SchedulePage({
   function buildAgenda(days: string[]) {
     return days.map((day) => {
       const plannedCounts = new Map<string, number>();
+      const manualItems = manualEntries
+        .filter((manual) => manual.scheduledDate === day)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((manual) => ({
+          id: manual.id,
+          routineId: manual.routineId,
+          routineName: routineNameMap.get(manual.routineId) ?? manual.routineId,
+        }));
 
-      for (const manual of manualEntries) {
-        if (manual.scheduledDate !== day) continue;
+      for (const manual of manualItems) {
         plannedCounts.set(manual.routineId, (plannedCounts.get(manual.routineId) ?? 0) + 1);
       }
 
@@ -254,7 +261,7 @@ export default async function SchedulePage({
         })
         .sort((a, b) => a.routineName.localeCompare(b.routineName));
 
-      return { day, tasks, isPastOrToday };
+      return { day, tasks, isPastOrToday, manualItems };
     });
   }
 
@@ -337,6 +344,19 @@ export default async function SchedulePage({
                       {dayItem.tasks.length === 0 && (
                         <div style={{ fontSize: 13, opacity: 0.65 }}>
                           {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
+                        </div>
+                      )}
+                      {dayItem.manualItems.length > 0 && (
+                        <div style={{ display: "grid", gap: 6 }}>
+                          {dayItem.manualItems.map((item) => (
+                            <form key={item.id} action={removeManualEntry} style={manualEntryRow}>
+                              <input type="hidden" name="entryId" value={item.id} />
+                              <input type="hidden" name="returnStart" value={timelineStart} />
+                              <input type="hidden" name="returnMonth" value={selectedMonth} />
+                              <div style={{ fontSize: 12, fontWeight: 800 }}>{item.routineName}</div>
+                              <button type="submit" style={removeBtn}>Remove</button>
+                            </form>
+                          ))}
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
@@ -424,6 +444,15 @@ export default async function SchedulePage({
                         <button type="submit" style={calendarQuickAddBtn}>+</button>
                       </form>
                       <div style={{ display: "grid", gap: 6 }}>
+                        {dayItem.manualItems.map((item) => (
+                          <form key={item.id} action={removeManualEntry} style={calendarManualEntryRow}>
+                            <input type="hidden" name="entryId" value={item.id} />
+                            <input type="hidden" name="returnStart" value={timelineStart} />
+                            <input type="hidden" name="returnMonth" value={selectedMonth} />
+                            <div style={{ fontWeight: 800 }}>{item.routineName}</div>
+                            <button type="submit" style={calendarRemoveBtn}>Remove</button>
+                          </form>
+                        ))}
                         {dayItem.tasks.length === 0 && (
                           <div style={calendarEmptyText}>
                             {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
@@ -744,6 +773,28 @@ const quickAddBtn: React.CSSProperties = {
   alignSelf: "flex-end",
 };
 
+const manualEntryRow: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  justifyContent: "space-between",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 8,
+  padding: "7px 8px",
+  background: "rgba(255,255,255,0.04)",
+};
+
+const removeBtn: React.CSSProperties = {
+  padding: "5px 8px",
+  border: "1px solid rgba(255,80,80,0.75)",
+  borderRadius: 999,
+  background: "rgba(255,80,80,0.12)",
+  color: "inherit",
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
 const monthPill: React.CSSProperties = {
   padding: "7px 11px",
   borderRadius: 999,
@@ -849,6 +900,23 @@ const completedCalendarTaskRow: React.CSSProperties = {
 const calendarEmptyText: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.58,
+};
+
+const calendarManualEntryRow: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 8,
+  padding: "7px 8px",
+  background: "rgba(255,255,255,0.05)",
+  fontSize: 12,
+  display: "grid",
+  gap: 6,
+};
+
+const calendarRemoveBtn: React.CSSProperties = {
+  ...removeBtn,
+  justifySelf: "start",
+  padding: "4px 7px",
+  fontSize: 10,
 };
 
 function dayNumberChip(isToday: boolean): React.CSSProperties {

@@ -350,9 +350,9 @@ export default function WorkoutExerciseEditor({
                 <thead>
                   <tr>
                     <th style={styles.th}>Set</th>
+                    {showWeight && <th style={styles.th}>Weight (lb)</th>}
                     {showReps && <th style={styles.th}>Reps</th>}
                     {showTime && <th style={styles.th}>Time (sec)</th>}
-                    {showWeight && <th style={styles.th}>Weight (lb)</th>}
                     <th style={styles.th}></th>
                   </tr>
                 </thead>
@@ -360,6 +360,16 @@ export default function WorkoutExerciseEditor({
                   {block.rows.map((row) => (
                     <tr key={row.setNumber}>
                       <td style={styles.tdCenter}>{row.setNumber}</td>
+                      {showWeight && (
+                        <td style={styles.td}>
+                          <input
+                            style={styles.input}
+                            value={row.weightLb ?? ""}
+                            inputMode="decimal"
+                            onChange={(event) => updateCell(block.exerciseId, row.setNumber, "weightLb", event.target.value)}
+                          />
+                        </td>
+                      )}
                       {showReps && (
                         <td style={styles.td}>
                           <input
@@ -377,16 +387,6 @@ export default function WorkoutExerciseEditor({
                             value={row.seconds ?? ""}
                             inputMode="numeric"
                             onChange={(event) => updateCell(block.exerciseId, row.setNumber, "seconds", event.target.value)}
-                          />
-                        </td>
-                      )}
-                      {showWeight && (
-                        <td style={styles.td}>
-                          <input
-                            style={styles.input}
-                            value={row.weightLb ?? ""}
-                            inputMode="decimal"
-                            onChange={(event) => updateCell(block.exerciseId, row.setNumber, "weightLb", event.target.value)}
                           />
                         </td>
                       )}

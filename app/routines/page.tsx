@@ -345,9 +345,14 @@ export default async function RoutinesPage(props: {
           </div>
         </div>
 
-        <Link href="/routines/new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
-          + New Routine
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href="/exercises" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
+            Manage Exercises
+          </Link>
+          <Link href="/routines/new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
+            + New Routine
+          </Link>
+        </div>
       </div>
 
       <form method="get" style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>

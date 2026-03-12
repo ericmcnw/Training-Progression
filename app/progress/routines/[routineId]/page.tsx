@@ -1,6 +1,7 @@
 import MetricLineChart from "../../MetricLineChart";
 import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, getRoutineLogs, routineSubtitle, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../../data";
 import { EmptyState, PillNav, SectionCard, SectionLinkButton, StatGrid, TabHint, TargetCard } from "../../ui";
+import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, progressRanges, progressSections, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
@@ -13,6 +14,16 @@ type SearchParams = Record<string, string | string[] | undefined>;
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function formatSecondsShort(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0 sec";
+  const rounded = Math.round(value);
+  const minutes = Math.floor(rounded / 60);
+  const seconds = rounded % 60;
+  if (minutes <= 0) return `${seconds} sec`;
+  if (seconds === 0) return `${minutes}m`;
+  return `${minutes}m ${seconds}s`;
 }
 
 export default async function RoutineTargetPage(props: {
@@ -57,6 +68,55 @@ export default async function RoutineTargetPage(props: {
   const lastCompletedLabel = summary.lastSession
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)
     : "-";
+  const routineExercisePerformance = routine.exercises.map((routineExercise) => {
+    const sessionRows = logs.flatMap((log) =>
+      log.exercises
+        .filter((entry) => entry.exerciseId === routineExercise.exercise.id)
+        .map((entry) => {
+          const topWeight = Math.max(0, ...entry.sets.map((set) => set.weightLb ?? 0));
+          const topReps = Math.max(0, ...entry.sets.map((set) => set.reps ?? 0));
+          const topSeconds = Math.max(0, ...entry.sets.map((set) => set.seconds ?? 0));
+          const hasRecordedWeight = topWeight > 0;
+          const label = formatAppDate(log.performedAt, { month: "short", day: "numeric" });
+
+          return {
+            label,
+            topWeight,
+            topReps,
+            topSeconds,
+            hasRecordedWeight,
+            detailLines: entry.sets.map((set, index) => {
+              const weightPart = set.weightLb && set.weightLb > 0 ? `${set.weightLb.toFixed(1)} lb` : null;
+              const repsPart = set.reps && set.reps > 0 ? `${set.reps} reps` : null;
+              const secondsPart = set.seconds && set.seconds > 0 ? formatSecondsShort(set.seconds) : null;
+              const parts = [weightPart, repsPart, secondsPart].filter(Boolean);
+              return `Set ${index + 1}: ${parts.length > 0 ? parts.join(" | ") : "No metric recorded"}`;
+            }),
+          };
+        })
+    );
+
+    const useWeightMetric = routineExercise.exercise.supportsWeight && sessionRows.some((row) => row.hasRecordedWeight);
+    const useTimeMetric = !useWeightMetric && routineExercise.exercise.unit === "TIME";
+
+    return {
+      exercise: routineExercise.exercise,
+      metricLabel: useWeightMetric ? "Top weight" : useTimeMetric ? "Top time" : "Top reps",
+      unit: useWeightMetric ? "lb" : useTimeMetric ? "sec" : "",
+      decimals: useWeightMetric ? 1 : 0,
+      yLabel: useWeightMetric ? "Weight" : useTimeMetric ? "Time" : "Reps",
+      title: useWeightMetric
+        ? `${routineExercise.exercise.name}: Top Weight per Session`
+        : useTimeMetric
+        ? `${routineExercise.exercise.name}: Top Time per Session`
+        : `${routineExercise.exercise.name}: Top Reps per Session`,
+      points: sessionRows.map((row) => ({
+        label: row.label,
+        value: useWeightMetric ? row.topWeight : useTimeMetric ? row.topSeconds : row.topReps,
+        detailLines: row.detailLines,
+      })),
+    };
+  }).filter((entry) => entry.points.length > 0);
 
   const overviewSecondaryChart =
     kind === "CARDIO" ? (
@@ -78,7 +138,18 @@ export default async function RoutineTargetPage(props: {
     ) : kind === "WORKOUT" ? (
       <div style={{ display: "grid", gap: 10 }}>
         <MetricLineChart title="Routine Volume per Session" yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} />
-        <MetricLineChart title="Heaviest Set per Session" yLabel="Weight" xLabel="Session" points={workoutPerf.topSetWeight} unit="lb" decimals={1} />
+        {routineExercisePerformance.map((entry) => (
+          <MetricLineChart
+            key={entry.exercise.id}
+            title={entry.title}
+            yLabel={entry.yLabel}
+            xLabel="Session"
+            points={entry.points}
+            unit={entry.unit}
+            decimals={entry.decimals}
+            valueLabel={entry.metricLabel}
+          />
+        ))}
       </div>
     ) : (
       <MetricLineChart
