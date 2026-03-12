@@ -1,5 +1,6 @@
 "use client";
 
+import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { updateRoutine } from "../../actions";
@@ -10,11 +11,12 @@ import {
   isGuidedKind,
   isWorkoutKind,
 } from "@/lib/routines";
-import type { RoutineKind } from "@prisma/client";
+import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 
 export default function EditRoutineForm({
   routine,
   categories,
+  metadataGroups,
 }: {
   routine: {
     id: string;
@@ -23,8 +25,16 @@ export default function EditRoutineForm({
     subtype: string | null;
     kind: RoutineKind;
     timesPerWeek: number | null;
+    selectedMetadataGroupIds: string[];
+    tags: string[];
   };
   categories: string[];
+  metadataGroups: Array<{
+    id: string;
+    slug: string;
+    label: string;
+    kind: MetadataGroupKind;
+  }>;
 }) {
   const hasCategory = categories.includes(routine.category);
   const [selectedCategory, setSelectedCategory] = useState(hasCategory ? routine.category : "__custom__");
@@ -118,6 +128,24 @@ export default function EditRoutineForm({
         />
       </div>
 
+      <MetadataGroupPicker
+        title="Analysis Groups"
+        help="Assign broader rollup groups for future progress views. Subtype-based defaults like running, walking, mobility, and climbing are added automatically."
+        groups={metadataGroups}
+        selectedIds={routine.selectedMetadataGroupIds}
+      />
+
+      <div>
+        <label style={styles.label}>Tags (optional)</label>
+        <input
+          name="tags"
+          style={styles.input}
+          defaultValue={routine.tags.join(", ")}
+          placeholder="Comma separated: trail, deload, gym, outdoors"
+        />
+        <div style={styles.help}>Tags are optional and personal. System rollups should use the structured groups above.</div>
+      </div>
+
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="submit" style={styles.btn}>
           Save
@@ -167,4 +195,5 @@ const styles = {
     fontWeight: 800 as const,
     background: "rgba(128,128,128,0.12)",
   },
+  help: { marginTop: 6, opacity: 0.7, fontSize: 12 },
 };

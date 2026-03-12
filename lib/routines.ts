@@ -1,4 +1,4 @@
-import type { RoutineKind } from "@prisma/client";
+import type { RoutineKind } from "@/generated/prisma";
 
 export const ROUTINE_KIND_OPTIONS = [
   { value: "COMPLETION", label: "Completion" },

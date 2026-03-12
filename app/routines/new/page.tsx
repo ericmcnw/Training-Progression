@@ -1,6 +1,7 @@
 import Link from "next/link";
 import NewRoutineForm from "./NewRoutineForm";
 import { prisma } from "@/lib/prisma";
+import type { MetadataGroupKind } from "@/generated/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -12,20 +13,31 @@ export default function NewRoutinePage() {
     distinct: ["category"],
     orderBy: { category: "asc" },
   });
+  const metadataGroupsPromise = prisma.metadataGroup.findMany({
+    where: { appliesToRoutine: true },
+    select: { id: true, slug: true, label: true, kind: true },
+    orderBy: [{ kind: "asc" }, { label: "asc" }],
+  });
 
   return (
-    <NewRoutinePageInner categoriesPromise={categoriesPromise} defaultCategories={defaultCategories} />
+    <NewRoutinePageInner
+      categoriesPromise={categoriesPromise}
+      metadataGroupsPromise={metadataGroupsPromise}
+      defaultCategories={defaultCategories}
+    />
   );
 }
 
 async function NewRoutinePageInner({
   categoriesPromise,
+  metadataGroupsPromise,
   defaultCategories,
 }: {
   categoriesPromise: Promise<Array<{ category: string }>>;
+  metadataGroupsPromise: Promise<Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>>;
   defaultCategories: string[];
 }) {
-  const categoryRows = await categoriesPromise;
+  const [categoryRows, metadataGroups] = await Promise.all([categoriesPromise, metadataGroupsPromise]);
   const categories = Array.from(
     new Set([
       ...defaultCategories,
@@ -48,7 +60,7 @@ async function NewRoutinePageInner({
 
       <div style={styles.panel}>
         <div style={styles.panelHeader}>DETAILS</div>
-        <NewRoutineForm categories={categories} />
+        <NewRoutineForm categories={categories} metadataGroups={metadataGroups} />
       </div>
     </div>
   );

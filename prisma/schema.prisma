@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -18,6 +19,14 @@ enum RoutineKind {
 enum ExerciseUnit {
   REPS
   TIME
+}
+
+enum MetadataGroupKind {
+  MUSCLE_GROUP
+  MOVEMENT_PATTERN
+  TRAINING_GROUP
+  CARDIO_ACTIVITY
+  ROUTINE_FOCUS
 }
 
 model Routine {
@@ -44,6 +53,8 @@ model Routine {
   sessionDetails SessionRoutineDetails?
   scheduleEntries ScheduleEntry[]
   manualScheduleEntries ScheduleManualEntry[]
+  metadataGroups RoutineMetadataGroup[]
+  tagAssignments RoutineTagAssignment[]
 
   @@index([isActive])
   @@index([isDeleted])
@@ -203,6 +214,85 @@ model Exercise {
 
   routines        RoutineExercise[]
   sessionExercises SessionExercise[]
+  metadataGroups  ExerciseMetadataGroup[]
+}
+
+model MetadataGroup {
+  id                String                  @id @default(cuid())
+  slug              String                  @unique
+  label             String
+  kind              MetadataGroupKind
+  description       String?
+  appliesToRoutine  Boolean                 @default(false)
+  appliesToExercise Boolean                 @default(false)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  parentRelations   MetadataGroupRelation[] @relation("MetadataGroupParent")
+  childRelations    MetadataGroupRelation[] @relation("MetadataGroupChild")
+  routineAssignments RoutineMetadataGroup[]
+  exerciseAssignments ExerciseMetadataGroup[]
+
+  @@index([kind, label])
+  @@index([appliesToRoutine])
+  @@index([appliesToExercise])
+}
+
+model MetadataGroupRelation {
+  parentGroupId String
+  childGroupId  String
+  createdAt     DateTime      @default(now())
+
+  parentGroup   MetadataGroup @relation("MetadataGroupParent", fields: [parentGroupId], references: [id], onDelete: Cascade)
+  childGroup    MetadataGroup @relation("MetadataGroupChild", fields: [childGroupId], references: [id], onDelete: Cascade)
+
+  @@id([parentGroupId, childGroupId])
+  @@index([childGroupId])
+}
+
+model RoutineMetadataGroup {
+  routineId   String
+  groupId     String
+  assignedAt  DateTime      @default(now())
+
+  routine     Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  group       MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([routineId, groupId])
+  @@index([groupId])
+}
+
+model ExerciseMetadataGroup {
+  exerciseId  String
+  groupId     String
+  assignedAt  DateTime      @default(now())
+
+  exercise    Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  group       MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([exerciseId, groupId])
+  @@index([groupId])
+}
+
+model RoutineTag {
+  id          String               @id @default(cuid())
+  name        String               @unique
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  routines    RoutineTagAssignment[]
+}
+
+model RoutineTagAssignment {
+  routineId   String
+  tagId       String
+  assignedAt  DateTime   @default(now())
+
+  routine     Routine    @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  tag         RoutineTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([routineId, tagId])
+  @@index([tagId])
 }
 
 model RoutineExercise {

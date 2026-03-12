@@ -1,11 +1,13 @@
 "use server";
 
+import { ROUTINE_SUBTYPE_GROUP_DEFAULTS, parseTagNames } from "@/lib/metadata";
+import { parseAppDateTimeLocal } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
 } from "@/lib/routines";
-import type { RoutineKind } from "@prisma/client";
+import type { RoutineKind } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -53,9 +55,7 @@ type SanitizedWorkoutExercise = {
 function parsePerformedAt(performedAtLocal?: string | null) {
   const raw = String(performedAtLocal || "").trim();
   if (!raw) return new Date();
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) throw new Error("Invalid log date/time.");
-  return parsed;
+  return parseAppDateTimeLocal(raw);
 }
 
 function parseCategory(formData: FormData) {
@@ -74,6 +74,105 @@ function parseTimesPerWeek(formData: FormData) {
     throw new Error("timesPerWeek must be a number >= 0");
   }
   return timesPerWeek;
+}
+
+async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "routine" | "exercise") {
+  const uniqueIds = Array.from(
+    new Set(
+      Array.from(groupIds)
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0)
+    )
+  );
+  if (uniqueIds.length === 0) return [];
+
+  const groups = await prisma.metadataGroup.findMany({
+    where: {
+      id: { in: uniqueIds },
+      ...(appliesTo === "routine" ? { appliesToRoutine: true } : { appliesToExercise: true }),
+    },
+    select: { id: true },
+  });
+  return groups.map((group) => group.id);
+}
+
+async function getMetadataGroupIdsBySlugs(slugs: string[], appliesTo: "routine" | "exercise") {
+  if (slugs.length === 0) return [];
+  const groups = await prisma.metadataGroup.findMany({
+    where: {
+      slug: { in: slugs },
+      ...(appliesTo === "routine" ? { appliesToRoutine: true } : { appliesToExercise: true }),
+    },
+    select: { id: true },
+  });
+  return groups.map((group) => group.id);
+}
+
+async function syncRoutineMetadataGroups(routineId: string, groupIds: string[]) {
+  const current = await prisma.routineMetadataGroup.findMany({
+    where: { routineId },
+    select: { groupId: true },
+  });
+  const currentIds = new Set(current.map((entry) => entry.groupId));
+  const nextIds = new Set(groupIds);
+
+  await prisma.routineMetadataGroup.deleteMany({
+    where: {
+      routineId,
+      groupId: { notIn: groupIds.length > 0 ? groupIds : ["__none__"] },
+    },
+  });
+
+  for (const groupId of nextIds) {
+    if (currentIds.has(groupId)) continue;
+    await prisma.routineMetadataGroup.create({ data: { routineId, groupId } });
+  }
+}
+
+async function syncRoutineTags(routineId: string, tagNames: string[]) {
+  const tags = await Promise.all(
+    tagNames.map((name) =>
+      prisma.routineTag.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+        select: { id: true, name: true },
+      })
+    )
+  );
+
+  const tagIds = tags.map((tag) => tag.id);
+  const current = await prisma.routineTagAssignment.findMany({
+    where: { routineId },
+    select: { tagId: true },
+  });
+  const currentIds = new Set(current.map((entry) => entry.tagId));
+
+  await prisma.routineTagAssignment.deleteMany({
+    where: {
+      routineId,
+      tagId: { notIn: tagIds.length > 0 ? tagIds : ["__none__"] },
+    },
+  });
+
+  for (const tagId of tagIds) {
+    if (currentIds.has(tagId)) continue;
+    await prisma.routineTagAssignment.create({ data: { routineId, tagId } });
+  }
+}
+
+async function syncRoutineClassificationMetadata(params: {
+  routineId: string;
+  subtype: string | null;
+  selectedGroupIds: string[];
+  tags: string[];
+}) {
+  const defaultSlugs = params.subtype ? ROUTINE_SUBTYPE_GROUP_DEFAULTS[params.subtype] ?? [] : [];
+  const defaultGroupIds = await getMetadataGroupIdsBySlugs(defaultSlugs, "routine");
+  const mergedGroupIds = Array.from(new Set([...defaultGroupIds, ...params.selectedGroupIds]));
+
+  await syncRoutineMetadataGroups(params.routineId, mergedGroupIds);
+  await syncRoutineTags(params.routineId, params.tags);
 }
 
 function sanitizeMetrics(metrics?: MetricInput[]) {
@@ -274,7 +373,7 @@ function revalidateRoutineSurfaces(routineId?: string) {
     revalidatePath(`/routines/${routineId}/log-guided`);
     revalidatePath(`/routines/${routineId}/log-session`);
     revalidatePath(`/routines/${routineId}/template`);
-    revalidatePath(`/progress/routine/${routineId}`);
+    revalidatePath(`/progress/routines/${routineId}`);
   }
 }
 
@@ -286,6 +385,8 @@ export async function createRoutine(formData: FormData) {
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
   const timesPerWeek = parseTimesPerWeek(formData);
   const postCreate = String(formData.get("postCreate") || "").trim();
+  const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
+  const tagNames = parseTagNames(String(formData.get("tags") || ""));
 
   if (!name) throw new Error("Name is required.");
 
@@ -305,6 +406,12 @@ export async function createRoutine(formData: FormData) {
   });
 
   await syncRoutineTypeDetails(created.id, kind);
+  await syncRoutineClassificationMetadata({
+    routineId: created.id,
+    subtype,
+    selectedGroupIds,
+    tags: tagNames,
+  });
 
   revalidateRoutineSurfaces(created.id);
   if (kind === "WORKOUT" && postCreate === "template") {
@@ -324,6 +431,8 @@ export async function updateRoutine(formData: FormData) {
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
   const timesPerWeek = parseTimesPerWeek(formData);
+  const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
+  const tagNames = parseTagNames(String(formData.get("tags") || ""));
 
   if (!id) throw new Error("Missing routine id.");
   if (!name) throw new Error("Name is required.");
@@ -343,6 +452,12 @@ export async function updateRoutine(formData: FormData) {
     data: { name, category, domain, kind, subtype, timesPerWeek },
   });
   await syncRoutineTypeDetails(id, kind);
+  await syncRoutineClassificationMetadata({
+    routineId: id,
+    subtype,
+    selectedGroupIds,
+    tags: tagNames,
+  });
 
   revalidateRoutineSurfaces(id);
   redirect("/routines");

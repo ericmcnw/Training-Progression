@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Routine } from "@prisma/client";
+import type { Routine } from "@/generated/prisma";
 import { GOAL_TYPE } from "@/lib/progress";
 import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";

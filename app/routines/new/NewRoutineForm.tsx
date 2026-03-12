@@ -1,5 +1,6 @@
 "use client";
 
+import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import { useMemo, useState } from "react";
 import { createRoutine } from "../actions";
 import {
@@ -7,9 +8,22 @@ import {
   ROUTINE_SUBTYPE_OPTIONS,
   formatRoutineSubtype,
 } from "@/lib/routines";
-import type { RoutineKind } from "@prisma/client";
+import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 
-export default function NewRoutineForm({ categories }: { categories: string[] }) {
+type MetadataGroupOption = {
+  id: string;
+  slug: string;
+  label: string;
+  kind: MetadataGroupKind;
+};
+
+export default function NewRoutineForm({
+  categories,
+  metadataGroups,
+}: {
+  categories: string[];
+  metadataGroups: MetadataGroupOption[];
+}) {
   const [kind, setKind] = useState<RoutineKind>("COMPLETION");
   const [selectedCategory, setSelectedCategory] = useState(categories[0] ?? "General");
   const [customCategory, setCustomCategory] = useState("");
@@ -103,6 +117,22 @@ export default function NewRoutineForm({ categories }: { categories: string[] })
       <div>
         <label style={styles.label}>Times per week (optional)</label>
         <input name="timesPerWeek" style={styles.input} inputMode="numeric" placeholder="e.g. 4" />
+      </div>
+
+      <MetadataGroupPicker
+        title="Analysis Groups"
+        help="Assign broader rollup groups for future progress views. Subtype-based defaults like running, walking, mobility, and climbing are added automatically."
+        groups={metadataGroups}
+      />
+
+      <div>
+        <label style={styles.label}>Tags (optional)</label>
+        <input
+          name="tags"
+          style={styles.input}
+          placeholder="Comma separated: trail, deload, gym, outdoors"
+        />
+        <div style={styles.help}>Tags are optional and personal. System rollups should use the structured groups above.</div>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

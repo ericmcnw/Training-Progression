@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
   formatRoutineTypeLabel,
@@ -11,25 +12,6 @@ import {
 import DeleteLogButton from "./DeleteLogButton";
 
 export const dynamic = "force-dynamic";
-
-const dateHeadingFormatter = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-  year: "numeric",
-});
-
-const timeFormatter = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-function localDateKey(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 export default async function ManualLogPage() {
   const recentLogs = await prisma.routineLog.findMany({
@@ -51,8 +33,7 @@ export default async function ManualLogPage() {
 
   const byDate = new Map<string, typeof recentLogs>();
   for (const log of recentLogs) {
-    const performedAt = new Date(log.performedAt);
-    const dateKey = localDateKey(performedAt);
+    const dateKey = toAppYmd(log.performedAt);
     if (!byDate.has(dateKey)) byDate.set(dateKey, []);
     byDate.get(dateKey)!.push(log);
   }
@@ -78,11 +59,15 @@ export default async function ManualLogPage() {
           {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
           {orderedDates.map((dateKey) => {
             const logs = byDate.get(dateKey) ?? [];
-            const headingDate = new Date(`${dateKey}T12:00:00`);
             return (
               <div key={dateKey} style={{ display: "grid", gap: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.4, opacity: 0.9 }}>
-                  {dateHeadingFormatter.format(headingDate).toUpperCase()} ({logs.length})
+                  {formatAppDate(`${dateKey}T12:00:00.000Z`, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  }).toUpperCase()} ({logs.length})
                 </div>
                 {logs.map((log) => {
                   const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -106,7 +91,7 @@ export default async function ManualLogPage() {
                           {log.routine.name} | {categoryLabel} | {typeLabel}
                         </div>
                         <div style={{ opacity: 0.8, marginTop: 2 }}>
-                          {timeFormatter.format(new Date(log.performedAt))}
+                          {formatAppDateTime(log.performedAt, { hour: "numeric", minute: "2-digit" })}
                         </div>
                         {isCardioKind(routineKind) && (
                           <div style={{ opacity: 0.8, marginTop: 2 }}>

@@ -1,3 +1,4 @@
+import { toAppYmd } from "@/lib/dates";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export type ProgressRange = "week" | "4w" | "8w" | "12w" | "all";
@@ -162,10 +163,7 @@ export function formatPace(secPerMi: number | null) {
 }
 
 export function dateYmd(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toAppYmd(date);
 }
 
 export function sparklinePoints(values: number[], width = 220, height = 64, padding = 6) {

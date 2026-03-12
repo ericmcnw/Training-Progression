@@ -53,6 +53,22 @@ function zonedTimeToUtc(year: number, month: number, day: number, hour = 0, minu
   return new Date(utcMs);
 }
 
+export function parseAppDateTimeLocal(value: string) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) throw new Error("Invalid log date/time.");
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  return zonedTimeToUtc(
+    Number(yearText),
+    Number(monthText),
+    Number(dayText),
+    Number(hourText),
+    Number(minuteText),
+    Number(secondText ?? "0")
+  );
+}
+
 export function toAppYmd(value: Date | string) {
   return ymdFormatter.format(value instanceof Date ? value : new Date(value));
 }

@@ -23,6 +23,18 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       kind: true,
       timesPerWeek: true,
       isActive: true,
+      metadataGroups: {
+        select: {
+          groupId: true,
+        },
+      },
+      tagAssignments: {
+        select: {
+          tag: {
+            select: { name: true },
+          },
+        },
+      },
     },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
@@ -33,6 +45,11 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
     where: { isDeleted: false },
     distinct: ["category"],
     orderBy: { category: "asc" },
+  });
+  const metadataGroups = await prisma.metadataGroup.findMany({
+    where: { appliesToRoutine: true },
+    select: { id: true, slug: true, label: true, kind: true },
+    orderBy: [{ kind: "asc" }, { label: "asc" }],
   });
   const categories = Array.from(
     new Set([
@@ -69,8 +86,11 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
             subtype: routine.subtype,
             kind: routine.kind,
             timesPerWeek: routine.timesPerWeek,
+            selectedMetadataGroupIds: routine.metadataGroups.map((entry) => entry.groupId),
+            tags: routine.tagAssignments.map((entry) => entry.tag.name),
           }}
           categories={categories}
+          metadataGroups={metadataGroups}
         />
       </div>
 

@@ -33,6 +33,13 @@ function formatDayLabel(ymd: string) {
   });
 }
 
+function formatShortWeekRangeLabel(startYmd: string) {
+  const endYmd = addDays(startYmd, 6);
+  const start = formatUtcDateLabel(startYmd, { month: "numeric", day: "numeric" });
+  const end = formatUtcDateLabel(endYmd, { month: "numeric", day: "numeric" });
+  return `${start}-${end}`;
+}
+
 function formatLogTime(date: Date) {
   return formatAppDateTime(date, {
     month: "short",
@@ -381,10 +388,9 @@ export default async function HomePage() {
     .sort((a, b) => b.miles - a.miles || a.type.localeCompare(b.type));
 
   const onTrack = weeklyCards.filter((item) => item.target > 0 && item.count >= item.target).slice(0, 4);
-  const needsAttention = weeklyCards.filter((item) => item.target > 0 && item.count < item.target).slice(0, 4);
 
-  const weeklySeries = Array.from({ length: 6 }, (_, index) => {
-    const start = addDays(weekStart, -(5 - index) * 7);
+  const weeklySeries = Array.from({ length: 4 }, (_, index) => {
+    const start = addDays(weekStart, -(3 - index) * 7);
     const end = addDays(start, 7);
     const logsInWeek = sparkLogs.filter((log) => {
       const ymd = toAppYmd(log.performedAt);
@@ -418,6 +424,26 @@ export default async function HomePage() {
     return sum + Math.max(0, logged - planned);
   }, 0);
   const weekSessionTargetTotal = weekPlannedTotal + weekUnplannedLoggedTotal;
+  const needsAttention = weeklyCards
+    .map((item) => {
+      const planned = weekPlannedByRoutine.get(item.id) ?? 0;
+      const missedPlanned = Math.max(0, planned - item.count);
+      const missedTarget = item.target > 0 ? Math.max(0, item.target - item.count) : 0;
+      return {
+        ...item,
+        planned,
+        missedPlanned,
+        missedTarget,
+      };
+    })
+    .filter((item) => item.missedPlanned > 0 || item.missedTarget > 0)
+    .sort((a, b) =>
+      b.missedPlanned - a.missedPlanned ||
+      b.missedTarget - a.missedTarget ||
+      b.planned - a.planned ||
+      a.name.localeCompare(b.name)
+    )
+    .slice(0, 4);
   const weekEnd = addDays(weekStart, 6);
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
 
@@ -456,9 +482,9 @@ export default async function HomePage() {
               <div style={sectionSub}>{formatDayLabel(today)}</div>
               <div className="mobileHomeSummaryGrid" style={summaryGrid}>
                 <div style={summaryCard}>
-                  <div style={summaryLabel}>Today Planned/Done</div>
-                  <div style={summaryValue}>{todayPlannedTotal}/{todayDoneRoutines}</div>
-                  <div style={summarySub}>planned routines / completed routines</div>
+                  <div style={summaryLabel}>Today: Done/Planned</div>
+                  <div style={summaryValue}>{todayDoneRoutines}/{todayPlannedTotal}</div>
+                  <div style={summarySub}>completed routines / planned routines</div>
                 </div>
                 <div style={summaryCard}>
                   <div style={summaryLabel}>Today Logs</div>
@@ -592,7 +618,7 @@ export default async function HomePage() {
 
               <div style={sparkCard}>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 15 }}>Last 6 Weeks</div>
+                  <div style={{ fontWeight: 900, fontSize: 15 }}>Last 4 Weeks</div>
                   <div style={sectionSub}>Session count trend with total weekly mileage underneath.</div>
                 </div>
                 <svg width="100%" height="84" viewBox="0 0 220 84" preserveAspectRatio="none">
@@ -606,7 +632,7 @@ export default async function HomePage() {
                 <div className="mobileHomeSparkMeta" style={sparkMetaRow}>
                   {weeklySeries.map((item) => (
                     <div key={item.label} style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11, opacity: 0.66 }}>{formatDayLabel(item.label)}</div>
+                      <div style={{ fontSize: 11, opacity: 0.66 }}>{formatShortWeekRangeLabel(item.label)}</div>
                       <div style={{ fontSize: 12, fontWeight: 800 }}>{item.sessions} logs</div>
                       <div style={{ fontSize: 11, opacity: 0.74 }}>{item.miles.toFixed(1)} mi</div>
                     </div>
@@ -633,12 +659,13 @@ export default async function HomePage() {
                 <div style={subPanel}>
                   <div style={subPanelTitle}>Needs Attention</div>
                   <div style={{ display: "grid", gap: 8 }}>
-                    {needsAttention.length === 0 && <div style={emptyState}>Everything with a weekly target is on pace.</div>}
+                    {needsAttention.length === 0 && <div style={emptyState}>Nothing planned or targeted is behind right now.</div>}
                     {needsAttention.map((item) => (
                       <div key={item.id} style={miniCardWarn}>
                         <div style={{ fontWeight: 800 }}>{item.name}</div>
                         <div style={miniCardMeta}>
-                          {item.count}/{item.target} this week
+                          {item.count}/{item.target || item.planned} this week
+                          {item.missedPlanned > 0 ? ` | missed planned: ${item.missedPlanned}` : ""}
                         </div>
                       </div>
                     ))}
@@ -866,7 +893,7 @@ const cardioRoutineRow: React.CSSProperties = {
 
 const sparkMetaRow: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 8,
 };
 
