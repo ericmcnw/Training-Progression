@@ -272,7 +272,7 @@ export default async function SchedulePage({
   const trailingEmptyDays = (7 - ((leadingEmptyDays + monthDays.length) % 7)) % 7;
   const monthCalendarCells = [
     ...Array.from({ length: leadingEmptyDays }, () => null),
-    ...monthDays.map((day) => monthAgendaMap.get(day) ?? { day, tasks: [], isPastOrToday: day <= today }),
+    ...monthDays.map((day) => monthAgendaMap.get(day) ?? { day, tasks: [], isPastOrToday: day <= today, manualItems: [] }),
     ...Array.from({ length: trailingEmptyDays }, () => null),
   ];
   const timelinePrevHref = `/schedule?start=${addDays(timelineStart, -7)}&month=${selectedMonth}`;
