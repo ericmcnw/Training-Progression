@@ -251,17 +251,21 @@ export default async function SchedulePage({
       const tasks = Array.from(plannedCounts.entries())
         .map(([routineId, planned]) => {
           const logged = loggedMap.get(`${day}|${routineId}`) ?? 0;
+          const removableManualEntry = logged === 0
+            ? manualItems.find((item) => item.routineId === routineId)
+            : undefined;
           return {
             routineId,
             routineName: routineNameMap.get(routineId) ?? routineId,
             planned,
             logged,
             remaining: Math.max(0, planned - logged),
+            removableManualEntryId: removableManualEntry?.id ?? null,
           };
         })
         .sort((a, b) => a.routineName.localeCompare(b.routineName));
 
-      return { day, tasks, isPastOrToday, manualItems };
+      return { day, tasks, isPastOrToday };
     });
   }
 
@@ -272,7 +276,7 @@ export default async function SchedulePage({
   const trailingEmptyDays = (7 - ((leadingEmptyDays + monthDays.length) % 7)) % 7;
   const monthCalendarCells = [
     ...Array.from({ length: leadingEmptyDays }, () => null),
-    ...monthDays.map((day) => monthAgendaMap.get(day) ?? { day, tasks: [], isPastOrToday: day <= today, manualItems: [] }),
+    ...monthDays.map((day) => monthAgendaMap.get(day) ?? { day, tasks: [], isPastOrToday: day <= today }),
     ...Array.from({ length: trailingEmptyDays }, () => null),
   ];
   const timelinePrevHref = `/schedule?start=${addDays(timelineStart, -7)}&month=${selectedMonth}`;
@@ -350,11 +354,15 @@ export default async function SchedulePage({
                         <div style={{ display: "grid", gap: 6 }}>
                           {dayItem.manualItems.map((item) => (
                             <form key={item.id} action={removeManualEntry} style={manualEntryRow}>
-                              <input type="hidden" name="entryId" value={item.id} />
-                              <input type="hidden" name="returnStart" value={timelineStart} />
-                              <input type="hidden" name="returnMonth" value={selectedMonth} />
+                              {item.canRemove ? <input type="hidden" name="entryId" value={item.id} /> : null}
+                              {item.canRemove ? <input type="hidden" name="returnStart" value={timelineStart} /> : null}
+                              {item.canRemove ? <input type="hidden" name="returnMonth" value={selectedMonth} /> : null}
                               <div style={{ fontSize: 12, fontWeight: 800 }}>{item.routineName}</div>
-                              <button type="submit" style={removeBtn}>Remove</button>
+                              {item.canRemove ? (
+                                <button type="submit" style={removeBtn}>Remove</button>
+                              ) : (
+                                <div style={manualLockedTag}>Completed</div>
+                              )}
                             </form>
                           ))}
                         </div>
@@ -446,11 +454,15 @@ export default async function SchedulePage({
                       <div style={{ display: "grid", gap: 6 }}>
                         {dayItem.manualItems.map((item) => (
                           <form key={item.id} action={removeManualEntry} style={calendarManualEntryRow}>
-                            <input type="hidden" name="entryId" value={item.id} />
-                            <input type="hidden" name="returnStart" value={timelineStart} />
-                            <input type="hidden" name="returnMonth" value={selectedMonth} />
+                            {item.canRemove ? <input type="hidden" name="entryId" value={item.id} /> : null}
+                            {item.canRemove ? <input type="hidden" name="returnStart" value={timelineStart} /> : null}
+                            {item.canRemove ? <input type="hidden" name="returnMonth" value={selectedMonth} /> : null}
                             <div style={{ fontWeight: 800 }}>{item.routineName}</div>
-                            <button type="submit" style={calendarRemoveBtn}>Remove</button>
+                            {item.canRemove ? (
+                              <button type="submit" style={calendarRemoveBtn}>Remove</button>
+                            ) : (
+                              <div style={calendarLockedTag}>Completed</div>
+                            )}
                           </form>
                         ))}
                         {dayItem.tasks.length === 0 && (
@@ -795,6 +807,16 @@ const removeBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const manualLockedTag: React.CSSProperties = {
+  padding: "5px 8px",
+  border: "1px solid rgba(84,203,130,0.75)",
+  borderRadius: 999,
+  background: "rgba(84,203,130,0.12)",
+  color: "inherit",
+  fontSize: 11,
+  fontWeight: 800,
+};
+
 const monthPill: React.CSSProperties = {
   padding: "7px 11px",
   borderRadius: 999,
@@ -914,6 +936,13 @@ const calendarManualEntryRow: React.CSSProperties = {
 
 const calendarRemoveBtn: React.CSSProperties = {
   ...removeBtn,
+  justifySelf: "start",
+  padding: "4px 7px",
+  fontSize: 10,
+};
+
+const calendarLockedTag: React.CSSProperties = {
+  ...manualLockedTag,
   justifySelf: "start",
   padding: "4px 7px",
   fontSize: 10,
