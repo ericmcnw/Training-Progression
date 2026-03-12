@@ -141,7 +141,19 @@ details[open] > summary[data-collapsible-summary]::before{
   padding: 18px;
 }
 
+.mobileOnlyHomeSection{
+  display: none;
+}
+
 @media (max-width: 900px){
+  .mobileOnlyHomeSection{
+    display: block;
+  }
+
+  .desktopOnlyHomeSection{
+    display: none;
+  }
+
   .mobileHomeMainGrid{
     grid-template-columns: 1fr !important;
   }

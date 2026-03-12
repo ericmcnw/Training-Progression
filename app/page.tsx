@@ -472,6 +472,110 @@ export default async function HomePage() {
     createdAt: formatAppDate(goal.createdAt),
   }));
 
+  const weeklyMomentumSection = (
+    <section style={panel}>
+      <div style={panelHeader}>WEEKLY MOMENTUM</div>
+      <div style={{ padding: 14, display: "grid", gap: 14 }}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div className="mobileHomeWeeklyHeader" style={weeklySubheaderRow}>
+            <div style={weeklySubheader}>This Week</div>
+            <SessionFractionRing current={weekLoggedTotal} target={weekSessionTargetTotal} />
+          </div>
+          <div style={sectionSub}>{weekDateRangeLabel}</div>
+        </div>
+
+        <div style={mileageBand}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Cardio Mileage</div>
+            <div style={sectionSub}>Combined miles from all cardio routines this week.</div>
+          </div>
+          <div style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
+          <details style={cardioDetails}>
+            <summary data-collapsible-summary style={cardioSummary}>
+              Show cardio routine breakdown
+            </summary>
+            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+              {cardioTypeGroups.length === 0 && <div style={emptyState}>No cardio logged this week.</div>}
+              {cardioTypeGroups.map((group) => (
+                <div key={group.type} style={cardioGroupCard}>
+                  <div className="mobileHomeCardioRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontWeight: 900 }}>{group.type}</div>
+                    <div style={cardioMilesPill}>{group.miles.toFixed(1)} mi</div>
+                  </div>
+                  <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+                    {group.items.map((item) => (
+                      <div key={item.id} style={cardioRoutineRow}>
+                        <span>{item.name}</span>
+                        <span>{item.miles.toFixed(1)} mi ({item.logs} logs)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+
+        <div style={sparkCard}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Last 4 Weeks</div>
+            <div style={sectionSub}>Session count trend with total weekly mileage underneath.</div>
+          </div>
+          <svg width="100%" height="84" viewBox="0 0 220 84" preserveAspectRatio="none">
+            <polyline
+              fill="none"
+              stroke="rgba(84,203,130,0.95)"
+              strokeWidth="3"
+              points={sparklinePoints(weeklySeries.map((item) => item.sessions), 220, 84, 8)}
+            />
+          </svg>
+          <div className="mobileHomeSparkMeta" style={sparkMetaRow}>
+            {weeklySeries.map((item) => (
+              <div key={item.label} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, opacity: 0.66 }}>{formatShortWeekRangeLabel(item.label)}</div>
+                <div style={{ fontSize: 12, fontWeight: 800 }}>{item.sessions} logs</div>
+                <div style={{ fontSize: 11, opacity: 0.74 }}>{item.miles.toFixed(1)} mi</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mobileHomeTwoCol" style={twoColGrid}>
+          <div style={subPanel}>
+            <div style={subPanelTitle}>On Track</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {onTrack.length === 0 && <div style={emptyState}>No routines have hit their weekly target yet.</div>}
+              {onTrack.map((item) => (
+                <div key={item.id} style={miniCardSuccess}>
+                  <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  <div style={miniCardMeta}>
+                    {item.count}/{item.target} this week
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={subPanel}>
+            <div style={subPanelTitle}>Needs Attention</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {needsAttention.length === 0 && <div style={emptyState}>Nothing planned or targeted is behind right now.</div>}
+              {needsAttention.map((item) => (
+                <div key={item.id} style={miniCardWarn}>
+                  <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  <div style={miniCardMeta}>
+                    {item.count}/{item.target || item.planned} this week
+                    {item.missedPlanned > 0 ? ` | missed planned: ${item.missedPlanned}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
   return (
     <div className="mobileHomePage" style={page}>
       <section className="mobileHomeMainGrid" style={mainGrid}>
@@ -551,6 +655,8 @@ export default async function HomePage() {
             </div>
           </section>
 
+          <div className="mobileOnlyHomeSection">{weeklyMomentumSection}</div>
+
           <section style={panel}>
             <div style={panelHeader}>RECENT ACTIVITY</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
@@ -573,107 +679,7 @@ export default async function HomePage() {
         </div>
 
         <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
-          <section style={panel}>
-            <div style={panelHeader}>WEEKLY MOMENTUM</div>
-            <div style={{ padding: 14, display: "grid", gap: 14 }}>
-              <div style={{ display: "grid", gap: 8 }}>
-                <div className="mobileHomeWeeklyHeader" style={weeklySubheaderRow}>
-                  <div style={weeklySubheader}>This Week</div>
-                  <SessionFractionRing current={weekLoggedTotal} target={weekSessionTargetTotal} />
-                </div>
-                <div style={sectionSub}>{weekDateRangeLabel}</div>
-              </div>
-
-              <div style={mileageBand}>
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Cardio Mileage</div>
-                  <div style={sectionSub}>Combined miles from all cardio routines this week.</div>
-                </div>
-                <div style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
-                <details style={cardioDetails}>
-                  <summary data-collapsible-summary style={cardioSummary}>
-                    Show cardio routine breakdown
-                  </summary>
-                  <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-                    {cardioTypeGroups.length === 0 && <div style={emptyState}>No cardio logged this week.</div>}
-                    {cardioTypeGroups.map((group) => (
-                      <div key={group.type} style={cardioGroupCard}>
-                        <div className="mobileHomeCardioRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                          <div style={{ fontWeight: 900 }}>{group.type}</div>
-                          <div style={cardioMilesPill}>{group.miles.toFixed(1)} mi</div>
-                        </div>
-                        <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
-                          {group.items.map((item) => (
-                            <div key={item.id} style={cardioRoutineRow}>
-                              <span>{item.name}</span>
-                              <span>{item.miles.toFixed(1)} mi ({item.logs} logs)</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              </div>
-
-              <div style={sparkCard}>
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 15 }}>Last 4 Weeks</div>
-                  <div style={sectionSub}>Session count trend with total weekly mileage underneath.</div>
-                </div>
-                <svg width="100%" height="84" viewBox="0 0 220 84" preserveAspectRatio="none">
-                  <polyline
-                    fill="none"
-                    stroke="rgba(84,203,130,0.95)"
-                    strokeWidth="3"
-                    points={sparklinePoints(weeklySeries.map((item) => item.sessions), 220, 84, 8)}
-                  />
-                </svg>
-                <div className="mobileHomeSparkMeta" style={sparkMetaRow}>
-                  {weeklySeries.map((item) => (
-                    <div key={item.label} style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11, opacity: 0.66 }}>{formatShortWeekRangeLabel(item.label)}</div>
-                      <div style={{ fontSize: 12, fontWeight: 800 }}>{item.sessions} logs</div>
-                      <div style={{ fontSize: 11, opacity: 0.74 }}>{item.miles.toFixed(1)} mi</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mobileHomeTwoCol" style={twoColGrid}>
-                <div style={subPanel}>
-                  <div style={subPanelTitle}>On Track</div>
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {onTrack.length === 0 && <div style={emptyState}>No routines have hit their weekly target yet.</div>}
-                    {onTrack.map((item) => (
-                      <div key={item.id} style={miniCardSuccess}>
-                        <div style={{ fontWeight: 800 }}>{item.name}</div>
-                        <div style={miniCardMeta}>
-                          {item.count}/{item.target} this week
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={subPanel}>
-                  <div style={subPanelTitle}>Needs Attention</div>
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {needsAttention.length === 0 && <div style={emptyState}>Nothing planned or targeted is behind right now.</div>}
-                    {needsAttention.map((item) => (
-                      <div key={item.id} style={miniCardWarn}>
-                        <div style={{ fontWeight: 800 }}>{item.name}</div>
-                        <div style={miniCardMeta}>
-                          {item.count}/{item.target || item.planned} this week
-                          {item.missedPlanned > 0 ? ` | missed planned: ${item.missedPlanned}` : ""}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          <div className="desktopOnlyHomeSection">{weeklyMomentumSection}</div>
 
           <section style={panel}>
             <div style={panelHeader}>ACTIVE GOALS</div>
