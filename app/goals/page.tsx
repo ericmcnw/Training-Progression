@@ -20,6 +20,7 @@ import {
   parseRunLongestGoalType,
   parseRunWeeklyMileageGoalType,
 } from "@/lib/progress";
+import { formatAppDate } from "@/lib/dates";
 import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
@@ -795,7 +796,7 @@ export default async function GoalsPage({
                                 {card.valueLabel}: {card.currentDisplay}/{card.targetDisplay}
                               </div>
                               <div style={{ marginTop: 2, fontSize: 12, opacity: 0.75 }}>
-                                {card.goal.isVirtual ? "Source: routine setup sessions/week" : `Created: ${new Date(card.goal.createdAt).toLocaleDateString()}`}
+                                {card.goal.isVirtual ? "Source: routine setup sessions/week" : `Created: ${formatAppDate(card.goal.createdAt)}`}
                               </div>
                             </div>
                           </div>

@@ -89,3 +89,13 @@ export function formatUtcDateLabel(
   const date = new Date(`${ymd}T00:00:00.000Z`);
   return date.toLocaleDateString(undefined, { ...options, timeZone: "UTC" });
 }
+
+export function formatAppDate(value: Date | string, options: Intl.DateTimeFormatOptions = {}) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleDateString(undefined, { ...options, timeZone: APP_TIME_ZONE });
+}
+
+export function formatAppDateTime(value: Date | string, options: Intl.DateTimeFormatOptions = {}) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleString(undefined, { ...options, timeZone: APP_TIME_ZONE });
+}

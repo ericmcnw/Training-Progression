@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Routine } from "@prisma/client";
 import { GOAL_TYPE } from "@/lib/progress";
+import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
   formatRoutineSubtype,
@@ -340,7 +341,7 @@ export default async function RoutinesPage(props: {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Routines</h1>
           <div style={styles.subText}>
-            Week (Sun-Sat): {start.toLocaleDateString()} - {new Date(end.getTime() - 1).toLocaleDateString()}
+            Week (Sun-Sat): {formatAppDate(start)} - {formatAppDate(new Date(end.getTime() - 1))}
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import {
   parseRunWeeklyMileageGoalType,
   sparklinePoints,
 } from "@/lib/progress";
-import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
+import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
@@ -34,7 +34,7 @@ function formatDayLabel(ymd: string) {
 }
 
 function formatLogTime(date: Date) {
-  return date.toLocaleString(undefined, {
+  return formatAppDateTime(date, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -443,7 +443,7 @@ export default async function HomePage() {
     id: goal.id,
     title: formatGoalType(goal.type, routineMap, exerciseMap),
     target: goal.targetValue,
-    createdAt: goal.createdAt.toLocaleDateString(),
+    createdAt: formatAppDate(goal.createdAt),
   }));
 
   return (
