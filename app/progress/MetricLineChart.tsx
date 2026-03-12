@@ -55,6 +55,10 @@ export default function MetricLineChart({
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  function togglePoint(index: number) {
+    setHoverIndex((current) => (current === index ? null : index));
+  }
+
   const metrics = useMemo(() => {
     if (points.length === 0) return { max: 0, avg: 0, latest: 0, total: 0 };
     const values = points.map((p) => p.value);
@@ -139,6 +143,7 @@ export default function MetricLineChart({
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 180 : 240} style={{ marginTop: 8 }}>
+          <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
             x1={margin.left}
@@ -195,6 +200,10 @@ export default function MetricLineChart({
                 fill="rgba(51,255,122,0.95)"
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
               >
                 <title>{`${p.label}: ${formatValue(p.value, decimals, unit)}`}</title>
               </circle>

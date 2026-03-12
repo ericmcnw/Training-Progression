@@ -21,7 +21,7 @@ export default async function ProgressCardioIndexPage(props: {
     await Promise.all(
       cardioGroups.map(async (group) => ({
         group,
-        target: await resolveGroupTarget(group.slug, "12w"),
+        target: await resolveGroupTarget(group.slug, "4w"),
       }))
     )
   )
@@ -49,7 +49,7 @@ export default async function ProgressCardioIndexPage(props: {
           {previews.map(({ group, target }) => (
             <TargetCard
               key={group.id}
-              href={`/progress/cardio/${group.slug}?tab=overview&range=12w`}
+              href={`/progress/cardio/${group.slug}?tab=overview&range=4w`}
               title={group.label}
               subtitle="Cardio rollup"
               chips={[

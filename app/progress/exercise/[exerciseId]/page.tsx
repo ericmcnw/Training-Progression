@@ -15,6 +15,6 @@ export default async function LegacyExerciseProgressPage(props: {
   const params = await Promise.resolve(props.params);
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const tab = getParam(searchParams, "tab") ?? "overview";
-  const range = getParam(searchParams, "range") ?? "12w";
+  const range = getParam(searchParams, "range") ?? "4w";
   redirect(`/progress/exercises/${params.exerciseId}?tab=${tab}&range=${range}`);
 }

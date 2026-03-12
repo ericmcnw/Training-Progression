@@ -17,7 +17,7 @@ export default async function ProgressRoutinesIndexPage(props: {
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
   const kind = (getParam(searchParams, "kind") ?? "all").trim().toUpperCase();
   const status = (getParam(searchParams, "status") ?? "active").trim();
-  const [routines, logs] = await Promise.all([getRoutineIndex(), getRoutineLogs("12w")]);
+  const [routines, logs] = await Promise.all([getRoutineIndex(), getRoutineLogs("4w")]);
 
   const rows = routines
     .map((routine) => {
@@ -81,7 +81,7 @@ export default async function ProgressRoutinesIndexPage(props: {
           {rows.map(({ routine, summary }) => (
             <TargetCard
               key={routine.id}
-              href={`/progress/routines/${routine.id}?tab=overview&range=12w`}
+              href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
               title={routine.name}
               subtitle={routineSubtitle(routine)}
               chips={[

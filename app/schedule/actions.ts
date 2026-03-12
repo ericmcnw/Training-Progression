@@ -23,6 +23,15 @@ function normalizeDateInput(dateInput: string) {
   return `${value}T00:00:00.000Z`;
 }
 
+function parseUtcDayStart(ymd: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) throw new Error("Invalid date.");
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
+
+function nextUtcDayStart(date: Date) {
+  return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+}
+
 export async function createCyclePlan(formData: FormData) {
   const returnMode = String(formData.get("returnMode") || "cycle");
   const name = String(formData.get("name") || "").trim() || "New Cycle";
@@ -267,25 +276,33 @@ export async function quickAddManualEntry(formData: FormData) {
   if (!routineId) throw new Error("Missing routineId.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) throw new Error("Invalid scheduled date.");
 
-  const routine = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    'SELECT "id" FROM "Routine" WHERE "id" = ? AND "isDeleted" = false LIMIT 1',
-    routineId
-  );
-  if (!routine[0]) throw new Error("Routine not found.");
+  const routine = await prisma.routine.findFirst({
+    where: { id: routineId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!routine) throw new Error("Routine not found.");
 
-  const existing = await prisma.$queryRawUnsafe<Array<{ sortOrder: number | null }>>(
-    'SELECT MAX("sortOrder") as "sortOrder" FROM "ScheduleManualEntry" WHERE "scheduledDate" = ?',
-    `${scheduledDate}T00:00:00.000Z`
-  );
-  const nextSortOrder = Number(existing[0]?.sortOrder ?? -1) + 1;
+  const dayStart = parseUtcDayStart(scheduledDate);
+  const nextDayStart = nextUtcDayStart(dayStart);
+  const existing = await prisma.scheduleManualEntry.aggregate({
+    where: {
+      scheduledDate: {
+        gte: dayStart,
+        lt: nextDayStart,
+      },
+    },
+    _max: { sortOrder: true },
+  });
+  const nextSortOrder = (existing._max.sortOrder ?? -1) + 1;
 
-  await prisma.$executeRawUnsafe(
-    'INSERT INTO "ScheduleManualEntry" ("id","routineId","scheduledDate","sortOrder","createdAt","updatedAt") VALUES (?,?,?, ?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
-    makeId(),
-    routineId,
-    `${scheduledDate}T00:00:00.000Z`,
-    nextSortOrder
-  );
+  await prisma.scheduleManualEntry.create({
+    data: {
+      id: makeId(),
+      routineId,
+      scheduledDate: dayStart,
+      sortOrder: nextSortOrder,
+    },
+  });
 
   revalidatePath("/schedule");
   const params = new URLSearchParams();

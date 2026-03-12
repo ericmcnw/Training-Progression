@@ -79,7 +79,7 @@ export default async function ProgressOverviewPage() {
           {cardioGroups.slice(0, 6).map((group) => (
             <TargetCard
               key={group.id}
-              href={`/progress/cardio/${group.slug}?tab=overview&range=12w`}
+              href={`/progress/cardio/${group.slug}?tab=overview&range=4w`}
               title={group.label}
               subtitle="Cardio rollup target"
             />
@@ -87,7 +87,7 @@ export default async function ProgressOverviewPage() {
           {cardioRoutines.slice(0, 2).map((routine) => (
             <TargetCard
               key={routine.id}
-              href={`/progress/routines/${routine.id}?tab=overview&range=12w`}
+              href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
               title={routine.name}
               subtitle="Specific cardio routine"
             />
@@ -100,7 +100,7 @@ export default async function ProgressOverviewPage() {
           {featuredGroups.map((group) => (
             <TargetCard
               key={group.id}
-              href={`/progress/groups/${group.slug}?tab=overview&range=12w`}
+              href={`/progress/groups/${group.slug}?tab=overview&range=4w`}
               title={group.label}
               subtitle={group.kind.replaceAll("_", " ")}
             />

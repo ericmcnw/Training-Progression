@@ -69,6 +69,10 @@ export default function DualMetricLineChart({
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  function togglePoint(index: number) {
+    setHoverIndex((current) => (current === index ? null : index));
+  }
+
   const width = 640;
   const height = compact ? 200 : 250;
   const margin = { top: 22, right: 56, bottom: 46, left: 56 };
@@ -146,6 +150,7 @@ export default function DualMetricLineChart({
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 200 : 250} style={{ marginTop: 8 }}>
+          <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
             x1={margin.left + innerW}
@@ -247,6 +252,10 @@ export default function DualMetricLineChart({
                 fill="rgba(51,255,122,1)"
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
               />
               <circle
                 cx={p.x}
@@ -255,6 +264,10 @@ export default function DualMetricLineChart({
                 fill="rgba(120,190,255,0.72)"
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
               />
 
               {markerIndices.has(idx) && (

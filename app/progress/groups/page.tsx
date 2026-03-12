@@ -21,7 +21,7 @@ export default async function ProgressGroupsIndexPage(props: {
     await Promise.all(
       groups.map(async (group) => ({
         group,
-        target: await resolveGroupTarget(group.slug, "12w"),
+        target: await resolveGroupTarget(group.slug, "4w"),
       }))
     )
   )
@@ -65,7 +65,7 @@ export default async function ProgressGroupsIndexPage(props: {
           {previews.map(({ group, target }) => (
             <TargetCard
               key={group.id}
-              href={`/progress/groups/${group.slug}?tab=overview&range=12w`}
+              href={`/progress/groups/${group.slug}?tab=overview&range=4w`}
               title={group.label}
               subtitle={group.kind.replaceAll("_", " ")}
               chips={[

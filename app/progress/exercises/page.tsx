@@ -17,7 +17,7 @@ export default async function ProgressExercisesIndexPage(props: {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
   const filter = (getParam(searchParams, "filter") ?? "all").trim();
-  const [exercises, logs] = await Promise.all([getExerciseIndex(), getRoutineLogs("12w")]);
+  const [exercises, logs] = await Promise.all([getExerciseIndex(), getRoutineLogs("4w")]);
 
   const rows = exercises
     .map((exercise) => {
@@ -79,7 +79,7 @@ export default async function ProgressExercisesIndexPage(props: {
           {rows.map(({ exercise, sessions }) => (
             <TargetCard
               key={exercise.id}
-              href={`/progress/exercises/${exercise.id}?tab=overview&range=12w`}
+              href={`/progress/exercises/${exercise.id}?tab=overview&range=4w`}
               title={exercise.name}
               subtitle={`${exercise.unit}${exercise.supportsWeight ? " | Weighted" : ""}`}
               chips={[
