@@ -1,5 +1,6 @@
 "use client";
 
+import { addDaysYmd, diffYmdDays, todayAppYmd } from "@/lib/dates";
 import { routineKindColor } from "@/lib/routines";
 import { useMemo, useState } from "react";
 import { saveCycleEntries, saveManualEntries } from "./actions";
@@ -72,19 +73,15 @@ function normalizeManual(items: ManualEntry[]) {
 }
 
 function todayYmd() {
-  return new Date().toISOString().slice(0, 10);
+  return todayAppYmd();
 }
 
 function addDays(base: string, plus: number) {
-  const date = new Date(`${base}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + plus);
-  return date.toISOString().slice(0, 10);
+  return addDaysYmd(base, plus);
 }
 
 function dayDiff(from: string, to: string) {
-  const a = new Date(`${from}T00:00:00.000Z`).getTime();
-  const b = new Date(`${to}T00:00:00.000Z`).getTime();
-  return Math.floor((a - b) / 86400000);
+  return diffYmdDays(from, to);
 }
 
 export default function ScheduleWorkspace({

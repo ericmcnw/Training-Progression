@@ -1,13 +1,10 @@
+import { addDaysYmd, getAppDayRange, toAppYmd } from "@/lib/dates";
+
 export function getWeekBoundsSunday(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay();
-
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - day);
-
-  const end = new Date(start);
-  end.setDate(end.getDate() + 7);
-
-  return { start, end };
+  const todayYmd = toAppYmd(date);
+  const day = new Date(`${todayYmd}T00:00:00.000Z`).getUTCDay();
+  const startYmd = addDaysYmd(todayYmd, -day);
+  const start = getAppDayRange(startYmd).start;
+  const end = getAppDayRange(addDaysYmd(startYmd, 7)).start;
+  return { start, end, startYmd };
 }

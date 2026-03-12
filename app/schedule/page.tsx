@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import ScheduleBoard from "./ScheduleBoard";
 import CycleBuilder from "./CycleBuilder";
 import { createCyclePlan, quickAddManualEntry, setCycleActivation, updateCyclePlan } from "./actions";
@@ -20,11 +21,7 @@ function isMonthParam(value: string | undefined) {
 }
 
 function todayLocalYmd() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return todayAppYmd();
 }
 
 function toYmd(value: string | Date) {
@@ -33,21 +30,16 @@ function toYmd(value: string | Date) {
 }
 
 function addDays(ymd: string, plus: number) {
-  const date = new Date(`${ymd}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + plus);
-  return date.toISOString().slice(0, 10);
+  return addDaysYmd(ymd, plus);
 }
 
 function dayDiff(a: string, b: string) {
-  const at = new Date(`${a}T00:00:00.000Z`).getTime();
-  const bt = new Date(`${b}T00:00:00.000Z`).getTime();
-  return Math.floor((at - bt) / 86400000);
+  return diffYmdDays(a, b);
 }
 
 function formatDayTitle(ymd: string) {
-  const date = new Date(`${ymd}T00:00:00.000Z`);
-  const weekday = date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" });
-  const md = date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  const weekday = formatUtcDateLabel(ymd, { weekday: "long" });
+  const md = formatUtcDateLabel(ymd, { month: "short", day: "numeric" });
   return `${weekday} (${md})`;
 }
 
@@ -167,9 +159,7 @@ export default async function SchedulePage({
   }));
 
   const next7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() + i);
-    return d.toISOString().slice(0, 10);
+    return addDays(today, i);
   });
   const routinePlannedDaysMap = new Map<string, number>();
   for (const day of next7Days) {
@@ -207,8 +197,8 @@ export default async function SchedulePage({
   const logs = await prisma.routineLog.findMany({
     where: {
       performedAt: {
-        gte: new Date(`${logStart}T00:00:00.000Z`),
-        lt: new Date(`${logEnd}T00:00:00.000Z`),
+        gte: getAppDayRange(logStart).start,
+        lt: getAppDayRange(logEnd).start,
       },
     },
     select: { routineId: true, performedAt: true },
@@ -217,7 +207,7 @@ export default async function SchedulePage({
   const loggedMap = new Map<string, number>();
   const loggedByDay = new Map<string, Map<string, number>>();
   for (const log of logs) {
-    const day = toYmd(log.performedAt);
+    const day = toAppYmd(log.performedAt);
     const key = `${day}|${log.routineId}`;
     loggedMap.set(key, (loggedMap.get(key) ?? 0) + 1);
     if (!loggedByDay.has(day)) loggedByDay.set(day, new Map());
@@ -288,7 +278,7 @@ export default async function SchedulePage({
   const earliestKnownYmd = [
     manualEntries[0]?.scheduledDate,
     ...activeCycles.map((cycle) => cycle.startDate),
-    logRange._min.performedAt ? toYmd(logRange._min.performedAt) : undefined,
+    logRange._min.performedAt ? toAppYmd(logRange._min.performedAt) : undefined,
   ]
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => a.localeCompare(b))[0] ?? monthStart;

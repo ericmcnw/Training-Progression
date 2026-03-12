@@ -1,5 +1,6 @@
 "use client";
 
+import { addDaysYmd, diffYmdDays, formatUtcDateLabel, todayAppYmd } from "@/lib/dates";
 import { routineKindColor } from "@/lib/routines";
 import { useMemo, useState } from "react";
 import { saveManualEntries, setCycleActivation } from "./actions";
@@ -30,15 +31,11 @@ type ManualEntry = {
 };
 
 function addDays(base: string, plus: number) {
-  const date = new Date(`${base}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + plus);
-  return date.toISOString().slice(0, 10);
+  return addDaysYmd(base, plus);
 }
 
 function dayDiff(a: string, b: string) {
-  const at = new Date(`${a}T00:00:00.000Z`).getTime();
-  const bt = new Date(`${b}T00:00:00.000Z`).getTime();
-  return Math.floor((at - bt) / 86400000);
+  return diffYmdDays(a, b);
 }
 
 function normalizeManual(items: ManualEntry[]) {
@@ -58,9 +55,8 @@ function normalizeManual(items: ManualEntry[]) {
 }
 
 function formatDayLabel(ymd: string) {
-  const d = new Date(`${ymd}T00:00:00.000Z`);
-  const weekday = d.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
-  const md = d.toLocaleDateString(undefined, { month: "numeric", day: "numeric", timeZone: "UTC" });
+  const weekday = formatUtcDateLabel(ymd, { weekday: "short" });
+  const md = formatUtcDateLabel(ymd, { month: "numeric", day: "numeric" });
   return `${weekday} ${md}`;
 }
 
@@ -94,7 +90,7 @@ export default function ScheduleBoard({
     }
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [routines]);
-  const start = new Date().toISOString().slice(0, 10);
+  const start = todayAppYmd();
   const horizonDays = 21;
   const days = Array.from({ length: horizonDays }, (_, i) => addDays(start, i));
 

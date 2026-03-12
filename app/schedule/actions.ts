@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
+import { todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -28,7 +29,7 @@ export async function createCyclePlan(formData: FormData) {
   const raw = Number(String(formData.get("cycleLengthDays") || "7"));
   const cycleLengthDays = clampCycleDays(Number.isFinite(raw) ? raw : 7);
   const startDateInput = String(formData.get("startDate") || "").trim();
-  const startDateIso = startDateInput ? normalizeDateInput(startDateInput) : new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+  const startDateIso = startDateInput ? normalizeDateInput(startDateInput) : `${todayAppYmd()}T00:00:00.000Z`;
 
   const planId = makeId();
   const activationId = makeId();

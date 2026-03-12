@@ -6,18 +6,11 @@ import {
   parseRunWeeklyMileageGoalType,
   sparklinePoints,
 } from "@/lib/progress";
+import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
-
-function localYmd(value: Date | string) {
-  const date = value instanceof Date ? value : new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function utcDateOnlyYmd(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
@@ -25,24 +18,18 @@ function utcDateOnlyYmd(value: Date | string) {
 }
 
 function addDays(ymd: string, plus: number) {
-  const date = new Date(`${ymd}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + plus);
-  return date.toISOString().slice(0, 10);
+  return addDaysYmd(ymd, plus);
 }
 
 function dayDiff(a: string, b: string) {
-  const at = new Date(`${a}T00:00:00.000Z`).getTime();
-  const bt = new Date(`${b}T00:00:00.000Z`).getTime();
-  return Math.floor((at - bt) / 86400000);
+  return diffYmdDays(a, b);
 }
 
 function formatDayLabel(ymd: string) {
-  const date = new Date(`${ymd}T00:00:00.000Z`);
-  return date.toLocaleDateString(undefined, {
+  return formatUtcDateLabel(ymd, {
     weekday: "short",
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
   });
 }
 
@@ -56,10 +43,7 @@ function formatLogTime(date: Date) {
 }
 
 function localDayRange(ymd: string) {
-  const [year, month, day] = ymd.split("-").map(Number);
-  const start = new Date(year, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0);
-  const end = new Date(year, (month ?? 1) - 1, (day ?? 1) + 1, 0, 0, 0, 0);
-  return { start, end };
+  return getAppDayRange(ymd);
 }
 
 function formatGoalType(type: string, routineMap: Map<string, { name: string }>, exerciseMap: Map<string, { name: string }>) {
@@ -160,10 +144,10 @@ function SessionFractionRing({ current, target }: { current: number; target: num
 }
 
 export default async function HomePage() {
-  const today = localYmd(new Date());
+  const today = todayAppYmd();
   const tomorrow = addDays(today, 1);
   const weekBounds = getWeekBoundsSunday(new Date());
-  const weekStart = localYmd(weekBounds.start);
+  const weekStart = toAppYmd(weekBounds.start);
   const sparkStart = addDays(weekStart, -35);
 
   const [
@@ -403,7 +387,7 @@ export default async function HomePage() {
     const start = addDays(weekStart, -(5 - index) * 7);
     const end = addDays(start, 7);
     const logsInWeek = sparkLogs.filter((log) => {
-      const ymd = localYmd(log.performedAt);
+      const ymd = toAppYmd(log.performedAt);
       return ymd >= start && ymd < end;
     });
     return {
