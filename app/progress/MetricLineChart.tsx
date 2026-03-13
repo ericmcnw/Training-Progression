@@ -58,6 +58,7 @@ export default function MetricLineChart({
   yAxisTicks?: number[];
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const hitRadius = compact ? 12 : 10;
 
   function togglePoint(index: number) {
     setHoverIndex((current) => (current === index ? null : index));
@@ -73,9 +74,9 @@ export default function MetricLineChart({
     return { max, avg, latest, total };
   }, [points]);
 
-  const width = 640;
-  const height = compact ? 180 : 240;
-  const margin = { top: 20, right: 16, bottom: 44, left: 56 };
+  const width = 700;
+  const height = compact ? 196 : 256;
+  const margin = { top: 20, right: 16, bottom: 44, left: 72 };
   const innerW = width - margin.left - margin.right;
   const innerH = height - margin.top - margin.bottom;
   const goalValue = targetValue !== undefined && Number.isFinite(targetValue) && targetValue > 0 ? targetValue : undefined;
@@ -146,7 +147,7 @@ export default function MetricLineChart({
       {series.length === 0 ? (
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 180 : 240} style={{ marginTop: 8 }}>
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 196 : 256} style={{ marginTop: 8 }}>
           <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
@@ -170,7 +171,13 @@ export default function MetricLineChart({
                   stroke={isBaseline ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.18)"}
                   strokeDasharray={isBaseline ? undefined : "4 4"}
                 />
-                <text x={8} y={tickY + 4} fontSize="11" fill={isBaseline ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.85)"}>
+                <text
+                  x={margin.left - 8}
+                  y={tickY + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fill={isBaseline ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.85)"}
+                >
                   {formatAxisNumber(tick, decimals)}
                 </text>
               </g>
@@ -200,8 +207,22 @@ export default function MetricLineChart({
               <circle
                 cx={p.x}
                 cy={p.y}
+                r={hitRadius}
+                fill="transparent"
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoverIndex(idx)}
+                onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
+              />
+              <circle
+                cx={p.x}
+                cy={p.y}
                 r={3.5}
                 fill="rgba(51,255,122,0.95)"
+                style={{ pointerEvents: "none" }}
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
                 onClick={(event) => {
@@ -264,9 +285,9 @@ export default function MetricLineChart({
             {xLabel}
           </text>
           <text
-            x={14}
+            x={18}
             y={margin.top + innerH / 2}
-            transform={`rotate(-90 14 ${margin.top + innerH / 2})`}
+            transform={`rotate(-90 18 ${margin.top + innerH / 2})`}
             textAnchor="middle"
             fontSize="11"
             fill="rgba(255,255,255,0.8)"

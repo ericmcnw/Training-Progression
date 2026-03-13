@@ -1,4 +1,5 @@
 export const APP_TIME_ZONE = "America/New_York";
+const APP_LOCALE = "en-US";
 
 const ymdFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: APP_TIME_ZONE,
@@ -103,15 +104,15 @@ export function formatUtcDateLabel(
   options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
 ) {
   const date = new Date(`${ymd}T00:00:00.000Z`);
-  return date.toLocaleDateString(undefined, { ...options, timeZone: "UTC" });
+  return date.toLocaleDateString(APP_LOCALE, { ...options, timeZone: "UTC" });
 }
 
 export function formatAppDate(value: Date | string, options: Intl.DateTimeFormatOptions = {}) {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleDateString(undefined, { ...options, timeZone: APP_TIME_ZONE });
+  return date.toLocaleDateString(APP_LOCALE, { ...options, timeZone: APP_TIME_ZONE });
 }
 
 export function formatAppDateTime(value: Date | string, options: Intl.DateTimeFormatOptions = {}) {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleString(undefined, { ...options, timeZone: APP_TIME_ZONE });
+  return date.toLocaleString(APP_LOCALE, { ...options, timeZone: APP_TIME_ZONE });
 }

@@ -135,6 +135,10 @@ details[open] > summary[data-collapsible-summary]::before{
   flex-wrap: wrap;
 }
 
+.mobileBottomNav{
+  display: none;
+}
+
 .appMain{
   max-width: 980px;
   margin: 0 auto;
@@ -175,19 +179,74 @@ details[open] > summary[data-collapsible-summary]::before{
 @media (max-width: 720px){
   .appHeaderInner{
     padding: 12px 14px;
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .appNav{
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: thin;
+    display: none;
+  }
+
+  .appHeader{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(14px);
+    background: rgba(11,18,32,0.86);
+  }
+
+  .mobileBottomNav{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255,255,255,0.12);
+    background:
+      linear-gradient(180deg, rgba(16,22,37,0.82), rgba(8,13,24,0.96)),
+      rgba(9,15,28,0.94);
+    backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 -12px 36px rgba(0,0,0,0.34);
+  }
+
+  .mobileBottomNavLink{
+    display: grid;
+    place-items: center;
+    min-height: 54px;
+    padding: 10px 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 18px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-align: center;
+    color: var(--muted);
+    background: rgba(255,255,255,0.04);
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+  }
+
+  .mobileBottomNavLink[aria-current="page"]{
+    color: var(--success);
+    background: linear-gradient(180deg, rgba(51,255,122,0.16), rgba(51,255,122,0.08));
+    border-color: rgba(51,255,122,0.28);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  .mobileBottomNavLink:hover{
+    color: var(--success);
+    background: rgba(51,255,122,0.08);
+    border-color: rgba(51,255,122,0.18);
+    transform: translateY(-1px);
+  }
+
+  .mobileBottomNavText{
+    line-height: 1.1;
   }
 
   .appMain{
-    padding: 14px;
+    padding: 14px 14px calc(108px + env(safe-area-inset-bottom));
   }
 
   .mobileHomePage,

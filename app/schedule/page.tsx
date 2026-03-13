@@ -2,8 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import ScheduleBoard from "./ScheduleBoard";
-import CycleBuilder from "./CycleBuilder";
-import { createCyclePlan, quickAddManualEntry, removeManualEntry, setCycleActivation, updateCyclePlan } from "./actions";
+import { quickAddManualEntry, removeManualEntry } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -77,24 +76,13 @@ export default async function SchedulePage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = searchParams ? await searchParams : {};
-  const requestedPlanId = getParam(params?.planId);
   const mode = getParam(params?.mode) === "edit" ? "edit" : "view";
-  const editTab = getParam(params?.tab) === "cycles" ? "cycles" : "board";
   const today = todayLocalYmd();
   const requestedStart = getParam(params?.start);
   const timelineStart = isYmd(requestedStart) ? requestedStart! : addDays(today, -7);
   const selectedMonth = isMonthParam(getParam(params?.month)) ? getParam(params?.month)! : monthFromYmd(today);
 
-  const [plansRaw, entriesRaw, activationsRaw, routines, manualRaw, logRange] = await Promise.all([
-    prisma.$queryRawUnsafe<
-      Array<{ id: string; name: string; cycleLengthDays: number; isActive: number | boolean; createdAt: string }>
-    >('SELECT "id","name","cycleLengthDays","isActive","createdAt" FROM "SchedulePlan" ORDER BY "createdAt" ASC'),
-    prisma.$queryRawUnsafe<Array<{ id: string; schedulePlanId: string; routineId: string; dayOffset: number; sortOrder: number }>>(
-      'SELECT "id","schedulePlanId","routineId","dayOffset","sortOrder" FROM "ScheduleEntry" ORDER BY "dayOffset" ASC, "sortOrder" ASC'
-    ),
-    prisma.$queryRawUnsafe<Array<{ schedulePlanId: string; isEnabled: number | boolean; startDate: string }>>(
-      'SELECT "schedulePlanId","isEnabled","startDate" FROM "SchedulePlanActivation"'
-    ),
+  const [routines, manualRaw, logRange] = await prisma.$transaction([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ isActive: "desc" }, { kind: "asc" }, { category: "asc" }, { name: "asc" }],
@@ -108,48 +96,6 @@ export default async function SchedulePage({
       _max: { performedAt: true },
     }),
   ]);
-
-  const activationMap = new Map(
-    activationsRaw.map((row) => [row.schedulePlanId, { isEnabled: Boolean(row.isEnabled), startDate: toYmd(row.startDate) }])
-  );
-
-  const plans = plansRaw.map((plan) => ({
-    id: plan.id,
-    name: plan.name,
-    cycleLengthDays: Number(plan.cycleLengthDays),
-    isActive: Boolean(plan.isActive),
-    activation: activationMap.get(plan.id) ?? { isEnabled: false, startDate: toYmd(new Date()) },
-    entries: entriesRaw
-      .filter((entry) => entry.schedulePlanId === plan.id)
-      .map((entry) => ({
-        id: entry.id,
-        routineId: entry.routineId,
-        dayOffset: Number(entry.dayOffset),
-        sortOrder: Number(entry.sortOrder),
-      })),
-  }));
-
-  const selectedPlanId =
-    (requestedPlanId && plans.find((plan) => plan.id === requestedPlanId)?.id) ||
-    plans.find((plan) => plan.isActive)?.id ||
-    plans[0]?.id ||
-    "";
-  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
-
-  const activeCycles = plans
-    .filter((plan) => plan.activation.isEnabled)
-    .map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      cycleLengthDays: plan.cycleLengthDays,
-      isEnabled: plan.activation.isEnabled,
-      startDate: plan.activation.startDate,
-      entries: plan.entries.map((entry) => ({
-        routineId: entry.routineId,
-        dayOffset: entry.dayOffset,
-        sortOrder: entry.sortOrder,
-      })),
-    }));
 
   const manualEntries = manualRaw.map((entry) => ({
     id: entry.id,
@@ -166,14 +112,6 @@ export default async function SchedulePage({
     const ids = new Set<string>();
     for (const manual of manualEntries) {
       if (manual.scheduledDate === day) ids.add(manual.routineId);
-    }
-    for (const cycle of activeCycles) {
-      const diff = dayDiff(day, cycle.startDate);
-      if (diff < 0 || cycle.cycleLengthDays <= 0) continue;
-      const offset = diff % cycle.cycleLengthDays;
-      for (const entry of cycle.entries) {
-        if (entry.dayOffset === offset) ids.add(entry.routineId);
-      }
     }
     for (const id of ids) {
       routinePlannedDaysMap.set(id, (routinePlannedDaysMap.get(id) ?? 0) + 1);
@@ -234,16 +172,6 @@ export default async function SchedulePage({
         plannedCounts.set(manual.routineId, (plannedCounts.get(manual.routineId) ?? 0) + 1);
       }
 
-      for (const cycle of activeCycles) {
-        const diff = dayDiff(day, cycle.startDate);
-        if (diff < 0 || cycle.cycleLengthDays <= 0) continue;
-        const offset = diff % cycle.cycleLengthDays;
-        for (const entry of cycle.entries) {
-          if (entry.dayOffset !== offset) continue;
-          plannedCounts.set(entry.routineId, (plannedCounts.get(entry.routineId) ?? 0) + 1);
-        }
-      }
-
       const isPastOrToday = day <= today;
       if (isPastOrToday) {
         for (const [routineId] of loggedByDay.get(day)?.entries() ?? []) {
@@ -292,7 +220,6 @@ export default async function SchedulePage({
 
   const earliestKnownYmd = [
     manualEntries[0]?.scheduledDate,
-    ...activeCycles.map((cycle) => cycle.startDate),
     logRange._min.performedAt ? toAppYmd(logRange._min.performedAt) : undefined,
   ]
     .filter((value): value is string => Boolean(value))
@@ -507,129 +434,17 @@ export default async function SchedulePage({
         <>
           <section style={panel}>
             <div style={panelHeader}>EDITOR</div>
-            <div className="mobileScheduleInlineRow" style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Link href="/schedule?mode=edit&tab=board" style={editTab === "board" ? tabBtnActive : tabBtn}>
-                Schedule Board
-              </Link>
-              <Link href="/schedule?mode=edit&tab=cycles" style={editTab === "cycles" ? tabBtnActive : tabBtn}>
-                Cycle Builder
-              </Link>
+            <div style={{ padding: 12, fontSize: 13, opacity: 0.82 }}>
+              Manual scheduling only. Repeating plans are disabled for now.
             </div>
           </section>
 
-          {editTab === "board" && (
-            <>
-              {plans.length > 0 && (
-                <section style={panel}>
-                  <div style={panelHeader}>CYCLES</div>
-                  <div style={{ padding: 14, display: "grid", gap: 8 }}>
-                    {plans.map((plan) => (
-                      <div key={plan.id} style={planRow}>
-                        <div style={{ fontSize: 13, fontWeight: 800 }}>
-                          {plan.name} ({plan.cycleLengthDays} days)
-                        </div>
-                        <form action={setCycleActivation} className="mobileScheduleInlineRow" style={row}>
-                          <input type="hidden" name="planId" value={plan.id} />
-                          <input type="hidden" name="returnMode" value="edit" />
-                          <label style={inlineLabel}>
-                            <input name="isEnabled" type="checkbox" defaultChecked={plan.activation.isEnabled} />
-                            Enabled
-                          </label>
-                          <label style={inlineLabel}>
-                            Start
-                            <input name="startDate" type="date" defaultValue={plan.activation.startDate} style={input} />
-                          </label>
-                          <button type="submit" style={btn}>Save</button>
-                        </form>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <section style={{ ...panel, marginTop: 14 }}>
-                <div style={panelHeader}>SCHEDULE BOARD</div>
-                <div style={{ padding: 14 }}>
-                  <ScheduleBoard
-                    routines={routinesWithPlanned}
-                    cycles={plans.map((plan) => ({
-                      id: plan.id,
-                      name: plan.name,
-                      cycleLengthDays: plan.cycleLengthDays,
-                      startDate: plan.activation.startDate,
-                      isEnabled: plan.activation.isEnabled,
-                      entries: plan.entries.map((entry) => ({
-                        routineId: entry.routineId,
-                        dayOffset: entry.dayOffset,
-                        sortOrder: entry.sortOrder,
-                      })),
-                    }))}
-                    manualEntries={manualEntries}
-                  />
-                </div>
-              </section>
-            </>
-          )}
-
-          {editTab === "cycles" && (
-            <>
-              <section style={panel}>
-                <div style={panelHeader}>CREATE CYCLE</div>
-                <div style={{ padding: 14 }}>
-                  <form action={createCyclePlan} className="mobileScheduleInlineRow" style={row}>
-                    <input type="hidden" name="returnMode" value="edit" />
-                    <input name="name" placeholder="Cycle name" style={{ ...input, minWidth: 180 }} />
-                    <label style={inlineLabel}>
-                      Length (days)
-                      <input name="cycleLengthDays" type="number" min={1} max={60} defaultValue={7} style={{ ...input, width: 90 }} />
-                    </label>
-                    <label style={inlineLabel}>
-                      Start day
-                      <input name="startDate" type="date" defaultValue={toYmd(new Date())} style={input} />
-                    </label>
-                    <button type="submit" style={btn}>+ Create Cycle</button>
-                  </form>
-                </div>
-              </section>
-
-              {plans.length > 0 && (
-                <section style={{ ...panel, marginTop: 14 }}>
-                  <div style={panelHeader}>EDIT CYCLE</div>
-                  <div style={{ padding: 14, display: "grid", gap: 10 }}>
-                    <div className="mobileScheduleInlineRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {plans.map((plan) => (
-                        <Link key={plan.id} href={`/schedule?mode=edit&tab=cycles&planId=${plan.id}`} style={smallLink}>
-                          {selectedPlanId === plan.id ? "[Editing]" : "[Open]"} {plan.name}
-                        </Link>
-                      ))}
-                    </div>
-
-                    {selectedPlan && (
-                      <>
-                        <form action={updateCyclePlan} className="mobileScheduleInlineRow" style={row}>
-                          <input type="hidden" name="planId" value={selectedPlan.id} />
-                          <input type="hidden" name="returnMode" value="edit" />
-                          <input name="name" defaultValue={selectedPlan.name} style={{ ...input, minWidth: 200 }} />
-                          <label style={inlineLabel}>
-                            Length (days)
-                            <input name="cycleLengthDays" type="number" min={1} max={60} defaultValue={selectedPlan.cycleLengthDays} style={{ ...input, width: 90 }} />
-                          </label>
-                          <button type="submit" style={btn}>Save Settings</button>
-                        </form>
-
-                        <CycleBuilder
-                          planId={selectedPlan.id}
-                          cycleLengthDays={selectedPlan.cycleLengthDays}
-                          routines={routines}
-                          initialEntries={selectedPlan.entries}
-                        />
-                      </>
-                    )}
-                  </div>
-                </section>
-              )}
-            </>
-          )}
+          <section style={{ ...panel, marginTop: 14 }}>
+            <div style={panelHeader}>SCHEDULE BOARD</div>
+            <div style={{ padding: 14 }}>
+              <ScheduleBoard routines={routinesWithPlanned} manualEntries={manualEntries} />
+            </div>
+          </section>
         </>
       )}
     </div>
@@ -696,44 +511,12 @@ const taskLink: React.CSSProperties = {
   textDecoration: "none",
 };
 
-const row: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-};
-
-const planRow: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.35)",
-  borderRadius: 10,
-  padding: 10,
-  display: "grid",
-  gap: 8,
-};
-
 const input: React.CSSProperties = {
   padding: 8,
   border: "1px solid rgba(128,128,128,0.6)",
   borderRadius: 10,
   background: "rgba(128,128,128,0.08)",
   color: "inherit",
-};
-
-const btn: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid rgba(128,128,128,0.8)",
-  borderRadius: 10,
-  background: "rgba(128,128,128,0.12)",
-  color: "inherit",
-  fontWeight: 800,
-};
-
-const inlineLabel: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  alignItems: "center",
-  fontSize: 12,
-  fontWeight: 700,
 };
 
 const linkBtn: React.CSSProperties = {
@@ -744,30 +527,6 @@ const linkBtn: React.CSSProperties = {
   color: "inherit",
   fontWeight: 800,
   background: "rgba(128,128,128,0.12)",
-};
-
-const smallLink: React.CSSProperties = {
-  textDecoration: "none",
-  color: "inherit",
-  fontWeight: 800,
-  fontSize: 13,
-};
-
-const tabBtn: React.CSSProperties = {
-  padding: "7px 10px",
-  border: "1px solid rgba(128,128,128,0.8)",
-  borderRadius: 10,
-  textDecoration: "none",
-  color: "inherit",
-  fontWeight: 800,
-  background: "rgba(128,128,128,0.1)",
-  fontSize: 13,
-};
-
-const tabBtnActive: React.CSSProperties = {
-  ...tabBtn,
-  background: "rgba(255,255,255,0.18)",
-  borderColor: "rgba(255,255,255,0.65)",
 };
 
 const toolbar: React.CSSProperties = {

@@ -32,8 +32,18 @@ function nextUtcDayStart(date: Date) {
   return new Date(date.getTime() + 24 * 60 * 60 * 1000);
 }
 
+function redirectToSchedule(returnMode: string, planId?: string, returnTab?: string) {
+  const params = new URLSearchParams();
+  if (returnMode === "edit") params.set("mode", "edit");
+  if (returnTab) params.set("tab", returnTab);
+  if (planId) params.set("planId", planId);
+  const query = params.toString();
+  redirect(query ? `/schedule?${query}` : "/schedule");
+}
+
 export async function createCyclePlan(formData: FormData) {
-  const returnMode = String(formData.get("returnMode") || "cycle");
+  const returnMode = String(formData.get("returnMode") || "edit");
+  const returnTab = String(formData.get("returnTab") || "").trim();
   const name = String(formData.get("name") || "").trim() || "New Cycle";
   const raw = Number(String(formData.get("cycleLengthDays") || "7"));
   const cycleLengthDays = clampCycleDays(Number.isFinite(raw) ? raw : 7);
@@ -61,12 +71,13 @@ export async function createCyclePlan(formData: FormData) {
   });
 
   revalidatePath("/schedule");
-  redirect(`/schedule?mode=${encodeURIComponent(returnMode)}&planId=${planId}`);
+  redirectToSchedule(returnMode, planId, returnTab);
 }
 
 export async function updateCyclePlan(formData: FormData) {
   const planId = String(formData.get("planId") || "");
-  const returnMode = String(formData.get("returnMode") || "cycle");
+  const returnMode = String(formData.get("returnMode") || "edit");
+  const returnTab = String(formData.get("returnTab") || "").trim();
   const name = String(formData.get("name") || "").trim();
   const raw = Number(String(formData.get("cycleLengthDays") || "7"));
   const cycleLengthDays = clampCycleDays(Number.isFinite(raw) ? raw : 7);
@@ -89,12 +100,13 @@ export async function updateCyclePlan(formData: FormData) {
   });
 
   revalidatePath("/schedule");
-  redirect(`/schedule?mode=${encodeURIComponent(returnMode)}&planId=${planId}`);
+  redirectToSchedule(returnMode, planId, returnTab);
 }
 
 export async function setCycleActivation(formData: FormData) {
   const planId = String(formData.get("planId") || "");
   const returnMode = String(formData.get("returnMode") || "schedule");
+  const returnTab = String(formData.get("returnTab") || "").trim();
   const isEnabled = String(formData.get("isEnabled") || "") === "on";
   const startDateInput = String(formData.get("startDate") || "").trim();
   const startDateIso = normalizeDateInput(startDateInput);
@@ -124,7 +136,7 @@ export async function setCycleActivation(formData: FormData) {
   }
 
   revalidatePath("/schedule");
-  redirect(`/schedule?mode=${encodeURIComponent(returnMode)}&planId=${planId}`);
+  redirectToSchedule(returnMode, planId, returnTab);
 }
 
 type IncomingCycleEntry = {
@@ -135,7 +147,8 @@ type IncomingCycleEntry = {
 
 export async function saveCycleEntries(formData: FormData) {
   const planId = String(formData.get("planId") || "");
-  const returnMode = String(formData.get("returnMode") || "cycle");
+  const returnMode = String(formData.get("returnMode") || "edit");
+  const returnTab = String(formData.get("returnTab") || "").trim();
   const entriesRaw = String(formData.get("entriesJson") || "[]");
   if (!planId) throw new Error("Missing planId.");
 
@@ -197,7 +210,7 @@ export async function saveCycleEntries(formData: FormData) {
   });
 
   revalidatePath("/schedule");
-  redirect(`/schedule?mode=${encodeURIComponent(returnMode)}&planId=${planId}`);
+  redirectToSchedule(returnMode, planId, returnTab);
 }
 
 type IncomingManualEntry = {

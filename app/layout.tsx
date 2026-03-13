@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import AppNavigation, { MobileBottomNavigation } from "./AppNavigation";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,30 +22,12 @@ export default function RootLayout({
               Progression
             </Link>
 
-            <nav className="appNav">
-              <Link className="navLink" href="/">
-                Dashboard
-              </Link>
-              <Link className="navLink" href="/routines">
-                Routines
-              </Link>
-              <Link className="navLink" href="/progress">
-                Progress
-              </Link>
-              <Link className="navLink" href="/goals">
-                Goals
-              </Link>
-              <Link className="navLink" href="/schedule">
-                Schedule
-              </Link>
-              <Link className="navLink" href="/manual-log">
-                Manual Log
-              </Link>
-            </nav>
+            <AppNavigation />
           </div>
         </header>
 
         <main className="appMain">{children}</main>
+        <MobileBottomNavigation />
       </body>
     </html>
   );

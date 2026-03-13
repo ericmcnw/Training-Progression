@@ -68,14 +68,15 @@ export default function DualMetricLineChart({
   rightTargetLabel?: string;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const hitRadius = compact ? 12 : 10;
 
   function togglePoint(index: number) {
     setHoverIndex((current) => (current === index ? null : index));
   }
 
-  const width = 640;
-  const height = compact ? 200 : 250;
-  const margin = { top: 22, right: 56, bottom: 46, left: 56 };
+  const width = 700;
+  const height = compact ? 216 : 266;
+  const margin = { top: 22, right: 64, bottom: 46, left: 72 };
   const innerW = width - margin.left - margin.right;
   const innerH = height - margin.top - margin.bottom;
 
@@ -151,7 +152,7 @@ export default function DualMetricLineChart({
       {plotted.length === 0 ? (
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 200 : 250} style={{ marginTop: 8 }}>
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 216 : 266} style={{ marginTop: 8 }}>
           <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
@@ -169,12 +170,12 @@ export default function DualMetricLineChart({
             stroke="rgba(255,255,255,0.35)"
           />
           <text
-            x={10}
+            x={18}
             y={margin.top + innerH / 2}
             textAnchor="middle"
             fontSize="11"
             fill="rgba(255,255,255,0.8)"
-            transform={`rotate(-90 10 ${margin.top + innerH / 2})`}
+            transform={`rotate(-90 18 ${margin.top + innerH / 2})`}
           >
             {leftUnit ? `${leftLabel} (${leftUnit})` : leftLabel}
           </text>
@@ -221,26 +222,32 @@ export default function DualMetricLineChart({
             </>
           )}
 
-          <text x={margin.left - 24} y={margin.top + 4} fontSize="11" fill="rgba(255,255,255,0.82)">
+          <text x={margin.left - 8} y={margin.top + 4} textAnchor="end" fontSize="11" fill="rgba(255,255,255,0.82)">
             {fmtNum(leftAxisMax, leftDecimals)}
           </text>
-          <text x={margin.left - 24} y={margin.top + innerH + 4} fontSize="11" fill="rgba(255,255,255,0.72)">
+          <text x={margin.left - 8} y={margin.top + innerH + 4} textAnchor="end" fontSize="11" fill="rgba(255,255,255,0.72)">
             0
           </text>
           {showLeftPeakTick ? (
-            <text x={margin.left - 24} y={Math.max(margin.top + 12, leftPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
+            <text
+              x={margin.left - 8}
+              y={Math.max(margin.top + 12, leftPeakY + 4)}
+              textAnchor="end"
+              fontSize="11"
+              fill="rgba(255,255,255,0.92)"
+            >
               {fmtNum(stats.leftMax, leftDecimals)}
             </text>
           ) : null}
 
-          <text x={width - margin.right + 4} y={margin.top + innerH + 4} fontSize="11" fill="rgba(255,255,255,0.72)">
+          <text x={width - margin.right + 6} y={margin.top + innerH + 4} fontSize="11" fill="rgba(255,255,255,0.72)">
             0
           </text>
-          <text x={width - margin.right + 4} y={margin.top + 4} fontSize="11" fill="rgba(255,255,255,0.82)">
+          <text x={width - margin.right + 6} y={margin.top + 4} fontSize="11" fill="rgba(255,255,255,0.82)">
             {fmtNum(rightAxisMax, rightDecimals)}
           </text>
           {showRightPeakTick ? (
-            <text x={width - margin.right + 4} y={Math.max(margin.top + 12, rightPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
+            <text x={width - margin.right + 6} y={Math.max(margin.top + 12, rightPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
               {fmtNum(stats.rightMax, rightDecimals)}
             </text>
           ) : null}
@@ -257,8 +264,35 @@ export default function DualMetricLineChart({
               <circle
                 cx={p.x}
                 cy={p.yLeft}
+                r={hitRadius}
+                fill="transparent"
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoverIndex(idx)}
+                onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
+              />
+              <circle
+                cx={p.x}
+                cy={p.yRight}
+                r={hitRadius}
+                fill="transparent"
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoverIndex(idx)}
+                onMouseLeave={() => setHoverIndex(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePoint(idx);
+                }}
+              />
+              <circle
+                cx={p.x}
+                cy={p.yLeft}
                 r={4.2}
                 fill="rgba(51,255,122,1)"
+                style={{ pointerEvents: "none" }}
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
                 onClick={(event) => {
@@ -271,6 +305,7 @@ export default function DualMetricLineChart({
                 cy={p.yRight}
                 r={2.8}
                 fill="rgba(120,190,255,0.72)"
+                style={{ pointerEvents: "none" }}
                 onMouseEnter={() => setHoverIndex(idx)}
                 onMouseLeave={() => setHoverIndex(null)}
                 onClick={(event) => {

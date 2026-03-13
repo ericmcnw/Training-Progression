@@ -137,7 +137,7 @@ export default function CycleBuilder({
       </section>
 
       <section style={panel}>
-        <div style={panelHeader}>CYCLE DAYS</div>
+        <div style={panelHeader}>PLAN DAYS</div>
         <div style={{ overflowX: "auto", padding: 10 }}>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cycleLengthDays}, minmax(150px, 1fr))`, gap: 8, minWidth: Math.max(800, cycleLengthDays * 150) }}>
             {Array.from({ length: cycleLengthDays }, (_, dayOffset) => {
@@ -177,9 +177,10 @@ export default function CycleBuilder({
         <div style={{ padding: 10, borderTop: "1px solid rgba(128,128,128,0.25)" }}>
           <form action={saveCycleEntries}>
             <input type="hidden" name="planId" value={planId} />
-            <input type="hidden" name="returnMode" value="cycle" />
+            <input type="hidden" name="returnMode" value="edit" />
+            <input type="hidden" name="returnTab" value="builder" />
             <input type="hidden" name="entriesJson" value={entriesJson} />
-            <button type="submit" style={saveBtn}>Save Cycle</button>
+            <button type="submit" style={saveBtn}>Save Plan</button>
           </form>
         </div>
       </section>
