@@ -126,6 +126,12 @@ export function inferExerciseMetadataSlugs(name: string) {
   return Array.from(slugs);
 }
 
+export function inferRoutineMetadataSlugs(subtype: string | null | undefined) {
+  const normalized = String(subtype ?? "").trim().toUpperCase();
+  if (!normalized) return [];
+  return ROUTINE_SUBTYPE_GROUP_DEFAULTS[normalized] ?? [];
+}
+
 export function formatMetadataGroupKind(kind: MetadataGroupKind) {
   return METADATA_GROUP_KIND_LABELS[kind] ?? kind;
 }

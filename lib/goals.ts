@@ -15,7 +15,7 @@ import {
   getAllowedMetricTypes,
   metricIsLowerBetter,
 } from "@/lib/goals-config";
-import { formatMetadataGroupKind } from "@/lib/metadata";
+import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
@@ -164,6 +164,7 @@ function currentWindowForGoal(goal: GoalWithConfig, now = new Date()): GoalWindo
   const goalStart = goal.startDate;
   const naturalEnd = goal.endDate ?? now;
   const useAllTimePerformanceWindow = goal.goalType === "PERFORMANCE" && goal.timeframe === "ONE_TIME";
+  const shouldClampToGoalStart = goal.timeframe === "ONE_TIME";
   let currentStart = startOfDay(goalStart);
   let currentEnd = addDays(currentStart, 1);
   let historyStart = currentStart;
@@ -190,13 +191,13 @@ function currentWindowForGoal(goal: GoalWithConfig, now = new Date()): GoalWindo
 
   currentStart = useAllTimePerformanceWindow
     ? currentStart
-    : currentStart.getTime() < goalStart.getTime()
+    : shouldClampToGoalStart && currentStart.getTime() < goalStart.getTime()
     ? goalStart
     : currentStart;
   currentEnd = currentEnd.getTime() > naturalEnd.getTime() ? naturalEnd : currentEnd;
   historyStart = useAllTimePerformanceWindow
     ? historyStart
-    : historyStart.getTime() < goalStart.getTime()
+    : shouldClampToGoalStart && historyStart.getTime() < goalStart.getTime()
     ? goalStart
     : historyStart;
   const historyEnd = naturalEnd;
@@ -284,7 +285,15 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
     select: { id: true, slug: true, label: true, kind: true },
   });
   const groupIds = group ? await getDescendantGroupIds(group.id) : [];
-  const [routineAssignments, exerciseAssignments] = groupIds.length
+  const relevantGroups = groupIds.length
+    ? await prisma.metadataGroup.findMany({
+        where: { id: { in: groupIds } },
+        select: { slug: true },
+      })
+    : [];
+  const relevantSlugs = new Set(relevantGroups.map((item) => item.slug));
+
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises] = groupIds.length
     ? await Promise.all([
         prisma.routineMetadataGroup.findMany({
           where: { groupId: { in: groupIds } },
@@ -294,10 +303,25 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
           where: { groupId: { in: groupIds } },
           select: { exerciseId: true },
         }),
+        prisma.routine.findMany({
+          where: { isDeleted: false },
+          select: { id: true, subtype: true },
+        }),
+        prisma.exercise.findMany({
+          select: { id: true, name: true },
+        }),
       ])
-    : [[], []];
-  const routineIds = Array.from(new Set(routineAssignments.map((item) => item.routineId)));
-  const exerciseIds = Array.from(new Set(exerciseAssignments.map((item) => item.exerciseId)));
+    : [[], [], [], []];
+  const inferredRoutineIds = subtypeRoutines
+    .filter((routine) => inferRoutineMetadataSlugs(routine.subtype).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((routine) => routine.id);
+  const inferredExerciseIds = inferredExercises
+    .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((exercise) => exercise.id);
+  const routineIds = Array.from(
+    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds])
+  );
+  const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
 
   return {
     label: group?.label ?? "Unknown group",

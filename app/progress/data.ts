@@ -1,4 +1,5 @@
 import { formatAppDate, formatAppDateTime } from "@/lib/dates";
+import { inferExerciseMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { aggregateExerciseSessionRow, countGoalMetWeeks, descendantGroupIds, fillWeeklySeries, hasSessionLikeKinds, hasWorkoutKinds, incrementWeekMap, isCardioOnlyKinds, lastOrNull, performedAtWhere, weeksWithActivity, ytdSessions, type ProgressRange, type SeriesPoint } from "@/lib/progress-v2";
 import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
@@ -300,7 +301,15 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
   if (!group) return null;
 
   const relevantGroupIds = descendantGroupIds(group.id, relations);
-  const [routineAssignments, exerciseAssignments] = await Promise.all([
+  const relevantSlugs = new Set(
+    (
+      await prisma.metadataGroup.findMany({
+        where: { id: { in: relevantGroupIds } },
+        select: { slug: true },
+      })
+    ).map((item) => item.slug)
+  );
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises] = await Promise.all([
     prisma.routineMetadataGroup.findMany({
       where: { groupId: { in: relevantGroupIds } },
       select: { routineId: true },
@@ -309,10 +318,24 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
       where: { groupId: { in: relevantGroupIds } },
       select: { exerciseId: true },
     }),
+    prisma.routine.findMany({
+      where: { isDeleted: false },
+      select: { id: true, subtype: true },
+    }),
+    prisma.exercise.findMany({
+      select: { id: true, name: true },
+    }),
   ]);
 
-  const routineIds = Array.from(new Set(routineAssignments.map((item) => item.routineId)));
-  const exerciseIds = Array.from(new Set(exerciseAssignments.map((item) => item.exerciseId)));
+  const inferredRoutineIds = subtypeRoutines
+    .filter((routine) => inferRoutineMetadataSlugs(routine.subtype).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((routine) => routine.id);
+  const inferredExerciseIds = inferredExercises
+    .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((exercise) => exercise.id);
+
+  const routineIds = Array.from(new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds]));
+  const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
   const logs =
     routineIds.length === 0 && exerciseIds.length === 0
       ? []
