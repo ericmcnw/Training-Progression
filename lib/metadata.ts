@@ -75,8 +75,8 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
 ];
 
 export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
-  RUN: ["running"],
-  WALK: ["walking"],
+  RUN: ["running", "run-walk"],
+  WALK: ["walking", "run-walk"],
   BIKE: ["biking"],
   SWIM: ["swimming"],
   HIKE: ["hiking"],
@@ -92,6 +92,39 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   STRENGTH: ["strength"],
   HYPERTROPHY: ["hypertrophy"],
 };
+
+const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[] }> = [
+  { pattern: /\b(pull[\s-]?up|chin[\s-]?up|lat pulldown|pulldown)\b/i, slugs: ["vertical-pull", "pull", "back", "biceps"] },
+  { pattern: /\b(row|seal row|t-bar row|inverted row)\b/i, slugs: ["horizontal-pull", "pull", "back", "biceps"] },
+  { pattern: /\b(face pull|rear delt)\b/i, slugs: ["horizontal-pull", "pull", "back", "shoulders"] },
+  { pattern: /\b(bench|push[\s-]?up|chest press|chest fly|dip)\b/i, slugs: ["horizontal-push", "push", "chest", "triceps", "shoulders"] },
+  { pattern: /\b(overhead press|shoulder press|arnold press|pike push[\s-]?up|handstand push[\s-]?up)\b/i, slugs: ["vertical-push", "push", "shoulders", "triceps"] },
+  { pattern: /\b(squat|leg press|wall sit)\b/i, slugs: ["squat", "legs", "lower-body", "quads", "glutes"] },
+  { pattern: /\b(deadlift|romanian deadlift|rdl|good morning|hip thrust|bridge|swing|pull-through)\b/i, slugs: ["hinge", "legs", "lower-body", "hamstrings", "glutes"] },
+  { pattern: /\b(lunge|split squat|step-up)\b/i, slugs: ["lunge", "legs", "lower-body", "quads", "glutes"] },
+  { pattern: /\b(curl)\b/i, slugs: ["pull", "biceps"] },
+  { pattern: /\b(triceps|pressdown|skull crusher|extension)\b/i, slugs: ["push", "triceps"] },
+  { pattern: /\b(plank|hollow|dead bug|ab wheel|sit-up|crunch|leg raise|l-sit)\b/i, slugs: ["core"] },
+  { pattern: /\b(side plank|copenhagen|suitcase carry)\b/i, slugs: ["core", "anti-lateral-flexion", "isometric"] },
+  { pattern: /\b(pallof)\b/i, slugs: ["core", "anti-rotation"] },
+  { pattern: /\b(bird dog)\b/i, slugs: ["core", "anti-rotation", "glutes"] },
+  { pattern: /\b(dead bug|ab wheel)\b/i, slugs: ["core", "anti-extension"] },
+  { pattern: /\b(carry|farmer|waiter|overhead carry)\b/i, slugs: ["carry", "core"] },
+  { pattern: /\b(hang|hold|isometric|support hold|handstand hold)\b/i, slugs: ["isometric"] },
+  { pattern: /\b(stretch|mobility|neural glide)\b/i, slugs: ["mobility"] },
+];
+
+export function inferExerciseMetadataSlugs(name: string) {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return [];
+
+  const slugs = new Set<string>();
+  for (const rule of EXERCISE_METADATA_INFERENCE_RULES) {
+    if (!rule.pattern.test(normalized)) continue;
+    for (const slug of rule.slugs) slugs.add(slug);
+  }
+  return Array.from(slugs);
+}
 
 export function formatMetadataGroupKind(kind: MetadataGroupKind) {
   return METADATA_GROUP_KIND_LABELS[kind] ?? kind;

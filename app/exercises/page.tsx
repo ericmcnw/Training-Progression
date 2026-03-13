@@ -1,7 +1,7 @@
 import Link from "next/link";
-import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import { prisma } from "@/lib/prisma";
 import { createExercise } from "./actions";
+import ExerciseForm from "./ExerciseForm";
 
 export const dynamic = "force-dynamic";
 
@@ -45,43 +45,11 @@ export default async function ExercisesPage() {
         <div style={styles.panelHeader}>NEW EXERCISE</div>
 
         <div style={{ padding: 14 }}>
-          <form action={createExercise} style={{ display: "grid", gap: 12, maxWidth: 720 }}>
-            <div>
-              <label style={styles.label}>Name</label>
-              <input
-                name="name"
-                style={styles.input}
-                placeholder="Weighted Pull-Up, Lock-Off, Deadlift..."
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={styles.label}>Unit</label>
-                <select name="unit" style={styles.input as React.CSSProperties} defaultValue="REPS">
-                  <option value="REPS">REPS</option>
-                  <option value="TIME">TIME (seconds)</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 22 }}>
-                <input id="supportsWeight" name="supportsWeight" type="checkbox" />
-                <label htmlFor="supportsWeight" style={{ fontWeight: 800 }}>
-                  Supports Weight (lbs)
-                </label>
-              </div>
-            </div>
-
-            <MetadataGroupPicker
-              title="Exercise Metadata"
-              help="Assign muscle groups, movement patterns, and broader training groups for future rollups."
-              groups={metadataGroups}
-            />
-
-            <button type="submit" style={styles.btn}>
-              Create Exercise
-            </button>
-          </form>
+          <ExerciseForm
+            action={createExercise}
+            metadataGroups={metadataGroups}
+            submitLabel="Create Exercise"
+          />
         </div>
       </div>
 

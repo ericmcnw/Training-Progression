@@ -28,6 +28,7 @@ export default async function GroupTargetPage(props: {
 
   const summary = summarizeRoutineLogs(target.logs, null);
   const targetType = groupTargetType(target.logs);
+  const targetLabel = target.group.label;
   const cardioPerf = cardioPerformanceSeries(target.logs);
   const cardioWorkload = cardioWorkloadSeries(target.logs, range);
   const workoutPerf = workoutSessionSeries(target.logs);
@@ -36,11 +37,11 @@ export default async function GroupTargetPage(props: {
 
   const overviewSecondary =
     targetType === "cardio" ? (
-      <MetricLineChart title="Distance per Week" yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
+      <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
     ) : targetType === "workout" ? (
-      <MetricLineChart title="Volume per Week" yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
+      <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
     ) : (
-      <MetricLineChart title="Duration per Week" yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
+      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
     );
 
   return (
@@ -77,14 +78,14 @@ export default async function GroupTargetPage(props: {
         {tab === "overview" ? (
           <>
             <SectionCard title="Completion / Consistency">
-              {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />}
+              {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />}
             </SectionCard>
             <SectionCard title={targetType === "mixed" ? "Workload Snapshot" : "Primary Trend"}>
               {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : overviewSecondary}
             </SectionCard>
             {targetType === "cardio" ? (
               <SectionCard title="Performance Snapshot">
-                <MetricLineChart title="Pace per Session" yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
               </SectionCard>
             ) : null}
           </>
@@ -92,7 +93,7 @@ export default async function GroupTargetPage(props: {
 
         {tab === "completion" ? (
           <SectionCard title="Completion">
-            {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />}
+            {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />}
           </SectionCard>
         ) : null}
 
@@ -102,13 +103,13 @@ export default async function GroupTargetPage(props: {
               <EmptyState message="No activity in this group for the selected range." />
             ) : targetType === "cardio" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Distance per Session" yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} />
-                <MetricLineChart title="Pace per Session" yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} />
+                <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
               </div>
             ) : targetType === "workout" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Volume per Session" yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} />
-                <MetricLineChart title="Reps per Session" yLabel="Reps" xLabel="Session" points={workoutPerf.totalReps} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Volume per Session`} yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Reps per Session`} yLabel="Reps" xLabel="Session" points={workoutPerf.totalReps} decimals={0} />
               </div>
             ) : (
               <EmptyState message="This group mixes training types, so performance is intentionally minimized here. Use completion and workload first." />
@@ -122,20 +123,20 @@ export default async function GroupTargetPage(props: {
               <EmptyState message="No activity in this group for the selected range." />
             ) : targetType === "cardio" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />
-                <MetricLineChart title="Distance per Week" yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
-                <MetricLineChart title="Duration per Week" yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
+                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} />
               </div>
             ) : targetType === "workout" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Sets per Week" yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} />
-                <MetricLineChart title="Reps per Week" yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} />
-                <MetricLineChart title="Volume per Week" yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
               </div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />
-                <MetricLineChart title="Duration per Week" yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
               </div>
             )}
           </SectionCard>

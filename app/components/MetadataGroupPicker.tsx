@@ -1,3 +1,5 @@
+"use client";
+
 import { formatMetadataGroupKind } from "@/lib/metadata";
 import type { MetadataGroupKind } from "@/generated/prisma";
 
@@ -13,12 +15,14 @@ export default function MetadataGroupPicker({
   help,
   groups,
   selectedIds,
+  onSelectionChange,
   inputName = "metadataGroupIds",
 }: {
   title: string;
   help?: string;
   groups: GroupOption[];
   selectedIds?: string[];
+  onSelectionChange?: (nextSelectedIds: string[]) => void;
   inputName?: string;
 }) {
   const grouped = groups.reduce<Record<MetadataGroupKind, GroupOption[]>>((acc, group) => {
@@ -29,6 +33,14 @@ export default function MetadataGroupPicker({
 
   const selected = new Set(selectedIds ?? []);
   const orderedKinds = Object.keys(grouped).sort() as MetadataGroupKind[];
+
+  function handleCheckedChange(groupId: string, checked: boolean) {
+    if (!onSelectionChange) return;
+    const next = new Set(selectedIds ?? []);
+    if (checked) next.add(groupId);
+    else next.delete(groupId);
+    onSelectionChange(Array.from(next));
+  }
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -46,12 +58,22 @@ export default function MetadataGroupPicker({
               .sort((a, b) => a.label.localeCompare(b.label))
               .map((group) => (
                 <label key={group.id} style={styles.option}>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value={group.id}
-                    defaultChecked={selected.has(group.id)}
-                  />
+                  {onSelectionChange ? (
+                    <input
+                      type="checkbox"
+                      name={inputName}
+                      value={group.id}
+                      checked={selected.has(group.id)}
+                      onChange={(event) => handleCheckedChange(group.id, event.target.checked)}
+                    />
+                  ) : (
+                    <input
+                      type="checkbox"
+                      name={inputName}
+                      value={group.id}
+                      defaultChecked={selected.has(group.id)}
+                    />
+                  )}
                   <span>{group.label}</span>
                 </label>
               ))}

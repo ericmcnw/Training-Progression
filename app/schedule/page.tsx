@@ -201,15 +201,18 @@ export default async function SchedulePage({
         lt: getAppDayRange(logEnd).start,
       },
     },
-    select: { routineId: true, performedAt: true },
+    orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, routineId: true, performedAt: true },
   });
 
   const loggedMap = new Map<string, number>();
+  const latestLogIdByDay = new Map<string, string>();
   const loggedByDay = new Map<string, Map<string, number>>();
   for (const log of logs) {
     const day = toAppYmd(log.performedAt);
     const key = `${day}|${log.routineId}`;
     loggedMap.set(key, (loggedMap.get(key) ?? 0) + 1);
+    if (!latestLogIdByDay.has(key)) latestLogIdByDay.set(key, log.id);
     if (!loggedByDay.has(day)) loggedByDay.set(day, new Map());
     const dayLogs = loggedByDay.get(day)!;
     dayLogs.set(log.routineId, (dayLogs.get(log.routineId) ?? 0) + 1);
@@ -261,6 +264,7 @@ export default async function SchedulePage({
             logged,
             remaining: Math.max(0, planned - logged),
             removableManualEntryId: removableManualEntry?.id ?? null,
+            latestLogId: latestLogIdByDay.get(`${day}|${routineId}`) ?? null,
           };
         })
         .sort((a, b) => a.routineName.localeCompare(b.routineName));
@@ -350,26 +354,28 @@ export default async function SchedulePage({
                           {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
                         </div>
                       )}
-                      {dayItem.manualItems.length > 0 && (
-                        <div style={{ display: "grid", gap: 6 }}>
-                          {dayItem.manualItems.map((item) => (
-                            <form key={item.id} action={removeManualEntry} style={manualEntryRow}>
-                              {item.canRemove ? <input type="hidden" name="entryId" value={item.id} /> : null}
-                              {item.canRemove ? <input type="hidden" name="returnStart" value={timelineStart} /> : null}
-                              {item.canRemove ? <input type="hidden" name="returnMonth" value={selectedMonth} /> : null}
-                              <div style={{ fontSize: 12, fontWeight: 800 }}>{item.routineName}</div>
-                              {item.canRemove ? (
-                                <button type="submit" style={removeBtn}>Remove</button>
-                              ) : (
-                                <div style={manualLockedTag}>Completed</div>
-                              )}
-                            </form>
-                          ))}
-                        </div>
-                      )}
                       {dayItem.tasks.map((task) => (
                         <div key={task.routineId} style={task.logged > 0 ? completedTaskRow : taskRow}>
-                          <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                          <div style={taskRowTop}>
+                            {task.latestLogId ? (
+                              <Link
+                                href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}
+                                style={taskLink}
+                              >
+                                {task.routineName}
+                              </Link>
+                            ) : (
+                              <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                            )}
+                            {task.removableManualEntryId ? (
+                              <form action={removeManualEntry}>
+                                <input type="hidden" name="entryId" value={task.removableManualEntryId} />
+                                <input type="hidden" name="returnStart" value={timelineStart} />
+                                <input type="hidden" name="returnMonth" value={selectedMonth} />
+                                <button type="submit" style={removeBtn}>Remove</button>
+                              </form>
+                            ) : null}
+                          </div>
                           <div style={{ fontSize: 12, opacity: 0.85 }}>
                             Planned: {task.planned} | Logged: {task.logged} | Remaining: {task.remaining}
                           </div>
@@ -452,19 +458,6 @@ export default async function SchedulePage({
                         <button type="submit" style={calendarQuickAddBtn}>+</button>
                       </form>
                       <div style={{ display: "grid", gap: 6 }}>
-                        {dayItem.manualItems.map((item) => (
-                          <form key={item.id} action={removeManualEntry} style={calendarManualEntryRow}>
-                            {item.canRemove ? <input type="hidden" name="entryId" value={item.id} /> : null}
-                            {item.canRemove ? <input type="hidden" name="returnStart" value={timelineStart} /> : null}
-                            {item.canRemove ? <input type="hidden" name="returnMonth" value={selectedMonth} /> : null}
-                            <div style={{ fontWeight: 800 }}>{item.routineName}</div>
-                            {item.canRemove ? (
-                              <button type="submit" style={calendarRemoveBtn}>Remove</button>
-                            ) : (
-                              <div style={calendarLockedTag}>Completed</div>
-                            )}
-                          </form>
-                        ))}
                         {dayItem.tasks.length === 0 && (
                           <div style={calendarEmptyText}>
                             {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
@@ -472,7 +465,26 @@ export default async function SchedulePage({
                         )}
                         {dayItem.tasks.map((task) => (
                           <div key={task.routineId} style={task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow}>
-                            <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                            <div style={taskRowTop}>
+                              {task.latestLogId ? (
+                                <Link
+                                  href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}
+                                  style={taskLink}
+                                >
+                                  {task.routineName}
+                                </Link>
+                              ) : (
+                                <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                              )}
+                              {task.removableManualEntryId ? (
+                                <form action={removeManualEntry}>
+                                  <input type="hidden" name="entryId" value={task.removableManualEntryId} />
+                                  <input type="hidden" name="returnStart" value={timelineStart} />
+                                  <input type="hidden" name="returnMonth" value={selectedMonth} />
+                                  <button type="submit" style={calendarRemoveBtn}>Remove</button>
+                                </form>
+                              ) : null}
+                            </div>
                             <div style={{ fontSize: 11, opacity: 0.85 }}>
                               Planned: {task.planned} | Logged: {task.logged}
                             </div>
@@ -670,6 +682,20 @@ const completedTaskRow: React.CSSProperties = {
   boxShadow: "0 0 0 1px rgba(84,203,130,0.18), 0 0 14px rgba(84,203,130,0.22)",
 };
 
+const taskRowTop: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+};
+
+const taskLink: React.CSSProperties = {
+  fontWeight: 800,
+  color: "inherit",
+  textDecoration: "none",
+};
+
 const row: React.CSSProperties = {
   display: "flex",
   gap: 10,
@@ -785,17 +811,6 @@ const quickAddBtn: React.CSSProperties = {
   alignSelf: "flex-end",
 };
 
-const manualEntryRow: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  alignItems: "center",
-  justifyContent: "space-between",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 8,
-  padding: "7px 8px",
-  background: "rgba(255,255,255,0.04)",
-};
-
 const removeBtn: React.CSSProperties = {
   padding: "5px 8px",
   border: "1px solid rgba(255,80,80,0.75)",
@@ -805,16 +820,6 @@ const removeBtn: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
   cursor: "pointer",
-};
-
-const manualLockedTag: React.CSSProperties = {
-  padding: "5px 8px",
-  border: "1px solid rgba(84,203,130,0.75)",
-  borderRadius: 999,
-  background: "rgba(84,203,130,0.12)",
-  color: "inherit",
-  fontSize: 11,
-  fontWeight: 800,
 };
 
 const monthPill: React.CSSProperties = {
@@ -924,25 +929,8 @@ const calendarEmptyText: React.CSSProperties = {
   opacity: 0.58,
 };
 
-const calendarManualEntryRow: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 8,
-  padding: "7px 8px",
-  background: "rgba(255,255,255,0.05)",
-  fontSize: 12,
-  display: "grid",
-  gap: 6,
-};
-
 const calendarRemoveBtn: React.CSSProperties = {
   ...removeBtn,
-  justifySelf: "start",
-  padding: "4px 7px",
-  fontSize: 10,
-};
-
-const calendarLockedTag: React.CSSProperties = {
-  ...manualLockedTag,
   justifySelf: "start",
   padding: "4px 7px",
   fontSize: 10,

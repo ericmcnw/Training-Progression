@@ -313,7 +313,10 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
 
   const routineIds = Array.from(new Set(routineAssignments.map((item) => item.routineId)));
   const exerciseIds = Array.from(new Set(exerciseAssignments.map((item) => item.exerciseId)));
-  const logs = await getRoutineLogs(range, { routineIds, exerciseIds });
+  const logs =
+    routineIds.length === 0 && exerciseIds.length === 0
+      ? []
+      : await getRoutineLogs(range, { routineIds, exerciseIds });
 
   return {
     group,

@@ -130,6 +130,8 @@ export default function DualMetricLineChart({
   const rightGoalY = rightGoal !== undefined ? margin.top + (1 - rightGoal / rightAxisMax) * innerH : null;
   const leftPeakY = margin.top + (1 - (stats.leftMax > 0 ? stats.leftMax : 0) / leftAxisMax) * innerH;
   const rightPeakY = margin.top + (1 - (stats.rightMax > 0 ? stats.rightMax : 0) / rightAxisMax) * innerH;
+  const showLeftPeakTick = stats.leftMax > 0 && stats.leftMax !== leftAxisMax;
+  const showRightPeakTick = stats.rightMax > 0 && stats.rightMax !== rightAxisMax;
 
   return (
     <div style={cardStyle}>
@@ -225,16 +227,23 @@ export default function DualMetricLineChart({
           <text x={margin.left - 24} y={margin.top + innerH + 4} fontSize="11" fill="rgba(255,255,255,0.72)">
             0
           </text>
-          <text x={margin.left - 24} y={Math.max(margin.top + 12, leftPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
-            {fmtNum(stats.leftMax, leftDecimals)}
-          </text>
+          {showLeftPeakTick ? (
+            <text x={margin.left - 24} y={Math.max(margin.top + 12, leftPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
+              {fmtNum(stats.leftMax, leftDecimals)}
+            </text>
+          ) : null}
 
           <text x={width - margin.right + 4} y={margin.top + innerH + 4} fontSize="11" fill="rgba(255,255,255,0.72)">
             0
           </text>
-          <text x={width - margin.right + 4} y={Math.max(margin.top + 12, rightPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
-            {fmtNum(stats.rightMax, rightDecimals)}
+          <text x={width - margin.right + 4} y={margin.top + 4} fontSize="11" fill="rgba(255,255,255,0.82)">
+            {fmtNum(rightAxisMax, rightDecimals)}
           </text>
+          {showRightPeakTick ? (
+            <text x={width - margin.right + 4} y={Math.max(margin.top + 12, rightPeakY + 4)} fontSize="11" fill="rgba(255,255,255,0.92)">
+              {fmtNum(stats.rightMax, rightDecimals)}
+            </text>
+          ) : null}
 
           {plotted.length > 1 && (
             <>

@@ -1,6 +1,6 @@
 "use server";
 
-import { ROUTINE_SUBTYPE_GROUP_DEFAULTS, parseTagNames } from "@/lib/metadata";
+import { parseTagNames } from "@/lib/metadata";
 import { parseAppDateTimeLocal } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
@@ -96,18 +96,6 @@ async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "
   return groups.map((group) => group.id);
 }
 
-async function getMetadataGroupIdsBySlugs(slugs: string[], appliesTo: "routine" | "exercise") {
-  if (slugs.length === 0) return [];
-  const groups = await prisma.metadataGroup.findMany({
-    where: {
-      slug: { in: slugs },
-      ...(appliesTo === "routine" ? { appliesToRoutine: true } : { appliesToExercise: true }),
-    },
-    select: { id: true },
-  });
-  return groups.map((group) => group.id);
-}
-
 async function syncRoutineMetadataGroups(routineId: string, groupIds: string[]) {
   const current = await prisma.routineMetadataGroup.findMany({
     where: { routineId },
@@ -163,15 +151,10 @@ async function syncRoutineTags(routineId: string, tagNames: string[]) {
 
 async function syncRoutineClassificationMetadata(params: {
   routineId: string;
-  subtype: string | null;
   selectedGroupIds: string[];
   tags: string[];
 }) {
-  const defaultSlugs = params.subtype ? ROUTINE_SUBTYPE_GROUP_DEFAULTS[params.subtype] ?? [] : [];
-  const defaultGroupIds = await getMetadataGroupIdsBySlugs(defaultSlugs, "routine");
-  const mergedGroupIds = Array.from(new Set([...defaultGroupIds, ...params.selectedGroupIds]));
-
-  await syncRoutineMetadataGroups(params.routineId, mergedGroupIds);
+  await syncRoutineMetadataGroups(params.routineId, params.selectedGroupIds);
   await syncRoutineTags(params.routineId, params.tags);
 }
 
@@ -408,7 +391,6 @@ export async function createRoutine(formData: FormData) {
   await syncRoutineTypeDetails(created.id, kind);
   await syncRoutineClassificationMetadata({
     routineId: created.id,
-    subtype,
     selectedGroupIds,
     tags: tagNames,
   });
@@ -454,7 +436,6 @@ export async function updateRoutine(formData: FormData) {
   await syncRoutineTypeDetails(id, kind);
   await syncRoutineClassificationMetadata({
     routineId: id,
-    subtype,
     selectedGroupIds,
     tags: tagNames,
   });

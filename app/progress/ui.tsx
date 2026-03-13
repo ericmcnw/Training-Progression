@@ -233,7 +233,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(76,163,255,0.18)",
     borderColor: "rgba(76,163,255,0.45)",
   },
-  overlayNav: { display: "grid", gap: 10 },
+  overlayNav: { display: "grid", gap: 12, marginBottom: 6 },
   section: { border, borderRadius: 14, overflow: "hidden" },
   sectionHeader: {
     padding: "10px 14px",
@@ -278,7 +278,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     background: "rgba(128,128,128,0.12)",
   },
-  tabHint: { fontSize: 12, opacity: 0.75, marginTop: -6 },
+  tabHint: { fontSize: 12, opacity: 0.75, marginTop: 4 },
   filterBar: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: {
     padding: "8px 10px",

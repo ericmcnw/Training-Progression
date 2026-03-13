@@ -1,7 +1,7 @@
 import Link from "next/link";
-import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import { prisma } from "@/lib/prisma";
 import { updateExercise } from "../actions";
+import ExerciseForm from "../ExerciseForm";
 
 export const dynamic = "force-dynamic";
 
@@ -47,52 +47,19 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
       <div style={styles.panel}>
         <div style={styles.panelHeader}>DETAILS</div>
 
-        <form action={updateExercise} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 720 }}>
-          <input type="hidden" name="id" value={exercise.id} />
-
-          <div>
-            <label style={styles.label}>Name</label>
-            <input name="name" style={styles.input} defaultValue={exercise.name} />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={styles.label}>Unit</label>
-              <select name="unit" style={styles.input as React.CSSProperties} defaultValue={exercise.unit}>
-                <option value="REPS">REPS</option>
-                <option value="TIME">TIME (seconds)</option>
-              </select>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 22 }}>
-              <input
-                id="supportsWeight"
-                name="supportsWeight"
-                type="checkbox"
-                defaultChecked={exercise.supportsWeight}
-              />
-              <label htmlFor="supportsWeight" style={{ fontWeight: 800 }}>
-                Supports Weight (lbs)
-              </label>
-            </div>
-          </div>
-
-          <MetadataGroupPicker
-            title="Exercise Metadata"
-            help="Assign muscle groups, movement patterns, and broader training groups for future rollups."
-            groups={metadataGroups}
-            selectedIds={exercise.metadataGroups.map((entry) => entry.groupId)}
-          />
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="submit" style={styles.btn}>
-              Save
-            </button>
-            <Link href="/exercises" style={styles.linkBtn}>
-              Cancel
-            </Link>
-          </div>
-        </form>
+        <ExerciseForm
+          action={updateExercise}
+          metadataGroups={metadataGroups}
+          submitLabel="Save"
+          cancelHref="/exercises"
+          exercise={{
+            id: exercise.id,
+            name: exercise.name,
+            unit: exercise.unit,
+            supportsWeight: exercise.supportsWeight,
+            selectedMetadataGroupIds: exercise.metadataGroups.map((entry) => entry.groupId),
+          }}
+        />
       </div>
     </div>
   );

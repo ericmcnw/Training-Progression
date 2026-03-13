@@ -47,6 +47,7 @@ export default async function ExerciseTargetPage(props: {
   if (!exercise) return <div style={{ padding: 20 }}>Exercise not found.</div>;
 
   const isTimeExercise = exercise.unit === "TIME";
+  const targetLabel = exercise.name;
 
   const logs = await getRoutineLogs(range, { exerciseIds: [exercise.id] });
   const rows = logs.flatMap((log) =>
@@ -123,7 +124,7 @@ export default async function ExerciseTargetPage(props: {
   const topSetLabel = isTimeExercise ? formatSeconds(topSetValue) : `${topSetValue.toFixed(1)} lb`;
   const overviewPerfChart = (
     <MetricLineChart
-      title={isTimeExercise ? "Average Time per Set" : "Top Set per Session"}
+      title={isTimeExercise ? `${targetLabel}: Average Time per Set` : `${targetLabel}: Top Set per Session`}
       yLabel={isTimeExercise ? "Time" : "Weight"}
       xLabel="Session"
       points={isTimeExercise ? performance.avgSecondsPerSet : performance.topMetric}
@@ -184,7 +185,7 @@ export default async function ExerciseTargetPage(props: {
                 <EmptyState message="No exercise sessions in this range." />
               ) : (
                 <MetricLineChart
-                  title={isTimeExercise ? "Total Time per Week" : "Total Volume per Week"}
+                  title={isTimeExercise ? `${targetLabel}: Total Time per Week` : `${targetLabel}: Total Volume per Week`}
                   yLabel={isTimeExercise ? "Time" : "Volume"}
                   xLabel="Week"
                   points={isTimeExercise ? workload.totalSeconds : workload.volume}
@@ -198,7 +199,7 @@ export default async function ExerciseTargetPage(props: {
 
         {tab === "completion" ? (
           <SectionCard title="Completion">
-            {rows.length === 0 ? <EmptyState message="No exercise sessions in this range." /> : <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} />}
+            {rows.length === 0 ? <EmptyState message="No exercise sessions in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} />}
           </SectionCard>
         ) : null}
 
@@ -211,7 +212,7 @@ export default async function ExerciseTargetPage(props: {
                 {overviewPerfChart}
                 {isTimeExercise ? (
                   <MetricLineChart
-                    title="Total Time per Session"
+                    title={`${targetLabel}: Total Time per Session`}
                     yLabel="Time"
                     xLabel="Session"
                     points={performance.totalSeconds}
@@ -220,8 +221,8 @@ export default async function ExerciseTargetPage(props: {
                   />
                 ) : (
                   <>
-                    <MetricLineChart title="Total Reps per Session" yLabel="Reps" xLabel="Session" points={performance.totalReps} decimals={0} />
-                    <MetricLineChart title="Total Volume per Session" yLabel="Volume" xLabel="Session" points={performance.totalVolume} decimals={0} />
+                    <MetricLineChart title={`${targetLabel}: Total Reps per Session`} yLabel="Reps" xLabel="Session" points={performance.totalReps} decimals={0} />
+                    <MetricLineChart title={`${targetLabel}: Total Volume per Session`} yLabel="Volume" xLabel="Session" points={performance.totalVolume} decimals={0} />
                   </>
                 )}
               </div>
@@ -235,13 +236,13 @@ export default async function ExerciseTargetPage(props: {
               <EmptyState message="No exercise sessions in this range." />
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Total Sets per Week" yLabel="Sets" xLabel="Week" points={workload.sets} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Total Sets per Week`} yLabel="Sets" xLabel="Week" points={workload.sets} decimals={0} />
                 {isTimeExercise ? (
-                  <MetricLineChart title="Total Time per Week" yLabel="Time" xLabel="Week" points={workload.totalSeconds} unit="sec" decimals={0} />
+                  <MetricLineChart title={`${targetLabel}: Total Time per Week`} yLabel="Time" xLabel="Week" points={workload.totalSeconds} unit="sec" decimals={0} />
                 ) : (
                   <>
-                    <MetricLineChart title="Total Reps per Week" yLabel="Reps" xLabel="Week" points={workload.reps} decimals={0} />
-                    <MetricLineChart title="Total Volume per Week" yLabel="Volume" xLabel="Week" points={workload.volume} decimals={0} />
+                    <MetricLineChart title={`${targetLabel}: Total Reps per Week`} yLabel="Reps" xLabel="Week" points={workload.reps} decimals={0} />
+                    <MetricLineChart title={`${targetLabel}: Total Volume per Week`} yLabel="Volume" xLabel="Week" points={workload.volume} decimals={0} />
                   </>
                 )}
               </div>

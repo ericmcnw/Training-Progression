@@ -31,6 +31,7 @@ export default async function CardioTargetPage(props: {
   const summary = summarizeRoutineLogs(target.logs, null);
   const performance = cardioPerformanceSeries(target.logs);
   const workload = cardioWorkloadSeries(target.logs, range);
+  const targetLabel = target.group.label;
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: 20 }}>
@@ -67,14 +68,14 @@ export default async function CardioTargetPage(props: {
               {target.logs.length === 0 ? (
                 <EmptyState message="No cardio logs in this range." />
               ) : (
-                <MetricLineChart title="Pace per Session" yLabel="Pace" xLabel="Session" points={performance.pacePoints} unit="sec/mi" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={performance.pacePoints} unit="sec/mi" decimals={0} />
               )}
             </SectionCard>
             <SectionCard title="Workload Snapshot">
               {target.logs.length === 0 ? (
                 <EmptyState message="No cardio logs in this range." />
               ) : (
-                <MetricLineChart title="Distance per Week" yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} />
+                <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} />
               )}
             </SectionCard>
           </>
@@ -82,7 +83,7 @@ export default async function CardioTargetPage(props: {
 
         {tab === "completion" ? (
           <SectionCard title="Completion">
-            {target.logs.length === 0 ? <EmptyState message="No cardio logs in this range." /> : <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} />}
+            {target.logs.length === 0 ? <EmptyState message="No cardio logs in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} />}
           </SectionCard>
         ) : null}
 
@@ -92,8 +93,8 @@ export default async function CardioTargetPage(props: {
               <EmptyState message="No cardio logs in this range." />
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Distance per Session" yLabel="Distance" xLabel="Session" points={performance.distancePoints} unit="mi" decimals={2} />
-                <MetricLineChart title="Pace per Session" yLabel="Pace" xLabel="Session" points={performance.pacePoints} unit="sec/mi" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={performance.distancePoints} unit="mi" decimals={2} />
+                <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={performance.pacePoints} unit="sec/mi" decimals={0} />
               </div>
             )}
           </SectionCard>
@@ -105,9 +106,9 @@ export default async function CardioTargetPage(props: {
               <EmptyState message="No cardio logs in this range." />
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title="Sessions per Week" yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} />
-                <MetricLineChart title="Distance per Week" yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} />
-                <MetricLineChart title="Duration per Week" yLabel="Duration" xLabel="Week" points={workload.duration} unit="sec" decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} />
+                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={workload.duration} unit="sec" decimals={0} />
               </div>
             )}
           </SectionCard>

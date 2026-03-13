@@ -2,7 +2,7 @@
 
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
 import {
   ROUTINE_KIND_OPTIONS,
@@ -11,6 +11,7 @@ import {
   isGuidedKind,
   isWorkoutKind,
 } from "@/lib/routines";
+import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 
 export default function EditRoutineForm({
@@ -43,6 +44,31 @@ export default function EditRoutineForm({
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(routine.subtype && subtypeOptions.includes(routine.subtype) ? routine.subtype : subtypeOptions[0]);
   const isCustomCategory = selectedCategory === "__custom__";
+  const metadataGroupIdBySlug = useMemo(
+    () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
+    [metadataGroups]
+  );
+  const suggestedMetadataGroupIds = useMemo(
+    () =>
+      (ROUTINE_SUBTYPE_GROUP_DEFAULTS[subtype] ?? [])
+        .map((slug) => metadataGroupIdBySlug.get(slug))
+        .filter((value): value is string => Boolean(value)),
+    [metadataGroupIdBySlug, subtype]
+  );
+  const [selectedMetadataGroupIds, setSelectedMetadataGroupIds] = useState<string[]>(() =>
+    Array.from(new Set([...routine.selectedMetadataGroupIds, ...suggestedMetadataGroupIds]))
+  );
+  const previousSuggestedRef = useRef<string[]>(suggestedMetadataGroupIds);
+
+  useEffect(() => {
+    const previous = new Set(previousSuggestedRef.current);
+    const next = new Set(suggestedMetadataGroupIds);
+    const additions = Array.from(next).filter((id) => !previous.has(id));
+    if (additions.length > 0) {
+      setSelectedMetadataGroupIds((current) => Array.from(new Set([...current, ...additions])));
+    }
+    previousSuggestedRef.current = suggestedMetadataGroupIds;
+  }, [suggestedMetadataGroupIds]);
 
   return (
     <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 520 }}>
@@ -130,9 +156,10 @@ export default function EditRoutineForm({
 
       <MetadataGroupPicker
         title="Analysis Groups"
-        help="Assign broader rollup groups for future progress views. Subtype-based defaults like running, walking, mobility, and climbing are added automatically."
+        help="Subtype defaults are preselected here. You can add more or uncheck any of them before saving."
         groups={metadataGroups}
-        selectedIds={routine.selectedMetadataGroupIds}
+        selectedIds={selectedMetadataGroupIds}
+        onSelectionChange={setSelectedMetadataGroupIds}
       />
 
       <div>

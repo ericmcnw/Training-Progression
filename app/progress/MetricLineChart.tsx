@@ -12,6 +12,10 @@ function formatValue(value: number, decimals: number, unit: string) {
   return `${value.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
 }
 
+function formatAxisNumber(value: number, decimals: number) {
+  return value.toFixed(decimals);
+}
+
 function niceAxisMax(value: number) {
   if (value <= 0) return 1;
   const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
@@ -115,7 +119,7 @@ export default function MetricLineChart({
   const hoverY = hoveredSeriesPoint ? Math.max(margin.top, hoveredSeriesPoint.y - 26) : 0;
   const goalY =
     goalValue !== undefined ? margin.top + (1 - (goalValue <= 0 ? 0 : goalValue / yMax)) * innerH : null;
-  const tickValues = (yAxisTicks && yAxisTicks.length > 0 ? Array.from(new Set([0, ...yAxisTicks])) : [0, yMax])
+  const tickValues = Array.from(new Set([0, metrics.max, yMax, ...(yAxisTicks ?? [])]))
     .filter((value) => value >= 0 && value <= yMax)
     .sort((a, b) => b - a);
 
@@ -167,7 +171,7 @@ export default function MetricLineChart({
                   strokeDasharray={isBaseline ? undefined : "4 4"}
                 />
                 <text x={8} y={tickY + 4} fontSize="11" fill={isBaseline ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.85)"}>
-                  {formatValue(tick, decimals, unit)}
+                  {formatAxisNumber(tick, decimals)}
                 </text>
               </g>
             );
@@ -267,7 +271,7 @@ export default function MetricLineChart({
             fontSize="11"
             fill="rgba(255,255,255,0.8)"
           >
-            {yLabel}
+            {unit ? `${yLabel} (${unit})` : yLabel}
           </text>
         </svg>
       )}
