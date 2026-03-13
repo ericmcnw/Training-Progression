@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum RoutineKind {
@@ -27,6 +28,40 @@ enum MetadataGroupKind {
   TRAINING_GROUP
   CARDIO_ACTIVITY
   ROUTINE_FOCUS
+}
+
+enum GoalType {
+  FREQUENCY
+  VOLUME
+  PERFORMANCE
+  COMPLETION
+}
+
+enum GoalTargetType {
+  ROUTINE
+  EXERCISE
+  CARDIO
+  GROUP
+}
+
+enum GoalTimeframe {
+  DAY
+  WEEK
+  MONTH
+  ONE_TIME
+}
+
+enum GoalMetricType {
+  SESSIONS
+  DISTANCE
+  DURATION
+  VOLUME
+  REPS
+  SETS
+  MAX_WEIGHT
+  MAX_DURATION
+  PACE
+  COMPLETED
 }
 
 model Routine {
@@ -348,9 +383,24 @@ model SetEntry {
 }
 
 model Goal {
-  id          String   @id @default(cuid())
-  type        String
+  id          String         @id @default(cuid())
+  name        String
+  goalType    GoalType
+  targetType  GoalTargetType
+  targetId    String
+  metricType  GoalMetricType
   targetValue Float
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  timeframe   GoalTimeframe
+  unit        String?
+  startDate   DateTime       @default(now())
+  endDate     DateTime?
+  isActive    Boolean        @default(true)
+  notes       String?
+  config      Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([isActive, goalType])
+  @@index([targetType, targetId])
+  @@index([timeframe, startDate, endDate])
 }
