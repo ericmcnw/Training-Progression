@@ -2,6 +2,7 @@ import MetricLineChart from "../../MetricLineChart";
 import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, getRoutineLogs, routineSubtitle, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../../data";
 import { EmptyState, PillNav, SectionCard, SectionLinkButton, StatGrid, TabHint, TargetCard } from "../../ui";
 import { formatAppDate } from "@/lib/dates";
+import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, progressRanges, progressSections, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
@@ -55,6 +56,45 @@ export default async function RoutineTargetPage(props: {
   });
 
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+  const kind = routine.kind;
+
+  const [completionGoalLine, weeklyDistanceGoalLine, sessionDistanceGoalLine, durationGoalLine, setsGoalLine, repsGoalLine, volumeGoalLine] = await Promise.all([
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "SESSIONS",
+      timeframe: "WEEK",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "DISTANCE",
+      timeframe: "WEEK",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "DISTANCE",
+      timeframe: "ONE_TIME",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "DURATION",
+      timeframe: "WEEK",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "SETS",
+      timeframe: "WEEK",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "REPS",
+      timeframe: "WEEK",
+    }),
+    getChartGoalReference({
+      candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
+      metricType: "VOLUME",
+      timeframe: "WEEK",
+    }),
+  ]);
 
   const logs = (await getRoutineLogs(range, { routineIds: [routine.id] })).filter((log) => log.routineId === routine.id);
   const summary = summarizeRoutineLogs(logs, routine.timesPerWeek);
@@ -64,7 +104,6 @@ export default async function RoutineTargetPage(props: {
   const workoutPerf = workoutSessionSeries(logs);
   const workoutWorkload = workoutWeeklySeries(logs, range);
   const durationWorkload = durationWeeklySeries(logs, range);
-  const kind = routine.kind;
   const targetLabel = routine.name;
   const lastCompletedLabel = summary.lastSession
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)
@@ -121,11 +160,11 @@ export default async function RoutineTargetPage(props: {
 
   const overviewSecondaryChart =
     kind === "CARDIO" ? (
-      <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
+      <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
     ) : kind === "WORKOUT" ? (
-      <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
+      <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
     ) : (
-      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
+      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
     );
 
   const performanceContent =
@@ -133,7 +172,7 @@ export default async function RoutineTargetPage(props: {
       <EmptyState message="No routine logs in this range." />
     ) : kind === "CARDIO" ? (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} />
+        <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} targetValue={sessionDistanceGoalLine?.targetValue} targetLabel={sessionDistanceGoalLine?.label} targetUnit={sessionDistanceGoalLine?.unit} targetDecimals={sessionDistanceGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
       </div>
     ) : kind === "WORKOUT" ? (
@@ -170,21 +209,21 @@ export default async function RoutineTargetPage(props: {
     logs.length === 0 ? (
       <EmptyState message="No routine logs in this range." />
     ) : kind === "CARDIO" ? (
-      <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} />
-        <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} />
+        <div style={{ display: "grid", gap: 10 }}>
+        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
       </div>
     ) : kind === "WORKOUT" ? (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} />
-        <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} />
-        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} />
+        <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} targetValue={setsGoalLine?.targetValue} targetLabel={setsGoalLine?.label} targetUnit={setsGoalLine?.unit} targetDecimals={setsGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} targetValue={repsGoalLine?.targetValue} targetLabel={repsGoalLine?.label} targetUnit={repsGoalLine?.unit} targetDecimals={repsGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
       </div>
     ) : (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} />
+        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
       </div>
     );
 
@@ -237,7 +276,7 @@ export default async function RoutineTargetPage(props: {
               {logs.length === 0 ? (
                 <EmptyState message="No routine logs in this range." />
               ) : (
-                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
               )}
             </SectionCard>
             <SectionCard title={kind === "CARDIO" ? "Workload Snapshot" : kind === "WORKOUT" ? "Workload Snapshot" : "Session Snapshot"}>
@@ -246,7 +285,7 @@ export default async function RoutineTargetPage(props: {
           </>
         ) : null}
 
-        {tab === "completion" ? <SectionCard title="Completion">{logs.length === 0 ? <EmptyState message="No routine logs in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} />}</SectionCard> : null}
+        {tab === "completion" ? <SectionCard title="Completion">{logs.length === 0 ? <EmptyState message="No routine logs in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />}</SectionCard> : null}
         {tab === "performance" ? <SectionCard title="Performance">{performanceContent}</SectionCard> : null}
         {tab === "workload" ? <SectionCard title="Workload">{workloadContent}</SectionCard> : null}
 

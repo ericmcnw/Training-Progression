@@ -5,17 +5,15 @@ import { deleteGoal } from "./actions";
 
 export default function DeleteGoalButton({
   goalId,
-  goalType,
 }: {
-  goalId?: string;
-  goalType?: string;
+  goalId: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   function onConfirmDelete() {
     startTransition(async () => {
-      await deleteGoal({ goalId, goalType });
+      await deleteGoal({ goalId });
     });
   }
 

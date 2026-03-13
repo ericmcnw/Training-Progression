@@ -1,11 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import {
-  parseExerciseRepsAtWeightGoalType,
-  parseRunLongestGoalType,
-  parseRunWeeklyMileageGoalType,
-  sparklinePoints,
-} from "@/lib/progress";
+import { sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
@@ -51,48 +46,6 @@ function formatLogTime(date: Date) {
 
 function localDayRange(ymd: string) {
   return getAppDayRange(ymd);
-}
-
-function formatGoalType(type: string, routineMap: Map<string, { name: string }>, exerciseMap: Map<string, { name: string }>) {
-  if (type.startsWith("routine_planned_per_week:")) {
-    const routineId = type.split(":")[1];
-    return `Plan ${routineMap.get(routineId)?.name ?? "routine"} per week`;
-  }
-  if (type.startsWith("routine_completion:")) {
-    const routineId = type.split(":")[1];
-    return `Complete ${routineMap.get(routineId)?.name ?? "routine"} this week`;
-  }
-  if (type.startsWith("routine_streak:")) {
-    const routineId = type.split(":")[1];
-    return `Keep ${routineMap.get(routineId)?.name ?? "routine"} streak`;
-  }
-  if (type.startsWith("run_weekly_mileage:")) {
-    const scope = parseRunWeeklyMileageGoalType(type);
-    if (scope?.kind === "allCardio") return "All cardio weekly mileage";
-    if (scope?.kind === "cardioType") return `${scope.cardioType} cardio weekly mileage`;
-    const routineId = scope?.routineId ?? type.split(":")[1];
-    return `${routineMap.get(routineId)?.name ?? "Cardio"} weekly mileage`;
-  }
-  if (type.startsWith("run_longest:")) {
-    const scope = parseRunLongestGoalType(type);
-    if (scope?.kind === "allCardio") return "All cardio longest session";
-    if (scope?.kind === "cardioType") return `${scope.cardioType} cardio longest session`;
-    const routineId = scope?.routineId ?? type.split(":")[1];
-    return `${routineMap.get(routineId)?.name ?? "Cardio"} longest session`;
-  }
-  if (type.startsWith("exercise_weight:")) {
-    const exerciseId = type.split(":")[1];
-    return `${exerciseMap.get(exerciseId)?.name ?? "Exercise"} top weight`;
-  }
-  if (type.startsWith("exercise_avg_reps_per_set:")) {
-    const exerciseId = type.split(":")[1];
-    return `${exerciseMap.get(exerciseId)?.name ?? "Exercise"} avg reps/set`;
-  }
-  const repsAtWeight = parseExerciseRepsAtWeightGoalType(type);
-  if (repsAtWeight) {
-    return `${exerciseMap.get(repsAtWeight.exerciseId)?.name ?? "Exercise"} reps @ ${repsAtWeight.weightLb} lb`;
-  }
-  return type;
 }
 
 function kindAccent(kind: string) {
@@ -162,7 +115,6 @@ export default async function HomePage() {
     recentLogs,
     weeklyLogs,
     activeGoals,
-    exercises,
     planEntriesRaw,
     manualEntriesRaw,
     sparkLogs,
@@ -207,10 +159,7 @@ export default async function HomePage() {
       where: { isActive: true },
       orderBy: { createdAt: "desc" },
       take: 6,
-      select: { id: true, type: true, targetValue: true, createdAt: true },
-    }),
-    prisma.exercise.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, targetValue: true, createdAt: true },
     }),
     prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
       'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
@@ -231,7 +180,6 @@ export default async function HomePage() {
   ]);
 
   const routineMap = new Map(routines.map((routine) => [routine.id, routine]));
-  const exerciseMap = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
   const weeklyMap = new Map(
     weeklyLogs.map((row) => [
@@ -467,7 +415,7 @@ export default async function HomePage() {
 
   const goalCards = activeGoals.map((goal) => ({
     id: goal.id,
-    title: formatGoalType(goal.type, routineMap, exerciseMap),
+    title: goal.name,
     target: goal.targetValue,
     createdAt: formatAppDate(goal.createdAt),
   }));

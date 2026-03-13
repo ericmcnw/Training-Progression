@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Routine } from "@/generated/prisma";
-import { GOAL_TYPE } from "@/lib/progress";
 import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
@@ -303,19 +302,21 @@ export default async function RoutinesPage(props: {
       _count: { _all: true },
     }),
     prisma.goal.findMany({
-      where: { isActive: true, type: { startsWith: `${GOAL_TYPE.routineCompletion}:` } },
-      select: { type: true, targetValue: true },
+      where: {
+        isActive: true,
+        targetType: "ROUTINE",
+        timeframe: "WEEK",
+        goalType: { in: ["FREQUENCY", "COMPLETION"] },
+        metricType: { in: ["SESSIONS", "COMPLETED"] },
+      },
+      select: { targetId: true, targetValue: true },
     }),
   ]);
 
   const weeklyMap = new Map(weeklyCounts.map((row) => [row.routineId, row._count._all]));
   const routineCompletionGoalMap = new Map(
     activeGoals
-      .map((goal) => {
-        const routineId = goal.type.split(":")[1];
-        return routineId ? ([routineId, goal.targetValue] as const) : null;
-      })
-      .filter((entry): entry is readonly [string, number] => entry !== null)
+      .map((goal) => [goal.targetId, goal.targetValue] as const)
   );
 
   const filteredRoutines = routines.filter((routine) => {
