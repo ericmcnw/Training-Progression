@@ -294,7 +294,7 @@ export default async function RoutinesPage(props: {
   const [routines, weeklyCounts, activeGoals] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
     }),
     prisma.routineLog.groupBy({
       by: ["routineId"],
@@ -329,12 +329,12 @@ export default async function RoutinesPage(props: {
 
   const groups = new Map<string, typeof active>();
   for (const routine of active) {
-    const key = (routine.category || "General").trim() || "General";
+    const key = formatRoutineTypeLabel(normalizeRoutineKind(routine.kind));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(routine);
   }
 
-  const orderedCategories = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+  const orderedTypes = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="mobileRoutinesPage" style={styles.container}>
@@ -385,13 +385,13 @@ export default async function RoutinesPage(props: {
             </div>
           </section>
         ) : null}
-        {orderedCategories.map((category) => {
-          const list = groups.get(category)!;
+        {orderedTypes.map((typeLabel) => {
+          const list = groups.get(typeLabel)!;
           return (
-            <section key={category} style={styles.section}>
+            <section key={typeLabel} style={styles.section}>
               <details open>
                 <summary data-collapsible-summary className="mobileRoutinesHeader" style={styles.sectionHeader}>
-                  <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{category.toUpperCase()}</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{typeLabel.toUpperCase()}</div>
                   <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
                 </summary>
                 <div style={{ padding: 12, display: "grid", gap: 10 }}>
@@ -420,7 +420,11 @@ export default async function RoutinesPage(props: {
               <div style={{ padding: 12, display: "grid", gap: 10 }}>
                 {archived
                   .slice()
-                  .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+                  .sort((a, b) => {
+                    const aType = formatRoutineTypeLabel(normalizeRoutineKind(a.kind));
+                    const bType = formatRoutineTypeLabel(normalizeRoutineKind(b.kind));
+                    return aType.localeCompare(bType) || a.name.localeCompare(b.name);
+                  })
                   .map((routine) => (
                     <RoutineCard
                       key={routine.id}
