@@ -2,7 +2,7 @@
 
 import { addDaysYmd, formatUtcDateLabel, todayAppYmd } from "@/lib/dates";
 import { routineKindColor } from "@/lib/routines";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { saveManualEntries } from "./actions";
 
 type Routine = {
@@ -20,6 +20,10 @@ type ManualEntry = {
   scheduledDate: string;
   sortOrder: number;
 };
+
+type PendingPlacement =
+  | { source: "library"; routineId: string; label: string }
+  | { source: "manual"; clientId: string; label: string };
 
 function addDays(base: string, plus: number) {
   return addDaysYmd(base, plus);
@@ -64,6 +68,16 @@ export default function ScheduleBoard({
       }))
     )
   );
+  const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const sync = () => setIsNarrow(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   const routineMap = useMemo(() => new Map(routines.map((routine) => [routine.id, routine])), [routines]);
   const routinesByCategory = useMemo(() => {
@@ -91,6 +105,37 @@ export default function ScheduleBoard({
     [manual]
   );
 
+  function applyPlacement(targetDate: string, placement: PendingPlacement) {
+    if (placement.source === "library") {
+      setManual((prev) =>
+        normalizeManual([
+          ...prev,
+          {
+            clientId: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            routineId: placement.routineId,
+            scheduledDate: targetDate,
+            sortOrder: prev.filter((x) => x.scheduledDate === targetDate).length,
+          },
+        ])
+      );
+      return;
+    }
+
+    setManual((prev) =>
+      normalizeManual(
+        prev.map((entry) =>
+          entry.clientId === placement.clientId
+            ? {
+                ...entry,
+                scheduledDate: targetDate,
+                sortOrder: prev.filter((x) => x.scheduledDate === targetDate).length,
+              }
+            : entry
+        )
+      )
+    );
+  }
+
   function onDrop(event: React.DragEvent<HTMLDivElement>, targetDate: string) {
     event.preventDefault();
     const payload = event.dataTransfer.getData("text/plain");
@@ -99,33 +144,22 @@ export default function ScheduleBoard({
       const parsed = JSON.parse(payload) as { source: "library"; routineId: string } | { source: "manual"; clientId: string };
 
       if (parsed.source === "library" && parsed.routineId) {
-        setManual((prev) =>
-          normalizeManual([
-            ...prev,
-            {
-              clientId: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              routineId: parsed.routineId,
-              scheduledDate: targetDate,
-              sortOrder: prev.filter((x) => x.scheduledDate === targetDate).length,
-            },
-          ])
-        );
+        const routine = routineMap.get(parsed.routineId);
+        applyPlacement(targetDate, {
+          source: "library",
+          routineId: parsed.routineId,
+          label: routine?.name ?? parsed.routineId,
+        });
       }
 
       if (parsed.source === "manual" && parsed.clientId) {
-        setManual((prev) =>
-          normalizeManual(
-            prev.map((entry) =>
-              entry.clientId === parsed.clientId
-                ? {
-                    ...entry,
-                    scheduledDate: targetDate,
-                    sortOrder: prev.filter((x) => x.scheduledDate === targetDate).length,
-                  }
-                : entry
-            )
-          )
-        );
+        const entry = manual.find((item) => item.clientId === parsed.clientId);
+        const routine = entry ? routineMap.get(entry.routineId) : null;
+        applyPlacement(targetDate, {
+          source: "manual",
+          clientId: parsed.clientId,
+          label: routine?.name ?? "Scheduled item",
+        });
       }
 
     } catch {
@@ -138,6 +172,13 @@ export default function ScheduleBoard({
       <section style={panel}>
         <div style={panelHeader}>ROUTINES TO DROP</div>
         <div style={{ padding: 10, display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 12, opacity: 0.78 }}>
+            {isNarrow
+              ? pendingPlacement
+                ? `Selected: ${pendingPlacement.label}. Tap a day to place it.`
+                : "Tap a routine, then tap a day to place it."
+              : "Drag routines onto a day. On mobile, tap a routine and then tap a day."}
+          </div>
           {routinesByCategory.map(([category, list]) => (
             <div key={category} style={{ display: "grid", gap: 6 }}>
               <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.3 }}>{category.toUpperCase()}</div>
@@ -147,7 +188,21 @@ export default function ScheduleBoard({
                     key={routine.id}
                     draggable
                     onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ source: "library", routineId: routine.id }))}
-                    style={{ border: "1px solid rgba(128,128,128,0.45)", borderRadius: 10, padding: 9, background: "rgba(128,128,128,0.08)", cursor: "grab", minWidth: 210 }}
+                    onClick={() => setPendingPlacement({ source: "library", routineId: routine.id, label: routine.name })}
+                    style={{
+                      border:
+                        pendingPlacement?.source === "library" && pendingPlacement.routineId === routine.id
+                          ? "1px solid rgba(84,203,130,0.9)"
+                          : "1px solid rgba(128,128,128,0.45)",
+                      borderRadius: 10,
+                      padding: 9,
+                      background:
+                        pendingPlacement?.source === "library" && pendingPlacement.routineId === routine.id
+                          ? "rgba(84,203,130,0.16)"
+                          : "rgba(128,128,128,0.08)",
+                      cursor: isNarrow ? "pointer" : "grab",
+                      minWidth: isNarrow ? 180 : 210,
+                    }}
                   >
                     <div style={{ fontWeight: 800, fontSize: 13 }}>{routine.name}</div>
                     <div style={{ marginTop: 3, fontSize: 11, opacity: 0.8 }}>{routine.kind}</div>
@@ -165,14 +220,48 @@ export default function ScheduleBoard({
       <section style={panel}>
           <div style={panelHeader}>SCHEDULE</div>
           <div style={{ overflowX: "auto", padding: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(150px, 1fr))", gap: 8, minWidth: 1080 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isNarrow ? "1fr" : "repeat(7, minmax(150px, 1fr))",
+                gap: 8,
+                minWidth: isNarrow ? undefined : 1080,
+              }}
+            >
               {days.map((date) => {
                 const manualForDate = manual.filter((entry) => entry.scheduledDate === date).sort((a, b) => a.sortOrder - b.sortOrder);
 
                 return (
-                  <div key={date} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, date)} style={dayCard}>
-                    <div style={{ fontWeight: 900, fontSize: 12 }}>{formatDayLabel(date)}</div>
-                    <div style={{ fontSize: 11, opacity: 0.75 }}>{date}</div>
+                  <div
+                    key={date}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDrop(e, date)}
+                    onClick={() => {
+                      if (!isNarrow || !pendingPlacement) return;
+                      applyPlacement(date, pendingPlacement);
+                      setPendingPlacement(null);
+                    }}
+                    style={{ ...dayCard, cursor: isNarrow && pendingPlacement ? "pointer" : "default" }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <div>
+                        <div style={{ fontWeight: 900, fontSize: 12 }}>{formatDayLabel(date)}</div>
+                        <div style={{ fontSize: 11, opacity: 0.75 }}>{date}</div>
+                      </div>
+                      {isNarrow && pendingPlacement ? (
+                        <button
+                          type="button"
+                          style={tapBtn}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            applyPlacement(date, pendingPlacement);
+                            setPendingPlacement(null);
+                          }}
+                        >
+                          Place Here
+                        </button>
+                      ) : null}
+                    </div>
 
                     <div style={{ marginTop: 6, display: "grid", gap: 6 }}>
                       {manualForDate.map((entry) => {
@@ -183,7 +272,23 @@ export default function ScheduleBoard({
                             key={entry.clientId}
                             draggable
                             onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ source: "manual", clientId: entry.clientId }))}
-                            style={{ border: `1px solid ${routineKindColor(routine.kind)}`, borderRadius: 8, padding: 6, background: "rgba(128,128,128,0.12)", cursor: "grab" }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPendingPlacement({ source: "manual", clientId: entry.clientId, label: routine.name });
+                            }}
+                            style={{
+                              border:
+                                pendingPlacement?.source === "manual" && pendingPlacement.clientId === entry.clientId
+                                  ? "1px solid rgba(84,203,130,0.9)"
+                                  : `1px solid ${routineKindColor(routine.kind)}`,
+                              borderRadius: 8,
+                              padding: 6,
+                              background:
+                                pendingPlacement?.source === "manual" && pendingPlacement.clientId === entry.clientId
+                                  ? "rgba(84,203,130,0.16)"
+                                  : "rgba(128,128,128,0.12)",
+                              cursor: isNarrow ? "pointer" : "grab",
+                            }}
                           >
                             <div style={{ fontSize: 12, fontWeight: 800 }}>{routine.name}</div>
                             <button
@@ -256,4 +361,14 @@ const removeBtn: React.CSSProperties = {
   background: "rgba(255,80,80,0.12)",
   color: "inherit",
   fontSize: 11,
+};
+
+const tapBtn: React.CSSProperties = {
+  padding: "6px 9px",
+  border: "1px solid rgba(84,203,130,0.8)",
+  borderRadius: 8,
+  background: "rgba(84,203,130,0.16)",
+  color: "inherit",
+  fontSize: 11,
+  fontWeight: 800,
 };

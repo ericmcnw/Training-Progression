@@ -172,7 +172,7 @@ export default async function ExerciseTargetPage(props: {
   );
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: 20 }}>
+    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 14px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>{exercise.name}</h1>

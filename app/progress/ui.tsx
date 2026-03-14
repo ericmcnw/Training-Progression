@@ -212,7 +212,7 @@ export function FilterSelect({
 const border = "1px solid rgba(128,128,128,0.35)";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 1080, margin: "0 auto", padding: 20 },
+  container: { maxWidth: 1120, margin: "0 auto", padding: "20px 14px" },
   topRow: { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" },
   h1: { margin: 0, fontSize: 28, fontWeight: 900 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },

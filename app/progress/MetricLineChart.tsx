@@ -58,10 +58,11 @@ export default function MetricLineChart({
   yAxisTicks?: number[];
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const hitRadius = compact ? 12 : 10;
 
   function togglePoint(index: number) {
-    setHoverIndex((current) => (current === index ? null : index));
+    setActiveIndex((current) => (current === index ? null : index));
   }
 
   const metrics = useMemo(() => {
@@ -97,8 +98,9 @@ export default function MetricLineChart({
     markerIndices.add(idx);
   }
 
-  const hovered = hoverIndex !== null ? points[hoverIndex] : null;
-  const hoveredSeriesPoint = hoverIndex !== null ? series[hoverIndex] : null;
+  const focusedIndex = activeIndex ?? hoverIndex;
+  const hovered = focusedIndex !== null ? points[focusedIndex] : null;
+  const hoveredSeriesPoint = focusedIndex !== null ? series[focusedIndex] : null;
   const hoverMetricLabel = valueLabel ?? yLabel;
   const hoverValueText =
     hovered && hoveredSeriesPoint
@@ -148,7 +150,17 @@ export default function MetricLineChart({
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 196 : 256} style={{ marginTop: 8 }}>
-          <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
+          <rect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fill="transparent"
+            onClick={() => {
+              setHoverIndex(null);
+              setActiveIndex(null);
+            }}
+          />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
             x1={margin.left}
@@ -210,8 +222,15 @@ export default function MetricLineChart({
                 r={hitRadius}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
+                onPointerEnter={() => {
+                  if (activeIndex === null) setHoverIndex(idx);
+                }}
+                onPointerLeave={() => {
+                  if (activeIndex === null) setHoverIndex(null);
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
                   togglePoint(idx);
@@ -223,12 +242,6 @@ export default function MetricLineChart({
                 r={3.5}
                 fill="rgba(51,255,122,0.95)"
                 style={{ pointerEvents: "none" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  togglePoint(idx);
-                }}
               >
                 <title>{`${p.label}: ${formatValue(p.value, decimals, unit)}`}</title>
               </circle>

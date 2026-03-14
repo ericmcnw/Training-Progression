@@ -68,10 +68,11 @@ export default function DualMetricLineChart({
   rightTargetLabel?: string;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const hitRadius = compact ? 12 : 10;
 
   function togglePoint(index: number) {
-    setHoverIndex((current) => (current === index ? null : index));
+    setActiveIndex((current) => (current === index ? null : index));
   }
 
   const width = 700;
@@ -113,7 +114,8 @@ export default function DualMetricLineChart({
     markerIndices.add(idx);
   }
 
-  const hovered = hoverIndex !== null ? plotted[hoverIndex] : null;
+  const focusedIndex = activeIndex ?? hoverIndex;
+  const hovered = focusedIndex !== null ? plotted[focusedIndex] : null;
   const detailLines = hovered?.rightDetailLines ?? [];
   const line1 = hovered ? `${hovered.label}` : "";
   const line2 = hovered ? `${leftLabel}: ${fmt(hovered.left, leftDecimals, leftUnit)}` : "";
@@ -153,7 +155,17 @@ export default function DualMetricLineChart({
         <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>No data</div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={compact ? 216 : 266} style={{ marginTop: 8 }}>
-          <rect x={0} y={0} width={width} height={height} fill="transparent" onClick={() => setHoverIndex(null)} />
+          <rect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fill="transparent"
+            onClick={() => {
+              setHoverIndex(null);
+              setActiveIndex(null);
+            }}
+          />
           <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + innerH} stroke="rgba(255,255,255,0.35)" />
           <line
             x1={margin.left + innerW}
@@ -267,8 +279,15 @@ export default function DualMetricLineChart({
                 r={hitRadius}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
+                onPointerEnter={() => {
+                  if (activeIndex === null) setHoverIndex(idx);
+                }}
+                onPointerLeave={() => {
+                  if (activeIndex === null) setHoverIndex(null);
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
                   togglePoint(idx);
@@ -280,8 +299,15 @@ export default function DualMetricLineChart({
                 r={hitRadius}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
+                onPointerEnter={() => {
+                  if (activeIndex === null) setHoverIndex(idx);
+                }}
+                onPointerLeave={() => {
+                  if (activeIndex === null) setHoverIndex(null);
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
                   togglePoint(idx);
@@ -293,12 +319,6 @@ export default function DualMetricLineChart({
                 r={4.2}
                 fill="rgba(51,255,122,1)"
                 style={{ pointerEvents: "none" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  togglePoint(idx);
-                }}
               />
               <circle
                 cx={p.x}
@@ -306,12 +326,6 @@ export default function DualMetricLineChart({
                 r={2.8}
                 fill="rgba(120,190,255,0.72)"
                 style={{ pointerEvents: "none" }}
-                onMouseEnter={() => setHoverIndex(idx)}
-                onMouseLeave={() => setHoverIndex(null)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  togglePoint(idx);
-                }}
               />
 
               {markerIndices.has(idx) && (
