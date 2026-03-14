@@ -586,27 +586,27 @@ export default async function HomePage() {
               {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
               {todayFocus.map((item) => (
                 <div key={item.routineId} style={item.logged > 0 ? focusDoneCard : focusCard}>
-                  <div className="mobileHomeFocusHeader" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
-                    <div>
+                  <div style={focusCardTopRow}>
+                    <div style={focusCardInfo}>
                       <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
                       <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
                         {item.category} | {formatRoutineTypeLabel(item.kind)}
                       </div>
+                      <div style={focusMetaLine}>
+                        Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
+                      </div>
                     </div>
-                    <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
-                      {item.logged > 0 ? "DONE" : "PLANNED"}
+                    <div style={focusStatusColumn}>
+                      <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
+                        {item.logged > 0 ? "DONE" : "PLANNED"}
+                      </div>
+                      {item.planned > 0 && (
+                        <Link href={loggingHref(item)} style={focusActionLink}>
+                          Log
+                        </Link>
+                      )}
                     </div>
                   </div>
-                  <div style={{ marginTop: 10, fontSize: 13, opacity: 0.88 }}>
-                    Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
-                  </div>
-                  {item.planned > 0 && (
-                    <div style={{ marginTop: 10 }}>
-                      <Link href={loggingHref(item)} style={focusActionLink}>
-                        Log
-                      </Link>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -795,18 +795,44 @@ const focusDoneCard: React.CSSProperties = {
   boxShadow: "0 0 0 1px rgba(84,203,130,0.14), 0 0 18px rgba(84,203,130,0.18)",
 };
 
+const focusCardTopRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  alignItems: "flex-start",
+};
+
+const focusCardInfo: React.CSSProperties = {
+  minWidth: 0,
+  flex: 1,
+};
+
+const focusMetaLine: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 13,
+  opacity: 0.88,
+};
+
 const focusActionLink: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "8px 12px",
+  padding: "7px 12px",
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.08)",
   color: "inherit",
   textDecoration: "none",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 800,
+};
+
+const focusStatusColumn: React.CSSProperties = {
+  display: "grid",
+  justifyItems: "end",
+  alignContent: "start",
+  gap: 6,
+  flexShrink: 0,
 };
 
 const kindPill: React.CSSProperties = {
