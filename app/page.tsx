@@ -103,6 +103,54 @@ function SessionFractionRing({ current, target }: { current: number; target: num
   );
 }
 
+function SummaryFractionRing({ current, target }: { current: number; target: number }) {
+  const size = 92;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = target > 0 ? current / target : 0;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const dashOffset = circumference * (1 - clamped);
+
+  return (
+    <div style={{ display: "grid", justifyItems: "center", gap: 10 }}>
+      <div style={{ width: size, height: size, position: "relative", display: "grid", placeItems: "center" }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(255,255,255,0.15)"
+            strokeWidth={stroke}
+            fill="none"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(84,203,130,0.95)"
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
+        <div style={{ position: "absolute", textAlign: "center", lineHeight: 1.05 }}>
+          <div style={{ fontSize: 19, fontWeight: 900 }}>
+            {current}/{target}
+          </div>
+          <div style={{ fontSize: 10, opacity: 0.68 }}>done</div>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", display: "grid", gap: 3 }}>
+        <div style={summaryLabel}>Today: Done/Planned</div>
+        <div style={summarySub}>completed routines / planned routines</div>
+      </div>
+    </div>
+  );
+}
+
 export default async function HomePage() {
   const today = todayAppYmd();
   const tomorrow = addDays(today, 1);
@@ -352,9 +400,7 @@ export default async function HomePage() {
   });
 
   const todayPlannedTotal = todayFocus.reduce((sum, item) => sum + item.planned, 0);
-  const todayLoggedTotal = todayFocus.reduce((sum, item) => sum + item.logged, 0);
   const todayDoneRoutines = todayFocus.filter((item) => item.logged > 0).length;
-  const todayRemainingTotal = todayFocus.reduce((sum, item) => sum + Math.max(0, item.planned - item.logged), 0);
   const tomorrowPlannedTotal = tomorrowPlan.reduce((sum, item) => sum + item.planned, 0);
   const weekLoggedByRoutine = new Map(weeklyCards.map((item) => [item.id, item.count]));
   const weekLoggedTotal = weeklyCards.reduce((sum, item) => sum + item.count, 0);
@@ -533,25 +579,8 @@ export default async function HomePage() {
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
               <div style={sectionSub}>{formatDayLabel(today)}</div>
               <div className="mobileHomeSummaryGrid" style={summaryGrid}>
-                <div style={summaryCard}>
-                  <div style={summaryLabel}>Today: Done/Planned</div>
-                  <div style={summaryValue}>{todayDoneRoutines}/{todayPlannedTotal}</div>
-                  <div style={summarySub}>completed routines / planned routines</div>
-                </div>
-                <div style={summaryCard}>
-                  <div style={summaryLabel}>Today Logs</div>
-                  <div style={summaryValue}>{todayLoggedTotal}</div>
-                  <div style={summarySub}>logs completed today</div>
-                </div>
-                <div style={summaryCard}>
-                  <div style={summaryLabel}>Today Remaining</div>
-                  <div style={summaryValue}>{todayRemainingTotal}</div>
-                  <div style={summarySub}>planned entries remaining</div>
-                </div>
-                <div style={summaryCard}>
-                  <div style={summaryLabel}>Tomorrow Planned</div>
-                  <div style={summaryValue}>{tomorrowPlannedTotal}</div>
-                  <div style={summarySub}>planned entries tomorrow</div>
+                <div style={summaryRingCard}>
+                  <SummaryFractionRing current={todayDoneRoutines} target={todayPlannedTotal} />
                 </div>
               </div>
               {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
@@ -715,7 +744,7 @@ const sectionSub: React.CSSProperties = {
 
 const summaryGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: 8,
 };
 
@@ -726,6 +755,12 @@ const summaryCard: React.CSSProperties = {
   background: "rgba(255,255,255,0.03)",
   display: "grid",
   gap: 3,
+};
+
+const summaryRingCard: React.CSSProperties = {
+  ...summaryCard,
+  justifyItems: "center",
+  padding: 14,
 };
 
 const summaryLabel: React.CSSProperties = {
