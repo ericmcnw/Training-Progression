@@ -59,7 +59,7 @@ export default function MetricLineChart({
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const hitRadius = compact ? 12 : 10;
+  const hitRadius = compact ? 14 : 12;
 
   function togglePoint(index: number) {
     setActiveIndex((current) => (current === index ? null : index));
