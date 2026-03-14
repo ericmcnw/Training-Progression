@@ -41,16 +41,21 @@ export default async function ManualLogPage() {
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Manual Log</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
             Recent routine logs, grouped by date with newest entries first. Edit date/time and content from here.
           </div>
         </div>
-        <Link href="/routines" style={linkBtn}>
-          Back to Routines
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href="/progress" style={linkBtn}>
+            Progress
+          </Link>
+          <Link href="/routines" style={linkBtn}>
+            Back to Routines
+          </Link>
+        </div>
       </div>
 
       <section style={panel}>

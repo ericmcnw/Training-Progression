@@ -200,8 +200,8 @@ details[open] > summary[data-collapsible-summary]::before{
     bottom: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
     padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
     border-top: 1px solid rgba(255,255,255,0.12);
     background:
@@ -214,11 +214,11 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileBottomNavLink{
     display: grid;
     place-items: center;
-    min-height: 54px;
-    padding: 10px 8px;
+    min-height: 58px;
+    padding: 9px 6px;
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 18px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.01em;
     text-align: center;
@@ -243,6 +243,16 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileBottomNavText{
     line-height: 1.1;
+  }
+
+  .mobileBottomNavDetail{
+    margin-top: 2px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.72;
   }
 
   .appMain{
