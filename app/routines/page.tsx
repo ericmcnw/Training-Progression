@@ -78,6 +78,18 @@ const styles = {
     background: "rgba(128,128,128,0.12)",
     fontWeight: 700,
   },
+  compactBtnLink: {
+    padding: "5px 8px",
+    border: "1px solid rgba(128,128,128,0.55)",
+    borderRadius: 8,
+    textAlign: "center" as const,
+    textDecoration: "none",
+    color: "inherit",
+    background: "rgba(255,255,255,0.05)",
+    fontWeight: 700,
+    fontSize: 12,
+    lineHeight: 1.2,
+  },
   smallLink: {
     fontSize: 13,
     color: "inherit",
@@ -167,16 +179,16 @@ function RoutineCard({
                 </div>
                 {allowLogging && (
                   <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Link href={loggingHref(routine)} style={styles.btnLink}>
+                    <Link href={loggingHref(routine)} style={styles.compactBtnLink}>
                       {loggingLabel(kind)}
                     </Link>
                     {isWorkoutKind(kind) && (
-                      <Link href={`/routines/${routine.id}/template`} style={styles.btnLink}>
+                      <Link href={`/routines/${routine.id}/template`} style={styles.compactBtnLink}>
                         Template
                       </Link>
                     )}
                     {isGuidedKind(kind) && (
-                      <Link href={`/routines/${routine.id}/guided`} style={styles.btnLink}>
+                      <Link href={`/routines/${routine.id}/guided`} style={styles.compactBtnLink}>
                         Steps
                       </Link>
                     )}
@@ -187,7 +199,7 @@ function RoutineCard({
                           await logRoutineCompletion(routine.id);
                         }}
                       >
-                        <button type="submit" suppressHydrationWarning style={styles.btnLink}>
+                        <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
                           Quick Log
                         </button>
                       </form>
@@ -199,7 +211,7 @@ function RoutineCard({
                           await removeLastRoutineCompletion(routine.id);
                         }}
                       >
-                        <button type="submit" suppressHydrationWarning style={styles.btnLink}>
+                        <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
                           Undo Last
                         </button>
                       </form>
@@ -264,7 +276,7 @@ function RoutineCard({
               <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
                 Edit
               </Link>
-              {allowLogging && <DeleteRoutineButton routineId={routine.id} />}
+              {allowLogging && <DeleteRoutineButton routineId={routine.id} compact />}
             </div>
 
           </div>

@@ -407,7 +407,11 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileRoutinesCardActions > *{
-    flex: 1 1 140px;
+    flex: 0 0 auto;
+  }
+
+  .mobileRoutinesCardActions form{
+    display: inline-flex;
   }
 
   .mobileRoutinesExerciseList{

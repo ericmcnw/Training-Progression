@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import { deleteRoutine } from "./actions";
 
-export default function DeleteRoutineButton({ routineId }: { routineId: string }) {
+export default function DeleteRoutineButton({
+  routineId,
+  compact = false,
+}: {
+  routineId: string;
+  compact?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
@@ -15,7 +21,13 @@ export default function DeleteRoutineButton({ routineId }: { routineId: string }
 
   return (
     <>
-      <button type="button" suppressHydrationWarning onClick={() => setIsConfirmOpen(true)} disabled={isPending} style={btnStyle}>
+      <button
+        type="button"
+        suppressHydrationWarning
+        onClick={() => setIsConfirmOpen(true)}
+        disabled={isPending}
+        style={compact ? compactBtnStyle : btnStyle}
+      >
         {isPending ? "Deleting..." : "Delete"}
       </button>
 
@@ -59,6 +71,14 @@ const btnStyle: React.CSSProperties = {
   color: "inherit",
   background: "rgba(128,128,128,0.12)",
   fontWeight: 700,
+};
+
+const compactBtnStyle: React.CSSProperties = {
+  ...btnStyle,
+  padding: "5px 8px",
+  borderRadius: 8,
+  fontSize: 12,
+  lineHeight: 1.2,
 };
 
 const overlayStyle: React.CSSProperties = {
