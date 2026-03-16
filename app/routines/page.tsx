@@ -154,12 +154,12 @@ function RoutineCard({
               flex: 1,
               minWidth: 0,
               display: "grid",
-              gap: 6,
-              gridTemplateColumns: exercisePreview ? "minmax(0, 1fr) minmax(160px, 220px) auto" : "minmax(0, 1fr) auto",
+              gap: 10,
+              gridTemplateColumns: "minmax(0, 1fr) auto",
               alignItems: "start",
             }}
           >
-              <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div className="mobileRoutinesCardPrimary" style={{ display: "grid", gap: 8, minWidth: 0 }}>
                 <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
                 <div style={{ fontSize: 12, opacity: 0.75 }}>
                   {routine.category} | {formatRoutineTypeLabel(kind)}
@@ -214,20 +214,34 @@ function RoutineCard({
 
             {exercisePreview ? (
               <div
+                className="mobileRoutinesExerciseList"
                 style={{
                   fontSize: 12,
                   opacity: 0.78,
                   display: "grid",
-                  gap: 4,
-                  minWidth: 160,
-                  maxWidth: 220,
+                  gap: 6,
+                  minWidth: 180,
+                  maxWidth: 240,
                   alignContent: "start",
+                  padding: 10,
+                  border: "1px solid rgba(128,128,128,0.25)",
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.03)",
                 }}
               >
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.7 }}>
+                  Exercises
+                </div>
                 {routine.exercises.map((item) => (
                   <div
                     key={`${routine.id}-${item.exercise.name}`}
-                    style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%" }}
+                    style={{
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      width: "100%",
+                      paddingBottom: 2,
+                    }}
                   >
                     {item.exercise.name}
                   </div>
@@ -235,7 +249,18 @@ function RoutineCard({
               </div>
             ) : null}
 
-            <div className="mobileRoutinesCardMeta" style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", flexShrink: 0 }}>
+            <div
+              className="mobileRoutinesCardMeta"
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                justifyContent: "flex-end",
+                marginLeft: "auto",
+                flexShrink: 0,
+                alignSelf: "start",
+              }}
+            >
               <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
                 Edit
               </Link>
