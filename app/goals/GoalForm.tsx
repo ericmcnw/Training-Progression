@@ -13,7 +13,7 @@ import {
   getAllowedMetricTypes,
 } from "@/lib/goals-config";
 import type { GoalFormOptions } from "@/lib/goals";
-import { GOAL_TEMPLATES, type GoalTemplateKey } from "@/lib/goal-templates";
+import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
 import { formInputStyle } from "./ui";
 
 type GoalFormInitial = {
