@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Routine } from "@/generated/prisma";
+import type { Prisma, Routine } from "@/generated/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
@@ -157,13 +157,22 @@ function loggingLabel(kind: string) {
   return "Log Completion";
 }
 
+type RoutineWithExercises = Prisma.RoutineGetPayload<{
+  include: {
+    exercises: {
+      orderBy: { sortOrder: "asc" };
+      include: { exercise: { select: { name: true } } };
+    };
+  };
+}>;
+
 function RoutineCard({
   routine,
   weeklyMap,
   routineCompletionGoalMap,
   allowLogging,
 }: {
-  routine: Routine;
+  routine: RoutineWithExercises;
   weeklyMap: Map<string, number>;
   routineCompletionGoalMap: Map<string, number>;
   allowLogging: boolean;
@@ -181,6 +190,9 @@ function RoutineCard({
     : hasCompletionGoalProgress || isInProgress
     ? "rgba(255,196,92,0.95)"
     : "rgba(255,255,255,0.35)";
+  const exercisePreview = isWorkoutKind(kind)
+    ? routine.exercises.map((item) => item.exercise.name).join(" • ")
+    : "";
 
   return (
     <div key={routine.id} style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
@@ -198,6 +210,12 @@ function RoutineCard({
                     {subtypeLabel ? ` | ${subtypeLabel}` : ""}
                   </div>
                 </div>
+
+                {exercisePreview ? (
+                  <div style={{ fontSize: 12, opacity: 0.78, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {exercisePreview}
+                  </div>
+                ) : null}
 
                 {allowLogging && (
                   <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -221,7 +239,7 @@ function RoutineCard({
                           await logRoutineCompletion(routine.id);
                         }}
                       >
-                        <button type="submit" style={styles.btnLink}>
+                        <button type="submit" suppressHydrationWarning style={styles.btnLink}>
                           Quick Log
                         </button>
                       </form>
@@ -233,7 +251,7 @@ function RoutineCard({
                           await removeLastRoutineCompletion(routine.id);
                         }}
                       >
-                        <button type="submit" style={styles.btnLink}>
+                        <button type="submit" suppressHydrationWarning style={styles.btnLink}>
                           Undo Last
                         </button>
                       </form>
@@ -271,7 +289,7 @@ function RoutineCard({
                 }}
               >
                 <input type="datetime-local" name="performedAtLocal" style={styles.input} />
-                <button type="submit" style={{ ...styles.btnLink, width: "100%" }}>
+                <button type="submit" suppressHydrationWarning style={{ ...styles.btnLink, width: "100%" }}>
                   Save Dated Log
                 </button>
               </form>
@@ -295,6 +313,16 @@ export default async function RoutinesPage(props: {
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
+      include: {
+        exercises: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            exercise: {
+              select: { name: true },
+            },
+          },
+        },
+      },
     }),
     prisma.routineLog.groupBy({
       by: ["routineId"],

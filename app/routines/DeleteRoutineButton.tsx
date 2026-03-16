@@ -15,7 +15,7 @@ export default function DeleteRoutineButton({ routineId }: { routineId: string }
 
   return (
     <>
-      <button type="button" onClick={() => setIsConfirmOpen(true)} disabled={isPending} style={btnStyle}>
+      <button type="button" suppressHydrationWarning onClick={() => setIsConfirmOpen(true)} disabled={isPending} style={btnStyle}>
         {isPending ? "Deleting..." : "Delete"}
       </button>
 
@@ -32,13 +32,14 @@ export default function DeleteRoutineButton({ routineId }: { routineId: string }
             <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={() => setIsConfirmOpen(false)}
                 disabled={isPending}
                 style={secondaryBtnStyle}
               >
                 No
               </button>
-              <button type="button" onClick={onConfirmDelete} disabled={isPending} style={dangerBtnStyle}>
+              <button type="button" suppressHydrationWarning onClick={onConfirmDelete} disabled={isPending} style={dangerBtnStyle}>
                 {isPending ? "Deleting..." : "Yes"}
               </button>
             </div>
