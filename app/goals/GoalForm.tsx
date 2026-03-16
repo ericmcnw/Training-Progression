@@ -13,6 +13,7 @@ import {
   getAllowedMetricTypes,
 } from "@/lib/goals-config";
 import type { GoalFormOptions } from "@/lib/goals";
+import { GOAL_TEMPLATES, type GoalTemplateKey } from "@/lib/goal-templates";
 import { formInputStyle } from "./ui";
 
 type GoalFormInitial = {
@@ -51,25 +52,56 @@ function metricInputMeta(metricType: GoalMetricTypeValue) {
   return { label: "Target value", step: "1" };
 }
 
+function templateForCurrentConfig(params: {
+  goalType: GoalTypeValue;
+  targetType: GoalTargetTypeValue;
+  metricType: GoalMetricTypeValue;
+  timeframe: GoalTimeframeValue;
+}) {
+  return (
+    GOAL_TEMPLATES.find(
+      (template) =>
+        template.goalType === params.goalType &&
+        template.targetType === params.targetType &&
+        template.metricType === params.metricType &&
+        template.timeframe === params.timeframe
+    )?.key ?? GOAL_TEMPLATES[0].key
+  );
+}
+
 export default function GoalForm({
   action,
   options,
   submitLabel,
   initial,
+  mode = "advanced",
+  initialTemplateKey,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   options: GoalFormOptions;
   submitLabel: string;
   initial: GoalFormInitial;
+  mode?: "guided" | "advanced";
+  initialTemplateKey?: GoalTemplateKey;
 }) {
   const [goalType, setGoalType] = useState<GoalTypeValue>(initial.goalType);
   const [targetType, setTargetType] = useState<GoalTargetTypeValue>(initial.targetType);
   const [metricType, setMetricType] = useState<GoalMetricTypeValue>(initial.metricType);
+  const [timeframe, setTimeframe] = useState<GoalTimeframeValue>(initial.timeframe);
   const [targetId, setTargetId] = useState(initial.targetId);
   const [rawTargetValue, setRawTargetValue] = useState(String(initial.targetValue || ""));
   const [durationParts, setDurationParts] = useState(splitSeconds(initial.targetValue || 0));
   const [benchmarkDistanceMi, setBenchmarkDistanceMi] = useState(initial.benchmarkDistanceMi);
   const [benchmarkLabel, setBenchmarkLabel] = useState(initial.benchmarkLabel);
+  const [templateKey, setTemplateKey] = useState<GoalTemplateKey>(
+    initialTemplateKey ??
+      templateForCurrentConfig({
+        goalType: initial.goalType,
+        targetType: initial.targetType,
+        metricType: initial.metricType,
+        timeframe: initial.timeframe,
+      })
+  );
 
   const allowedMetrics = useMemo(() => getAllowedMetricTypes(goalType, targetType), [goalType, targetType]);
 
@@ -99,54 +131,62 @@ export default function GoalForm({
   }, [durationParts, effectiveMetricType, rawTargetValue]);
 
   const metricMeta = metricInputMeta(effectiveMetricType);
+  const selectedTarget = activeTargetOptions.find((option) => option.id === effectiveTargetId);
+
+  function applyTemplate(nextTemplateKey: GoalTemplateKey) {
+    const template = getGoalTemplate(nextTemplateKey);
+    setTemplateKey(nextTemplateKey);
+    setGoalType(template.goalType);
+    setTargetType(template.targetType);
+    setMetricType(template.metricType);
+    setTimeframe(template.timeframe);
+    setRawTargetValue(String(template.targetValue));
+    setDurationParts(splitSeconds(template.targetValue));
+    setBenchmarkDistanceMi(template.benchmarkDistanceMi ? String(template.benchmarkDistanceMi) : "");
+    setBenchmarkLabel(template.benchmarkLabel ?? "");
+  }
 
   return (
     <form action={action} style={{ display: "grid", gap: 16 }}>
       {initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
       <input type="hidden" name="targetValue" value={canonicalTargetValue} />
 
+      {mode === "guided" ? (
+        <section style={sectionStyle}>
+          <div style={sectionTitleStyle}>Goal Shape</div>
+          <div style={templateGridStyle}>
+            {GOAL_TEMPLATES.map((template) => (
+              <button
+                key={template.key}
+                type="button"
+                onClick={() => applyTemplate(template.key)}
+                style={{
+                  ...templateCardStyle,
+                  ...(templateKey === template.key ? templateCardActiveStyle : null),
+                }}
+              >
+                <div style={{ fontWeight: 900 }}>{template.label}</div>
+                <div style={hintStyle}>{template.description}</div>
+              </button>
+            ))}
+          </div>
+          <div style={hintStyle}>
+            Pick the closest goal shape. It sets the default goal type, target type, metric, and timeframe for you.
+          </div>
+        </section>
+      ) : null}
+
       <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>Basics</div>
+        <div style={sectionTitleStyle}>{mode === "guided" ? "Goal Details" : "Basics"}</div>
         <div style={gridStyle}>
           <label style={fieldStyle}>
             <span>Goal name</span>
-            <input name="name" defaultValue={initial.name} style={formInputStyle} placeholder="Bench 225 by summer" />
-          </label>
-          <label style={fieldStyle}>
-            <span>Goal type</span>
-            <select name="goalType" value={goalType} onChange={(event) => setGoalType(event.target.value as GoalTypeValue)} style={formInputStyle}>
-              {Object.entries(GOAL_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={fieldStyle}>
-            <span>Timeframe</span>
-            <select name="timeframe" defaultValue={initial.timeframe} style={formInputStyle}>
-              {Object.entries(GOAL_TIMEFRAME_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>Target</div>
-        <div style={gridStyle}>
-          <label style={fieldStyle}>
-            <span>Target type</span>
-            <select name="targetType" value={targetType} onChange={(event) => setTargetType(event.target.value as GoalTargetTypeValue)} style={formInputStyle}>
-              {Object.entries(GOAL_TARGET_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <input
+              name="name"
+              defaultValue={initial.name}
+              style={formInputStyle}
+              placeholder={mode === "guided" ? "Weekly running target" : "Bench 225 by summer"}
+            />
           </label>
           <label style={fieldStyle}>
             <span>Specific target</span>
@@ -157,26 +197,8 @@ export default function GoalForm({
                 </option>
               ))}
             </select>
-            {activeTargetOptions.find((option) => option.id === effectiveTargetId)?.subtitle ? (
-              <span style={hintStyle}>{activeTargetOptions.find((option) => option.id === effectiveTargetId)?.subtitle}</span>
-            ) : null}
+            {selectedTarget?.subtitle ? <span style={hintStyle}>{selectedTarget.subtitle}</span> : null}
           </label>
-          <label style={fieldStyle}>
-            <span>Metric</span>
-            <select name="metricType" value={effectiveMetricType} onChange={(event) => setMetricType(event.target.value as GoalMetricTypeValue)} style={formInputStyle}>
-              {allowedMetrics.map((value) => (
-                <option key={value} value={value}>
-                  {GOAL_METRIC_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>Target Value</div>
-        <div style={gridStyle}>
           {effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION" || effectiveMetricType === "PACE" ? (
             <>
               <label style={fieldStyle}>
@@ -216,7 +238,6 @@ export default function GoalForm({
               />
             </label>
           )}
-
           {effectiveMetricType === "PACE" ? (
             <>
               <label style={fieldStyle}>
@@ -243,30 +264,91 @@ export default function GoalForm({
               </label>
             </>
           ) : null}
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>Dates & Notes</div>
-        <div style={gridStyle}>
           <label style={fieldStyle}>
             <span>Start date</span>
             <input name="startDate" type="date" defaultValue={initial.startDate} style={formInputStyle} />
           </label>
-          <label style={fieldStyle}>
-            <span>End date</span>
-            <input name="endDate" type="date" defaultValue={initial.endDate} style={formInputStyle} />
-          </label>
-          <label style={{ ...fieldStyle, justifyContent: "center" }}>
-            <span>Active</span>
-            <input name="isActive" type="checkbox" defaultChecked={initial.isActive} style={{ width: 18, height: 18 }} />
-          </label>
         </div>
-        <label style={fieldStyle}>
-          <span>Notes</span>
-          <textarea name="notes" defaultValue={initial.notes} rows={4} style={{ ...formInputStyle, resize: "vertical" }} />
-        </label>
       </section>
+
+      <details style={advancedSectionStyle} open={mode === "advanced"}>
+        <summary data-collapsible-summary style={advancedSummaryStyle}>
+          Advanced goal settings
+        </summary>
+        <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
+          <section style={sectionStyle}>
+            <div style={sectionTitleStyle}>Definition</div>
+            <div style={gridStyle}>
+              <label style={fieldStyle}>
+                <span>Goal type</span>
+                <select name="goalType" value={goalType} onChange={(event) => setGoalType(event.target.value as GoalTypeValue)} style={formInputStyle}>
+                  {Object.entries(GOAL_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldStyle}>
+                <span>Target type</span>
+                <select
+                  name="targetType"
+                  value={targetType}
+                  onChange={(event) => {
+                    setTargetType(event.target.value as GoalTargetTypeValue);
+                    setTargetId("");
+                  }}
+                  style={formInputStyle}
+                >
+                  {Object.entries(GOAL_TARGET_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldStyle}>
+                <span>Metric</span>
+                <select name="metricType" value={effectiveMetricType} onChange={(event) => setMetricType(event.target.value as GoalMetricTypeValue)} style={formInputStyle}>
+                  {allowedMetrics.map((value) => (
+                    <option key={value} value={value}>
+                      {GOAL_METRIC_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldStyle}>
+                <span>Timeframe</span>
+                <select name="timeframe" value={timeframe} onChange={(event) => setTimeframe(event.target.value as GoalTimeframeValue)} style={formInputStyle}>
+                  {Object.entries(GOAL_TIMEFRAME_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section style={sectionStyle}>
+            <div style={sectionTitleStyle}>Dates & Status</div>
+            <div style={gridStyle}>
+              <label style={fieldStyle}>
+                <span>End date</span>
+                <input name="endDate" type="date" defaultValue={initial.endDate} style={formInputStyle} />
+              </label>
+              <label style={{ ...fieldStyle, justifyContent: "center" }}>
+                <span>Active</span>
+                <input name="isActive" type="checkbox" defaultChecked={initial.isActive} style={{ width: 18, height: 18 }} />
+              </label>
+            </div>
+            <label style={fieldStyle}>
+              <span>Notes</span>
+              <textarea name="notes" defaultValue={initial.notes} rows={4} style={{ ...formInputStyle, resize: "vertical" }} />
+            </label>
+          </section>
+        </div>
+      </details>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button type="submit" style={submitStyle}>
@@ -291,10 +373,29 @@ const sectionTitleStyle: React.CSSProperties = {
   fontSize: 14,
 };
 
+const advancedSectionStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.28)",
+  borderRadius: 16,
+  padding: 14,
+  background: "rgba(128,128,128,0.04)",
+};
+
+const advancedSummaryStyle: React.CSSProperties = {
+  cursor: "pointer",
+  fontWeight: 900,
+  fontSize: 14,
+};
+
 const gridStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
   gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+};
+
+const templateGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
 };
 
 const fieldStyle: React.CSSProperties = {
@@ -306,6 +407,20 @@ const fieldStyle: React.CSSProperties = {
 const hintStyle: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.72,
+};
+
+const templateCardStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: 12,
+  border: "1px solid rgba(128,128,128,0.35)",
+  borderRadius: 12,
+  background: "rgba(128,128,128,0.05)",
+  color: "inherit",
+};
+
+const templateCardActiveStyle: React.CSSProperties = {
+  borderColor: "rgba(34,197,94,0.45)",
+  background: "rgba(34,197,94,0.12)",
 };
 
 const submitStyle: React.CSSProperties = {

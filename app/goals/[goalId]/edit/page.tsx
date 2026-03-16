@@ -49,7 +49,7 @@ export default async function EditGoalPage(props: {
       actions={<SectionLinkButton href={`/goals/${goal.id}`} label="Back to Goal" />}
     >
       <SectionCard title="Edit Goal">
-        <GoalForm action={updateGoal} options={options} submitLabel="Update Goal" initial={initial} />
+        <GoalForm action={updateGoal} options={options} submitLabel="Update Goal" initial={initial} mode="advanced" />
       </SectionCard>
     </ProgressShell>
   );

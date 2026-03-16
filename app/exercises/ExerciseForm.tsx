@@ -97,8 +97,8 @@ export default function ExerciseForm({
       </div>
 
       <MetadataGroupPicker
-        title="Exercise Metadata"
-        help="Name-based defaults are preselected here. You can add more or uncheck any of them before saving."
+        title="Exercise groups (optional)"
+        help="Name-based suggestions are preselected here. You only need to change this when you want better rollups in Progress."
         groups={metadataGroups}
         selectedIds={selectedMetadataGroupIds}
         onSelectionChange={setSelectedMetadataGroupIds}

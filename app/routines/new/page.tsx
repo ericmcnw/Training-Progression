@@ -50,7 +50,7 @@ async function NewRoutinePageInner({
       <div style={styles.topRow}>
         <div>
           <h1 style={styles.h1}>New Routine</h1>
-          <div style={styles.sub}>Create a routine.</div>
+          <div style={styles.sub}>Start with a preset, then open Advanced only if you need deeper control.</div>
         </div>
 
         <Link href="/routines" style={styles.linkBtn}>
@@ -59,7 +59,7 @@ async function NewRoutinePageInner({
       </div>
 
       <div style={styles.panel}>
-        <div style={styles.panelHeader}>DETAILS</div>
+        <div style={styles.panelHeader}>QUICK SETUP</div>
         <NewRoutineForm categories={categories} metadataGroups={metadataGroups} />
       </div>
     </div>

@@ -31,7 +31,7 @@ export default async function ExercisesPage() {
       <div style={styles.topRow}>
         <div>
           <h1 style={styles.h1}>Exercises</h1>
-          <div style={styles.sub}>Library of movements with structured metadata for future progress rollups.</div>
+          <div style={styles.sub}>Library of movements with optional groups for better progress rollups.</div>
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -77,7 +77,7 @@ export default async function ExercisesPage() {
                   ))}
               </div>
             ) : (
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No structured metadata yet.</div>
+              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No groups assigned yet.</div>
             )}
           </div>
         ))}

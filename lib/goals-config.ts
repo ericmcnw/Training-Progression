@@ -30,7 +30,7 @@ export const GOAL_TARGET_TYPE_LABELS: Record<GoalTargetTypeValue, string> = {
   ROUTINE: "Routine",
   EXERCISE: "Exercise",
   CARDIO: "Cardio target",
-  GROUP: "Metadata group",
+  GROUP: "Group",
 };
 
 export const GOAL_TIMEFRAME_LABELS: Record<GoalTimeframeValue, string> = {

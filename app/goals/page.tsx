@@ -27,7 +27,7 @@ export default async function GoalsPage({
     <ProgressShell
       section="overview"
       title="Goals"
-      subtitle="Active targets calculated directly from your existing routine, exercise, cardio, and metadata-group logs."
+      subtitle="Active targets calculated directly from your existing routine, exercise, cardio, and group logs."
       actions={<SectionLinkButton href="/goals/new" label="New Goal" />}
     >
       <SectionCard title="Filters">

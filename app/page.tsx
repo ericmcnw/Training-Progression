@@ -44,6 +44,11 @@ function formatLogTime(date: Date) {
   });
 }
 
+function formatLastCompletedLabel(date: Date | null) {
+  if (!date) return "Never completed";
+  return `Last completed ${formatAppDate(date, { month: "short", day: "numeric" })}`;
+}
+
 function localDayRange(ymd: string) {
   return getAppDayRange(ymd);
 }
@@ -162,6 +167,7 @@ export default async function HomePage() {
     routines,
     recentLogs,
     weeklyLogs,
+    latestLogs,
     activeGoals,
     planEntriesRaw,
     manualEntriesRaw,
@@ -174,10 +180,9 @@ export default async function HomePage() {
         category: string;
         subtype: string | null;
         kind: string;
-        timesPerWeek: number | null;
       }>
     >(
-      'SELECT "id","name","category","subtype","kind","timesPerWeek" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
+      'SELECT "id","name","category","subtype","kind" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
     ),
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
@@ -201,6 +206,10 @@ export default async function HomePage() {
       },
       _count: { _all: true },
       _sum: { distanceMi: true },
+      _max: { performedAt: true },
+    }),
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
       _max: { performedAt: true },
     }),
     prisma.goal.findMany({
@@ -239,6 +248,7 @@ export default async function HomePage() {
       },
     ])
   );
+  const latestLogMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
 
   const manualToday = manualEntriesRaw
     .map((entry) => ({
@@ -338,25 +348,17 @@ export default async function HomePage() {
   const weeklyCards = routines
     .map((routine) => {
       const week = weeklyMap.get(routine.id) ?? { count: 0, miles: 0, lastAt: null };
-      const target = routine.timesPerWeek ?? 0;
-      const percent = target > 0 ? Math.min(100, Math.round((week.count / target) * 100)) : 0;
       return {
         id: routine.id,
         name: routine.name,
         category: routine.category,
         kind: routine.kind,
-        target,
         count: week.count,
         miles: week.miles,
-        percent,
-        delta: target > 0 ? target - week.count : 0,
+        lastCompletedAt: latestLogMap.get(routine.id) ?? null,
       };
     })
-    .sort((a, b) => {
-      const aNeeds = a.target > 0 ? a.delta : 999;
-      const bNeeds = b.target > 0 ? b.delta : 999;
-      return aNeeds - bNeeds || b.percent - a.percent || a.name.localeCompare(b.name);
-    });
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const weeklyCardioBreakdown = routines
     .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
@@ -383,7 +385,10 @@ export default async function HomePage() {
     }))
     .sort((a, b) => b.miles - a.miles || a.type.localeCompare(b.type));
 
-  const onTrack = weeklyCards.filter((item) => item.target > 0 && item.count >= item.target).slice(0, 4);
+  const recentCompletions = weeklyCards
+    .filter((item) => item.lastCompletedAt)
+    .sort((a, b) => (b.lastCompletedAt?.getTime() ?? 0) - (a.lastCompletedAt?.getTime() ?? 0))
+    .slice(0, 4);
 
   const weeklySeries = Array.from({ length: 4 }, (_, index) => {
     const start = addDays(weekStart, -(3 - index) * 7);
@@ -420,23 +425,14 @@ export default async function HomePage() {
   const weekSessionTargetTotal = weekPlannedTotal + weekUnplannedLoggedTotal;
   const needsAttention = weeklyCards
     .map((item) => {
-      const planned = weekPlannedByRoutine.get(item.id) ?? 0;
-      const missedPlanned = Math.max(0, planned - item.count);
-      const missedTarget = item.target > 0 ? Math.max(0, item.target - item.count) : 0;
+      const lastCompletedYmd = item.lastCompletedAt ? toAppYmd(item.lastCompletedAt) : null;
       return {
         ...item,
-        planned,
-        missedPlanned,
-        missedTarget,
+        daysSinceLastCompleted: lastCompletedYmd ? dayDiff(today, lastCompletedYmd) : Number.POSITIVE_INFINITY,
       };
     })
-    .filter((item) => item.missedPlanned > 0 || item.missedTarget > 0)
-    .sort((a, b) =>
-      b.missedPlanned - a.missedPlanned ||
-      b.missedTarget - a.missedTarget ||
-      b.planned - a.planned ||
-      a.name.localeCompare(b.name)
-    )
+    .filter((item) => item.daysSinceLastCompleted > 7)
+    .sort((a, b) => b.daysSinceLastCompleted - a.daysSinceLastCompleted || a.name.localeCompare(b.name))
     .slice(0, 4);
   const weekEnd = addDays(weekStart, 6);
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
@@ -536,14 +532,14 @@ export default async function HomePage() {
 
         <div className="mobileHomeTwoCol" style={twoColGrid}>
           <div style={subPanel}>
-            <div style={subPanelTitle}>On Track</div>
+            <div style={subPanelTitle}>Recently Completed</div>
             <div style={{ display: "grid", gap: 8 }}>
-              {onTrack.length === 0 && <div style={emptyState}>No routines have hit their weekly target yet.</div>}
-              {onTrack.map((item) => (
+              {recentCompletions.length === 0 && <div style={emptyState}>No routines completed yet.</div>}
+              {recentCompletions.map((item) => (
                 <div key={item.id} style={miniCardSuccess}>
                   <div style={{ fontWeight: 800 }}>{item.name}</div>
                   <div style={miniCardMeta}>
-                    {item.count}/{item.target} this week
+                    {formatLastCompletedLabel(item.lastCompletedAt)}
                   </div>
                 </div>
               ))}
@@ -553,13 +549,12 @@ export default async function HomePage() {
           <div style={subPanel}>
             <div style={subPanelTitle}>Needs Attention</div>
             <div style={{ display: "grid", gap: 8 }}>
-              {needsAttention.length === 0 && <div style={emptyState}>Nothing planned or targeted is behind right now.</div>}
+              {needsAttention.length === 0 && <div style={emptyState}>Everything has been completed recently.</div>}
               {needsAttention.map((item) => (
                 <div key={item.id} style={miniCardWarn}>
                   <div style={{ fontWeight: 800 }}>{item.name}</div>
                   <div style={miniCardMeta}>
-                    {item.count}/{item.target || item.planned} this week
-                    {item.missedPlanned > 0 ? ` | missed planned: ${item.missedPlanned}` : ""}
+                    {formatLastCompletedLabel(item.lastCompletedAt)}
                   </div>
                 </div>
               ))}
@@ -692,9 +687,9 @@ export default async function HomePage() {
                   <div style={quickTitle}>Review Trends</div>
                   <div style={quickSub}>Open progression charts and completion history.</div>
                 </Link>
-                <Link href="/goals?mode=create" style={quickCard}>
+                <Link href="/goals/new" style={quickCard}>
                   <div style={quickTitle}>Set Goal</div>
-                  <div style={quickSub}>Create a target tied to routine, cardio, or exercise progress.</div>
+                  <div style={quickSub}>Start from a goal template tied to routine, cardio, exercise, or group progress.</div>
                 </Link>
               </div>
             </div>

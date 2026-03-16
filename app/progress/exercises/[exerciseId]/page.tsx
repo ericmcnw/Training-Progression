@@ -1,10 +1,10 @@
 import MetricLineChart from "../../MetricLineChart";
 import { getRoutineLogs } from "../../data";
-import { EmptyState, PillNav, SectionCard, SectionLinkButton, StatGrid, TabHint } from "../../ui";
+import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../../ui";
 import { formatAppDate } from "@/lib/dates";
 import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
-import { fillWeeklySeries, getRangeFromSearchParam, incrementWeekMap, normalizeProgressTab, progressRanges, progressSections, progressTabs, rangeChipLabel, trendLabel } from "@/lib/progress-v2";
+import { fillWeeklySeries, getRangeFromSearchParam, incrementWeekMap, normalizeProgressTab, rangeChipLabel, trendLabel } from "@/lib/progress-v2";
 
 export const dynamic = "force-dynamic";
 
@@ -172,24 +172,18 @@ export default async function ExerciseTargetPage(props: {
   );
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 14px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>{exercise.name}</h1>
-          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-            Exercise target | {exercise.unit}
-            {exercise.supportsWeight ? " | Weighted" : ""}
-          </div>
-        </div>
-        <SectionLinkButton href="/progress/exercises" label="Back to Exercises" />
-      </div>
+    <>
+      <TargetHeader
+        section="exercises"
+        title={exercise.name}
+        subtitle={`Exercise target | ${exercise.unit}${exercise.supportsWeight ? " | Weighted" : ""}`}
+        basePath={`/progress/exercises/${exercise.id}`}
+        tab={tab}
+        range={range}
+        actions={<SectionLinkButton href="/progress/exercises" label="Back to Exercises" />}
+      />
 
-      <PillNav items={progressSections().map((item) => ({ ...item, active: item.key === "exercises" }))} />
-      <PillNav items={progressTabs(`/progress/exercises/${exercise.id}`, range).map((item) => ({ ...item, active: item.key === tab }))} />
-      <PillNav items={progressRanges(`/progress/exercises/${exercise.id}`, tab).map((item) => ({ ...item, active: item.key === range }))} />
-      <TabHint tab={tab} />
-
-      <div style={{ marginTop: 18, display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
         <SectionCard title="Overview Snapshot">
           <StatGrid
             items={[
@@ -291,7 +285,7 @@ export default async function ExerciseTargetPage(props: {
           </SectionCard>
         ) : null}
       </div>
-    </div>
+    </>
   );
 }
 

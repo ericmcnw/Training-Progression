@@ -1,5 +1,25 @@
 import Link from "next/link";
 
+function splitValueAndUnit(value: string) {
+  const match = value.trim().match(/^(.+?)(?:\s+([A-Za-z%/][A-Za-z0-9%/.-]*))?$/);
+  if (!match) return { amount: value, unit: "" };
+  return {
+    amount: match[1] ?? value,
+    unit: match[2] ?? "",
+  };
+}
+
+function compactAmount(value: string) {
+  const trimmed = value.trim();
+  if (/^-?\d+\.0+$/.test(trimmed)) {
+    return String(Number(trimmed));
+  }
+  if (/^-?\d+\.\d+$/.test(trimmed)) {
+    return trimmed.replace(/(\.\d*?[1-9])0+$/, "$1");
+  }
+  return trimmed;
+}
+
 export function GoalProgressRing({
   current,
   target,
@@ -16,6 +36,11 @@ export function GoalProgressRing({
   const clamped = Math.max(0, Math.min(1, fraction));
   const dashOffset = circumference * (1 - clamped);
   const glowOpacity = 0.18 + clamped * 0.32;
+  const currentParts = splitValueAndUnit(current);
+  const targetParts = splitValueAndUnit(target);
+  const sharedUnit = currentParts.unit && currentParts.unit === targetParts.unit ? currentParts.unit : "";
+  const currentLabel = compactAmount(sharedUnit ? currentParts.amount : current);
+  const targetLabel = compactAmount(sharedUnit ? targetParts.amount : target);
 
   return (
     <div
@@ -49,9 +74,47 @@ export function GoalProgressRing({
           strokeDashoffset={dashOffset}
         />
       </svg>
-      <div style={{ position: "absolute", textAlign: "center", lineHeight: 1.1, maxWidth: 72 }}>
-        <div style={{ fontWeight: 900, fontSize: 15 }}>{current}</div>
-        <div style={{ fontSize: 10, opacity: 0.8 }}>{target}</div>
+      <div
+        style={{
+          position: "absolute",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            justifyItems: "center",
+            lineHeight: 1,
+            minWidth: 28,
+          }}
+        >
+          <div style={{ fontWeight: 900, fontSize: 19, whiteSpace: "nowrap" }}>{currentLabel}</div>
+          <div
+            style={{
+              width: "100%",
+              height: 2,
+              borderRadius: 999,
+              background: "currentColor",
+              opacity: 0.7,
+              margin: "3px 0 4px",
+            }}
+          />
+          <div style={{ fontWeight: 900, fontSize: 19, whiteSpace: "nowrap" }}>{targetLabel}</div>
+        </div>
+        {sharedUnit ? (
+          <div
+            style={{
+              fontSize: 10,
+              opacity: 0.82,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {sharedUnit}
+          </div>
+        ) : null}
       </div>
     </div>
   );

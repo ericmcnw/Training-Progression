@@ -21,7 +21,6 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       category: true,
       subtype: true,
       kind: true,
-      timesPerWeek: true,
       isActive: true,
       metadataGroups: {
         select: {
@@ -38,6 +37,18 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
     },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+
+  const weeklyGoal = await prisma.goal.findFirst({
+    where: {
+      targetType: "ROUTINE",
+      targetId: routine.id,
+      timeframe: "WEEK",
+      goalType: { in: ["FREQUENCY", "COMPLETION"] },
+      metricType: { in: ["SESSIONS", "COMPLETED"] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { targetValue: true },
+  });
 
   const defaultCategories = ["General", "Daily", "Strength", "Running", "Climbing"];
   const categoryRows = await prisma.routine.findMany({
@@ -67,7 +78,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
         <div>
           <h1 style={styles.h1}>Edit Routine</h1>
           <div style={styles.sub}>
-            {routine.name} · {routine.isActive ? "Active" : "Archived"}
+            {routine.name} | {routine.isActive ? "Active" : "Archived"}
           </div>
         </div>
 
@@ -77,7 +88,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       </div>
 
       <div style={styles.panel}>
-        <div style={styles.panelHeader}>DETAILS</div>
+        <div style={styles.panelHeader}>ROUTINE SETUP</div>
         <EditRoutineForm
           routine={{
             id: routine.id,
@@ -85,7 +96,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
             category: routine.category || "General",
             subtype: routine.subtype,
             kind: routine.kind,
-            timesPerWeek: routine.timesPerWeek,
+            timesPerWeek: weeklyGoal ? Math.round(weeklyGoal.targetValue) : null,
             selectedMetadataGroupIds: routine.metadataGroups.map((entry) => entry.groupId),
             tags: routine.tagAssignments.map((entry) => entry.tag.name),
           }}

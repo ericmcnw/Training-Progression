@@ -18,52 +18,19 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
+type RoutineWithExercises = Prisma.RoutineGetPayload<{
+  include: {
+    exercises: {
+      orderBy: { sortOrder: "asc" };
+      include: { exercise: { select: { name: true } } };
+    };
+  };
+}>;
+
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   if (Array.isArray(value)) return value[0];
   return value;
-}
-
-function ProgressRing({
-  current,
-  target,
-  fraction,
-  strokeColor,
-}: {
-  current: string;
-  target: string;
-  fraction: number;
-  strokeColor: string;
-}) {
-  const size = 84;
-  const stroke = 8;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(1, fraction));
-  const dashOffset = circumference * (1 - clamped);
-
-  return (
-    <div style={{ width: size, height: size, position: "relative", display: "grid", placeItems: "center", flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(128,128,128,0.28)" strokeWidth={stroke} fill="none" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={strokeColor}
-          strokeWidth={stroke}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-        />
-      </svg>
-      <div style={{ position: "absolute", textAlign: "center", lineHeight: 1.1 }}>
-        <div style={{ fontWeight: 900, fontSize: 16 }}>{current}</div>
-        <div style={{ fontSize: 11, opacity: 0.8 }}>/ {target}</div>
-      </div>
-    </div>
-  );
 }
 
 const styles = {
@@ -157,66 +124,47 @@ function loggingLabel(kind: string) {
   return "Log Completion";
 }
 
-type RoutineWithExercises = Prisma.RoutineGetPayload<{
-  include: {
-    exercises: {
-      orderBy: { sortOrder: "asc" };
-      include: { exercise: { select: { name: true } } };
-    };
-  };
-}>;
-
 function RoutineCard({
   routine,
   weeklyMap,
-  routineCompletionGoalMap,
+  lastCompletedMap,
   allowLogging,
 }: {
   routine: RoutineWithExercises;
   weeklyMap: Map<string, number>;
-  routineCompletionGoalMap: Map<string, number>;
+  lastCompletedMap: Map<string, Date | null>;
   allowLogging: boolean;
 }) {
   const kind = normalizeRoutineKind(routine.kind);
   const count = weeklyMap.get(routine.id) ?? 0;
-  const target = routine.timesPerWeek ?? 0;
-  const complete = target > 0 ? count >= target : count > 0;
-  const fraction = target > 0 ? count / target : complete ? 1 : 0;
-  const hasCompletionGoalProgress = routineCompletionGoalMap.has(routine.id) && count > 0;
-  const isInProgress = count > 0 && !complete;
   const subtypeLabel = formatRoutineSubtype(routine.subtype);
-  const strokeColor = complete
-    ? "rgba(34,197,94,0.92)"
-    : hasCompletionGoalProgress || isInProgress
-    ? "rgba(255,196,92,0.95)"
-    : "rgba(255,255,255,0.35)";
   const exercisePreview = isWorkoutKind(kind)
-    ? routine.exercises.map((item) => item.exercise.name).join(" • ")
+    ? routine.exercises.map((item) => item.exercise.name).join(", ")
     : "";
+  const lastCompletedAt = lastCompletedMap.get(routine.id) ?? null;
+  const lastCompletedLabel = lastCompletedAt ? formatAppDate(lastCompletedAt) : "Never";
 
   return (
     <div key={routine.id} style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
       <div className="mobileRoutinesCardShell" style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
-        <div className="mobileRoutinesCardMain" style={{ flex: 1, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <ProgressRing current={String(count)} target={target ? String(target) : "-"} fraction={fraction} strokeColor={strokeColor} />
-
-          <div className="mobileRoutinesCardInfo" style={{ flex: 1, minWidth: 0 }}>
-            <div className="mobileRoutinesCardHeading" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
-              <div style={{ display: "grid", gap: 6, flex: 1, minWidth: 0 }}>
-                <div className="mobileRoutinesCardActions" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
-                  <div style={{ fontSize: 12, opacity: 0.75 }}>
-                    {routine.category} | {formatRoutineTypeLabel(kind)}
-                    {subtypeLabel ? ` | ${subtypeLabel}` : ""}
-                  </div>
+        <div className="mobileRoutinesCardMain" style={{ flex: 1, display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div
+            className="mobileRoutinesCardInfo"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "grid",
+              gap: 6,
+              gridTemplateColumns: exercisePreview ? "minmax(0, 1fr) minmax(160px, 220px) auto" : "minmax(0, 1fr) auto",
+              alignItems: "start",
+            }}
+          >
+              <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  {routine.category} | {formatRoutineTypeLabel(kind)}
+                  {subtypeLabel ? ` | ${subtypeLabel}` : ""}
                 </div>
-
-                {exercisePreview ? (
-                  <div style={{ fontSize: 12, opacity: 0.78, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {exercisePreview}
-                  </div>
-                ) : null}
-
                 {allowLogging && (
                   <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Link href={loggingHref(routine)} style={styles.btnLink}>
@@ -258,19 +206,42 @@ function RoutineCard({
                     )}
                   </div>
                 )}
+
+                <div style={{ fontSize: 13, opacity: 0.85 }}>
+                  This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
+                </div>
               </div>
 
-              <div className="mobileRoutinesCardMeta" style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
-                <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
-                  Edit
-                </Link>
-                {allowLogging && <DeleteRoutineButton routineId={routine.id} />}
+            {exercisePreview ? (
+              <div
+                style={{
+                  fontSize: 12,
+                  opacity: 0.78,
+                  display: "grid",
+                  gap: 4,
+                  minWidth: 160,
+                  maxWidth: 220,
+                  alignContent: "start",
+                }}
+              >
+                {routine.exercises.map((item) => (
+                  <div
+                    key={`${routine.id}-${item.exercise.name}`}
+                    style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%" }}
+                  >
+                    {item.exercise.name}
+                  </div>
+                ))}
               </div>
+            ) : null}
+
+            <div className="mobileRoutinesCardMeta" style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", flexShrink: 0 }}>
+              <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
+                Edit
+              </Link>
+              {allowLogging && <DeleteRoutineButton routineId={routine.id} />}
             </div>
 
-            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
-              This week: <b>{count}</b> / {target || "-"}
-            </div>
           </div>
         </div>
 
@@ -309,7 +280,7 @@ export default async function RoutinesPage(props: {
   const normalizedSearchQuery = searchQuery.toLowerCase();
   const { start, end } = getWeekBoundsSunday(new Date());
 
-  const [routines, weeklyCounts, activeGoals] = await Promise.all([
+  const [routines, weeklyCounts, latestLogs] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
@@ -329,23 +300,14 @@ export default async function RoutinesPage(props: {
       where: { performedAt: { gte: start, lt: end } },
       _count: { _all: true },
     }),
-    prisma.goal.findMany({
-      where: {
-        isActive: true,
-        targetType: "ROUTINE",
-        timeframe: "WEEK",
-        goalType: { in: ["FREQUENCY", "COMPLETION"] },
-        metricType: { in: ["SESSIONS", "COMPLETED"] },
-      },
-      select: { targetId: true, targetValue: true },
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
+      _max: { performedAt: true },
     }),
   ]);
 
   const weeklyMap = new Map(weeklyCounts.map((row) => [row.routineId, row._count._all]));
-  const routineCompletionGoalMap = new Map(
-    activeGoals
-      .map((goal) => [goal.targetId, goal.targetValue] as const)
-  );
+  const lastCompletedMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
 
   const filteredRoutines = routines.filter((routine) => {
     if (!normalizedSearchQuery) return true;
@@ -428,7 +390,7 @@ export default async function RoutinesPage(props: {
                       key={routine.id}
                       routine={routine}
                       weeklyMap={weeklyMap}
-                      routineCompletionGoalMap={routineCompletionGoalMap}
+                      lastCompletedMap={lastCompletedMap}
                       allowLogging={true}
                     />
                   ))}
@@ -458,7 +420,7 @@ export default async function RoutinesPage(props: {
                       key={routine.id}
                       routine={routine}
                       weeklyMap={weeklyMap}
-                      routineCompletionGoalMap={routineCompletionGoalMap}
+                      lastCompletedMap={lastCompletedMap}
                       allowLogging={false}
                     />
                   ))}

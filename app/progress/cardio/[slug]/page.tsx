@@ -1,8 +1,8 @@
 import MetricLineChart from "../../MetricLineChart";
 import { cardioPerformanceSeries, cardioWorkloadSeries, resolveGroupTarget, summarizeRoutineLogs } from "../../data";
-import { EmptyState, PillNav, SectionCard, SectionLinkButton, StatGrid, TabHint } from "../../ui";
+import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../../ui";
 import { getChartGoalReference } from "@/lib/goals";
-import { getRangeFromSearchParam, normalizeProgressTab, progressRanges, progressSections, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
+import { getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
 
 export const dynamic = "force-dynamic";
@@ -72,21 +72,18 @@ export default async function CardioTargetPage(props: {
   const targetLabel = target.group.label;
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 14px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>{target.group.label}</h1>
-          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>Cardio target powered by metadata groups.</div>
-        </div>
-        <SectionLinkButton href="/progress/cardio" label="Back to Cardio" />
-      </div>
+    <>
+      <TargetHeader
+        section="cardio"
+        title={target.group.label}
+        subtitle="Cardio target powered by your cardio groupings."
+        basePath={`/progress/cardio/${target.group.slug}`}
+        tab={tab}
+        range={range}
+        actions={<SectionLinkButton href="/progress/cardio" label="Back to Cardio" />}
+      />
 
-      <PillNav items={progressSections().map((item) => ({ ...item, active: item.key === "cardio" }))} />
-      <PillNav items={progressTabs(`/progress/cardio/${target.group.slug}`, range).map((item) => ({ ...item, active: item.key === tab }))} />
-      <PillNav items={progressRanges(`/progress/cardio/${target.group.slug}`, tab).map((item) => ({ ...item, active: item.key === range }))} />
-      <TabHint tab={tab} />
-
-      <div style={{ marginTop: 18, display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
         <SectionCard title="Overview Snapshot">
           <StatGrid
             items={[
@@ -152,6 +149,6 @@ export default async function CardioTargetPage(props: {
           </SectionCard>
         ) : null}
       </div>
-    </div>
+    </>
   );
 }

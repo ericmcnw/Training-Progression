@@ -36,7 +36,7 @@ export default async function ProgressGroupsIndexPage(props: {
     <ProgressShell
       section="groups"
       title="Group Progress"
-      subtitle="Metadata-driven rollups across muscles, movement patterns, training groups, cardio groups, and routine focus."
+      subtitle="Rollups across body areas, movement patterns, training groups, cardio groups, and routine focus."
     >
       <SectionCard title="Find a Group">
         <FilterBar>

@@ -67,13 +67,14 @@ function parseCategory(formData: FormData) {
   return categoryRaw || (categoryPreset && categoryPreset !== "__custom__" ? categoryPreset : "General");
 }
 
-function parseTimesPerWeek(formData: FormData) {
+function parseOptionalTimesPerWeek(formData: FormData) {
   const timesRaw = String(formData.get("timesPerWeek") || "").trim();
-  const timesPerWeek = timesRaw ? Number(timesRaw) : null;
-  if (timesPerWeek !== null && (!Number.isFinite(timesPerWeek) || timesPerWeek < 0)) {
-    throw new Error("timesPerWeek must be a number >= 0");
+  if (!timesRaw) return null;
+  const timesPerWeek = Number(timesRaw);
+  if (!Number.isFinite(timesPerWeek) || timesPerWeek <= 0) {
+    throw new Error("timesPerWeek must be a number greater than 0");
   }
-  return timesPerWeek;
+  return Math.floor(timesPerWeek);
 }
 
 async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "routine" | "exercise") {
@@ -360,13 +361,59 @@ function revalidateRoutineSurfaces(routineId?: string) {
   }
 }
 
+async function syncRoutineWeeklyGoal(params: {
+  routineId: string;
+  routineName: string;
+  timesPerWeek: number | null;
+}) {
+  if (params.timesPerWeek === null) return;
+
+  const existing = await prisma.goal.findFirst({
+    where: {
+      targetType: "ROUTINE",
+      targetId: params.routineId,
+      timeframe: "WEEK",
+      goalType: { in: ["FREQUENCY", "COMPLETION"] },
+      metricType: { in: ["SESSIONS", "COMPLETED"] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  const data = {
+    name: `${params.routineName} Weekly Goal`,
+    goalType: "FREQUENCY" as const,
+    targetType: "ROUTINE" as const,
+    targetId: params.routineId,
+    metricType: "SESSIONS" as const,
+    targetValue: params.timesPerWeek,
+    timeframe: "WEEK" as const,
+    unit: null,
+    startDate: new Date(),
+    endDate: null,
+    isActive: true,
+    notes: null,
+    config: undefined,
+  };
+
+  if (existing) {
+    await prisma.goal.update({
+      where: { id: existing.id },
+      data,
+    });
+    return;
+  }
+
+  await prisma.goal.create({ data });
+}
+
 export async function createRoutine(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const category = parseCategory(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
-  const timesPerWeek = parseTimesPerWeek(formData);
+  const timesPerWeek = parseOptionalTimesPerWeek(formData);
   const postCreate = String(formData.get("postCreate") || "").trim();
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
@@ -380,7 +427,6 @@ export async function createRoutine(formData: FormData) {
       domain,
       kind,
       subtype,
-      timesPerWeek,
       isActive: true,
       isDeleted: false,
       deletedAt: null,
@@ -393,6 +439,11 @@ export async function createRoutine(formData: FormData) {
     routineId: created.id,
     selectedGroupIds,
     tags: tagNames,
+  });
+  await syncRoutineWeeklyGoal({
+    routineId: created.id,
+    routineName: name,
+    timesPerWeek,
   });
 
   revalidateRoutineSurfaces(created.id);
@@ -412,7 +463,7 @@ export async function updateRoutine(formData: FormData) {
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
-  const timesPerWeek = parseTimesPerWeek(formData);
+  const timesPerWeek = parseOptionalTimesPerWeek(formData);
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
 
@@ -431,13 +482,18 @@ export async function updateRoutine(formData: FormData) {
 
   await prisma.routine.update({
     where: { id },
-    data: { name, category, domain, kind, subtype, timesPerWeek },
+    data: { name, category, domain, kind, subtype },
   });
   await syncRoutineTypeDetails(id, kind);
   await syncRoutineClassificationMetadata({
     routineId: id,
     selectedGroupIds,
     tags: tagNames,
+  });
+  await syncRoutineWeeklyGoal({
+    routineId: id,
+    routineName: name,
+    timesPerWeek,
   });
 
   revalidateRoutineSurfaces(id);
