@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { parseSessionMetricGoalTarget, withSessionMetricConfig } from "@/lib/session-templates";
 import {
   isGoalMetricTypeValue,
   isGoalTargetTypeValue,
@@ -38,10 +39,44 @@ function inferUnit(metricType: string) {
   if (metricType === "DURATION" || metricType === "MAX_DURATION") return "sec";
   if (metricType === "PACE") return "sec";
   if (metricType === "MAX_WEIGHT" || metricType === "VOLUME") return "lb";
+  if (metricType === "SESSION_METRIC") return null;
   return null;
 }
 
-function parseTargetValue(formData: FormData, metricType: string) {
+async function getSessionMetricDefinitionForForm(formData: FormData, targetType: string, targetId: string) {
+  const definitionId = String(formData.get("sessionMetricDefinitionId") ?? "").trim();
+  if (!definitionId) throw new Error("Session metric is required.");
+
+  const definition = await prisma.sessionMetricDefinition.findUnique({
+    where: { id: definitionId },
+    include: { template: true },
+  });
+  if (!definition || !definition.showInGoals) throw new Error("Session metric not found.");
+
+  if (targetType === "SESSION_TEMPLATE" && definition.templateId !== targetId) {
+    throw new Error("Session metric does not belong to the selected template.");
+  }
+
+  if (targetType === "ROUTINE") {
+    const routine = await prisma.routine.findUnique({
+      where: { id: targetId },
+      select: { sessionDetails: { select: { templateId: true } } },
+    });
+    if (!routine?.sessionDetails?.templateId || routine.sessionDetails.templateId !== definition.templateId) {
+      throw new Error("That session metric does not belong to the selected routine.");
+    }
+  }
+
+  return withSessionMetricConfig(definition);
+}
+
+async function parseTargetValue(formData: FormData, metricType: string, targetType: string, targetId: string) {
+  if (metricType === "SESSION_METRIC") {
+    const definition = await getSessionMetricDefinitionForForm(formData, targetType, targetId);
+    const rawTarget = String(formData.get("sessionMetricTarget") ?? "").trim();
+    return parseSessionMetricGoalTarget(definition, rawTarget).targetValue;
+  }
+
   const raw = Number(formData.get("targetValue"));
   if (!Number.isFinite(raw) || raw <= 0) {
     throw new Error("Target value must be greater than 0.");
@@ -57,7 +92,17 @@ function parseTargetValue(formData: FormData, metricType: string) {
   return raw;
 }
 
-function parseConfig(formData: FormData, metricType: string) {
+async function parseConfig(formData: FormData, metricType: string, targetType: string, targetId: string) {
+  if (metricType === "SESSION_METRIC") {
+    const definition = await getSessionMetricDefinitionForForm(formData, targetType, targetId);
+    const rawTarget = String(formData.get("sessionMetricTarget") ?? "").trim();
+    return {
+      sessionMetricDefinitionId: definition.id,
+      sessionMetricDefinitionLabel: definition.label,
+      ...(rawTarget ? { sessionMetricTargetText: rawTarget } : {}),
+    };
+  }
+
   if (metricType !== "PACE") return undefined;
   const benchmarkDistanceMi = Number(formData.get("benchmarkDistanceMi"));
   if (!Number.isFinite(benchmarkDistanceMi) || benchmarkDistanceMi <= 0) {
@@ -70,7 +115,7 @@ function parseConfig(formData: FormData, metricType: string) {
   };
 }
 
-function parseGoalInput(formData: FormData) {
+async function parseGoalInput(formData: FormData) {
   const name = parseRequiredString(formData, "name", "Goal name");
   const goalType = parseRequiredString(formData, "goalType", "Goal type");
   const targetType = parseRequiredString(formData, "targetType", "Target type");
@@ -102,14 +147,14 @@ function parseGoalInput(formData: FormData) {
     targetType,
     targetId,
     metricType,
-    targetValue: parseTargetValue(formData, metricType),
+    targetValue: await parseTargetValue(formData, metricType, targetType, targetId),
     timeframe,
     unit: inferUnit(metricType),
     startDate,
     endDate,
     isActive: parseBoolean(formData, "isActive"),
     notes: parseOptionalString(formData, "notes"),
-    config: parseConfig(formData, metricType),
+    config: await parseConfig(formData, metricType, targetType, targetId),
   };
 }
 
@@ -120,7 +165,7 @@ function revalidateGoals() {
 }
 
 export async function createGoal(formData: FormData) {
-  const input = parseGoalInput(formData);
+  const input = await parseGoalInput(formData);
   const goal = await prisma.goal.create({
     data: input,
     select: { id: true },
@@ -131,7 +176,7 @@ export async function createGoal(formData: FormData) {
 
 export async function updateGoal(formData: FormData) {
   const goalId = parseRequiredString(formData, "goalId", "Goal");
-  const input = parseGoalInput(formData);
+  const input = await parseGoalInput(formData);
   await prisma.goal.update({
     where: { id: goalId },
     data: input,

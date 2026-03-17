@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { updateSessionLog } from "../../../actions";
+import SessionMetricFields, { type SessionMetricDraftValue } from "../SessionMetricFields";
+import {
+  normalizeSessionMetricText,
+  parseSessionMetricNumber,
+  type SessionMetricDefinitionWithConfig,
+} from "@/lib/session-templates";
 
 function toLocalInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -17,7 +23,9 @@ export default function EditSessionLogForm({
   initialLocation,
   initialNotes,
   initialPerformedAt,
-  initialMetric,
+  templateName,
+  definitions,
+  initialValues,
 }: {
   routineId: string;
   logId: string;
@@ -26,15 +34,15 @@ export default function EditSessionLogForm({
   initialLocation: string;
   initialNotes: string;
   initialPerformedAt: Date;
-  initialMetric?: { name: string; value: number; unit: string | null } | null;
+  templateName: string | null;
+  definitions: SessionMetricDefinitionWithConfig[];
+  initialValues: Record<string, SessionMetricDraftValue>;
 }) {
   const [durationMin, setDurationMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [location, setLocation] = useState(initialLocation);
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
-  const [metricName, setMetricName] = useState(initialMetric?.name ?? "");
-  const [metricValue, setMetricValue] = useState(initialMetric ? String(initialMetric.value) : "");
-  const [metricUnit, setMetricUnit] = useState(initialMetric?.unit ?? "");
+  const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>(initialValues);
   const [saving, setSaving] = useState(false);
 
   async function onSave() {
@@ -44,13 +52,33 @@ export default function EditSessionLogForm({
       return;
     }
 
-    const metrics =
-      metricName.trim() && metricValue.trim()
-        ? [{ name: metricName, value: Number(metricValue), unit: metricUnit }]
-        : [];
-    if (metrics.length > 0 && !Number.isFinite(metrics[0].value)) {
-      alert("Metric value must be a number.");
-      return;
+    const structuredValues: Array<{
+      metricDefinitionId: string;
+      numberValue?: number;
+      textValue?: string;
+      booleanValue?: boolean;
+    }> = [];
+    for (const definition of definitions) {
+      const draft = sessionMetricValues[definition.id] ?? {};
+      if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
+        const numberValue = parseSessionMetricNumber(draft.numberValue ?? "", definition.valueType);
+        if (definition.isRequired && numberValue === null) throw new Error(`${definition.label} is required.`);
+        if (numberValue !== null) {
+          structuredValues.push({ metricDefinitionId: definition.id, numberValue });
+        }
+        continue;
+      }
+      if (definition.valueType === "BOOLEAN") {
+        if (draft.booleanValue) {
+          structuredValues.push({ metricDefinitionId: definition.id, booleanValue: true });
+        }
+        continue;
+      }
+      const textValue = normalizeSessionMetricText(draft.textValue ?? "");
+      if (definition.isRequired && !textValue) throw new Error(`${definition.label} is required.`);
+      if (textValue) {
+        structuredValues.push({ metricDefinitionId: definition.id, textValue });
+      }
     }
 
     setSaving(true);
@@ -62,9 +90,11 @@ export default function EditSessionLogForm({
         location,
         notes,
         performedAtLocal,
-        metrics,
+        sessionMetricValues: structuredValues,
       });
       window.location.href = returnTo;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save session.");
     } finally {
       setSaving(false);
     }
@@ -87,14 +117,21 @@ export default function EditSessionLogForm({
         <input style={styles.input} value={location} onChange={(event) => setLocation(event.target.value)} />
       </div>
 
-      <div style={styles.metricCard}>
-        <div style={{ fontWeight: 900, fontSize: 13 }}>Optional metric</div>
-        <div style={{ marginTop: 8, display: "grid", gap: 8, gridTemplateColumns: "1.4fr 1fr 1fr" }}>
-          <input style={styles.input} value={metricName} onChange={(event) => setMetricName(event.target.value)} placeholder="Metric name" />
-          <input style={styles.input} value={metricValue} onChange={(event) => setMetricValue(event.target.value)} inputMode="decimal" placeholder="Value" />
-          <input style={styles.input} value={metricUnit} onChange={(event) => setMetricUnit(event.target.value)} placeholder="Unit" />
-        </div>
-      </div>
+      {templateName ? <div style={{ fontSize: 12, opacity: 0.72 }}>Template: {templateName}</div> : null}
+
+      <SessionMetricFields
+        definitions={definitions}
+        values={sessionMetricValues}
+        onChange={(metricDefinitionId, value) =>
+          setSessionMetricValues((current) => ({
+            ...current,
+            [metricDefinitionId]: {
+              ...current[metricDefinitionId],
+              ...value,
+            },
+          }))
+        }
+      />
 
       <div>
         <label style={styles.label}>Notes</label>
@@ -139,11 +176,5 @@ const styles = {
     color: "inherit",
     fontWeight: 900 as const,
     textDecoration: "none",
-  },
-  metricCard: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
-    background: "rgba(128,128,128,0.06)",
   },
 };

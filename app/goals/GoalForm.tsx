@@ -31,6 +31,8 @@ type GoalFormInitial = {
   notes: string;
   benchmarkDistanceMi: string;
   benchmarkLabel: string;
+  sessionMetricDefinitionId: string;
+  sessionMetricTarget: string;
 };
 
 function splitSeconds(value: number) {
@@ -93,6 +95,8 @@ export default function GoalForm({
   const [durationParts, setDurationParts] = useState(splitSeconds(initial.targetValue || 0));
   const [benchmarkDistanceMi, setBenchmarkDistanceMi] = useState(initial.benchmarkDistanceMi);
   const [benchmarkLabel, setBenchmarkLabel] = useState(initial.benchmarkLabel);
+  const [sessionMetricDefinitionId, setSessionMetricDefinitionId] = useState(initial.sessionMetricDefinitionId);
+  const [sessionMetricTarget, setSessionMetricTarget] = useState(initial.sessionMetricTarget);
   const [templateKey, setTemplateKey] = useState<GoalTemplateKey>(
     initialTemplateKey ??
       templateForCurrentConfig({
@@ -109,16 +113,28 @@ export default function GoalForm({
     if (targetType === "ROUTINE") return options.routines;
     if (targetType === "EXERCISE") return options.exercises;
     if (targetType === "CARDIO") return options.cardioTargets;
+    if (targetType === "SESSION_TEMPLATE") return options.sessionTemplates;
     return options.groups;
   }, [options, targetType]);
-
-  const effectiveMetricType = allowedMetrics.includes(metricType)
-    ? metricType
-    : (allowedMetrics[0] ?? "SESSIONS");
 
   const effectiveTargetId = activeTargetOptions.some((option) => option.id === targetId)
     ? targetId
     : (activeTargetOptions[0]?.id ?? "");
+
+  const sessionMetricOptions = useMemo(() => {
+    if (targetType === "ROUTINE") return options.sessionMetricsByRoutineId[effectiveTargetId] ?? [];
+    if (targetType === "SESSION_TEMPLATE") return options.sessionMetricsByTemplateId[effectiveTargetId] ?? [];
+    return [];
+  }, [effectiveTargetId, options.sessionMetricsByRoutineId, options.sessionMetricsByTemplateId, targetType]);
+
+  const filteredAllowedMetrics = useMemo(() => {
+    if (sessionMetricOptions.length > 0) return allowedMetrics;
+    return allowedMetrics.filter((value) => value !== "SESSION_METRIC");
+  }, [allowedMetrics, sessionMetricOptions.length]);
+
+  const effectiveMetricType = filteredAllowedMetrics.includes(metricType)
+    ? metricType
+    : (filteredAllowedMetrics[0] ?? "SESSIONS");
 
   const canonicalTargetValue = useMemo(() => {
     if (effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION" || effectiveMetricType === "PACE") {
@@ -132,6 +148,10 @@ export default function GoalForm({
 
   const metricMeta = metricInputMeta(effectiveMetricType);
   const selectedTarget = activeTargetOptions.find((option) => option.id === effectiveTargetId);
+  const effectiveSessionMetricDefinitionId =
+    sessionMetricOptions.some((option) => option.id === sessionMetricDefinitionId)
+      ? sessionMetricDefinitionId
+      : (sessionMetricOptions[0]?.id ?? "");
 
   function applyTemplate(nextTemplateKey: GoalTemplateKey) {
     const template = getGoalTemplate(nextTemplateKey);
@@ -144,12 +164,15 @@ export default function GoalForm({
     setDurationParts(splitSeconds(template.targetValue));
     setBenchmarkDistanceMi(template.benchmarkDistanceMi ? String(template.benchmarkDistanceMi) : "");
     setBenchmarkLabel(template.benchmarkLabel ?? "");
+    setSessionMetricDefinitionId("");
+    setSessionMetricTarget("");
   }
 
   return (
     <form action={action} style={{ display: "grid", gap: 16 }}>
       {initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
       <input type="hidden" name="targetValue" value={canonicalTargetValue} />
+      <input type="hidden" name="sessionMetricDefinitionId" value={effectiveSessionMetricDefinitionId} />
 
       {mode === "guided" ? (
         <section style={sectionStyle}>
@@ -199,6 +222,34 @@ export default function GoalForm({
             </select>
             {selectedTarget?.subtitle ? <span style={hintStyle}>{selectedTarget.subtitle}</span> : null}
           </label>
+          {effectiveMetricType === "SESSION_METRIC" ? (
+            <>
+              <label style={fieldStyle}>
+                <span>Session metric</span>
+                <select
+                  value={effectiveSessionMetricDefinitionId}
+                  onChange={(event) => setSessionMetricDefinitionId(event.target.value)}
+                  style={formInputStyle}
+                >
+                  {sessionMetricOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldStyle}>
+                <span>Metric target</span>
+                <input
+                  name="sessionMetricTarget"
+                  value={sessionMetricTarget}
+                  onChange={(event) => setSessionMetricTarget(event.target.value)}
+                  style={formInputStyle}
+                  placeholder="5, 1200, V6, 5.11a"
+                />
+              </label>
+            </>
+          ) : null}
           {effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION" || effectiveMetricType === "PACE" ? (
             <>
               <label style={fieldStyle}>
@@ -225,7 +276,7 @@ export default function GoalForm({
                 />
               </label>
             </>
-          ) : (
+          ) : effectiveMetricType !== "SESSION_METRIC" ? (
             <label style={fieldStyle}>
               <span>{metricMeta.label}</span>
               <input
@@ -237,7 +288,7 @@ export default function GoalForm({
                 style={formInputStyle}
               />
             </label>
-          )}
+          ) : null}
           {effectiveMetricType === "PACE" ? (
             <>
               <label style={fieldStyle}>
@@ -297,6 +348,7 @@ export default function GoalForm({
                   onChange={(event) => {
                     setTargetType(event.target.value as GoalTargetTypeValue);
                     setTargetId("");
+                    setSessionMetricDefinitionId("");
                   }}
                   style={formInputStyle}
                 >
@@ -310,7 +362,7 @@ export default function GoalForm({
               <label style={fieldStyle}>
                 <span>Metric</span>
                 <select name="metricType" value={effectiveMetricType} onChange={(event) => setMetricType(event.target.value as GoalMetricTypeValue)} style={formInputStyle}>
-                  {allowedMetrics.map((value) => (
+                  {filteredAllowedMetrics.map((value) => (
                     <option key={value} value={value}>
                       {GOAL_METRIC_LABELS[value]}
                     </option>

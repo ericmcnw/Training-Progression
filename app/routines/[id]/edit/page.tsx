@@ -22,6 +22,9 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       subtype: true,
       kind: true,
       isActive: true,
+      sessionDetails: {
+        select: { templateId: true },
+      },
       metadataGroups: {
         select: {
           groupId: true,
@@ -62,6 +65,11 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
     select: { id: true, slug: true, label: true, kind: true },
     orderBy: [{ kind: "asc" }, { label: "asc" }],
   });
+  const sessionTemplates = await prisma.sessionTemplate.findMany({
+    where: { isSystem: true },
+    select: { id: true, name: true, description: true, sessionSubtype: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
   const categories = Array.from(
     new Set([
       ...defaultCategories,
@@ -97,11 +105,13 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
             subtype: routine.subtype,
             kind: routine.kind,
             timesPerWeek: weeklyGoal ? Math.round(weeklyGoal.targetValue) : null,
+            sessionTemplateId: routine.sessionDetails?.templateId ?? null,
             selectedMetadataGroupIds: routine.metadataGroups.map((entry) => entry.groupId),
             tags: routine.tagAssignments.map((entry) => entry.tag.name),
           }}
           categories={categories}
           metadataGroups={metadataGroups}
+          sessionTemplates={sessionTemplates}
         />
       </div>
 

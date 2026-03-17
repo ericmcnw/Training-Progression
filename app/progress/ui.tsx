@@ -342,7 +342,9 @@ const styles: Record<string, React.CSSProperties> = {
   segment: {
     padding: "10px 12px",
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "rgba(255,255,255,0.08)",
     textDecoration: "none",
     color: "inherit",
     background: "rgba(255,255,255,0.04)",

@@ -1,5 +1,5 @@
 export const GOAL_TYPE_VALUES = ["FREQUENCY", "VOLUME", "PERFORMANCE", "COMPLETION"] as const;
-export const GOAL_TARGET_TYPE_VALUES = ["ROUTINE", "EXERCISE", "CARDIO", "GROUP"] as const;
+export const GOAL_TARGET_TYPE_VALUES = ["ROUTINE", "EXERCISE", "CARDIO", "GROUP", "SESSION_TEMPLATE"] as const;
 export const GOAL_TIMEFRAME_VALUES = ["DAY", "WEEK", "MONTH", "ONE_TIME"] as const;
 export const GOAL_METRIC_TYPE_VALUES = [
   "SESSIONS",
@@ -12,6 +12,7 @@ export const GOAL_METRIC_TYPE_VALUES = [
   "MAX_DURATION",
   "PACE",
   "COMPLETED",
+  "SESSION_METRIC",
 ] as const;
 
 export type GoalTypeValue = (typeof GOAL_TYPE_VALUES)[number];
@@ -31,6 +32,7 @@ export const GOAL_TARGET_TYPE_LABELS: Record<GoalTargetTypeValue, string> = {
   EXERCISE: "Exercise",
   CARDIO: "Cardio target",
   GROUP: "Group",
+  SESSION_TEMPLATE: "Session template",
 };
 
 export const GOAL_TIMEFRAME_LABELS: Record<GoalTimeframeValue, string> = {
@@ -51,6 +53,7 @@ export const GOAL_METRIC_LABELS: Record<GoalMetricTypeValue, string> = {
   MAX_DURATION: "Best duration",
   PACE: "Pace",
   COMPLETED: "Completed",
+  SESSION_METRIC: "Session metric",
 };
 
 const METRICS_BY_COMBINATION: Record<GoalTypeValue, Partial<Record<GoalTargetTypeValue, GoalMetricTypeValue[]>>> = {
@@ -59,18 +62,21 @@ const METRICS_BY_COMBINATION: Record<GoalTypeValue, Partial<Record<GoalTargetTyp
     EXERCISE: ["SESSIONS"],
     CARDIO: ["SESSIONS"],
     GROUP: ["SESSIONS"],
+    SESSION_TEMPLATE: ["SESSIONS"],
   },
   VOLUME: {
-    ROUTINE: ["DISTANCE", "DURATION", "REPS", "SETS", "VOLUME"],
+    ROUTINE: ["DISTANCE", "DURATION", "REPS", "SETS", "VOLUME", "SESSION_METRIC"],
     EXERCISE: ["REPS", "SETS", "VOLUME", "DURATION"],
     CARDIO: ["DISTANCE", "DURATION"],
     GROUP: ["DISTANCE", "DURATION", "REPS", "SETS", "VOLUME"],
+    SESSION_TEMPLATE: ["DURATION", "SESSION_METRIC"],
   },
   PERFORMANCE: {
-    ROUTINE: ["DISTANCE", "MAX_DURATION"],
+    ROUTINE: ["DISTANCE", "MAX_DURATION", "SESSION_METRIC"],
     EXERCISE: ["MAX_WEIGHT", "MAX_DURATION"],
     CARDIO: ["DISTANCE", "PACE"],
     GROUP: [],
+    SESSION_TEMPLATE: ["SESSION_METRIC"],
   },
   COMPLETION: {
     ROUTINE: ["COMPLETED"],

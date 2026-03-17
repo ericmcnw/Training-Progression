@@ -22,9 +22,16 @@ type MetadataGroupOption = {
 export default function NewRoutineForm({
   categories,
   metadataGroups,
+  sessionTemplates,
 }: {
   categories: string[];
   metadataGroups: MetadataGroupOption[];
+  sessionTemplates: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    sessionSubtype: string | null;
+  }>;
 }) {
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>("HABIT");
   const initialPreset = getRoutinePreset(presetKey);
@@ -37,6 +44,15 @@ export default function NewRoutineForm({
   );
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(initialPreset.subtype ?? subtypeOptions[0] ?? "OTHER");
+  const matchingSessionTemplates = useMemo(
+    () => sessionTemplates.filter((template) => !template.sessionSubtype || template.sessionSubtype === subtype),
+    [sessionTemplates, subtype]
+  );
+  const [sessionTemplateId, setSessionTemplateId] = useState(() => matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
+  const effectiveSessionTemplateId =
+    (matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).some((template) => template.id === sessionTemplateId)
+      ? sessionTemplateId
+      : (matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
   const isCustomCategory = selectedCategory === "__custom__";
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
@@ -208,6 +224,28 @@ export default function NewRoutineForm({
             </select>
           </div>
 
+          {kind === "SESSION" ? (
+            <div>
+              <label style={styles.label}>Session template</label>
+              <select
+                name="sessionTemplateId"
+                style={styles.input as React.CSSProperties}
+                value={effectiveSessionTemplateId}
+                onChange={(event) => setSessionTemplateId(event.target.value)}
+              >
+                {(matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <div style={styles.help}>
+                {(matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ?? sessionTemplates.find((template) => template.id === effectiveSessionTemplateId))?.description ??
+                  "Pick the sport/activity template that defines the structured log fields for this session routine."}
+              </div>
+            </div>
+          ) : null}
+
           <MetadataGroupPicker
             title="Organization & analysis (optional)"
             help="These groups power rollups in Progress. The app preselects suggestions from the preset and subtype, so most users can leave this alone."
@@ -259,7 +297,9 @@ const styles = {
   presetCard: {
     textAlign: "left" as const,
     padding: 12,
-    border: "1px solid rgba(128,128,128,0.4)",
+    borderWidth: 1,
+    borderStyle: "solid" as const,
+    borderColor: "rgba(128,128,128,0.4)",
     borderRadius: 12,
     background: "rgba(128,128,128,0.06)",
     color: "inherit",

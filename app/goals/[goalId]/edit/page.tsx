@@ -39,6 +39,8 @@ export default async function EditGoalPage(props: {
     notes: goal.notes ?? "",
     benchmarkDistanceMi: goal.config?.benchmarkDistanceMi ? String(goal.config.benchmarkDistanceMi) : "",
     benchmarkLabel: goal.config?.benchmarkLabel ?? "",
+    sessionMetricDefinitionId: goal.config?.sessionMetricDefinitionId ?? "",
+    sessionMetricTarget: goal.config?.sessionMetricTargetText ?? "",
   };
 
   return (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { isSessionKind } from "@/lib/routines";
+import { withSessionMetricConfig } from "@/lib/session-templates";
 import SessionLogForm from "./SessionLogForm";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,23 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
 
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
-    select: { id: true, name: true, category: true, kind: true },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      kind: true,
+      sessionDetails: {
+        select: {
+          template: {
+            include: {
+              metricDefinitions: {
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
   if (!isSessionKind(routine.kind)) return <div style={{ padding: 20 }}>This routine is not a session routine.</div>;
@@ -29,9 +46,23 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
       durationSec: true,
       location: true,
       notes: true,
-      metrics: { orderBy: { sortOrder: "asc" }, select: { name: true, value: true, unit: true } },
+      sessionMetricValues: {
+        orderBy: { metricDefinition: { sortOrder: "asc" } },
+        select: {
+          numberValue: true,
+          textValue: true,
+          booleanValue: true,
+          metricDefinition: {
+            select: {
+              label: true,
+              unit: true,
+            },
+          },
+        },
+      },
     },
   });
+  const templateDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
@@ -48,7 +79,11 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
       <section style={panel}>
         <div style={panelHeader}>SESSION DETAILS</div>
         <div style={{ padding: 14 }}>
-          <SessionLogForm routineId={routineId} />
+          <SessionLogForm
+            routineId={routineId}
+            templateName={routine.sessionDetails?.template?.name ?? null}
+            definitions={templateDefinitions}
+          />
         </div>
       </section>
 
@@ -63,9 +98,21 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
                 {log.durationSec ? `${Math.round(log.durationSec / 60)} min` : "No duration"}
                 {log.location ? ` | ${log.location}` : ""}
               </div>
-              {log.metrics.length > 0 && (
+              {log.sessionMetricValues.length > 0 && (
                 <div style={{ opacity: 0.75, marginTop: 2 }}>
-                  {log.metrics.map((metric) => `${metric.name}: ${metric.value}${metric.unit ? ` ${metric.unit}` : ""}`).join(" | ")}
+                  {log.sessionMetricValues
+                    .map((metric) => {
+                      if (metric.textValue) return `${metric.metricDefinition.label}: ${metric.textValue}`;
+                      if (metric.numberValue !== null && metric.numberValue !== undefined) {
+                        return `${metric.metricDefinition.label}: ${metric.numberValue}${metric.metricDefinition.unit ? ` ${metric.metricDefinition.unit}` : ""}`;
+                      }
+                      if (metric.booleanValue !== null && metric.booleanValue !== undefined) {
+                        return `${metric.metricDefinition.label}: ${metric.booleanValue ? "Yes" : "No"}`;
+                      }
+                      return null;
+                    })
+                    .filter(Boolean)
+                    .join(" | ")}
                 </div>
               )}
               {log.notes ? <div style={{ opacity: 0.75, marginTop: 2 }}>{log.notes}</div> : null}

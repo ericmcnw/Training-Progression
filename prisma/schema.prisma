@@ -42,6 +42,7 @@ enum GoalTargetType {
   EXERCISE
   CARDIO
   GROUP
+  SESSION_TEMPLATE
 }
 
 enum GoalTimeframe {
@@ -62,6 +63,14 @@ enum GoalMetricType {
   MAX_DURATION
   PACE
   COMPLETED
+  SESSION_METRIC
+}
+
+enum SessionMetricValueType {
+  INTEGER
+  DECIMAL
+  TEXT
+  BOOLEAN
 }
 
 model Routine {
@@ -95,6 +104,25 @@ model Routine {
   @@index([isDeleted])
   @@index([category])
   @@index([kind, subtype])
+}
+
+model SessionTemplate {
+  id             String                     @id @default(cuid())
+  key            String                     @unique
+  name           String
+  description    String?
+  sessionSubtype String?
+  isSystem       Boolean                    @default(true)
+  sortOrder      Int                        @default(0)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  metricDefinitions SessionMetricDefinition[]
+  routines          SessionRoutineDetails[]
+  metadataGroups    SessionTemplateMetadataGroup[]
+
+  @@index([sortOrder, name])
+  @@index([sessionSubtype])
 }
 
 model SchedulePlan {
@@ -165,6 +193,7 @@ model RoutineLog {
   exercises       SessionExercise[]
   guidedSteps     GuidedStepLog[]
   metrics         RoutineLogMetric[]
+  sessionMetricValues SessionLogMetricValue[]
 
   createdAt       DateTime @default(now())
 
@@ -231,11 +260,65 @@ model CardioRoutineDetails {
 model SessionRoutineDetails {
   id             String   @id @default(cuid())
   routineId      String   @unique
+  templateId     String?
   supportsLocation Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   routine        Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  template       SessionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+}
+
+model SessionMetricDefinition {
+  id             String                 @id @default(cuid())
+  templateId     String
+  key            String
+  label          String
+  valueType      SessionMetricValueType
+  unit           String?
+  sortOrder      Int                    @default(0)
+  isRequired     Boolean                @default(false)
+  showInProgress Boolean                @default(false)
+  showInGoals    Boolean                @default(false)
+  config         Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  template       SessionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  metricValues   SessionLogMetricValue[]
+
+  @@unique([templateId, key])
+  @@index([templateId, sortOrder])
+}
+
+model SessionLogMetricValue {
+  id                 String                  @id @default(cuid())
+  routineLogId       String
+  metricDefinitionId String
+  numberValue        Float?
+  textValue          String?
+  booleanValue       Boolean?
+  createdAt          DateTime                @default(now())
+
+  routineLog         RoutineLog              @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  metricDefinition   SessionMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([routineLogId, metricDefinitionId])
+  @@index([metricDefinitionId])
+}
+
+model SessionTemplateMetadataGroup {
+  templateId  String
+  groupId     String
+  assignedAt  DateTime        @default(now())
+
+  template    SessionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  group       MetadataGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, groupId])
+  @@index([groupId])
 }
 
 model Exercise {
@@ -267,6 +350,7 @@ model MetadataGroup {
   childRelations    MetadataGroupRelation[] @relation("MetadataGroupChild")
   routineAssignments RoutineMetadataGroup[]
   exerciseAssignments ExerciseMetadataGroup[]
+  sessionTemplateAssignments SessionTemplateMetadataGroup[]
 
   @@index([kind, label])
   @@index([appliesToRoutine])

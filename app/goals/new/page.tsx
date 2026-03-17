@@ -36,6 +36,8 @@ export default async function NewGoalPage({
       ? options.exercises[0]?.id ?? ""
       : template.targetType === "CARDIO"
       ? options.cardioTargets[0]?.id ?? ""
+      : template.targetType === "SESSION_TEMPLATE"
+      ? options.sessionTemplates[0]?.id ?? ""
       : options.groups[0]?.id ?? "";
 
   const initial: GoalFormInitial = {
@@ -52,6 +54,8 @@ export default async function NewGoalPage({
     notes: "",
     benchmarkDistanceMi: template.benchmarkDistanceMi ? String(template.benchmarkDistanceMi) : "3.11",
     benchmarkLabel: template.benchmarkLabel ?? "5K",
+    sessionMetricDefinitionId: "",
+    sessionMetricTarget: "",
   };
 
   return (

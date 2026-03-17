@@ -41,6 +41,10 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "legs", label: "Legs", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true, parentSlugs: ["lower-body"] },
   { slug: "upper-body", label: "Upper Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
   { slug: "lower-body", label: "Lower Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "full-body", label: "Full Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "endurance", label: "Endurance", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "outdoor", label: "Outdoor", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "board-sports", label: "Board Sports", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
   { slug: "mobility", label: "Mobility", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
 
   { slug: "squat", label: "Squat", kind: "MOVEMENT_PATTERN", appliesToExercise: true, appliesToRoutine: false, parentSlugs: ["legs", "lower-body"] },

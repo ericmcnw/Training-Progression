@@ -24,6 +24,10 @@ const metadataGroups = [
   { slug: "legs", label: "Legs", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true, parentSlugs: ["lower-body"] },
   { slug: "upper-body", label: "Upper Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
   { slug: "lower-body", label: "Lower Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "full-body", label: "Full Body", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "endurance", label: "Endurance", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "outdoor", label: "Outdoor", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "board-sports", label: "Board Sports", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true },
   { slug: "mobility", label: "Mobility", kind: "TRAINING_GROUP", appliesToExercise: true, appliesToRoutine: true },
   { slug: "squat", label: "Squat", kind: "MOVEMENT_PATTERN", appliesToExercise: true, appliesToRoutine: false, parentSlugs: ["legs", "lower-body"] },
   { slug: "hinge", label: "Hinge", kind: "MOVEMENT_PATTERN", appliesToExercise: true, appliesToRoutine: false, parentSlugs: ["legs", "lower-body"] },
@@ -52,6 +56,95 @@ const metadataGroups = [
   { slug: "rehab", label: "Rehab", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
   { slug: "skill-practice", label: "Skill Practice", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
   { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
+];
+
+const sessionTemplates = [
+  {
+    key: "indoor-bouldering",
+    name: "Indoor Bouldering",
+    description: "Track bouldering sessions with flash/send counts by grade and best grades.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 10,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice"],
+    metrics: [
+      { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInProgress: false, showInGoals: false },
+      { key: "total_attempts", label: "Total Climbs Attempted", valueType: "INTEGER", sortOrder: 20, unit: "attempts", showInProgress: true, showInGoals: true },
+      { key: "v0_flashed_count", label: "V0 Flashed", valueType: "INTEGER", sortOrder: 30, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v1_flashed_count", label: "V1 Flashed", valueType: "INTEGER", sortOrder: 31, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v2_flashed_count", label: "V2 Flashed", valueType: "INTEGER", sortOrder: 32, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v3_flashed_count", label: "V3 Flashed", valueType: "INTEGER", sortOrder: 33, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v4_flashed_count", label: "V4 Flashed", valueType: "INTEGER", sortOrder: 34, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v5_flashed_count", label: "V5 Flashed", valueType: "INTEGER", sortOrder: 35, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v6_flashed_count", label: "V6 Flashed", valueType: "INTEGER", sortOrder: 36, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v0_sent_count", label: "V0 Sent", valueType: "INTEGER", sortOrder: 40, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v1_sent_count", label: "V1 Sent", valueType: "INTEGER", sortOrder: 41, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v2_sent_count", label: "V2 Sent", valueType: "INTEGER", sortOrder: 42, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v3_sent_count", label: "V3 Sent", valueType: "INTEGER", sortOrder: 43, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v4_sent_count", label: "V4 Sent", valueType: "INTEGER", sortOrder: 44, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v5_sent_count", label: "V5 Sent", valueType: "INTEGER", sortOrder: 45, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "v6_sent_count", label: "V6 Sent", valueType: "INTEGER", sortOrder: 46, unit: "climbs", showInProgress: true, showInGoals: true },
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 50, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 51, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 60, showInProgress: false, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "indoor-rope-climbing",
+    name: "Indoor Rope Climbing",
+    description: "Track route count and top flash/send grades for rope sessions.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 20,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice"],
+    metrics: [
+      { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 30, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 31, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 40, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "hiking",
+    name: "Hiking",
+    description: "Track trail, distance, elevation gain, and hike duration.",
+    sessionSubtype: "HIKE_DAY",
+    sortOrder: 30,
+    metadataSlugs: ["hiking", "cardio", "endurance", "outdoor", "legs"],
+    metrics: [
+      { key: "trail_name", label: "Trail / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "distance_mi", label: "Distance", valueType: "DECIMAL", sortOrder: 20, unit: "mi", showInProgress: true, showInGoals: true },
+      { key: "elevation_gain_ft", label: "Elevation Gain", valueType: "INTEGER", sortOrder: 30, unit: "ft", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 40, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "surfing",
+    name: "Surfing",
+    description: "Track surf sessions with location, waves, and board details.",
+    sessionSubtype: "SURFING",
+    sortOrder: 40,
+    metadataSlugs: ["board-sports", "outdoor", "skill-practice", "upper-body", "full-body"],
+    metrics: [
+      { key: "break_name", label: "Break / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "wave_count", label: "Wave Count", valueType: "INTEGER", sortOrder: 20, unit: "waves", showInProgress: true, showInGoals: true },
+      { key: "board_name", label: "Board", valueType: "TEXT", sortOrder: 30, showInGoals: false },
+      { key: "conditions_notes", label: "Conditions", valueType: "TEXT", sortOrder: 40, showInGoals: false, config: { input: "textarea" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 50, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "snowboarding",
+    name: "Snowboarding",
+    description: "Track mountain days with run count and time on snow.",
+    sessionSubtype: "SNOWBOARDING",
+    sortOrder: 50,
+    metadataSlugs: ["board-sports", "outdoor", "legs", "skill-practice"],
+    metrics: [
+      { key: "mountain_name", label: "Mountain / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "runs_completed", label: "Runs Completed", valueType: "INTEGER", sortOrder: 20, unit: "runs", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 30, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
 ];
 
 const starterExercises = [
@@ -241,11 +334,88 @@ async function seedExercises(groupMap) {
   }
 }
 
+async function seedSessionTemplates(groupMap) {
+  for (const template of sessionTemplates) {
+    const templateRecord = await prisma.sessionTemplate.upsert({
+      where: { key: template.key },
+      update: {
+        name: template.name,
+        description: template.description,
+        sessionSubtype: template.sessionSubtype,
+        isSystem: true,
+        sortOrder: template.sortOrder,
+      },
+      create: {
+        key: template.key,
+        name: template.name,
+        description: template.description,
+        sessionSubtype: template.sessionSubtype,
+        isSystem: true,
+        sortOrder: template.sortOrder,
+      },
+      select: { id: true },
+    });
+
+    await prisma.sessionMetricDefinition.deleteMany({
+      where: {
+        templateId: templateRecord.id,
+        key: { notIn: template.metrics.map((metric) => metric.key) },
+      },
+    });
+
+    for (const metric of template.metrics) {
+      await prisma.sessionMetricDefinition.upsert({
+        where: {
+          templateId_key: {
+            templateId: templateRecord.id,
+            key: metric.key,
+          },
+        },
+        update: {
+          label: metric.label,
+          valueType: metric.valueType,
+          unit: metric.unit ?? null,
+          sortOrder: metric.sortOrder,
+          isRequired: Boolean(metric.isRequired),
+          showInProgress: Boolean(metric.showInProgress),
+          showInGoals: Boolean(metric.showInGoals),
+          config: metric.config ?? undefined,
+        },
+        create: {
+          templateId: templateRecord.id,
+          key: metric.key,
+          label: metric.label,
+          valueType: metric.valueType,
+          unit: metric.unit ?? null,
+          sortOrder: metric.sortOrder,
+          isRequired: Boolean(metric.isRequired),
+          showInProgress: Boolean(metric.showInProgress),
+          showInGoals: Boolean(metric.showInGoals),
+          config: metric.config ?? undefined,
+        },
+      });
+    }
+
+    const groupIds = template.metadataSlugs.map((slug) => groupMap.get(slug)).filter(Boolean);
+    await prisma.sessionTemplateMetadataGroup.deleteMany({ where: { templateId: templateRecord.id } });
+    if (groupIds.length > 0) {
+      await prisma.sessionTemplateMetadataGroup.createMany({
+        data: groupIds.map((groupId) => ({
+          templateId: templateRecord.id,
+          groupId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+}
+
 async function main() {
   const groupMap = await seedMetadataGroups();
   await seedExercises(groupMap);
+  await seedSessionTemplates(groupMap);
 
-  console.log(`Seeded ${metadataGroups.length} metadata groups and ${starterExercises.length} starter exercises.`);
+  console.log(`Seeded ${metadataGroups.length} metadata groups, ${starterExercises.length} starter exercises, and ${sessionTemplates.length} session templates.`);
 }
 
 main()

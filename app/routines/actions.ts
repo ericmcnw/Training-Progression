@@ -38,6 +38,13 @@ type MetricInput = {
   unit?: string | null;
 };
 
+type SessionMetricValueInput = {
+  metricDefinitionId: string;
+  numberValue?: number | null;
+  textValue?: string | null;
+  booleanValue?: boolean | null;
+};
+
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 type SanitizedWorkoutExercise = {
@@ -95,6 +102,17 @@ async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "
     select: { id: true },
   });
   return groups.map((group) => group.id);
+}
+
+async function getValidSessionTemplateId(templateId: FormDataEntryValue | null) {
+  const value = String(templateId ?? "").trim();
+  if (!value) return null;
+  const template = await prisma.sessionTemplate.findUnique({
+    where: { id: value },
+    select: { id: true },
+  });
+  if (!template) throw new Error("Session template not found.");
+  return template.id;
 }
 
 async function syncRoutineMetadataGroups(routineId: string, groupIds: string[]) {
@@ -168,6 +186,104 @@ function sanitizeMetrics(metrics?: MetricInput[]) {
       sortOrder: index,
     }))
     .filter((metric) => metric.name && Number.isFinite(metric.value));
+}
+
+async function sanitizeSessionMetricValues(params: {
+  routineId: string;
+  values?: SessionMetricValueInput[];
+}) {
+  const routine = await prisma.routine.findUnique({
+    where: { id: params.routineId },
+    select: {
+      sessionDetails: {
+        select: {
+          templateId: true,
+          template: {
+            select: {
+              id: true,
+              metricDefinitions: {
+                orderBy: { sortOrder: "asc" },
+                select: {
+                  id: true,
+                  valueType: true,
+                  isRequired: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const template = routine?.sessionDetails?.template;
+  if (!template) return [];
+
+  const inputById = new Map(
+    (params.values ?? [])
+      .map((value) => ({
+        metricDefinitionId: String(value.metricDefinitionId || "").trim(),
+        numberValue: value.numberValue ?? null,
+        textValue: value.textValue?.trim() || null,
+        booleanValue: value.booleanValue ?? null,
+      }))
+      .filter((value) => value.metricDefinitionId.length > 0)
+      .map((value) => [value.metricDefinitionId, value])
+  );
+
+  const sanitizedValues: Array<{
+    metricDefinitionId: string;
+    numberValue: number | null;
+    textValue: string | null;
+    booleanValue: boolean | null;
+  }> = [];
+
+  for (const definition of template.metricDefinitions) {
+    const input = inputById.get(definition.id);
+    const hasValue =
+      (input?.numberValue !== null && input?.numberValue !== undefined) ||
+      (input?.textValue !== null && input?.textValue !== undefined) ||
+      (input?.booleanValue !== null && input?.booleanValue !== undefined);
+
+    if (!input || !hasValue) {
+      if (definition.isRequired) throw new Error("Missing required session metric value.");
+      continue;
+    }
+
+    if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
+      if (!Number.isFinite(input.numberValue)) throw new Error("Session metric number value is invalid.");
+      sanitizedValues.push({
+        metricDefinitionId: definition.id,
+        numberValue: definition.valueType === "INTEGER" ? Math.round(input.numberValue ?? 0) : input.numberValue ?? null,
+        textValue: null,
+        booleanValue: null,
+      });
+      continue;
+    }
+
+    if (definition.valueType === "BOOLEAN") {
+      sanitizedValues.push({
+        metricDefinitionId: definition.id,
+        numberValue: null,
+        textValue: null,
+        booleanValue: Boolean(input.booleanValue),
+      });
+      continue;
+    }
+
+    if (!input.textValue) {
+      if (definition.isRequired) throw new Error("Missing required session metric value.");
+      continue;
+    }
+
+    sanitizedValues.push({
+      metricDefinitionId: definition.id,
+      numberValue: null,
+      textValue: input.textValue,
+      booleanValue: null,
+    });
+  }
+
+  return sanitizedValues;
 }
 
 function sanitizeGuidedSteps(steps?: GuidedStepInput[]) {
@@ -320,7 +436,7 @@ async function ensureRoutineKind(routineId: string, expectedKind: RoutineKind) {
   return routine;
 }
 
-async function syncRoutineTypeDetails(routineId: string, kind: RoutineKind) {
+async function syncRoutineTypeDetails(routineId: string, kind: RoutineKind, sessionTemplateId?: string | null) {
   if (kind === "CARDIO") {
     await prisma.cardioRoutineDetails.upsert({
       where: { routineId },
@@ -335,8 +451,8 @@ async function syncRoutineTypeDetails(routineId: string, kind: RoutineKind) {
   if (kind === "SESSION") {
     await prisma.sessionRoutineDetails.upsert({
       where: { routineId },
-      update: {},
-      create: { routineId },
+      update: { templateId: sessionTemplateId ?? null },
+      create: { routineId, templateId: sessionTemplateId ?? null },
     });
   }
   if (kind !== "SESSION") {
@@ -415,6 +531,7 @@ export async function createRoutine(formData: FormData) {
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
   const timesPerWeek = parseOptionalTimesPerWeek(formData);
   const postCreate = String(formData.get("postCreate") || "").trim();
+  const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
 
@@ -434,7 +551,7 @@ export async function createRoutine(formData: FormData) {
     select: { id: true },
   });
 
-  await syncRoutineTypeDetails(created.id, kind);
+  await syncRoutineTypeDetails(created.id, kind, sessionTemplateId);
   await syncRoutineClassificationMetadata({
     routineId: created.id,
     selectedGroupIds,
@@ -464,6 +581,7 @@ export async function updateRoutine(formData: FormData) {
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
   const timesPerWeek = parseOptionalTimesPerWeek(formData);
+  const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
 
@@ -484,7 +602,7 @@ export async function updateRoutine(formData: FormData) {
     where: { id },
     data: { name, category, domain, kind, subtype },
   });
-  await syncRoutineTypeDetails(id, kind);
+  await syncRoutineTypeDetails(id, kind, sessionTemplateId);
   await syncRoutineClassificationMetadata({
     routineId: id,
     selectedGroupIds,
@@ -787,29 +905,48 @@ export async function logSession(params: {
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
+  sessionMetricValues?: SessionMetricValueInput[];
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) {
     throw new Error("Duration must be > 0.");
   }
 
-  const log = await prisma.routineLog.create({
-    data: {
-      routineId: params.routineId,
-      performedAt: parsePerformedAt(params.performedAtLocal),
-      durationSec: params.durationSec,
-      location: params.location?.trim() || null,
-      notes: params.notes?.trim() || null,
-    },
-    select: { id: true },
-  });
-
-  const metrics = sanitizeMetrics(params.metrics);
-  if (metrics.length > 0) {
-    await prisma.routineLogMetric.createMany({
-      data: metrics.map((metric) => ({ ...metric, routineLogId: log.id })),
+  await prisma.$transaction(async (tx) => {
+    const log = await tx.routineLog.create({
+      data: {
+        routineId: params.routineId,
+        performedAt: parsePerformedAt(params.performedAtLocal),
+        durationSec: params.durationSec,
+        location: params.location?.trim() || null,
+        notes: params.notes?.trim() || null,
+      },
+      select: { id: true },
     });
-  }
+
+    const metrics = sanitizeMetrics(params.metrics);
+    if (metrics.length > 0) {
+      await tx.routineLogMetric.createMany({
+        data: metrics.map((metric) => ({ ...metric, routineLogId: log.id })),
+      });
+    }
+
+    const sessionMetricValues = await sanitizeSessionMetricValues({
+      routineId: params.routineId,
+      values: params.sessionMetricValues,
+    });
+    if (sessionMetricValues.length > 0) {
+      await tx.sessionLogMetricValue.createMany({
+        data: sessionMetricValues.map((value) => ({
+          routineLogId: log.id,
+          metricDefinitionId: value.metricDefinitionId,
+          numberValue: value.numberValue ?? null,
+          textValue: value.textValue ?? null,
+          booleanValue: value.booleanValue ?? null,
+        })),
+      });
+    }
+  });
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1039,6 +1176,7 @@ export async function updateSessionLog(params: {
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
+  sessionMetricValues?: SessionMetricValueInput[];
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (!params.logId) throw new Error("Missing logId.");
@@ -1065,6 +1203,22 @@ export async function updateSessionLog(params: {
     if (metrics.length > 0) {
       await tx.routineLogMetric.createMany({
         data: metrics.map((metric) => ({ ...metric, routineLogId: params.logId })),
+      });
+    }
+    await tx.sessionLogMetricValue.deleteMany({ where: { routineLogId: params.logId } });
+    const sessionMetricValues = await sanitizeSessionMetricValues({
+      routineId: params.routineId,
+      values: params.sessionMetricValues,
+    });
+    if (sessionMetricValues.length > 0) {
+      await tx.sessionLogMetricValue.createMany({
+        data: sessionMetricValues.map((value) => ({
+          routineLogId: params.logId,
+          metricDefinitionId: value.metricDefinitionId,
+          numberValue: value.numberValue ?? null,
+          textValue: value.textValue ?? null,
+          booleanValue: value.booleanValue ?? null,
+        })),
       });
     }
   });

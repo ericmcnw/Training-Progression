@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isSessionKind } from "@/lib/routines";
+import { withSessionMetricConfig } from "@/lib/session-templates";
 import EditSessionLogForm from "./EditSessionLogForm";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,22 @@ export default async function EditSessionLogPage(props: {
 
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
-    select: { name: true, category: true, kind: true },
+    select: {
+      name: true,
+      category: true,
+      kind: true,
+      sessionDetails: {
+        select: {
+          template: {
+            include: {
+              metricDefinitions: {
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
   if (!isSessionKind(routine.kind)) return <div style={{ padding: 20 }}>This routine is not a session routine.</div>;
@@ -42,10 +58,25 @@ export default async function EditSessionLogPage(props: {
       durationSec: true,
       location: true,
       notes: true,
-      metrics: { orderBy: { sortOrder: "asc" }, take: 1, select: { name: true, value: true, unit: true } },
+      sessionMetricValues: {
+        include: {
+          metricDefinition: true,
+        },
+      },
     },
   });
   if (!log || log.routineId !== routineId) return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
+  const definitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
+  const initialValues = Object.fromEntries(
+    log.sessionMetricValues.map((value) => [
+      value.metricDefinitionId,
+      {
+        numberValue: value.numberValue !== null && value.numberValue !== undefined ? String(value.numberValue) : undefined,
+        textValue: value.textValue ?? undefined,
+        booleanValue: value.booleanValue ?? undefined,
+      },
+    ])
+  );
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
@@ -64,7 +95,9 @@ export default async function EditSessionLogPage(props: {
             initialLocation={log.location ?? ""}
             initialNotes={log.notes ?? ""}
             initialPerformedAt={log.performedAt}
-            initialMetric={log.metrics[0] ?? null}
+            templateName={routine.sessionDetails?.template?.name ?? null}
+            definitions={definitions}
+            initialValues={initialValues}
           />
         </div>
       </div>

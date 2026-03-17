@@ -19,11 +19,19 @@ import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferRoutineMetada
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
+import {
+  sessionMetricGoalValueLabel,
+  sessionMetricNumericValue,
+  withSessionMetricConfig,
+} from "@/lib/session-templates";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 type GoalConfig = {
   benchmarkDistanceMi?: number;
   benchmarkLabel?: string;
+  sessionMetricDefinitionId?: string;
+  sessionMetricDefinitionLabel?: string;
+  sessionMetricTargetText?: string;
 };
 
 type GoalWithConfig = Omit<Goal, "config"> & {
@@ -37,6 +45,8 @@ export type GoalTargetOption = {
   id: string;
   label: string;
   subtitle?: string;
+  routineKind?: string;
+  sessionTemplateId?: string | null;
 };
 
 export type GoalFormOptions = {
@@ -44,6 +54,9 @@ export type GoalFormOptions = {
   exercises: GoalTargetOption[];
   cardioTargets: GoalTargetOption[];
   groups: GoalTargetOption[];
+  sessionTemplates: GoalTargetOption[];
+  sessionMetricsByRoutineId: Record<string, GoalTargetOption[]>;
+  sessionMetricsByTemplateId: Record<string, GoalTargetOption[]>;
 };
 
 export type GoalHistoryPoint = {
@@ -122,9 +135,24 @@ function asGoalConfig(value: Goal["config"]): GoalConfig | null {
     typeof record.benchmarkLabel === "string" && record.benchmarkLabel.trim().length > 0
       ? record.benchmarkLabel.trim()
       : undefined;
+  const sessionMetricDefinitionId =
+    typeof record.sessionMetricDefinitionId === "string" && record.sessionMetricDefinitionId.trim().length > 0
+      ? record.sessionMetricDefinitionId.trim()
+      : undefined;
+  const sessionMetricDefinitionLabel =
+    typeof record.sessionMetricDefinitionLabel === "string" && record.sessionMetricDefinitionLabel.trim().length > 0
+      ? record.sessionMetricDefinitionLabel.trim()
+      : undefined;
+  const sessionMetricTargetText =
+    typeof record.sessionMetricTargetText === "string" && record.sessionMetricTargetText.trim().length > 0
+      ? record.sessionMetricTargetText.trim()
+      : undefined;
   return {
     ...(benchmarkDistanceMi ? { benchmarkDistanceMi } : {}),
     ...(benchmarkLabel ? { benchmarkLabel } : {}),
+    ...(sessionMetricDefinitionId ? { sessionMetricDefinitionId } : {}),
+    ...(sessionMetricDefinitionLabel ? { sessionMetricDefinitionLabel } : {}),
+    ...(sessionMetricTargetText ? { sessionMetricTargetText } : {}),
   };
 }
 
@@ -260,6 +288,7 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
       filter: {
         routineIds: routine ? [routine.id] : [],
         exerciseIds: [],
+        sessionTemplateIds: [],
       },
     };
   }
@@ -276,6 +305,24 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
       filter: {
         routineIds: [],
         exerciseIds: exercise ? [exercise.id] : [],
+        sessionTemplateIds: [],
+      },
+    };
+  }
+
+  if (goal.targetType === "SESSION_TEMPLATE") {
+    const template = await prisma.sessionTemplate.findUnique({
+      where: { id: goal.targetId },
+      select: { id: true, name: true },
+    });
+    return {
+      label: template?.name ?? "Unknown session template",
+      kindLabel: GOAL_TARGET_TYPE_LABELS.SESSION_TEMPLATE,
+      href: null,
+      filter: {
+        routineIds: [],
+        exerciseIds: [],
+        sessionTemplateIds: template ? [template.id] : [],
       },
     };
   }
@@ -293,7 +340,7 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
     : [];
   const relevantSlugs = new Set(relevantGroups.map((item) => item.slug));
 
-  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises] = groupIds.length
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, templateAssignments, sessionTemplateRoutines] = groupIds.length
     ? await Promise.all([
         prisma.routineMetadataGroup.findMany({
           where: { groupId: { in: groupIds } },
@@ -310,48 +357,55 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
         prisma.exercise.findMany({
           select: { id: true, name: true },
         }),
+        prisma.sessionTemplateMetadataGroup.findMany({
+          where: { groupId: { in: groupIds } },
+          select: { templateId: true },
+        }),
+        prisma.sessionRoutineDetails.findMany({
+          where: { templateId: { not: null } },
+          select: { routineId: true, templateId: true },
+        }),
       ])
-    : [[], [], [], []];
+    : [[], [], [], [], [], []];
   const inferredRoutineIds = subtypeRoutines
     .filter((routine) => inferRoutineMetadataSlugs(routine.subtype).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((routine) => routine.id);
   const inferredExerciseIds = inferredExercises
     .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((exercise) => exercise.id);
+  const templateRoutineIds = sessionTemplateRoutines
+    .filter((detail) => detail.templateId && templateAssignments.some((assignment) => assignment.templateId === detail.templateId))
+    .map((detail) => detail.routineId);
   const routineIds = Array.from(
-    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds])
+    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds])
   );
   const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
+  const sessionTemplateIds = Array.from(new Set(templateAssignments.map((item) => item.templateId)));
 
   return {
     label: group?.label ?? "Unknown group",
     kindLabel: goal.targetType === "CARDIO" ? GOAL_TARGET_TYPE_LABELS.CARDIO : GOAL_TARGET_TYPE_LABELS.GROUP,
     href: group ? `/progress/groups/${group.slug}?tab=overview&range=4w` : null,
-    filter: { routineIds, exerciseIds },
+    filter: { routineIds, exerciseIds, sessionTemplateIds },
   };
 }
 
 async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnType<typeof getTargetDescriptor>>, start: Date, end: Date) {
   const routineIds = descriptor.filter.routineIds;
   const exerciseIds = descriptor.filter.exerciseIds;
+  const sessionTemplateIds = descriptor.filter.sessionTemplateIds;
+  const targetFilters = [
+    ...(routineIds.length > 0 ? [{ routineId: { in: routineIds } }] : []),
+    ...(exerciseIds.length > 0 ? [{ exercises: { some: { exerciseId: { in: exerciseIds } } } }] : []),
+    ...(sessionTemplateIds.length > 0
+      ? [{ routine: { sessionDetails: { templateId: { in: sessionTemplateIds } } } }]
+      : []),
+  ];
 
   const logs = await prisma.routineLog.findMany({
     where: {
       performedAt: { gte: start, lte: end },
-      ...(
-        routineIds.length > 0 && exerciseIds.length > 0
-          ? {
-              OR: [
-                { routineId: { in: routineIds } },
-                { exercises: { some: { exerciseId: { in: exerciseIds } } } },
-              ],
-            }
-          : routineIds.length > 0
-          ? { routineId: { in: routineIds } }
-          : exerciseIds.length > 0
-          ? { exercises: { some: { exerciseId: { in: exerciseIds } } } }
-          : { id: "__none__" }
-      ),
+      ...(targetFilters.length > 1 ? { OR: targetFilters } : targetFilters.length === 1 ? targetFilters[0] : { id: "__none__" }),
     },
     include: {
       routine: {
@@ -386,6 +440,11 @@ async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnTy
           unit: true,
         },
       },
+      sessionMetricValues: {
+        include: {
+          metricDefinition: true,
+        },
+      },
     },
     orderBy: { performedAt: "desc" },
   });
@@ -415,6 +474,15 @@ function metricForExerciseEntry(goal: GoalWithConfig, entry: GoalExerciseEntry) 
   return 0;
 }
 
+function sessionMetricValueForGoal(goal: GoalWithConfig, log: GoalLog) {
+  const definitionId = goal.config?.sessionMetricDefinitionId;
+  if (!definitionId) return null;
+  const metricValue = log.sessionMetricValues.find((value) => value.metricDefinitionId === definitionId);
+  if (!metricValue) return null;
+  const definition = withSessionMetricConfig(metricValue.metricDefinition);
+  return sessionMetricNumericValue(definition, metricValue);
+}
+
 function metricForLog(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<string>) {
   if (goal.metricType === "SESSIONS") {
     return 1;
@@ -437,6 +505,9 @@ function metricForLog(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<strin
     if (!log.distanceMi || !log.durationSec || log.distanceMi <= 0) return 0;
     const benchmarkDistance = goal.config?.benchmarkDistanceMi ?? 1;
     return (log.durationSec / log.distanceMi) * benchmarkDistance;
+  }
+  if (goal.metricType === "SESSION_METRIC") {
+    return sessionMetricValueForGoal(goal, log) ?? 0;
   }
 
   const relevantExercises = exerciseIds.size > 0 ? relevantExerciseIdsForLog(log, exerciseIds) : log.exercises;
@@ -527,6 +598,10 @@ function formatSeconds(value: number) {
 }
 
 function formatMetricValue(goal: GoalWithConfig, value: number) {
+  if (goal.metricType === "SESSION_METRIC") {
+    if (goal.config?.sessionMetricTargetText && value === goal.targetValue) return goal.config.sessionMetricTargetText;
+    return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+  }
   if (goal.metricType === "DISTANCE") return `${value.toFixed(1)} mi`;
   if (goal.metricType === "DURATION" || goal.metricType === "MAX_DURATION") return formatSeconds(value);
   if (goal.metricType === "PACE") {
@@ -543,7 +618,10 @@ function formatMetricValue(goal: GoalWithConfig, value: number) {
 
 function summaryLabel(goal: GoalWithConfig, targetLabel: string) {
   const timeframe = GOAL_TIMEFRAME_LABELS[goal.timeframe as GoalTimeframeValue].toLowerCase();
-  const metric = GOAL_METRIC_LABELS[goal.metricType as GoalMetricTypeValue].toLowerCase();
+  const metric =
+    goal.metricType === "SESSION_METRIC"
+      ? (goal.config?.sessionMetricDefinitionLabel ?? GOAL_METRIC_LABELS[goal.metricType as GoalMetricTypeValue]).toLowerCase()
+      : GOAL_METRIC_LABELS[goal.metricType as GoalMetricTypeValue].toLowerCase();
   return `${targetLabel} | ${metric} | ${timeframe}`;
 }
 
@@ -575,6 +653,19 @@ function statusForGoal(goal: GoalWithConfig, actualValue: number, elapsedFractio
 }
 
 function recentContributionLabel(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<string>) {
+  if (goal.metricType === "SESSION_METRIC") {
+    const definitionId = goal.config?.sessionMetricDefinitionId;
+    if (definitionId) {
+      const metricValue = log.sessionMetricValues.find((value) => value.metricDefinitionId === definitionId);
+      if (metricValue) {
+        const definition = withSessionMetricConfig(metricValue.metricDefinition);
+        if (metricValue.textValue) return metricValue.textValue;
+        if (metricValue.numberValue !== null && metricValue.numberValue !== undefined) {
+          return sessionMetricGoalValueLabel(definition, metricValue.numberValue);
+        }
+      }
+    }
+  }
   return formatMetricValue(goal, metricForLog(goal, log, exerciseIds));
 }
 
@@ -607,7 +698,10 @@ async function buildGoalInsight(goal: Goal) {
     targetKindLabel: descriptor.kindLabel,
     targetHref: descriptor.href,
     goalTypeLabel: GOAL_TYPE_LABELS[parsedGoal.goalType as GoalTypeValue],
-    metricLabel: GOAL_METRIC_LABELS[parsedGoal.metricType as GoalMetricTypeValue],
+    metricLabel:
+      parsedGoal.metricType === "SESSION_METRIC"
+        ? parsedGoal.config?.sessionMetricDefinitionLabel ?? GOAL_METRIC_LABELS[parsedGoal.metricType as GoalMetricTypeValue]
+        : GOAL_METRIC_LABELS[parsedGoal.metricType as GoalMetricTypeValue],
     timeframeLabel: GOAL_TIMEFRAME_LABELS[parsedGoal.timeframe as GoalTimeframeValue],
     timeframeStatusLabel: status.label,
     timeframeWindowLabel: window.currentLabel,
@@ -625,11 +719,20 @@ async function buildGoalInsight(goal: Goal) {
 }
 
 export async function getGoalFormOptions(): Promise<GoalFormOptions> {
-  const [routines, exercises, groups] = await Promise.all([
+  const [routines, exercises, groups, sessionTemplates] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, category: true, kind: true, subtype: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        kind: true,
+        subtype: true,
+        sessionDetails: {
+          select: { templateId: true },
+        },
+      },
     }),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },
@@ -639,16 +742,45 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       orderBy: [{ kind: "asc" }, { label: "asc" }],
       select: { id: true, label: true, kind: true },
     }),
+    prisma.sessionTemplate.findMany({
+      where: { isSystem: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        metricDefinitions: {
+          where: { showInGoals: true },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    }),
   ]);
 
   const cardioTargets = groups.filter((group) => cardioKinds.includes(group.kind));
   const standardGroups = groups.filter((group) => !cardioKinds.includes(group.kind));
+
+  const sessionMetricOptionsByTemplateId = Object.fromEntries(
+    sessionTemplates.map((template) => [
+      template.id,
+      template.metricDefinitions.map((definition) => ({
+        id: definition.id,
+        label: definition.label,
+        subtitle: definition.unit ?? (definition.valueType === "TEXT" ? "Grade / text" : definition.valueType.toLowerCase()),
+      })),
+    ])
+  );
+  const sessionMetricOptionsByRoutineId = Object.fromEntries(
+    routines.map((routine) => [
+      routine.id,
+      routine.sessionDetails?.templateId ? sessionMetricOptionsByTemplateId[routine.sessionDetails.templateId] ?? [] : [],
+    ])
+  );
 
   return {
     routines: routines.map((routine) => ({
       id: routine.id,
       label: routine.name,
       subtitle: `${routine.category} | ${routine.kind}${routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}`,
+      routineKind: routine.kind,
+      sessionTemplateId: routine.sessionDetails?.templateId ?? null,
     })),
     exercises: exercises.map((exercise) => ({
       id: exercise.id,
@@ -665,6 +797,13 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       label: group.label,
       subtitle: formatMetadataGroupKind(group.kind),
     })),
+    sessionTemplates: sessionTemplates.map((template) => ({
+      id: template.id,
+      label: template.name,
+      subtitle: template.sessionSubtype ? formatRoutineSubtype(template.sessionSubtype) : "Session template",
+    })),
+    sessionMetricsByRoutineId: sessionMetricOptionsByRoutineId,
+    sessionMetricsByTemplateId: sessionMetricOptionsByTemplateId,
   };
 }
 
@@ -700,7 +839,7 @@ export function getMetricOptionsFor(goalType: GoalTypeValue, targetType: GoalTar
 }
 
 export function goalTargetTypeOptions() {
-  return (["ROUTINE", "EXERCISE", "CARDIO", "GROUP"] as const).map((value) => ({
+  return (["ROUTINE", "EXERCISE", "CARDIO", "GROUP", "SESSION_TEMPLATE"] as const).map((value) => ({
     value,
     label: GOAL_TARGET_TYPE_LABELS[value],
   }));

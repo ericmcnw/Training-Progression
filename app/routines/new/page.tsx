@@ -18,11 +18,17 @@ export default function NewRoutinePage() {
     select: { id: true, slug: true, label: true, kind: true },
     orderBy: [{ kind: "asc" }, { label: "asc" }],
   });
+  const sessionTemplatesPromise = prisma.sessionTemplate.findMany({
+    where: { isSystem: true },
+    select: { id: true, name: true, description: true, sessionSubtype: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
 
   return (
     <NewRoutinePageInner
       categoriesPromise={categoriesPromise}
       metadataGroupsPromise={metadataGroupsPromise}
+      sessionTemplatesPromise={sessionTemplatesPromise}
       defaultCategories={defaultCategories}
     />
   );
@@ -31,13 +37,15 @@ export default function NewRoutinePage() {
 async function NewRoutinePageInner({
   categoriesPromise,
   metadataGroupsPromise,
+  sessionTemplatesPromise,
   defaultCategories,
 }: {
   categoriesPromise: Promise<Array<{ category: string }>>;
   metadataGroupsPromise: Promise<Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>>;
+  sessionTemplatesPromise: Promise<Array<{ id: string; name: string; description: string | null; sessionSubtype: string | null }>>;
   defaultCategories: string[];
 }) {
-  const [categoryRows, metadataGroups] = await Promise.all([categoriesPromise, metadataGroupsPromise]);
+  const [categoryRows, metadataGroups, sessionTemplates] = await Promise.all([categoriesPromise, metadataGroupsPromise, sessionTemplatesPromise]);
   const categories = Array.from(
     new Set([
       ...defaultCategories,
@@ -60,7 +68,7 @@ async function NewRoutinePageInner({
 
       <div style={styles.panel}>
         <div style={styles.panelHeader}>QUICK SETUP</div>
-        <NewRoutineForm categories={categories} metadataGroups={metadataGroups} />
+        <NewRoutineForm categories={categories} metadataGroups={metadataGroups} sessionTemplates={sessionTemplates} />
       </div>
     </div>
   );

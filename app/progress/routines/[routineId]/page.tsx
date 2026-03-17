@@ -6,6 +6,8 @@ import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
+import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
+import { withSessionMetricConfig } from "@/lib/session-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,17 @@ export default async function RoutineTargetPage(props: {
       },
       tagAssignments: {
         include: { tag: true },
+      },
+      sessionDetails: {
+        include: {
+          template: {
+            include: {
+              metricDefinitions: {
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -105,6 +118,25 @@ export default async function RoutineTargetPage(props: {
   const workoutWorkload = workoutWeeklySeries(logs, range);
   const durationWorkload = durationWeeklySeries(logs, range);
   const targetLabel = routine.name;
+  const sessionMetricDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig).filter((definition) => definition.showInProgress) ?? [];
+  const sessionPerformanceCharts = sessionMetricDefinitions
+    .map((definition) => ({
+      definition,
+      points: sessionMetricPerformanceSeries(logs, definition),
+    }))
+    .filter((entry) => entry.points.length > 0);
+  const sessionWorkloadCharts = sessionMetricDefinitions
+    .filter((definition) => definition.valueType === "INTEGER" || definition.valueType === "DECIMAL" || definition.config?.input === "grade")
+    .map((definition) => ({
+      definition,
+      points: aggregateSessionMetricHistory(
+        logs,
+        definition.id,
+        range,
+        tab === "performance" || definition.config?.input === "grade" ? "max" : "sum"
+      ),
+    }))
+    .filter((entry) => entry.points.some((point) => point.value > 0));
   const lastCompletedLabel = summary.lastSession
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)
     : "-";
@@ -192,17 +224,30 @@ export default async function RoutineTargetPage(props: {
         ))}
       </div>
     ) : (
-      <MetricLineChart
-        title={`${targetLabel}: Duration per Session`}
-        yLabel="Duration"
-        xLabel="Session"
-        points={logs.map((log) => ({
-          label: new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(log.performedAt),
-          value: log.durationSec ?? 0,
-        }))}
-        unit="sec"
-        decimals={0}
-      />
+      <div style={{ display: "grid", gap: 10 }}>
+        <MetricLineChart
+          title={`${targetLabel}: Duration per Session`}
+          yLabel="Duration"
+          xLabel="Session"
+          points={logs.map((log) => ({
+            label: new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(log.performedAt),
+            value: log.durationSec ?? 0,
+          }))}
+          unit="sec"
+          decimals={0}
+        />
+        {sessionPerformanceCharts.map((entry) => (
+          <MetricLineChart
+            key={entry.definition.id}
+            title={`${targetLabel}: ${entry.definition.label}`}
+            yLabel={entry.definition.label}
+            xLabel="Session"
+            points={entry.points}
+            unit={entry.definition.unit ?? undefined}
+            decimals={entry.definition.valueType === "DECIMAL" ? 1 : 0}
+          />
+        ))}
+      </div>
     );
 
   const workloadContent =
@@ -224,6 +269,17 @@ export default async function RoutineTargetPage(props: {
       <div style={{ display: "grid", gap: 10 }}>
         <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+        {sessionWorkloadCharts.map((entry) => (
+          <MetricLineChart
+            key={entry.definition.id}
+            title={`${targetLabel}: ${entry.definition.label} per Week`}
+            yLabel={entry.definition.label}
+            xLabel="Week"
+            points={entry.points}
+            unit={entry.definition.unit ?? undefined}
+            decimals={entry.definition.valueType === "DECIMAL" ? 1 : 0}
+          />
+        ))}
       </div>
     );
 
@@ -263,6 +319,9 @@ export default async function RoutineTargetPage(props: {
                   #{entry.tag.name}
                 </span>
               ))}
+              {routine.sessionDetails?.template ? (
+                <span style={chip}>Template: {routine.sessionDetails.template.name}</span>
+              ) : null}
             </div>
           ) : null}
         </SectionCard>

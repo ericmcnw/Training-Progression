@@ -7,6 +7,8 @@ import type {
 
 export type GoalTemplateKey =
   | "ROUTINE_FREQUENCY"
+  | "SESSION_TEMPLATE_FREQUENCY"
+  | "SESSION_TEMPLATE_METRIC"
   | "EXERCISE_STRENGTH"
   | "EXERCISE_VOLUME"
   | "CARDIO_DISTANCE"
@@ -36,6 +38,26 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
     metricType: "SESSIONS",
     timeframe: "WEEK",
     targetValue: 3,
+  },
+  {
+    key: "SESSION_TEMPLATE_FREQUENCY",
+    label: "Session template frequency",
+    description: "Track how often a specific sport or activity template gets logged each week.",
+    goalType: "FREQUENCY",
+    targetType: "SESSION_TEMPLATE",
+    metricType: "SESSIONS",
+    timeframe: "WEEK",
+    targetValue: 2,
+  },
+  {
+    key: "SESSION_TEMPLATE_METRIC",
+    label: "Session template metric",
+    description: "Target a climbing, hiking, surfing, or snowboarding metric defined by the template.",
+    goalType: "VOLUME",
+    targetType: "SESSION_TEMPLATE",
+    metricType: "SESSION_METRIC",
+    timeframe: "WEEK",
+    targetValue: 5,
   },
   {
     key: "EXERCISE_STRENGTH",

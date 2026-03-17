@@ -4,6 +4,8 @@ import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } fr
 import { getChartGoalReference } from "@/lib/goals";
 import { getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
+import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
+import { withSessionMetricConfig } from "@/lib/session-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,25 @@ export default async function GroupTargetPage(props: {
   const summary = summarizeRoutineLogs(target.logs, null);
   const targetType = groupTargetType(target.logs);
   const targetLabel = target.group.label;
+  const sessionMetricDefinitions = Array.from(
+    new Map(
+      target.logs
+        .flatMap((log) => log.sessionMetricValues.map((value) => [value.metricDefinition.id, withSessionMetricConfig(value.metricDefinition)] as const))
+    ).values()
+  ).filter((definition) => definition.showInProgress);
+  const sessionPerformanceCharts = sessionMetricDefinitions
+    .map((definition) => ({
+      definition,
+      points: sessionMetricPerformanceSeries(target.logs, definition),
+    }))
+    .filter((entry) => entry.points.length > 0);
+  const sessionWorkloadCharts = sessionMetricDefinitions
+    .filter((definition) => definition.valueType === "INTEGER" || definition.valueType === "DECIMAL" || definition.config?.input === "grade")
+    .map((definition) => ({
+      definition,
+      points: aggregateSessionMetricHistory(target.logs, definition.id, range, definition.config?.input === "grade" ? "max" : "sum"),
+    }))
+    .filter((entry) => entry.points.some((point) => point.value > 0));
   const cardioPerf = cardioPerformanceSeries(target.logs);
   const cardioWorkload = cardioWorkloadSeries(target.logs, range);
   const workoutPerf = workoutSessionSeries(target.logs);
@@ -74,6 +95,15 @@ export default async function GroupTargetPage(props: {
       <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
     ) : targetType === "workout" ? (
       <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={weeklyVolumeGoalLine?.targetValue} targetLabel={weeklyVolumeGoalLine?.label} targetUnit={weeklyVolumeGoalLine?.unit} targetDecimals={weeklyVolumeGoalLine?.decimals} />
+    ) : targetType === "session" && sessionWorkloadCharts.length > 0 ? (
+      <MetricLineChart
+        title={`${targetLabel}: ${sessionWorkloadCharts[0].definition.label} per Week`}
+        yLabel={sessionWorkloadCharts[0].definition.label}
+        xLabel="Week"
+        points={sessionWorkloadCharts[0].points}
+        unit={sessionWorkloadCharts[0].definition.unit ?? undefined}
+        decimals={sessionWorkloadCharts[0].definition.valueType === "DECIMAL" ? 1 : 0}
+      />
     ) : (
       <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
     );
@@ -140,6 +170,24 @@ export default async function GroupTargetPage(props: {
                 <MetricLineChart title={`${targetLabel}: Volume per Session`} yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} />
                 <MetricLineChart title={`${targetLabel}: Reps per Session`} yLabel="Reps" xLabel="Session" points={workoutPerf.totalReps} decimals={0} />
               </div>
+            ) : targetType === "session" ? (
+              sessionPerformanceCharts.length > 0 ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {sessionPerformanceCharts.map((entry) => (
+                    <MetricLineChart
+                      key={entry.definition.id}
+                      title={`${targetLabel}: ${entry.definition.label}`}
+                      yLabel={entry.definition.label}
+                      xLabel="Session"
+                      points={entry.points}
+                      unit={entry.definition.unit ?? undefined}
+                      decimals={entry.definition.valueType === "DECIMAL" ? 1 : 0}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No structured session metrics in this group yet." />
+              )
             ) : (
               <EmptyState message="This group mixes training types, so performance is intentionally minimized here. Use completion and workload first." />
             )}
@@ -161,6 +209,22 @@ export default async function GroupTargetPage(props: {
                 <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} targetValue={weeklySetsGoalLine?.targetValue} targetLabel={weeklySetsGoalLine?.label} targetUnit={weeklySetsGoalLine?.unit} targetDecimals={weeklySetsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} targetValue={weeklyRepsGoalLine?.targetValue} targetLabel={weeklyRepsGoalLine?.label} targetUnit={weeklyRepsGoalLine?.unit} targetDecimals={weeklyRepsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={weeklyVolumeGoalLine?.targetValue} targetLabel={weeklyVolumeGoalLine?.label} targetUnit={weeklyVolumeGoalLine?.unit} targetDecimals={weeklyVolumeGoalLine?.decimals} />
+              </div>
+            ) : targetType === "session" ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+                {sessionWorkloadCharts.map((entry) => (
+                  <MetricLineChart
+                    key={entry.definition.id}
+                    title={`${targetLabel}: ${entry.definition.label} per Week`}
+                    yLabel={entry.definition.label}
+                    xLabel="Week"
+                    points={entry.points}
+                    unit={entry.definition.unit ?? undefined}
+                    decimals={entry.definition.valueType === "DECIMAL" ? 1 : 0}
+                  />
+                ))}
               </div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>

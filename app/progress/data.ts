@@ -80,7 +80,24 @@ export async function getRoutineLogs(range: ProgressRange, filter?: {
     },
     orderBy: [{ performedAt: "asc" }],
     include: {
-      routine: true,
+      routine: {
+        include: {
+          sessionDetails: {
+            include: {
+              template: {
+                include: {
+                  metricDefinitions: {
+                    orderBy: { sortOrder: "asc" },
+                  },
+                  metadataGroups: {
+                    include: { group: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       exercises: {
         include: {
           exercise: {
@@ -94,6 +111,11 @@ export async function getRoutineLogs(range: ProgressRange, filter?: {
         },
       },
       metrics: true,
+      sessionMetricValues: {
+        include: {
+          metricDefinition: true,
+        },
+      },
       guidedSteps: true,
     },
   });
@@ -281,6 +303,7 @@ export function exerciseWeeklySeries(rows: Array<{
 export function groupTargetType(logs: RoutineLogWithRelations[]) {
   const kinds = Array.from(new Set(logs.map((log) => normalizeRoutineKind(log.routine.kind))));
   if (isCardioOnlyKinds(kinds)) return "cardio";
+  if (kinds.length > 0 && kinds.every((kind) => kind === "SESSION")) return "session";
   if (hasWorkoutKinds(kinds) && !hasSessionLikeKinds(kinds.filter((kind) => kind !== "WORKOUT"))) return "workout";
   return "mixed";
 }
@@ -309,7 +332,7 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
       })
     ).map((item) => item.slug)
   );
-  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises] = await Promise.all([
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, sessionTemplateAssignments, sessionTemplateRoutines] = await Promise.all([
     prisma.routineMetadataGroup.findMany({
       where: { groupId: { in: relevantGroupIds } },
       select: { routineId: true },
@@ -325,6 +348,14 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
     prisma.exercise.findMany({
       select: { id: true, name: true },
     }),
+    prisma.sessionTemplateMetadataGroup.findMany({
+      where: { groupId: { in: relevantGroupIds } },
+      select: { templateId: true },
+    }),
+    prisma.sessionRoutineDetails.findMany({
+      where: { templateId: { not: null } },
+      select: { routineId: true, templateId: true },
+    }),
   ]);
 
   const inferredRoutineIds = subtypeRoutines
@@ -334,7 +365,12 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
     .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((exercise) => exercise.id);
 
-  const routineIds = Array.from(new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds]));
+  const templateRoutineIds = sessionTemplateRoutines
+    .filter((detail) => detail.templateId && sessionTemplateAssignments.some((assignment) => assignment.templateId === detail.templateId))
+    .map((detail) => detail.routineId);
+  const routineIds = Array.from(
+    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds])
+  );
   const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
   const logs =
     routineIds.length === 0 && exerciseIds.length === 0
