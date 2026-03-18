@@ -1,6 +1,7 @@
 "use server";
 
 import { parseTagNames } from "@/lib/metadata";
+import { parseSessionGradeValue } from "@/lib/session-templates";
 import { parseAppDateTimeLocal } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
@@ -43,6 +44,10 @@ type SessionMetricValueInput = {
   numberValue?: number | null;
   textValue?: string | null;
   booleanValue?: boolean | null;
+};
+
+type SessionTemplateConfig = {
+  preferredClimbingGrades?: string[];
 };
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -207,6 +212,8 @@ async function sanitizeSessionMetricValues(params: {
                   id: true,
                   valueType: true,
                   isRequired: true,
+                  key: true,
+                  config: true,
                 },
               },
             },
@@ -283,7 +290,84 @@ async function sanitizeSessionMetricValues(params: {
     });
   }
 
-  return sanitizedValues;
+  const sanitizedByDefinitionId = new Map(sanitizedValues.map((value) => [value.metricDefinitionId, value]));
+
+  const highestGradeForColumn = (column: "DONE" | "FLASHED") => {
+    let bestGrade = "";
+    let bestValue = -1;
+    for (const definition of template.metricDefinitions) {
+      const config =
+        definition.config && typeof definition.config === "object" && !Array.isArray(definition.config)
+          ? (definition.config as Record<string, unknown>)
+          : null;
+      if (!config || config.climbingColumn !== column || typeof config.gradeBucket !== "string") continue;
+      const entry = sanitizedByDefinitionId.get(definition.id);
+      if (!entry || !entry.numberValue || entry.numberValue <= 0) continue;
+      const parsedGrade = parseSessionGradeValue(
+        config.gradeBucket,
+        config.gradeSystem === "BOULDER_V" || config.gradeSystem === "YOSEMITE" ? config.gradeSystem : undefined
+      );
+      if (parsedGrade === null || parsedGrade < bestValue) continue;
+      bestValue = parsedGrade;
+      bestGrade = config.gradeBucket;
+    }
+    return bestGrade || null;
+  };
+
+  const highestFlashGrade = highestGradeForColumn("FLASHED");
+  const highestSendGrade = highestGradeForColumn("DONE");
+
+  for (const definition of template.metricDefinitions) {
+    if (definition.key === "highest_flash_grade" && highestFlashGrade) {
+      sanitizedByDefinitionId.set(definition.id, {
+        metricDefinitionId: definition.id,
+        numberValue: null,
+        textValue: highestFlashGrade,
+        booleanValue: null,
+      });
+    }
+    if (definition.key === "highest_send_grade" && highestSendGrade) {
+      sanitizedByDefinitionId.set(definition.id, {
+        metricDefinitionId: definition.id,
+        numberValue: null,
+        textValue: highestSendGrade,
+        booleanValue: null,
+      });
+    }
+  }
+
+  return Array.from(sanitizedByDefinitionId.values());
+}
+
+function sanitizePreferredClimbingGrades(grades?: string[]) {
+  return Array.from(
+    new Set(
+      (grades ?? [])
+        .map((grade) => grade.trim())
+        .filter((grade) => grade.length > 0)
+    )
+  );
+}
+
+async function updateSessionRoutineTemplateConfig(routineId: string, nextConfig: SessionTemplateConfig) {
+  const current = await prisma.sessionRoutineDetails.findUnique({
+    where: { routineId },
+    select: { templateConfig: true },
+  });
+  const currentConfig =
+    current?.templateConfig && typeof current.templateConfig === "object" && !Array.isArray(current.templateConfig)
+      ? (current.templateConfig as Record<string, unknown>)
+      : {};
+
+  await prisma.sessionRoutineDetails.update({
+    where: { routineId },
+    data: {
+      templateConfig: {
+        ...currentConfig,
+        ...nextConfig,
+      },
+    },
+  });
 }
 
 function sanitizeGuidedSteps(steps?: GuidedStepInput[]) {
@@ -900,15 +984,16 @@ export async function logGuided(params: {
 
 export async function logSession(params: {
   routineId: string;
-  durationSec: number;
+  durationSec?: number | null;
   location?: string;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
+  preferredClimbingGrades?: string[];
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
-  if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) {
+  if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
     throw new Error("Duration must be > 0.");
   }
 
@@ -917,7 +1002,7 @@ export async function logSession(params: {
       data: {
         routineId: params.routineId,
         performedAt: parsePerformedAt(params.performedAtLocal),
-        durationSec: params.durationSec,
+        durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
       },
@@ -949,6 +1034,11 @@ export async function logSession(params: {
   });
 
   revalidateRoutineSurfaces(params.routineId);
+  if (params.preferredClimbingGrades) {
+    await updateSessionRoutineTemplateConfig(params.routineId, {
+      preferredClimbingGrades: sanitizePreferredClimbingGrades(params.preferredClimbingGrades),
+    });
+  }
 }
 
 export async function updateCardioLog(params: {
@@ -1171,16 +1261,19 @@ export async function updateGuidedLog(params: {
 export async function updateSessionLog(params: {
   routineId: string;
   logId: string;
-  durationSec: number;
+  durationSec?: number | null;
   location?: string;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
+  preferredClimbingGrades?: string[];
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (!params.logId) throw new Error("Missing logId.");
-  if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) throw new Error("Duration must be > 0.");
+  if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
+    throw new Error("Duration must be > 0.");
+  }
 
   const existing = await prisma.routineLog.findUnique({
     where: { id: params.logId },
@@ -1193,7 +1286,7 @@ export async function updateSessionLog(params: {
       where: { id: params.logId },
       data: {
         performedAt: parsePerformedAt(params.performedAtLocal),
-        durationSec: params.durationSec,
+        durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
       },
@@ -1224,6 +1317,11 @@ export async function updateSessionLog(params: {
   });
 
   revalidateRoutineSurfaces(params.routineId);
+  if (params.preferredClimbingGrades) {
+    await updateSessionRoutineTemplateConfig(params.routineId, {
+      preferredClimbingGrades: sanitizePreferredClimbingGrades(params.preferredClimbingGrades),
+    });
+  }
 }
 
 export async function deleteRoutineLog(logId: string) {

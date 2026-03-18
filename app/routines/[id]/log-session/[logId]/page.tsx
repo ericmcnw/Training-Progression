@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isSessionKind } from "@/lib/routines";
+import type { Prisma } from "@/generated/prisma";
 import { withSessionMetricConfig } from "@/lib/session-templates";
 import EditSessionLogForm from "./EditSessionLogForm";
 
@@ -12,6 +13,12 @@ function getParam(params: SearchParams, key: string) {
   const value = params[key];
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function preferredClimbingGrades(value: Prisma.JsonValue | null | undefined) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const raw = (value as Record<string, unknown>).preferredClimbingGrades;
+  return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
 export default async function EditSessionLogPage(props: {
@@ -35,6 +42,7 @@ export default async function EditSessionLogPage(props: {
       kind: true,
       sessionDetails: {
         select: {
+          templateConfig: true,
           template: {
             include: {
               metricDefinitions: {
@@ -67,6 +75,13 @@ export default async function EditSessionLogPage(props: {
   });
   if (!log || log.routineId !== routineId) return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
   const definitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
+  const currentClimbingGrades = Array.from(
+    new Set(
+      log.sessionMetricValues
+        .map((value) => withSessionMetricConfig(value.metricDefinition).config?.gradeBucket)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
   const initialValues = Object.fromEntries(
     log.sessionMetricValues.map((value) => [
       value.metricDefinitionId,
@@ -95,9 +110,11 @@ export default async function EditSessionLogPage(props: {
             initialLocation={log.location ?? ""}
             initialNotes={log.notes ?? ""}
             initialPerformedAt={log.performedAt}
+            templateKey={routine.sessionDetails?.template?.key ?? null}
             templateName={routine.sessionDetails?.template?.name ?? null}
             definitions={definitions}
             initialValues={initialValues}
+            preferredClimbingGrades={currentClimbingGrades.length > 0 ? currentClimbingGrades : preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
           />
         </div>
       </div>

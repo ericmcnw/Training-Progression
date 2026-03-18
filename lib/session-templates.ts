@@ -3,6 +3,10 @@ import type { Prisma, SessionMetricDefinition, SessionMetricValueType } from "@/
 export const SESSION_TEMPLATE_KEYS = [
   "indoor-bouldering",
   "indoor-rope-climbing",
+  "indoor-sport-climbing",
+  "outdoor-bouldering",
+  "outdoor-sport-climbing",
+  "outdoor-trad-climbing",
   "hiking",
   "surfing",
   "snowboarding",
@@ -13,7 +17,33 @@ export type SessionTemplateKey = (typeof SESSION_TEMPLATE_KEYS)[number];
 export type SessionMetricConfig = {
   input?: "grade" | "textarea";
   gradeSystem?: "BOULDER_V" | "YOSEMITE";
+  gradeBucket?: string;
+  climbingColumn?: "DONE" | "FLASHED";
 };
+
+const BOULDER_GRADE_OPTIONS = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"] as const;
+const YOSEMITE_GRADE_OPTIONS = [
+  "5.6",
+  "5.7",
+  "5.8",
+  "5.9",
+  "5.10a",
+  "5.10b",
+  "5.10c",
+  "5.10d",
+  "5.11a",
+  "5.11b",
+  "5.11c",
+  "5.11d",
+  "5.12a",
+  "5.12b",
+  "5.12c",
+  "5.12d",
+  "5.13a",
+  "5.13b",
+  "5.13c",
+  "5.13d",
+] as const;
 
 export type SessionMetricDefinitionWithConfig = SessionMetricDefinition & {
   config: SessionMetricConfig | null;
@@ -25,9 +55,14 @@ export function asSessionMetricConfig(value: Prisma.JsonValue | null | undefined
   const input = record.input === "grade" || record.input === "textarea" ? record.input : undefined;
   const gradeSystem =
     record.gradeSystem === "BOULDER_V" || record.gradeSystem === "YOSEMITE" ? record.gradeSystem : undefined;
+  const gradeBucket = typeof record.gradeBucket === "string" && record.gradeBucket.trim().length > 0 ? record.gradeBucket.trim() : undefined;
+  const climbingColumn =
+    record.climbingColumn === "DONE" || record.climbingColumn === "FLASHED" ? record.climbingColumn : undefined;
   return {
     ...(input ? { input } : {}),
     ...(gradeSystem ? { gradeSystem } : {}),
+    ...(gradeBucket ? { gradeBucket } : {}),
+    ...(climbingColumn ? { climbingColumn } : {}),
   };
 }
 
@@ -48,6 +83,46 @@ export function sessionMetricUsesTextArea(definition: Pick<SessionMetricDefiniti
 
 export function sessionMetricUsesGradeInput(definition: Pick<SessionMetricDefinitionWithConfig, "config">) {
   return definition.config?.input === "grade";
+}
+
+export function isClimbingTemplateKey(templateKey: string | null | undefined) {
+  return templateKey === "indoor-bouldering" || templateKey === "indoor-rope-climbing" || templateKey === "indoor-sport-climbing" || templateKey === "outdoor-bouldering" || templateKey === "outdoor-sport-climbing" || templateKey === "outdoor-trad-climbing";
+}
+
+export function climbingGradeOptions(templateKey: string | null | undefined) {
+  if (templateKey === "indoor-bouldering" || templateKey === "outdoor-bouldering") return [...BOULDER_GRADE_OPTIONS];
+  if (templateKey === "indoor-rope-climbing" || templateKey === "indoor-sport-climbing" || templateKey === "outdoor-sport-climbing" || templateKey === "outdoor-trad-climbing") {
+    return [...YOSEMITE_GRADE_OPTIONS];
+  }
+  return [];
+}
+
+export type ClimbingGradeRowDefinition = {
+  grade: string;
+  doneDefinition: SessionMetricDefinitionWithConfig | null;
+  flashedDefinition: SessionMetricDefinitionWithConfig | null;
+};
+
+export function climbingGradeRowDefinitions(definitions: SessionMetricDefinitionWithConfig[]) {
+  const gradeMap = new Map<string, ClimbingGradeRowDefinition>();
+  for (const definition of definitions) {
+    const gradeBucket = definition.config?.gradeBucket;
+    const climbingColumn = definition.config?.climbingColumn;
+    if (!gradeBucket || !climbingColumn) continue;
+    const current = gradeMap.get(gradeBucket) ?? {
+      grade: gradeBucket,
+      doneDefinition: null,
+      flashedDefinition: null,
+    };
+    if (climbingColumn === "DONE") current.doneDefinition = definition;
+    if (climbingColumn === "FLASHED") current.flashedDefinition = definition;
+    gradeMap.set(gradeBucket, current);
+  }
+  return Array.from(gradeMap.values()).sort((a, b) => {
+    const aValue = parseSessionGradeValue(a.grade, a.doneDefinition?.config?.gradeSystem ?? a.flashedDefinition?.config?.gradeSystem ?? undefined) ?? 0;
+    const bValue = parseSessionGradeValue(b.grade, b.doneDefinition?.config?.gradeSystem ?? b.flashedDefinition?.config?.gradeSystem ?? undefined) ?? 0;
+    return aValue - bValue;
+  });
 }
 
 export function sessionMetricInputMode(valueType: SessionMetricValueType) {

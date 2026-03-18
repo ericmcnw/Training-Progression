@@ -17,13 +17,19 @@ export default function SessionMetricFields({
   values: Record<string, SessionMetricDraftValue>;
   onChange: (metricDefinitionId: string, value: SessionMetricDraftValue) => void;
 }) {
-  if (definitions.length === 0) return null;
+  const hasClimbingRows = definitions.some((definition) => definition.config?.gradeBucket && definition.config?.climbingColumn);
+  const visibleDefinitions = definitions.filter((definition) => {
+    if (definition.config?.gradeBucket && definition.config?.climbingColumn) return false;
+    if (hasClimbingRows && definition.config?.input === "grade") return false;
+    return true;
+  });
+  if (visibleDefinitions.length === 0) return null;
 
   return (
     <div style={sectionStyle}>
       <div style={{ fontWeight: 900, fontSize: 13 }}>Template metrics</div>
       <div style={gridStyle}>
-        {definitions.map((definition) => {
+        {visibleDefinitions.map((definition) => {
           const value = values[definition.id] ?? {};
           const label = definition.unit ? `${definition.label} (${definition.unit})` : definition.label;
 

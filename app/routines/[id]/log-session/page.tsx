@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { isSessionKind } from "@/lib/routines";
+import type { Prisma } from "@/generated/prisma";
 import { withSessionMetricConfig } from "@/lib/session-templates";
 import SessionLogForm from "./SessionLogForm";
 
 export const dynamic = "force-dynamic";
 
 type Params = { id: string };
+
+function preferredClimbingGrades(value: Prisma.JsonValue | null | undefined) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const raw = (value as Record<string, unknown>).preferredClimbingGrades;
+  return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
 
 export default async function LogSessionPage(props: { params: Promise<Params> | Params }) {
   const params = await Promise.resolve(props.params);
@@ -22,6 +29,7 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
       kind: true,
       sessionDetails: {
         select: {
+          templateConfig: true,
           template: {
             include: {
               metricDefinitions: {
@@ -81,8 +89,10 @@ export default async function LogSessionPage(props: { params: Promise<Params> | 
         <div style={{ padding: 14 }}>
           <SessionLogForm
             routineId={routineId}
+            templateKey={routine.sessionDetails?.template?.key ?? null}
             templateName={routine.sessionDetails?.template?.name ?? null}
             definitions={templateDefinitions}
+            preferredClimbingGrades={preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
           />
         </div>
       </section>

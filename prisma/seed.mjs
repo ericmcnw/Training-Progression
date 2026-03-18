@@ -58,6 +58,41 @@ const metadataGroups = [
   { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
 ];
 
+const boulderingGrades = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"];
+const yosemiteGrades = ["5.6", "5.7", "5.8", "5.9", "5.10a", "5.10b", "5.10c", "5.10d", "5.11a", "5.11b", "5.11c", "5.11d", "5.12a", "5.12b", "5.12c", "5.12d", "5.13a", "5.13b", "5.13c", "5.13d"];
+
+function normalizeMetricGradeKey(grade) {
+  return grade.toLowerCase().replace(/\./g, "_").replace(/\+/g, "plus").replace(/[^a-z0-9_]/g, "");
+}
+
+function buildClimbingGradeMetrics({ grades, gradeSystem, doneKeySuffix, doneLabel, flashedLabel, sortStart }) {
+  return grades.flatMap((grade, index) => {
+    const gradeKey = normalizeMetricGradeKey(grade);
+    return [
+      {
+        key: `${gradeKey}_${doneKeySuffix}`,
+        label: `${grade} ${doneLabel}`,
+        valueType: "INTEGER",
+        sortOrder: sortStart + index * 2,
+        unit: "climbs",
+        showInProgress: false,
+        showInGoals: true,
+        config: { gradeBucket: grade, climbingColumn: "DONE", gradeSystem },
+      },
+      {
+        key: `${gradeKey}_flashed_count`,
+        label: `${grade} ${flashedLabel}`,
+        valueType: "INTEGER",
+        sortOrder: sortStart + index * 2 + 1,
+        unit: "climbs",
+        showInProgress: false,
+        showInGoals: true,
+        config: { gradeBucket: grade, climbingColumn: "FLASHED", gradeSystem },
+      },
+    ];
+  });
+}
+
 const sessionTemplates = [
   {
     key: "indoor-bouldering",
@@ -69,38 +104,132 @@ const sessionTemplates = [
     metrics: [
       { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInProgress: false, showInGoals: false },
       { key: "total_attempts", label: "Total Climbs Attempted", valueType: "INTEGER", sortOrder: 20, unit: "attempts", showInProgress: true, showInGoals: true },
-      { key: "v0_flashed_count", label: "V0 Flashed", valueType: "INTEGER", sortOrder: 30, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v1_flashed_count", label: "V1 Flashed", valueType: "INTEGER", sortOrder: 31, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v2_flashed_count", label: "V2 Flashed", valueType: "INTEGER", sortOrder: 32, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v3_flashed_count", label: "V3 Flashed", valueType: "INTEGER", sortOrder: 33, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v4_flashed_count", label: "V4 Flashed", valueType: "INTEGER", sortOrder: 34, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v5_flashed_count", label: "V5 Flashed", valueType: "INTEGER", sortOrder: 35, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v6_flashed_count", label: "V6 Flashed", valueType: "INTEGER", sortOrder: 36, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v0_sent_count", label: "V0 Sent", valueType: "INTEGER", sortOrder: 40, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v1_sent_count", label: "V1 Sent", valueType: "INTEGER", sortOrder: 41, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v2_sent_count", label: "V2 Sent", valueType: "INTEGER", sortOrder: 42, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v3_sent_count", label: "V3 Sent", valueType: "INTEGER", sortOrder: 43, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v4_sent_count", label: "V4 Sent", valueType: "INTEGER", sortOrder: 44, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v5_sent_count", label: "V5 Sent", valueType: "INTEGER", sortOrder: 45, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "v6_sent_count", label: "V6 Sent", valueType: "INTEGER", sortOrder: 46, unit: "climbs", showInProgress: true, showInGoals: true },
-      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 50, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
-      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 51, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
-      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 60, showInProgress: false, showInGoals: false, config: { input: "textarea" } },
+      ...buildClimbingGradeMetrics({
+        grades: boulderingGrades,
+        gradeSystem: "BOULDER_V",
+        doneKeySuffix: "sent_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInProgress: false, showInGoals: false, config: { input: "textarea" } },
     ],
   },
   {
     key: "indoor-rope-climbing",
-    name: "Indoor Rope Climbing",
-    description: "Track route count and top flash/send grades for rope sessions.",
+    name: "Indoor Top Rope Climbing",
+    description: "Track indoor top rope sessions with route counts, flashes, and top sends.",
     sessionSubtype: "CLIMBING",
     sortOrder: 20,
     metadataSlugs: ["climbing", "pull", "fingers", "skill-practice"],
     metrics: [
       { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
-      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 30, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
-      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 31, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
-      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 40, showInGoals: false, config: { input: "textarea" } },
+      ...buildClimbingGradeMetrics({
+        grades: yosemiteGrades,
+        gradeSystem: "YOSEMITE",
+        doneKeySuffix: "done_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "indoor-sport-climbing",
+    name: "Indoor Sport Climbing",
+    description: "Track indoor sport climbing sessions with route counts, flashes, and top sends.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 21,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice"],
+    metrics: [
+      { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
+      ...buildClimbingGradeMetrics({
+        grades: yosemiteGrades,
+        gradeSystem: "YOSEMITE",
+        doneKeySuffix: "done_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "outdoor-bouldering",
+    name: "Outdoor Bouldering",
+    description: "Track outdoor bouldering days with flash/send counts by grade and best grades.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 24,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice", "outdoor"],
+    metrics: [
+      { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInProgress: false, showInGoals: false },
+      { key: "total_attempts", label: "Total Climbs Attempted", valueType: "INTEGER", sortOrder: 20, unit: "attempts", showInProgress: true, showInGoals: true },
+      ...buildClimbingGradeMetrics({
+        grades: boulderingGrades,
+        gradeSystem: "BOULDER_V",
+        doneKeySuffix: "sent_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "BOULDER_V" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "outdoor-sport-climbing",
+    name: "Outdoor Sport Climbing",
+    description: "Track outdoor sport climbing days with grade rows, flashes, and top sends.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 25,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice", "outdoor"],
+    metrics: [
+      { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
+      ...buildClimbingGradeMetrics({
+        grades: yosemiteGrades,
+        gradeSystem: "YOSEMITE",
+        doneKeySuffix: "done_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "outdoor-trad-climbing",
+    name: "Outdoor Trad Climbing",
+    description: "Track outdoor trad climbing days with grade rows, flashes, and top sends.",
+    sessionSubtype: "CLIMBING",
+    sortOrder: 26,
+    metadataSlugs: ["climbing", "pull", "fingers", "skill-practice", "outdoor"],
+    metrics: [
+      { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
+      ...buildClimbingGradeMetrics({
+        grades: yosemiteGrades,
+        gradeSystem: "YOSEMITE",
+        doneKeySuffix: "done_count",
+        doneLabel: "Done",
+        flashedLabel: "Flashed",
+        sortStart: 30,
+      }),
+      { key: "highest_flash_grade", label: "Highest Flash Grade", valueType: "TEXT", sortOrder: 90, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "highest_send_grade", label: "Highest Send Grade", valueType: "TEXT", sortOrder: 91, showInProgress: true, showInGoals: true, config: { input: "grade", gradeSystem: "YOSEMITE" } },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 100, showInGoals: false, config: { input: "textarea" } },
     ],
   },
   {

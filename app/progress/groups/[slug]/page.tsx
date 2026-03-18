@@ -1,8 +1,9 @@
 import MetricLineChart from "../../MetricLineChart";
 import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, groupTargetType, resolveGroupTarget, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../../ui";
+import { formatAppDate } from "@/lib/dates";
 import { getChartGoalReference } from "@/lib/goals";
-import { getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel } from "@/lib/progress-v2";
+import { formatWeekLabel, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, weekKey } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
 import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
 import { withSessionMetricConfig } from "@/lib/session-templates";
@@ -15,6 +16,33 @@ type SearchParams = Record<string, string | string[] | undefined>;
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function buildWeeklySessionDetailLines(logs: NonNullable<Awaited<ReturnType<typeof resolveGroupTarget>>>["logs"]) {
+  const weekMap = new Map<string, Map<string, Map<string, number>>>();
+
+  for (const log of logs) {
+    const currentWeekKey = weekKey(log.performedAt);
+    const dayLabel = formatAppDate(log.performedAt, { weekday: "short", month: "numeric", day: "numeric" });
+    const routineMap = weekMap.get(currentWeekKey) ?? new Map<string, Map<string, number>>();
+    const dayRoutineMap = routineMap.get(dayLabel) ?? new Map<string, number>();
+    dayRoutineMap.set(log.routine.name, (dayRoutineMap.get(log.routine.name) ?? 0) + 1);
+    routineMap.set(dayLabel, dayRoutineMap);
+    weekMap.set(currentWeekKey, routineMap);
+  }
+
+  return new Map(
+    Array.from(weekMap.entries()).map(([currentWeekKey, dayMap]) => [
+      formatWeekLabel(currentWeekKey),
+      Array.from(dayMap.entries()).flatMap(([dayLabel, routineMap]) => {
+        const routineSummary = Array.from(routineMap.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .map(([routineName, count]) => (count > 1 ? `${routineName} x${count}` : routineName))
+          .join(", ");
+        return routineSummary ? [`${dayLabel}: ${routineSummary}`] : [];
+      }),
+    ])
+  );
 }
 
 export default async function GroupTargetPage(props: {
@@ -86,6 +114,11 @@ export default async function GroupTargetPage(props: {
     .filter((entry) => entry.points.some((point) => point.value > 0));
   const cardioPerf = cardioPerformanceSeries(target.logs);
   const cardioWorkload = cardioWorkloadSeries(target.logs, range);
+  const weeklySessionDetailLines = buildWeeklySessionDetailLines(target.logs);
+  const sessionsSeries = cardioWorkload.sessions.map((point) => ({
+    ...point,
+    detailLines: weeklySessionDetailLines.get(point.label) ?? [],
+  }));
   const workoutPerf = workoutSessionSeries(target.logs);
   const workoutWorkload = workoutWeeklySeries(target.logs, range);
   const durationWorkload = durationWeeklySeries(target.logs, range);
@@ -137,7 +170,7 @@ export default async function GroupTargetPage(props: {
         {tab === "overview" ? (
           <>
             <SectionCard title="Completion / Consistency">
-              {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />}
+              {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />}
             </SectionCard>
             <SectionCard title={targetType === "mixed" ? "Workload Snapshot" : "Primary Trend"}>
               {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : overviewSecondary}
@@ -152,7 +185,7 @@ export default async function GroupTargetPage(props: {
 
         {tab === "completion" ? (
           <SectionCard title="Completion">
-            {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />}
+            {target.logs.length === 0 ? <EmptyState message="No activity in this group for the selected range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />}
           </SectionCard>
         ) : null}
 
@@ -200,7 +233,7 @@ export default async function GroupTargetPage(props: {
               <EmptyState message="No activity in this group for the selected range." />
             ) : targetType === "cardio" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
               </div>
@@ -212,7 +245,7 @@ export default async function GroupTargetPage(props: {
               </div>
             ) : targetType === "session" ? (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
                 {sessionWorkloadCharts.map((entry) => (
                   <MetricLineChart
@@ -228,7 +261,7 @@ export default async function GroupTargetPage(props: {
               </div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
               </div>
             )}

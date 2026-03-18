@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { updateSessionLog } from "../../../actions";
+import ClimbingGradeRowsEditor from "../ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "../SessionMetricFields";
 import {
+  isClimbingTemplateKey,
   normalizeSessionMetricText,
   parseSessionMetricNumber,
   type SessionMetricDefinitionWithConfig,
@@ -23,9 +25,11 @@ export default function EditSessionLogForm({
   initialLocation,
   initialNotes,
   initialPerformedAt,
+  templateKey,
   templateName,
   definitions,
   initialValues,
+  preferredClimbingGrades,
 }: {
   routineId: string;
   logId: string;
@@ -34,23 +38,28 @@ export default function EditSessionLogForm({
   initialLocation: string;
   initialNotes: string;
   initialPerformedAt: Date;
+  templateKey: string | null;
   templateName: string | null;
   definitions: SessionMetricDefinitionWithConfig[];
   initialValues: Record<string, SessionMetricDraftValue>;
+  preferredClimbingGrades: string[];
 }) {
   const [durationMin, setDurationMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [location, setLocation] = useState(initialLocation);
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>(initialValues);
+  const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [saving, setSaving] = useState(false);
 
   async function onSave() {
-    const durationSec = Number(durationMin) * 60;
-    if (!Number.isFinite(durationSec) || durationSec <= 0) {
-      alert("Duration must be greater than 0.");
+    const trimmedDuration = durationMin.trim();
+    const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
+    if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
+      alert("Enter a valid duration in minutes or leave it blank.");
       return;
     }
+    const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
 
     const structuredValues: Array<{
       metricDefinitionId: string;
@@ -91,6 +100,7 @@ export default function EditSessionLogForm({
         notes,
         performedAtLocal,
         sessionMetricValues: structuredValues,
+        preferredClimbingGrades: isClimbingTemplateKey(templateKey) ? selectedClimbingGrades : undefined,
       });
       window.location.href = returnTo;
     } catch (error) {
@@ -108,7 +118,7 @@ export default function EditSessionLogForm({
       </div>
 
       <div>
-        <label style={styles.label}>Duration (minutes)</label>
+        <label style={styles.label}>Duration (minutes, optional)</label>
         <input style={styles.input} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
       </div>
 
@@ -118,6 +128,25 @@ export default function EditSessionLogForm({
       </div>
 
       {templateName ? <div style={{ fontSize: 12, opacity: 0.72 }}>Template: {templateName}</div> : null}
+
+      {isClimbingTemplateKey(templateKey) ? (
+        <ClimbingGradeRowsEditor
+          templateKey={templateKey}
+          definitions={definitions}
+          values={sessionMetricValues}
+          selectedGrades={selectedClimbingGrades}
+          onValuesChange={(metricDefinitionId, value) =>
+            setSessionMetricValues((current) => ({
+              ...current,
+              [metricDefinitionId]: {
+                ...current[metricDefinitionId],
+                ...value,
+              },
+            }))
+          }
+          onSelectedGradesChange={setSelectedClimbingGrades}
+        />
+      ) : null}
 
       <SessionMetricFields
         definitions={definitions}

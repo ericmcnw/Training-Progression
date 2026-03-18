@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { logSession } from "../../actions";
+import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import {
+  isClimbingTemplateKey,
   normalizeSessionMetricText,
   parseSessionMetricNumber,
   type SessionMetricDefinitionWithConfig,
@@ -12,26 +14,33 @@ import {
 
 export default function SessionLogForm({
   routineId,
+  templateKey,
   templateName,
   definitions,
+  preferredClimbingGrades,
 }: {
   routineId: string;
+  templateKey: string | null;
   templateName: string | null;
   definitions: SessionMetricDefinitionWithConfig[];
+  preferredClimbingGrades: string[];
 }) {
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
+  const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function onSave() {
-    const durationSec = Number(durationMin) * 60;
-    if (!Number.isFinite(durationSec) || durationSec <= 0) {
-      alert("Enter a valid duration in minutes.");
+    const trimmedDuration = durationMin.trim();
+    const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
+    if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
+      alert("Enter a valid duration in minutes or leave it blank.");
       return;
     }
+    const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
 
     const structuredValues: Array<{
       metricDefinitionId: string;
@@ -71,6 +80,7 @@ export default function SessionLogForm({
         notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: structuredValues,
+        preferredClimbingGrades: isClimbingTemplateKey(templateKey) ? selectedClimbingGrades : undefined,
       });
       window.location.href = "/routines";
     } catch (error) {
@@ -83,7 +93,7 @@ export default function SessionLogForm({
   return (
     <div style={{ display: "grid", gap: 12, maxWidth: 580 }}>
       <div>
-        <label style={styles.label}>Duration (minutes)</label>
+        <label style={styles.label}>Duration (minutes, optional)</label>
         <input style={styles.input} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
       </div>
 
@@ -93,6 +103,25 @@ export default function SessionLogForm({
       </div>
 
       {templateName ? <div style={styles.help}>Template: {templateName}</div> : null}
+
+      {isClimbingTemplateKey(templateKey) ? (
+        <ClimbingGradeRowsEditor
+          templateKey={templateKey}
+          definitions={definitions}
+          values={sessionMetricValues}
+          selectedGrades={selectedClimbingGrades}
+          onValuesChange={(metricDefinitionId, value) =>
+            setSessionMetricValues((current) => ({
+              ...current,
+              [metricDefinitionId]: {
+                ...current[metricDefinitionId],
+                ...value,
+              },
+            }))
+          }
+          onSelectedGradesChange={setSelectedClimbingGrades}
+        />
+      ) : null}
 
       <SessionMetricFields
         definitions={definitions}

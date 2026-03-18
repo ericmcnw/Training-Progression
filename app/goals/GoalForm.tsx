@@ -71,6 +71,14 @@ function templateForCurrentConfig(params: {
   );
 }
 
+function targetFieldLabel(targetType: GoalTargetTypeValue) {
+  if (targetType === "ROUTINE") return "Routine / session";
+  if (targetType === "SESSION_TEMPLATE") return "Session type";
+  if (targetType === "EXERCISE") return "Exercise";
+  if (targetType === "CARDIO") return "Cardio target";
+  return "Group";
+}
+
 export default function GoalForm({
   action,
   options,
@@ -148,10 +156,17 @@ export default function GoalForm({
 
   const metricMeta = metricInputMeta(effectiveMetricType);
   const selectedTarget = activeTargetOptions.find((option) => option.id === effectiveTargetId);
-  const effectiveSessionMetricDefinitionId =
-    sessionMetricOptions.some((option) => option.id === sessionMetricDefinitionId)
-      ? sessionMetricDefinitionId
-      : (sessionMetricOptions[0]?.id ?? "");
+  const currentSessionMetricIsValid = sessionMetricOptions.some((option) => option.id === sessionMetricDefinitionId);
+  const preferredBoulderingMetricId =
+    (targetType === "ROUTINE" || targetType === "SESSION_TEMPLATE") && selectedTarget?.sessionTemplateKey?.includes("bouldering")
+      ? (sessionMetricOptions.find(
+          (option) => option.metricKey === "highest_send_grade" && option.gradeSystem === "BOULDER_V"
+        )?.id ?? "")
+      : "";
+  const effectiveSessionMetricDefinitionId = currentSessionMetricIsValid
+    ? sessionMetricDefinitionId
+    : (preferredBoulderingMetricId || sessionMetricOptions[0]?.id || "");
+  const selectedSessionMetric = sessionMetricOptions.find((option) => option.id === effectiveSessionMetricDefinitionId) ?? null;
 
   function applyTemplate(nextTemplateKey: GoalTemplateKey) {
     const template = getGoalTemplate(nextTemplateKey);
@@ -212,7 +227,7 @@ export default function GoalForm({
             />
           </label>
           <label style={fieldStyle}>
-            <span>Specific target</span>
+            <span>{targetFieldLabel(targetType)}</span>
             <select name="targetId" value={effectiveTargetId} onChange={(event) => setTargetId(event.target.value)} style={formInputStyle}>
               {activeTargetOptions.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -245,7 +260,13 @@ export default function GoalForm({
                   value={sessionMetricTarget}
                   onChange={(event) => setSessionMetricTarget(event.target.value)}
                   style={formInputStyle}
-                  placeholder="5, 1200, V6, 5.11a"
+                  placeholder={
+                    selectedSessionMetric?.gradeSystem === "BOULDER_V"
+                      ? "V4, V5, V6"
+                      : selectedSessionMetric?.gradeSystem === "YOSEMITE"
+                      ? "5.10d, 5.11a"
+                      : "5, 1200"
+                  }
                 />
               </label>
             </>
@@ -464,7 +485,9 @@ const hintStyle: React.CSSProperties = {
 const templateCardStyle: React.CSSProperties = {
   textAlign: "left",
   padding: 12,
-  border: "1px solid rgba(128,128,128,0.35)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(128,128,128,0.35)",
   borderRadius: 12,
   background: "rgba(128,128,128,0.05)",
   color: "inherit",

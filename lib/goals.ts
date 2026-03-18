@@ -47,6 +47,9 @@ export type GoalTargetOption = {
   subtitle?: string;
   routineKind?: string;
   sessionTemplateId?: string | null;
+  sessionTemplateKey?: string | null;
+  metricKey?: string;
+  gradeSystem?: "BOULDER_V" | "YOSEMITE";
 };
 
 export type GoalFormOptions = {
@@ -600,6 +603,13 @@ function formatSeconds(value: number) {
 function formatMetricValue(goal: GoalWithConfig, value: number) {
   if (goal.metricType === "SESSION_METRIC") {
     if (goal.config?.sessionMetricTargetText && value === goal.targetValue) return goal.config.sessionMetricTargetText;
+    const targetText = goal.config?.sessionMetricTargetText?.trim();
+    const isBoulderingGradeGoal =
+      (goal.config?.sessionMetricDefinitionLabel === "V Grade" || /^v\d+/i.test(targetText ?? "")) &&
+      Number.isFinite(value);
+    if (isBoulderingGradeGoal) {
+      return `V${Math.round(value)}`;
+    }
     return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
   }
   if (goal.metricType === "DISTANCE") return `${value.toFixed(1)} mi`;
@@ -730,7 +740,14 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
         kind: true,
         subtype: true,
         sessionDetails: {
-          select: { templateId: true },
+          select: {
+            templateId: true,
+            template: {
+              select: {
+                key: true,
+              },
+            },
+          },
         },
       },
     }),
@@ -760,11 +777,21 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
   const sessionMetricOptionsByTemplateId = Object.fromEntries(
     sessionTemplates.map((template) => [
       template.id,
-      template.metricDefinitions.map((definition) => ({
-        id: definition.id,
-        label: definition.label,
-        subtitle: definition.unit ?? (definition.valueType === "TEXT" ? "Grade / text" : definition.valueType.toLowerCase()),
-      })),
+      template.metricDefinitions.map((definition) => {
+        const definitionWithConfig = withSessionMetricConfig(definition);
+        const isBoulderingGradeMetric =
+          template.key.includes("bouldering") && definition.key === "highest_send_grade" && definitionWithConfig.config?.gradeSystem === "BOULDER_V";
+        return {
+          id: definition.id,
+          label: isBoulderingGradeMetric ? "V Grade" : definition.label,
+          subtitle:
+            isBoulderingGradeMetric
+              ? "Best send grade"
+              : definition.unit ?? (definition.valueType === "TEXT" ? "Grade / text" : definition.valueType.toLowerCase()),
+          metricKey: definition.key,
+          gradeSystem: definitionWithConfig.config?.gradeSystem,
+        };
+      }),
     ])
   );
   const sessionMetricOptionsByRoutineId = Object.fromEntries(
@@ -781,6 +808,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       subtitle: `${routine.category} | ${routine.kind}${routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}`,
       routineKind: routine.kind,
       sessionTemplateId: routine.sessionDetails?.templateId ?? null,
+      sessionTemplateKey: routine.sessionDetails?.template?.key ?? null,
     })),
     exercises: exercises.map((exercise) => ({
       id: exercise.id,
@@ -801,6 +829,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       id: template.id,
       label: template.name,
       subtitle: template.sessionSubtype ? formatRoutineSubtype(template.sessionSubtype) : "Session template",
+      sessionTemplateKey: template.key,
     })),
     sessionMetricsByRoutineId: sessionMetricOptionsByRoutineId,
     sessionMetricsByTemplateId: sessionMetricOptionsByTemplateId,

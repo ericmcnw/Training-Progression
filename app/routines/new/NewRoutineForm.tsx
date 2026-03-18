@@ -53,6 +53,10 @@ export default function NewRoutineForm({
     (matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).some((template) => template.id === sessionTemplateId)
       ? sessionTemplateId
       : (matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
+  const selectedSessionTemplate =
+    matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
+    sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
+    null;
   const isCustomCategory = selectedCategory === "__custom__";
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
@@ -133,6 +137,35 @@ export default function NewRoutineForm({
         <input name="timesPerWeek" style={styles.input} inputMode="numeric" placeholder="e.g. 4" />
         <div style={styles.help}>If set, this creates or updates a visible weekly goal for the routine.</div>
       </div>
+
+      {kind === "SESSION" ? (
+        <div style={styles.sessionTemplateCard}>
+          <label style={styles.label}>Session template</label>
+          <select
+            name="sessionTemplateId"
+            style={styles.input as React.CSSProperties}
+            value={effectiveSessionTemplateId}
+            onChange={(event) => {
+              const nextTemplateId = event.target.value;
+              const nextTemplate = sessionTemplates.find((template) => template.id === nextTemplateId) ?? null;
+              setSessionTemplateId(nextTemplateId);
+              if (nextTemplate?.sessionSubtype) {
+                setSubtype(nextTemplate.sessionSubtype);
+              }
+            }}
+          >
+            {(matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+          <div style={styles.help}>
+            {selectedSessionTemplate?.description ??
+              "Pick the sport/activity template that defines the structured log fields for this session routine."}
+          </div>
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="submit" style={styles.btn}>
@@ -224,28 +257,6 @@ export default function NewRoutineForm({
             </select>
           </div>
 
-          {kind === "SESSION" ? (
-            <div>
-              <label style={styles.label}>Session template</label>
-              <select
-                name="sessionTemplateId"
-                style={styles.input as React.CSSProperties}
-                value={effectiveSessionTemplateId}
-                onChange={(event) => setSessionTemplateId(event.target.value)}
-              >
-                {(matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-              <div style={styles.help}>
-                {(matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ?? sessionTemplates.find((template) => template.id === effectiveSessionTemplateId))?.description ??
-                  "Pick the sport/activity template that defines the structured log fields for this session routine."}
-              </div>
-            </div>
-          ) : null}
-
           <MetadataGroupPicker
             title="Organization & analysis (optional)"
             help="These groups power rollups in Progress. The app preselects suggestions from the preset and subtype, so most users can leave this alone."
@@ -310,6 +321,12 @@ const styles = {
   },
   presetTitle: { fontWeight: 900 as const, marginBottom: 6 },
   presetDescription: { fontSize: 12, opacity: 0.8 },
+  sessionTemplateCard: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 12,
+    padding: 12,
+    background: "rgba(128,128,128,0.05)",
+  },
   advancedCard: {
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: 12,

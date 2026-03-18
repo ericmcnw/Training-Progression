@@ -261,6 +261,7 @@ model SessionRoutineDetails {
   id             String   @id @default(cuid())
   routineId      String   @unique
   templateId     String?
+  templateConfig Json?
   supportsLocation Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
