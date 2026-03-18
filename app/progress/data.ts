@@ -1,5 +1,5 @@
 import { formatAppDate, formatAppDateTime } from "@/lib/dates";
-import { inferExerciseMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
+import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { aggregateExerciseSessionRow, countGoalMetWeeks, descendantGroupIds, fillWeeklySeries, hasSessionLikeKinds, hasWorkoutKinds, incrementWeekMap, isCardioOnlyKinds, lastOrNull, performedAtWhere, weeksWithActivity, ytdSessions, type ProgressRange, type SeriesPoint } from "@/lib/progress-v2";
 import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
@@ -53,6 +53,7 @@ export async function getMetadataIndex() {
       childRelations: true,
       routineAssignments: true,
       exerciseAssignments: true,
+      guidedStepAssignments: true,
     },
   });
 }
@@ -60,6 +61,8 @@ export async function getMetadataIndex() {
 export async function getRoutineLogs(range: ProgressRange, filter?: {
   routineIds?: string[];
   exerciseIds?: string[];
+  guidedStepIds?: string[];
+  guidedExerciseIds?: string[];
 }) {
   return prisma.routineLog.findMany({
     where: {
@@ -72,10 +75,20 @@ export async function getRoutineLogs(range: ProgressRange, filter?: {
                 ...(filter.exerciseIds && filter.exerciseIds.length > 0
                   ? [{ exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }]
                   : []),
+                ...(filter.guidedStepIds && filter.guidedStepIds.length > 0
+                  ? [{ guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }]
+                  : []),
+                ...(filter.guidedExerciseIds && filter.guidedExerciseIds.length > 0
+                  ? [{ guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }]
+                  : []),
               ],
             }
           : filter?.exerciseIds && filter.exerciseIds.length > 0
           ? { exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }
+          : filter?.guidedStepIds && filter.guidedStepIds.length > 0
+          ? { guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }
+          : filter?.guidedExerciseIds && filter.guidedExerciseIds.length > 0
+          ? { guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }
           : {}),
     },
     orderBy: [{ performedAt: "asc" }],
@@ -116,7 +129,17 @@ export async function getRoutineLogs(range: ProgressRange, filter?: {
           metricDefinition: true,
         },
       },
-      guidedSteps: true,
+      guidedSteps: {
+        include: {
+          exercise: {
+            include: {
+              metadataGroups: {
+                include: { group: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
 }
@@ -262,6 +285,45 @@ export function durationWeeklySeries(logs: RoutineLogWithRelations[], range: Pro
   };
 }
 
+export function guidedItemWeeklySeries(
+  logs: RoutineLogWithRelations[],
+  range: ProgressRange,
+  filter: { guidedStepIds?: string[]; guidedExerciseIds?: string[] }
+) {
+  const completions = new Map<string, number>();
+  const duration = new Map<string, number>();
+  const guidedStepIds = new Set(filter.guidedStepIds ?? []);
+  const guidedExerciseIds = new Set(filter.guidedExerciseIds ?? []);
+
+  for (const log of logs) {
+    let sessionCompletions = 0;
+    let sessionDuration = 0;
+
+    for (const step of log.guidedSteps) {
+      const matchesGuidedStep = step.guidedStepId ? guidedStepIds.has(step.guidedStepId) : false;
+      const matchesGuidedExercise = step.exerciseId ? guidedExerciseIds.has(step.exerciseId) : false;
+      if (!matchesGuidedStep && !matchesGuidedExercise) continue;
+
+      const repeatCount = Math.max(1, step.repeatCount ?? 1);
+      const workSec = step.durationSec ?? 0;
+      const restSec = step.restSec ?? 0;
+      const restMultiplier = restSec > 0 ? (repeatCount > 1 ? repeatCount - 1 : 1) : 0;
+      sessionCompletions += repeatCount;
+      sessionDuration += workSec * repeatCount + restSec * restMultiplier;
+    }
+
+    if (sessionCompletions > 0) {
+      incrementWeekMap(completions, log.performedAt, sessionCompletions);
+      incrementWeekMap(duration, log.performedAt, sessionDuration);
+    }
+  }
+
+  return {
+    completions: fillWeeklySeries(completions, range),
+    duration: fillWeeklySeries(duration, range),
+  };
+}
+
 export function exerciseSessionSeries(rows: Array<{
   performedAt: Date;
   topWeight: number;
@@ -332,7 +394,7 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
       })
     ).map((item) => item.slug)
   );
-  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, sessionTemplateAssignments, sessionTemplateRoutines] = await Promise.all([
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, sessionTemplateAssignments, sessionTemplateRoutines, guidedStepAssignments, guidedSteps] = await Promise.all([
     prisma.routineMetadataGroup.findMany({
       where: { groupId: { in: relevantGroupIds } },
       select: { routineId: true },
@@ -356,6 +418,13 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
       where: { templateId: { not: null } },
       select: { routineId: true, templateId: true },
     }),
+    prisma.guidedStepMetadataGroup.findMany({
+      where: { groupId: { in: relevantGroupIds } },
+      select: { guidedStepId: true },
+    }),
+    prisma.guidedStep.findMany({
+      select: { id: true, routineId: true, kind: true, title: true, exerciseId: true },
+    }),
   ]);
 
   const inferredRoutineIds = subtypeRoutines
@@ -364,23 +433,39 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
   const inferredExerciseIds = inferredExercises
     .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((exercise) => exercise.id);
+  const inferredGuidedStepIds = guidedSteps
+    .filter((step) => step.kind === "STEP" && inferGuidedStepMetadataSlugs(step.title).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((step) => step.id);
+  const guidedStepIds = Array.from(new Set([...guidedStepAssignments.map((item) => item.guidedStepId), ...inferredGuidedStepIds]));
+  const guidedExerciseIds = Array.from(
+    new Set(
+      guidedSteps
+        .filter((step) => step.exerciseId && inferredExerciseIds.includes(step.exerciseId))
+        .map((step) => step.exerciseId as string)
+    )
+  );
+  const guidedRoutineIds = guidedSteps
+    .filter((step) => guidedStepIds.includes(step.id) || (step.exerciseId ? guidedExerciseIds.includes(step.exerciseId) : false))
+    .map((step) => step.routineId);
 
   const templateRoutineIds = sessionTemplateRoutines
     .filter((detail) => detail.templateId && sessionTemplateAssignments.some((assignment) => assignment.templateId === detail.templateId))
     .map((detail) => detail.routineId);
   const routineIds = Array.from(
-    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds])
+    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds, ...guidedRoutineIds])
   );
   const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
   const logs =
-    routineIds.length === 0 && exerciseIds.length === 0
+    routineIds.length === 0 && exerciseIds.length === 0 && guidedStepIds.length === 0 && guidedExerciseIds.length === 0
       ? []
-      : await getRoutineLogs(range, { routineIds, exerciseIds });
+      : await getRoutineLogs(range, { routineIds, exerciseIds, guidedStepIds, guidedExerciseIds });
 
   return {
     group,
     routineIds,
     exerciseIds,
+    guidedStepIds,
+    guidedExerciseIds,
     logs,
   };
 }

@@ -1,5 +1,5 @@
 import MetricLineChart from "../../MetricLineChart";
-import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, groupTargetType, resolveGroupTarget, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../../data";
+import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, groupTargetType, guidedItemWeeklySeries, resolveGroupTarget, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../../ui";
 import { formatAppDate } from "@/lib/dates";
 import { getChartGoalReference } from "@/lib/goals";
@@ -122,6 +122,13 @@ export default async function GroupTargetPage(props: {
   const workoutPerf = workoutSessionSeries(target.logs);
   const workoutWorkload = workoutWeeklySeries(target.logs, range);
   const durationWorkload = durationWeeklySeries(target.logs, range);
+  const guidedWorkload = guidedItemWeeklySeries(target.logs, range, {
+    guidedStepIds: target.guidedStepIds,
+    guidedExerciseIds: target.guidedExerciseIds,
+  });
+  const hasGuidedWorkload =
+    guidedWorkload.completions.some((point) => point.value > 0) ||
+    guidedWorkload.duration.some((point) => point.value > 0);
 
   const overviewSecondary =
     targetType === "cardio" ? (
@@ -162,6 +169,7 @@ export default async function GroupTargetPage(props: {
               { label: "YTD sessions", value: String(summary.ytd) },
               { label: "Routines", value: String(target.routineIds.length) },
               { label: "Exercises", value: String(target.exerciseIds.length) },
+              ...(hasGuidedWorkload ? [{ label: "Guided items", value: String(target.guidedStepIds.length + target.guidedExerciseIds.length) }] : []),
               { label: targetType === "cardio" ? "Avg pace" : "Total duration", value: targetType === "cardio" ? formatPace(summary.totalDistance > 0 ? summary.totalDurationSec / summary.totalDistance : null) : formatDuration(summary.totalDurationSec) },
             ]}
           />
@@ -263,6 +271,12 @@ export default async function GroupTargetPage(props: {
               <div style={{ display: "grid", gap: 10 }}>
                 <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={sessionsSeries} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+                {hasGuidedWorkload ? (
+                  <>
+                    <MetricLineChart title={`${targetLabel}: Guided item completions per Week`} yLabel="Completions" xLabel="Week" points={guidedWorkload.completions} decimals={0} />
+                    <MetricLineChart title={`${targetLabel}: Guided item time per Week`} yLabel="Duration" xLabel="Week" points={guidedWorkload.duration} unit="sec" decimals={0} />
+                  </>
+                ) : null}
               </div>
             )}
           </SectionCard>

@@ -15,7 +15,7 @@ import {
   getAllowedMetricTypes,
   metricIsLowerBetter,
 } from "@/lib/goals-config";
-import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
+import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
@@ -343,7 +343,7 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
     : [];
   const relevantSlugs = new Set(relevantGroups.map((item) => item.slug));
 
-  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, templateAssignments, sessionTemplateRoutines] = groupIds.length
+  const [routineAssignments, exerciseAssignments, subtypeRoutines, inferredExercises, templateAssignments, sessionTemplateRoutines, guidedStepAssignments, guidedSteps] = groupIds.length
     ? await Promise.all([
         prisma.routineMetadataGroup.findMany({
           where: { groupId: { in: groupIds } },
@@ -368,19 +368,44 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
           where: { templateId: { not: null } },
           select: { routineId: true, templateId: true },
         }),
+        prisma.guidedStepMetadataGroup.findMany({
+          where: { groupId: { in: groupIds } },
+          select: { guidedStepId: true },
+        }),
+        prisma.guidedStep.findMany({
+          select: { id: true, routineId: true, kind: true, title: true, exerciseId: true },
+        }),
       ])
-    : [[], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], []];
   const inferredRoutineIds = subtypeRoutines
     .filter((routine) => inferRoutineMetadataSlugs(routine.subtype).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((routine) => routine.id);
   const inferredExerciseIds = inferredExercises
     .filter((exercise) => inferExerciseMetadataSlugs(exercise.name).some((slugValue) => relevantSlugs.has(slugValue)))
     .map((exercise) => exercise.id);
+  const inferredGuidedStepIds = guidedSteps
+    .filter((step) => step.kind === "STEP" && inferGuidedStepMetadataSlugs(step.title).some((slugValue) => relevantSlugs.has(slugValue)))
+    .map((step) => step.id);
+  const guidedExerciseIds = Array.from(
+    new Set(
+      guidedSteps
+        .filter((step) => step.exerciseId && inferredExerciseIds.includes(step.exerciseId))
+        .map((step) => step.exerciseId as string)
+    )
+  );
+  const guidedRoutineIds = guidedSteps
+    .filter(
+      (step) =>
+        guidedStepAssignments.some((assignment) => assignment.guidedStepId === step.id) ||
+        inferredGuidedStepIds.includes(step.id) ||
+        (step.exerciseId ? guidedExerciseIds.includes(step.exerciseId) : false)
+    )
+    .map((step) => step.routineId);
   const templateRoutineIds = sessionTemplateRoutines
     .filter((detail) => detail.templateId && templateAssignments.some((assignment) => assignment.templateId === detail.templateId))
     .map((detail) => detail.routineId);
   const routineIds = Array.from(
-    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds])
+    new Set([...routineAssignments.map((item) => item.routineId), ...inferredRoutineIds, ...templateRoutineIds, ...guidedRoutineIds])
   );
   const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
   const sessionTemplateIds = Array.from(new Set(templateAssignments.map((item) => item.templateId)));

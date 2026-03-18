@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import { isGuidedKind } from "@/lib/routines";
 import GuidedLogForm from "./GuidedLogForm";
@@ -19,7 +20,20 @@ export default async function LogGuidedPage(props: { params: Promise<Params> | P
       name: true,
       category: true,
       kind: true,
-      guidedSteps: { orderBy: { sortOrder: "asc" }, select: { id: true, title: true, durationSec: true, restSec: true, sortOrder: true } },
+      guidedSteps: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          exerciseId: true,
+          durationSec: true,
+          restSec: true,
+          repeatCount: true,
+          sortOrder: true,
+          exercise: { select: { name: true } },
+        },
+      },
     },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
@@ -47,7 +61,20 @@ export default async function LogGuidedPage(props: { params: Promise<Params> | P
       <section style={panel}>
         <div style={panelHeader}>GUIDED DETAILS</div>
         <div style={{ padding: 14 }}>
-          <GuidedLogForm routineId={routineId} steps={routine.guidedSteps} />
+          <GuidedLogForm
+            routineId={routineId}
+            steps={routine.guidedSteps.map((step) => ({
+              id: step.id,
+              kind: step.kind,
+              title: step.title,
+              exerciseId: step.exerciseId,
+              exerciseName: step.exercise?.name ?? null,
+              durationSec: step.durationSec,
+              restSec: step.restSec,
+              repeatCount: step.repeatCount,
+              sortOrder: step.sortOrder,
+            }))}
+          />
         </div>
       </section>
 
@@ -59,7 +86,7 @@ export default async function LogGuidedPage(props: { params: Promise<Params> | P
             <div key={log.id} style={card}>
               <div style={{ fontWeight: 800 }}>{new Date(log.performedAt).toLocaleString()}</div>
               <div style={{ opacity: 0.8, marginTop: 2 }}>
-                {log.durationSec ? `${Math.round(log.durationSec / 60)} min` : "No duration"} | {log.guidedSteps.length} saved steps
+                {log.durationSec ? formatGuidedSeconds(log.durationSec) : "No duration"} | {log.guidedSteps.length} saved items
               </div>
               {log.notes ? <div style={{ opacity: 0.75, marginTop: 2 }}>{log.notes}</div> : null}
             </div>

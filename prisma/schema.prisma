@@ -73,6 +73,11 @@ enum SessionMetricValueType {
   BOOLEAN
 }
 
+enum GuidedStepKind {
+  STEP
+  EXERCISE
+}
+
 model Routine {
   id           String      @id @default(cuid())
   name         String
@@ -203,34 +208,46 @@ model RoutineLog {
 model GuidedStep {
   id          String   @id @default(cuid())
   routineId   String
+  kind        GuidedStepKind @default(STEP)
   title       String
+  exerciseId  String?
   durationSec Int?
   restSec     Int?
+  repeatCount Int      @default(1)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   routine     Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise    Exercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
   logSteps    GuidedStepLog[]
+  metadataGroups GuidedStepMetadataGroup[]
 
   @@index([routineId, sortOrder])
+  @@index([exerciseId])
 }
 
 model GuidedStepLog {
   id            String      @id @default(cuid())
   routineLogId   String
   guidedStepId   String?
+  kind           GuidedStepKind @default(STEP)
   title          String
+  exerciseId     String?
   durationSec    Int?
   restSec        Int?
+  repeatCount    Int      @default(1)
+  weightLb       Float?
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
 
   routineLog     RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
   guidedStep     GuidedStep? @relation(fields: [guidedStepId], references: [id], onDelete: SetNull)
+  exercise       Exercise?   @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
 
   @@index([routineLogId, sortOrder])
   @@index([guidedStepId])
+  @@index([exerciseId])
 }
 
 model RoutineLogMetric {
@@ -334,6 +351,8 @@ model Exercise {
   routines        RoutineExercise[]
   sessionExercises SessionExercise[]
   metadataGroups  ExerciseMetadataGroup[]
+  guidedSteps     GuidedStep[]
+  guidedStepLogs  GuidedStepLog[]
 }
 
 model MetadataGroup {
@@ -352,6 +371,7 @@ model MetadataGroup {
   routineAssignments RoutineMetadataGroup[]
   exerciseAssignments ExerciseMetadataGroup[]
   sessionTemplateAssignments SessionTemplateMetadataGroup[]
+  guidedStepAssignments GuidedStepMetadataGroup[]
 
   @@index([kind, label])
   @@index([appliesToRoutine])
@@ -391,6 +411,18 @@ model ExerciseMetadataGroup {
   group       MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@id([exerciseId, groupId])
+  @@index([groupId])
+}
+
+model GuidedStepMetadataGroup {
+  guidedStepId String
+  groupId      String
+  assignedAt   DateTime      @default(now())
+
+  guidedStep   GuidedStep    @relation(fields: [guidedStepId], references: [id], onDelete: Cascade)
+  group        MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([guidedStepId, groupId])
   @@index([groupId])
 }
 

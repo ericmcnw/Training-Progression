@@ -43,7 +43,18 @@ export default async function EditGuidedLogPage(props: {
       notes: true,
       guidedSteps: {
         orderBy: { sortOrder: "asc" },
-        select: { guidedStepId: true, title: true, durationSec: true, restSec: true, sortOrder: true },
+        select: {
+          guidedStepId: true,
+          kind: true,
+          title: true,
+          exerciseId: true,
+          durationSec: true,
+          restSec: true,
+          repeatCount: true,
+          weightLb: true,
+          sortOrder: true,
+          exercise: { select: { name: true } },
+        },
       },
     },
   });
@@ -65,7 +76,18 @@ export default async function EditGuidedLogPage(props: {
             initialDurationSec={log.durationSec ?? 0}
             initialNotes={log.notes ?? ""}
             initialPerformedAt={log.performedAt}
-            steps={log.guidedSteps}
+            steps={log.guidedSteps.map((step) => ({
+              guidedStepId: step.guidedStepId,
+              kind: step.kind,
+              title: step.title,
+              exerciseId: step.exerciseId,
+              exerciseName: step.exercise?.name ?? null,
+              durationSec: step.durationSec,
+              restSec: step.restSec,
+              repeatCount: step.repeatCount,
+              weightLb: step.weightLb,
+              sortOrder: step.sortOrder,
+            }))}
           />
         </div>
       </div>

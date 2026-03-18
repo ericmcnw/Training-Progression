@@ -71,11 +71,12 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "rowing", label: "Rowing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "climbing", label: "Climbing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true },
 
-  { slug: "strength", label: "Strength", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "strength", label: "Strength", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
   { slug: "hypertrophy", label: "Hypertrophy", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
-  { slug: "rehab", label: "Rehab", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
-  { slug: "skill-practice", label: "Skill Practice", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
-  { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
+  { slug: "rehab", label: "Rehab", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "skill-practice", label: "Skill Practice", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "breathwork", label: "Breathwork", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
+  { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
 ];
 
 export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
@@ -90,7 +91,8 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   WARMUP: ["mobility"],
   COOLDOWN: ["mobility", "recovery"],
   REHAB: ["rehab"],
-  CLIMBING: ["climbing", "skill-practice"],
+  BREATHWORK: ["breathwork", "recovery", "skill-practice"],
+  CLIMBING: ["climbing", "skill-practice", "strength"],
   SKILL_PRACTICE: ["skill-practice"],
   HIKE_DAY: ["hiking"],
   STRENGTH: ["strength"],
@@ -114,8 +116,21 @@ const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[
   { pattern: /\b(bird dog)\b/i, slugs: ["core", "anti-rotation", "glutes"] },
   { pattern: /\b(dead bug|ab wheel)\b/i, slugs: ["core", "anti-extension"] },
   { pattern: /\b(carry|farmer|waiter|overhead carry)\b/i, slugs: ["carry", "core"] },
-  { pattern: /\b(hang|hold|isometric|support hold|handstand hold)\b/i, slugs: ["isometric"] },
-  { pattern: /\b(stretch|mobility|neural glide)\b/i, slugs: ["mobility"] },
+  { pattern: /\b(hang|hangboard|fingerboard|lock-off|support hold|handstand hold|isometric)\b/i, slugs: ["isometric"] },
+  { pattern: /\b(hangboard|fingerboard|crimp|pinch)\b/i, slugs: ["fingers", "forearms", "pull", "strength"] },
+  { pattern: /\b(stretch|mobility|neural glide|yoga|opener)\b/i, slugs: ["mobility", "recovery"] },
+  { pattern: /\b(breath|breathing|nasal|box breathing|breathwork|inhale|exhale)\b/i, slugs: ["breathwork", "recovery", "skill-practice"] },
+  { pattern: /\b(rehab|prehab|therapy)\b/i, slugs: ["rehab", "recovery"] },
+];
+
+const GUIDED_STEP_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[] }> = [
+  { pattern: /\b(stretch|mobility|opener|flow|yoga)\b/i, slugs: ["mobility", "recovery"] },
+  { pattern: /\b(breath|breathing|nasal|box breathing|breathwork|inhale|exhale)\b/i, slugs: ["breathwork", "recovery", "skill-practice"] },
+  { pattern: /\b(hangboard|fingerboard|finger|crimp|pinch)\b/i, slugs: ["fingers", "pull", "strength"] },
+  { pattern: /\b(pull|scap|shoulder blade|lock-off)\b/i, slugs: ["pull", "strength"] },
+  { pattern: /\b(warmup|warm-up)\b/i, slugs: ["mobility", "recovery"] },
+  { pattern: /\b(cooldown|cool-down)\b/i, slugs: ["recovery", "mobility"] },
+  { pattern: /\b(rehab|prehab|therapy|nerve glide)\b/i, slugs: ["rehab", "recovery", "mobility"] },
 ];
 
 export function inferExerciseMetadataSlugs(name: string) {
@@ -124,6 +139,18 @@ export function inferExerciseMetadataSlugs(name: string) {
 
   const slugs = new Set<string>();
   for (const rule of EXERCISE_METADATA_INFERENCE_RULES) {
+    if (!rule.pattern.test(normalized)) continue;
+    for (const slug of rule.slugs) slugs.add(slug);
+  }
+  return Array.from(slugs);
+}
+
+export function inferGuidedStepMetadataSlugs(name: string) {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return [];
+
+  const slugs = new Set<string>();
+  for (const rule of GUIDED_STEP_METADATA_INFERENCE_RULES) {
     if (!rule.pattern.test(normalized)) continue;
     for (const slug of rule.slugs) slugs.add(slug);
   }

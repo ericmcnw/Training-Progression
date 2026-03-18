@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { logGuided } from "../../actions";
+import {
+  buildGuidedRunnerSegments,
+  formatGuidedSeconds,
+  formatGuidedStepLabel,
+  totalGuidedTemplateDuration,
+  type GuidedTemplateStep,
+} from "@/lib/guided";
 
-type Step = {
-  id: string;
-  title: string;
-  durationSec: number | null;
-  restSec: number | null;
-  sortOrder: number;
-};
+type Step = GuidedTemplateStep;
 
 export default function GuidedLogForm({
   routineId,
@@ -21,32 +22,73 @@ export default function GuidedLogForm({
 }) {
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
-  const [customDurationMin, setCustomDurationMin] = useState("");
+  const [runMode, setRunMode] = useState<"MANUAL" | "CONTINUOUS">("MANUAL");
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const segments = useMemo(() => buildGuidedRunnerSegments(steps), [steps]);
+  const [remainingSec, setRemainingSec] = useState(segments[0]?.durationSec ?? 0);
+  const [isRunning, setIsRunning] = useState(false);
   const [saving, setSaving] = useState(false);
-  const defaultDurationSec = useMemo(
-    () => steps.reduce((sum, step) => sum + (step.durationSec ?? 0) + (step.restSec ?? 0), 0),
-    [steps]
-  );
+  const [exerciseWeights, setExerciseWeights] = useState<Record<string, string>>({});
+  const defaultDurationSec = useMemo(() => totalGuidedTemplateDuration(steps), [steps]);
 
-  async function onSave() {
-    const customDurationSec = customDurationMin.trim() ? Number(customDurationMin) * 60 : null;
-    if (customDurationSec !== null && (!Number.isFinite(customDurationSec) || customDurationSec <= 0)) {
-      alert("Duration must be greater than 0.");
+  const currentSegment = currentSegmentIndex < segments.length ? segments[currentSegmentIndex] : null;
+  const completedDurationSec = useMemo(() => {
+    if (segments.length === 0) return 0;
+    const completed = segments
+      .slice(0, Math.min(currentSegmentIndex, segments.length))
+      .reduce((sum, segment) => sum + segment.durationSec, 0);
+    if (!currentSegment) return completed;
+    return completed + Math.max(0, currentSegment.durationSec - remainingSec);
+  }, [currentSegment, currentSegmentIndex, remainingSec, segments]);
+  const nextSegment = currentSegmentIndex + 1 < segments.length ? segments[currentSegmentIndex + 1] : null;
+
+  useEffect(() => {
+    const segment = currentSegmentIndex < segments.length ? segments[currentSegmentIndex] : null;
+    if (!segment) {
+      setIsRunning(false);
       return;
     }
+    setRemainingSec(segment.durationSec);
+  }, [currentSegmentIndex, segments]);
 
+  useEffect(() => {
+    if (!isRunning || !currentSegment) return;
+    const timeout = window.setTimeout(() => {
+      setRemainingSec((value) => {
+        if (value > 1) return value - 1;
+
+        const nextIndex = currentSegmentIndex + 1;
+        if (nextIndex >= segments.length) {
+          setCurrentSegmentIndex(segments.length);
+          setIsRunning(false);
+          return 0;
+        }
+
+        setCurrentSegmentIndex(nextIndex);
+        setIsRunning(runMode === "CONTINUOUS");
+        return segments[nextIndex].durationSec;
+      });
+    }, 1000);
+    return () => window.clearTimeout(timeout);
+  }, [currentSegment, currentSegmentIndex, isRunning, remainingSec, runMode, segments]);
+
+  async function onSave() {
     setSaving(true);
     try {
       await logGuided({
         routineId,
-        durationSec: customDurationSec,
+        durationSec: completedDurationSec > 0 ? completedDurationSec : defaultDurationSec || null,
         notes,
         performedAtLocal: performedAtLocal || undefined,
         steps: steps.map((step) => ({
           guidedStepId: step.id,
+          kind: step.kind,
           title: step.title,
+          exerciseId: step.exerciseId ?? null,
           durationSec: step.durationSec,
           restSec: step.restSec,
+          repeatCount: step.repeatCount,
+          weightLb: step.kind === "EXERCISE" ? (exerciseWeights[step.id]?.trim() ? Number(exerciseWeights[step.id]) : null) : null,
           sortOrder: step.sortOrder,
         })),
       });
@@ -56,17 +98,115 @@ export default function GuidedLogForm({
     }
   }
 
+  function goToSegment(nextIndex: number) {
+    if (segments.length === 0) return;
+    const clamped = Math.max(0, Math.min(nextIndex, segments.length - 1));
+    setCurrentSegmentIndex(clamped);
+    setRemainingSec(segments[clamped].durationSec);
+    setIsRunning(false);
+  }
+
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 580 }}>
-      <div>
-        <label style={styles.label}>Duration override (minutes, optional)</label>
-        <input
-          style={styles.input}
-          value={customDurationMin}
-          onChange={(event) => setCustomDurationMin(event.target.value)}
-          inputMode="decimal"
-          placeholder={defaultDurationSec > 0 ? `Default template total: ${Math.round(defaultDurationSec / 60)} min` : "Leave blank to use step total"}
-        />
+    <div style={{ display: "grid", gap: 12, maxWidth: 720 }}>
+      <div style={modeCard}>
+        <div style={{ fontWeight: 900, fontSize: 13 }}>Playback</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          <button type="button" onClick={() => setRunMode("MANUAL")} style={{ ...modeBtn, ...(runMode === "MANUAL" ? modeBtnActive : null) }}>
+            Manual start each step
+          </button>
+          <button type="button" onClick={() => setRunMode("CONTINUOUS")} style={{ ...modeBtn, ...(runMode === "CONTINUOUS" ? modeBtnActive : null) }}>
+            Continuous auto-advance
+          </button>
+        </div>
+        <div style={helpText}>
+          Manual mode pauses when a step or rest finishes. Continuous mode rolls straight into the next segment. You can still pause any time.
+        </div>
+      </div>
+
+      <div style={runnerCard}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 13 }}>Current timer</div>
+            <div style={{ fontSize: 12, opacity: 0.72 }}>
+              {segments.length === 0
+                ? "No timed items yet."
+                : currentSegment
+                ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
+                : "Flow complete"}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.72 }}>
+            Completed {formatGuidedSeconds(completedDurationSec)} / {formatGuidedSeconds(defaultDurationSec)}
+          </div>
+        </div>
+
+        <div style={timerFace}>
+          <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.68 }}>
+            {currentSegment ? currentSegment.phase : "DONE"}
+          </div>
+          <div style={timerValue}>
+            {currentSegment ? formatGuidedSeconds(remainingSec) : "Finished"}
+          </div>
+          <div style={{ fontWeight: 900, textAlign: "center" }}>
+            {currentSegment ? currentSegment.segmentLabel : "All template items completed"}
+          </div>
+          {currentSegment ? (
+            <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
+              {currentSegment.stepKind === "EXERCISE" ? "Exercise" : "Step"} • {currentSegment.stepLabel}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!currentSegment && segments.length > 0) {
+                goToSegment(0);
+              }
+              setIsRunning((value) => !value);
+            }}
+            disabled={segments.length === 0}
+            style={actionBtn}
+          >
+            {isRunning ? "Pause" : currentSegment ? "Play" : "Restart"}
+          </button>
+          <button type="button" onClick={() => currentSegment && goToSegment(currentSegmentIndex + 1)} disabled={!currentSegment || currentSegmentIndex >= segments.length - 1} style={actionBtn}>
+            Next
+          </button>
+          <button type="button" onClick={() => goToSegment(currentSegmentIndex - 1)} disabled={segments.length === 0 || currentSegmentIndex <= 0} style={actionBtn}>
+            Previous
+          </button>
+          <button type="button" onClick={() => goToSegment(0)} disabled={segments.length === 0} style={actionBtn}>
+            Reset
+          </button>
+        </div>
+
+        {nextSegment ? (
+          <div style={nextCard}>
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.68 }}>Next up</div>
+            <div style={{ fontWeight: 800 }}>{nextSegment.segmentLabel}</div>
+            <div style={{ fontSize: 12, opacity: 0.72 }}>{formatGuidedSeconds(nextSegment.durationSec)}</div>
+          </div>
+        ) : null}
+
+        {currentSegment?.stepKind === "EXERCISE" ? (
+          <div>
+            <label style={styles.label}>Weight for this exercise item (lb, optional)</label>
+            <input
+              style={styles.input}
+              inputMode="decimal"
+              value={exerciseWeights[currentSegment.guidedStepId] ?? ""}
+              onChange={(event) =>
+                setExerciseWeights((current) => ({
+                  ...current,
+                  [currentSegment.guidedStepId]: event.target.value,
+                }))
+              }
+              placeholder="25"
+            />
+          </div>
+        ) : null}
       </div>
 
       <div>
@@ -83,15 +223,18 @@ export default function GuidedLogForm({
       </details>
 
       <div style={styles.templateCard}>
-        <div style={{ fontWeight: 900, fontSize: 13 }}>Guided Steps</div>
-        {steps.length === 0 && <div style={{ marginTop: 8, opacity: 0.75 }}>No guided steps are saved yet. You can still log total duration and notes.</div>}
+        <div style={{ fontWeight: 900, fontSize: 13 }}>Template flow</div>
+        {steps.length === 0 && <div style={{ marginTop: 8, opacity: 0.75 }}>No guided items are saved yet. You can still save a guided log with notes.</div>}
         <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
           {steps.map((step, index) => (
             <div key={step.id} style={styles.stepRow}>
-              <div style={{ fontWeight: 800 }}>{index + 1}. {step.title}</div>
+              <div style={{ fontWeight: 800 }}>
+                {index + 1}. {formatGuidedStepLabel(step)}
+              </div>
               <div style={{ fontSize: 12, opacity: 0.75 }}>
-                {step.durationSec ? `${step.durationSec}s work` : "No work time"}
-                {step.restSec ? ` | ${step.restSec}s rest` : ""}
+                {step.kind === "EXERCISE" ? "Exercise" : "Step"} • {formatGuidedSeconds(step.durationSec)} work
+                {step.restSec ? ` • ${formatGuidedSeconds(step.restSec)} rest` : ""}
+                {step.repeatCount > 1 ? ` • ${step.repeatCount} sets` : ""}
               </div>
             </div>
           ))}
@@ -160,4 +303,77 @@ const styles = {
     padding: 8,
     background: "rgba(128,128,128,0.05)",
   },
+};
+
+const modeCard: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.3)",
+  borderRadius: 12,
+  padding: 12,
+  background: "rgba(128,128,128,0.05)",
+};
+
+const modeBtn: React.CSSProperties = {
+  padding: "9px 12px",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(128,128,128,0.4)",
+  borderRadius: 999,
+  background: "rgba(128,128,128,0.08)",
+  color: "inherit",
+  fontWeight: 800,
+};
+
+const modeBtnActive: React.CSSProperties = {
+  borderColor: "rgba(84,203,130,0.72)",
+  background: "rgba(84,203,130,0.14)",
+};
+
+const runnerCard: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.3)",
+  borderRadius: 16,
+  padding: 14,
+  background: "linear-gradient(180deg, rgba(34,197,94,0.08), rgba(17,24,39,0.2))",
+  display: "grid",
+  gap: 12,
+};
+
+const timerFace: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 18,
+  padding: 20,
+  display: "grid",
+  gap: 8,
+  justifyItems: "center",
+  background: "rgba(17,24,39,0.35)",
+};
+
+const timerValue: React.CSSProperties = {
+  fontSize: 40,
+  lineHeight: 1,
+  fontWeight: 900,
+  letterSpacing: -1,
+};
+
+const actionBtn: React.CSSProperties = {
+  padding: "10px 12px",
+  border: "1px solid rgba(128,128,128,0.5)",
+  borderRadius: 10,
+  background: "rgba(17,24,39,0.35)",
+  color: "inherit",
+  fontWeight: 800,
+};
+
+const nextCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 12,
+  padding: 10,
+  background: "rgba(17,24,39,0.2)",
+  display: "grid",
+  gap: 4,
+};
+
+const helpText: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 12,
+  opacity: 0.72,
 };

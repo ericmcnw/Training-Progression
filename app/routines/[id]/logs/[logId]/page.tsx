@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatAppDateTime } from "@/lib/dates";
+import { formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import { isCardioKind, isCompletionKind, isGuidedKind, isSessionKind, isWorkoutKind } from "@/lib/routines";
 
@@ -14,16 +15,7 @@ function getParam(params: SearchParams, key: string) {
   return value;
 }
 
-function formatSeconds(value: number | null | undefined) {
-  if (!value || value <= 0) return "0s";
-  const total = Math.floor(value);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
+const formatSeconds = formatGuidedSeconds;
 
 function formatMetricValue(value: number, unit?: string | null) {
   const normalized = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
@@ -75,7 +67,7 @@ export default async function RoutineLogDetailPage(props: {
       },
       guidedSteps: {
         orderBy: { sortOrder: "asc" },
-        select: { id: true, title: true, durationSec: true, restSec: true },
+        select: { id: true, kind: true, title: true, exerciseId: true, durationSec: true, restSec: true, repeatCount: true, weightLb: true, exercise: { select: { name: true } } },
       },
       exercises: {
         orderBy: { createdAt: "asc" },
@@ -213,9 +205,11 @@ export default async function RoutineLogDetailPage(props: {
             <div style={{ display: "grid", gap: 8 }}>
               {log.guidedSteps.map((step, index) => (
                 <div key={step.id} style={itemCard}>
-                  <div style={{ fontWeight: 900 }}>{index + 1}. {step.title}</div>
+                  <div style={{ fontWeight: 900 }}>{index + 1}. {formatGuidedStepLabel({ kind: step.kind, title: step.title, exerciseName: step.exercise?.name ?? null })}</div>
                   <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
-                    Work: {formatSeconds(step.durationSec)} | Rest: {formatSeconds(step.restSec)}
+                    {step.kind === "EXERCISE" ? "Exercise" : "Step"} | Work: {formatSeconds(step.durationSec)} | Rest: {formatSeconds(step.restSec)}
+                    {step.repeatCount > 1 ? ` | Sets: ${step.repeatCount}` : ""}
+                    {step.weightLb !== null && step.weightLb !== undefined ? ` | Weight: ${step.weightLb} lb` : ""}
                   </div>
                 </div>
               ))}

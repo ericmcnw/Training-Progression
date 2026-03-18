@@ -1,5 +1,6 @@
 "use server";
 
+import { inferGuidedStepMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -8,13 +9,75 @@ function routeFor(routineId: string) {
   return `/routines/${routineId}/guided`;
 }
 
+async function metadataGroupIdsForSlugs(slugs: string[]) {
+  if (slugs.length === 0) return [];
+  const groups = await prisma.metadataGroup.findMany({
+    where: {
+      slug: { in: slugs },
+    },
+    select: { id: true },
+  });
+  return groups.map((group) => group.id);
+}
+
+async function syncGuidedStepMetadataGroups(guidedStepId: string, groupIds: string[]) {
+  await prisma.guidedStepMetadataGroup.deleteMany({
+    where: {
+      guidedStepId,
+      groupId: { notIn: groupIds.length > 0 ? groupIds : ["__none__"] },
+    },
+  });
+
+  if (groupIds.length === 0) return;
+
+  await prisma.guidedStepMetadataGroup.createMany({
+    data: groupIds.map((groupId) => ({ guidedStepId, groupId })),
+    skipDuplicates: true,
+  });
+}
+
+function parseStepKind(value: FormDataEntryValue | null) {
+  return String(value || "").trim() === "EXERCISE" ? "EXERCISE" : "STEP";
+}
+
+function parseOptionalSeconds(value: FormDataEntryValue | null, label: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${label} must be greater than 0.`);
+  return Math.floor(parsed);
+}
+
+function parseRepeatCount(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return 1;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("Repeat count must be at least 1.");
+  return Math.floor(parsed);
+}
+
 export async function addGuidedStep(formData: FormData) {
   const routineId = String(formData.get("routineId") || "").trim();
+  const kind = parseStepKind(formData.get("kind"));
   const title = String(formData.get("title") || "").trim();
-  const durationSecRaw = String(formData.get("durationSec") || "").trim();
-  const restSecRaw = String(formData.get("restSec") || "").trim();
+  const exerciseId = String(formData.get("exerciseId") || "").trim();
   if (!routineId) throw new Error("Missing routine id.");
-  if (!title) throw new Error("Title is required.");
+  if (kind === "STEP" && !title) throw new Error("Title is required.");
+  if (kind === "EXERCISE" && !exerciseId) throw new Error("Exercise is required.");
+
+  const durationSec = parseOptionalSeconds(formData.get("durationSec"), "Duration");
+  const restSec = parseOptionalSeconds(formData.get("restSec"), "Rest");
+  const repeatCount = parseRepeatCount(formData.get("repeatCount"));
+
+  let exerciseName: string | null = null;
+  if (exerciseId) {
+    const exercise = await prisma.exercise.findUnique({
+      where: { id: exerciseId },
+      select: { id: true, name: true },
+    });
+    if (!exercise) throw new Error("Exercise not found.");
+    exerciseName = exercise.name;
+  }
 
   const existing = await prisma.guidedStep.findMany({
     where: { routineId },
@@ -22,15 +85,24 @@ export async function addGuidedStep(formData: FormData) {
     select: { id: true },
   });
 
-  await prisma.guidedStep.create({
+  const created = await prisma.guidedStep.create({
     data: {
       routineId,
-      title,
-      durationSec: durationSecRaw ? Math.max(0, Math.floor(Number(durationSecRaw))) : null,
-      restSec: restSecRaw ? Math.max(0, Math.floor(Number(restSecRaw))) : null,
+      kind,
+      title: kind === "EXERCISE" ? exerciseName ?? title : title,
+      exerciseId: exerciseId || null,
+      durationSec,
+      restSec,
+      repeatCount,
       sortOrder: existing.length,
     },
+    select: { id: true },
   });
+
+  if (kind === "STEP") {
+    const inferredGroupIds = await metadataGroupIdsForSlugs(inferGuidedStepMetadataSlugs(title));
+    await syncGuidedStepMetadataGroups(created.id, inferredGroupIds);
+  }
 
   revalidatePath(routeFor(routineId));
   revalidatePath(`/routines/${routineId}/log-guided`);
@@ -40,20 +112,45 @@ export async function addGuidedStep(formData: FormData) {
 export async function updateGuidedStep(formData: FormData) {
   const routineId = String(formData.get("routineId") || "").trim();
   const stepId = String(formData.get("stepId") || "").trim();
+  const kind = parseStepKind(formData.get("kind"));
   const title = String(formData.get("title") || "").trim();
-  const durationSecRaw = String(formData.get("durationSec") || "").trim();
-  const restSecRaw = String(formData.get("restSec") || "").trim();
+  const exerciseId = String(formData.get("exerciseId") || "").trim();
   if (!routineId || !stepId) throw new Error("Missing ids.");
-  if (!title) throw new Error("Title is required.");
+  if (kind === "STEP" && !title) throw new Error("Title is required.");
+  if (kind === "EXERCISE" && !exerciseId) throw new Error("Exercise is required.");
+
+  const durationSec = parseOptionalSeconds(formData.get("durationSec"), "Duration");
+  const restSec = parseOptionalSeconds(formData.get("restSec"), "Rest");
+  const repeatCount = parseRepeatCount(formData.get("repeatCount"));
+
+  let exerciseName: string | null = null;
+  if (exerciseId) {
+    const exercise = await prisma.exercise.findUnique({
+      where: { id: exerciseId },
+      select: { id: true, name: true },
+    });
+    if (!exercise) throw new Error("Exercise not found.");
+    exerciseName = exercise.name;
+  }
 
   await prisma.guidedStep.update({
     where: { id: stepId },
     data: {
-      title,
-      durationSec: durationSecRaw ? Math.max(0, Math.floor(Number(durationSecRaw))) : null,
-      restSec: restSecRaw ? Math.max(0, Math.floor(Number(restSecRaw))) : null,
+      kind,
+      title: kind === "EXERCISE" ? exerciseName ?? title : title,
+      exerciseId: exerciseId || null,
+      durationSec,
+      restSec,
+      repeatCount,
     },
   });
+
+  if (kind === "STEP") {
+    const inferredGroupIds = await metadataGroupIdsForSlugs(inferGuidedStepMetadataSlugs(title));
+    await syncGuidedStepMetadataGroups(stepId, inferredGroupIds);
+  } else {
+    await syncGuidedStepMetadataGroups(stepId, []);
+  }
 
   revalidatePath(routeFor(routineId));
   revalidatePath(`/routines/${routineId}/log-guided`);

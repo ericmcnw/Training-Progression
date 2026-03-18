@@ -8,7 +8,7 @@ import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
 } from "@/lib/routines";
-import type { RoutineKind } from "@/generated/prisma";
+import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -27,9 +27,13 @@ type WorkoutExerciseInput = {
 
 type GuidedStepInput = {
   guidedStepId?: string | null;
+  kind?: GuidedStepKind;
   title: string;
+  exerciseId?: string | null;
   durationSec?: number | null;
   restSec?: number | null;
+  repeatCount?: number | null;
+  weightLb?: number | null;
   sortOrder: number;
 };
 
@@ -374,12 +378,51 @@ function sanitizeGuidedSteps(steps?: GuidedStepInput[]) {
   return (steps ?? [])
     .map((step, index) => ({
       guidedStepId: step.guidedStepId || null,
+      kind: (step.kind === "EXERCISE" ? "EXERCISE" : "STEP") as GuidedStepKind,
       title: step.title.trim(),
+      exerciseId: step.exerciseId?.trim() || null,
       durationSec: step.durationSec ?? null,
       restSec: step.restSec ?? null,
+      repeatCount:
+        step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
+          ? Math.max(1, Math.floor(step.repeatCount))
+          : 1,
+      weightLb:
+        step.weightLb !== null && step.weightLb !== undefined && Number.isFinite(step.weightLb)
+          ? step.weightLb
+          : null,
       sortOrder: Number.isFinite(step.sortOrder) ? step.sortOrder : index,
     }))
-    .filter((step) => step.title.length > 0);
+    .filter((step) => step.title.length > 0 || step.exerciseId) as Array<{
+      guidedStepId: string | null;
+      kind: GuidedStepKind;
+      title: string;
+      exerciseId: string | null;
+      durationSec: number | null;
+      restSec: number | null;
+      repeatCount: number;
+      weightLb: number | null;
+      sortOrder: number;
+    }>;
+}
+
+function guidedTemplateDurationSec(
+  steps: Array<{
+    durationSec?: number | null;
+    restSec?: number | null;
+    repeatCount?: number | null;
+  }>
+) {
+  return steps.reduce((sum, step) => {
+    const repeatCount =
+      step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
+        ? Math.max(1, Math.floor(step.repeatCount))
+        : 1;
+    const workSec = step.durationSec ?? 0;
+    const restSec = step.restSec ?? 0;
+    const restMultiplier = restSec > 0 ? (repeatCount > 1 ? repeatCount - 1 : 1) : 0;
+    return sum + workSec * repeatCount + restSec * restMultiplier;
+  }, 0);
 }
 
 function hasWorkoutSetValue(set: { reps?: number | null; seconds?: number | null; weightLb?: number | null }) {
@@ -953,7 +996,7 @@ export async function logGuided(params: {
 }) {
   await ensureRoutineKind(params.routineId, "GUIDED");
   const steps = sanitizeGuidedSteps(params.steps);
-  const fallbackDuration = steps.reduce((sum, step) => sum + (step.durationSec ?? 0) + (step.restSec ?? 0), 0);
+  const fallbackDuration = guidedTemplateDurationSec(steps);
   const durationSec = params.durationSec ?? (fallbackDuration > 0 ? fallbackDuration : null);
 
   const log = await prisma.routineLog.create({
@@ -971,9 +1014,13 @@ export async function logGuided(params: {
       data: steps.map((step) => ({
         routineLogId: log.id,
         guidedStepId: step.guidedStepId,
+        kind: step.kind,
         title: step.title,
+        exerciseId: step.exerciseId,
         durationSec: step.durationSec,
         restSec: step.restSec,
+        repeatCount: step.repeatCount,
+        weightLb: step.weightLb,
         sortOrder: step.sortOrder,
       })),
     });
@@ -1228,7 +1275,7 @@ export async function updateGuidedLog(params: {
   if (!existing || existing.routineId !== params.routineId) throw new Error("Log not found for routine.");
 
   const steps = sanitizeGuidedSteps(params.steps);
-  const fallbackDuration = steps.reduce((sum, step) => sum + (step.durationSec ?? 0) + (step.restSec ?? 0), 0);
+  const fallbackDuration = guidedTemplateDurationSec(steps);
   const durationSec = params.durationSec ?? (fallbackDuration > 0 ? fallbackDuration : null);
 
   await prisma.$transaction(async (tx) => {
@@ -1246,9 +1293,13 @@ export async function updateGuidedLog(params: {
         data: steps.map((step) => ({
           routineLogId: params.logId,
           guidedStepId: step.guidedStepId,
+          kind: step.kind,
           title: step.title,
+          exerciseId: step.exerciseId,
           durationSec: step.durationSec,
           restSec: step.restSec,
+          repeatCount: step.repeatCount,
+          weightLb: step.weightLb,
           sortOrder: step.sortOrder,
         })),
       });

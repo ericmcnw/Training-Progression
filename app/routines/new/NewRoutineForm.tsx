@@ -129,7 +129,12 @@ export default function NewRoutineForm({
 
       <div>
         <label style={styles.label}>Name</label>
-        <input name="name" style={styles.input} placeholder="Morning mobility, Lift A, Trail run, Climbing..." />
+        <input
+          name="name"
+          style={styles.input}
+          placeholder="Morning mobility, Lift A, Trail run, Climbing..."
+          required
+        />
       </div>
 
       <div>
