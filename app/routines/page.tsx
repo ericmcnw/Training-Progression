@@ -62,6 +62,20 @@ const styles = {
     cursor: "pointer",
     listStyle: "none",
   },
+  sectionActionLink: {
+    position: "absolute" as const,
+    right: 14,
+    top: 8,
+    padding: "6px 10px",
+    border: "1px solid rgba(128,128,128,0.7)",
+    borderRadius: 8,
+    textDecoration: "none",
+    color: "inherit",
+    background: "rgba(255,255,255,0.06)",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.2,
+  },
   card: {
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: 12,
@@ -414,13 +428,26 @@ export default async function RoutinesPage(props: {
         ) : null}
         {orderedTypes.map((typeLabel) => {
           const list = groups.get(typeLabel)!;
+          const isWorkoutSection = typeLabel === formatRoutineTypeLabel("WORKOUT");
           return (
             <section key={typeLabel} style={styles.section}>
-              <details open>
-                <summary data-collapsible-summary className="mobileRoutinesHeader" style={styles.sectionHeader}>
+              <details open style={{ position: "relative" }}>
+                <summary
+                  data-collapsible-summary
+                  className="mobileRoutinesHeader"
+                  style={{
+                    ...styles.sectionHeader,
+                    ...(isWorkoutSection ? { paddingRight: 118 } : null),
+                  }}
+                >
                   <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{typeLabel.toUpperCase()}</div>
                   <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
                 </summary>
+                {isWorkoutSection ? (
+                  <Link href="/routines/log-workout-quick" style={styles.sectionActionLink}>
+                    Quick Log
+                  </Link>
+                ) : null}
                 <div style={{ padding: 12, display: "grid", gap: 10 }}>
                   {list.map((routine) => (
                     <RoutineCard

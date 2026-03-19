@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { createWorkoutExerciseOption } from "@/app/routines/actions";
 
 export type ExerciseOption = {
   id: string;
@@ -40,6 +39,13 @@ type SavePayload = {
   }[];
 };
 
+type CreateExerciseOptionFn = (params: {
+  routineId: string;
+  name: string;
+  unit: "REPS" | "TIME";
+  supportsWeight?: boolean;
+}) => Promise<ExerciseOption>;
+
 function defaultRows(count = 3) {
   return Array.from({ length: Math.max(1, count) }, (_, index) => ({
     setNumber: index + 1,
@@ -59,6 +65,11 @@ export default function WorkoutExerciseEditor({
   saveLabel,
   savingLabel,
   backHref,
+  addExerciseTitle = "Add Exercise To This Routine",
+  addExerciseHelp = "Saving here updates the routine template too. Remove a block to remove it from the routine.",
+  createExerciseHelp = "Creating here saves the exercise for future workouts and adds it to this routine now.",
+  emptyStateHelp = "",
+  createExerciseOption,
   onSave,
 }: {
   routineId: string;
@@ -69,6 +80,11 @@ export default function WorkoutExerciseEditor({
   saveLabel: string;
   savingLabel: string;
   backHref: string;
+  addExerciseTitle?: string;
+  addExerciseHelp?: string;
+  createExerciseHelp?: string;
+  emptyStateHelp?: string;
+  createExerciseOption: CreateExerciseOptionFn;
   onSave: (payload: SavePayload) => Promise<void>;
 }) {
   const [notes, setNotes] = useState(initialNotes);
@@ -205,7 +221,7 @@ export default function WorkoutExerciseEditor({
     setExerciseError("");
     startCreateExercise(async () => {
       try {
-        const created = await createWorkoutExerciseOption({
+        const created = await createExerciseOption({
           routineId,
           name,
           unit: customUnit,
@@ -258,10 +274,8 @@ export default function WorkoutExerciseEditor({
 
       <div style={styles.addPanel}>
         <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 14 }}>Add Exercise To This Routine</div>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Saving here updates the routine template too. Remove a block to remove it from the routine.
-          </div>
+          <div style={{ fontWeight: 900, fontSize: 14 }}>{addExerciseTitle}</div>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>{addExerciseHelp}</div>
         </div>
         <input
           style={{ ...styles.input, minWidth: 260 }}
@@ -309,7 +323,7 @@ export default function WorkoutExerciseEditor({
               </button>
             </div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Creating here saves the exercise for future workouts and adds it to this routine now.
+              {createExerciseHelp}
             </div>
           </div>
 
@@ -320,6 +334,10 @@ export default function WorkoutExerciseEditor({
           )}
         </div>
       </div>
+
+      {blocks.length === 0 && emptyStateHelp ? (
+        <div style={{ ...styles.card, fontSize: 13, opacity: 0.82 }}>{emptyStateHelp}</div>
+      ) : null}
 
       {blocks.map((block) => {
         const showReps = block.unit === "REPS";

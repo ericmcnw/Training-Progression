@@ -1,6 +1,6 @@
 "use client";
 
-import { logWorkout } from "../../actions";
+import { createWorkoutExerciseOption, logWorkout } from "../../actions";
 import WorkoutExerciseEditor, {
   type ExerciseOption,
   type WorkoutBlock,
@@ -25,6 +25,7 @@ export default function LogWorkoutForm({
       saveLabel="Save Workout"
       savingLabel="Saving..."
       backHref="/routines"
+      createExerciseOption={createWorkoutExerciseOption}
       onSave={async (payload) => {
         await logWorkout({
           routineId,

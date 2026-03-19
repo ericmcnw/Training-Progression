@@ -877,6 +877,85 @@ export async function logWorkout(params: {
   revalidateRoutineSurfaces(params.routineId);
 }
 
+export async function logAdHocWorkout(params: {
+  routineId: string;
+  notes?: string;
+  performedAtLocal?: string;
+  exercises: WorkoutExerciseInput[];
+}) {
+  await ensureRoutineKind(params.routineId, "WORKOUT");
+  await prisma.$transaction(async (tx) => {
+    const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
+    const loggedExercises = exercises.filter((exercise) => exercise.loggedSets.length > 0);
+    if (loggedExercises.length === 0) return;
+
+    const log = await tx.routineLog.create({
+      data: {
+        routineId: params.routineId,
+        performedAt: parsePerformedAt(params.performedAtLocal),
+        notes: params.notes?.trim() || null,
+      },
+      select: { id: true },
+    });
+
+    for (const exercise of loggedExercises) {
+      const sessionExercise = await tx.sessionExercise.create({
+        data: { routineLogId: log.id, exerciseId: exercise.exerciseId },
+        select: { id: true },
+      });
+
+      await tx.setEntry.createMany({
+        data: exercise.loggedSets.map((set) => ({
+          sessionExerciseId: sessionExercise.id,
+          setNumber: set.setNumber,
+          reps: set.reps,
+          seconds: set.seconds,
+          weightLb: set.weightLb,
+        })),
+      });
+    }
+  });
+
+  revalidateRoutineSurfaces(params.routineId);
+}
+
+export async function createWorkoutLogExerciseOption(params: {
+  routineId: string;
+  name: string;
+  unit: "REPS" | "TIME";
+  supportsWeight?: boolean;
+}) {
+  await ensureRoutineKind(params.routineId, "WORKOUT");
+
+  const name = normalizeExerciseName(params.name || "");
+  const unit = params.unit === "TIME" ? "TIME" : "REPS";
+  if (!name) throw new Error("Exercise name is required.");
+
+  const exercise = await prisma.$transaction(async (tx) => {
+    const exerciseId = await ensureExerciseExists(tx, {
+      exerciseId: "",
+      customName: name,
+      unit,
+      supportsWeight: Boolean(params.supportsWeight),
+    });
+
+    return tx.exercise.findUniqueOrThrow({
+      where: { id: exerciseId },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        supportsWeight: true,
+      },
+    });
+  });
+
+  revalidateRoutineSurfaces(params.routineId);
+  revalidatePath("/exercises");
+
+  return exercise;
+}
+
 export async function createWorkoutExerciseOption(params: {
   routineId: string;
   name: string;
