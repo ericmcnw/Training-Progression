@@ -1,6 +1,6 @@
 "use client";
 
-import { updateWorkoutLog } from "../../../actions";
+import { createWorkoutExerciseOption, updateWorkoutLog } from "../../../actions";
 import WorkoutExerciseEditor, {
   type ExerciseOption,
   type WorkoutBlock,
@@ -43,6 +43,7 @@ export default function EditWorkoutLogForm({
       saveLabel="Save Changes"
       savingLabel="Saving..."
       backHref={returnTo}
+      createExerciseOption={createWorkoutExerciseOption}
       onSave={async (payload) => {
         await updateWorkoutLog({
           routineId,
