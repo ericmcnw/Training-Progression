@@ -48,10 +48,30 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
 
   return (
     <div className="mobileGuidedTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div className="mobileGuidedTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
-          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.category} | {formatRoutineTypeLabel(routine.kind)}</div>
+      <div
+        className="mobileGuidedTemplateTopRow"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          gap: 16,
+          flexWrap: "wrap",
+          padding: 18,
+          border: "1px solid rgba(128,128,128,0.3)",
+          borderRadius: 16,
+          background: "linear-gradient(180deg, rgba(128,128,128,0.12), rgba(128,128,128,0.04))",
+        }}
+      >
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", opacity: 0.65 }}>
+            Guided Flow Builder
+          </div>
+          <h1 style={{ fontSize: 30, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={metaPill}>{routine.category}</span>
+            <span style={metaPill}>{formatRoutineTypeLabel(routine.kind)}</span>
+            <span style={metaPill}>{routine.guidedSteps.length} items</span>
+          </div>
         </div>
         <div className="mobileGuidedTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href={`/routines/${routineId}/edit`} style={linkBtn}>
@@ -92,4 +112,13 @@ const linkBtn: React.CSSProperties = {
   color: "inherit",
   fontWeight: 800,
   background: "rgba(128,128,128,0.12)",
+};
+
+const metaPill: React.CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  background: "rgba(128,128,128,0.12)",
+  border: "1px solid rgba(128,128,128,0.22)",
+  fontSize: 12,
+  fontWeight: 800,
 };

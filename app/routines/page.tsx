@@ -172,72 +172,82 @@ function RoutineCard({
 
   return (
     <div key={routine.id} style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
-      <div className="mobileRoutinesCardShell" style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
-        <div className="mobileRoutinesCardMain" style={{ flex: 1, display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div className="mobileRoutinesCardShell" style={{ display: "grid", gap: 12 }}>
+        <div
+          className="mobileRoutinesCardHeader"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 14,
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          <div className="mobileRoutinesCardPrimary" style={{ flex: "1 1 320px", display: "grid", gap: 8, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>
+              {routine.category} | {formatRoutineTypeLabel(kind)}
+              {subtypeLabel ? ` | ${subtypeLabel}` : ""}
+            </div>
+
+            {allowLogging && (
+              <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <Link href={loggingHref(routine)} style={styles.compactBtnLink}>
+                  {loggingLabel(kind)}
+                </Link>
+                {isWorkoutKind(kind) && (
+                  <Link href={`/routines/${routine.id}/template`} style={styles.compactBtnLink}>
+                    Template
+                  </Link>
+                )}
+                {isGuidedKind(kind) && (
+                  <Link href={`/routines/${routine.id}/guided`} style={styles.compactBtnLink}>
+                    Steps
+                  </Link>
+                )}
+                {isCompletionKind(kind) && (
+                  <form
+                    action={async () => {
+                      "use server";
+                      await logRoutineCompletion(routine.id);
+                    }}
+                  >
+                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
+                      Quick Log
+                    </button>
+                  </form>
+                )}
+                {isCompletionKind(kind) && (
+                  <form
+                    action={async () => {
+                      "use server";
+                      await removeLastRoutineCompletion(routine.id);
+                    }}
+                  >
+                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
+                      Undo Last
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+
+            <div style={{ fontSize: 13, opacity: 0.85 }}>
+              This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
+            </div>
+          </div>
+
           <div
-            className="mobileRoutinesCardInfo"
+            className="mobileRoutinesCardMetaWrap"
             style={{
-              flex: 1,
-              minWidth: 0,
-              display: "grid",
+              display: "flex",
               gap: 10,
-              gridTemplateColumns: "minmax(0, 1fr) auto",
-              alignItems: "start",
+              alignItems: "flex-start",
+              justifyContent: "flex-end",
+              flexWrap: "wrap",
+              marginLeft: "auto",
             }}
           >
-              <div className="mobileRoutinesCardPrimary" style={{ display: "grid", gap: 8, minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  {routine.category} | {formatRoutineTypeLabel(kind)}
-                  {subtypeLabel ? ` | ${subtypeLabel}` : ""}
-                </div>
-                {allowLogging && (
-                  <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Link href={loggingHref(routine)} style={styles.compactBtnLink}>
-                      {loggingLabel(kind)}
-                    </Link>
-                    {isWorkoutKind(kind) && (
-                      <Link href={`/routines/${routine.id}/template`} style={styles.compactBtnLink}>
-                        Template
-                      </Link>
-                    )}
-                    {isGuidedKind(kind) && (
-                      <Link href={`/routines/${routine.id}/guided`} style={styles.compactBtnLink}>
-                        Steps
-                      </Link>
-                    )}
-                    {isCompletionKind(kind) && (
-                      <form
-                        action={async () => {
-                          "use server";
-                          await logRoutineCompletion(routine.id);
-                        }}
-                      >
-                        <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                          Quick Log
-                        </button>
-                      </form>
-                    )}
-                    {isCompletionKind(kind) && (
-                      <form
-                        action={async () => {
-                          "use server";
-                          await removeLastRoutineCompletion(routine.id);
-                        }}
-                      >
-                        <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                          Undo Last
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ fontSize: 13, opacity: 0.85 }}>
-                  This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
-                </div>
-              </div>
-
             {exercisePreview ? (
               <div
                 className="mobileRoutinesExerciseList"
@@ -282,9 +292,8 @@ function RoutineCard({
                 gap: 8,
                 alignItems: "center",
                 justifyContent: "flex-end",
-                marginLeft: "auto",
                 flexShrink: 0,
-                alignSelf: "start",
+                alignSelf: "flex-start",
               }}
             >
               <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
@@ -292,12 +301,11 @@ function RoutineCard({
               </Link>
               {allowLogging && <DeleteRoutineButton routineId={routine.id} compact />}
             </div>
-
           </div>
         </div>
 
         {allowLogging && isCompletionKind(kind) && (
-          <div className="mobileRoutinesQuickDate" style={{ minWidth: 0, width: "100%", maxWidth: 280 }}>
+          <div className="mobileRoutinesQuickDate" style={{ minWidth: 0, width: "100%", maxWidth: 320 }}>
             <details style={styles.detailsBox}>
               <summary data-collapsible-summary style={styles.detailsSummary}>
                 Quick log with custom date/time
