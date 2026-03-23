@@ -1,5 +1,7 @@
 import { getMetadataIndex, resolveGroupTarget } from "../data";
 import { EmptyState, FilterBar, FilterInput, FilterSelect, ProgressShell, SectionCard, TargetCard } from "../ui";
+import { formatMetadataGroupKind } from "@/lib/metadata";
+import type { MetadataGroupKind } from "@/generated/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,20 @@ export default async function ProgressGroupsIndexPage(props: {
       return true;
     })
     .sort((a, b) => (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label));
+  const kindOrder: MetadataGroupKind[] = [
+    "MUSCLE_GROUP",
+    "MOVEMENT_PATTERN",
+    "TRAINING_GROUP",
+    "CARDIO_ACTIVITY",
+    "ROUTINE_FOCUS",
+  ];
+  const previewsByKind = new Map<MetadataGroupKind, typeof previews>();
+
+  for (const preview of previews) {
+    const current = previewsByKind.get(preview.group.kind) ?? [];
+    current.push(preview);
+    previewsByKind.set(preview.group.kind, current);
+  }
 
   return (
     <ProgressShell
@@ -59,24 +75,56 @@ export default async function ProgressGroupsIndexPage(props: {
         </FilterBar>
       </SectionCard>
 
-      <SectionCard title="All Groups">
-        {previews.length === 0 ? <EmptyState message="No groups match the current filters." /> : null}
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-          {previews.map(({ group, target }) => (
-            <TargetCard
-              key={group.id}
-              href={`/progress/groups/${group.slug}?tab=overview&range=4w`}
-              title={group.label}
-              subtitle={group.kind.replaceAll("_", " ")}
-              chips={[
-                `${target?.logs.length ?? 0} sessions`,
-                `${target?.routineIds.length ?? 0} routines`,
-                `${target?.exerciseIds.length ?? 0} exercises`,
-              ]}
-            />
-          ))}
-        </div>
-      </SectionCard>
+      {previews.length === 0 ? (
+        <SectionCard title="All Groups">
+          <EmptyState message="No groups match the current filters." />
+        </SectionCard>
+      ) : (
+        kindOrder
+          .map((groupKind) => ({
+            groupKind,
+            items: previewsByKind.get(groupKind) ?? [],
+          }))
+          .filter(({ items }) => items.length > 0)
+          .map(({ groupKind, items }) => (
+            <SectionCard
+              key={groupKind}
+              title={formatMetadataGroupKind(groupKind)}
+              subtitle={`${items.length} ${items.length === 1 ? "group" : "groups"}`}
+            >
+              <details open>
+                <summary
+                  data-collapsible-summary
+                  style={{
+                    cursor: "pointer",
+                    listStyle: "none",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    opacity: 0.86,
+                    marginBottom: 12,
+                  }}
+                >
+                  Show {formatMetadataGroupKind(groupKind).toLowerCase()}
+                </summary>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
+                  {items.map(({ group, target }) => (
+                    <TargetCard
+                      key={group.id}
+                      href={`/progress/groups/${group.slug}?tab=overview&range=4w`}
+                      title={group.label}
+                      subtitle={formatMetadataGroupKind(group.kind)}
+                      chips={[
+                        `${target?.logs.length ?? 0} sessions`,
+                        `${target?.routineIds.length ?? 0} routines`,
+                        `${target?.exerciseIds.length ?? 0} exercises`,
+                      ]}
+                    />
+                  ))}
+                </div>
+              </details>
+            </SectionCard>
+          ))
+      )}
     </ProgressShell>
   );
 }

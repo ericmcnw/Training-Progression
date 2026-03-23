@@ -214,6 +214,8 @@ model GuidedStep {
   durationSec Int?
   restSec     Int?
   repeatCount Int      @default(1)
+  repCount    Int      @default(1)
+  setCount    Int      @default(1)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -237,6 +239,8 @@ model GuidedStepLog {
   durationSec    Int?
   restSec        Int?
   repeatCount    Int      @default(1)
+  repCount       Int      @default(1)
+  setCount       Int      @default(1)
   weightLb       Float?
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())

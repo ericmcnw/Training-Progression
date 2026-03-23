@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
+  supportsRoutineSteps,
 } from "@/lib/routines";
 import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
@@ -33,6 +34,8 @@ type GuidedStepInput = {
   durationSec?: number | null;
   restSec?: number | null;
   repeatCount?: number | null;
+  repCount?: number | null;
+  setCount?: number | null;
   weightLb?: number | null;
   sortOrder: number;
 };
@@ -66,6 +69,18 @@ type SanitizedWorkoutExercise = {
     seconds: number | null;
     weightLb: number | null;
   }[];
+};
+
+type RoutineStepTemplateInput = {
+  kind: GuidedStepKind;
+  title: string;
+  exerciseId: string | null;
+  durationSec: number | null;
+  restSec: number | null;
+  repeatCount: number;
+  repCount: number;
+  setCount: number;
+  sortOrder: number;
 };
 
 function parsePerformedAt(performedAtLocal?: string | null) {
@@ -387,6 +402,16 @@ function sanitizeGuidedSteps(steps?: GuidedStepInput[]) {
         step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
           ? Math.max(1, Math.floor(step.repeatCount))
           : 1,
+      repCount:
+        step.repCount !== null && step.repCount !== undefined && Number.isFinite(step.repCount)
+          ? Math.max(1, Math.floor(step.repCount))
+          : step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
+          ? Math.max(1, Math.floor(step.repeatCount))
+          : 1,
+      setCount:
+        step.setCount !== null && step.setCount !== undefined && Number.isFinite(step.setCount)
+          ? Math.max(1, Math.floor(step.setCount))
+          : 1,
       weightLb:
         step.weightLb !== null && step.weightLb !== undefined && Number.isFinite(step.weightLb)
           ? step.weightLb
@@ -401,6 +426,8 @@ function sanitizeGuidedSteps(steps?: GuidedStepInput[]) {
       durationSec: number | null;
       restSec: number | null;
       repeatCount: number;
+      repCount: number;
+      setCount: number;
       weightLb: number | null;
       sortOrder: number;
     }>;
@@ -411,17 +438,26 @@ function guidedTemplateDurationSec(
     durationSec?: number | null;
     restSec?: number | null;
     repeatCount?: number | null;
+    repCount?: number | null;
+    setCount?: number | null;
   }>
 ) {
   return steps.reduce((sum, step) => {
-    const repeatCount =
-      step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
+    const repCount =
+      step.repCount !== null && step.repCount !== undefined && Number.isFinite(step.repCount)
+        ? Math.max(1, Math.floor(step.repCount))
+        : step.repeatCount !== null && step.repeatCount !== undefined && Number.isFinite(step.repeatCount)
         ? Math.max(1, Math.floor(step.repeatCount))
         : 1;
+    const setCount =
+      step.setCount !== null && step.setCount !== undefined && Number.isFinite(step.setCount)
+        ? Math.max(1, Math.floor(step.setCount))
+        : 1;
+    const roundCount = repCount * setCount;
     const workSec = step.durationSec ?? 0;
     const restSec = step.restSec ?? 0;
-    const restMultiplier = restSec > 0 ? (repeatCount > 1 ? repeatCount - 1 : 1) : 0;
-    return sum + workSec * repeatCount + restSec * restMultiplier;
+    const restMultiplier = restSec > 0 ? Math.max(0, roundCount - 1) : 0;
+    return sum + workSec * roundCount + restSec * restMultiplier;
   }, 0);
 }
 
@@ -550,6 +586,116 @@ async function syncWorkoutTemplateTx(tx: PrismaTx, routineId: string, exercises:
   }
 }
 
+async function buildStepTemplateFromWorkoutTx(tx: PrismaTx, routineId: string): Promise<RoutineStepTemplateInput[]> {
+  const exercises = await tx.routineExercise.findMany({
+    where: { routineId },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      exerciseId: true,
+      defaultSets: true,
+      sortOrder: true,
+      exercise: { select: { name: true } },
+    },
+  });
+
+  return exercises.map((exercise, index) => ({
+    kind: "EXERCISE" as GuidedStepKind,
+    title: exercise.exercise.name,
+    exerciseId: exercise.exerciseId,
+    durationSec: null,
+    restSec: null,
+    repeatCount: Math.max(1, exercise.defaultSets ?? 1),
+    repCount: 1,
+    setCount: Math.max(1, exercise.defaultSets ?? 1),
+    sortOrder: Number.isFinite(exercise.sortOrder) ? exercise.sortOrder : index,
+  }));
+}
+
+async function buildWorkoutTemplateFromStepsTx(tx: PrismaTx, routineId: string): Promise<SanitizedWorkoutExercise[]> {
+  const steps = await tx.guidedStep.findMany({
+    where: { routineId, kind: "EXERCISE", exerciseId: { not: null } },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      exerciseId: true,
+      repeatCount: true,
+      setCount: true,
+      sortOrder: true,
+    },
+  });
+
+  const seenExerciseIds = new Set<string>();
+  return steps
+    .filter((step) => {
+      const exerciseId = step.exerciseId;
+      if (!exerciseId || seenExerciseIds.has(exerciseId)) return false;
+      seenExerciseIds.add(exerciseId);
+      return true;
+    })
+    .map((step, index) => ({
+      exerciseId: step.exerciseId as string,
+      sortOrder: Number.isFinite(step.sortOrder) ? step.sortOrder : index,
+      defaultSets: Math.max(1, step.setCount ?? step.repeatCount ?? 1),
+      loggedSets: [],
+    }));
+}
+
+async function replaceRoutineStepTemplateTx(tx: PrismaTx, routineId: string, steps: RoutineStepTemplateInput[]) {
+  await tx.guidedStep.deleteMany({ where: { routineId } });
+  if (steps.length === 0) return;
+
+  for (const [index, step] of steps.entries()) {
+    await tx.guidedStep.create({
+      data: {
+        routineId,
+        kind: step.kind,
+        title: step.title,
+        exerciseId: step.exerciseId,
+        durationSec: step.durationSec,
+        restSec: step.restSec,
+        repeatCount: Math.max(1, step.repeatCount || 1),
+        repCount: Math.max(1, step.repCount || 1),
+        setCount: Math.max(1, step.setCount || 1),
+        sortOrder: Number.isFinite(step.sortOrder) ? step.sortOrder : index,
+      },
+    });
+  }
+}
+
+async function convertRoutineStructureTx(tx: PrismaTx, params: {
+  routineId: string;
+  currentKind: RoutineKind;
+  nextKind: RoutineKind;
+}) {
+  const { routineId, currentKind, nextKind } = params;
+  if (currentKind === nextKind) return;
+
+  const currentSupportsSteps = supportsRoutineSteps(currentKind);
+  const nextSupportsSteps = supportsRoutineSteps(nextKind);
+
+  if (currentKind === "WORKOUT" && nextSupportsSteps) {
+    const steps = await buildStepTemplateFromWorkoutTx(tx, routineId);
+    await replaceRoutineStepTemplateTx(tx, routineId, steps);
+    await tx.routineExercise.deleteMany({ where: { routineId } });
+    return;
+  }
+
+  if (currentSupportsSteps && nextKind === "WORKOUT") {
+    const exercises = await buildWorkoutTemplateFromStepsTx(tx, routineId);
+    await syncWorkoutTemplateTx(tx, routineId, exercises);
+    await tx.guidedStep.deleteMany({ where: { routineId } });
+    return;
+  }
+
+  if (currentSupportsSteps && !nextSupportsSteps) {
+    await tx.guidedStep.deleteMany({ where: { routineId } });
+    return;
+  }
+
+  if (currentKind === "WORKOUT" && nextKind !== "WORKOUT") {
+    await tx.routineExercise.deleteMany({ where: { routineId } });
+  }
+}
+
 async function ensureRoutineKind(routineId: string, expectedKind: RoutineKind) {
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
@@ -583,7 +729,10 @@ async function syncRoutineTypeDetails(routineId: string, kind: RoutineKind, sess
     });
   }
   if (kind !== "SESSION") {
-    await prisma.sessionRoutineDetails.deleteMany({ where: { routineId } });
+    await prisma.sessionRoutineDetails.updateMany({
+      where: { routineId },
+      data: { templateId: null },
+    });
   }
 }
 
@@ -694,9 +843,6 @@ export async function createRoutine(formData: FormData) {
   if (kind === "WORKOUT" && postCreate === "template") {
     redirect(`/routines/${created.id}/template`);
   }
-  if (kind === "GUIDED" && postCreate === "template") {
-    redirect(`/routines/${created.id}/edit`);
-  }
   redirect("/routines");
 }
 
@@ -708,6 +854,7 @@ export async function updateRoutine(formData: FormData) {
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
   const timesPerWeek = parseOptionalTimesPerWeek(formData);
+  const postSave = String(formData.get("postSave") || "").trim();
   const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
@@ -717,7 +864,7 @@ export async function updateRoutine(formData: FormData) {
 
   const existing = await prisma.routine.findUnique({
     where: { id },
-    select: { isDeleted: true },
+    select: { isDeleted: true, kind: true },
   });
   if (!existing) throw new Error("Routine not found.");
   if (existing.isDeleted) {
@@ -725,9 +872,19 @@ export async function updateRoutine(formData: FormData) {
     redirect("/routines");
   }
 
-  await prisma.routine.update({
-    where: { id },
-    data: { name, category, domain, kind, subtype },
+  const currentKind = normalizeRoutineKind(existing.kind);
+
+  await prisma.$transaction(async (tx) => {
+    await convertRoutineStructureTx(tx, {
+      routineId: id,
+      currentKind,
+      nextKind: kind,
+    });
+
+    await tx.routine.update({
+      where: { id },
+      data: { name, category, domain, kind, subtype },
+    });
   });
   await syncRoutineTypeDetails(id, kind, sessionTemplateId);
   await syncRoutineClassificationMetadata({
@@ -742,6 +899,12 @@ export async function updateRoutine(formData: FormData) {
   });
 
   revalidateRoutineSurfaces(id);
+  if (kind === "GUIDED" && postSave === "steps") {
+    redirect(`/routines/${id}/guided`);
+  }
+  if (kind === "WORKOUT" && postSave === "template") {
+    redirect(`/routines/${id}/template`);
+  }
   redirect("/routines");
 }
 
@@ -1090,19 +1253,21 @@ export async function logGuided(params: {
 
   if (steps.length > 0) {
     await prisma.guidedStepLog.createMany({
-      data: steps.map((step) => ({
-        routineLogId: log.id,
-        guidedStepId: step.guidedStepId,
-        kind: step.kind,
-        title: step.title,
-        exerciseId: step.exerciseId,
-        durationSec: step.durationSec,
-        restSec: step.restSec,
-        repeatCount: step.repeatCount,
-        weightLb: step.weightLb,
-        sortOrder: step.sortOrder,
-      })),
-    });
+        data: steps.map((step) => ({
+          routineLogId: log.id,
+          guidedStepId: step.guidedStepId,
+          kind: step.kind,
+          title: step.title,
+          exerciseId: step.exerciseId,
+          durationSec: step.durationSec,
+          restSec: step.restSec,
+          repeatCount: step.repeatCount,
+          repCount: step.repCount,
+          setCount: step.setCount,
+          weightLb: step.weightLb,
+          sortOrder: step.sortOrder,
+        })),
+      });
   }
 
   revalidateRoutineSurfaces(params.routineId);
@@ -1378,6 +1543,8 @@ export async function updateGuidedLog(params: {
           durationSec: step.durationSec,
           restSec: step.restSec,
           repeatCount: step.repeatCount,
+          repCount: step.repCount,
+          setCount: step.setCount,
           weightLb: step.weightLb,
           sortOrder: step.sortOrder,
         })),

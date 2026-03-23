@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { formatAppDateTime } from "@/lib/dates";
-import { formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
+import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import { isCardioKind, isCompletionKind, isGuidedKind, isSessionKind, isWorkoutKind } from "@/lib/routines";
+import type { RoutineKind } from "@/generated/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,23 @@ function getEditHref(routineId: string, logId: string, kind: string, returnTo: s
   if (isGuidedKind(kind)) return `/routines/${routineId}/log-guided/${logId}?returnTo=${encoded}`;
   if (isSessionKind(kind)) return `/routines/${routineId}/log-session/${logId}?returnTo=${encoded}`;
   return `/routines/${routineId}/log-check/${logId}?returnTo=${encoded}`;
+}
+
+function inferLogKind(log: {
+  distanceMi: number | null;
+  durationSec: number | null;
+  location: string | null;
+  exercises: Array<{ id: string }>;
+  guidedSteps: Array<{ id: string }>;
+  sessionMetricValues: Array<{ id: string }>;
+}, routineKind: string): RoutineKind {
+  if (log.distanceMi !== null) return "CARDIO";
+  if (log.exercises.length > 0) return "WORKOUT";
+  if (log.location || log.sessionMetricValues.length > 0) return "SESSION";
+  if (log.durationSec !== null && log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
+  if (log.durationSec !== null && isSessionKind(routineKind)) return "SESSION";
+  if (log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
+  return "COMPLETION";
 }
 
 export default async function RoutineLogDetailPage(props: {
@@ -65,9 +83,12 @@ export default async function RoutineLogDetailPage(props: {
         orderBy: { sortOrder: "asc" },
         select: { id: true, name: true, value: true, unit: true },
       },
+      sessionMetricValues: {
+        select: { id: true },
+      },
       guidedSteps: {
         orderBy: { sortOrder: "asc" },
-        select: { id: true, kind: true, title: true, exerciseId: true, durationSec: true, restSec: true, repeatCount: true, weightLb: true, exercise: { select: { name: true } } },
+        select: { id: true, kind: true, title: true, exerciseId: true, durationSec: true, restSec: true, repeatCount: true, repCount: true, setCount: true, weightLb: true, exercise: { select: { name: true } } },
       },
       exercises: {
         orderBy: { createdAt: "asc" },
@@ -86,7 +107,8 @@ export default async function RoutineLogDetailPage(props: {
   });
   if (!log || log.routineId !== routineId) return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
 
-  const editHref = getEditHref(routineId, logId, routine.kind, returnTo);
+  const logKind = inferLogKind(log, routine.kind);
+  const editHref = getEditHref(routineId, logId, logKind, returnTo);
 
   return (
     <div style={container}>
@@ -110,13 +132,13 @@ export default async function RoutineLogDetailPage(props: {
       <section style={panel}>
         <div style={panelHeader}>SUMMARY</div>
         <div style={summaryGrid}>
-          {isCompletionKind(routine.kind) && (
+          {isCompletionKind(logKind) && (
             <div style={statCard}>
               <div style={statLabel}>Count</div>
               <div style={statValue}>{log.completionCount ?? 1}</div>
             </div>
           )}
-          {isCardioKind(routine.kind) && (
+          {isCardioKind(logKind) && (
             <>
               <div style={statCard}>
                 <div style={statLabel}>Distance</div>
@@ -128,7 +150,7 @@ export default async function RoutineLogDetailPage(props: {
               </div>
             </>
           )}
-          {isGuidedKind(routine.kind) && (
+          {isGuidedKind(logKind) && (
             <>
               <div style={statCard}>
                 <div style={statLabel}>Duration</div>
@@ -140,7 +162,7 @@ export default async function RoutineLogDetailPage(props: {
               </div>
             </>
           )}
-          {isSessionKind(routine.kind) && (
+          {isSessionKind(logKind) && (
             <>
               <div style={statCard}>
                 <div style={statLabel}>Duration</div>
@@ -152,7 +174,7 @@ export default async function RoutineLogDetailPage(props: {
               </div>
             </>
           )}
-          {isWorkoutKind(routine.kind) && (
+          {isWorkoutKind(logKind) && (
             <>
               <div style={statCard}>
                 <div style={statLabel}>Exercises</div>
@@ -167,7 +189,7 @@ export default async function RoutineLogDetailPage(props: {
         </div>
       </section>
 
-      {isWorkoutKind(routine.kind) && (
+      {isWorkoutKind(logKind) && (
         <section style={panel}>
           <div style={panelHeader}>EXERCISES</div>
           <div style={contentPad}>
@@ -198,7 +220,7 @@ export default async function RoutineLogDetailPage(props: {
         </section>
       )}
 
-      {isGuidedKind(routine.kind) && (
+      {isGuidedKind(logKind) && (
         <section style={panel}>
           <div style={panelHeader}>GUIDED STEPS</div>
           <div style={contentPad}>
@@ -208,7 +230,7 @@ export default async function RoutineLogDetailPage(props: {
                   <div style={{ fontWeight: 900 }}>{index + 1}. {formatGuidedStepLabel({ kind: step.kind, title: step.title, exerciseName: step.exercise?.name ?? null })}</div>
                   <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
                     {step.kind === "EXERCISE" ? "Exercise" : "Step"} | Work: {formatSeconds(step.durationSec)} | Rest: {formatSeconds(step.restSec)}
-                    {step.repeatCount > 1 ? ` | Sets: ${step.repeatCount}` : ""}
+                    {formatGuidedRepSetSummary(step) ? ` | ${formatGuidedRepSetSummary(step)}` : ""}
                     {step.weightLb !== null && step.weightLb !== undefined ? ` | Weight: ${step.weightLb} lb` : ""}
                   </div>
                 </div>
@@ -218,7 +240,7 @@ export default async function RoutineLogDetailPage(props: {
         </section>
       )}
 
-      {isSessionKind(routine.kind) && log.metrics.length > 0 && (
+      {isSessionKind(logKind) && log.metrics.length > 0 && (
         <section style={panel}>
           <div style={panelHeader}>METRICS</div>
           <div style={contentPad}>

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { formatGuidedSeconds } from "@/lib/guided";
-import { addGuidedStep, deleteGuidedStep, updateGuidedStep } from "./actions";
+import { formatGuidedRepSetSummary, formatGuidedSeconds } from "@/lib/guided";
+import { addGuidedStep, deleteGuidedStep, moveGuidedStep, updateGuidedStep } from "./actions";
 
 type ExerciseOption = {
   id: string;
@@ -19,6 +19,8 @@ type GuidedStepRow = {
   durationSec: number | null;
   restSec: number | null;
   repeatCount: number;
+  repCount: number;
+  setCount: number;
   sortOrder: number;
   exerciseId: string | null;
   exerciseName: string | null;
@@ -39,8 +41,10 @@ function GuidedTemplateItemFields({
   setDurationSec,
   restSec,
   setRestSec,
-  repeatCount,
-  setRepeatCount,
+  repCount,
+  setRepCount,
+  setCount,
+  setSetCount,
 }: {
   kind: "STEP" | "EXERCISE";
   setKind: (value: "STEP" | "EXERCISE") => void;
@@ -56,8 +60,10 @@ function GuidedTemplateItemFields({
   setDurationSec: (value: string) => void;
   restSec: string;
   setRestSec: (value: string) => void;
-  repeatCount: string;
-  setRepeatCount: (value: string) => void;
+  repCount: string;
+  setRepCount: (value: string) => void;
+  setCount: string;
+  setSetCount: (value: string) => void;
 }) {
   return (
     <div className="mobileGuidedTemplateGrid" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", alignItems: "end" }}>
@@ -151,17 +157,22 @@ function GuidedTemplateItemFields({
 
       <label style={field}>
         <span>Work duration (sec)</span>
-        <input name="durationSec" value={durationSec} onChange={(event) => setDurationSec(event.target.value)} style={input} inputMode="numeric" placeholder="60" />
+        <input name="durationSec" value={durationSec} onChange={(event) => setDurationSec(event.target.value)} style={input} inputMode="numeric" placeholder="7" />
       </label>
 
       <label style={field}>
         <span>Rest duration (sec)</span>
-        <input name="restSec" value={restSec} onChange={(event) => setRestSec(event.target.value)} style={input} inputMode="numeric" placeholder="15" />
+        <input name="restSec" value={restSec} onChange={(event) => setRestSec(event.target.value)} style={input} inputMode="numeric" placeholder="3" />
       </label>
 
       <label style={field}>
-        <span>Repeats / sets</span>
-        <input name="repeatCount" value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} style={input} inputMode="numeric" />
+        <span>Reps (optional)</span>
+        <input name="repCount" value={repCount} onChange={(event) => setRepCount(event.target.value)} style={input} inputMode="numeric" placeholder="10" />
+      </label>
+
+      <label style={field}>
+        <span>Sets (optional)</span>
+        <input name="setCount" value={setCount} onChange={(event) => setSetCount(event.target.value)} style={input} inputMode="numeric" placeholder="2" />
       </label>
     </div>
   );
@@ -186,24 +197,35 @@ function GuidedTemplateRow({
   const [title, setTitle] = useState(step.kind === "EXERCISE" && step.exerciseName === step.title ? "" : step.title);
   const [durationSec, setDurationSec] = useState(step.durationSec === null ? "" : String(step.durationSec));
   const [restSec, setRestSec] = useState(step.restSec === null ? "" : String(step.restSec));
-  const [repeatCount, setRepeatCount] = useState(String(step.repeatCount));
+  const [repCount, setRepCount] = useState(step.repCount > 1 ? String(step.repCount) : "");
+  const [setCount, setSetCount] = useState(step.setCount > 1 ? String(step.setCount) : "");
 
   const itemLabel = kind === "EXERCISE"
     ? (exercises.find((exercise) => exercise.id === selectedExerciseId)?.name ?? step.exerciseName ?? step.title)
     : (title || selectedLibraryTitle || step.title);
+  const effectiveRepCount = repCount ? Number(repCount) : step.repCount;
+  const effectiveSetCount = setCount ? Number(setCount) : step.setCount;
+  const repSetSummary = formatGuidedRepSetSummary({
+    repeatCount: step.repeatCount,
+    repCount: effectiveRepCount,
+    setCount: effectiveSetCount,
+  });
+  const moveUpAction = moveGuidedStep.bind(null, "UP");
+  const moveDownAction = moveGuidedStep.bind(null, "DOWN");
 
   return (
     <form action={updateGuidedStep} style={card}>
       <input type="hidden" name="routineId" value={routineId} />
       <input type="hidden" name="stepId" value={step.id} />
+      <input type="hidden" name="repeatCount" value={String(effectiveRepCount || 1)} />
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
         <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.8 }}>
-          Item {step.sortOrder + 1} • {kind === "EXERCISE" ? "Exercise" : "Step"}
+          Item {step.sortOrder + 1} | {kind === "EXERCISE" ? "Exercise" : "Step"}
         </div>
         <div style={{ fontSize: 12, opacity: 0.72 }}>
-          {itemLabel} • {formatGuidedSeconds(durationSec ? Number(durationSec) : step.durationSec)} work
-          {restSec ? ` • ${formatGuidedSeconds(Number(restSec))} rest` : step.restSec ? ` • ${formatGuidedSeconds(step.restSec)} rest` : ""}
-          {(repeatCount ? Number(repeatCount) : step.repeatCount) > 1 ? ` • ${repeatCount || step.repeatCount} sets` : ""}
+          {itemLabel} | {formatGuidedSeconds(durationSec ? Number(durationSec) : step.durationSec)} work
+          {restSec ? ` | ${formatGuidedSeconds(Number(restSec))} rest` : step.restSec ? ` | ${formatGuidedSeconds(step.restSec)} rest` : ""}
+          {repSetSummary ? ` | ${repSetSummary}` : ""}
         </div>
       </div>
 
@@ -229,11 +251,19 @@ function GuidedTemplateRow({
         setDurationSec={setDurationSec}
         restSec={restSec}
         setRestSec={setRestSec}
-        repeatCount={repeatCount}
-        setRepeatCount={setRepeatCount}
+        repCount={repCount}
+        setRepCount={setRepCount}
+        setCount={setCount}
+        setSetCount={setSetCount}
       />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="submit" formAction={moveUpAction} style={btn}>
+          Move Up
+        </button>
+        <button type="submit" formAction={moveDownAction} style={btn}>
+          Move Down
+        </button>
         <button type="submit" style={btn}>Save</button>
         <button type="submit" formAction={deleteGuidedStep} style={dangerBtn}>Delete</button>
       </div>
@@ -256,10 +286,11 @@ export default function GuidedTemplateEditor({
   const [title, setTitle] = useState("");
   const [durationSec, setDurationSec] = useState("");
   const [restSec, setRestSec] = useState("");
-  const [repeatCount, setRepeatCount] = useState("1");
+  const [repCount, setRepCount] = useState("");
+  const [setCount, setSetCount] = useState("");
 
   const stepLibraryOptions = useMemo(
-    () => exercises.filter((exercise) => exercise.unit === "TIME" && !exercise.supportsWeight),
+    () => exercises.filter((exercise) => exercise.unit === "TIME"),
     [exercises]
   );
 
@@ -269,10 +300,11 @@ export default function GuidedTemplateEditor({
         <div style={panelHeader}>ADD TEMPLATE ITEM</div>
         <div style={{ padding: 14, display: "grid", gap: 10 }}>
           <div style={helperText}>
-            Exercise items use the exercise library and support weight at log time. Step items use the general library for breathwork, stretching, and similar sections, plus an optional custom section title.
+            Exercise items use the exercise library and support weight at log time. Step items use the general library for breathwork, stretching, and similar sections. Reps and sets are both optional, so intervals like 7 on / 3 off x10 for 2 sets fit cleanly.
           </div>
           <form action={addGuidedStep} style={{ display: "grid", gap: 10 }}>
             <input type="hidden" name="routineId" value={routineId} />
+            <input type="hidden" name="repeatCount" value={repCount || "1"} />
             <GuidedTemplateItemFields
               kind={kind}
               setKind={(nextKind) => {
@@ -295,8 +327,10 @@ export default function GuidedTemplateEditor({
               setDurationSec={setDurationSec}
               restSec={restSec}
               setRestSec={setRestSec}
-              repeatCount={repeatCount}
-              setRepeatCount={setRepeatCount}
+              repCount={repCount}
+              setRepCount={setRepCount}
+              setCount={setCount}
+              setSetCount={setSetCount}
             />
             <div>
               <button type="submit" style={btn}>Add Item</button>

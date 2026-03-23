@@ -70,6 +70,10 @@ function buildAgendaDays(start: string, totalDays: number) {
   return Array.from({ length: totalDays }, (_, i) => addDays(start, i));
 }
 
+function fallbackRoutineLabel(name: string | undefined) {
+  return name?.trim() || "Deleted routine";
+}
+
 export default async function SchedulePage({
   searchParams,
 }: {
@@ -123,7 +127,6 @@ export default async function SchedulePage({
     plannedDaysPerWeek: routinePlannedDaysMap.get(routine.id) ?? 0,
   }));
 
-  const routineNameMap = new Map(routines.map((routine) => [routine.id, routine.name]));
   const timelineDays = buildAgendaDays(timelineStart, 21);
   const timelineEnd = addDays(timelineStart, 21);
   const monthStart = startOfMonth(selectedMonth);
@@ -142,6 +145,22 @@ export default async function SchedulePage({
     orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
     select: { id: true, routineId: true, performedAt: true },
   });
+
+  const referencedRoutineIds = Array.from(
+    new Set([...manualEntries.map((entry) => entry.routineId), ...logs.map((log) => log.routineId)])
+  );
+  const inactiveReferencedRoutines = referencedRoutineIds.length
+    ? await prisma.routine.findMany({
+        where: {
+          id: { in: referencedRoutineIds },
+          isDeleted: true,
+        },
+        select: { id: true, name: true },
+      })
+    : [];
+  const routineNameMap = new Map(
+    [...routines, ...inactiveReferencedRoutines].map((routine) => [routine.id, fallbackRoutineLabel(routine.name)])
+  );
 
   const loggedMap = new Map<string, number>();
   const latestLogIdByDay = new Map<string, string>();
@@ -165,7 +184,7 @@ export default async function SchedulePage({
         .map((manual) => ({
           id: manual.id,
           routineId: manual.routineId,
-          routineName: routineNameMap.get(manual.routineId) ?? manual.routineId,
+          routineName: routineNameMap.get(manual.routineId) ?? "Deleted routine",
         }));
 
       for (const manual of manualItems) {
@@ -187,7 +206,7 @@ export default async function SchedulePage({
             : undefined;
           return {
             routineId,
-            routineName: routineNameMap.get(routineId) ?? routineId,
+            routineName: routineNameMap.get(routineId) ?? "Deleted routine",
             planned,
             logged,
             remaining: Math.max(0, planned - logged),

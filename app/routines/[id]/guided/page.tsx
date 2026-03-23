@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { isGuidedKind } from "@/lib/routines";
+import { formatRoutineTypeLabel, isGuidedKind } from "@/lib/routines";
 import GuidedTemplateEditor from "./GuidedTemplateEditor";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
             durationSec: true,
             restSec: true,
             repeatCount: true,
+            repCount: true,
+            setCount: true,
             sortOrder: true,
             exerciseId: true,
             exercise: { select: { name: true } },
@@ -42,14 +44,14 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
     }),
   ]);
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
-  if (!isGuidedKind(routine.kind)) return <div style={{ padding: 20 }}>This page is for GUIDED routines only.</div>;
+  if (!isGuidedKind(routine.kind)) return <div style={{ padding: 20 }}>This page is only for guided routines.</div>;
 
   return (
     <div className="mobileGuidedTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
       <div className="mobileGuidedTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Guided Flow Template: {routine.name}</h1>
-          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.category}</div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
+          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.category} | {formatRoutineTypeLabel(routine.kind)}</div>
         </div>
         <div className="mobileGuidedTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href={`/routines/${routineId}/edit`} style={linkBtn}>
@@ -71,6 +73,8 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
           durationSec: step.durationSec,
           restSec: step.restSec,
           repeatCount: step.repeatCount,
+          repCount: step.repCount,
+          setCount: step.setCount,
           sortOrder: step.sortOrder,
           exerciseId: step.exerciseId,
           exerciseName: step.exercise?.name ?? null,

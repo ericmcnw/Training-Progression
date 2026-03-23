@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { logGuided } from "../../actions";
 import {
   buildGuidedRunnerSegments,
+  formatGuidedRepSetSummary,
   formatGuidedSeconds,
   formatGuidedStepLabel,
   totalGuidedTemplateDuration,
@@ -88,6 +89,8 @@ export default function GuidedLogForm({
           durationSec: step.durationSec,
           restSec: step.restSec,
           repeatCount: step.repeatCount,
+          repCount: step.repCount ?? step.repeatCount,
+          setCount: step.setCount ?? 1,
           weightLb: step.kind === "EXERCISE" ? (exerciseWeights[step.id]?.trim() ? Number(exerciseWeights[step.id]) : null) : null,
           sortOrder: step.sortOrder,
         })),
@@ -152,7 +155,7 @@ export default function GuidedLogForm({
           </div>
           {currentSegment ? (
             <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
-              {currentSegment.stepKind === "EXERCISE" ? "Exercise" : "Step"} • {currentSegment.stepLabel}
+              {currentSegment.stepKind === "EXERCISE" ? "Exercise" : "Step"} | {currentSegment.stepLabel}
             </div>
           ) : null}
         </div>
@@ -232,9 +235,9 @@ export default function GuidedLogForm({
                 {index + 1}. {formatGuidedStepLabel(step)}
               </div>
               <div style={{ fontSize: 12, opacity: 0.75 }}>
-                {step.kind === "EXERCISE" ? "Exercise" : "Step"} • {formatGuidedSeconds(step.durationSec)} work
-                {step.restSec ? ` • ${formatGuidedSeconds(step.restSec)} rest` : ""}
-                {step.repeatCount > 1 ? ` • ${step.repeatCount} sets` : ""}
+                {step.kind === "EXERCISE" ? "Exercise" : "Step"} | {formatGuidedSeconds(step.durationSec)} work
+                {step.restSec ? ` | ${formatGuidedSeconds(step.restSec)} rest` : ""}
+                {formatGuidedRepSetSummary(step) ? ` | ${formatGuidedRepSetSummary(step)}` : ""}
               </div>
             </div>
           ))}
@@ -338,38 +341,35 @@ const runnerCard: React.CSSProperties = {
 };
 
 const timerFace: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: 18,
-  padding: 20,
+  border: "1px solid rgba(128,128,128,0.26)",
+  borderRadius: 16,
+  padding: 16,
   display: "grid",
   gap: 8,
-  justifyItems: "center",
-  background: "rgba(17,24,39,0.35)",
+  placeItems: "center",
+  background: "rgba(0,0,0,0.18)",
 };
 
 const timerValue: React.CSSProperties = {
-  fontSize: 40,
-  lineHeight: 1,
+  fontSize: 34,
   fontWeight: 900,
-  letterSpacing: -1,
+  lineHeight: 1,
 };
 
 const actionBtn: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid rgba(128,128,128,0.5)",
+  padding: "9px 12px",
+  border: "1px solid rgba(128,128,128,0.7)",
   borderRadius: 10,
-  background: "rgba(17,24,39,0.35)",
+  background: "rgba(128,128,128,0.12)",
   color: "inherit",
   fontWeight: 800,
 };
 
 const nextCard: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(128,128,128,0.24)",
   borderRadius: 12,
   padding: 10,
-  background: "rgba(17,24,39,0.2)",
-  display: "grid",
-  gap: 4,
+  background: "rgba(255,255,255,0.04)",
 };
 
 const helpText: React.CSSProperties = {

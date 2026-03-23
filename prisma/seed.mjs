@@ -277,6 +277,60 @@ const sessionTemplates = [
   },
 ];
 
+const fingerPullExercises = [
+  "Crimp",
+  "Half Crimp",
+  "Open Hand",
+  "3 Finger Drag",
+  "2 Finger Drag (Front Two)",
+  "2 Finger Drag (Middle Two)",
+  "1 Finger Drag",
+  "3 Finger Crimp",
+  "2 Finger Crimp",
+  "1 Finger Crimp",
+].map((name) => ({
+  name: `${name} Pull`,
+  unit: "REPS",
+  supportsWeight: true,
+  metadata: ["fingers", "forearms", "pull", "strength"],
+}));
+
+const fingerTimedPullExercises = [
+  "Crimp",
+  "Half Crimp",
+  "Open Hand",
+  "3 Finger Drag",
+  "2 Finger Drag (Front Two)",
+  "2 Finger Drag (Middle Two)",
+  "1 Finger Drag",
+  "3 Finger Crimp",
+  "2 Finger Crimp",
+  "1 Finger Crimp",
+].map((name) => ({
+  name: `${name} Pull (Time)`,
+  unit: "TIME",
+  supportsWeight: true,
+  metadata: ["fingers", "forearms", "pull", "strength"],
+}));
+
+const fingerHangExercises = [
+  "Crimp",
+  "Half Crimp",
+  "Open Hand",
+  "3 Finger Drag",
+  "2 Finger Drag (Front Two)",
+  "2 Finger Drag (Middle Two)",
+  "1 Finger Drag",
+  "3 Finger Crimp",
+  "2 Finger Crimp",
+  "1 Finger Crimp",
+].map((name) => ({
+  name: `${name} Hang`,
+  unit: "TIME",
+  supportsWeight: true,
+  metadata: ["fingers", "forearms", "pull", "strength", "isometric"],
+}));
+
 const starterExercises = [
   { name: "Back Squat", unit: "REPS", supportsWeight: true, metadata: ["quads", "glutes", "legs", "lower-body", "squat"] },
   { name: "Front Squat", unit: "REPS", supportsWeight: true, metadata: ["quads", "core", "legs", "lower-body", "squat"] },
@@ -382,11 +436,9 @@ const starterExercises = [
   { name: "Glute Bridge Hold", unit: "TIME", supportsWeight: false, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge", "isometric"] },
   { name: "Dead Hang", unit: "TIME", supportsWeight: false, metadata: ["back", "forearms", "fingers", "pull", "upper-body", "isometric"] },
   { name: "Active Hang", unit: "TIME", supportsWeight: false, metadata: ["back", "shoulders", "forearms", "fingers", "pull", "upper-body", "isometric"] },
-  { name: "7/7 Half Crimp Hangs", unit: "TIME", supportsWeight: true, metadata: ["fingers", "forearms", "pull", "isometric", "strength"] },
-  { name: "7/7 Open Hand Hangs", unit: "TIME", supportsWeight: true, metadata: ["fingers", "forearms", "pull", "isometric", "strength"] },
-  { name: "7/7 Three Finger Drag Hangs", unit: "TIME", supportsWeight: true, metadata: ["fingers", "forearms", "pull", "isometric", "strength"] },
-  { name: "7/7 Pinch Grip Hangs", unit: "TIME", supportsWeight: true, metadata: ["fingers", "forearms", "pull", "isometric", "strength"] },
-  { name: "7/7 Pocket Hangs", unit: "TIME", supportsWeight: true, metadata: ["fingers", "forearms", "pull", "isometric", "strength"] },
+  ...fingerPullExercises,
+  ...fingerTimedPullExercises,
+  ...fingerHangExercises,
   { name: "Flexed-Arm Hang", unit: "TIME", supportsWeight: false, metadata: ["back", "biceps", "forearms", "pull", "upper-body", "vertical-pull", "isometric"] },
   { name: "Support Hold", unit: "TIME", supportsWeight: false, metadata: ["chest", "shoulders", "triceps", "core", "push", "upper-body", "isometric"] },
   { name: "Ring Support Hold", unit: "TIME", supportsWeight: false, metadata: ["chest", "shoulders", "triceps", "core", "push", "upper-body", "isometric"] },

@@ -30,6 +30,8 @@ export default async function LogGuidedPage(props: { params: Promise<Params> | P
           durationSec: true,
           restSec: true,
           repeatCount: true,
+          repCount: true,
+          setCount: true,
           sortOrder: true,
           exercise: { select: { name: true } },
         },
@@ -72,6 +74,8 @@ export default async function LogGuidedPage(props: { params: Promise<Params> | P
               durationSec: step.durationSec,
               restSec: step.restSec,
               repeatCount: step.repeatCount,
+              repCount: step.repCount,
+              setCount: step.setCount,
               sortOrder: step.sortOrder,
             }))}
           />

@@ -52,7 +52,7 @@ export const ROUTINE_PRESETS: RoutinePreset[] = [
   },
   {
     key: "OPEN_SESSION",
-    label: "Open Session",
+    label: "Sports Session",
     description: "Broad sessions like climbing, sports, hiking days, and skill practice.",
     kind: "SESSION",
     subtype: "SKILL_PRACTICE",

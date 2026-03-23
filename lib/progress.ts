@@ -167,10 +167,19 @@ export function dateYmd(date: Date) {
 }
 
 export function sparklinePoints(values: number[], width = 220, height = 64, padding = 6) {
-  if (values.length === 0) return "";
+  return sparklineCoordinates(values, width, height, padding)
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
+}
+
+export function sparklineCoordinates(values: number[], width = 220, height = 64, padding = 6) {
+  if (values.length === 0) return [] as Array<{ x: number; y: number }>;
   if (values.length === 1) {
     const y = height / 2;
-    return `${padding},${y} ${width - padding},${y}`;
+    return [
+      { x: padding, y },
+      { x: width - padding, y },
+    ];
   }
 
   const min = Math.min(...values);
@@ -179,13 +188,11 @@ export function sparklinePoints(values: number[], width = 220, height = 64, padd
   const innerW = Math.max(1, width - padding * 2);
   const innerH = Math.max(1, height - padding * 2);
 
-  return values
-    .map((value, i) => {
-      const x = padding + (i / (values.length - 1)) * innerW;
-      const y = padding + (1 - (value - min) / span) * innerH;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  return values.map((value, i) => {
+    const x = padding + (i / (values.length - 1)) * innerW;
+    const y = padding + (1 - (value - min) / span) * innerH;
+    return { x, y };
+  });
 }
 
 export function aggregateWeeklyMileageSeries(

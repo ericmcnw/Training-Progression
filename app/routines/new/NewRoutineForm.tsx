@@ -48,11 +48,11 @@ export default function NewRoutineForm({
     () => sessionTemplates.filter((template) => !template.sessionSubtype || template.sessionSubtype === subtype),
     [sessionTemplates, subtype]
   );
-  const [sessionTemplateId, setSessionTemplateId] = useState(() => matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
-  const effectiveSessionTemplateId =
-    (matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).some((template) => template.id === sessionTemplateId)
+  const sessionTemplateOptions = matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates;
+  const [sessionTemplateId, setSessionTemplateId] = useState("");
+  const effectiveSessionTemplateId = sessionTemplateOptions.some((template) => template.id === sessionTemplateId)
       ? sessionTemplateId
-      : (matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
+      : "";
   const selectedSessionTemplate =
     matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
     sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
@@ -95,9 +95,9 @@ export default function NewRoutineForm({
       : "Broader sessions like climbing, sports, or skill practice.";
 
   return (
-    <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 520 }}>
+    <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <div>
-        <label style={styles.label}>Tracking preset</label>
+        <label style={styles.label}>Routine Type Selection</label>
         <div style={styles.presetGrid}>
           {ROUTINE_PRESETS.map((preset) => (
             <button
@@ -159,7 +159,8 @@ export default function NewRoutineForm({
               }
             }}
           >
-            {(matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).map((template) => (
+            <option value="">Open session (no metric template)</option>
+            {sessionTemplateOptions.map((template) => (
               <option key={template.id} value={template.id}>
                 {template.name}
               </option>
@@ -167,7 +168,7 @@ export default function NewRoutineForm({
           </select>
           <div style={styles.help}>
             {selectedSessionTemplate?.description ??
-              "Pick the sport/activity template that defines the structured log fields for this session routine."}
+              "Leave this open for a free-form session, or choose a template for structured metric fields."}
           </div>
         </div>
       ) : null}
@@ -307,12 +308,14 @@ const styles = {
   },
   presetGrid: {
     display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    alignItems: "stretch" as const,
   },
   presetCard: {
     textAlign: "left" as const,
-    padding: 12,
+    minHeight: 112,
+    padding: 14,
     borderWidth: 1,
     borderStyle: "solid" as const,
     borderColor: "rgba(128,128,128,0.4)",

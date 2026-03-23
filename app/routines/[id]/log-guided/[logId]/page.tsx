@@ -51,6 +51,8 @@ export default async function EditGuidedLogPage(props: {
           durationSec: true,
           restSec: true,
           repeatCount: true,
+          repCount: true,
+          setCount: true,
           weightLb: true,
           sortOrder: true,
           exercise: { select: { name: true } },
@@ -85,6 +87,8 @@ export default async function EditGuidedLogPage(props: {
               durationSec: step.durationSec,
               restSec: step.restSec,
               repeatCount: step.repeatCount,
+              repCount: step.repCount,
+              setCount: step.setCount,
               weightLb: step.weightLb,
               sortOrder: step.sortOrder,
             }))}

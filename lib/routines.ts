@@ -97,3 +97,8 @@ export function isGuidedKind(kind: string | null | undefined) {
 export function isSessionKind(kind: string | null | undefined) {
   return normalizeRoutineKind(kind) === "SESSION";
 }
+
+export function supportsRoutineSteps(kind: string | null | undefined) {
+  const normalized = normalizeRoutineKind(kind);
+  return normalized === "GUIDED";
+}

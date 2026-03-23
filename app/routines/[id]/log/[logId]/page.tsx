@@ -49,7 +49,6 @@ export default async function EditWorkoutLogPage(props: {
     },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
-  if (routine.kind !== "WORKOUT") return <div style={{ padding: 20 }}>This routine is not a workout routine.</div>;
 
   const log = await prisma.routineLog.findUnique({
     where: { id: logId },
@@ -73,6 +72,7 @@ export default async function EditWorkoutLogPage(props: {
     },
   });
   if (!log || log.routineId !== routineId) return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
+  if (log.exercises.length === 0) return <div style={{ padding: 20 }}>This log is not a workout log.</div>;
 
   const availableExercises = await prisma.exercise.findMany({
     orderBy: { name: "asc" },

@@ -57,13 +57,15 @@ export default function EditRoutineForm({
     () => sessionTemplates.filter((template) => !template.sessionSubtype || template.sessionSubtype === subtype),
     [sessionTemplates, subtype]
   );
-  const [sessionTemplateId, setSessionTemplateId] = useState(
-    routine.sessionTemplateId ?? matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? ""
-  );
-  const effectiveSessionTemplateId =
-    (matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).some((template) => template.id === sessionTemplateId)
+  const sessionTemplateOptions = matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates;
+  const [sessionTemplateId, setSessionTemplateId] = useState(routine.sessionTemplateId ?? "");
+  const effectiveSessionTemplateId = sessionTemplateOptions.some((template) => template.id === sessionTemplateId)
       ? sessionTemplateId
-      : (matchingSessionTemplates[0]?.id ?? sessionTemplates[0]?.id ?? "");
+      : "";
+  const selectedSessionTemplate =
+    sessionTemplateOptions.find((template) => template.id === effectiveSessionTemplateId) ??
+    sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
+    null;
   const isCustomCategory = selectedCategory === "__custom__";
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
@@ -94,11 +96,11 @@ export default function EditRoutineForm({
   const activePreset = getRoutinePreset(presetKey);
 
   return (
-    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 520 }}>
+    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="id" value={routine.id} />
 
       <div>
-        <label style={styles.label}>Tracking preset</label>
+        <label style={styles.label}>Routine Type Selection</label>
         <div style={styles.presetGrid}>
           {ROUTINE_PRESETS.map((preset) => (
             <button
@@ -149,15 +151,25 @@ export default function EditRoutineForm({
         <button type="submit" style={styles.btn}>
           Save
         </button>
+        {isGuidedKind(kind) && !isGuidedKind(routine.kind) && (
+          <button type="submit" name="postSave" value="steps" style={styles.btn}>
+            Save + Open Steps
+          </button>
+        )}
+        {isWorkoutKind(kind) && !isWorkoutKind(routine.kind) && (
+          <button type="submit" name="postSave" value="template" style={styles.btn}>
+            Save + Open Template
+          </button>
+        )}
         <Link href="/routines" style={styles.linkBtn}>
           Back
         </Link>
-        {isWorkoutKind(kind) && (
+        {isWorkoutKind(kind) && isWorkoutKind(routine.kind) && (
           <Link href={`/routines/${routine.id}/template`} style={styles.linkBtn}>
             Template
           </Link>
         )}
-        {isGuidedKind(kind) && (
+        {isGuidedKind(kind) && isGuidedKind(routine.kind) && (
           <Link href={`/routines/${routine.id}/guided`} style={styles.linkBtn}>
             Steps
           </Link>
@@ -221,6 +233,9 @@ export default function EditRoutineForm({
                 </option>
               ))}
             </select>
+            <div style={styles.help}>
+              Guided routines use reusable steps. Sessions use either a session template or an open custom session.
+            </div>
           </div>
 
           <div>
@@ -251,15 +266,16 @@ export default function EditRoutineForm({
                 value={effectiveSessionTemplateId}
                 onChange={(event) => setSessionTemplateId(event.target.value)}
               >
-                {(matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates).map((template) => (
+                <option value="">Open session (no metric template)</option>
+                {sessionTemplateOptions.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
                   </option>
                 ))}
               </select>
               <div style={styles.help}>
-                {(matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ?? sessionTemplates.find((template) => template.id === effectiveSessionTemplateId))?.description ??
-                  "Pick the structured session template for this routine."}
+                {selectedSessionTemplate?.description ??
+                  "Leave this open for a free-form session, or choose a template for structured metric fields."}
               </div>
             </div>
           ) : null}
@@ -317,12 +333,14 @@ const styles = {
   },
   presetGrid: {
     display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    alignItems: "stretch" as const,
   },
   presetCard: {
     textAlign: "left" as const,
-    padding: 12,
+    minHeight: 112,
+    padding: 14,
     borderWidth: 1,
     borderStyle: "solid" as const,
     borderColor: "rgba(128,128,128,0.4)",

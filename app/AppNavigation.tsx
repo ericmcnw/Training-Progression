@@ -10,7 +10,7 @@ const desktopNavItems = [
   { href: "/progress", label: "Progress", match: (pathname: string) => pathname.startsWith("/progress") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "Manual Log", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [

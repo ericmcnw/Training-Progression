@@ -2,6 +2,7 @@
 
 import { inferGuidedStepMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
+import { supportsRoutineSteps } from "@/lib/routines";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -18,6 +19,16 @@ async function metadataGroupIdsForSlugs(slugs: string[]) {
     select: { id: true },
   });
   return groups.map((group) => group.id);
+}
+
+async function ensureStepRoutine(routineId: string) {
+  const routine = await prisma.routine.findUnique({
+    where: { id: routineId },
+    select: { kind: true },
+  });
+  if (!routine) throw new Error("Routine not found.");
+  if (!supportsRoutineSteps(routine.kind)) throw new Error("This routine type does not support reusable steps.");
+  return routine;
 }
 
 async function syncGuidedStepMetadataGroups(guidedStepId: string, groupIds: string[]) {
@@ -56,18 +67,29 @@ function parseRepeatCount(value: FormDataEntryValue | null) {
   return Math.floor(parsed);
 }
 
+function parseOptionalCount(value: FormDataEntryValue | null, label: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return 1;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${label} must be at least 1.`);
+  return Math.floor(parsed);
+}
+
 export async function addGuidedStep(formData: FormData) {
   const routineId = String(formData.get("routineId") || "").trim();
   const kind = parseStepKind(formData.get("kind"));
   const title = String(formData.get("title") || "").trim();
   const exerciseId = String(formData.get("exerciseId") || "").trim();
   if (!routineId) throw new Error("Missing routine id.");
+  await ensureStepRoutine(routineId);
   if (kind === "STEP" && !title) throw new Error("Title is required.");
   if (kind === "EXERCISE" && !exerciseId) throw new Error("Exercise is required.");
 
   const durationSec = parseOptionalSeconds(formData.get("durationSec"), "Duration");
   const restSec = parseOptionalSeconds(formData.get("restSec"), "Rest");
   const repeatCount = parseRepeatCount(formData.get("repeatCount"));
+  const repCount = parseOptionalCount(formData.get("repCount"), "Reps");
+  const setCount = parseOptionalCount(formData.get("setCount"), "Sets");
 
   let exerciseName: string | null = null;
   if (exerciseId) {
@@ -94,6 +116,8 @@ export async function addGuidedStep(formData: FormData) {
       durationSec,
       restSec,
       repeatCount,
+      repCount,
+      setCount,
       sortOrder: existing.length,
     },
     select: { id: true },
@@ -116,12 +140,15 @@ export async function updateGuidedStep(formData: FormData) {
   const title = String(formData.get("title") || "").trim();
   const exerciseId = String(formData.get("exerciseId") || "").trim();
   if (!routineId || !stepId) throw new Error("Missing ids.");
+  await ensureStepRoutine(routineId);
   if (kind === "STEP" && !title) throw new Error("Title is required.");
   if (kind === "EXERCISE" && !exerciseId) throw new Error("Exercise is required.");
 
   const durationSec = parseOptionalSeconds(formData.get("durationSec"), "Duration");
   const restSec = parseOptionalSeconds(formData.get("restSec"), "Rest");
   const repeatCount = parseRepeatCount(formData.get("repeatCount"));
+  const repCount = parseOptionalCount(formData.get("repCount"), "Reps");
+  const setCount = parseOptionalCount(formData.get("setCount"), "Sets");
 
   let exerciseName: string | null = null;
   if (exerciseId) {
@@ -142,6 +169,8 @@ export async function updateGuidedStep(formData: FormData) {
       durationSec,
       restSec,
       repeatCount,
+      repCount,
+      setCount,
     },
   });
 
@@ -157,10 +186,50 @@ export async function updateGuidedStep(formData: FormData) {
   redirect(routeFor(routineId));
 }
 
+export async function moveGuidedStep(direction: "UP" | "DOWN", formData: FormData) {
+  const routineId = String(formData.get("routineId") || "").trim();
+  const stepId = String(formData.get("stepId") || "").trim();
+  if (!routineId || !stepId) throw new Error("Missing ids.");
+  await ensureStepRoutine(routineId);
+
+  const steps = await prisma.guidedStep.findMany({
+    where: { routineId },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, sortOrder: true },
+  });
+
+  const currentIndex = steps.findIndex((step) => step.id === stepId);
+  if (currentIndex < 0) throw new Error("Step not found.");
+  const swapIndex = direction === "UP" ? currentIndex - 1 : currentIndex + 1;
+  if (swapIndex < 0 || swapIndex >= steps.length) {
+    revalidatePath(routeFor(routineId));
+    redirect(routeFor(routineId));
+  }
+
+  const current = steps[currentIndex];
+  const target = steps[swapIndex];
+
+  await prisma.$transaction([
+    prisma.guidedStep.update({
+      where: { id: current.id },
+      data: { sortOrder: target.sortOrder },
+    }),
+    prisma.guidedStep.update({
+      where: { id: target.id },
+      data: { sortOrder: current.sortOrder },
+    }),
+  ]);
+
+  revalidatePath(routeFor(routineId));
+  revalidatePath(`/routines/${routineId}/log-guided`);
+  redirect(routeFor(routineId));
+}
+
 export async function deleteGuidedStep(formData: FormData) {
   const routineId = String(formData.get("routineId") || "").trim();
   const stepId = String(formData.get("stepId") || "").trim();
   if (!routineId || !stepId) throw new Error("Missing ids.");
+  await ensureStepRoutine(routineId);
 
   await prisma.guidedStep.delete({ where: { id: stepId } });
   const remaining = await prisma.guidedStep.findMany({

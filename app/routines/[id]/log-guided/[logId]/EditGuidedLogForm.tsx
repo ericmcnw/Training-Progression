@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { updateGuidedLog } from "../../../actions";
-import { formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
+import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import type { GuidedStepKind } from "@/generated/prisma";
 
 function toLocalInputValue(date: Date) {
@@ -20,6 +20,8 @@ type Step = {
   durationSec: number | null;
   restSec: number | null;
   repeatCount: number;
+  repCount?: number | null;
+  setCount?: number | null;
   weightLb?: number | null;
   sortOrder: number;
 };
@@ -93,9 +95,9 @@ export default function EditGuidedLogForm({
             <div key={`${step.guidedStepId ?? "step"}-${index}`} style={styles.stepRow}>
               <div style={{ fontWeight: 800 }}>{index + 1}. {formatGuidedStepLabel({ kind: step.kind, title: step.title, exerciseName: step.exerciseName })}</div>
               <div style={{ fontSize: 12, opacity: 0.75 }}>
-                {step.kind === "EXERCISE" ? "Exercise" : "Step"} • {formatGuidedSeconds(step.durationSec)} work
+                {step.kind === "EXERCISE" ? "Exercise" : "Step"} | {formatGuidedSeconds(step.durationSec)} work
                 {step.restSec ? ` | ${formatGuidedSeconds(step.restSec)} rest` : ""}
-                {step.repeatCount > 1 ? ` | ${step.repeatCount} sets` : ""}
+                {formatGuidedRepSetSummary(step) ? ` | ${formatGuidedRepSetSummary(step)}` : ""}
                 {step.weightLb !== null && step.weightLb !== undefined ? ` | ${step.weightLb} lb` : ""}
               </div>
             </div>
