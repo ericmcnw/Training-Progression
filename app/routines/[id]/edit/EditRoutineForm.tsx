@@ -11,7 +11,6 @@ import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 
 export default function EditRoutineForm({
   routine,
-  categories,
   metadataGroups,
   sessionTemplates,
 }: {
@@ -26,7 +25,6 @@ export default function EditRoutineForm({
     selectedMetadataGroupIds: string[];
     tags: string[];
   };
-  categories: string[];
   metadataGroups: Array<{
     id: string;
     slug: string;
@@ -41,10 +39,8 @@ export default function EditRoutineForm({
   }>;
 }) {
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>(() => inferRoutinePreset(routine.kind, routine.subtype));
-  const hasCategory = categories.includes(routine.category);
-  const [selectedCategory, setSelectedCategory] = useState(hasCategory ? routine.category : "__custom__");
-  const [customCategory, setCustomCategory] = useState(hasCategory ? "" : routine.category);
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
+  const [category, setCategory] = useState(routine.category.trim() || getRoutinePreset(presetKey).categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(routine.subtype && subtypeOptions.includes(routine.subtype) ? routine.subtype : subtypeOptions[0]);
   const matchingSessionTemplates = useMemo(
@@ -60,7 +56,6 @@ export default function EditRoutineForm({
     sessionTemplateOptions.find((template) => template.id === effectiveSessionTemplateId) ??
     sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
     null;
-  const isCustomCategory = selectedCategory === "__custom__";
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
     [metadataGroups]
@@ -88,14 +83,13 @@ export default function EditRoutineForm({
   }, [suggestedMetadataGroupIds]);
 
   const activePreset = getRoutinePreset(presetKey);
-  const resolvedCategory = isCustomCategory ? customCategory.trim() : selectedCategory;
 
   return (
     <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="id" value={routine.id} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
-      <input type="hidden" name="category" value={resolvedCategory} />
+      <input type="hidden" name="category" value={category} />
       <input type="hidden" name="tags" value={routine.tags.join(", ")} />
 
       <div>
@@ -110,8 +104,7 @@ export default function EditRoutineForm({
                 if (preset.key !== "CUSTOM") {
                   setKind(preset.kind);
                   setSubtype(preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER");
-                  setSelectedCategory(categories.includes(preset.categoryHint) ? preset.categoryHint : "__custom__");
-                  setCustomCategory(categories.includes(preset.categoryHint) ? "" : preset.categoryHint);
+                  setCategory(preset.categoryHint);
                 }
               }}
               style={{
@@ -133,7 +126,7 @@ export default function EditRoutineForm({
         <div style={styles.selectionLabel}>Selected setup</div>
         <div style={styles.selectionTitle}>{activePreset.label}</div>
         <div style={styles.selectionSub}>
-          {kind} | {formatRoutineSubtype(subtype)}
+          {kind} | {formatRoutineSubtype(subtype)} | {category}
         </div>
       </div>
 

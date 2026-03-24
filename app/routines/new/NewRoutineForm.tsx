@@ -16,11 +16,9 @@ type MetadataGroupOption = {
 };
 
 export default function NewRoutineForm({
-  categories,
   metadataGroups,
   sessionTemplates,
 }: {
-  categories: string[];
   metadataGroups: MetadataGroupOption[];
   sessionTemplates: Array<{
     id: string;
@@ -32,12 +30,7 @@ export default function NewRoutineForm({
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>("HABIT");
   const initialPreset = getRoutinePreset(presetKey);
   const [kind, setKind] = useState<RoutineKind>(initialPreset.kind);
-  const [selectedCategory, setSelectedCategory] = useState(
-    categories.includes(initialPreset.categoryHint) ? initialPreset.categoryHint : "__custom__"
-  );
-  const [customCategory, setCustomCategory] = useState(
-    categories.includes(initialPreset.categoryHint) ? "" : initialPreset.categoryHint
-  );
+  const [category, setCategory] = useState(initialPreset.categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(initialPreset.subtype ?? subtypeOptions[0] ?? "OTHER");
   const matchingSessionTemplates = useMemo(
@@ -53,7 +46,6 @@ export default function NewRoutineForm({
     matchingSessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
     sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
     null;
-  const isCustomCategory = selectedCategory === "__custom__";
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
     [metadataGroups]
@@ -79,13 +71,12 @@ export default function NewRoutineForm({
   }, [suggestedMetadataGroupIds]);
 
   const activePreset = getRoutinePreset(presetKey);
-  const resolvedCategory = isCustomCategory ? customCategory.trim() : selectedCategory;
 
   return (
     <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
-      <input type="hidden" name="category" value={resolvedCategory} />
+      <input type="hidden" name="category" value={category} />
       <input type="hidden" name="tags" value="" />
 
       <div>
@@ -100,8 +91,7 @@ export default function NewRoutineForm({
                 if (preset.key !== "CUSTOM") {
                   setKind(preset.kind);
                   setSubtype(preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER");
-                  setSelectedCategory(categories.includes(preset.categoryHint) ? preset.categoryHint : "__custom__");
-                  setCustomCategory(categories.includes(preset.categoryHint) ? "" : preset.categoryHint);
+                  setCategory(preset.categoryHint);
                 }
               }}
               style={{
@@ -123,7 +113,7 @@ export default function NewRoutineForm({
         <div style={styles.selectionLabel}>Selected setup</div>
         <div style={styles.selectionTitle}>{activePreset.label}</div>
         <div style={styles.selectionSub}>
-          {kind} | {formatRoutineSubtype(subtype)}
+          {kind} | {formatRoutineSubtype(subtype)} | {category}
         </div>
       </div>
 

@@ -92,12 +92,8 @@ function parsePerformedAt(performedAtLocal?: string | null) {
 }
 
 function parseCategory(formData: FormData) {
-  const categoryRaw = String(formData.get("category") || "").trim();
-  const categoryPreset = String(formData.get("categoryPreset") || "").trim();
-  if (categoryPreset === "__custom__" && !categoryRaw) {
-    throw new Error("Custom category is required.");
-  }
-  return categoryRaw || (categoryPreset && categoryPreset !== "__custom__" ? categoryPreset : "General");
+  const category = String(formData.get("category") || "").trim();
+  return category || "General";
 }
 
 function parseOptionalTimesPerWeek(formData: FormData) {

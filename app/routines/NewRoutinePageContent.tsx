@@ -6,13 +6,6 @@ import type { MetadataGroupKind } from "@/generated/prisma";
 export const dynamic = "force-dynamic";
 
 export default function NewRoutinePage() {
-  const defaultCategories = ["General", "Daily", "Strength", "Running", "Climbing"];
-  const categoriesPromise = prisma.routine.findMany({
-    select: { category: true },
-    where: { isDeleted: false },
-    distinct: ["category"],
-    orderBy: { category: "asc" },
-  });
   const metadataGroupsPromise = prisma.metadataGroup.findMany({
     where: { appliesToRoutine: true },
     select: { id: true, slug: true, label: true, kind: true },
@@ -26,32 +19,20 @@ export default function NewRoutinePage() {
 
   return (
     <NewRoutinePageInner
-      categoriesPromise={categoriesPromise}
       metadataGroupsPromise={metadataGroupsPromise}
       sessionTemplatesPromise={sessionTemplatesPromise}
-      defaultCategories={defaultCategories}
     />
   );
 }
 
 async function NewRoutinePageInner({
-  categoriesPromise,
   metadataGroupsPromise,
   sessionTemplatesPromise,
-  defaultCategories,
 }: {
-  categoriesPromise: Promise<Array<{ category: string }>>;
   metadataGroupsPromise: Promise<Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>>;
   sessionTemplatesPromise: Promise<Array<{ id: string; name: string; description: string | null; sessionSubtype: string | null }>>;
-  defaultCategories: string[];
 }) {
-  const [categoryRows, metadataGroups, sessionTemplates] = await Promise.all([categoriesPromise, metadataGroupsPromise, sessionTemplatesPromise]);
-  const categories = Array.from(
-    new Set([
-      ...defaultCategories,
-      ...categoryRows.map((row) => row.category.trim()).filter((value) => value.length > 0),
-    ])
-  ).sort((a, b) => a.localeCompare(b));
+  const [metadataGroups, sessionTemplates] = await Promise.all([metadataGroupsPromise, sessionTemplatesPromise]);
 
   return (
     <div style={styles.container}>
@@ -73,7 +54,7 @@ async function NewRoutinePageInner({
 
       <div style={styles.panel}>
         <div style={styles.panelHeader}>QUICK SETUP</div>
-        <NewRoutineForm categories={categories} metadataGroups={metadataGroups} sessionTemplates={sessionTemplates} />
+        <NewRoutineForm metadataGroups={metadataGroups} sessionTemplates={sessionTemplates} />
       </div>
     </div>
   );
