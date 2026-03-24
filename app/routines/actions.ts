@@ -3,7 +3,9 @@
 import { parseTagNames } from "@/lib/metadata";
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { parseAppDateTimeLocal } from "@/lib/dates";
+import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
+import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
 import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
@@ -467,10 +469,6 @@ function hasWorkoutSetValue(set: { reps?: number | null; seconds?: number | null
     || set.weightLb !== null && set.weightLb !== undefined;
 }
 
-function normalizeExerciseName(name: string) {
-  return name.trim().replace(/\s+/g, " ");
-}
-
 async function ensureExerciseExists(
   tx: PrismaTx,
   params: Pick<WorkoutExerciseInput, "exerciseId" | "customName" | "unit" | "supportsWeight">
@@ -488,11 +486,24 @@ async function ensureExerciseExists(
   const unit = params.unit === "TIME" ? "TIME" : "REPS";
   if (!name) throw new Error("Exercise name is required.");
 
-  const existing = await tx.exercise.findFirst({
-    where: { name, unit },
-    select: { id: true },
+  const existingExercises = await tx.exercise.findMany({
+    select: { id: true, name: true, unit: true, supportsWeight: true },
   });
-  if (existing) return existing.id;
+  const existing = findExerciseNameMatch(existingExercises, name);
+  if (existing) {
+    if (existing.unit !== unit) {
+      throw new Error(
+        `"${existing.name}" already exists as a ${exerciseUnitLabel(existing.unit).toLowerCase()} exercise. Rename this one or use the existing exercise instead.`
+      );
+    }
+    if (params.supportsWeight && !existing.supportsWeight) {
+      await tx.exercise.update({
+        where: { id: existing.id },
+        data: { supportsWeight: true },
+      });
+    }
+    return existing.id;
+  }
 
   const created = await tx.exercise.create({
     data: {
@@ -745,9 +756,7 @@ function revalidateRoutineSurfaces(routineId?: string) {
   revalidatePath("/schedule");
   if (routineId) {
     revalidatePath(`/routines/${routineId}/log`);
-    revalidatePath(`/routines/${routineId}/log-cardio`);
-    revalidatePath(`/routines/${routineId}/log-guided`);
-    revalidatePath(`/routines/${routineId}/log-session`);
+    revalidatePath(`/routines/${routineId}/logs`);
     revalidatePath(`/routines/${routineId}/template`);
     revalidatePath(`/progress/routines/${routineId}`);
   }
@@ -843,6 +852,64 @@ export async function createRoutine(formData: FormData) {
   if (kind === "WORKOUT" && postCreate === "template") {
     redirect(`/routines/${created.id}/template`);
   }
+  redirect("/routines");
+}
+
+export async function createStarterPack(formData: FormData) {
+  const focus = String(formData.get("focus") || "MIXED").trim().toUpperCase() as StarterPackFocus;
+  const structure = String(formData.get("structure") || "BALANCED").trim().toUpperCase() as StarterPackStructure;
+  const pack = getStarterPackDefinition(focus);
+  const structureDef = getStarterStructureDefinition(structure);
+  const plan = buildStarterPackPlan(pack.key, structureDef.key);
+
+  if (plan.length === 0) {
+    throw new Error("Starter pack is empty.");
+  }
+
+  const sessionTemplateKeys = Array.from(
+    new Set(plan.map((item) => item.sessionTemplateKey).filter((value): value is string => Boolean(value)))
+  );
+  const sessionTemplates = sessionTemplateKeys.length > 0
+    ? await prisma.sessionTemplate.findMany({
+        where: { key: { in: sessionTemplateKeys } },
+        select: { id: true, key: true },
+      })
+    : [];
+  const sessionTemplateIdByKey = new Map(sessionTemplates.map((template) => [template.key, template.id]));
+
+  for (const routine of plan) {
+    const created = await prisma.routine.create({
+      data: {
+        name: routine.name,
+        category: routine.category,
+        domain: "general",
+        kind: routine.kind,
+        subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
+        isActive: true,
+        isDeleted: false,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    await syncRoutineTypeDetails(
+      created.id,
+      routine.kind,
+      routine.sessionTemplateKey ? sessionTemplateIdByKey.get(routine.sessionTemplateKey) ?? null : null
+    );
+    await syncRoutineClassificationMetadata({
+      routineId: created.id,
+      selectedGroupIds: [],
+      tags: [],
+    });
+    await syncRoutineWeeklyGoal({
+      routineId: created.id,
+      routineName: routine.name,
+      timesPerWeek: routine.timesPerWeek,
+    });
+  }
+
+  revalidateRoutineSurfaces();
   redirect("/routines");
 }
 
@@ -1186,6 +1253,7 @@ export async function logCardio(params: {
   routineId: string;
   distanceMi: number;
   durationSec: number;
+  elevationGainFt?: number | null;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
@@ -1197,6 +1265,13 @@ export async function logCardio(params: {
   if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) {
     throw new Error("Duration must be > 0.");
   }
+  if (
+    params.elevationGainFt !== null &&
+    params.elevationGainFt !== undefined &&
+    (!Number.isFinite(params.elevationGainFt) || params.elevationGainFt < 0)
+  ) {
+    throw new Error("Elevation gain must be 0 or greater.");
+  }
 
   const log = await prisma.routineLog.create({
     data: {
@@ -1204,6 +1279,10 @@ export async function logCardio(params: {
       performedAt: parsePerformedAt(params.performedAtLocal),
       distanceMi: params.distanceMi,
       durationSec: params.durationSec,
+      elevationGainFt:
+        params.elevationGainFt !== null && params.elevationGainFt !== undefined
+          ? Math.round(params.elevationGainFt)
+          : null,
       notes: params.notes?.trim() || null,
     },
     select: { id: true },
@@ -1223,6 +1302,7 @@ export async function logRun(params: {
   routineId: string;
   distanceMi: number;
   durationSec: number;
+  elevationGainFt?: number | null;
   notes?: string;
   performedAtLocal?: string;
 }) {
@@ -1337,6 +1417,7 @@ export async function updateCardioLog(params: {
   logId: string;
   distanceMi: number;
   durationSec: number;
+  elevationGainFt?: number | null;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
@@ -1345,6 +1426,13 @@ export async function updateCardioLog(params: {
   if (!params.logId) throw new Error("Missing logId.");
   if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) throw new Error("Distance must be > 0.");
   if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) throw new Error("Duration must be > 0.");
+  if (
+    params.elevationGainFt !== null &&
+    params.elevationGainFt !== undefined &&
+    (!Number.isFinite(params.elevationGainFt) || params.elevationGainFt < 0)
+  ) {
+    throw new Error("Elevation gain must be 0 or greater.");
+  }
 
   const existing = await prisma.routineLog.findUnique({
     where: { id: params.logId },
@@ -1359,6 +1447,10 @@ export async function updateCardioLog(params: {
         performedAt: parsePerformedAt(params.performedAtLocal),
         distanceMi: params.distanceMi,
         durationSec: params.durationSec,
+        elevationGainFt:
+          params.elevationGainFt !== null && params.elevationGainFt !== undefined
+            ? Math.round(params.elevationGainFt)
+            : null,
         notes: params.notes?.trim() || null,
       },
     });
@@ -1379,6 +1471,7 @@ export async function updateRunLog(params: {
   logId: string;
   distanceMi: number;
   durationSec: number;
+  elevationGainFt?: number | null;
   notes?: string;
   performedAtLocal?: string;
 }) {

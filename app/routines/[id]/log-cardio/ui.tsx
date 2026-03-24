@@ -1,11 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { logRun } from "../../actions";
+import {
+  Field,
+  FieldGrid,
+  FormActions,
+  FormSection,
+  FormStack,
+  OptionalDateSection,
+  inputStyle,
+  textareaStyle,
+} from "../log/form-ui";
 
 export default function LogRunForm({ routineId }: { routineId: string }) {
   const [distanceMi, setDistanceMi] = useState("");
+  const [elevationGainFt, setElevationGainFt] = useState("");
   const [minutes, setMinutes] = useState("");
   const [seconds, setSeconds] = useState("");
   const [notes, setNotes] = useState("");
@@ -14,6 +24,10 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
 
   async function onSave() {
     const distance = Number(distanceMi);
+    const elevation =
+      elevationGainFt.trim().length > 0
+        ? Number(elevationGainFt)
+        : null;
     const mins = Number(minutes || "0");
     const secs = Number(seconds || "0");
     const durationSec = mins * 60 + secs;
@@ -27,6 +41,10 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
       alert("Enter a valid duration.");
       return;
     }
+    if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
+      alert("Enter a valid elevation gain in feet.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -34,6 +52,7 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
         routineId,
         distanceMi: distance,
         durationSec,
+        elevationGainFt: elevation,
         notes,
         performedAtLocal: performedAtLocal || undefined,
       });
@@ -45,117 +64,72 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
-      <div>
-        <label style={styles.label}>Distance (miles)</label>
-        <input
-          style={styles.input}
-          value={distanceMi}
-          onChange={(e) => setDistanceMi(e.target.value)}
-          inputMode="decimal"
-          placeholder="e.g. 4.25"
-        />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div>
-          <label style={styles.label}>Minutes</label>
+    <FormStack maxWidth={560}>
+      <FormSection title="Cardio details" description="Capture the session first. Timing and notes stay in the same places as the other routine logs.">
+        <Field label="Distance (miles)">
           <input
-            style={styles.input}
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
+            style={inputStyle}
+            value={distanceMi}
+            onChange={(e) => setDistanceMi(e.target.value)}
+            inputMode="decimal"
+            placeholder="e.g. 4.25"
+          />
+        </Field>
+
+        <FieldGrid>
+          <Field label="Minutes">
+            <input
+              style={inputStyle}
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              inputMode="numeric"
+              placeholder="e.g. 38"
+            />
+          </Field>
+
+          <Field label="Seconds">
+            <input
+              style={inputStyle}
+              value={seconds}
+              onChange={(e) => setSeconds(e.target.value)}
+              inputMode="numeric"
+              placeholder="e.g. 15"
+            />
+          </Field>
+        </FieldGrid>
+
+        <Field label="Elevation gain (ft, optional)" hint="Useful for hiking, trail runs, stairs, or any climb-heavy cardio.">
+          <input
+            style={inputStyle}
+            value={elevationGainFt}
+            onChange={(e) => setElevationGainFt(e.target.value)}
             inputMode="numeric"
-            placeholder="e.g. 38"
+            placeholder="e.g. 1200"
           />
-        </div>
+        </Field>
+      </FormSection>
 
-        <div>
-          <label style={styles.label}>Seconds</label>
-          <input
-            style={styles.input}
-            value={seconds}
-            onChange={(e) => setSeconds(e.target.value)}
-            inputMode="numeric"
-            placeholder="e.g. 15"
+      <FormSection title="Notes">
+        <Field label="Session notes (optional)" hint="Use this for feel, route, weather, or anything you want to review later.">
+          <textarea
+            style={textareaStyle}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="How did cardio feel?"
           />
-        </div>
-      </div>
+        </Field>
+      </FormSection>
 
-      <div>
-        <label style={styles.label}>Notes (optional)</label>
-        <textarea
-          style={{ ...styles.input, minHeight: 90, resize: "vertical" as const }}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="How did cardio feel?"
-        />
-      </div>
+      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 
-      <details style={styles.details}>
-        <summary data-collapsible-summary style={styles.summary}>Log with custom date/time (optional)</summary>
-        <div style={{ marginTop: 8 }}>
-          <label style={styles.label}>Performed at</label>
-          <input
-            type="datetime-local"
-            style={styles.input}
-            value={performedAtLocal}
-            onChange={(e) => setPerformedAtLocal(e.target.value)}
-          />
-        </div>
-      </details>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Cardio"}
-        </button>
-        <Link href="/routines" style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+      <FormActions
+        primaryLabel="Save Cardio"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref="/routines"
+      />
+    </FormStack>
   );
 }
-
-const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-  details: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background: "rgba(128,128,128,0.06)",
-  },
-  summary: {
-    cursor: "pointer",
-    fontWeight: 800 as const,
-    fontSize: 13,
-  },
-};
 

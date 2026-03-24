@@ -56,6 +56,7 @@ enum GoalMetricType {
   SESSIONS
   DISTANCE
   DURATION
+  ELEVATION_GAIN
   VOLUME
   REPS
   SETS
@@ -191,6 +192,7 @@ model RoutineLog {
   completionCount Int?
   durationSec     Int?
   distanceMi      Float?
+  elevationGainFt Int?
   location        String?
 
   routine         Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)

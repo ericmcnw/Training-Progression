@@ -522,6 +522,9 @@ function metricForLog(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<strin
     if (goal.goalType === "PERFORMANCE") return log.distanceMi ?? 0;
     return log.distanceMi ?? 0;
   }
+  if (goal.metricType === "ELEVATION_GAIN") {
+    return log.elevationGainFt ?? 0;
+  }
   if (goal.metricType === "DURATION") {
     if (exerciseIds.size > 0) {
       const relevantExercises = relevantExerciseIdsForLog(log, exerciseIds);
@@ -638,6 +641,7 @@ function formatMetricValue(goal: GoalWithConfig, value: number) {
     return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
   }
   if (goal.metricType === "DISTANCE") return `${value.toFixed(1)} mi`;
+  if (goal.metricType === "ELEVATION_GAIN") return `${value.toFixed(0)} ft`;
   if (goal.metricType === "DURATION" || goal.metricType === "MAX_DURATION") return formatSeconds(value);
   if (goal.metricType === "PACE") {
     const label = goal.config?.benchmarkLabel ?? (goal.config?.benchmarkDistanceMi ? `${goal.config.benchmarkDistanceMi.toFixed(2)} mi` : null);

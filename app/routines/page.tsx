@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { Prisma, Routine } from "@/generated/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
+import NewRoutinePageContent from "./NewRoutinePageContent";
+import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
+import StarterPackPageContent from "./StarterPackPageContent";
 import {
   formatRoutineSubtype,
   formatRoutineTypeLabel,
@@ -133,12 +136,7 @@ const styles = {
 };
 
 function loggingHref(routine: Pick<Routine, "id" | "kind">) {
-  const kind = normalizeRoutineKind(routine.kind);
-  if (kind === "WORKOUT") return `/routines/${routine.id}/log`;
-  if (kind === "CARDIO") return `/routines/${routine.id}/log-cardio`;
-  if (kind === "GUIDED") return `/routines/${routine.id}/log-guided`;
-  if (kind === "SESSION") return `/routines/${routine.id}/log-session`;
-  return `/routines/${routine.id}/log-completion`;
+  return `/routines/${routine.id}/log`;
 }
 
 function loggingLabel(kind: string) {
@@ -335,6 +333,17 @@ export default async function RoutinesPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const mode = getParam(searchParams, "mode");
+  if (mode === "new") {
+    return <NewRoutinePageContent />;
+  }
+  if (mode === "quick-log") {
+    return <QuickWorkoutLogPageContent />;
+  }
+  if (mode === "starter") {
+    return <StarterPackPageContent />;
+  }
+
   const searchQuery = (getParam(searchParams, "q") ?? "").trim();
   const normalizedSearchQuery = searchQuery.toLowerCase();
   const { start, end } = getWeekBoundsSunday(new Date());
@@ -396,10 +405,13 @@ export default async function RoutinesPage(props: {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href="/routines?mode=starter" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
+            Starter Pack
+          </Link>
           <Link href="/exercises" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
             Manage Exercises
           </Link>
-          <Link href="/routines/new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
+          <Link href="/routines?mode=new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
             + New Routine
           </Link>
         </div>
@@ -452,7 +464,7 @@ export default async function RoutinesPage(props: {
                   <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
                 </summary>
                 {isWorkoutSection ? (
-                  <Link href="/routines/log-workout-quick" style={styles.sectionActionLink}>
+                  <Link href="/routines?mode=quick-log" style={styles.sectionActionLink}>
                     Quick Log
                   </Link>
                 ) : null}

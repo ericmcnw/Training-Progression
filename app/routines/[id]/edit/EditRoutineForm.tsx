@@ -4,13 +4,7 @@ import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
-import {
-  ROUTINE_KIND_OPTIONS,
-  ROUTINE_SUBTYPE_OPTIONS,
-  formatRoutineSubtype,
-  isGuidedKind,
-  isWorkoutKind,
-} from "@/lib/routines";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, inferRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
@@ -94,10 +88,15 @@ export default function EditRoutineForm({
   }, [suggestedMetadataGroupIds]);
 
   const activePreset = getRoutinePreset(presetKey);
+  const resolvedCategory = isCustomCategory ? customCategory.trim() : selectedCategory;
 
   return (
     <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="id" value={routine.id} />
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="subtype" value={subtype} />
+      <input type="hidden" name="category" value={resolvedCategory} />
+      <input type="hidden" name="tags" value={routine.tags.join(", ")} />
 
       <div>
         <label style={styles.label}>Routine Type Selection</label>
@@ -126,7 +125,15 @@ export default function EditRoutineForm({
           ))}
         </div>
         <div style={styles.help}>
-          Presets control the default tracking shape. Advanced fields below still let you override raw type, subtype, and analysis groups.
+          Presets control the tracking shape. Advanced is reserved for metadata adjustments only.
+        </div>
+      </div>
+
+      <div style={styles.selectionCard}>
+        <div style={styles.selectionLabel}>Selected setup</div>
+        <div style={styles.selectionTitle}>{activePreset.label}</div>
+        <div style={styles.selectionSub}>
+          {kind} | {formatRoutineSubtype(subtype)}
         </div>
       </div>
 
@@ -146,6 +153,29 @@ export default function EditRoutineForm({
         />
         <div style={styles.help}>If set, this creates or updates a visible weekly goal for the routine.</div>
       </div>
+
+      {kind === "SESSION" ? (
+        <div style={styles.sessionTemplateCard}>
+          <label style={styles.label}>Session template</label>
+          <select
+            name="sessionTemplateId"
+            style={styles.input as React.CSSProperties}
+            value={effectiveSessionTemplateId}
+            onChange={(event) => setSessionTemplateId(event.target.value)}
+          >
+            <option value="">Open session (no metric template)</option>
+            {sessionTemplateOptions.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+          <div style={styles.help}>
+            {selectedSessionTemplate?.description ??
+              "Leave this open for a free-form session, or choose a template for structured metric fields."}
+          </div>
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="submit" style={styles.btn}>
@@ -178,126 +208,18 @@ export default function EditRoutineForm({
 
       <details style={styles.advancedCard}>
         <summary data-collapsible-summary style={styles.advancedSummary}>
-          Advanced setup
+          Advanced metadata
         </summary>
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <div style={styles.advancedIntro}>
-            <div style={{ fontWeight: 800 }}>{activePreset.label}</div>
-            <div>{activePreset.description}</div>
-          </div>
-
-          <div>
-            <label style={styles.label}>Category</label>
-            <select
-              name={isCustomCategory ? "categoryPreset" : "category"}
-              style={styles.input as React.CSSProperties}
-              value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-              <option value="__custom__">+ Add new category</option>
-            </select>
-            {isCustomCategory && (
-              <div style={{ marginTop: 8 }}>
-                <input
-                  name="category"
-                  style={styles.input}
-                  placeholder="Type new category name..."
-                  value={customCategory}
-                  onChange={(event) => setCustomCategory(event.target.value)}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label style={styles.label}>Tracking type</label>
-            <select
-              name="kind"
-              style={styles.input as React.CSSProperties}
-              value={kind}
-              onChange={(event) => {
-                const nextKind = event.target.value as RoutineKind;
-                setPresetKey("CUSTOM");
-                setKind(nextKind);
-                setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
-              }}
-            >
-              {ROUTINE_KIND_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <div style={styles.help}>
-              Guided routines use reusable steps. Sessions use either a session template or an open custom session.
-            </div>
-          </div>
-
-          <div>
-            <label style={styles.label}>Subtype / Template</label>
-            <select
-              name="subtype"
-              style={styles.input as React.CSSProperties}
-              value={subtype}
-              onChange={(event) => {
-                setPresetKey("CUSTOM");
-                setSubtype(event.target.value);
-              }}
-            >
-              {subtypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {formatRoutineSubtype(option)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {kind === "SESSION" ? (
-            <div>
-              <label style={styles.label}>Session template</label>
-              <select
-                name="sessionTemplateId"
-                style={styles.input as React.CSSProperties}
-                value={effectiveSessionTemplateId}
-                onChange={(event) => setSessionTemplateId(event.target.value)}
-              >
-                <option value="">Open session (no metric template)</option>
-                {sessionTemplateOptions.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-              <div style={styles.help}>
-                {selectedSessionTemplate?.description ??
-                  "Leave this open for a free-form session, or choose a template for structured metric fields."}
-              </div>
-            </div>
-          ) : null}
-
           <MetadataGroupPicker
             title="Organization & analysis (optional)"
             help="These groups power rollups in Progress. The app preselects suggestions from subtype, so you only need to change this when the default grouping is wrong."
             groups={metadataGroups}
             selectedIds={selectedMetadataGroupIds}
             onSelectionChange={setSelectedMetadataGroupIds}
+            collapsible
+            defaultOpen={selectedMetadataGroupIds.length > 0}
           />
-
-          <div>
-            <label style={styles.label}>Tags (optional)</label>
-            <input
-              name="tags"
-              style={styles.input}
-              defaultValue={routine.tags.join(", ")}
-              placeholder="Comma separated: trail, deload, gym, outdoors"
-            />
-            <div style={styles.help}>Use tags for personal filters. The groups above are for shared analytics and rollups.</div>
-          </div>
         </div>
       </details>
     </form>
@@ -354,6 +276,23 @@ const styles = {
   },
   presetTitle: { fontWeight: 900 as const, marginBottom: 6 },
   presetDescription: { fontSize: 12, opacity: 0.8 },
+  selectionCard: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 12,
+    padding: 12,
+    background: "rgba(128,128,128,0.05)",
+    display: "grid",
+    gap: 4,
+  },
+  selectionLabel: { fontSize: 11, fontWeight: 900 as const, letterSpacing: 0.4, opacity: 0.7, textTransform: "uppercase" as const },
+  selectionTitle: { fontSize: 15, fontWeight: 900 as const },
+  selectionSub: { fontSize: 12, opacity: 0.74 },
+  sessionTemplateCard: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 12,
+    padding: 12,
+    background: "rgba(128,128,128,0.05)",
+  },
   advancedCard: {
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: 12,
@@ -361,13 +300,5 @@ const styles = {
     background: "rgba(128,128,128,0.04)",
   },
   advancedSummary: { cursor: "pointer", fontWeight: 900 as const },
-  advancedIntro: {
-    border: "1px solid rgba(128,128,128,0.25)",
-    borderRadius: 10,
-    padding: 10,
-    background: "rgba(128,128,128,0.06)",
-    fontSize: 13,
-    opacity: 0.88,
-  },
   help: { marginTop: 6, opacity: 0.7, fontSize: 12 },
 };

@@ -7,6 +7,8 @@ export type { ProgressRange } from "@/lib/progress";
 export type ProgressSection = "overview" | "routines" | "exercises" | "cardio" | "groups";
 export type ProgressTab = "overview" | "completion" | "performance" | "workload";
 
+const defaultProgressTabs: ProgressTab[] = ["overview", "completion", "performance", "workload"];
+
 export type SeriesPoint = {
   label: string;
   value: number;
@@ -30,13 +32,21 @@ export function progressSections() {
   ] satisfies Array<{ key: ProgressSection; label: string; href: string }>;
 }
 
-export function progressTabs(basePath: string, range: ProgressRange) {
-  return [
+export function progressTabs(basePath: string, range: ProgressRange, allowedTabs: ProgressTab[] = defaultProgressTabs) {
+  const items: Array<{ key: ProgressTab; label: string; href: string }> = [
     { key: "overview", label: "Overview", href: `${basePath}?tab=overview&range=${range}` },
     { key: "completion", label: "Completion", href: `${basePath}?tab=completion&range=${range}` },
     { key: "performance", label: "Performance", href: `${basePath}?tab=performance&range=${range}` },
     { key: "workload", label: "Workload", href: `${basePath}?tab=workload&range=${range}` },
-  ] satisfies Array<{ key: ProgressTab; label: string; href: string }>;
+  ];
+  return items.filter((item) => allowedTabs.includes(item.key));
+}
+
+export function resolveProgressTab(
+  requestedTab: ProgressTab,
+  allowedTabs: ProgressTab[] = defaultProgressTabs
+) {
+  return allowedTabs.includes(requestedTab) ? requestedTab : allowedTabs[0] ?? "overview";
 }
 
 export function progressTabDescription(tab: ProgressTab) {

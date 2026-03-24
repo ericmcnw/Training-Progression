@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { updateCompletionLog } from "../../../actions";
+import { Field, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -57,65 +57,36 @@ export default function EditCompletionLogForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
-      <div>
-        <label style={styles.label}>Performed at</label>
-        <input type="datetime-local" style={styles.input} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
-      </div>
+    <FormStack maxWidth={560}>
+      <FormSection title="Completion details">
+        <Field label="Performed at">
+          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Count (optional)</label>
-        <input
-          style={styles.input}
-          value={completionCount}
-          onChange={(event) => setCompletionCount(event.target.value)}
-          inputMode="numeric"
-          placeholder="Leave blank for a simple done log"
-        />
-      </div>
+        <Field label="Count (optional)" hint="Leave blank for a simple done log.">
+          <input
+            style={inputStyle}
+            value={completionCount}
+            onChange={(event) => setCompletionCount(event.target.value)}
+            inputMode="numeric"
+            placeholder="Leave blank for a simple done log"
+          />
+        </Field>
+      </FormSection>
 
-      <div>
-        <label style={styles.label}>Notes (optional)</label>
-        <textarea style={{ ...styles.input, minHeight: 90, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </div>
+      <FormSection title="Notes">
+        <Field label="Session notes (optional)">
+          <textarea style={textareaStyle} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+      </FormSection>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-        <Link href={returnTo} style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+      <FormActions
+        primaryLabel="Save Changes"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref={returnTo}
+      />
+    </FormStack>
   );
 }
-
-const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-};

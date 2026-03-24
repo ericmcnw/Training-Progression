@@ -1,10 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { updateSessionLog } from "../../../actions";
 import ClimbingGradeRowsEditor from "../ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "../SessionMetricFields";
+import {
+  Field,
+  FormActions,
+  FormSection,
+  FormStack,
+  helperTextStyle,
+  inputStyle,
+  textareaStyle,
+} from "../../log/form-ui";
 import {
   isClimbingTemplateKey,
   normalizeSessionMetricText,
@@ -111,31 +119,49 @@ export default function EditSessionLogForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 580 }}>
-      <div>
-        <label style={styles.label}>Performed at</label>
-        <input type="datetime-local" style={styles.input} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
-      </div>
+    <FormStack maxWidth={640}>
+      <FormSection title="Session details">
+        <Field label="Performed at">
+          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Duration (minutes, optional)</label>
-        <input style={styles.input} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
-      </div>
+        <Field label="Duration (minutes, optional)">
+          <input style={inputStyle} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Location</label>
-        <input style={styles.input} value={location} onChange={(event) => setLocation(event.target.value)} />
-      </div>
+        <Field label="Location">
+          <input style={inputStyle} value={location} onChange={(event) => setLocation(event.target.value)} />
+        </Field>
 
-      {templateName ? <div style={{ fontSize: 12, opacity: 0.72 }}>Template: {templateName}</div> : null}
+        {templateName ? <div style={helperTextStyle}>Template: {templateName}</div> : null}
+      </FormSection>
 
       {isClimbingTemplateKey(templateKey) ? (
-        <ClimbingGradeRowsEditor
-          templateKey={templateKey}
+        <FormSection title="Climbing details">
+          <ClimbingGradeRowsEditor
+            templateKey={templateKey}
+            definitions={definitions}
+            values={sessionMetricValues}
+            selectedGrades={selectedClimbingGrades}
+            onValuesChange={(metricDefinitionId, value) =>
+              setSessionMetricValues((current) => ({
+                ...current,
+                [metricDefinitionId]: {
+                  ...current[metricDefinitionId],
+                  ...value,
+                },
+              }))
+            }
+            onSelectedGradesChange={setSelectedClimbingGrades}
+          />
+        </FormSection>
+      ) : null}
+
+      <FormSection title="Session metrics">
+        <SessionMetricFields
           definitions={definitions}
           values={sessionMetricValues}
-          selectedGrades={selectedClimbingGrades}
-          onValuesChange={(metricDefinitionId, value) =>
+          onChange={(metricDefinitionId, value) =>
             setSessionMetricValues((current) => ({
               ...current,
               [metricDefinitionId]: {
@@ -144,66 +170,22 @@ export default function EditSessionLogForm({
               },
             }))
           }
-          onSelectedGradesChange={setSelectedClimbingGrades}
         />
-      ) : null}
+      </FormSection>
 
-      <SessionMetricFields
-        definitions={definitions}
-        values={sessionMetricValues}
-        onChange={(metricDefinitionId, value) =>
-          setSessionMetricValues((current) => ({
-            ...current,
-            [metricDefinitionId]: {
-              ...current[metricDefinitionId],
-              ...value,
-            },
-          }))
-        }
+      <FormSection title="Notes">
+        <Field label="Session notes">
+          <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </Field>
+      </FormSection>
+
+      <FormActions
+        primaryLabel="Save Changes"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref={returnTo}
       />
-
-      <div>
-        <label style={styles.label}>Notes</label>
-        <textarea style={{ ...styles.input, minHeight: 90 }} value={notes} onChange={(event) => setNotes(event.target.value)} />
-      </div>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-        <Link href={returnTo} style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+    </FormStack>
   );
 }
-
-const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-};

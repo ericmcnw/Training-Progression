@@ -256,16 +256,16 @@ export default async function SchedulePage({
       <div className="mobileScheduleTopRow" style={topRow}>
         <div>
           <h1 style={title}>Schedule</h1>
-          <div style={subText}>Rolling schedule context plus a month browser so you can plan from recent history without cluttering the main board.</div>
+          <div style={subText}>Plan the next few weeks, compare plan versus completed work, and use the month view for broader context.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {mode === "view" ? (
             <Link href="/schedule?mode=edit" style={linkBtn}>
-              Open Schedule Editor
+              Edit Schedule
             </Link>
           ) : (
             <Link href="/schedule" style={linkBtn}>
-              Back To Schedule
+              View Schedule
             </Link>
           )}
           <Link href="/routines" style={linkBtn}>View Routines</Link>
@@ -355,7 +355,7 @@ export default async function SchedulePage({
             <div style={{ padding: 12, display: "grid", gap: 12 }}>
               <div className="mobileScheduleToolbar" style={toolbar}>
                 <div style={{ fontSize: 13, opacity: 0.82 }}>
-                  Full month view for schedule history and planning context.
+                  Full month view for planning context and completed work.
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <div style={monthPill}>{formatMonthLabel(selectedMonth)}</div>
@@ -454,7 +454,7 @@ export default async function SchedulePage({
           <section style={panel}>
             <div style={panelHeader}>EDITOR</div>
             <div style={{ padding: 12, fontSize: 13, opacity: 0.82 }}>
-              Manual scheduling only. Repeating plans are disabled for now.
+              Build the day-by-day plan here. The editor currently focuses on manual placement so scheduling stays fast and predictable.
             </div>
           </section>
 

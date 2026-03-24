@@ -148,6 +148,7 @@ export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWe
   const sessionWeekMap = new Map<string, number>();
   let totalDistance = 0;
   let totalDurationSec = 0;
+  let totalElevationGainFt = 0;
   let totalSets = 0;
   let totalReps = 0;
   let totalVolume = 0;
@@ -156,6 +157,7 @@ export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWe
     incrementWeekMap(sessionWeekMap, log.performedAt, 1);
     totalDistance += log.distanceMi ?? 0;
     totalDurationSec += log.durationSec ?? 0;
+    totalElevationGainFt += log.elevationGainFt ?? 0;
     for (const exercise of log.exercises) {
       const metrics = aggregateExerciseSessionRow(exercise.sets);
       totalSets += metrics.totalSets;
@@ -172,6 +174,7 @@ export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWe
     sessionWeekMap,
     totalDistance,
     totalDurationSec,
+    totalElevationGainFt,
     totalSets,
     totalReps,
     totalVolume,
@@ -183,37 +186,43 @@ export function cardioPerformanceSeries(logs: RoutineLogWithRelations[]) {
   const distancePoints: SeriesPoint[] = [];
   const pacePoints: SeriesPoint[] = [];
   const durationPoints: SeriesPoint[] = [];
+  const elevationPoints: SeriesPoint[] = [];
 
   for (const log of logs) {
     if (!Number.isFinite(log.distanceMi) || !Number.isFinite(log.durationSec)) continue;
     const label = formatAppDate(log.performedAt, { month: "short", day: "numeric" });
     const distanceMi = log.distanceMi ?? 0;
     const durationSec = log.durationSec ?? 0;
+    const elevationGainFt = log.elevationGainFt ?? 0;
     distancePoints.push({ label, value: distanceMi });
     durationPoints.push({ label, value: durationSec });
+    elevationPoints.push({ label, value: elevationGainFt });
     if (distanceMi > 0) {
       pacePoints.push({ label, value: durationSec / distanceMi });
     }
   }
 
-  return { distancePoints, durationPoints, pacePoints };
+  return { distancePoints, durationPoints, pacePoints, elevationPoints };
 }
 
 export function cardioWorkloadSeries(logs: RoutineLogWithRelations[], range: ProgressRange) {
   const sessions = new Map<string, number>();
   const distance = new Map<string, number>();
   const duration = new Map<string, number>();
+  const elevation = new Map<string, number>();
 
   for (const log of logs) {
     incrementWeekMap(sessions, log.performedAt, 1);
     incrementWeekMap(distance, log.performedAt, log.distanceMi ?? 0);
     incrementWeekMap(duration, log.performedAt, log.durationSec ?? 0);
+    incrementWeekMap(elevation, log.performedAt, log.elevationGainFt ?? 0);
   }
 
   return {
     sessions: fillWeeklySeries(sessions, range),
     distance: fillWeeklySeries(distance, range),
     duration: fillWeeklySeries(duration, range),
+    elevation: fillWeeklySeries(elevation, range),
   };
 }
 

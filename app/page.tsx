@@ -74,12 +74,7 @@ function kindAccent(kind: string) {
 }
 
 function loggingHref(routine: { routineId: string; kind: string }) {
-  const kind = normalizeRoutineKind(routine.kind);
-  if (kind === "WORKOUT") return `/routines/${routine.routineId}/log`;
-  if (kind === "CARDIO") return `/routines/${routine.routineId}/log-cardio`;
-  if (kind === "GUIDED") return `/routines/${routine.routineId}/log-guided`;
-  if (kind === "SESSION") return `/routines/${routine.routineId}/log-session`;
-  return `/routines/${routine.routineId}/log-completion`;
+  return `/routines/${routine.routineId}/log`;
 }
 
 function WeeklyMomentumSection({
@@ -358,6 +353,7 @@ export default async function HomePage() {
         id: true,
         performedAt: true,
         distanceMi: true,
+        elevationGainFt: true,
         durationSec: true,
         exercises: { select: { id: true, sets: { select: { id: true } } } },
         routine: { select: { id: true, name: true, category: true, kind: true } },
@@ -629,7 +625,7 @@ export default async function HomePage() {
       kind: log.routine.kind,
       stamp: formatLogTime(log.performedAt),
       detail: isRun
-        ? `${(log.distanceMi ?? 0).toFixed(2)} mi`
+        ? `${(log.distanceMi ?? 0).toFixed(2)} mi${log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}`
         : isWorkout
         ? `${setCount} sets logged`
         : "Completed check-in",
@@ -705,20 +701,6 @@ export default async function HomePage() {
             </div>
           </section>
 
-          <div className="mobileOnlyHomeSection">
-            <WeeklyMomentumSection
-              weekDateRangeLabel={weekDateRangeLabel}
-              weekLoggedTotal={weekLoggedTotal}
-              weekSessionTargetTotal={weekSessionTargetTotal}
-              totalWeeklyCardioMiles={totalWeeklyCardioMiles}
-              cardioTypeGroups={cardioTypeGroups}
-              weeklySeries={weeklySeries}
-              weeklySparkPoints={weeklySparkPoints}
-              recentCompletions={recentCompletions}
-              needsAttention={needsAttention}
-            />
-          </div>
-
           <section style={panel}>
             <div style={panelHeader}>RECENT ACTIVITY</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
@@ -735,13 +717,13 @@ export default async function HomePage() {
                   <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
                 </div>
               ))}
-              <Link href="/manual-log" style={secondaryLinkBlock}>Open Profile</Link>
+              <Link href="/manual-log" style={secondaryLinkBlock}>Open Log History</Link>
             </div>
           </section>
         </div>
 
         <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
-          <div className="desktopOnlyHomeSection">
+          <div className="homeMomentumSection">
             <WeeklyMomentumSection
               weekDateRangeLabel={weekDateRangeLabel}
               weekLoggedTotal={weekLoggedTotal}
@@ -777,7 +759,7 @@ export default async function HomePage() {
             <div style={panelHeader}>QUICK PATHS</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
               <div className="mobileHomeQuickGrid" style={quickGrid}>
-                <Link href="/routines/new" style={quickCard}>
+                <Link href="/routines?mode=new" style={quickCard}>
                   <div style={quickTitle}>New Routine</div>
                   <div style={quickSub}>Add a workout, cardio, or check routine.</div>
                 </Link>
@@ -789,7 +771,7 @@ export default async function HomePage() {
                   <div style={quickTitle}>Review Trends</div>
                   <div style={quickSub}>Open progression charts and completion history.</div>
                 </Link>
-                <Link href="/goals/new" style={quickCard}>
+                <Link href="/goals?mode=new" style={quickCard}>
                   <div style={quickTitle}>Set Goal</div>
                   <div style={quickSub}>Start from a goal template tied to routine, cardio, exercise, or group progress.</div>
                 </Link>

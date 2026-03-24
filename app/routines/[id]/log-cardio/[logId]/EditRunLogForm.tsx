@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { updateRunLog } from "../../../actions";
+import { Field, FieldGrid, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -19,6 +19,7 @@ export default function EditRunLogForm({
   logId,
   returnTo,
   initialDistanceMi,
+  initialElevationGainFt,
   initialDurationSec,
   initialNotes,
   initialPerformedAt,
@@ -27,11 +28,15 @@ export default function EditRunLogForm({
   logId: string;
   returnTo: string;
   initialDistanceMi: number;
+  initialElevationGainFt: number | null;
   initialDurationSec: number;
   initialNotes: string;
   initialPerformedAt: Date;
 }) {
   const [distanceMi, setDistanceMi] = useState(String(initialDistanceMi));
+  const [elevationGainFt, setElevationGainFt] = useState(
+    initialElevationGainFt !== null && initialElevationGainFt !== undefined ? String(initialElevationGainFt) : ""
+  );
   const [minutes, setMinutes] = useState(String(Math.floor(initialDurationSec / 60)));
   const [seconds, setSeconds] = useState(String(initialDurationSec % 60));
   const [notes, setNotes] = useState(initialNotes);
@@ -40,6 +45,10 @@ export default function EditRunLogForm({
 
   async function onSave() {
     const distance = Number(distanceMi);
+    const elevation =
+      elevationGainFt.trim().length > 0
+        ? Number(elevationGainFt)
+        : null;
     const mins = Number(minutes || "0");
     const secs = Number(seconds || "0");
     const durationSec = mins * 60 + secs;
@@ -51,6 +60,10 @@ export default function EditRunLogForm({
       alert("Enter a valid duration.");
       return;
     }
+    if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
+      alert("Enter a valid elevation gain in feet.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -59,6 +72,7 @@ export default function EditRunLogForm({
         logId,
         distanceMi: distance,
         durationSec,
+        elevationGainFt: elevation,
         notes,
         performedAtLocal,
       });
@@ -69,70 +83,48 @@ export default function EditRunLogForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
-      <div>
-        <label style={styles.label}>Performed at</label>
-        <input type="datetime-local" style={styles.input} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
-      </div>
+    <FormStack maxWidth={560}>
+      <FormSection title="Cardio details">
+        <Field label="Performed at">
+          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Distance (miles)</label>
-        <input style={styles.input} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
-      </div>
+        <Field label="Distance (miles)">
+          <input style={inputStyle} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
+        </Field>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div>
-          <label style={styles.label}>Minutes</label>
-          <input style={styles.input} value={minutes} onChange={(e) => setMinutes(e.target.value)} inputMode="numeric" />
-        </div>
-        <div>
-          <label style={styles.label}>Seconds</label>
-          <input style={styles.input} value={seconds} onChange={(e) => setSeconds(e.target.value)} inputMode="numeric" />
-        </div>
-      </div>
+        <FieldGrid>
+          <Field label="Minutes">
+            <input style={inputStyle} value={minutes} onChange={(e) => setMinutes(e.target.value)} inputMode="numeric" />
+          </Field>
+          <Field label="Seconds">
+            <input style={inputStyle} value={seconds} onChange={(e) => setSeconds(e.target.value)} inputMode="numeric" />
+          </Field>
+        </FieldGrid>
 
-      <div>
-        <label style={styles.label}>Notes</label>
-        <textarea style={{ ...styles.input, minHeight: 90, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </div>
+        <Field label="Elevation gain (ft, optional)">
+          <input
+            style={inputStyle}
+            value={elevationGainFt}
+            onChange={(e) => setElevationGainFt(e.target.value)}
+            inputMode="numeric"
+          />
+        </Field>
+      </FormSection>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-        <Link href={returnTo} style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+      <FormSection title="Notes">
+        <Field label="Session notes">
+          <textarea style={textareaStyle} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+      </FormSection>
+
+      <FormActions
+        primaryLabel="Save Changes"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref={returnTo}
+      />
+    </FormStack>
   );
 }
-
-const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-};

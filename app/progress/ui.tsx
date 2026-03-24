@@ -44,6 +44,7 @@ export function TargetHeader({
   basePath,
   tab,
   range,
+  availableTabs,
   actions,
 }: {
   section: ProgressSection;
@@ -52,6 +53,7 @@ export function TargetHeader({
   basePath: string;
   tab: ProgressTab;
   range: ProgressRange;
+  availableTabs?: ProgressTab[];
   actions?: React.ReactNode;
 }) {
   return (
@@ -75,7 +77,7 @@ export function TargetHeader({
           <NavCluster
             label="View"
             hint={progressTabDescription(tab)}
-            items={progressTabs(basePath, range).map((item) => ({ ...item, active: item.key === tab }))}
+            items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))}
           />
           <NavCluster
             label="Window"

@@ -10,7 +10,7 @@ const desktopNavItems = [
   { href: "/progress", label: "Progress", match: (pathname: string) => pathname.startsWith("/progress") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "History", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [
@@ -18,7 +18,7 @@ const mobileNavItems = [
   { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
   { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "Account", icon: <AccountIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "History", icon: <HistoryIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 export default function AppNavigation() {
@@ -121,11 +121,11 @@ function ScheduleIcon() {
   );
 }
 
-function AccountIcon() {
+function HistoryIcon() {
   return (
     <MobileNavIcon>
-      <path d="M12 12a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" />
-      <path d="M5 20a7.5 7.5 0 0 1 14 0" />
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4.5l3 1.5" />
     </MobileNavIcon>
   );
 }

@@ -10,10 +10,12 @@ export default function LogWorkoutForm({
   routineId,
   initialBlocks,
   availableExercises,
+  smartDefaultLabel,
 }: {
   routineId: string;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
+  smartDefaultLabel?: string | null;
 }) {
   return (
     <WorkoutExerciseEditor
@@ -22,6 +24,7 @@ export default function LogWorkoutForm({
       initialPerformedAt=""
       initialBlocks={initialBlocks}
       availableExercises={availableExercises}
+      smartDefaultLabel={smartDefaultLabel}
       saveLabel="Save Workout"
       savingLabel="Saving..."
       backHref="/routines"

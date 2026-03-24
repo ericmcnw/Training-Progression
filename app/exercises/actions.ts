@@ -1,14 +1,11 @@
 "use server";
 
+import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 type ExerciseUnit = "REPS" | "TIME";
-
-function normalizeExerciseName(name: string) {
-  return name.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 async function getValidExerciseMetadataGroupIds(groupIds: Iterable<string>) {
   const uniqueIds = Array.from(
@@ -60,15 +57,27 @@ export async function createExercise(formData: FormData) {
   if (!name) throw new Error("Exercise name is required.");
   if (!["REPS", "TIME"].includes(unit)) throw new Error("Invalid unit.");
 
-  const normalized = normalizeExerciseName(name);
   const existing = await prisma.exercise.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, unit: true, supportsWeight: true },
   });
-  const match = existing.find((exercise) => normalizeExerciseName(exercise.name) === normalized);
+  const match = findExerciseNameMatch(existing, name);
 
-  if (!match) {
+  if (match) {
+    if (match.unit !== unit) {
+      throw new Error(
+        `"${match.name}" already exists as a ${exerciseUnitLabel(match.unit).toLowerCase()} exercise. Edit that exercise instead of creating a duplicate.`
+      );
+    }
+    if (supportsWeight && !match.supportsWeight) {
+      await prisma.exercise.update({
+        where: { id: match.id },
+        data: { supportsWeight: true },
+      });
+    }
+    await syncExerciseMetadataGroups(match.id, metadataGroupIds);
+  } else {
     const created = await prisma.exercise.create({
-      data: { name: name.replace(/\s+/g, " "), unit, supportsWeight },
+      data: { name: normalizeExerciseName(name), unit, supportsWeight },
       select: { id: true },
     });
     await syncExerciseMetadataGroups(created.id, metadataGroupIds);
@@ -89,18 +98,24 @@ export async function updateExercise(formData: FormData) {
   if (!name) throw new Error("Exercise name is required.");
   if (!["REPS", "TIME"].includes(unit)) throw new Error("Invalid unit.");
 
-  const normalized = normalizeExerciseName(name);
   const duplicates = await prisma.exercise.findMany({
     where: { NOT: { id } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, unit: true },
   });
-  const match = duplicates.find((exercise) => normalizeExerciseName(exercise.name) === normalized);
-  if (match) throw new Error("An exercise with that name already exists.");
+  const match = findExerciseNameMatch(duplicates, name);
+  if (match) {
+    if (match.unit !== unit) {
+      throw new Error(
+        `"${match.name}" already exists as a ${exerciseUnitLabel(match.unit).toLowerCase()} exercise. Rename this one or edit the existing exercise instead.`
+      );
+    }
+    throw new Error("An exercise with that name already exists.");
+  }
 
   await prisma.exercise.update({
     where: { id },
     data: {
-      name: name.replace(/\s+/g, " "),
+      name: normalizeExerciseName(name),
       unit,
       supportsWeight,
     },

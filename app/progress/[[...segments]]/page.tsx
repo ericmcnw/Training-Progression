@@ -1,0 +1,50 @@
+import { notFound } from "next/navigation";
+import CardioTargetPage from "../details/CardioTargetPage";
+import ExerciseTargetPage from "../details/ExerciseTargetPage";
+import GroupTargetPage from "../details/GroupTargetPage";
+import RoutineTargetPage from "../details/RoutineTargetPage";
+import ProgressOverviewContent from "../ProgressOverviewContent";
+
+export const dynamic = "force-dynamic";
+
+type Params = { segments?: string[] };
+type SearchParams = Record<string, string | string[] | undefined>;
+
+export default async function ProgressPage(props: {
+  params: Promise<Params> | Params;
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
+  const params = await Promise.resolve(props.params);
+  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const segments = params.segments ?? [];
+
+  if (segments.length === 0) {
+    return <ProgressOverviewContent searchParams={searchParams} />;
+  }
+
+  if (segments.length === 1) {
+    const section = segments[0];
+    if (!["routines", "exercises", "groups", "cardio"].includes(section)) {
+      notFound();
+    }
+    return <ProgressOverviewContent searchParams={{ ...searchParams, section }} />;
+  }
+
+  if (segments.length === 2) {
+    const [section, targetId] = segments;
+    if (section === "routines") {
+      return <RoutineTargetPage params={{ routineId: targetId }} searchParams={searchParams} />;
+    }
+    if (section === "exercises") {
+      return <ExerciseTargetPage params={{ exerciseId: targetId }} searchParams={searchParams} />;
+    }
+    if (section === "groups") {
+      return <GroupTargetPage params={{ slug: targetId }} searchParams={searchParams} />;
+    }
+    if (section === "cardio") {
+      return <CardioTargetPage params={{ slug: targetId }} searchParams={searchParams} />;
+    }
+  }
+
+  notFound();
+}

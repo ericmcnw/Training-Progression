@@ -37,6 +37,7 @@ function parseDateInput(value: string, label: string) {
 function inferUnit(metricType: string) {
   if (metricType === "DISTANCE") return "mi";
   if (metricType === "DURATION" || metricType === "MAX_DURATION") return "sec";
+  if (metricType === "ELEVATION_GAIN") return "ft";
   if (metricType === "PACE") return "sec";
   if (metricType === "MAX_WEIGHT" || metricType === "VOLUME") return "lb";
   if (metricType === "SESSION_METRIC") return null;
@@ -160,7 +161,6 @@ async function parseGoalInput(formData: FormData) {
 
 function revalidateGoals() {
   revalidatePath("/goals");
-  revalidatePath("/goals/new");
   revalidatePath("/progress");
 }
 

@@ -3,22 +3,28 @@
 import { logAdHocWorkout, createWorkoutLogExerciseOption } from "../actions";
 import WorkoutExerciseEditor, {
   type ExerciseOption,
+  type WorkoutBlock,
 } from "../[id]/log/WorkoutExerciseEditor";
 
 export default function QuickWorkoutLogForm({
   routineId,
   availableExercises,
+  initialBlocks,
+  smartDefaultLabel,
 }: {
   routineId: string;
   availableExercises: ExerciseOption[];
+  initialBlocks: WorkoutBlock[];
+  smartDefaultLabel?: string | null;
 }) {
   return (
     <WorkoutExerciseEditor
       routineId={routineId}
       initialNotes=""
       initialPerformedAt=""
-      initialBlocks={[]}
+      initialBlocks={initialBlocks}
       availableExercises={availableExercises}
+      smartDefaultLabel={smartDefaultLabel}
       saveLabel="Save Quick Workout"
       savingLabel="Saving..."
       backHref="/routines"

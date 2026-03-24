@@ -45,6 +45,7 @@ function splitSeconds(value: number) {
 
 function metricInputMeta(metricType: GoalMetricTypeValue) {
   if (metricType === "DISTANCE") return { label: "Target miles", step: "0.1" };
+  if (metricType === "ELEVATION_GAIN") return { label: "Target elevation gain (ft)", step: "1" };
   if (metricType === "MAX_WEIGHT") return { label: "Target weight (lb)", step: "0.5" };
   if (metricType === "VOLUME") return { label: "Target volume (lb)", step: "1" };
   if (metricType === "REPS") return { label: "Target reps", step: "1" };

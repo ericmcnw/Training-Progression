@@ -33,6 +33,7 @@ export default async function ManualLogPage({
         notes: true,
         completionCount: true,
         distanceMi: true,
+        elevationGainFt: true,
         durationSec: true,
         location: true,
         routine: { select: { id: true, name: true, category: true, kind: true } },
@@ -55,9 +56,9 @@ export default async function ManualLogPage({
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
       <div style={{ display: "grid", gap: 8 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Profile</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Training History</h1>
         <div style={{ opacity: 0.75, fontSize: 13 }}>
-          Quick account-style hub for review actions, recent activity context, and access to your full log history.
+          Review recent training, jump into the full log archive, and move quickly into progress, routines, and goals.
         </div>
       </div>
 
@@ -66,10 +67,10 @@ export default async function ManualLogPage({
         <div style={{ padding: 14, display: "grid", gap: 14 }}>
           <div style={heroCard}>
             <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>ACCOUNT HOME</div>
-              <div style={{ fontSize: 20, fontWeight: 900 }}>Keep review actions close, keep history one tap away.</div>
+              <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>TRAINING REVIEW</div>
+              <div style={{ fontSize: 20, fontWeight: 900 }}>Keep recent sessions close and the full training archive one tap away.</div>
               <div style={{ fontSize: 13, opacity: 0.76, maxWidth: 620 }}>
-                This replaces the old desktop manual log utility view so it behaves more like the phone account tab.
+                Use this as the review hub for what you logged recently and where to go next.
               </div>
             </div>
             <div style={heroActionRow}>
@@ -97,7 +98,7 @@ export default async function ManualLogPage({
             <div style={summaryCard}>
               <div style={summaryLabel}>Active Goals</div>
               <div style={summaryValue}>{goalCount}</div>
-              <div style={summaryMeta}>Current tracked targets</div>
+              <div style={summaryMeta}>Current training targets</div>
             </div>
             <div style={summaryCard}>
               <div style={summaryLabel}>Active Routines</div>
@@ -126,7 +127,7 @@ export default async function ManualLogPage({
                   </div>
                   {isCardioKind(routineKind) && (
                     <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
-                      {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s
+                      {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s{log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}
                     </div>
                   )}
                   {isWorkoutKind(routineKind) && <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>Sets logged: {exerciseSetCount}</div>}
@@ -150,7 +151,7 @@ export default async function ManualLogPage({
           <div style={{ ...panelHeader, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span>LOG HISTORY</span>
             <Link href="/manual-log" style={miniLinkBtn}>
-              Back to Profile
+              Back to History
             </Link>
           </div>
           <div style={{ padding: 12, display: "grid", gap: 14 }}>
@@ -173,15 +174,7 @@ export default async function ManualLogPage({
                     const typeLabel = formatRoutineTypeLabel(routineKind);
                     const categoryLabel = (log.routine.category || "General").trim() || "General";
                     const historyReturnTo = "/manual-log?view=history";
-                    const editHref = isWorkoutKind(routineKind)
-                      ? `/routines/${log.routineId}/log/${log.id}?returnTo=${encodeURIComponent(historyReturnTo)}`
-                      : isCardioKind(routineKind)
-                      ? `/routines/${log.routineId}/log-cardio/${log.id}?returnTo=${encodeURIComponent(historyReturnTo)}`
-                      : isGuidedKind(routineKind)
-                      ? `/routines/${log.routineId}/log-guided/${log.id}?returnTo=${encodeURIComponent(historyReturnTo)}`
-                      : isSessionKind(routineKind)
-                      ? `/routines/${log.routineId}/log-session/${log.id}?returnTo=${encodeURIComponent(historyReturnTo)}`
-                      : `/routines/${log.routineId}/log-check/${log.id}?returnTo=${encodeURIComponent(historyReturnTo)}`;
+                    const editHref = `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(historyReturnTo)}`;
 
                     return (
                       <div key={log.id} style={historyCard}>
@@ -194,7 +187,7 @@ export default async function ManualLogPage({
                           </div>
                           {isCardioKind(routineKind) && (
                             <div style={{ opacity: 0.8, marginTop: 2 }}>
-                              {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s
+                              {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s{log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}
                             </div>
                           )}
                           {isWorkoutKind(routineKind) && <div style={{ opacity: 0.8, marginTop: 2 }}>Sets: {exerciseSetCount}</div>}

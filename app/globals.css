@@ -149,13 +149,13 @@ details[open] > summary[data-collapsible-summary]::before{
   display: none;
 }
 
-@media (max-width: 900px){
-  .mobileOnlyHomeSection{
-    display: block;
-  }
+.homeMomentumSection{
+  display: block;
+}
 
-  .desktopOnlyHomeSection{
-    display: none;
+@media (max-width: 900px){
+  .homeMomentumSection{
+    order: -1;
   }
 
   .mobileHomeMainGrid{

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { logGuided } from "../../actions";
 import {
@@ -11,6 +10,7 @@ import {
   totalGuidedTemplateDuration,
   type GuidedTemplateStep,
 } from "@/lib/guided";
+import { Field, FormActions, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
 
 type Step = GuidedTemplateStep;
 
@@ -110,10 +110,9 @@ export default function GuidedLogForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 720 }}>
-      <div style={modeCard}>
-        <div style={{ fontWeight: 900, fontSize: 13 }}>Playback</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+    <FormStack maxWidth={760}>
+      <FormSection title="Playback" description="Keep the runner usable on a phone while still exposing the controls you need on desktop.">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" onClick={() => setRunMode("MANUAL")} style={{ ...modeBtn, ...(runMode === "MANUAL" ? modeBtnActive : null) }}>
             Manual start each step
           </button>
@@ -124,109 +123,104 @@ export default function GuidedLogForm({
         <div style={helpText}>
           Manual mode pauses when a step or rest finishes. Continuous mode rolls straight into the next segment. You can still pause any time.
         </div>
-      </div>
+      </FormSection>
 
-      <div style={runnerCard}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 13 }}>Current timer</div>
+      <FormSection title="Guided runner">
+        <div style={runnerCard}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 13 }}>Current timer</div>
+              <div style={{ fontSize: 12, opacity: 0.72 }}>
+                {segments.length === 0
+                  ? "No timed items yet."
+                  : currentSegment
+                  ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
+                  : "Flow complete"}
+              </div>
+            </div>
             <div style={{ fontSize: 12, opacity: 0.72 }}>
-              {segments.length === 0
-                ? "No timed items yet."
-                : currentSegment
-                ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
-                : "Flow complete"}
+              Completed {formatGuidedSeconds(completedDurationSec)} / {formatGuidedSeconds(defaultDurationSec)}
             </div>
           </div>
-          <div style={{ fontSize: 12, opacity: 0.72 }}>
-            Completed {formatGuidedSeconds(completedDurationSec)} / {formatGuidedSeconds(defaultDurationSec)}
-          </div>
-        </div>
 
-        <div style={timerFace}>
-          <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.68 }}>
-            {currentSegment ? currentSegment.phase : "DONE"}
+          <div style={timerFace}>
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.68 }}>
+              {currentSegment ? currentSegment.phase : "DONE"}
+            </div>
+            <div style={timerValue}>
+              {currentSegment ? formatGuidedSeconds(remainingSec) : "Finished"}
+            </div>
+            <div style={{ fontWeight: 900, textAlign: "center" }}>
+              {currentSegment ? currentSegment.segmentLabel : "All template items completed"}
+            </div>
+            {currentSegment ? (
+              <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
+                {currentSegment.stepKind === "EXERCISE" ? "Exercise" : "Step"} | {currentSegment.stepLabel}
+              </div>
+            ) : null}
           </div>
-          <div style={timerValue}>
-            {currentSegment ? formatGuidedSeconds(remainingSec) : "Finished"}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!currentSegment && segments.length > 0) {
+                  goToSegment(0);
+                }
+                setIsRunning((value) => !value);
+              }}
+              disabled={segments.length === 0}
+              style={actionBtn}
+            >
+              {isRunning ? "Pause" : currentSegment ? "Play" : "Restart"}
+            </button>
+            <button type="button" onClick={() => currentSegment && goToSegment(currentSegmentIndex + 1)} disabled={!currentSegment || currentSegmentIndex >= segments.length - 1} style={actionBtn}>
+              Next
+            </button>
+            <button type="button" onClick={() => goToSegment(currentSegmentIndex - 1)} disabled={segments.length === 0 || currentSegmentIndex <= 0} style={actionBtn}>
+              Previous
+            </button>
+            <button type="button" onClick={() => goToSegment(0)} disabled={segments.length === 0} style={actionBtn}>
+              Reset
+            </button>
           </div>
-          <div style={{ fontWeight: 900, textAlign: "center" }}>
-            {currentSegment ? currentSegment.segmentLabel : "All template items completed"}
-          </div>
-          {currentSegment ? (
-            <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
-              {currentSegment.stepKind === "EXERCISE" ? "Exercise" : "Step"} | {currentSegment.stepLabel}
+
+          {nextSegment ? (
+            <div style={nextCard}>
+              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.68 }}>Next up</div>
+              <div style={{ fontWeight: 800 }}>{nextSegment.segmentLabel}</div>
+              <div style={{ fontSize: 12, opacity: 0.72 }}>{formatGuidedSeconds(nextSegment.durationSec)}</div>
             </div>
           ) : null}
+
+          {currentSegment?.stepKind === "EXERCISE" ? (
+            <Field label="Weight for this exercise item (lb, optional)">
+              <input
+                style={inputStyle}
+                inputMode="decimal"
+                value={exerciseWeights[currentSegment.guidedStepId] ?? ""}
+                onChange={(event) =>
+                  setExerciseWeights((current) => ({
+                    ...current,
+                    [currentSegment.guidedStepId]: event.target.value,
+                  }))
+                }
+                placeholder="25"
+              />
+            </Field>
+          ) : null}
         </div>
+      </FormSection>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (!currentSegment && segments.length > 0) {
-                goToSegment(0);
-              }
-              setIsRunning((value) => !value);
-            }}
-            disabled={segments.length === 0}
-            style={actionBtn}
-          >
-            {isRunning ? "Pause" : currentSegment ? "Play" : "Restart"}
-          </button>
-          <button type="button" onClick={() => currentSegment && goToSegment(currentSegmentIndex + 1)} disabled={!currentSegment || currentSegmentIndex >= segments.length - 1} style={actionBtn}>
-            Next
-          </button>
-          <button type="button" onClick={() => goToSegment(currentSegmentIndex - 1)} disabled={segments.length === 0 || currentSegmentIndex <= 0} style={actionBtn}>
-            Previous
-          </button>
-          <button type="button" onClick={() => goToSegment(0)} disabled={segments.length === 0} style={actionBtn}>
-            Reset
-          </button>
-        </div>
+      <FormSection title="Notes">
+        <Field label="Session notes (optional)">
+          <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </Field>
+      </FormSection>
 
-        {nextSegment ? (
-          <div style={nextCard}>
-            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.68 }}>Next up</div>
-            <div style={{ fontWeight: 800 }}>{nextSegment.segmentLabel}</div>
-            <div style={{ fontSize: 12, opacity: 0.72 }}>{formatGuidedSeconds(nextSegment.durationSec)}</div>
-          </div>
-        ) : null}
+      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 
-        {currentSegment?.stepKind === "EXERCISE" ? (
-          <div>
-            <label style={styles.label}>Weight for this exercise item (lb, optional)</label>
-            <input
-              style={styles.input}
-              inputMode="decimal"
-              value={exerciseWeights[currentSegment.guidedStepId] ?? ""}
-              onChange={(event) =>
-                setExerciseWeights((current) => ({
-                  ...current,
-                  [currentSegment.guidedStepId]: event.target.value,
-                }))
-              }
-              placeholder="25"
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div>
-        <label style={styles.label}>Notes (optional)</label>
-        <textarea style={{ ...styles.input, minHeight: 90 }} value={notes} onChange={(event) => setNotes(event.target.value)} />
-      </div>
-
-      <details style={styles.details}>
-        <summary data-collapsible-summary style={styles.summary}>Log with custom date/time (optional)</summary>
-        <div style={{ marginTop: 8 }}>
-          <label style={styles.label}>Performed at</label>
-          <input type="datetime-local" style={styles.input} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
-        </div>
-      </details>
-
-      <div style={styles.templateCard}>
-        <div style={{ fontWeight: 900, fontSize: 13 }}>Template flow</div>
+      <FormSection title="Template flow" description="The saved flow is shown beneath the runner so review and editing stay predictable across screen sizes.">
         {steps.length === 0 && <div style={{ marginTop: 8, opacity: 0.75 }}>No guided items are saved yet. You can still save a guided log with notes.</div>}
         <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
           {steps.map((step, index) => (
@@ -242,77 +236,26 @@ export default function GuidedLogForm({
             </div>
           ))}
         </div>
-      </div>
+      </FormSection>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Guided Log"}
-        </button>
-        <Link href="/routines" style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+      <FormActions
+        primaryLabel="Save Guided Log"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref="/routines"
+      />
+    </FormStack>
   );
 }
 
 const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-  details: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background: "rgba(128,128,128,0.06)",
-  },
-  summary: {
-    cursor: "pointer",
-    fontWeight: 800 as const,
-    fontSize: 13,
-  },
-  templateCard: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
-    background: "rgba(128,128,128,0.06)",
-  },
   stepRow: {
     border: "1px solid rgba(128,128,128,0.24)",
     borderRadius: 10,
     padding: 8,
     background: "rgba(128,128,128,0.05)",
   },
-};
-
-const modeCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.3)",
-  borderRadius: 12,
-  padding: 12,
-  background: "rgba(128,128,128,0.05)",
 };
 
 const modeBtn: React.CSSProperties = {

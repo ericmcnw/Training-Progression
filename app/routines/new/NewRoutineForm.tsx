@@ -3,11 +3,7 @@
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoutine } from "../actions";
-import {
-  ROUTINE_KIND_OPTIONS,
-  ROUTINE_SUBTYPE_OPTIONS,
-  formatRoutineSubtype,
-} from "@/lib/routines";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
@@ -83,19 +79,15 @@ export default function NewRoutineForm({
   }, [suggestedMetadataGroupIds]);
 
   const activePreset = getRoutinePreset(presetKey);
-  const typeHelp =
-    kind === "COMPLETION"
-      ? "Done/not-done routines with optional notes and count."
-      : kind === "WORKOUT"
-      ? "Exercise templates with sets, reps, weight, or time."
-      : kind === "CARDIO"
-      ? "Distance and duration based sessions like running or biking."
-      : kind === "GUIDED"
-      ? "Timed or step-based flows like mobility, warmup, cooldown, or rehab."
-      : "Broader sessions like climbing, sports, or skill practice.";
+  const resolvedCategory = isCustomCategory ? customCategory.trim() : selectedCategory;
 
   return (
     <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="subtype" value={subtype} />
+      <input type="hidden" name="category" value={resolvedCategory} />
+      <input type="hidden" name="tags" value="" />
+
       <div>
         <label style={styles.label}>Routine Type Selection</label>
         <div style={styles.presetGrid}>
@@ -123,7 +115,15 @@ export default function NewRoutineForm({
           ))}
         </div>
         <div style={styles.help}>
-          Start with a preset. You can still fine-tune type, subtype, organization, and tags in Advanced.
+          Start with a preset, then name it and set the weekly target. Advanced is only for metadata cleanup.
+        </div>
+      </div>
+
+      <div style={styles.selectionCard}>
+        <div style={styles.selectionLabel}>Selected setup</div>
+        <div style={styles.selectionTitle}>{activePreset.label}</div>
+        <div style={styles.selectionSub}>
+          {kind} | {formatRoutineSubtype(subtype)}
         </div>
       </div>
 
@@ -186,100 +186,18 @@ export default function NewRoutineForm({
 
       <details style={styles.advancedCard}>
         <summary data-collapsible-summary style={styles.advancedSummary}>
-          Advanced setup
+          Advanced metadata
         </summary>
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <div style={styles.advancedIntro}>
-            <div style={{ fontWeight: 800 }}>{activePreset.label}</div>
-            <div>{activePreset.description}</div>
-          </div>
-
-          <div>
-            <label style={styles.label}>Category</label>
-            <select
-              name={isCustomCategory ? "categoryPreset" : "category"}
-              style={styles.input as React.CSSProperties}
-              value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-              <option value="__custom__">+ Add new category</option>
-            </select>
-            {isCustomCategory && (
-              <div style={{ marginTop: 8 }}>
-                <input
-                  name="category"
-                  style={styles.input}
-                  placeholder="Type new category name..."
-                  value={customCategory}
-                  onChange={(event) => setCustomCategory(event.target.value)}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label style={styles.label}>Tracking type</label>
-            <select
-              name="kind"
-              style={styles.input as React.CSSProperties}
-              value={kind}
-              onChange={(event) => {
-                const nextKind = event.target.value as RoutineKind;
-                setPresetKey("CUSTOM");
-                setKind(nextKind);
-                setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
-              }}
-            >
-              {ROUTINE_KIND_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <div style={styles.help}>{typeHelp}</div>
-          </div>
-
-          <div>
-            <label style={styles.label}>Subtype / Template</label>
-            <select
-              name="subtype"
-              style={styles.input as React.CSSProperties}
-              value={subtype}
-              onChange={(event) => {
-                setPresetKey("CUSTOM");
-                setSubtype(event.target.value);
-              }}
-            >
-              {subtypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {formatRoutineSubtype(option)}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <MetadataGroupPicker
             title="Organization & analysis (optional)"
             help="These groups power rollups in Progress. The app preselects suggestions from the preset and subtype, so most users can leave this alone."
             groups={metadataGroups}
             selectedIds={selectedMetadataGroupIds}
             onSelectionChange={setSelectedMetadataGroupIds}
+            collapsible
+            defaultOpen={selectedMetadataGroupIds.length > 0}
           />
-
-          <div>
-            <label style={styles.label}>Tags (optional)</label>
-            <input
-              name="tags"
-              style={styles.input}
-              placeholder="Comma separated: trail, deload, gym, outdoors"
-            />
-            <div style={styles.help}>Use tags for personal labels. Use the groups above only when you want stronger progress rollups.</div>
-          </div>
         </div>
       </details>
 
@@ -329,6 +247,17 @@ const styles = {
   },
   presetTitle: { fontWeight: 900 as const, marginBottom: 6 },
   presetDescription: { fontSize: 12, opacity: 0.8 },
+  selectionCard: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 12,
+    padding: 12,
+    background: "rgba(128,128,128,0.05)",
+    display: "grid",
+    gap: 4,
+  },
+  selectionLabel: { fontSize: 11, fontWeight: 900 as const, letterSpacing: 0.4, opacity: 0.7, textTransform: "uppercase" as const },
+  selectionTitle: { fontSize: 15, fontWeight: 900 as const },
+  selectionSub: { fontSize: 12, opacity: 0.74 },
   sessionTemplateCard: {
     border: "1px solid rgba(128,128,128,0.3)",
     borderRadius: 12,
@@ -342,13 +271,5 @@ const styles = {
     background: "rgba(128,128,128,0.04)",
   },
   advancedSummary: { cursor: "pointer", fontWeight: 900 as const },
-  advancedIntro: {
-    border: "1px solid rgba(128,128,128,0.25)",
-    borderRadius: 10,
-    padding: 10,
-    background: "rgba(128,128,128,0.06)",
-    fontSize: 13,
-    opacity: 0.88,
-  },
   help: { marginTop: 6, opacity: 0.7, fontSize: 12 },
 };

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
+import { exerciseUnitDescription } from "@/lib/exercises";
 import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 import type { MetadataGroupKind } from "@/generated/prisma";
 
@@ -33,6 +34,8 @@ export default function ExerciseForm({
   };
 }) {
   const [name, setName] = useState(exercise?.name ?? "");
+  const [unit, setUnit] = useState<"REPS" | "TIME">(exercise?.unit ?? "REPS");
+  const [supportsWeight, setSupportsWeight] = useState(exercise?.supportsWeight ?? false);
   const [selectedMetadataGroupIds, setSelectedMetadataGroupIds] = useState<string[]>(
     exercise?.selectedMetadataGroupIds ?? []
   );
@@ -76,11 +79,17 @@ export default function ExerciseForm({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
-          <label style={styles.label}>Unit</label>
-          <select name="unit" style={styles.input as React.CSSProperties} defaultValue={exercise?.unit ?? "REPS"}>
-            <option value="REPS">REPS</option>
-            <option value="TIME">TIME (seconds)</option>
+          <label style={styles.label}>Logging style</label>
+          <select
+            name="unit"
+            style={styles.input as React.CSSProperties}
+            value={unit}
+            onChange={(event) => setUnit(event.target.value as "REPS" | "TIME")}
+          >
+            <option value="REPS">Rep-based sets</option>
+            <option value="TIME">Timed sets</option>
           </select>
+          <div style={styles.hint}>{exerciseUnitDescription(unit)}</div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 22 }}>
@@ -88,10 +97,11 @@ export default function ExerciseForm({
             id="supportsWeight"
             name="supportsWeight"
             type="checkbox"
-            defaultChecked={exercise?.supportsWeight ?? false}
+            checked={supportsWeight}
+            onChange={(event) => setSupportsWeight(event.target.checked)}
           />
           <label htmlFor="supportsWeight" style={{ fontWeight: 800 }}>
-            Supports Weight (lbs)
+            Supports added weight
           </label>
         </div>
       </div>
@@ -102,6 +112,7 @@ export default function ExerciseForm({
         groups={metadataGroups}
         selectedIds={selectedMetadataGroupIds}
         onSelectionChange={setSelectedMetadataGroupIds}
+        collapsible
       />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -128,6 +139,7 @@ const styles = {
     background: "rgba(128,128,128,0.08)",
     color: "inherit",
   },
+  hint: { marginTop: 6, fontSize: 12, opacity: 0.72 },
   btn: {
     padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",

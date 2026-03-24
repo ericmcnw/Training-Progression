@@ -12,6 +12,7 @@ export type GoalTemplateKey =
   | "EXERCISE_STRENGTH"
   | "EXERCISE_VOLUME"
   | "CARDIO_DISTANCE"
+  | "CARDIO_ELEVATION"
   | "CARDIO_PACE"
   | "GROUP_VOLUME";
 
@@ -88,6 +89,16 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
     metricType: "DISTANCE",
     timeframe: "WEEK",
     targetValue: 20,
+  },
+  {
+    key: "CARDIO_ELEVATION",
+    label: "Cardio elevation gain",
+    description: "Build weekly climbing, hiking, trail running, or uphill elevation gain.",
+    goalType: "VOLUME",
+    targetType: "CARDIO",
+    metricType: "ELEVATION_GAIN",
+    timeframe: "WEEK",
+    targetValue: 2500,
   },
   {
     key: "CARDIO_PACE",

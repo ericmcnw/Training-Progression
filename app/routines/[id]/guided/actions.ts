@@ -129,7 +129,7 @@ export async function addGuidedStep(formData: FormData) {
   }
 
   revalidatePath(routeFor(routineId));
-  revalidatePath(`/routines/${routineId}/log-guided`);
+  revalidatePath(`/routines/${routineId}/log`);
   redirect(routeFor(routineId));
 }
 
@@ -182,7 +182,7 @@ export async function updateGuidedStep(formData: FormData) {
   }
 
   revalidatePath(routeFor(routineId));
-  revalidatePath(`/routines/${routineId}/log-guided`);
+  revalidatePath(`/routines/${routineId}/log`);
   redirect(routeFor(routineId));
 }
 
@@ -263,7 +263,7 @@ export async function saveAllGuidedStepsAndExit(formData: FormData) {
   });
 
   revalidatePath(routeFor(routineId));
-  revalidatePath(`/routines/${routineId}/log-guided`);
+  revalidatePath(`/routines/${routineId}/log`);
   revalidatePath("/routines");
   redirect("/routines");
 }
@@ -303,7 +303,7 @@ export async function moveGuidedStep(direction: "UP" | "DOWN", formData: FormDat
   ]);
 
   revalidatePath(routeFor(routineId));
-  revalidatePath(`/routines/${routineId}/log-guided`);
+  revalidatePath(`/routines/${routineId}/log`);
   redirect(routeFor(routineId));
 }
 
@@ -329,6 +329,6 @@ export async function deleteGuidedStep(formData: FormData) {
   );
 
   revalidatePath(routeFor(routineId));
-  revalidatePath(`/routines/${routineId}/log-guided`);
+  revalidatePath(`/routines/${routineId}/log`);
   redirect(routeFor(routineId));
 }

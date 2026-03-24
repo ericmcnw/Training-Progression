@@ -1,5 +1,6 @@
 "use client";
 
+import { compareExerciseNames, condensedExerciseName, exerciseMatchesQuery, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
 import { useMemo, useState } from "react";
 import { addExerciseToRoutine } from "./actions";
 
@@ -9,10 +10,6 @@ type ExerciseOption = {
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
 };
-
-function normalizeName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 export default function ExercisePicker({
   routineId,
@@ -27,9 +24,9 @@ export default function ExercisePicker({
   const [supportsWeight, setSupportsWeight] = useState(false);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return available.slice(0, 12);
-    return available.filter((exercise) => exercise.name.toLowerCase().includes(q)).slice(0, 12);
+    const sorted = [...available].sort((left, right) => compareExerciseNames(left.name, right.name));
+    if (!query.trim()) return sorted.slice(0, 12);
+    return sorted.filter((exercise) => exerciseMatchesQuery(exercise.name, query)).slice(0, 12);
   }, [available, query]);
 
   const activeSelectedId = filtered.some((exercise) => exercise.id === selectedId)
@@ -37,10 +34,12 @@ export default function ExercisePicker({
     : filtered[0]?.id ?? "";
 
   const hasExactMatch = useMemo(() => {
-    const normalizedQuery = normalizeName(query);
+    const normalizedQuery = condensedExerciseName(query);
     if (!normalizedQuery) return false;
-    return available.some((exercise) => normalizeName(exercise.name) === normalizedQuery);
+    return available.some((exercise) => condensedExerciseName(exercise.name) === normalizedQuery);
   }, [available, query]);
+
+  const normalizedQuery = normalizeExerciseName(query);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -49,7 +48,7 @@ export default function ExercisePicker({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Type to filter exercises..."
+          placeholder="Search by name, even without punctuation"
           style={input}
         />
       </div>
@@ -67,7 +66,7 @@ export default function ExercisePicker({
           {filtered.length === 0 && <option value="">No matches</option>}
           {filtered.map((exercise) => (
             <option key={exercise.id} value={exercise.id}>
-              {exercise.name} ({exercise.unit}{exercise.supportsWeight ? "+wt" : ""})
+              {exercise.name} ({exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " + weight" : ""})
             </option>
           ))}
         </select>
@@ -91,8 +90,8 @@ export default function ExercisePicker({
             style={{ ...input, minWidth: 300 }}
           />
           <select name="unit" value={unit} onChange={(event) => setUnit(event.target.value as "REPS" | "TIME")} style={input}>
-            <option value="REPS">REPS</option>
-            <option value="TIME">TIME</option>
+            <option value="REPS">Rep-based</option>
+            <option value="TIME">Timed</option>
           </select>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
             <input
@@ -103,14 +102,14 @@ export default function ExercisePicker({
             />
             Supports Weight
           </label>
-          <button type="submit" style={btn} disabled={!query.trim()}>
+          <button type="submit" style={btn} disabled={!normalizedQuery}>
             {hasExactMatch ? "Add Exact Match" : "Create + Add"}
           </button>
         </div>
 
-        {!hasExactMatch && query.trim() && (
+        {!hasExactMatch && normalizedQuery && (
           <div style={{ fontSize: 12, opacity: 0.75 }}>
-            No exact match found for &quot;{query.trim()}&quot;. Submitting will create both metric variants
+            No exact match found for &quot;{normalizedQuery}&quot;. Submitting will create both metric variants
             (Reps + Time) and attach the selected metric.
           </div>
         )}

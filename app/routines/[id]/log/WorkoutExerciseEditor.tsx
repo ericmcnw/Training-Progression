@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { compareExerciseNames, condensedExerciseName, exerciseMatchesQuery, exerciseUnitFieldLabel, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
 import { useMemo, useState, useTransition } from "react";
+import { Field, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "./form-ui";
 
 export type ExerciseOption = {
   id: string;
@@ -52,10 +53,6 @@ function defaultRows(count = 3) {
   }));
 }
 
-function normalizeName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
 export default function WorkoutExerciseEditor({
   routineId,
   initialNotes,
@@ -65,6 +62,7 @@ export default function WorkoutExerciseEditor({
   saveLabel,
   savingLabel,
   backHref,
+  smartDefaultLabel,
   addExerciseTitle = "Add Exercise To This Routine",
   addExerciseHelp = "Saving here updates the routine template too. Remove a block to remove it from the routine.",
   createExerciseHelp = "Creating here saves the exercise for future workouts and adds it to this routine now.",
@@ -80,6 +78,7 @@ export default function WorkoutExerciseEditor({
   saveLabel: string;
   savingLabel: string;
   backHref: string;
+  smartDefaultLabel?: string | null;
   addExerciseTitle?: string;
   addExerciseHelp?: string;
   createExerciseHelp?: string;
@@ -101,18 +100,16 @@ export default function WorkoutExerciseEditor({
 
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
-    const query = exerciseQuery.trim().toLowerCase();
     return exerciseOptions.filter((exercise) => {
       if (activeIds.has(exercise.id)) return false;
-      if (!query) return true;
-      return exercise.name.toLowerCase().includes(query);
+      return exerciseMatchesQuery(exercise.name, exerciseQuery);
     });
   }, [exerciseOptions, blocks, exerciseQuery]);
 
   const hasExactMatch = useMemo(() => {
-    const normalizedQuery = normalizeName(exerciseQuery);
+    const normalizedQuery = condensedExerciseName(exerciseQuery);
     if (!normalizedQuery) return false;
-    return exerciseOptions.some((exercise) => normalizeName(exercise.name) === normalizedQuery);
+    return exerciseOptions.some((exercise) => condensedExerciseName(exercise.name) === normalizedQuery);
   }, [exerciseOptions, exerciseQuery]);
 
   const activeSelectedExerciseId = useMemo(() => {
@@ -212,7 +209,7 @@ export default function WorkoutExerciseEditor({
   }
 
   function handleCreateExercise() {
-    const name = exerciseQuery.trim();
+    const name = normalizeExerciseName(exerciseQuery);
     if (!name) {
       setExerciseError("Enter an exercise name.");
       return;
@@ -230,7 +227,7 @@ export default function WorkoutExerciseEditor({
 
         setExerciseOptions((prev) => {
           if (prev.some((exercise) => exercise.id === created.id)) return prev;
-          return [...prev, created].sort((a, b) => a.name.localeCompare(b.name));
+          return [...prev, created].sort((a, b) => compareExerciseNames(a.name, b.name));
         });
         setBlocks((prev) => [
           ...prev,
@@ -252,49 +249,51 @@ export default function WorkoutExerciseEditor({
   }
 
   return (
-    <div style={{ marginTop: 12, display: "grid", gap: 16 }}>
-      <div>
-        <label style={styles.label}>Performed at</label>
-        <input
-          type="datetime-local"
-          style={styles.input}
-          value={performedAtLocal}
-          onChange={(event) => setPerformedAtLocal(event.target.value)}
-        />
-      </div>
+    <FormStack maxWidth={880}>
+      <FormSection title="Workout details" description="Keep the top of every log consistent: time first, notes second, then the type-specific editor.">
+        {smartDefaultLabel ? <div style={styles.smartDefaultNote}>{smartDefaultLabel}</div> : null}
+        <Field label="Performed at">
+          <input
+            type="datetime-local"
+            style={inputStyle}
+            value={performedAtLocal}
+            onChange={(event) => setPerformedAtLocal(event.target.value)}
+          />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Notes (optional)</label>
-        <textarea
-          style={{ ...styles.input, height: 70 }}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-      </div>
+        <Field label="Notes (optional)">
+          <textarea
+            style={{ ...textareaStyle, minHeight: 80 }}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </Field>
+      </FormSection>
 
-      <div style={styles.addPanel}>
+      <FormSection title="Exercise blocks" description="Add, swap, or remove exercises here. The template stays editable without leaving the logging flow.">
+        <div style={styles.addPanel}>
         <div style={{ display: "grid", gap: 6 }}>
           <div style={{ fontWeight: 900, fontSize: 14 }}>{addExerciseTitle}</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{addExerciseHelp}</div>
         </div>
         <input
-          style={{ ...styles.input, minWidth: 260 }}
+          style={{ ...inputStyle, minWidth: 260 }}
           value={exerciseQuery}
           onChange={(event) => setExerciseQuery(event.target.value)}
-          placeholder="Search exercises..."
+          placeholder="Search by name, even without punctuation"
         />
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={activeSelectedExerciseId}
               onChange={(event) => setSelectedExerciseId(event.target.value)}
-              style={{ ...styles.input, minWidth: 280, maxWidth: 420 }}
+              style={{ ...inputStyle, minWidth: 280, maxWidth: 420 }}
               disabled={availableToAdd.length === 0}
             >
               {availableToAdd.length === 0 && <option value="">No matches</option>}
               {availableToAdd.slice(0, 20).map((exercise) => (
                 <option key={exercise.id} value={exercise.id}>
-                  {exercise.name} ({exercise.unit}{exercise.supportsWeight ? "+wt" : ""})
+                  {exercise.name} ({exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " + weight" : ""})
                 </option>
               ))}
             </select>
@@ -306,9 +305,9 @@ export default function WorkoutExerciseEditor({
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.82 }}>Create Custom</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <select value={customUnit} onChange={(event) => setCustomUnit(event.target.value as "REPS" | "TIME")} style={{ ...styles.input, width: 110 }}>
-                <option value="REPS">REPS</option>
-                <option value="TIME">TIME</option>
+              <select value={customUnit} onChange={(event) => setCustomUnit(event.target.value as "REPS" | "TIME")} style={{ ...inputStyle, width: 140 }}>
+                <option value="REPS">Rep-based</option>
+                <option value="TIME">Timed</option>
               </select>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
                 <input
@@ -319,8 +318,13 @@ export default function WorkoutExerciseEditor({
                 Supports Weight
               </label>
               <button type="button" onClick={handleCreateExercise} style={styles.smallBtn} disabled={!exerciseQuery.trim() || creatingExercise}>
-                {creatingExercise ? "Creating..." : hasExactMatch ? "Use Matching Name" : "Create Custom"}
+                {creatingExercise ? "Creating..." : hasExactMatch ? "Use Matching Exercise" : "Create Exercise"}
               </button>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.72 }}>
+              {customUnit === "TIME"
+                ? "Timed exercises log seconds per set. Search ignores punctuation, so names like Pull-Up and Pull Up match the same way."
+                : "Rep-based exercises log reps per set. Search ignores punctuation, so names like Pull-Up and Pull Up match the same way."}
             </div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
               {createExerciseHelp}
@@ -333,7 +337,8 @@ export default function WorkoutExerciseEditor({
             </div>
           )}
         </div>
-      </div>
+        </div>
+      </FormSection>
 
       {blocks.length === 0 && emptyStateHelp ? (
         <div style={{ ...styles.card, fontSize: 13, opacity: 0.82 }}>{emptyStateHelp}</div>
@@ -343,6 +348,7 @@ export default function WorkoutExerciseEditor({
         const showReps = block.unit === "REPS";
         const showTime = block.unit === "TIME";
         const showWeight = block.supportsWeight;
+        const metricLabel = exerciseUnitFieldLabel(block.unit);
 
         return (
           <div key={block.exerciseId} style={styles.card}>
@@ -350,7 +356,7 @@ export default function WorkoutExerciseEditor({
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={{ fontSize: 16, fontWeight: 900 }}>{block.name}</div>
                 <div style={{ fontSize: 12, opacity: 0.72 }}>
-                  Leave every row blank to keep this exercise on the routine without logging it today.
+                  {exerciseUnitLabel(block.unit)} {showWeight ? "| Weighted" : ""} | Leave every row blank to keep this exercise on the routine without logging it today.
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -369,8 +375,7 @@ export default function WorkoutExerciseEditor({
                   <tr>
                     <th style={styles.th}>Set</th>
                     {showWeight && <th style={styles.th}>Weight (lb)</th>}
-                    {showReps && <th style={styles.th}>Reps</th>}
-                    {showTime && <th style={styles.th}>Time (sec)</th>}
+                    {(showReps || showTime) && <th style={styles.th}>{metricLabel}</th>}
                     <th style={styles.th}></th>
                   </tr>
                 </thead>
@@ -381,7 +386,7 @@ export default function WorkoutExerciseEditor({
                       {showWeight && (
                         <td style={styles.td}>
                           <input
-                            style={styles.input}
+                            style={inputStyle}
                             value={row.weightLb ?? ""}
                             inputMode="decimal"
                             onChange={(event) => updateCell(block.exerciseId, row.setNumber, "weightLb", event.target.value)}
@@ -391,7 +396,7 @@ export default function WorkoutExerciseEditor({
                       {showReps && (
                         <td style={styles.td}>
                           <input
-                            style={styles.input}
+                            style={inputStyle}
                             value={row.reps ?? ""}
                             inputMode="numeric"
                             onChange={(event) => updateCell(block.exerciseId, row.setNumber, "reps", event.target.value)}
@@ -401,7 +406,7 @@ export default function WorkoutExerciseEditor({
                       {showTime && (
                         <td style={styles.td}>
                           <input
-                            style={styles.input}
+                            style={inputStyle}
                             value={row.seconds ?? ""}
                             inputMode="numeric"
                             onChange={(event) => updateCell(block.exerciseId, row.setNumber, "seconds", event.target.value)}
@@ -426,27 +431,18 @@ export default function WorkoutExerciseEditor({
         );
       })}
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleSave} disabled={saving} style={styles.bigBtn}>
-          {saving ? savingLabel : saveLabel}
-        </button>
-        <Link href={backHref} style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+      <FormActions
+        primaryLabel={saveLabel}
+        primaryPendingLabel={savingLabel}
+        saving={saving}
+        onPrimary={handleSave}
+        backHref={backHref}
+      />
+    </FormStack>
   );
 }
 
 const styles = {
-  label: { display: "block", fontWeight: 800, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 8,
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.06)",
-  },
   addPanel: {
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: 12,
@@ -490,20 +486,12 @@ const styles = {
     color: "inherit",
     fontWeight: 800,
   },
-  bigBtn: {
-    padding: "10px 14px",
+  smartDefaultNote: {
+    border: "1px solid rgba(84,203,130,0.35)",
     borderRadius: 12,
-    border: "1px solid rgba(128,128,128,0.35)",
-    background: "rgba(128,128,128,0.12)",
-    fontWeight: 900,
-  },
-  linkBtn: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(128,128,128,0.35)",
-    background: "rgba(128,128,128,0.12)",
-    fontWeight: 900,
-    textDecoration: "none",
-    color: "inherit",
+    padding: "10px 12px",
+    background: "rgba(84,203,130,0.08)",
+    fontSize: 12,
+    opacity: 0.86,
   },
 };

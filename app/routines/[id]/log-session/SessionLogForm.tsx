@@ -1,10 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { logSession } from "../../actions";
 import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
+import {
+  Field,
+  FormActions,
+  FormSection,
+  FormStack,
+  OptionalDateSection,
+  helperTextStyle,
+  inputStyle,
+  textareaStyle,
+} from "../log/form-ui";
 import {
   isClimbingTemplateKey,
   normalizeSessionMetricText,
@@ -91,26 +100,45 @@ export default function SessionLogForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 580 }}>
-      <div>
-        <label style={styles.label}>Duration (minutes, optional)</label>
-        <input style={styles.input} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
-      </div>
+    <FormStack maxWidth={640}>
+      <FormSection title="Session details" description="Use the same review-friendly structure as the other routine logs, then fill in only the fields that matter for this session type.">
+        <Field label="Duration (minutes, optional)">
+          <input style={inputStyle} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
+        </Field>
 
-      <div>
-        <label style={styles.label}>Location (optional)</label>
-        <input style={styles.input} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Gym, beach, bouldering wall..." />
-      </div>
+        <Field label="Location (optional)">
+          <input style={inputStyle} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Gym, beach, bouldering wall..." />
+        </Field>
 
-      {templateName ? <div style={styles.help}>Template: {templateName}</div> : null}
+        {templateName ? <div style={helperTextStyle}>Template: {templateName}</div> : null}
+      </FormSection>
 
       {isClimbingTemplateKey(templateKey) ? (
-        <ClimbingGradeRowsEditor
-          templateKey={templateKey}
+        <FormSection title="Climbing details" description="Preferred grades stay grouped with the rest of the session metrics for easier mobile editing.">
+          <ClimbingGradeRowsEditor
+            templateKey={templateKey}
+            definitions={definitions}
+            values={sessionMetricValues}
+            selectedGrades={selectedClimbingGrades}
+            onValuesChange={(metricDefinitionId, value) =>
+              setSessionMetricValues((current) => ({
+                ...current,
+                [metricDefinitionId]: {
+                  ...current[metricDefinitionId],
+                  ...value,
+                },
+              }))
+            }
+            onSelectedGradesChange={setSelectedClimbingGrades}
+          />
+        </FormSection>
+      ) : null}
+
+      <FormSection title="Session metrics" description="Structured metrics stay here so every session-type routine follows the same scan pattern.">
+        <SessionMetricFields
           definitions={definitions}
           values={sessionMetricValues}
-          selectedGrades={selectedClimbingGrades}
-          onValuesChange={(metricDefinitionId, value) =>
+          onChange={(metricDefinitionId, value) =>
             setSessionMetricValues((current) => ({
               ...current,
               [metricDefinitionId]: {
@@ -119,89 +147,24 @@ export default function SessionLogForm({
               },
             }))
           }
-          onSelectedGradesChange={setSelectedClimbingGrades}
         />
-      ) : null}
+      </FormSection>
 
-      <SessionMetricFields
-        definitions={definitions}
-        values={sessionMetricValues}
-        onChange={(metricDefinitionId, value) =>
-          setSessionMetricValues((current) => ({
-            ...current,
-            [metricDefinitionId]: {
-              ...current[metricDefinitionId],
-              ...value,
-            },
-          }))
-        }
+      <FormSection title="Notes">
+        <Field label="Session notes (optional)">
+          <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </Field>
+      </FormSection>
+
+      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
+
+      <FormActions
+        primaryLabel="Save Session"
+        primaryPendingLabel="Saving..."
+        saving={saving}
+        onPrimary={onSave}
+        backHref="/routines"
       />
-
-      <div>
-        <label style={styles.label}>Notes (optional)</label>
-        <textarea style={{ ...styles.input, minHeight: 90 }} value={notes} onChange={(event) => setNotes(event.target.value)} />
-      </div>
-
-      <details style={styles.details}>
-        <summary data-collapsible-summary style={styles.summary}>Log with custom date/time (optional)</summary>
-        <div style={{ marginTop: 8 }}>
-          <label style={styles.label}>Performed at</label>
-          <input type="datetime-local" style={styles.input} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
-        </div>
-      </details>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onSave} disabled={saving} style={styles.btn}>
-          {saving ? "Saving..." : "Save Session"}
-        </button>
-        <Link href="/routines" style={styles.linkBtn}>
-          Back
-        </Link>
-      </div>
-    </div>
+    </FormStack>
   );
 }
-
-const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
-  input: {
-    width: "100%",
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  btn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-  },
-  linkBtn: {
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
-    color: "inherit",
-    fontWeight: 900 as const,
-    textDecoration: "none",
-  },
-  details: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background: "rgba(128,128,128,0.06)",
-  },
-  summary: {
-    cursor: "pointer",
-    fontWeight: 800 as const,
-    fontSize: 13,
-  },
-  help: {
-    fontSize: 12,
-    opacity: 0.72,
-  },
-};
