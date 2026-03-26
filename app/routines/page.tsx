@@ -13,9 +13,9 @@ import {
   isWorkoutKind,
   normalizeRoutineKind,
 } from "@/lib/routines";
-import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, type RoutineFrequencySummary } from "@/lib/routine-frequency";
+import { formatRoutineTargetLabel, getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
-import { logRoutineCompletion, removeLastRoutineCompletion } from "./actions";
+import { logRoutineCompletion, removeLastRoutineCompletion, updateRoutineFrequencyTarget } from "./actions";
 import DeleteRoutineButton from "./DeleteRoutineButton";
 
 export const dynamic = "force-dynamic";
@@ -125,6 +125,21 @@ const styles = {
     fontSize: 12,
     fontWeight: 800,
     opacity: 0.9,
+  },
+  targetEditorRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap" as const,
+    alignItems: "center" as const,
+  },
+  targetEditorLabel: {
+    fontSize: 12,
+    fontWeight: 800,
+    opacity: 0.82,
+  },
+  helpText: {
+    fontSize: 12,
+    opacity: 0.74,
   },
   input: {
     width: "100%",
@@ -240,6 +255,47 @@ function RoutineCard({
               Target: <b>{frequencySummary.summaryLabel}</b>
               {frequencySummary.hasTarget ? ` | ${frequencySummary.detailLabel}` : ""}
             </div>
+            <details style={styles.detailsBox}>
+              <summary data-collapsible-summary style={styles.detailsSummary}>
+                Adjust target frequency
+              </summary>
+              <form action={updateRoutineFrequencyTarget} style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                <input type="hidden" name="routineId" value={routine.id} />
+                <div style={styles.targetEditorRow}>
+                  <input
+                    name="targetFrequencyCount"
+                    style={{ ...styles.input, width: 76 }}
+                    inputMode="numeric"
+                    defaultValue={routine.targetFrequencyCount ?? 3}
+                  />
+                  <span style={styles.targetEditorLabel}>times per</span>
+                  <input
+                    name="targetFrequencyInterval"
+                    style={{ ...styles.input, width: 76 }}
+                    inputMode="numeric"
+                    defaultValue={routine.targetFrequencyInterval ?? 1}
+                  />
+                  <select
+                    name="targetFrequencyUnit"
+                    style={{ ...styles.input, width: 110 }}
+                    defaultValue={routine.targetFrequencyUnit ?? "WEEK"}
+                  >
+                    <option value="DAY">day</option>
+                    <option value="WEEK">week</option>
+                    <option value="MONTH">month</option>
+                  </select>
+                </div>
+                <div style={styles.helpText}>Current target: {formatRoutineTargetLabel(routine)}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="submit" name="intent" value="save" suppressHydrationWarning style={styles.compactBtnLink}>
+                    Save Target
+                  </button>
+                  <button type="submit" name="intent" value="clear" suppressHydrationWarning style={styles.compactBtnLink}>
+                    Clear Target
+                  </button>
+                </div>
+              </form>
+            </details>
           </div>
 
           <div

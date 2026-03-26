@@ -20,6 +20,13 @@ function barKey(categoryId: string, routineKind: RoutineKind) {
   return `${categoryId}:${routineKind}`;
 }
 
+function categoryStatus(totalCount: number, rangeLabel: string) {
+  if (totalCount === 0) return { label: "Quiet", tone: quietPillStyle };
+  if (rangeLabel === "This Week" && totalCount <= 1) return { label: "Thin", tone: thinPillStyle };
+  if (rangeLabel === "Last 4 Weeks" && totalCount <= 2) return { label: "Light", tone: thinPillStyle };
+  return { label: "Active", tone: activePillStyle };
+}
+
 function groupDetails(logs: CoverageDetailLog[]) {
   const grouped = new Map<
     string,
@@ -98,13 +105,22 @@ export default function CoverageGroupedBarChart({
       <div style={helperStyle}>Bars show how many completed logs in {rangeLabel.toLowerCase()} contributed to each category.</div>
 
       <div style={{ display: "grid", gap: 12 }}>
-        {categories.map((category) => (
-          <div key={category.id} style={categoryRowStyle}>
+        {categories.map((category, categoryIndex) => (
+          <div
+            key={category.id}
+            style={{
+              ...categoryRowStyle,
+              ...(focusedBar?.categoryId === category.id ? categoryRowFocusedStyle : null),
+            }}
+          >
             <div style={categoryLabelColumnStyle}>
               <Link href={category.targetHref} style={categoryLinkStyle}>
                 {category.label}
               </Link>
-              <div style={categoryMetaStyle}>{category.totalCount} total</div>
+              <div style={categoryMetaRowStyle}>
+                <span style={categoryMetaStyle}>{category.totalCount} total</span>
+                <span style={categoryStatus(category.totalCount, rangeLabel).tone}>{categoryStatus(category.totalCount, rangeLabel).label}</span>
+              </div>
             </div>
 
             <div style={barsColumnStyle}>
@@ -114,88 +130,97 @@ export default function CoverageGroupedBarChart({
                 const isFocused = focusedBar
                   ? focusedBar.categoryId === category.id && focusedBar.routineKind === item.kind
                   : false;
+                const showBubble =
+                  isFocused &&
+                  focusedDetails &&
+                  focusedDetails.category.id === category.id &&
+                  focusedDetails.routineKind === item.kind;
+                const placeBubbleBelow = categoryIndex < 2;
 
                 return (
-                  <button
-                    key={barKey(category.id, item.kind)}
-                    type="button"
-                    disabled={!isInteractive}
-                    style={{
-                      ...barButtonStyle,
-                      ...(isInteractive ? interactiveBarButtonStyle : inactiveBarButtonStyle),
-                      ...(isFocused ? focusedBarButtonStyle : {}),
-                    }}
-                    onMouseEnter={() => {
-                      if (activeBar === null && isInteractive) setHoveredBar({ categoryId: category.id, routineKind: item.kind });
-                    }}
-                    onMouseLeave={() => {
-                      if (activeBar === null) setHoveredBar(null);
-                    }}
-                    onClick={() => {
-                      if (!isInteractive) return;
-                      setActiveBar((current) =>
-                        current && current.categoryId === category.id && current.routineKind === item.kind
-                          ? null
-                          : { categoryId: category.id, routineKind: item.kind }
-                      );
-                    }}
-                    aria-label={`${category.label}, ${item.label}, ${count} completed logs`}
-                  >
-                    <span style={barTrackStyle}>
-                      <span
+                  <div key={barKey(category.id, item.kind)} style={barWrapStyle}>
+                    <button
+                      type="button"
+                      disabled={!isInteractive}
+                      style={{
+                        ...barButtonStyle,
+                        ...(isInteractive ? interactiveBarButtonStyle : inactiveBarButtonStyle),
+                        ...(isFocused ? focusedBarButtonStyle : {}),
+                      }}
+                      onMouseEnter={() => {
+                        if (activeBar === null && isInteractive) setHoveredBar({ categoryId: category.id, routineKind: item.kind });
+                      }}
+                      onMouseLeave={() => {
+                        if (activeBar === null) setHoveredBar(null);
+                      }}
+                      onClick={() => {
+                        if (!isInteractive) return;
+                        setActiveBar((current) =>
+                          current && current.categoryId === category.id && current.routineKind === item.kind
+                            ? null
+                            : { categoryId: category.id, routineKind: item.kind }
+                        );
+                      }}
+                      aria-label={`${category.label}, ${item.label}, ${count} completed logs`}
+                    >
+                      <span style={barTrackStyle}>
+                        <span
+                          style={{
+                            ...barFillStyle,
+                            background: item.color,
+                            width: count > 0 ? `${Math.max(8, (count / maxCount) * 100)}%` : "0%",
+                          }}
+                        />
+                      </span>
+                      <span style={barCountStyle}>{count}</span>
+                    </button>
+
+                    {showBubble ? (
+                      <div
                         style={{
-                          ...barFillStyle,
-                          background: item.color,
-                          width: count > 0 ? `${Math.max(8, (count / maxCount) * 100)}%` : "0%",
+                          ...tooltipBubbleStyle,
+                          ...(placeBubbleBelow ? tooltipBubbleBelowStyle : tooltipBubbleAboveStyle),
                         }}
-                      />
-                    </span>
-                    <span style={barCountStyle}>{count}</span>
-                  </button>
+                      >
+                        <div style={tooltipHeaderStyle}>
+                          <span style={legendChipStyle}>
+                            <span
+                              style={{
+                                ...legendDotStyle,
+                                background: legend.find((entry) => entry.kind === item.kind)?.color ?? "rgba(255,255,255,0.8)",
+                              }}
+                            />
+                            {item.label}
+                          </span>
+                          <span style={detailCountChipStyle}>{focusedDetails.logs.length} logs</span>
+                        </div>
+
+                        <div style={tooltipListStyle}>
+                          {focusedDetails.groupedLogs.slice(0, 4).map((entry) => (
+                            <div key={`${entry.routineName}-${entry.dates.join(",")}`} style={tooltipRowStyle}>
+                              <div style={tooltipTitleStyle}>
+                                {entry.routineName}
+                                {entry.dates.length > 1 ? ` x${entry.dates.length}` : ""}
+                              </div>
+                              <div style={tooltipDatesStyle}>{entry.dates.slice(0, 3).join(", ")}</div>
+                              {entry.relevantParts.length > 0 ? (
+                                <div style={tooltipPartsStyle}>{entry.relevantParts.slice(0, 2).join(" | ")}</div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+
+                        {focusedDetails.groupedLogs.length > 4 ? (
+                          <div style={tooltipMoreStyle}>+{focusedDetails.groupedLogs.length - 4} more routines</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
           </div>
         ))}
-      </div>
-
-      <div style={detailPanelStyle}>
-        {focusedDetails ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 15 }}>{focusedDetails.category.label}</div>
-              <span style={legendChipStyle}>
-                <span
-                  style={{
-                    ...legendDotStyle,
-                    background: legend.find((item) => item.kind === focusedDetails.routineKind)?.color ?? "rgba(255,255,255,0.8)",
-                  }}
-                />
-                {focusedDetails.routineKind}
-              </span>
-              <span style={detailCountChipStyle}>{focusedDetails.logs.length} logs</span>
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              {focusedDetails.groupedLogs.slice(0, 8).map((entry) => (
-                <div key={`${entry.routineName}-${entry.dates.join(",")}`} style={detailRowStyle}>
-                  <div style={{ fontWeight: 800 }}>
-                    {entry.routineName}
-                    {entry.dates.length > 1 ? ` x${entry.dates.length}` : ""}
-                  </div>
-                  <div style={detailDatesStyle}>{entry.dates.join(", ")}</div>
-                  {entry.relevantParts.length > 0 ? <div style={detailPartsStyle}>{entry.relevantParts.join(" | ")}</div> : null}
-                </div>
-              ))}
-            </div>
-
-            {focusedDetails.groupedLogs.length > 8 ? (
-              <div style={helperStyle}>Showing 8 routines. Narrow the window or open the target page for the full log history.</div>
-            ) : null}
-          </div>
-        ) : (
-          <div style={helperStyle}>Hover a bar on desktop or tap one on mobile to inspect the contributing routines, completion dates, and matching exercises or guided steps.</div>
-        )}
       </div>
     </div>
   );
@@ -246,11 +271,29 @@ const categoryRowStyle: React.CSSProperties = {
   gap: 12,
   gridTemplateColumns: "minmax(120px, 180px) minmax(0, 1fr)",
   alignItems: "start",
+  padding: "10px 12px",
+  borderRadius: 14,
+  background: "rgba(255,255,255,0.03)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.06)",
+};
+
+const categoryRowFocusedStyle: React.CSSProperties = {
+  borderColor: "rgba(120,190,255,0.26)",
+  background: "rgba(120,190,255,0.08)",
 };
 
 const categoryLabelColumnStyle: React.CSSProperties = {
   display: "grid",
   gap: 4,
+};
+
+const categoryMetaRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
 };
 
 const categoryLinkStyle: React.CSSProperties = {
@@ -264,14 +307,50 @@ const categoryMetaStyle: React.CSSProperties = {
   opacity: 0.7,
 };
 
+const activePillStyle: React.CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 800,
+  border: "1px solid rgba(84,203,130,0.22)",
+  background: "rgba(84,203,130,0.14)",
+};
+
+const thinPillStyle: React.CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 800,
+  border: "1px solid rgba(255,196,107,0.22)",
+  background: "rgba(255,196,107,0.14)",
+};
+
+const quietPillStyle: React.CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 800,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.05)",
+};
+
 const barsColumnStyle: React.CSSProperties = {
   display: "grid",
   gap: 6,
 };
 
+const barWrapStyle: React.CSSProperties = {
+  position: "relative",
+  width: "100%",
+  minWidth: 0,
+  zIndex: 1,
+};
+
 const barButtonStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr) 32px",
+  width: "100%",
+  minWidth: 0,
   gap: 8,
   alignItems: "center",
   padding: 0,
@@ -316,15 +395,6 @@ const barCountStyle: React.CSSProperties = {
   textAlign: "right",
 };
 
-const detailPanelStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-  padding: 14,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(255,255,255,0.03)",
-};
-
 const detailCountChipStyle: React.CSSProperties = {
   padding: "5px 9px",
   borderRadius: 999,
@@ -334,22 +404,70 @@ const detailCountChipStyle: React.CSSProperties = {
   fontWeight: 800,
 };
 
-const detailRowStyle: React.CSSProperties = {
+const tooltipBubbleStyle: React.CSSProperties = {
+  position: "absolute",
+  right: 36,
+  width: "min(320px, calc(100vw - 96px))",
+  maxWidth: "calc(100vw - 96px)",
   display: "grid",
-  gap: 4,
-  padding: "10px 12px",
-  borderRadius: 12,
+  gap: 8,
+  padding: 10,
+  borderRadius: 14,
+  border: "1px solid rgba(120,190,255,0.24)",
+  background: "rgb(10,16,27)",
+  boxShadow: "0 14px 28px rgba(0,0,0,0.28)",
+  zIndex: 20,
+  pointerEvents: "none",
+};
+
+const tooltipBubbleAboveStyle: React.CSSProperties = {
+  bottom: "calc(100% + 6px)",
+};
+
+const tooltipBubbleBelowStyle: React.CSSProperties = {
+  top: "calc(100% + 6px)",
+};
+
+const tooltipHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const tooltipListStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+};
+
+const tooltipRowStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 3,
+  padding: "8px 9px",
+  borderRadius: 10,
   background: "rgba(255,255,255,0.04)",
 };
 
-const detailDatesStyle: React.CSSProperties = {
+const tooltipTitleStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  lineHeight: 1.35,
+};
+
+const tooltipDatesStyle: React.CSSProperties = {
   fontSize: 12,
   lineHeight: 1.45,
   opacity: 0.76,
 };
 
-const detailPartsStyle: React.CSSProperties = {
-  fontSize: 12,
-  lineHeight: 1.45,
-  opacity: 0.9,
+const tooltipPartsStyle: React.CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.4,
+  opacity: 0.88,
+};
+
+const tooltipMoreStyle: React.CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.35,
+  opacity: 0.72,
 };

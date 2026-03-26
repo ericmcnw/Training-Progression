@@ -1,7 +1,7 @@
 import { toAppYmd } from "@/lib/dates";
 import { getWeekBoundsSunday } from "@/lib/week";
 
-export type ProgressRange = "week" | "4w" | "8w" | "12w" | "all";
+export type ProgressRange = "week" | "2w" | "4w" | "8w" | "12w" | "ytd" | "all";
 export type ProgressView = "completion" | "progression";
 
 type SetLike = {
@@ -11,7 +11,7 @@ type SetLike = {
 };
 
 export function normalizeProgressRange(value?: string | null): ProgressRange {
-  if (value === "week" || value === "4w" || value === "8w" || value === "12w" || value === "all") {
+  if (value === "week" || value === "2w" || value === "4w" || value === "8w" || value === "12w" || value === "ytd" || value === "all") {
     return value;
   }
   return "4w";
@@ -28,9 +28,10 @@ function startOfWeekSunday(date: Date) {
 
 export function getRangeStart(range: ProgressRange, now = new Date()): Date | null {
   if (range === "all") return null;
+  if (range === "ytd") return new Date(now.getFullYear(), 0, 1);
   if (range === "week") return getWeekBoundsSunday(now).start;
 
-  const weeks = range === "4w" ? 4 : range === "8w" ? 8 : 12;
+  const weeks = range === "2w" ? 2 : range === "4w" ? 4 : range === "8w" ? 8 : 12;
   const start = startOfWeekSunday(now);
   start.setDate(start.getDate() - (weeks - 1) * 7);
   return start;

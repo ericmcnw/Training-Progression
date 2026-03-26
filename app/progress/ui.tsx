@@ -5,7 +5,6 @@ import { progressRanges, progressSections, progressTabDescription, progressTabs,
 export function ProgressShell({
   section,
   title,
-  subtitle,
   children,
   actions,
 }: {
@@ -15,20 +14,25 @@ export function ProgressShell({
   children: React.ReactNode;
   actions?: React.ReactNode;
 }) {
+  const sectionItem = progressSections().find((item) => item.key === section);
+  const displayTitle = `Progress - ${sectionItem?.label ?? title}`;
+
   return (
     <div style={styles.container}>
-      <div style={styles.hero}>
-        <div style={styles.heroCopy}>
-          <div style={styles.eyebrow}>Progress Center</div>
-          <h1 style={styles.h1}>{title}</h1>
-          {subtitle ? <div style={styles.sub}>{subtitle}</div> : null}
+      <div style={styles.progressTopBar}>
+        <div style={styles.progressTitleRow}>
+          <h1 style={styles.progressH1}>{displayTitle}</h1>
+          {section !== "overview" ? (
+            <Link href="/progress" style={styles.backBtn}>
+              Back
+            </Link>
+          ) : null}
         </div>
-        {actions ? <div style={styles.heroActions}>{actions}</div> : null}
+        {actions ? <div style={styles.progressTopActions}>{actions}</div> : null}
       </div>
 
       <NavCluster
-        label="Area"
-        hint="Choose the layer you want to analyze."
+        label="Choose Type to Review"
         items={progressSections().map((item) => ({ ...item, active: item.key === section }))}
       />
 
@@ -291,22 +295,53 @@ const border = "1px solid rgba(255,255,255,0.12)";
 const cardBackground = "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 1120, margin: "0 auto", padding: "20px 14px" },
-  content: { marginTop: 18, display: "grid", gap: 16 },
+  container: { maxWidth: 1120, margin: "0 auto", padding: "10px 14px 20px" },
+  content: { marginTop: 12, display: "grid", gap: 16 },
+  progressTopBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+    minHeight: 40,
+    marginBottom: 10,
+  },
+  progressTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+  progressH1: { margin: 0, fontSize: 24, lineHeight: 1.05, fontWeight: 950 },
+  progressTopActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
+  backBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    textDecoration: "none",
+    color: "inherit",
+    fontSize: 12,
+    fontWeight: 800,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+  },
   hero: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 16,
+    gap: 14,
     flexWrap: "wrap",
-    alignItems: "flex-end",
-    padding: 18,
+    alignItems: "center",
+    padding: "14px 16px",
     border,
-    borderRadius: 24,
+    borderRadius: 20,
     background:
-      "radial-gradient(circle at top left, rgba(51,255,122,0.12), transparent 38%), radial-gradient(circle at top right, rgba(120,190,255,0.14), transparent 28%), linear-gradient(180deg, rgba(20,31,52,0.96), rgba(10,18,31,0.92))",
-    boxShadow: "0 18px 40px rgba(0,0,0,0.16)",
+      "radial-gradient(circle at top left, rgba(51,255,122,0.09), transparent 34%), radial-gradient(circle at top right, rgba(120,190,255,0.14), transparent 26%), linear-gradient(180deg, rgba(20,31,52,0.96), rgba(10,18,31,0.92))",
+    boxShadow: "0 14px 30px rgba(0,0,0,0.14)",
   },
-  heroCopy: { display: "grid", gap: 8, flex: "1 1 520px", minWidth: 0 },
+  heroCopy: { display: "grid", gap: 6, flex: "1 1 520px", minWidth: 0 },
   heroActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
   eyebrow: {
     fontSize: 11,
@@ -315,49 +350,48 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     color: "rgba(163,255,201,0.86)",
   },
-  h1: { margin: 0, fontSize: 32, lineHeight: 1.05, fontWeight: 950 },
-  sub: { fontSize: 14, lineHeight: 1.5, opacity: 0.82, maxWidth: 760 },
-  navStack: { marginTop: 16, display: "grid", gap: 12 },
+  h1: { margin: 0, fontSize: 28, lineHeight: 1.05, fontWeight: 950 },
+  sub: { fontSize: 13, lineHeight: 1.45, opacity: 0.82, maxWidth: 760 },
+  navStack: { marginTop: 12, display: "grid", gap: 10 },
   navGrid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" },
   navCluster: {
     display: "grid",
-    gap: 8,
-    padding: 12,
+    gap: 6,
+    padding: "9px 10px",
     border,
-    borderRadius: 18,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.035)",
   },
   navHeader: { display: "grid", gap: 2 },
   navLabel: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.9,
-    textTransform: "uppercase",
-    opacity: 0.74,
+    opacity: 0.82,
     fontWeight: 900,
   },
   navHint: { fontSize: 12, opacity: 0.72 },
   segmentedNav: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-    gap: 8,
+    gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+    gap: 6,
   },
   segment: {
-    padding: "10px 12px",
-    borderRadius: 14,
+    padding: "9px 10px",
+    borderRadius: 12,
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: "rgba(255,255,255,0.08)",
     textDecoration: "none",
     color: "inherit",
-    background: "rgba(255,255,255,0.04)",
+    background: "rgba(255,255,255,0.035)",
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 800,
   },
   segmentActive: {
-    background: "linear-gradient(180deg, rgba(51,255,122,0.18), rgba(51,255,122,0.08))",
-    borderColor: "rgba(51,255,122,0.26)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+    background: "linear-gradient(180deg, rgba(120,190,255,0.24), rgba(120,190,255,0.12))",
+    borderColor: "rgba(120,190,255,0.42)",
+    boxShadow: "0 0 0 1px rgba(120,190,255,0.08), inset 0 1px 0 rgba(255,255,255,0.08)",
   },
   pillRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 },
   pill: {
@@ -378,7 +412,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   section: {
     border,
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: "hidden",
     background: "rgba(255,255,255,0.028)",
     boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
@@ -389,15 +423,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     alignItems: "center",
     flexWrap: "wrap",
-    padding: "14px 16px 12px",
+    padding: "13px 15px 11px",
     background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
     borderBottom: "1px solid rgba(255,255,255,0.08)",
   },
-  sectionHeader: {
-    fontWeight: 900,
-    letterSpacing: 0.2,
-    fontSize: 16,
-  },
+  sectionHeader: { fontWeight: 900, letterSpacing: 0.2, fontSize: 16 },
   sectionSub: {
     marginTop: 4,
     fontSize: 13,
@@ -406,7 +436,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 720,
   },
   sectionActions: { display: "flex", gap: 8, flexWrap: "wrap" },
-  sectionBody: { padding: 16, display: "grid", gap: 12 },
+  sectionBody: { padding: 14, display: "grid", gap: 12 },
   targetCard: {
     border,
     borderRadius: 18,
@@ -415,7 +445,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "inherit",
     textDecoration: "none",
     display: "block",
-    minHeight: 120,
+    minHeight: 112,
   },
   targetCardFeatured: {
     background:

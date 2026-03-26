@@ -982,6 +982,70 @@ export async function updateRoutine(formData: FormData) {
   redirect("/routines");
 }
 
+export async function updateRoutineFrequencyTarget(formData: FormData) {
+  const routineId = String(formData.get("routineId") || "").trim();
+  const intent = String(formData.get("intent") || "save").trim();
+  if (!routineId) throw new Error("Missing routine id.");
+
+  const existing = await prisma.routine.findUnique({
+    where: { id: routineId },
+    select: { id: true, isDeleted: true },
+  });
+  if (!existing) throw new Error("Routine not found.");
+  if (existing.isDeleted) {
+    revalidateRoutineSurfaces(routineId);
+    return;
+  }
+
+  if (intent === "clear") {
+    await prisma.routine.update({
+      where: { id: routineId },
+      data: {
+        targetFrequencyCount: null,
+        targetFrequencyUnit: null,
+        targetFrequencyInterval: null,
+        timesPerWeek: null,
+      },
+    });
+    revalidateRoutineSurfaces(routineId);
+    return;
+  }
+
+  const targetFrequencyCount = Number(String(formData.get("targetFrequencyCount") || "").trim());
+  const targetFrequencyInterval = Number(String(formData.get("targetFrequencyInterval") || "").trim() || "1");
+  const unitRaw = String(formData.get("targetFrequencyUnit") || "").trim().toUpperCase();
+  const targetFrequencyUnit =
+    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH"
+      ? (unitRaw as RoutineFrequencyUnit)
+      : null;
+
+  if (!Number.isFinite(targetFrequencyCount) || targetFrequencyCount <= 0) {
+    throw new Error("Target count must be greater than 0.");
+  }
+  if (!Number.isFinite(targetFrequencyInterval) || targetFrequencyInterval <= 0) {
+    throw new Error("Target interval must be greater than 0.");
+  }
+  if (!targetFrequencyUnit) {
+    throw new Error("Target unit is required.");
+  }
+
+  const frequencyTarget = {
+    targetFrequencyCount: Math.floor(targetFrequencyCount),
+    targetFrequencyUnit,
+    targetFrequencyInterval: Math.floor(targetFrequencyInterval),
+  } as const;
+
+  await prisma.routine.update({
+    where: { id: routineId },
+    data: {
+      ...frequencyTarget,
+      timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
+    },
+  });
+
+  revalidateRoutineSurfaces(routineId);
+}
+
 export async function toggleArchiveRoutine(id: string) {
   if (!id) throw new Error("Missing routine id.");
 

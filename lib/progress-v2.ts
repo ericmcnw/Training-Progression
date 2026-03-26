@@ -58,17 +58,21 @@ export function progressTabDescription(tab: ProgressTab) {
 
 export function progressRanges(basePath: string, tab: ProgressTab) {
   return [
+    { key: "2w", label: "2W", href: `${basePath}?tab=${tab}&range=2w` },
     { key: "4w", label: "4W", href: `${basePath}?tab=${tab}&range=4w` },
     { key: "12w", label: "12W", href: `${basePath}?tab=${tab}&range=12w` },
+    { key: "ytd", label: "YTD", href: `${basePath}?tab=${tab}&range=ytd` },
     { key: "all", label: "All", href: `${basePath}?tab=${tab}&range=all` },
   ] satisfies Array<{ key: ProgressRange; label: string; href: string }>;
 }
 
 export function rangeChipLabel(range: ProgressRange) {
   if (range === "week") return "This Week";
+  if (range === "2w") return "Last 2 Weeks";
   if (range === "4w") return "Last 4 Weeks";
   if (range === "8w") return "Last 8 Weeks";
   if (range === "12w") return "Last 12 Weeks";
+  if (range === "ytd") return "Year to Date";
   return "All Time";
 }
 
@@ -92,13 +96,17 @@ export function fillWeeklySeries(
   range: ProgressRange,
   now = new Date()
 ): Array<{ label: string; value: number }> {
-  if (range === "all") {
-    return Array.from(totals.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, value]) => ({ label: formatWeekLabel(key), value }));
+  if (range === "all" || range === "ytd") {
+    const entries = Array.from(totals.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const filteredEntries =
+      range === "ytd"
+        ? entries.filter(([key]) => key >= toAppYmd(startOfYear(now)))
+        : entries;
+
+    return filteredEntries.map(([key, value]) => ({ label: formatWeekLabel(key), value }));
   }
 
-  const count = range === "week" ? 1 : range === "4w" ? 4 : range === "8w" ? 8 : 12;
+  const count = range === "week" ? 1 : range === "2w" ? 2 : range === "4w" ? 4 : range === "8w" ? 8 : range === "12w" ? 12 : 12;
   const weeks: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
   for (let index = count - 1; index >= 0; index -= 1) {

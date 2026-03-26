@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getRoutineLogs, type RoutineLogWithRelations } from "./data";
 
 export type CoverageLens = "muscles" | "patterns" | "sports";
-export type CoverageRange = "week" | "4w";
+export type CoverageRange = "week" | "2w" | "4w" | "12w" | "ytd";
 
 type GroupRow = {
   id: string;
@@ -60,6 +60,51 @@ export type CoverageOverviewModel = {
 
 const COVERAGE_KIND_ORDER: RoutineKind[] = ["WORKOUT", "CARDIO", "GUIDED", "SESSION", "COMPLETION"];
 const EXCLUDED_SPORT_SLUGS = new Set(["run-walk"]);
+const COVERAGE_CATEGORY_ORDER: Record<CoverageLens, string[]> = {
+  muscles: [
+    "chest",
+    "shoulders",
+    "triceps",
+    "back",
+    "biceps",
+    "forearms",
+    "fingers",
+    "neck",
+    "quads",
+    "hamstrings",
+    "glutes",
+    "hip-flexors",
+    "adductors",
+    "abductors",
+    "calves",
+    "core",
+  ],
+  patterns: [
+    "squat",
+    "hinge",
+    "lunge",
+    "horizontal-push",
+    "vertical-push",
+    "horizontal-pull",
+    "vertical-pull",
+    "carry",
+    "rotation",
+    "anti-extension",
+    "anti-rotation",
+    "anti-lateral-flexion",
+    "isometric",
+  ],
+  sports: [
+    "running",
+    "walking",
+    "hiking",
+    "biking",
+    "rowing",
+    "swimming",
+    "climbing",
+    "cardio",
+  ],
+};
 
 function createEmptyKindCountRecord() {
   return {
@@ -82,7 +127,11 @@ function createEmptyKindDetailRecord() {
 }
 
 function rangeLabel(range: CoverageRange) {
-  return range === "week" ? "This Week" : "Last 4 Weeks";
+  if (range === "week") return "This Week";
+  if (range === "2w") return "Last 2 Weeks";
+  if (range === "4w") return "Last 4 Weeks";
+  if (range === "12w") return "Last 12 Weeks";
+  return "Year to Date";
 }
 
 function lensLabel(lens: CoverageLens) {
@@ -226,6 +275,9 @@ function relevantPartsForLog(params: {
   descendantsByGroupId: Map<string, Set<string>>;
 }) {
   const relevantParts = new Set<string>();
+  const matchingExerciseNames = new Set<string>();
+  const matchingGuidedExerciseNames = new Set<string>();
+  const matchingGuidedStepTitles = new Set<string>();
   const { log, targetGroupId, groupIdBySlug, descendantsByGroupId } = params;
 
   const routineGroupIds = new Set<string>([
@@ -246,7 +298,7 @@ function relevantPartsForLog(params: {
       const inferredGroupIds =
         directGroupIds.length > 0 ? [] : groupIdsFromSlugs(inferExerciseMetadataSlugs(exercise.exercise.name), groupIdBySlug);
       if (matchesSelectedGroup(targetGroupId, [...directGroupIds, ...inferredGroupIds], descendantsByGroupId)) {
-        relevantParts.add(`Exercise: ${exercise.exercise.name}`);
+        matchingExerciseNames.add(exercise.exercise.name);
       }
     }
   }
@@ -260,9 +312,27 @@ function relevantPartsForLog(params: {
           ? groupIdsFromSlugs(inferGuidedStepMetadataSlugs(step.title), groupIdBySlug)
           : [];
       if (matchesSelectedGroup(targetGroupId, [...stepGroupIds, ...exerciseGroupIds, ...inferredGroupIds], descendantsByGroupId)) {
-        relevantParts.add(step.exercise?.name ? `Guided exercise: ${step.exercise.name}` : `Guided step: ${step.title}`);
+        if (step.exercise?.name) {
+          matchingGuidedExerciseNames.add(step.exercise.name);
+        } else {
+          matchingGuidedStepTitles.add(step.title);
+        }
       }
     }
+  }
+
+  if (matchingExerciseNames.size > 0) {
+    relevantParts.add(`Exercises: ${Array.from(matchingExerciseNames).sort((left, right) => left.localeCompare(right)).join(", ")}`);
+  }
+  if (matchingGuidedExerciseNames.size > 0) {
+    relevantParts.add(
+      `Guided exercises: ${Array.from(matchingGuidedExerciseNames).sort((left, right) => left.localeCompare(right)).join(", ")}`
+    );
+  }
+  if (matchingGuidedStepTitles.size > 0) {
+    relevantParts.add(
+      `Guided steps: ${Array.from(matchingGuidedStepTitles).sort((left, right) => left.localeCompare(right)).join(", ")}`
+    );
   }
 
   if (relevantParts.size === 0 && matchesSelectedGroup(targetGroupId, routineGroupIds, descendantsByGroupId)) {
@@ -278,7 +348,19 @@ function categoryHref(group: GroupRow) {
     : `/progress/groups/${group.slug}?tab=overview&range=4w`;
 }
 
-export async function getCoverageOverviewModel(range: CoverageRange = "week"): Promise<CoverageOverviewModel> {
+function coverageCategorySort(lens: CoverageLens, left: CoverageCategoryRow, right: CoverageCategoryRow) {
+  const order = COVERAGE_CATEGORY_ORDER[lens];
+  const leftIndex = order.indexOf(left.slug);
+  const rightIndex = order.indexOf(right.slug);
+  const leftRank = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+  const rightRank = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  if (left.totalCount !== right.totalCount) return right.totalCount - left.totalCount;
+  return left.label.localeCompare(right.label);
+}
+
+export async function getCoverageOverviewModel(range: CoverageRange = "4w"): Promise<CoverageOverviewModel> {
   const [logs, groups] = await Promise.all([
     getRoutineLogs(range),
     prisma.metadataGroup.findMany({
@@ -379,9 +461,7 @@ export async function getCoverageOverviewModel(range: CoverageRange = "week"): P
   }
 
   const sections = (["muscles", "patterns", "sports"] as CoverageLens[]).map((lens) => {
-    const categories = Array.from(sectionsByLens.get(lens)!.values()).sort(
-      (left, right) => right.totalCount - left.totalCount || left.label.localeCompare(right.label)
-    );
+    const categories = Array.from(sectionsByLens.get(lens)!.values()).sort((left, right) => coverageCategorySort(lens, left, right));
 
     return {
       lens,
