@@ -200,15 +200,12 @@ details[open] > summary[data-collapsible-summary]::before{
     bottom: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
     padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(255,255,255,0.12);
-    background:
-      linear-gradient(180deg, rgba(16,22,37,0.82), rgba(8,13,24,0.96)),
-      rgba(9,15,28,0.94);
-    backdrop-filter: blur(20px) saturate(140%);
-    box-shadow: 0 -12px 36px rgba(0,0,0,0.34);
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
   }
 
   .mobileBottomNavLink{

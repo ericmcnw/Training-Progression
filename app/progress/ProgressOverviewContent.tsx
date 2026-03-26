@@ -181,22 +181,19 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
 
   const [routines, exercises, groups, recentLogs] = await Promise.all([getRoutineIndex(), getExerciseIndex(), getMetadataIndex(), getRoutineLogs("4w")]);
-  const [weekCoverageOverview, twoWeekCoverageOverview, fourWeekCoverageOverview, twelveWeekCoverageOverview, ytdCoverageOverview, recommendationModel] = await Promise.all([
+  const needsExtraCoverageOverview = coverageRange !== "week" && coverageRange !== "4w";
+  const [weekCoverageOverview, fourWeekCoverageOverview, extraCoverageOverview, recommendationModel] = await Promise.all([
     getCoverageOverviewModel("week"),
-    getCoverageOverviewModel("2w"),
     getCoverageOverviewModel("4w"),
-    getCoverageOverviewModel("12w"),
-    getCoverageOverviewModel("ytd"),
+    needsExtraCoverageOverview ? getCoverageOverviewModel(coverageRange) : Promise.resolve(null),
     getRecommendationModel(),
   ]);
-  const coverageOverviewByRange: Record<CoverageRange, Awaited<ReturnType<typeof getCoverageOverviewModel>>> = {
-    week: weekCoverageOverview,
-    "2w": twoWeekCoverageOverview,
-    "4w": fourWeekCoverageOverview,
-    "12w": twelveWeekCoverageOverview,
-    ytd: ytdCoverageOverview,
-  };
-  const coverageOverview = coverageOverviewByRange[coverageRange];
+  const coverageOverview =
+    coverageRange === "week"
+      ? weekCoverageOverview
+      : coverageRange === "4w"
+      ? fourWeekCoverageOverview
+      : extraCoverageOverview ?? fourWeekCoverageOverview;
 
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
   const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);

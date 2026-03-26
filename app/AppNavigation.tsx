@@ -16,6 +16,7 @@ const desktopNavItems = [
 const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
+  { href: "/progress", label: "Progress", icon: <ProgressIcon />, match: (pathname: string) => pathname.startsWith("/progress") },
   { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
   { href: "/manual-log", label: "Profile", icon: <HistoryIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
@@ -103,6 +104,18 @@ function GoalsIcon() {
       <path d="M4 12a8 8 0 1 1 3 6.25" />
       <path d="M12 7.5v5l3 1.5" />
       <path d="M4 18.5h4v-4" />
+    </MobileNavIcon>
+  );
+}
+
+function ProgressIcon() {
+  return (
+    <MobileNavIcon>
+      <path d="M4 18.5h16" />
+      <path d="M6.5 16V12.5" />
+      <path d="M10.5 16V9.5" />
+      <path d="M14.5 16V6.5" />
+      <path d="M18.5 16V11" />
     </MobileNavIcon>
   );
 }
