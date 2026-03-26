@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import {
+  exerciseLibraryWhereForKinds,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+  workoutLibraryKinds,
+} from "@/lib/exercise-library";
+import {
   isCardioKind,
   isGuidedKind,
   isSessionKind,
@@ -155,15 +161,34 @@ export default async function EditRoutineLogPage(props: {
   const logKind = inferLogKind(log, routine.kind);
 
   const availableExercises = isWorkoutKind(logKind)
-    ? await prisma.exercise.findMany({
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          unit: true,
-          supportsWeight: true,
-        },
-      })
+    ? await (async () => {
+        try {
+          return await prisma.exercise.findMany({
+            where: exerciseLibraryWhereForKinds(workoutLibraryKinds()),
+            orderBy: { name: "asc" },
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              supportsWeight: true,
+              libraryKind: true,
+            },
+          });
+        } catch (error) {
+          if (!isMissingExerciseLibraryKindError(error)) throw error;
+          return withDerivedExerciseLibraryKind(
+            await prisma.exercise.findMany({
+              orderBy: { name: "asc" },
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                supportsWeight: true,
+              },
+            })
+          ).filter((exercise) => workoutLibraryKinds().includes(exercise.libraryKind));
+        }
+      })()
     : [];
 
   const initialExercises = isWorkoutKind(logKind)

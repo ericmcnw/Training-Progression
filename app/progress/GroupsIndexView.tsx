@@ -1,128 +1,122 @@
 import { getMetadataIndex, resolveGroupTarget } from "./data";
-import { EmptyState, FilterBar, FilterInput, FilterSelect, ProgressShell, SectionCard, TargetCard } from "./ui";
-import { formatMetadataGroupKind } from "@/lib/metadata";
-import type { MetadataGroupKind } from "@/generated/prisma";
+import { EmptyState, FilterBar, FilterInput, ProgressShell, SectionCard, TargetCard } from "./ui";
 
 type SearchParams = Record<string, string | string[] | undefined>;
+
+type ProgressGroupItem = {
+  slug: string;
+  label: string;
+  subtitle: string;
+};
 
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
 }
 
+const STIMULUS_GROUPS: ProgressGroupItem[] = [
+  { slug: "push", label: "Push", subtitle: "Stimulus movement group" },
+  { slug: "pull", label: "Pull", subtitle: "Stimulus movement group" },
+  { slug: "squat", label: "Squat", subtitle: "Stimulus movement group" },
+  { slug: "hinge", label: "Hinge", subtitle: "Stimulus movement group" },
+  { slug: "core", label: "Core", subtitle: "Stimulus movement group" },
+  { slug: "grip", label: "Grip", subtitle: "Stimulus movement group" },
+  { slug: "cardio", label: "Cardio", subtitle: "Stimulus movement group" },
+  { slug: "mobility", label: "Mobility", subtitle: "Support movement group" },
+];
+
 export default async function GroupsIndexView(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
-  const kind = (getParam(searchParams, "kind") ?? "all").trim().toUpperCase();
   const groups = await getMetadataIndex();
-  const previews = (
-    await Promise.all(
-      groups.map(async (group) => ({
-        group,
-        target: await resolveGroupTarget(group.slug, "4w"),
-      }))
-    )
-  )
-    .filter(({ group }) => {
-      if (query && !group.label.toLowerCase().includes(query) && !group.slug.includes(query)) return false;
-      if (kind !== "ALL" && group.kind !== kind) return false;
-      return true;
-    })
-    .sort((a, b) => (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label));
-  const kindOrder: MetadataGroupKind[] = [
-    "MUSCLE_GROUP",
-    "MOVEMENT_PATTERN",
-    "TRAINING_GROUP",
-    "CARDIO_ACTIVITY",
-    "ROUTINE_FOCUS",
-  ];
-  const previewsByKind = new Map<MetadataGroupKind, typeof previews>();
 
-  for (const preview of previews) {
-    const current = previewsByKind.get(preview.group.kind) ?? [];
-    current.push(preview);
-    previewsByKind.set(preview.group.kind, current);
-  }
+  const sportAndCategoryGroups: ProgressGroupItem[] = groups
+    .filter((group) => group.kind === "CARDIO_ACTIVITY" || group.kind === "ROUTINE_FOCUS")
+    .map((group) => ({
+      slug: group.slug,
+      label: group.label,
+      subtitle: group.kind === "CARDIO_ACTIVITY" ? "Sport / activity sessions" : "Session category",
+    }));
+
+  const muscleGroups: ProgressGroupItem[] = groups
+    .filter((group) => group.kind === "MUSCLE_GROUP")
+    .map((group) => ({
+      slug: group.slug,
+      label: group.label,
+      subtitle: "Muscle group",
+    }));
+
+  const sections = [
+    { key: "sport-category", title: "Sport / Category Sessions", items: sportAndCategoryGroups },
+    { key: "muscles", title: "Muscle Groups", items: muscleGroups },
+    { key: "stimulus", title: "Movement / Stimulus Groups", items: STIMULUS_GROUPS },
+  ]
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !query || item.label.toLowerCase().includes(query) || item.slug.includes(query)),
+    }))
+    .filter((section) => section.items.length > 0);
+
+  const previewsBySlug = new Map(
+    await Promise.all(
+      sections
+        .flatMap((section) => section.items)
+        .map(async (item) => {
+          const target = await resolveGroupTarget(item.slug, "4w");
+          return [item.slug, target] as const;
+        })
+    )
+  );
 
   return (
     <ProgressShell
       section="groups"
       title="Group Progress"
-      subtitle="Rollups across body areas, movement patterns, training groups, cardio groups, and routine focus."
+      subtitle="Browse progress by sport and session categories, muscle groups, and the movement / stimulus groups that now drive the stimulus overview."
     >
       <SectionCard title="Find a Group">
         <FilterBar>
           <input type="hidden" name="section" value="groups" />
           <FilterInput name="q" defaultValue={query} placeholder="Search group" />
-          <FilterSelect
-            name="kind"
-            defaultValue={kind.toLowerCase()}
-            options={[
-              { value: "all", label: "All group types" },
-              { value: "muscle_group", label: "Muscle groups" },
-              { value: "movement_pattern", label: "Movement patterns" },
-              { value: "training_group", label: "Training groups" },
-              { value: "cardio_activity", label: "Cardio groups" },
-              { value: "routine_focus", label: "Routine focus" },
-            ]}
-          />
           <button type="submit" style={{ padding: "8px 12px" }}>
             Apply
           </button>
         </FilterBar>
       </SectionCard>
 
-      {previews.length === 0 ? (
+      {sections.length === 0 ? (
         <SectionCard title="All Groups">
-          <EmptyState message="No groups match the current filters." />
+          <EmptyState message="No groups match the current search." />
         </SectionCard>
       ) : (
-        kindOrder
-          .map((groupKind) => ({
-            groupKind,
-            items: previewsByKind.get(groupKind) ?? [],
-          }))
-          .filter(({ items }) => items.length > 0)
-          .map(({ groupKind, items }) => (
-            <SectionCard
-              key={groupKind}
-              title={formatMetadataGroupKind(groupKind)}
-              subtitle={`${items.length} ${items.length === 1 ? "group" : "groups"}`}
-            >
-              <details open>
-                <summary
-                  data-collapsible-summary
-                  style={{
-                    cursor: "pointer",
-                    listStyle: "none",
-                    fontSize: 13,
-                    fontWeight: 800,
-                    opacity: 0.86,
-                    marginBottom: 12,
-                  }}
-                >
-                  Show {formatMetadataGroupKind(groupKind).toLowerCase()}
-                </summary>
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-                  {items.map(({ group, target }) => (
-                    <TargetCard
-                      key={group.id}
-                      href={`/progress/groups/${group.slug}?tab=overview&range=4w`}
-                      title={group.label}
-                      subtitle={formatMetadataGroupKind(group.kind)}
-                      chips={[
-                        `${target?.logs.length ?? 0} sessions`,
-                        `${target?.routineIds.length ?? 0} routines`,
-                        `${target?.exerciseIds.length ?? 0} exercises`,
-                      ]}
-                    />
-                  ))}
-                </div>
-              </details>
-            </SectionCard>
-          ))
+        sections.map((section) => (
+          <SectionCard
+            key={section.key}
+            title={section.title}
+            subtitle={`${section.items.length} ${section.items.length === 1 ? "group" : "groups"}`}
+          >
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
+              {section.items.map((item) => {
+                const target = previewsBySlug.get(item.slug);
+                return (
+                  <TargetCard
+                    key={item.slug}
+                    href={`/progress/groups/${item.slug}?tab=overview&range=4w`}
+                    title={item.label}
+                    subtitle={item.subtitle}
+                    chips={[
+                      `${target?.logs.length ?? 0} sessions`,
+                      `${target?.routineIds.length ?? 0} routines`,
+                      `${target?.exerciseIds.length ?? 0} exercises`,
+                    ]}
+                  />
+                );
+              })}
+            </div>
+          </SectionCard>
+        ))
       )}
     </ProgressShell>
   );

@@ -59,8 +59,144 @@ const metadataGroups = [
   { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
 ];
 
+const stimulusCategories = [
+  { slug: "push", label: "Push", sortOrder: 10 },
+  { slug: "pull", label: "Pull", sortOrder: 20 },
+  { slug: "squat", label: "Squat", sortOrder: 30 },
+  { slug: "hinge", label: "Hinge", sortOrder: 40 },
+  { slug: "core", label: "Core", sortOrder: 50 },
+  { slug: "grip", label: "Grip", sortOrder: 60 },
+  { slug: "cardio", label: "Cardio", sortOrder: 70 },
+];
+
+const metadataStimulusMappings = [
+  { metadataGroupSlug: "push", stimulusSlug: "push", loadWeight: 1, stretchWeight: 0.1 },
+  { metadataGroupSlug: "horizontal-push", stimulusSlug: "push", loadWeight: 1, stretchWeight: 0.12 },
+  { metadataGroupSlug: "vertical-push", stimulusSlug: "push", loadWeight: 1, stretchWeight: 0.18 },
+  { metadataGroupSlug: "chest", stimulusSlug: "push", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "triceps", stimulusSlug: "push", loadWeight: 1, stretchWeight: 0.06 },
+  { metadataGroupSlug: "shoulders", stimulusSlug: "push", loadWeight: 0.9, stretchWeight: 0.18 },
+  { metadataGroupSlug: "shoulders", stimulusSlug: "pull", loadWeight: 0.15, stretchWeight: 0.1 },
+
+  { metadataGroupSlug: "pull", stimulusSlug: "pull", loadWeight: 1, stretchWeight: 0.1 },
+  { metadataGroupSlug: "horizontal-pull", stimulusSlug: "pull", loadWeight: 1, stretchWeight: 0.1 },
+  { metadataGroupSlug: "vertical-pull", stimulusSlug: "pull", loadWeight: 1, stretchWeight: 0.12 },
+  { metadataGroupSlug: "back", stimulusSlug: "pull", loadWeight: 1, stretchWeight: 0.14 },
+  { metadataGroupSlug: "biceps", stimulusSlug: "pull", loadWeight: 0.9, stretchWeight: 0.08 },
+  { metadataGroupSlug: "fingers", stimulusSlug: "grip", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "fingers", stimulusSlug: "pull", loadWeight: 0.45, stretchWeight: 0.04 },
+  { metadataGroupSlug: "forearms", stimulusSlug: "grip", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "forearms", stimulusSlug: "pull", loadWeight: 0.25, stretchWeight: 0.04 },
+
+  { metadataGroupSlug: "squat", stimulusSlug: "squat", loadWeight: 1, stretchWeight: 0.12 },
+  { metadataGroupSlug: "quads", stimulusSlug: "squat", loadWeight: 1, stretchWeight: 0.25 },
+  { metadataGroupSlug: "lunge", stimulusSlug: "squat", loadWeight: 0.85, stretchWeight: 0.18 },
+  { metadataGroupSlug: "calves", stimulusSlug: "squat", loadWeight: 0.45, stretchWeight: 0.25 },
+  { metadataGroupSlug: "legs", stimulusSlug: "squat", loadWeight: 0.55, stretchWeight: 0.15 },
+  { metadataGroupSlug: "lower-body", stimulusSlug: "squat", loadWeight: 0.45, stretchWeight: 0.1 },
+
+  { metadataGroupSlug: "hinge", stimulusSlug: "hinge", loadWeight: 1, stretchWeight: 0.2 },
+  { metadataGroupSlug: "hamstrings", stimulusSlug: "hinge", loadWeight: 1, stretchWeight: 0.35 },
+  { metadataGroupSlug: "glutes", stimulusSlug: "hinge", loadWeight: 0.8, stretchWeight: 0.18 },
+  { metadataGroupSlug: "hip-flexors", stimulusSlug: "hinge", loadWeight: 0.15, stretchWeight: 0.45 },
+  { metadataGroupSlug: "adductors", stimulusSlug: "hinge", loadWeight: 0.15, stretchWeight: 0.25 },
+  { metadataGroupSlug: "abductors", stimulusSlug: "hinge", loadWeight: 0.15, stretchWeight: 0.22 },
+  { metadataGroupSlug: "legs", stimulusSlug: "hinge", loadWeight: 0.45, stretchWeight: 0.12 },
+  { metadataGroupSlug: "lower-body", stimulusSlug: "hinge", loadWeight: 0.45, stretchWeight: 0.1 },
+
+  { metadataGroupSlug: "core", stimulusSlug: "core", loadWeight: 1, stretchWeight: 0.2 },
+  { metadataGroupSlug: "rotation", stimulusSlug: "core", loadWeight: 0.7, stretchWeight: 0.22 },
+  { metadataGroupSlug: "anti-extension", stimulusSlug: "core", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "anti-rotation", stimulusSlug: "core", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "anti-lateral-flexion", stimulusSlug: "core", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "carry", stimulusSlug: "core", loadWeight: 0.75, stretchWeight: 0.05 },
+  { metadataGroupSlug: "carry", stimulusSlug: "grip", loadWeight: 0.65, stretchWeight: 0.02 },
+  { metadataGroupSlug: "isometric", stimulusSlug: "core", loadWeight: 0.35, stretchWeight: 0.08 },
+
+  { metadataGroupSlug: "cardio", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "run-walk", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "running", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "running", stimulusSlug: "squat", loadWeight: 0.35, stretchWeight: 0 },
+  { metadataGroupSlug: "running", stimulusSlug: "hinge", loadWeight: 0.2, stretchWeight: 0 },
+  { metadataGroupSlug: "running", stimulusSlug: "core", loadWeight: 0.15, stretchWeight: 0 },
+  { metadataGroupSlug: "walking", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "walking", stimulusSlug: "squat", loadWeight: 0.18, stretchWeight: 0 },
+  { metadataGroupSlug: "walking", stimulusSlug: "hinge", loadWeight: 0.08, stretchWeight: 0 },
+  { metadataGroupSlug: "biking", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "biking", stimulusSlug: "squat", loadWeight: 0.28, stretchWeight: 0 },
+  { metadataGroupSlug: "swimming", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "swimming", stimulusSlug: "pull", loadWeight: 0.4, stretchWeight: 0 },
+  { metadataGroupSlug: "rowing", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "rowing", stimulusSlug: "pull", loadWeight: 0.5, stretchWeight: 0 },
+  { metadataGroupSlug: "rowing", stimulusSlug: "hinge", loadWeight: 0.25, stretchWeight: 0 },
+  { metadataGroupSlug: "hiking", stimulusSlug: "cardio", loadWeight: 1, stretchWeight: 0 },
+  { metadataGroupSlug: "hiking", stimulusSlug: "squat", loadWeight: 0.35, stretchWeight: 0 },
+  { metadataGroupSlug: "hiking", stimulusSlug: "hinge", loadWeight: 0.2, stretchWeight: 0 },
+  { metadataGroupSlug: "hiking", stimulusSlug: "core", loadWeight: 0.18, stretchWeight: 0 },
+  { metadataGroupSlug: "climbing", stimulusSlug: "pull", loadWeight: 1, stretchWeight: 0.06 },
+  { metadataGroupSlug: "climbing", stimulusSlug: "grip", loadWeight: 1, stretchWeight: 0.08 },
+  { metadataGroupSlug: "climbing", stimulusSlug: "core", loadWeight: 0.45, stretchWeight: 0.05 },
+
+  { metadataGroupSlug: "mobility", stimulusSlug: "hinge", loadWeight: 0.08, stretchWeight: 0.35 },
+  { metadataGroupSlug: "mobility", stimulusSlug: "squat", loadWeight: 0.08, stretchWeight: 0.3 },
+  { metadataGroupSlug: "mobility", stimulusSlug: "core", loadWeight: 0.06, stretchWeight: 0.22 },
+  { metadataGroupSlug: "rehab", stimulusSlug: "core", loadWeight: 0.08, stretchWeight: 0.2 },
+  { metadataGroupSlug: "recovery", stimulusSlug: "hinge", loadWeight: 0, stretchWeight: 0.18 },
+  { metadataGroupSlug: "recovery", stimulusSlug: "core", loadWeight: 0, stretchWeight: 0.12 },
+];
+
 const boulderingGrades = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"];
 const yosemiteGrades = ["5.6", "5.7", "5.8", "5.9", "5.10a", "5.10b", "5.10c", "5.10d", "5.11a", "5.11b", "5.11c", "5.11d", "5.12a", "5.12b", "5.12c", "5.12d", "5.13a", "5.13b", "5.13c", "5.13d"];
+const climbingTemplateMetadata = ["climbing", "back", "biceps", "forearms", "fingers", "pull", "vertical-pull", "isometric", "core", "strength", "skill-practice"];
+const climbingOutdoorTemplateMetadata = [...climbingTemplateMetadata, "outdoor"];
+const hikingTemplateMetadata = ["hiking", "cardio", "endurance", "outdoor", "legs", "quads", "glutes", "calves", "core"];
+const surfingTemplateMetadata = ["board-sports", "outdoor", "cardio", "skill-practice", "full-body", "upper-body", "core", "shoulders", "back"];
+const snowboardingTemplateMetadata = ["board-sports", "outdoor", "legs", "quads", "glutes", "calves", "core", "skill-practice"];
+
+function deriveExerciseLibraryKind({ name, metadata, unit }) {
+  const normalizedName = String(name || "").trim().toLowerCase();
+  const metadataSet = new Set((metadata ?? []).map((slug) => String(slug).trim().toLowerCase()).filter(Boolean));
+
+  if (metadataSet.has("breathwork") || /\b(breath|breathing|inhale|exhale)\b/i.test(normalizedName)) {
+    return "BREATHWORK";
+  }
+  if (
+    /\b(stretch|pose|fold|opener|child'?s pose|downward dog|pigeon|figure four|butterfly)\b/i.test(normalizedName) ||
+    (metadataSet.has("mobility") && (
+      metadataSet.has("hinge") ||
+      metadataSet.has("quads") ||
+      metadataSet.has("hamstrings") ||
+      metadataSet.has("calves") ||
+      metadataSet.has("hip-flexors") ||
+      metadataSet.has("glutes") ||
+      metadataSet.has("shoulders")
+    ))
+  ) {
+    return "STRETCH";
+  }
+  if (metadataSet.has("mobility") || metadataSet.has("rehab") || /\b(mobility|warmup|warm-up|cooldown|cool-down|glide|rotation)\b/i.test(normalizedName)) {
+    return "MOBILITY";
+  }
+  if (
+    metadataSet.has("cardio") ||
+    metadataSet.has("running") ||
+    metadataSet.has("walking") ||
+    metadataSet.has("biking") ||
+    metadataSet.has("swimming") ||
+    metadataSet.has("rowing") ||
+    metadataSet.has("hiking") ||
+    metadataSet.has("endurance")
+  ) {
+    return "CONDITIONING";
+  }
+  if (metadataSet.has("skill-practice") || metadataSet.has("climbing") || /\b(climb|hangboard|fingerboard|hang|carry|handstand|lock-off)\b/i.test(normalizedName)) {
+    return "SKILL";
+  }
+  if (unit === "TIME" && metadataSet.has("isometric")) {
+    return "SKILL";
+  }
+  return "STRENGTH";
+}
 
 function normalizeMetricGradeKey(grade) {
   return grade.toLowerCase().replace(/\./g, "_").replace(/\+/g, "plus").replace(/[^a-z0-9_]/g, "");
@@ -101,7 +237,7 @@ const sessionTemplates = [
     description: "Track bouldering sessions with flash/send counts by grade and best grades.",
     sessionSubtype: "CLIMBING",
     sortOrder: 10,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice"],
+    metadataSlugs: climbingTemplateMetadata,
     metrics: [
       { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInProgress: false, showInGoals: false },
       { key: "total_attempts", label: "Total Climbs Attempted", valueType: "INTEGER", sortOrder: 20, unit: "attempts", showInProgress: true, showInGoals: true },
@@ -124,7 +260,7 @@ const sessionTemplates = [
     description: "Track indoor top rope sessions with route counts, flashes, and top sends.",
     sessionSubtype: "CLIMBING",
     sortOrder: 20,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice"],
+    metadataSlugs: climbingTemplateMetadata,
     metrics: [
       { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
@@ -147,7 +283,7 @@ const sessionTemplates = [
     description: "Track indoor sport climbing sessions with route counts, flashes, and top sends.",
     sessionSubtype: "CLIMBING",
     sortOrder: 21,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice"],
+    metadataSlugs: climbingTemplateMetadata,
     metrics: [
       { key: "gym", label: "Gym", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
@@ -170,7 +306,7 @@ const sessionTemplates = [
     description: "Track outdoor bouldering days with flash/send counts by grade and best grades.",
     sessionSubtype: "CLIMBING",
     sortOrder: 24,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice", "outdoor"],
+    metadataSlugs: climbingOutdoorTemplateMetadata,
     metrics: [
       { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInProgress: false, showInGoals: false },
       { key: "total_attempts", label: "Total Climbs Attempted", valueType: "INTEGER", sortOrder: 20, unit: "attempts", showInProgress: true, showInGoals: true },
@@ -193,7 +329,7 @@ const sessionTemplates = [
     description: "Track outdoor sport climbing days with grade rows, flashes, and top sends.",
     sessionSubtype: "CLIMBING",
     sortOrder: 25,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice", "outdoor"],
+    metadataSlugs: climbingOutdoorTemplateMetadata,
     metrics: [
       { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
@@ -216,7 +352,7 @@ const sessionTemplates = [
     description: "Track outdoor trad climbing days with grade rows, flashes, and top sends.",
     sessionSubtype: "CLIMBING",
     sortOrder: 26,
-    metadataSlugs: ["climbing", "pull", "fingers", "strength", "skill-practice", "outdoor"],
+    metadataSlugs: climbingOutdoorTemplateMetadata,
     metrics: [
       { key: "crag", label: "Crag / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "routes_climbed", label: "Routes Climbed", valueType: "INTEGER", sortOrder: 20, unit: "routes", showInProgress: true, showInGoals: true },
@@ -239,7 +375,7 @@ const sessionTemplates = [
     description: "Track trail, distance, elevation gain, and hike duration.",
     sessionSubtype: "HIKE_DAY",
     sortOrder: 30,
-    metadataSlugs: ["hiking", "cardio", "endurance", "outdoor", "legs"],
+    metadataSlugs: hikingTemplateMetadata,
     metrics: [
       { key: "trail_name", label: "Trail / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "distance_mi", label: "Distance", valueType: "DECIMAL", sortOrder: 20, unit: "mi", showInProgress: true, showInGoals: true },
@@ -253,7 +389,7 @@ const sessionTemplates = [
     description: "Track surf sessions with location, waves, and board details.",
     sessionSubtype: "SURFING",
     sortOrder: 40,
-    metadataSlugs: ["board-sports", "outdoor", "skill-practice", "upper-body", "full-body"],
+    metadataSlugs: surfingTemplateMetadata,
     metrics: [
       { key: "break_name", label: "Break / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "wave_count", label: "Wave Count", valueType: "INTEGER", sortOrder: 20, unit: "waves", showInProgress: true, showInGoals: true },
@@ -268,7 +404,7 @@ const sessionTemplates = [
     description: "Track mountain days with run count and time on snow.",
     sessionSubtype: "SNOWBOARDING",
     sortOrder: 50,
-    metadataSlugs: ["board-sports", "outdoor", "legs", "skill-practice"],
+    metadataSlugs: snowboardingTemplateMetadata,
     metrics: [
       { key: "mountain_name", label: "Mountain / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "runs_completed", label: "Runs Completed", valueType: "INTEGER", sortOrder: 20, unit: "runs", showInProgress: true, showInGoals: true },
@@ -514,11 +650,13 @@ async function seedExercises(groupMap) {
       update: {
         unit: exercise.unit,
         supportsWeight: exercise.supportsWeight,
+        libraryKind: deriveExerciseLibraryKind(exercise),
       },
       create: {
         name: exercise.name,
         unit: exercise.unit,
         supportsWeight: exercise.supportsWeight,
+        libraryKind: deriveExerciseLibraryKind(exercise),
       },
       select: { id: true },
     });
@@ -534,6 +672,50 @@ async function seedExercises(groupMap) {
         skipDuplicates: true,
       });
     }
+  }
+}
+
+async function seedStimulusCategories() {
+  for (const category of stimulusCategories) {
+    await prisma.stimulusCategory.upsert({
+      where: { slug: category.slug },
+      update: {
+        label: category.label,
+        sortOrder: category.sortOrder,
+      },
+      create: category,
+    });
+  }
+
+  return new Map(
+    (await prisma.stimulusCategory.findMany({ select: { id: true, slug: true } })).map((category) => [category.slug, category.id])
+  );
+}
+
+async function seedMetadataStimulusMappings(groupMap, stimulusMap) {
+  for (const mapping of metadataStimulusMappings) {
+    const metadataGroupId = groupMap.get(mapping.metadataGroupSlug);
+    const stimulusCategoryId = stimulusMap.get(mapping.stimulusSlug);
+    if (!metadataGroupId || !stimulusCategoryId) continue;
+
+    await prisma.metadataStimulusMapping.upsert({
+      where: {
+        metadataGroupId_stimulusCategoryId: {
+          metadataGroupId,
+          stimulusCategoryId,
+        },
+      },
+      update: {
+        loadWeight: mapping.loadWeight,
+        stretchWeight: mapping.stretchWeight,
+      },
+      create: {
+        metadataGroupId,
+        stimulusCategoryId,
+        loadWeight: mapping.loadWeight,
+        stretchWeight: mapping.stretchWeight,
+      },
+    });
   }
 }
 
@@ -615,10 +797,12 @@ async function seedSessionTemplates(groupMap) {
 
 async function main() {
   const groupMap = await seedMetadataGroups();
+  const stimulusMap = await seedStimulusCategories();
   await seedExercises(groupMap);
   await seedSessionTemplates(groupMap);
+  await seedMetadataStimulusMappings(groupMap, stimulusMap);
 
-  console.log(`Seeded ${metadataGroups.length} metadata groups, ${starterExercises.length} starter exercises, and ${sessionTemplates.length} session templates.`);
+  console.log(`Seeded ${metadataGroups.length} metadata groups, ${stimulusCategories.length} stimulus categories, ${starterExercises.length} starter exercises, and ${sessionTemplates.length} session templates.`);
 }
 
 main()

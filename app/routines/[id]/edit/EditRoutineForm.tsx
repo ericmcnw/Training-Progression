@@ -1,13 +1,14 @@
 "use client";
 
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
+import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetFields";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
 import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, inferRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
-import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
+import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
 
 export default function EditRoutineForm({
   routine,
@@ -20,7 +21,9 @@ export default function EditRoutineForm({
     category: string;
     subtype: string | null;
     kind: RoutineKind;
-    timesPerWeek: number | null;
+    targetFrequencyCount: number | null;
+    targetFrequencyUnit: RoutineFrequencyUnit | null;
+    targetFrequencyInterval: number | null;
     sessionTemplateId: string | null;
     selectedMetadataGroupIds: string[];
     tags: string[];
@@ -136,15 +139,12 @@ export default function EditRoutineForm({
       </div>
 
       <div>
-        <label style={styles.label}>Times per week (optional)</label>
-        <input
-          name="timesPerWeek"
-          style={styles.input}
-          inputMode="numeric"
-          defaultValue={routine.timesPerWeek ?? ""}
-          placeholder="e.g. 4"
+        <label style={styles.label}>Frequency Target (optional)</label>
+        <RoutineFrequencyTargetFields
+          initialCount={routine.targetFrequencyCount}
+          initialUnit={routine.targetFrequencyUnit}
+          initialInterval={routine.targetFrequencyInterval}
         />
-        <div style={styles.help}>If set, this creates or updates a visible weekly goal for the routine.</div>
       </div>
 
       {kind === "SESSION" ? (

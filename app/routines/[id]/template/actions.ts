@@ -1,5 +1,7 @@
 "use server";
 
+import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/lib/exercise-library";
+import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -27,10 +29,27 @@ async function ensureMetricVariant(
   });
   if (existing) return existing;
 
-  return tx.exercise.create({
-    data: { name, unit, supportsWeight },
-    select: { id: true },
-  });
+  try {
+    return await tx.exercise.create({
+      data: {
+        name,
+        unit,
+        supportsWeight,
+        libraryKind: deriveExerciseLibraryKind({
+          name,
+          unit,
+          metadataSlugs: inferExerciseMetadataSlugs(name),
+        }),
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    if (!isMissingExerciseLibraryKindError(error)) throw error;
+    return tx.exercise.create({
+      data: { name, unit, supportsWeight },
+      select: { id: true },
+    });
+  }
 }
 
 async function switchRoutineExerciseMetricTx(

@@ -1,5 +1,7 @@
 import { getRoutineIndex, getRoutineLogs, routineSubtitle, summarizeRoutineLogs } from "./data";
 import { EmptyState, FilterBar, FilterInput, FilterSelect, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
+import { prisma } from "@/lib/prisma";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -15,13 +17,29 @@ export default async function RoutinesIndexView(props: {
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
   const kind = (getParam(searchParams, "kind") ?? "all").trim().toUpperCase();
   const status = (getParam(searchParams, "status") ?? "active").trim();
+  const now = new Date();
   const [routines, logs] = await Promise.all([getRoutineIndex(), getRoutineLogs("4w")]);
+  const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
+  const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
+  const frequencyLogs =
+    maxFrequencyWindowDays > 0
+      ? await prisma.routineLog.findMany({
+          where: { performedAt: { gte: frequencyWindowStart } },
+          select: { routineId: true, performedAt: true },
+        })
+      : [];
+  const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({
+    routines,
+    logs: frequencyLogs,
+    now,
+  });
 
   const rows = routines
     .map((routine) => {
       const routineLogs = logs.filter((log) => log.routineId === routine.id);
       const summary = summarizeRoutineLogs(routineLogs, routine.timesPerWeek);
-      return { routine, summary };
+      const frequencySummary = frequencyStatusByRoutineId.get(routine.id);
+      return { routine, summary, frequencySummary };
     })
     .filter(({ routine }) => {
       if (query && !routine.name.toLowerCase().includes(query) && !routine.category.toLowerCase().includes(query)) return false;
@@ -77,7 +95,7 @@ export default async function RoutinesIndexView(props: {
       <SectionCard title="All Routines">
         {rows.length === 0 ? <EmptyState message="No routines match the current filters." /> : null}
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-          {rows.map(({ routine, summary }) => (
+          {rows.map(({ routine, summary, frequencySummary }) => (
             <TargetCard
               key={routine.id}
               href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
@@ -86,7 +104,8 @@ export default async function RoutinesIndexView(props: {
               chips={[
                 `${summary.sessions} sessions`,
                 `${summary.ytd} YTD`,
-                routine.timesPerWeek ? `${summary.weeksGoalMet} goal weeks` : `${summary.weeksActive} active weeks`,
+                frequencySummary?.summaryLabel ?? `${summary.weeksActive} active weeks`,
+                frequencySummary?.hasTarget ? frequencySummary.detailLabel : `${summary.weeksActive} active weeks`,
                 summary.lastSession ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)}` : "No recent activity",
               ]}
             />

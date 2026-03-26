@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
+import { EXERCISE_LIBRARY_KIND_LABELS } from "@/lib/exercise-library";
 import { exerciseUnitDescription } from "@/lib/exercises";
 import { inferExerciseMetadataSlugs } from "@/lib/metadata";
-import type { MetadataGroupKind } from "@/generated/prisma";
+import type { ExerciseLibraryKind, MetadataGroupKind } from "@/generated/prisma";
 
 type MetadataGroupOption = {
   id: string;
@@ -30,12 +31,14 @@ export default function ExerciseForm({
     name: string;
     unit: "REPS" | "TIME";
     supportsWeight: boolean;
+    libraryKind: ExerciseLibraryKind;
     selectedMetadataGroupIds: string[];
   };
 }) {
   const [name, setName] = useState(exercise?.name ?? "");
   const [unit, setUnit] = useState<"REPS" | "TIME">(exercise?.unit ?? "REPS");
   const [supportsWeight, setSupportsWeight] = useState(exercise?.supportsWeight ?? false);
+  const [libraryKind, setLibraryKind] = useState<ExerciseLibraryKind>(exercise?.libraryKind ?? "STRENGTH");
   const [selectedMetadataGroupIds, setSelectedMetadataGroupIds] = useState<string[]>(
     exercise?.selectedMetadataGroupIds ?? []
   );
@@ -103,6 +106,25 @@ export default function ExerciseForm({
           <label htmlFor="supportsWeight" style={{ fontWeight: 800 }}>
             Supports added weight
           </label>
+        </div>
+      </div>
+
+      <div>
+        <label style={styles.label}>Library classification</label>
+        <select
+          name="libraryKind"
+          style={styles.input as React.CSSProperties}
+          value={libraryKind}
+          onChange={(event) => setLibraryKind(event.target.value as ExerciseLibraryKind)}
+        >
+          {Object.entries(EXERCISE_LIBRARY_KIND_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <div style={styles.hint}>
+          Workout template search uses this to keep stretch, mobility, and breathwork entries in the right library by default.
         </div>
       </div>
 

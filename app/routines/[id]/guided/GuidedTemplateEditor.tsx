@@ -2,6 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  EXERCISE_LIBRARY_KIND_LABELS,
+  guidedPreferredLibraryKinds,
+  guidedStepLibraryKinds,
+  orderExercisesForLibraryContext,
+} from "@/lib/exercise-library";
 import { formatGuidedRepSetSummary, formatGuidedSeconds } from "@/lib/guided";
 import { addGuidedStep, deleteGuidedStep, moveGuidedStep, saveAllGuidedStepsAndExit, updateGuidedStep } from "./actions";
 
@@ -10,6 +16,7 @@ type ExerciseOption = {
   name: string;
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
+  libraryKind: "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
 };
 
 type GuidedStepRow = {
@@ -142,7 +149,7 @@ function GuidedTemplateItemFields({
                   <option value="">Select exercise</option>
                   {exercises.map((exercise) => (
                     <option key={exercise.id} value={exercise.id}>
-                      {exercise.name}
+                      {exercise.name} ({EXERCISE_LIBRARY_KIND_LABELS[exercise.libraryKind]})
                     </option>
                   ))}
                 </select>
@@ -368,9 +375,21 @@ export default function GuidedTemplateEditor({
     }))
   );
 
-  const stepLibraryOptions = useMemo(
-    () => exercises.filter((exercise) => exercise.unit === "TIME"),
+  const orderedExercises = useMemo(
+    () => orderExercisesForLibraryContext(exercises, guidedPreferredLibraryKinds()),
     [exercises]
+  );
+  const stepLibraryOptions = useMemo(
+    () =>
+      orderExercisesForLibraryContext(
+        orderedExercises.filter(
+          (exercise) =>
+            exercise.unit === "TIME" &&
+            guidedStepLibraryKinds().includes(exercise.libraryKind)
+        ),
+        guidedStepLibraryKinds()
+      ),
+    [orderedExercises]
   );
   const totalItems = steps.length;
   const totalExerciseItems = steps.filter((step) => step.kind === "EXERCISE").length;
@@ -435,7 +454,7 @@ export default function GuidedTemplateEditor({
                   setSelectedExerciseId("");
                 }
               }}
-              exercises={exercises}
+              exercises={orderedExercises}
               stepLibraryOptions={stepLibraryOptions}
               selectedExerciseId={selectedExerciseId}
               setSelectedExerciseId={setSelectedExerciseId}
@@ -490,7 +509,7 @@ export default function GuidedTemplateEditor({
                 sortOrder: step.sortOrder,
                 exerciseName: step.exerciseName,
               }}
-              exercises={exercises}
+              exercises={orderedExercises}
               stepLibraryOptions={stepLibraryOptions}
               onDraftChange={updateStepDraft}
             />
@@ -502,7 +521,14 @@ export default function GuidedTemplateEditor({
 }
 
 function stepLibraryOptionsForRow(step: GuidedStepRow, exercises: ExerciseOption[]) {
-  const timeOptions = exercises.filter((exercise) => exercise.unit === "TIME");
+  const timeOptions = orderExercisesForLibraryContext(
+    exercises.filter(
+      (exercise) =>
+        exercise.unit === "TIME" &&
+        guidedStepLibraryKinds().includes(exercise.libraryKind)
+    ),
+    guidedStepLibraryKinds()
+  );
   return step.kind === "STEP" ? timeOptions : timeOptions;
 }
 

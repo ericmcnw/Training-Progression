@@ -93,14 +93,14 @@ export default function StarterPackPageContent() {
                   <div style={{ fontWeight: 900 }}>{routine.name}</div>
                   <div style={styles.previewMeta}>
                     {routine.category} | {routine.kind} | {routine.subtype}
-                    {routine.timesPerWeek ? ` | ${routine.timesPerWeek}x / week` : ""}
+                    {routine.timesPerWeek ? ` | target ${routine.timesPerWeek}x / week` : ""}
                   </div>
                 </div>
               ))}
             </div>
 
             <div style={styles.helper}>
-              This creates the routines and weekly goals only. You can fill in workout templates, guided steps, and metadata after.
+              This creates the routines and starter frequency targets only. You can fill in workout templates, guided steps, and metadata after.
             </div>
 
             <input type="hidden" name="focus" value={focus} />

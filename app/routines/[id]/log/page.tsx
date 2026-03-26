@@ -4,6 +4,12 @@ import type { Prisma } from "@/generated/prisma";
 import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import {
+  exerciseLibraryWhereForKinds,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+  workoutLibraryKinds,
+} from "@/lib/exercise-library";
+import {
   isCardioKind,
   isGuidedKind,
   isSessionKind,
@@ -112,15 +118,34 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
 
   const kind = normalizeRoutineKind(routine.kind);
   const availableExercises = isWorkoutKind(kind)
-    ? await prisma.exercise.findMany({
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          unit: true,
-          supportsWeight: true,
-        },
-      })
+    ? await (async () => {
+        try {
+          return await prisma.exercise.findMany({
+            where: exerciseLibraryWhereForKinds(workoutLibraryKinds()),
+            orderBy: { name: "asc" },
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              supportsWeight: true,
+              libraryKind: true,
+            },
+          });
+        } catch (error) {
+          if (!isMissingExerciseLibraryKindError(error)) throw error;
+          return withDerivedExerciseLibraryKind(
+            await prisma.exercise.findMany({
+              orderBy: { name: "asc" },
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                supportsWeight: true,
+              },
+            })
+          ).filter((exercise) => workoutLibraryKinds().includes(exercise.libraryKind));
+        }
+      })()
     : [];
   const lastWorkoutLog = isWorkoutKind(kind)
     ? await prisma.routineLog.findFirst({

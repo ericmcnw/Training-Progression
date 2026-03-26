@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 import { deleteRoutine, toggleArchiveRoutine } from "../../actions";
 import EditRoutineForm from "../edit/EditRoutineForm";
 
@@ -22,6 +23,9 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       subtype: true,
       kind: true,
       isActive: true,
+      targetFrequencyCount: true,
+      targetFrequencyUnit: true,
+      targetFrequencyInterval: true,
       sessionDetails: {
         select: { templateId: true },
       },
@@ -41,20 +45,10 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
 
-  const weeklyGoal = await prisma.goal.findFirst({
-    where: {
-      targetType: "ROUTINE",
-      targetId: routine.id,
-      timeframe: "WEEK",
-      goalType: { in: ["FREQUENCY", "COMPLETION"] },
-      metricType: { in: ["SESSIONS", "COMPLETED"] },
-    },
-    orderBy: { createdAt: "asc" },
-    select: { targetValue: true },
-  });
-
   const metadataGroups = await prisma.metadataGroup.findMany({
-    where: { appliesToRoutine: true },
+    where: {
+      OR: [{ appliesToRoutine: true }, { kind: { in: ROUTINE_METADATA_SELECTABLE_KINDS } }],
+    },
     select: { id: true, slug: true, label: true, kind: true },
     orderBy: [{ kind: "asc" }, { label: "asc" }],
   });
@@ -88,7 +82,9 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
             category: routine.category || "General",
             subtype: routine.subtype,
             kind: routine.kind,
-            timesPerWeek: weeklyGoal ? Math.round(weeklyGoal.targetValue) : null,
+            targetFrequencyCount: routine.targetFrequencyCount,
+            targetFrequencyUnit: routine.targetFrequencyUnit,
+            targetFrequencyInterval: routine.targetFrequencyInterval,
             sessionTemplateId: routine.sessionDetails?.templateId ?? null,
             selectedMetadataGroupIds: routine.metadataGroups.map((entry) => entry.groupId),
             tags: routine.tagAssignments.map((entry) => entry.tag.name),

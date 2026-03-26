@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getRecommendationModel } from "@/lib/recommendations";
+import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
@@ -77,6 +79,32 @@ function loggingHref(routine: { routineId: string; kind: string }) {
   return `/routines/${routine.routineId}/log`;
 }
 
+function recommendationPriorityBadge(priority: "high" | "medium" | "low"): React.CSSProperties {
+  if (priority === "high") {
+    return {
+      ...recommendationBadgeBase,
+      background: "rgba(255, 186, 125, 0.18)",
+      borderColor: "rgba(255, 186, 125, 0.4)",
+      color: "#ffd4a8",
+    };
+  }
+  if (priority === "medium") {
+    return {
+      ...recommendationBadgeBase,
+      background: "rgba(142, 197, 255, 0.18)",
+      borderColor: "rgba(142, 197, 255, 0.35)",
+      color: "#d2e7ff",
+    };
+  }
+  return {
+    ...recommendationBadgeBase,
+    background: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.16)",
+    color: "rgba(255,255,255,0.82)",
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function WeeklyMomentumSection({
   weekDateRangeLabel,
   weekLoggedTotal,
@@ -334,6 +362,7 @@ export default async function HomePage() {
     planEntriesRaw,
     manualEntriesRaw,
     sparkLogs,
+    recommendationModel,
   ] = await Promise.all([
     prisma.$queryRawUnsafe<
       Array<{
@@ -401,6 +430,7 @@ export default async function HomePage() {
         routine: { select: { name: true } },
       },
     }),
+    getRecommendationModel(),
   ]);
 
   const routineMap = new Map(routines.map((routine) => [routine.id, routine]));
@@ -682,6 +712,89 @@ export default async function HomePage() {
           </section>
 
           <section style={panel}>
+            <div style={panelHeader}>SUGGESTED NEXT</div>
+            <div style={{ padding: 14, display: "grid", gap: 12 }}>
+              <div style={sectionSub}>
+                Recommendations prioritize behind-target routines, thin recent coverage, and recent overconcentration. Focus only nudges the ranking when the main evidence is close.
+              </div>
+              {recommendationModel.primaryRecommendation ? (
+                <div style={recommendationPrimaryCard}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                      <div style={{ fontWeight: 900, fontSize: 18 }}>{recommendationModel.primaryRecommendation.title}</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.82 }}>{recommendationModel.primaryRecommendation.summary}</div>
+                    </div>
+                    <div style={recommendationPriorityBadge(recommendationModel.primaryRecommendation.priority)}>
+                      {recommendationModel.primaryRecommendation.priority.toUpperCase()}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {(recommendationModel.emphasisLabels.length > 0 ? recommendationModel.emphasisLabels : ["No special focus"]).slice(0, 3).map((label) => (
+                      <span key={label} style={recommendationChip}>
+                        {label}
+                      </span>
+                    ))}
+                    {recommendationModel.primaryRecommendation.targetCategories.map((slug) => (
+                      <span key={slug} style={recommendationChipMuted}>
+                        {slug}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <Link href={recommendationModel.primaryRecommendation.suggestedAction.href} style={recommendationActionLink}>
+                      {recommendationModel.primaryRecommendation.suggestedAction.label}
+                    </Link>
+                    {recommendationModel.primaryRecommendation.suggestedRoutines[1] ? (
+                      <Link href={recommendationModel.primaryRecommendation.suggestedRoutines[1].href} style={recommendationSecondaryLink}>
+                        Or {recommendationModel.primaryRecommendation.suggestedRoutines[1].name}
+                      </Link>
+                    ) : null}
+                  </div>
+
+                  <details style={recommendationDetails}>
+                    <summary data-collapsible-summary style={recommendationSummary}>
+                      Why?
+                    </summary>
+                    <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                      {recommendationModel.primaryRecommendation.rationale.map((item) => (
+                        <div key={item} style={recommendationWhyRow}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              ) : (
+                <div style={emptyState}>Recommendations will appear once there is enough recent routine and coverage history to rank the next best move.</div>
+              )}
+
+              {recommendationModel.secondaryRecommendations.length > 0 ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {recommendationModel.secondaryRecommendations.map((item) => (
+                    <div key={item.id} style={recommendationSecondaryCard}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                        <div style={{ display: "grid", gap: 5, minWidth: 0 }}>
+                          <div style={{ fontWeight: 800 }}>{item.title}</div>
+                          <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.76 }}>{item.summary}</div>
+                        </div>
+                        <div style={recommendationPriorityBadge(item.priority)}>{item.priority.toUpperCase()}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <Link href={item.suggestedAction.href} style={recommendationSecondaryLink}>
+                          {item.suggestedAction.label}
+                        </Link>
+                        {item.suggestedRoutines[1] ? <span style={{ fontSize: 12, opacity: 0.62 }}>or {item.suggestedRoutines[1].name}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section style={panel}>
             <div style={panelHeader}>TOMORROW PREVIEW</div>
             <div style={{ padding: 14, display: "grid", gap: 10 }}>
               <div style={sectionSub}>{formatDayLabel(tomorrow)}</div>
@@ -724,16 +837,28 @@ export default async function HomePage() {
 
         <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
           <div className="homeMomentumSection">
-            <WeeklyMomentumSection
+            <WeeklyMomentumSectionBoundary
               weekDateRangeLabel={weekDateRangeLabel}
               weekLoggedTotal={weekLoggedTotal}
               weekSessionTargetTotal={weekSessionTargetTotal}
               totalWeeklyCardioMiles={totalWeeklyCardioMiles}
               cardioTypeGroups={cardioTypeGroups}
-              weeklySeries={weeklySeries}
+              weeklySeries={weeklySeries.map((item) => ({
+                ...item,
+                logs: item.logs.map((log) => ({
+                  ...log,
+                  performedAt: log.performedAt.toISOString(),
+                })),
+              }))}
               weeklySparkPoints={weeklySparkPoints}
-              recentCompletions={recentCompletions}
-              needsAttention={needsAttention}
+              recentCompletions={recentCompletions.map((item) => ({
+                ...item,
+                lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+              }))}
+              needsAttention={needsAttention.map((item) => ({
+                ...item,
+                lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+              }))}
             />
           </div>
 
@@ -1132,4 +1257,95 @@ const secondaryLinkBlock: React.CSSProperties = {
 const emptyState: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.64,
+};
+
+const recommendationBadgeBase: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.16)",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  whiteSpace: "nowrap",
+};
+
+const recommendationPrimaryCard: React.CSSProperties = {
+  borderRadius: 16,
+  padding: 14,
+  border: "1px solid rgba(142,197,255,0.24)",
+  background: "linear-gradient(135deg, rgba(142,197,255,0.12), rgba(84,203,130,0.06))",
+  display: "grid",
+  gap: 12,
+};
+
+const recommendationSecondaryCard: React.CSSProperties = {
+  borderRadius: 14,
+  padding: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+  display: "grid",
+  gap: 10,
+};
+
+const recommendationChip: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  background: "rgba(84,203,130,0.14)",
+  border: "1px solid rgba(84,203,130,0.3)",
+  fontSize: 11,
+  fontWeight: 800,
+};
+
+const recommendationChipMuted: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "capitalize",
+};
+
+const recommendationActionLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 10,
+  background: "rgba(84,203,130,0.18)",
+  border: "1px solid rgba(84,203,130,0.34)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const recommendationSecondaryLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.84,
+};
+
+const recommendationDetails: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(12,18,30,0.24)",
+  padding: 10,
+};
+
+const recommendationSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.35,
+};
+
+const recommendationWhyRow: React.CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.45,
+  opacity: 0.78,
 };

@@ -13,6 +13,7 @@ import {
   isWorkoutKind,
   normalizeRoutineKind,
 } from "@/lib/routines";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { logRoutineCompletion, removeLastRoutineCompletion } from "./actions";
 import DeleteRoutineButton from "./DeleteRoutineButton";
@@ -153,11 +154,13 @@ function RoutineCard({
   weeklyMap,
   lastCompletedMap,
   allowLogging,
+  frequencySummary,
 }: {
   routine: RoutineWithExercises;
   weeklyMap: Map<string, number>;
   lastCompletedMap: Map<string, Date | null>;
   allowLogging: boolean;
+  frequencySummary: RoutineFrequencySummary;
 }) {
   const kind = normalizeRoutineKind(routine.kind);
   const count = weeklyMap.get(routine.id) ?? 0;
@@ -232,6 +235,10 @@ function RoutineCard({
 
             <div style={{ fontSize: 13, opacity: 0.85 }}>
               This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.82 }}>
+              Target: <b>{frequencySummary.summaryLabel}</b>
+              {frequencySummary.hasTarget ? ` | ${frequencySummary.detailLabel}` : ""}
             </div>
           </div>
 
@@ -346,23 +353,27 @@ export default async function RoutinesPage(props: {
 
   const searchQuery = (getParam(searchParams, "q") ?? "").trim();
   const normalizedSearchQuery = searchQuery.toLowerCase();
-  const { start, end } = getWeekBoundsSunday(new Date());
+  const now = new Date();
+  const { start, end } = getWeekBoundsSunday(now);
 
-  const [routines, weeklyCounts, latestLogs] = await Promise.all([
-    prisma.routine.findMany({
-      where: { isDeleted: false },
-      orderBy: [{ kind: "asc" }, { name: "asc" }],
-      include: {
-        exercises: {
-          orderBy: { sortOrder: "asc" },
-          include: {
-            exercise: {
-              select: { name: true },
-            },
+  const routines = await prisma.routine.findMany({
+    where: { isDeleted: false },
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
+    include: {
+      exercises: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          exercise: {
+            select: { name: true },
           },
         },
       },
-    }),
+    },
+  });
+
+  const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
+  const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
+  const [weeklyCounts, latestLogs, frequencyLogs] = await Promise.all([
     prisma.routineLog.groupBy({
       by: ["routineId"],
       where: { performedAt: { gte: start, lt: end } },
@@ -372,10 +383,21 @@ export default async function RoutinesPage(props: {
       by: ["routineId"],
       _max: { performedAt: true },
     }),
+    maxFrequencyWindowDays > 0
+      ? prisma.routineLog.findMany({
+          where: { performedAt: { gte: frequencyWindowStart } },
+          select: { routineId: true, performedAt: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const weeklyMap = new Map(weeklyCounts.map((row) => [row.routineId, row._count._all]));
   const lastCompletedMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
+  const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({
+    routines,
+    logs: frequencyLogs,
+    now,
+  });
 
   const filteredRoutines = routines.filter((routine) => {
     if (!normalizedSearchQuery) return true;
@@ -476,6 +498,7 @@ export default async function RoutinesPage(props: {
                       weeklyMap={weeklyMap}
                       lastCompletedMap={lastCompletedMap}
                       allowLogging={true}
+                      frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
                     />
                   ))}
                 </div>
@@ -506,6 +529,7 @@ export default async function RoutinesPage(props: {
                       weeklyMap={weeklyMap}
                       lastCompletedMap={lastCompletedMap}
                       allowLogging={false}
+                      frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
                     />
                   ))}
               </div>

@@ -1,17 +1,20 @@
 "use server";
 
-import { parseTagNames } from "@/lib/metadata";
+import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/lib/exercise-library";
+import { inferExerciseMetadataSlugs, parseTagNames, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 import { parseSessionGradeValue } from "@/lib/session-templates";
+import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
+import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
 import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
 import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
   supportsRoutineSteps,
 } from "@/lib/routines";
-import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
+import type { GuidedStepKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -96,14 +99,44 @@ function parseCategory(formData: FormData) {
   return category || "General";
 }
 
-function parseOptionalTimesPerWeek(formData: FormData) {
-  const timesRaw = String(formData.get("timesPerWeek") || "").trim();
-  if (!timesRaw) return null;
-  const timesPerWeek = Number(timesRaw);
-  if (!Number.isFinite(timesPerWeek) || timesPerWeek <= 0) {
-    throw new Error("timesPerWeek must be a number greater than 0");
+function parseRoutineFrequencyTarget(formData: FormData) {
+  const enabled = String(formData.get("frequencyTargetEnabled") || "").trim() === "1";
+  if (!enabled) {
+    return {
+      targetFrequencyCount: null,
+      targetFrequencyUnit: null,
+      targetFrequencyInterval: null,
+    } as const;
   }
-  return Math.floor(timesPerWeek);
+
+  const countRaw = String(formData.get("targetFrequencyCount") || "").trim();
+  const intervalRaw = String(formData.get("targetFrequencyInterval") || "").trim();
+  const unitRaw = String(formData.get("targetFrequencyUnit") || "")
+    .trim()
+    .toUpperCase();
+
+  const targetFrequencyCount = Number(countRaw);
+  const targetFrequencyInterval = Number(intervalRaw || "1");
+  const targetFrequencyUnit =
+    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH"
+      ? (unitRaw as RoutineFrequencyUnit)
+      : null;
+
+  if (!Number.isFinite(targetFrequencyCount) || targetFrequencyCount <= 0) {
+    throw new Error("Target frequency count must be greater than 0.");
+  }
+  if (!Number.isFinite(targetFrequencyInterval) || targetFrequencyInterval <= 0) {
+    throw new Error("Target frequency interval must be greater than 0.");
+  }
+  if (!targetFrequencyUnit) {
+    throw new Error("Target frequency unit is required.");
+  }
+
+  return {
+    targetFrequencyCount: Math.floor(targetFrequencyCount),
+    targetFrequencyUnit,
+    targetFrequencyInterval: Math.floor(targetFrequencyInterval),
+  } as const;
 }
 
 async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "routine" | "exercise") {
@@ -119,7 +152,9 @@ async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "
   const groups = await prisma.metadataGroup.findMany({
     where: {
       id: { in: uniqueIds },
-      ...(appliesTo === "routine" ? { appliesToRoutine: true } : { appliesToExercise: true }),
+      ...(appliesTo === "routine"
+        ? { OR: [{ appliesToRoutine: true }, { kind: { in: ROUTINE_METADATA_SELECTABLE_KINDS } }] }
+        : { appliesToExercise: true }),
     },
     select: { id: true },
   });
@@ -501,14 +536,33 @@ async function ensureExerciseExists(
     return existing.id;
   }
 
-  const created = await tx.exercise.create({
-    data: {
-      name,
-      unit,
-      supportsWeight: Boolean(params.supportsWeight),
-    },
-    select: { id: true },
-  });
+  const created = await (async () => {
+    try {
+      return await tx.exercise.create({
+        data: {
+          name,
+          unit,
+          supportsWeight: Boolean(params.supportsWeight),
+          libraryKind: deriveExerciseLibraryKind({
+            name,
+            unit,
+            metadataSlugs: inferExerciseMetadataSlugs(name),
+          }),
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (!isMissingExerciseLibraryKindError(error)) throw error;
+      return tx.exercise.create({
+        data: {
+          name,
+          unit,
+          supportsWeight: Boolean(params.supportsWeight),
+        },
+        select: { id: true },
+      });
+    }
+  })();
   return created.id;
 }
 
@@ -758,59 +812,13 @@ function revalidateRoutineSurfaces(routineId?: string) {
   }
 }
 
-async function syncRoutineWeeklyGoal(params: {
-  routineId: string;
-  routineName: string;
-  timesPerWeek: number | null;
-}) {
-  if (params.timesPerWeek === null) return;
-
-  const existing = await prisma.goal.findFirst({
-    where: {
-      targetType: "ROUTINE",
-      targetId: params.routineId,
-      timeframe: "WEEK",
-      goalType: { in: ["FREQUENCY", "COMPLETION"] },
-      metricType: { in: ["SESSIONS", "COMPLETED"] },
-    },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-
-  const data = {
-    name: `${params.routineName} Weekly Goal`,
-    goalType: "FREQUENCY" as const,
-    targetType: "ROUTINE" as const,
-    targetId: params.routineId,
-    metricType: "SESSIONS" as const,
-    targetValue: params.timesPerWeek,
-    timeframe: "WEEK" as const,
-    unit: null,
-    startDate: new Date(),
-    endDate: null,
-    isActive: true,
-    notes: null,
-    config: undefined,
-  };
-
-  if (existing) {
-    await prisma.goal.update({
-      where: { id: existing.id },
-      data,
-    });
-    return;
-  }
-
-  await prisma.goal.create({ data });
-}
-
 export async function createRoutine(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const category = parseCategory(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
-  const timesPerWeek = parseOptionalTimesPerWeek(formData);
+  const frequencyTarget = parseRoutineFrequencyTarget(formData);
   const postCreate = String(formData.get("postCreate") || "").trim();
   const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
@@ -825,6 +833,10 @@ export async function createRoutine(formData: FormData) {
       domain,
       kind,
       subtype,
+      targetFrequencyCount: frequencyTarget.targetFrequencyCount,
+      targetFrequencyUnit: frequencyTarget.targetFrequencyUnit,
+      targetFrequencyInterval: frequencyTarget.targetFrequencyInterval,
+      timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
       isActive: true,
       isDeleted: false,
       deletedAt: null,
@@ -837,11 +849,6 @@ export async function createRoutine(formData: FormData) {
     routineId: created.id,
     selectedGroupIds,
     tags: tagNames,
-  });
-  await syncRoutineWeeklyGoal({
-    routineId: created.id,
-    routineName: name,
-    timesPerWeek,
   });
 
   revalidateRoutineSurfaces(created.id);
@@ -879,11 +886,15 @@ export async function createStarterPack(formData: FormData) {
         name: routine.name,
         category: routine.category,
         domain: "general",
-        kind: routine.kind,
-        subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
-        isActive: true,
-        isDeleted: false,
-        deletedAt: null,
+      kind: routine.kind,
+      subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
+      targetFrequencyCount: routine.timesPerWeek,
+      targetFrequencyUnit: routine.timesPerWeek ? "WEEK" : null,
+      targetFrequencyInterval: routine.timesPerWeek ? 1 : null,
+      timesPerWeek: routine.timesPerWeek,
+      isActive: true,
+      isDeleted: false,
+      deletedAt: null,
       },
       select: { id: true },
     });
@@ -898,11 +909,6 @@ export async function createStarterPack(formData: FormData) {
       selectedGroupIds: [],
       tags: [],
     });
-    await syncRoutineWeeklyGoal({
-      routineId: created.id,
-      routineName: routine.name,
-      timesPerWeek: routine.timesPerWeek,
-    });
   }
 
   revalidateRoutineSurfaces();
@@ -916,7 +922,7 @@ export async function updateRoutine(formData: FormData) {
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
-  const timesPerWeek = parseOptionalTimesPerWeek(formData);
+  const frequencyTarget = parseRoutineFrequencyTarget(formData);
   const postSave = String(formData.get("postSave") || "").trim();
   const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
@@ -946,7 +952,17 @@ export async function updateRoutine(formData: FormData) {
 
     await tx.routine.update({
       where: { id },
-      data: { name, category, domain, kind, subtype },
+      data: {
+        name,
+        category,
+        domain,
+        kind,
+        subtype,
+        targetFrequencyCount: frequencyTarget.targetFrequencyCount,
+        targetFrequencyUnit: frequencyTarget.targetFrequencyUnit,
+        targetFrequencyInterval: frequencyTarget.targetFrequencyInterval,
+        timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
+      },
     });
   });
   await syncRoutineTypeDetails(id, kind, sessionTemplateId);
@@ -954,11 +970,6 @@ export async function updateRoutine(formData: FormData) {
     routineId: id,
     selectedGroupIds,
     tags: tagNames,
-  });
-  await syncRoutineWeeklyGoal({
-    routineId: id,
-    routineName: name,
-    timesPerWeek,
   });
 
   revalidateRoutineSurfaces(id);
@@ -1021,14 +1032,16 @@ export async function createCompletionLog(params: {
       ? null
       : Math.max(1, Math.floor(params.completionCount));
 
-  await prisma.routineLog.create({
+  const log = await prisma.routineLog.create({
     data: {
       routineId: params.routineId,
       performedAt: parsePerformedAt(params.performedAtLocal),
       notes: params.notes?.trim() || null,
       completionCount,
     },
+    select: { id: true },
   });
+  await recalculateRoutineLogStimulus(log.id);
   revalidateRoutineSurfaces(params.routineId);
 }
 
@@ -1066,12 +1079,12 @@ export async function logWorkout(params: {
   exercises: WorkoutExerciseInput[];
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
-  await prisma.$transaction(async (tx) => {
+  const logId = await prisma.$transaction(async (tx) => {
     const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
     await syncWorkoutTemplateTx(tx, params.routineId, exercises);
 
     const loggedExercises = exercises.filter((exercise) => exercise.loggedSets.length > 0);
-    if (loggedExercises.length === 0) return;
+    if (loggedExercises.length === 0) return null;
 
     const log = await tx.routineLog.create({
       data: {
@@ -1098,7 +1111,9 @@ export async function logWorkout(params: {
         })),
       });
     }
+    return log.id;
   });
+  if (logId) await recalculateRoutineLogStimulus(logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1110,10 +1125,10 @@ export async function logAdHocWorkout(params: {
   exercises: WorkoutExerciseInput[];
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
-  await prisma.$transaction(async (tx) => {
+  const logId = await prisma.$transaction(async (tx) => {
     const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
     const loggedExercises = exercises.filter((exercise) => exercise.loggedSets.length > 0);
-    if (loggedExercises.length === 0) return;
+    if (loggedExercises.length === 0) return null;
 
     const log = await tx.routineLog.create({
       data: {
@@ -1140,7 +1155,9 @@ export async function logAdHocWorkout(params: {
         })),
       });
     }
+    return log.id;
   });
+  if (logId) await recalculateRoutineLogStimulus(logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1165,15 +1182,29 @@ export async function createWorkoutLogExerciseOption(params: {
       supportsWeight: Boolean(params.supportsWeight),
     });
 
-    return tx.exercise.findUniqueOrThrow({
-      where: { id: exerciseId },
-      select: {
-        id: true,
-        name: true,
-        unit: true,
-        supportsWeight: true,
-      },
-    });
+    try {
+      return await tx.exercise.findUniqueOrThrow({
+        where: { id: exerciseId },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          supportsWeight: true,
+          libraryKind: true,
+        },
+      });
+    } catch (error) {
+      if (!isMissingExerciseLibraryKindError(error)) throw error;
+      return tx.exercise.findUniqueOrThrow({
+        where: { id: exerciseId },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          supportsWeight: true,
+        },
+      });
+    }
   });
 
   revalidateRoutineSurfaces(params.routineId);
@@ -1228,15 +1259,29 @@ export async function createWorkoutExerciseOption(params: {
       });
     }
 
-    return tx.exercise.findUniqueOrThrow({
-      where: { id: exerciseId },
-      select: {
-        id: true,
-        name: true,
-        unit: true,
-        supportsWeight: true,
-      },
-    });
+    try {
+      return await tx.exercise.findUniqueOrThrow({
+        where: { id: exerciseId },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          supportsWeight: true,
+          libraryKind: true,
+        },
+      });
+    } catch (error) {
+      if (!isMissingExerciseLibraryKindError(error)) throw error;
+      return tx.exercise.findUniqueOrThrow({
+        where: { id: exerciseId },
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          supportsWeight: true,
+        },
+      });
+    }
   });
 
   revalidateRoutineSurfaces(params.routineId);
@@ -1290,6 +1335,7 @@ export async function logCardio(params: {
       data: metrics.map((metric) => ({ ...metric, routineLogId: log.id })),
     });
   }
+  await recalculateRoutineLogStimulus(log.id);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1345,6 +1391,7 @@ export async function logGuided(params: {
         })),
       });
   }
+  await recalculateRoutineLogStimulus(log.id);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1364,7 +1411,7 @@ export async function logSession(params: {
     throw new Error("Duration must be > 0.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  const logId = await prisma.$transaction(async (tx) => {
     const log = await tx.routineLog.create({
       data: {
         routineId: params.routineId,
@@ -1398,7 +1445,9 @@ export async function logSession(params: {
         })),
       });
     }
+    return log.id;
   });
+  if (logId) await recalculateRoutineLogStimulus(logId);
 
   revalidateRoutineSurfaces(params.routineId);
   if (params.preferredClimbingGrades) {
@@ -1458,6 +1507,7 @@ export async function updateCardioLog(params: {
       });
     }
   });
+  await recalculateRoutineLogStimulus(params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1535,6 +1585,7 @@ export async function updateWorkoutLog(params: {
       });
     }
   });
+  await recalculateRoutineLogStimulus(params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1586,6 +1637,7 @@ export async function updateCompletionLog(params: {
       completionCount,
     },
   });
+  await recalculateRoutineLogStimulus(params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1640,6 +1692,7 @@ export async function updateGuidedLog(params: {
       });
     }
   });
+  await recalculateRoutineLogStimulus(params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1701,6 +1754,7 @@ export async function updateSessionLog(params: {
       });
     }
   });
+  await recalculateRoutineLogStimulus(params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
   if (params.preferredClimbingGrades) {

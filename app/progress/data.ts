@@ -1,48 +1,181 @@
 import { formatAppDate, formatAppDateTime } from "@/lib/dates";
+import { isMissingExerciseLibraryKindError, withDerivedExerciseLibraryKind } from "@/lib/exercise-library";
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { aggregateExerciseSessionRow, countGoalMetWeeks, descendantGroupIds, fillWeeklySeries, hasSessionLikeKinds, hasWorkoutKinds, incrementWeekMap, isCardioOnlyKinds, lastOrNull, performedAtWhere, weeksWithActivity, ytdSessions, type ProgressRange, type SeriesPoint } from "@/lib/progress-v2";
+import { isMissingRoutineFrequencyColumnsError, withNullRoutineFrequencyTargets } from "@/lib/routine-query-compat";
 import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
 
 export type RoutineLogWithRelations = Awaited<ReturnType<typeof getRoutineLogs>>[number];
 
-export async function getRoutineIndex() {
-  return prisma.routine.findMany({
-    where: { isDeleted: false },
-    orderBy: [{ isActive: "desc" }, { category: "asc" }, { name: "asc" }],
+const routineScalarSelect = {
+  id: true,
+  name: true,
+  category: true,
+  subtype: true,
+  domain: true,
+  kind: true,
+  timesPerWeek: true,
+  isActive: true,
+  isDeleted: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const routineScalarSelectWithFrequency = {
+  ...routineScalarSelect,
+  targetFrequencyCount: true,
+  targetFrequencyUnit: true,
+  targetFrequencyInterval: true,
+} as const;
+
+const routineRelationSelectBase = {
+  ...routineScalarSelect,
+  metadataGroups: {
+    include: { group: true },
+  },
+  sessionDetails: {
     include: {
-      exercises: {
+      template: {
         include: {
-          exercise: {
-            include: {
-              metadataGroups: {
-                include: { group: true },
+          metricDefinitions: {
+            orderBy: { sortOrder: "asc" as const },
+          },
+          metadataGroups: {
+            include: { group: true },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const routineRelationSelectWithFrequency = {
+  ...routineRelationSelectBase,
+  targetFrequencyCount: true,
+  targetFrequencyUnit: true,
+  targetFrequencyInterval: true,
+} as const;
+
+export async function getRoutineIndex() {
+  try {
+    return await prisma.routine.findMany({
+      where: { isDeleted: false },
+      orderBy: [{ isActive: "desc" }, { category: "asc" }, { name: "asc" }],
+      select: {
+        ...routineScalarSelectWithFrequency,
+        exercises: {
+          include: {
+            exercise: {
+              include: {
+                metadataGroups: {
+                  include: { group: true },
+                },
               },
             },
           },
         },
+        metadataGroups: {
+          include: { group: true },
+        },
       },
-      metadataGroups: {
-        include: { group: true },
+    });
+  } catch (error) {
+    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
+    const routines = await prisma.routine.findMany({
+      where: { isDeleted: false },
+      orderBy: [{ isActive: "desc" }, { category: "asc" }, { name: "asc" }],
+      select: {
+        ...routineScalarSelect,
+        exercises: {
+          include: {
+            exercise: {
+              include: {
+                metadataGroups: {
+                  include: { group: true },
+                },
+              },
+            },
+          },
+        },
+        metadataGroups: {
+          include: { group: true },
+        },
       },
-    },
-  });
+    });
+    return routines.map((routine) => withNullRoutineFrequencyTargets(routine));
+  }
 }
 
 export async function getExerciseIndex() {
-  return prisma.exercise.findMany({
-    orderBy: [{ name: "asc" }],
-    include: {
-      metadataGroups: {
-        include: { group: true },
-      },
-      routines: {
+  try {
+    try {
+      return await prisma.exercise.findMany({
+        orderBy: [{ name: "asc" }],
         include: {
-          routine: true,
+          metadataGroups: {
+            include: { group: true },
+          },
+          routines: {
+            include: {
+              routine: {
+                select: routineScalarSelectWithFrequency,
+              },
+            },
+          },
         },
-      },
-    },
-  });
+      });
+    } catch (error) {
+      if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
+      const exercises = await prisma.exercise.findMany({
+        orderBy: [{ name: "asc" }],
+        include: {
+          metadataGroups: {
+            include: { group: true },
+          },
+          routines: {
+            include: {
+              routine: {
+                select: routineScalarSelect,
+              },
+            },
+          },
+        },
+      });
+      return exercises.map((exercise) => ({
+        ...exercise,
+        routines: exercise.routines.map((entry) => ({
+          ...entry,
+          routine: withNullRoutineFrequencyTargets(entry.routine),
+        })),
+      }));
+    }
+  } catch (error) {
+    if (!isMissingExerciseLibraryKindError(error)) throw error;
+    return withDerivedExerciseLibraryKind(
+      await prisma.exercise.findMany({
+        orderBy: [{ name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          supportsWeight: true,
+          createdAt: true,
+          updatedAt: true,
+          metadataGroups: {
+            include: { group: true },
+          },
+          routines: {
+            include: {
+              routine: {
+                select: routineScalarSelect,
+              },
+            },
+          },
+        },
+      })
+    );
+  }
 }
 
 export async function getMetadataIndex() {
@@ -59,89 +192,109 @@ export async function getMetadataIndex() {
 }
 
 export async function getRoutineLogs(range: ProgressRange, filter?: {
+  logIds?: string[];
   routineIds?: string[];
   exerciseIds?: string[];
   guidedStepIds?: string[];
   guidedExerciseIds?: string[];
 }) {
-  return prisma.routineLog.findMany({
-    where: {
-      ...(performedAtWhere(range) ? { performedAt: performedAtWhere(range) } : {}),
-      ...(
-        filter?.routineIds && filter.routineIds.length > 0
-          ? {
-              OR: [
-                { routineId: { in: filter.routineIds } },
-                ...(filter.exerciseIds && filter.exerciseIds.length > 0
-                  ? [{ exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }]
-                  : []),
-                ...(filter.guidedStepIds && filter.guidedStepIds.length > 0
-                  ? [{ guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }]
-                  : []),
-                ...(filter.guidedExerciseIds && filter.guidedExerciseIds.length > 0
-                  ? [{ guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }]
-                  : []),
-              ],
-            }
-          : filter?.exerciseIds && filter.exerciseIds.length > 0
-          ? { exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }
-          : filter?.guidedStepIds && filter.guidedStepIds.length > 0
-          ? { guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }
-          : filter?.guidedExerciseIds && filter.guidedExerciseIds.length > 0
-          ? { guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }
-          : {}),
+  const where = {
+    ...(performedAtWhere(range) ? { performedAt: performedAtWhere(range) } : {}),
+    ...(filter?.logIds && filter.logIds.length > 0 ? { id: { in: filter.logIds } } : {}),
+    ...(
+      filter?.logIds && filter.logIds.length > 0
+        ? {}
+        : filter?.routineIds && filter.routineIds.length > 0
+        ? {
+            OR: [
+              { routineId: { in: filter.routineIds } },
+              ...(filter.exerciseIds && filter.exerciseIds.length > 0
+                ? [{ exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }]
+                : []),
+              ...(filter.guidedStepIds && filter.guidedStepIds.length > 0
+                ? [{ guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }]
+                : []),
+              ...(filter.guidedExerciseIds && filter.guidedExerciseIds.length > 0
+                ? [{ guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }]
+                : []),
+            ],
+          }
+        : filter?.exerciseIds && filter.exerciseIds.length > 0
+        ? { exercises: { some: { exerciseId: { in: filter.exerciseIds } } } }
+        : filter?.guidedStepIds && filter.guidedStepIds.length > 0
+        ? { guidedSteps: { some: { guidedStepId: { in: filter.guidedStepIds } } } }
+        : filter?.guidedExerciseIds && filter.guidedExerciseIds.length > 0
+        ? { guidedSteps: { some: { exerciseId: { in: filter.guidedExerciseIds } } } }
+        : {}),
+  };
+
+  const sharedInclude = {
+    exercises: {
+      include: {
+        exercise: {
+          include: {
+            metadataGroups: {
+              include: { group: true },
+            },
+          },
+        },
+        sets: true,
+      },
     },
-    orderBy: [{ performedAt: "asc" }],
-    include: {
-      routine: {
-        include: {
-          sessionDetails: {
-            include: {
-              template: {
-                include: {
-                  metricDefinitions: {
-                    orderBy: { sortOrder: "asc" },
-                  },
-                  metadataGroups: {
-                    include: { group: true },
-                  },
-                },
-              },
+    metrics: true,
+    sessionMetricValues: {
+      include: {
+        metricDefinition: true,
+      },
+    },
+    guidedSteps: {
+      include: {
+        guidedStep: {
+          include: {
+            metadataGroups: {
+              include: { group: true },
             },
           },
         },
-      },
-      exercises: {
-        include: {
-          exercise: {
-            include: {
-              metadataGroups: {
-                include: { group: true },
-              },
-            },
-          },
-          sets: true,
-        },
-      },
-      metrics: true,
-      sessionMetricValues: {
-        include: {
-          metricDefinition: true,
-        },
-      },
-      guidedSteps: {
-        include: {
-          exercise: {
-            include: {
-              metadataGroups: {
-                include: { group: true },
-              },
+        exercise: {
+          include: {
+            metadataGroups: {
+              include: { group: true },
             },
           },
         },
       },
     },
-  });
+  } as const;
+
+  try {
+    return await prisma.routineLog.findMany({
+      where,
+      orderBy: [{ performedAt: "asc" }],
+      include: {
+        routine: {
+          select: routineRelationSelectWithFrequency,
+        },
+        ...sharedInclude,
+      },
+    });
+  } catch (error) {
+    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
+    const logs = await prisma.routineLog.findMany({
+      where,
+      orderBy: [{ performedAt: "asc" }],
+      include: {
+        routine: {
+          select: routineRelationSelectBase,
+        },
+        ...sharedInclude,
+      },
+    });
+    return logs.map((log) => ({
+      ...log,
+      routine: withNullRoutineFrequencyTargets(log.routine),
+    }));
+  }
 }
 
 export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWeek: number | null) {
@@ -392,7 +545,47 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
     prisma.metadataGroupRelation.findMany(),
   ]);
 
-  if (!group) return null;
+  if (!group) {
+    const stimulusCategory = await prisma.stimulusCategory.findUnique({
+      where: { slug },
+    });
+    if (!stimulusCategory) return null;
+
+    const stimulusRows = await prisma.routineLogStimulus.findMany({
+      where: {
+        stimulusCategoryId: stimulusCategory.id,
+        ...(performedAtWhere(range)
+          ? {
+              routineLog: {
+                performedAt: performedAtWhere(range),
+              },
+            }
+          : {}),
+      },
+      select: { routineLogId: true },
+    });
+
+    const logIds = Array.from(new Set(stimulusRows.map((row) => row.routineLogId)));
+    const logs = logIds.length > 0 ? await getRoutineLogs(range, { logIds }) : [];
+
+    return {
+      group: {
+        id: stimulusCategory.id,
+        slug: stimulusCategory.slug,
+        label: stimulusCategory.label,
+        kind: "MOVEMENT_PATTERN" as const,
+      },
+      routineIds: Array.from(new Set(logs.map((log) => log.routineId))),
+      exerciseIds: Array.from(new Set(logs.flatMap((log) => log.exercises.map((exercise) => exercise.exerciseId)))),
+      guidedStepIds: Array.from(
+        new Set(logs.flatMap((log) => log.guidedSteps.map((step) => step.guidedStepId).filter((value): value is string => Boolean(value))))
+      ),
+      guidedExerciseIds: Array.from(
+        new Set(logs.flatMap((log) => log.guidedSteps.map((step) => step.exerciseId).filter((value): value is string => Boolean(value))))
+      ),
+      logs,
+    };
+  }
 
   const relevantGroupIds = descendantGroupIds(group.id, relations);
   const relevantSlugs = new Set(

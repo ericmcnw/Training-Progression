@@ -1,3 +1,5 @@
+import Link from "next/link";
+import CoverageGroupedBarChart from "./CoverageGroupedBarChart";
 import {
   getExerciseIndex,
   getMetadataIndex,
@@ -6,12 +8,16 @@ import {
   resolveGroupTarget,
   summarizeRoutineLogs,
 } from "./data";
+import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from "./coverage";
 import CardioIndexView from "./CardioIndexView";
 import ExercisesIndexView from "./ExercisesIndexView";
 import GroupsIndexView from "./GroupsIndexView";
-import { ProgressShell, SectionCard, SectionLinkButton, StatGrid, TargetCard } from "./ui";
+import { PillNav, ProgressShell, SectionCard, SectionLinkButton, StatGrid, TargetCard } from "./ui";
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
+import { getRecommendationModel } from "@/lib/recommendations";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +37,16 @@ function formatMinutes(seconds: number) {
   return String(Math.round(seconds / 60));
 }
 
+function normalizeCoverageLens(value: string | undefined): CoverageLens {
+  if (value === "muscles" || value === "patterns" || value === "sports") return value;
+  return "muscles";
+}
+
+function normalizeCoverageRange(value: string | undefined): CoverageRange {
+  if (value === "4w") return "4w";
+  return "week";
+}
+
 export default async function ProgressOverviewPage({
   searchParams,
 }: {
@@ -39,6 +55,9 @@ export default async function ProgressOverviewPage({
   const params = await Promise.resolve(searchParams ?? {});
   const query = (getParam(params, "q") ?? "").trim().toLowerCase();
   const section = (getParam(params, "section") ?? "overview").trim().toLowerCase();
+  const coverageLens = normalizeCoverageLens(getParam(params, "coverageLens"));
+  const coverageRange = normalizeCoverageRange(getParam(params, "coverageRange"));
+  const now = new Date();
 
   if (section === "routines") {
     return <RoutinesIndexView searchParams={params} />;
@@ -59,6 +78,24 @@ export default async function ProgressOverviewPage({
     getMetadataIndex(),
     getRoutineLogs("4w"),
   ]);
+  const [coverageOverview, recommendationModel] = await Promise.all([
+    getCoverageOverviewModel(coverageRange),
+    getRecommendationModel(),
+  ]);
+  const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
+  const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
+  const frequencyLogs =
+    maxFrequencyWindowDays > 0
+      ? await prisma.routineLog.findMany({
+          where: { performedAt: { gte: frequencyWindowStart } },
+          select: { routineId: true, performedAt: true },
+        })
+      : [];
+  const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({
+    routines,
+    logs: frequencyLogs,
+    now,
+  });
 
   const cardioRoutines = routines.filter((routine) => routine.kind === "CARDIO");
   const activeRoutines = routines.filter((routine) => routine.isActive);
@@ -84,26 +121,10 @@ export default async function ProgressOverviewPage({
     recentActive[0] ??
     null;
 
-  const workoutLogs = recentLogs.filter((log) => log.routine.kind === "WORKOUT");
-  const cardioLogs = recentLogs.filter((log) => log.routine.kind === "CARDIO");
-  const totalSets = recentLogs.reduce(
-    (sum, log) => sum + log.exercises.reduce((exerciseSum, exercise) => exerciseSum + exercise.sets.length, 0),
-    0
-  );
-  const totalVolume = recentLogs.reduce(
-    (sum, log) =>
-      sum +
-      log.exercises.reduce(
-        (exerciseSum, exercise) =>
-          exerciseSum +
-          exercise.sets.reduce((setSum, set) => setSum + (set.reps ?? 0) * (set.weightLb ?? 0), 0),
-        0
-      ),
-    0
-  );
-  const onTrackRoutines = routineSnapshots.filter(
-    (entry) => entry.targetSessions > 0 && entry.summary.sessions >= Math.max(1, Math.ceil(entry.targetSessions * 0.75))
-  ).length;
+  const onTrackRoutines = activeRoutines.filter((routine) => {
+    const frequencySummary = frequencyStatusByRoutineId.get(routine.id);
+    return frequencySummary?.status === "on_track" || frequencySummary?.status === "ahead";
+  }).length;
 
   const exerciseLeaders = exercises
     .map((exercise) => {
@@ -166,6 +187,8 @@ export default async function ProgressOverviewPage({
   const featuredGroups = groups
     .filter((group) => group.appliesToRoutine || group.appliesToExercise)
     .slice(0, 6);
+  const selectedCoverageSection =
+    coverageOverview.sections.find((entry) => entry.lens === coverageLens) ?? coverageOverview.sections[0];
 
   const searchResults = query
     ? [
@@ -203,7 +226,7 @@ export default async function ProgressOverviewPage({
     <ProgressShell
       section="overview"
       title="Progress"
-      subtitle="Use this as the command center for consistency, strength trends, cardio workload, and broader training rollups. The important targets should be one click away."
+      subtitle="Use this as the command center for recent activity, frequency, and coverage. The important targets should still be one click away, but the overview now starts with interpretable evidence."
       actions={<SectionLinkButton href="/goals" label="Goals" />}
     >
       <SectionCard
@@ -211,6 +234,8 @@ export default async function ProgressOverviewPage({
         subtitle="Search by the thing you care about first. The app will send you to the right progress view."
       >
         <form method="get" style={{ display: "grid", gap: 12 }}>
+          <input type="hidden" name="coverageLens" value={coverageLens} />
+          <input type="hidden" name="coverageRange" value={coverageRange} />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input
               type="search"
@@ -243,21 +268,102 @@ export default async function ProgressOverviewPage({
 
       <SectionCard
         title="Key Signals"
-        subtitle="Last 4 weeks at a glance. These are the numbers most likely to tell you whether training is moving."
+        subtitle={`${coverageOverview.rangeLabel} at a glance. These are the quickest coverage and frequency signals to scan first.`}
       >
         <StatGrid
           items={[
-            { label: "Logged sessions", value: String(recentLogs.length) },
-            { label: "Workout sessions", value: String(workoutLogs.length) },
-            { label: "Cardio sessions", value: String(cardioLogs.length) },
-            { label: "Tracked sets", value: String(totalSets) },
-            { label: "Workout volume", value: totalVolume.toFixed(0) },
-            { label: "Cardio distance", value: `${cardioLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0).toFixed(1)} mi` },
-            { label: "Cardio elevation", value: `${cardioLogs.reduce((sum, log) => sum + (log.elevationGainFt ?? 0), 0).toFixed(0)} ft` },
-            { label: "Training time", value: `${formatMinutes(recentLogs.reduce((sum, log) => sum + (log.durationSec ?? 0), 0))} min` },
+            { label: "Completed logs", value: String(coverageOverview.totalLogs) },
+            { label: "Muscle groups hit", value: String(coverageOverview.coveredCategoryCounts.muscles) },
+            { label: "Patterns covered", value: String(coverageOverview.coveredCategoryCounts.patterns) },
+            { label: "Sports covered", value: String(coverageOverview.coveredCategoryCounts.sports) },
+            { label: "Workout logs", value: String(coverageOverview.countsByKind.WORKOUT) },
+            { label: "Cardio logs", value: String(coverageOverview.countsByKind.CARDIO) },
+            { label: "Guided logs", value: String(coverageOverview.countsByKind.GUIDED) },
+            { label: "Session logs", value: String(coverageOverview.countsByKind.SESSION) },
+            { label: "Completion logs", value: String(coverageOverview.countsByKind.COMPLETION) },
             { label: "On-track routines", value: `${onTrackRoutines}/${activeRoutines.length}` },
           ]}
         />
+      </SectionCard>
+
+      <SectionCard
+        title="Coverage Overview"
+        subtitle={`${selectedCoverageSection.label} in ${coverageOverview.rangeLabel.toLowerCase()}, broken down by routine kind so recent activity is easy to trust and inspect.`}
+      >
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "grid", gap: 10 }}>
+            <PillNav
+              items={[
+                { href: `/progress?coverageLens=muscles&coverageRange=${coverageRange}`, label: "Muscle Groups", active: coverageLens === "muscles" },
+                { href: `/progress?coverageLens=patterns&coverageRange=${coverageRange}`, label: "Movement Patterns", active: coverageLens === "patterns" },
+                { href: `/progress?coverageLens=sports&coverageRange=${coverageRange}`, label: "Sports", active: coverageLens === "sports" },
+              ]}
+            />
+            <PillNav
+              items={[
+                { href: `/progress?coverageLens=${coverageLens}&coverageRange=week`, label: "This Week", active: coverageRange === "week" },
+                { href: `/progress?coverageLens=${coverageLens}&coverageRange=4w`, label: "Last 4 Weeks", active: coverageRange === "4w" },
+              ]}
+            />
+          </div>
+          <div style={helperTextStyle}>{selectedCoverageSection.description}</div>
+
+          <CoverageGroupedBarChart
+            categories={selectedCoverageSection.categories}
+            legend={coverageOverview.routineKindLegend}
+            rangeLabel={coverageOverview.rangeLabel}
+            emptyMessage={selectedCoverageSection.emptyMessage}
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Recommendation Snapshot"
+        subtitle="Dashboard recommendations now lean on behind-target routines, thin lens coverage, and recent concentration. Progress keeps the evidence visible without turning into another what-next panel."
+      >
+        {recommendationModel.primaryRecommendation ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={recommendationSnapshotStyle}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>{recommendationModel.primaryRecommendation.title}</div>
+                <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.78 }}>{recommendationModel.primaryRecommendation.summary}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {recommendationModel.primaryRecommendation.targetCategories.map((slug) => (
+                  <span key={slug} style={coverageChipStyle}>
+                    {slug}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <a href={recommendationModel.primaryRecommendation.suggestedAction.href} style={recommendationActionStyle}>
+                  {recommendationModel.primaryRecommendation.suggestedAction.label}
+                </a>
+                <Link href="/" style={recommendationLinkStyle}>
+                  Open dashboard
+                </Link>
+              </div>
+            </div>
+
+            {recommendationModel.secondaryRecommendations.length > 0 ? (
+              <div style={cardGridStyle}>
+                {recommendationModel.secondaryRecommendations.slice(0, 2).map((item) => (
+                  <TargetCard
+                    key={item.id}
+                    href={item.suggestedAction.href}
+                    eyebrow={item.sourceType === "ROUTINE_TARGET" ? "Behind Target" : item.sourceType === "COVERAGE_GAP" ? "Coverage Gap" : "Watch"}
+                    title={item.title}
+                    subtitle={item.summary}
+                    description={item.rationale[0] ?? "Recent evidence suggests this is worth keeping an eye on."}
+                    chips={item.targetCategories.slice(0, 2)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div style={helperTextStyle}>Recommendations will appear here after a bit more routine and coverage history is available.</div>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -271,20 +377,18 @@ export default async function ProgressOverviewPage({
               eyebrow="Consistency"
               title={attentionRoutine.routine.name}
               subtitle={
-                attentionRoutine.targetSessions > 0
-                  ? `${attentionRoutine.summary.sessions}/${attentionRoutine.targetSessions} planned sessions in the last 4 weeks`
-                  : `${attentionRoutine.summary.sessions} sessions in the last 4 weeks`
+                frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.summaryLabel ??
+                `${attentionRoutine.summary.sessions} sessions in the last 4 weeks`
               }
               description={
-                attentionRoutine.targetSessions > 0 && attentionRoutine.gap > 0
-                  ? "Best place to review adherence first, then drop into completion and workload."
+                frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.hasTarget
+                  ? frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.detailLabel ??
+                    "Best place to review adherence first, then drop into completion and workload."
                   : "This routine has the most recent momentum, so it is a strong first stop for routine-level progress."
               }
               chips={[
                 `${attentionRoutine.summary.weeksActive} active weeks`,
-                attentionRoutine.routine.timesPerWeek
-                  ? `${attentionRoutine.summary.weeksGoalMet} goal weeks`
-                  : "No weekly goal",
+                frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.shortStatusLabel ?? "No target",
                 formatShortDate(attentionRoutine.summary.lastSession),
               ]}
               emphasis="featured"
@@ -449,6 +553,52 @@ const featuredGridStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
   gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+};
+
+const coverageChipStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const recommendationSnapshotStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 12,
+  padding: 14,
+  borderRadius: 16,
+  border: "1px solid rgba(142,197,255,0.18)",
+  background: "linear-gradient(135deg, rgba(142,197,255,0.1), rgba(84,203,130,0.05))",
+};
+
+const recommendationActionStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 10,
+  textDecoration: "none",
+  color: "inherit",
+  border: "1px solid rgba(84,203,130,0.34)",
+  background: "rgba(84,203,130,0.16)",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const recommendationLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 10,
+  textDecoration: "none",
+  color: "inherit",
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  fontSize: 12,
+  fontWeight: 800,
 };
 
 const twoColumnStyle: React.CSSProperties = {

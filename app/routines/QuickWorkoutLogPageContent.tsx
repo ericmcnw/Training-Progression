@@ -1,4 +1,10 @@
 import Link from "next/link";
+import {
+  exerciseLibraryWhereForKinds,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+  workoutLibraryKinds,
+} from "@/lib/exercise-library";
 import { prisma } from "@/lib/prisma";
 import QuickWorkoutLogForm from "./log-workout-quick/QuickWorkoutLogForm";
 
@@ -44,15 +50,34 @@ async function ensureQuickWorkoutRoutine() {
 export default async function QuickWorkoutLogPage() {
   const selectedRoutine = await ensureQuickWorkoutRoutine();
   const [availableExercises, lastWorkoutLog] = await Promise.all([
-    prisma.exercise.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        unit: true,
-        supportsWeight: true,
-      },
-    }),
+    (async () => {
+      try {
+        return await prisma.exercise.findMany({
+          where: exerciseLibraryWhereForKinds(workoutLibraryKinds()),
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            supportsWeight: true,
+            libraryKind: true,
+          },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        return withDerivedExerciseLibraryKind(
+          await prisma.exercise.findMany({
+            orderBy: { name: "asc" },
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              supportsWeight: true,
+            },
+          })
+        ).filter((exercise) => workoutLibraryKinds().includes(exercise.libraryKind));
+      }
+    })(),
     prisma.routineLog.findFirst({
       where: { routineId: selectedRoutine.id, exercises: { some: {} } },
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],

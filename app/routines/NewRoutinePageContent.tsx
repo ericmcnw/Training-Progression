@@ -2,12 +2,15 @@ import Link from "next/link";
 import NewRoutineForm from "./new/NewRoutineForm";
 import { prisma } from "@/lib/prisma";
 import type { MetadataGroupKind } from "@/generated/prisma";
+import { ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 
 export const dynamic = "force-dynamic";
 
 export default function NewRoutinePage() {
   const metadataGroupsPromise = prisma.metadataGroup.findMany({
-    where: { appliesToRoutine: true },
+    where: {
+      OR: [{ appliesToRoutine: true }, { kind: { in: ROUTINE_METADATA_SELECTABLE_KINDS } }],
+    },
     select: { id: true, slug: true, label: true, kind: true },
     orderBy: [{ kind: "asc" }, { label: "asc" }],
   });

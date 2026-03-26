@@ -1,5 +1,10 @@
 import Link from "next/link";
 import type React from "react";
+import {
+  EXERCISE_LIBRARY_KIND_LABELS,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+} from "@/lib/exercise-library";
 import { canonicalizeExerciseName, compareExerciseNames, exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
 import { createExercise } from "./actions";
@@ -21,18 +26,42 @@ export default async function ExercisesPage({
   searchParams?: SearchParams;
 }) {
   const [exercises, metadataGroups] = await Promise.all([
-    prisma.exercise.findMany({
-      orderBy: [{ name: "asc" }],
-      include: {
-        metadataGroups: {
+    (async () => {
+      try {
+        return await prisma.exercise.findMany({
+          orderBy: [{ name: "asc" }],
           include: {
-            group: {
-              select: { id: true, label: true, kind: true },
+            metadataGroups: {
+              include: {
+                group: {
+                  select: { id: true, label: true, kind: true },
+                },
+              },
             },
           },
-        },
-      },
-    }),
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        return withDerivedExerciseLibraryKind(
+          await prisma.exercise.findMany({
+            orderBy: [{ name: "asc" }],
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              supportsWeight: true,
+              metadataGroups: {
+                include: {
+                  group: {
+                    select: { id: true, label: true, kind: true },
+                  },
+                },
+              },
+            },
+          })
+        );
+      }
+    })(),
     prisma.metadataGroup.findMany({
       where: { appliesToExercise: true },
       select: { id: true, slug: true, label: true, kind: true },
@@ -42,8 +71,12 @@ export default async function ExercisesPage({
 
   const searchQuery = getSearchParamValue(searchParams, "q").trim();
   const unitFilter = getSearchParamValue(searchParams, "unit").trim();
+  const libraryKindFilter = getSearchParamValue(searchParams, "libraryKind").trim();
   const filteredExercises = exercises.filter((exercise) => {
     if ((unitFilter === "REPS" || unitFilter === "TIME") && exercise.unit !== unitFilter) {
+      return false;
+    }
+    if (libraryKindFilter && exercise.libraryKind !== libraryKindFilter) {
       return false;
     }
     return exerciseMatchesQuery(exercise.name, searchQuery);
@@ -99,12 +132,23 @@ export default async function ExercisesPage({
                 <option value="TIME">Timed</option>
               </select>
             </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={styles.label}>Library</span>
+              <select name="libraryKind" defaultValue={libraryKindFilter} style={styles.input}>
+                <option value="">All libraries</option>
+                {Object.entries(EXERCISE_LIBRARY_KIND_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="submit" style={styles.btn}>
               Search
             </button>
-            {(searchQuery || unitFilter) ? (
+            {(searchQuery || unitFilter || libraryKindFilter) ? (
               <Link href="/exercises" style={styles.linkBtn}>
                 Clear
               </Link>
@@ -150,7 +194,7 @@ export default async function ExercisesPage({
               </Link>
             </div>
             <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>
-              Style: <b>{exerciseUnitLabel(exercise.unit)}</b> | Weight: <b>{exercise.supportsWeight ? "Yes" : "No"}</b>
+              Style: <b>{exerciseUnitLabel(exercise.unit)}</b> | Weight: <b>{exercise.supportsWeight ? "Yes" : "No"}</b> | Library: <b>{EXERCISE_LIBRARY_KIND_LABELS[exercise.libraryKind]}</b>
             </div>
             {exercise.metadataGroups.length > 0 ? (
               <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -171,7 +215,9 @@ export default async function ExercisesPage({
 
         {filteredExercises.length === 0 ? (
           <div style={{ marginTop: 10, opacity: 0.75 }}>
-            {searchQuery || unitFilter ? "No exercises match those filters." : "No exercises yet. Add your first one above."}
+            {searchQuery || unitFilter || libraryKindFilter
+              ? "No exercises match those filters."
+              : "No exercises yet. Add your first one above."}
           </div>
         ) : null}
       </div>
@@ -190,7 +236,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   panel: { marginTop: 16, border, borderRadius: 12, overflow: "hidden" },
   panelHeader: { padding: "10px 14px", background: bgBar, borderBottom: border, fontWeight: 900 as const },
-  filterGrid: { display: "grid", gap: 12, gridTemplateColumns: "minmax(220px, 1.4fr) minmax(180px, 0.8fr)" },
+  filterGrid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" },
 
   label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
   input: {

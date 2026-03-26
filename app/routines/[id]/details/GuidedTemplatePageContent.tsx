@@ -1,4 +1,10 @@
 import Link from "next/link";
+import {
+  guidedPreferredLibraryKinds,
+  isMissingExerciseLibraryKindError,
+  orderExercisesForLibraryContext,
+  withDerivedExerciseLibraryKind,
+} from "@/lib/exercise-library";
 import { prisma } from "@/lib/prisma";
 import { formatRoutineTypeLabel, isGuidedKind } from "@/lib/routines";
 import GuidedTemplateEditor from "../guided/GuidedTemplateEditor";
@@ -38,10 +44,22 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
         },
       },
     }),
-    prisma.exercise.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, unit: true, supportsWeight: true },
-    }),
+    (async () => {
+      try {
+        return await prisma.exercise.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        return withDerivedExerciseLibraryKind(
+          await prisma.exercise.findMany({
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, unit: true, supportsWeight: true },
+          })
+        );
+      }
+    })(),
   ]);
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
   if (!isGuidedKind(routine.kind)) return <div style={{ padding: 20 }}>This page is only for guided routines.</div>;
@@ -85,7 +103,7 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
 
       <GuidedTemplateEditor
         routineId={routineId}
-        exercises={exercises}
+        exercises={orderExercisesForLibraryContext(exercises, guidedPreferredLibraryKinds())}
         steps={routine.guidedSteps.map((step) => ({
           id: step.id,
           kind: step.kind,

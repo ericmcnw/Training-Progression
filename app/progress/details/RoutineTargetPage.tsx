@@ -6,6 +6,7 @@ import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, resolveProgressTab, type ProgressTab } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
+import { getRoutineFrequencyStatus, getRoutineTargetWindow } from "@/lib/routine-frequency";
 import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
 import { withSessionMetricConfig } from "@/lib/session-templates";
 
@@ -127,6 +128,21 @@ export default async function RoutineTargetPage(props: {
   ]);
 
   const logs = (await getRoutineLogs(range, { routineIds: [routine.id] })).filter((log) => log.routineId === routine.id);
+  const frequencyWindowStart = getRoutineTargetWindow(routine)?.start;
+  const frequencyLogs =
+    frequencyWindowStart
+      ? await prisma.routineLog.findMany({
+          where: {
+            routineId: routine.id,
+            performedAt: { gte: frequencyWindowStart },
+          },
+          select: { performedAt: true },
+        })
+      : [];
+  const frequencySummary = getRoutineFrequencyStatus({
+    target: routine,
+    logs: frequencyLogs,
+  });
   const summary = summarizeRoutineLogs(logs, routine.timesPerWeek);
   const completionSeries = fillWeeklySeries(summary.sessionWeekMap, range);
   const cardioPerf = cardioPerformanceSeries(logs);
@@ -322,11 +338,13 @@ export default async function RoutineTargetPage(props: {
               { label: "Range", value: rangeChipLabel(range) },
               { label: "Sessions", value: String(summary.sessions) },
               { label: "YTD sessions", value: String(summary.ytd) },
-              { label: "Weeks goal met", value: String(summary.weeksGoalMet) },
+              { label: "Target", value: frequencySummary.summaryLabel },
+              { label: "Status", value: frequencySummary.shortStatusLabel },
               { label: "Last completed", value: lastCompletedLabel },
               { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
             ]}
           />
+          <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.78 }}>{frequencySummary.detailLabel}</div>
           {routine.metadataGroups.length > 0 || routine.tagAssignments.length > 0 ? (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {routine.metadataGroups.map((entry) => (

@@ -10,7 +10,7 @@ const desktopNavItems = [
   { href: "/progress", label: "Progress", match: (pathname: string) => pathname.startsWith("/progress") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "History", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [
@@ -18,7 +18,7 @@ const mobileNavItems = [
   { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
   { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "History", icon: <HistoryIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "Profile", icon: <HistoryIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 export default function AppNavigation() {

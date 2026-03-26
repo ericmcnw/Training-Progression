@@ -17,9 +17,24 @@ enum RoutineKind {
   SESSION
 }
 
+enum RoutineFrequencyUnit {
+  DAY
+  WEEK
+  MONTH
+}
+
 enum ExerciseUnit {
   REPS
   TIME
+}
+
+enum ExerciseLibraryKind {
+  STRENGTH
+  CONDITIONING
+  MOBILITY
+  STRETCH
+  BREATHWORK
+  SKILL
 }
 
 enum MetadataGroupKind {
@@ -87,6 +102,9 @@ model Routine {
   domain       String      @default("general")
   kind         RoutineKind @default(COMPLETION)
   timesPerWeek Int?
+  targetFrequencyCount    Int?
+  targetFrequencyUnit     RoutineFrequencyUnit?
+  targetFrequencyInterval Int?
   isActive     Boolean     @default(true)
 
   // soft delete (hide from UI, keep logs for progress)
@@ -110,6 +128,7 @@ model Routine {
   @@index([isDeleted])
   @@index([category])
   @@index([kind, subtype])
+  @@index([targetFrequencyUnit, targetFrequencyInterval])
 }
 
 model SessionTemplate {
@@ -201,6 +220,7 @@ model RoutineLog {
   guidedSteps     GuidedStepLog[]
   metrics         RoutineLogMetric[]
   sessionMetricValues SessionLogMetricValue[]
+  stimuli         RoutineLogStimulus[]
 
   createdAt       DateTime @default(now())
 
@@ -350,6 +370,7 @@ model Exercise {
   name           String       @unique
   unit           ExerciseUnit @default(REPS)
   supportsWeight Boolean      @default(false)
+  libraryKind    ExerciseLibraryKind @default(STRENGTH)
 
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -359,6 +380,8 @@ model Exercise {
   metadataGroups  ExerciseMetadataGroup[]
   guidedSteps     GuidedStep[]
   guidedStepLogs  GuidedStepLog[]
+
+  @@index([libraryKind, name])
 }
 
 model MetadataGroup {
@@ -378,10 +401,86 @@ model MetadataGroup {
   exerciseAssignments ExerciseMetadataGroup[]
   sessionTemplateAssignments SessionTemplateMetadataGroup[]
   guidedStepAssignments GuidedStepMetadataGroup[]
+  stimulusMappings   MetadataStimulusMapping[]
 
   @@index([kind, label])
   @@index([appliesToRoutine])
   @@index([appliesToExercise])
+}
+
+model StimulusCategory {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  label       String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metadataMappings MetadataStimulusMapping[]
+  logStimuli       RoutineLogStimulus[]
+  preferences      UserStimulusPreference[]
+
+  @@index([sortOrder, label])
+}
+
+model AppProfile {
+  id                         String                  @id @default(cuid())
+  key                        String                  @unique @default("default")
+  selectedStimulusPresetKeys String[]                @default([])
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+
+  stimulusPreferences        UserStimulusPreference[]
+}
+
+model UserStimulusPreference {
+  id                 String           @id @default(cuid())
+  profileId          String
+  stimulusCategoryId String
+  priorityWeight     Float            @default(1)
+  maintenanceFloor   Float?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  profile            AppProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, stimulusCategoryId])
+  @@index([stimulusCategoryId])
+}
+
+model MetadataStimulusMapping {
+  id                 String           @id @default(cuid())
+  metadataGroupId    String
+  stimulusCategoryId String
+  loadWeight         Float            @default(0)
+  stretchWeight      Float            @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  metadataGroup      MetadataGroup    @relation(fields: [metadataGroupId], references: [id], onDelete: Cascade)
+  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([metadataGroupId, stimulusCategoryId])
+  @@index([stimulusCategoryId])
+}
+
+model RoutineLogStimulus {
+  id                 String           @id @default(cuid())
+  routineLogId       String
+  stimulusCategoryId String
+  loadValue          Float            @default(0)
+  stretchValue       Float            @default(0)
+  confidence         Float?
+  sourceKind         String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  routineLog         RoutineLog       @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([routineLogId, stimulusCategoryId])
+  @@index([stimulusCategoryId])
 }
 
 model MetadataGroupRelation {

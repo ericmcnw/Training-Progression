@@ -8,6 +8,14 @@ export const METADATA_GROUP_KIND_LABELS: Record<MetadataGroupKind, string> = {
   ROUTINE_FOCUS: "Routine Focus",
 };
 
+export const ROUTINE_METADATA_SELECTABLE_KINDS: MetadataGroupKind[] = [
+  "MUSCLE_GROUP",
+  "MOVEMENT_PATTERN",
+  "TRAINING_GROUP",
+  "CARDIO_ACTIVITY",
+  "ROUTINE_FOCUS",
+];
+
 export type MetadataSeedGroup = {
   slug: string;
   label: string;
@@ -93,8 +101,11 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   REHAB: ["rehab"],
   BREATHWORK: ["breathwork", "recovery", "skill-practice"],
   CLIMBING: ["climbing", "skill-practice", "strength"],
-  SKILL_PRACTICE: ["skill-practice"],
-  HIKE_DAY: ["hiking"],
+  SURFING: ["board-sports", "cardio", "core", "grip"],
+  SNOWBOARDING: ["board-sports", "cardio", "core"],
+  TEAM_SPORT: ["cardio", "core"],
+  SKILL_PRACTICE: ["skill-practice", "core"],
+  HIKE_DAY: ["hiking", "cardio"],
   STRENGTH: ["strength"],
   HYPERTROPHY: ["hypertrophy"],
 };
@@ -109,8 +120,11 @@ const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[
   { pattern: /\b(deadlift|romanian deadlift|rdl|good morning|hip thrust|bridge|swing|pull-through)\b/i, slugs: ["hinge", "legs", "lower-body", "hamstrings", "glutes"] },
   { pattern: /\b(lunge|split squat|step-up)\b/i, slugs: ["lunge", "legs", "lower-body", "quads", "glutes"] },
   { pattern: /\b(curl)\b/i, slugs: ["pull", "biceps"] },
+  { pattern: /\b(hamstring curl|leg curl|nordic curl)\b/i, slugs: ["hinge", "hamstrings", "legs", "lower-body"] },
+  { pattern: /\b(leg extension)\b/i, slugs: ["squat", "quads", "legs", "lower-body"] },
+  { pattern: /\b(calf raise)\b/i, slugs: ["squat", "calves", "legs", "lower-body"] },
   { pattern: /\b(triceps|pressdown|skull crusher|extension)\b/i, slugs: ["push", "triceps"] },
-  { pattern: /\b(plank|hollow|dead bug|ab wheel|sit-up|crunch|leg raise|l-sit)\b/i, slugs: ["core"] },
+  { pattern: /\b(plank|hollow|dead bug|ab wheel|sit-up|crunch|leg raise|knee raise|l-sit)\b/i, slugs: ["core"] },
   { pattern: /\b(side plank|copenhagen|suitcase carry)\b/i, slugs: ["core", "anti-lateral-flexion", "isometric"] },
   { pattern: /\b(pallof)\b/i, slugs: ["core", "anti-rotation"] },
   { pattern: /\b(bird dog)\b/i, slugs: ["core", "anti-rotation", "glutes"] },
@@ -127,7 +141,8 @@ const GUIDED_STEP_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: stri
   { pattern: /\b(stretch|mobility|opener|flow|yoga)\b/i, slugs: ["mobility", "recovery"] },
   { pattern: /\b(breath|breathing|nasal|box breathing|breathwork|inhale|exhale)\b/i, slugs: ["breathwork", "recovery", "skill-practice"] },
   { pattern: /\b(hangboard|fingerboard|finger|crimp|pinch)\b/i, slugs: ["fingers", "pull", "strength"] },
-  { pattern: /\b(pull|scap|shoulder blade|lock-off)\b/i, slugs: ["pull", "strength"] },
+  { pattern: /\b(pull-up|pull up|chin-up|chin up|pulldown|lat pulldown|face pull|scap|scapular|shoulder blade|lock-off)\b/i, slugs: ["pull", "strength"] },
+  { pattern: /\b(plank|hollow|dead bug|bird dog|pallof|carry|rotation|anti-rotation|anti-extension|core)\b/i, slugs: ["core"] },
   { pattern: /\b(warmup|warm-up)\b/i, slugs: ["mobility", "recovery"] },
   { pattern: /\b(cooldown|cool-down)\b/i, slugs: ["recovery", "mobility"] },
   { pattern: /\b(rehab|prehab|therapy|nerve glide)\b/i, slugs: ["rehab", "recovery", "mobility"] },

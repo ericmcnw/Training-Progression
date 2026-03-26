@@ -9,6 +9,7 @@ export type ExerciseOption = {
   name: string;
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
+  libraryKind?: "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
 };
 
 export type SetRow = {
@@ -275,6 +276,9 @@ export default function WorkoutExerciseEditor({
         <div style={{ display: "grid", gap: 6 }}>
           <div style={{ fontWeight: 900, fontSize: 14 }}>{addExerciseTitle}</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{addExerciseHelp}</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            Workout search uses the workout library by default, so stretch, mobility, and breathwork items do not crowd this picker.
+          </div>
         </div>
         <input
           style={{ ...inputStyle, minWidth: 260 }}

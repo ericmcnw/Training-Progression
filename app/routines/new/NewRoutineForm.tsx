@@ -1,6 +1,7 @@
 "use client";
 
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
+import RoutineFrequencyTargetFields from "../RoutineFrequencyTargetFields";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoutine } from "../actions";
 import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype } from "@/lib/routines";
@@ -105,7 +106,7 @@ export default function NewRoutineForm({
           ))}
         </div>
         <div style={styles.help}>
-          Start with a preset, then name it and set the weekly target. Advanced is only for metadata cleanup.
+          Start with a preset, then name it and optionally set a target frequency. Advanced is only for metadata cleanup.
         </div>
       </div>
 
@@ -128,9 +129,8 @@ export default function NewRoutineForm({
       </div>
 
       <div>
-        <label style={styles.label}>Times per week (optional)</label>
-        <input name="timesPerWeek" style={styles.input} inputMode="numeric" placeholder="e.g. 4" />
-        <div style={styles.help}>If set, this creates or updates a visible weekly goal for the routine.</div>
+        <label style={styles.label}>Frequency Target (optional)</label>
+        <RoutineFrequencyTargetFields initialCount={3} initialUnit="WEEK" initialInterval={1} />
       </div>
 
       {kind === "SESSION" ? (

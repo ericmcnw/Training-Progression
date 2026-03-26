@@ -1,4 +1,10 @@
 import Link from "next/link";
+import {
+  exerciseLibraryWhereForKinds,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+  workoutLibraryKinds,
+} from "@/lib/exercise-library";
 import { exerciseUnitLabel } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
 import { moveRoutineExercise, removeRoutineExercise, saveRoutineTemplate, setDefaultSets } from "../template/actions";
@@ -34,7 +40,27 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
     include: { exercise: true },
   });
 
-  const allExercises = await prisma.exercise.findMany({ orderBy: [{ name: "asc" }] });
+  const allExercises = await (async () => {
+    try {
+      return await prisma.exercise.findMany({
+        where: exerciseLibraryWhereForKinds(workoutLibraryKinds()),
+        orderBy: [{ name: "asc" }],
+      });
+    } catch (error) {
+      if (!isMissingExerciseLibraryKindError(error)) throw error;
+      return withDerivedExerciseLibraryKind(
+        await prisma.exercise.findMany({
+          orderBy: [{ name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            supportsWeight: true,
+          },
+        })
+      ).filter((exercise) => workoutLibraryKinds().includes(exercise.libraryKind));
+    }
+  })();
 
   const attachedIds = new Set(attached.map((x) => x.exerciseId));
   const available = allExercises.filter((x) => !attachedIds.has(x.id));

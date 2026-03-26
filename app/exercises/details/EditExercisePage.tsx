@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isMissingExerciseLibraryKindError, withDerivedExerciseLibraryKind } from "@/lib/exercise-library";
 import { prisma } from "@/lib/prisma";
 import { updateExercise } from "../actions";
 import ExerciseForm from "../ExerciseForm";
@@ -14,14 +15,33 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
   if (!id) return <div style={{ padding: 20 }}>Missing exercise id.</div>;
 
   const [exercise, metadataGroups] = await Promise.all([
-    prisma.exercise.findUnique({
-      where: { id },
-      include: {
-        metadataGroups: {
-          select: { groupId: true },
-        },
-      },
-    }),
+    (async () => {
+      try {
+        return await prisma.exercise.findUnique({
+          where: { id },
+          include: {
+            metadataGroups: {
+              select: { groupId: true },
+            },
+          },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        const fallback = await prisma.exercise.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            supportsWeight: true,
+            metadataGroups: {
+              select: { groupId: true },
+            },
+          },
+        });
+        return fallback ? withDerivedExerciseLibraryKind([fallback])[0] : null;
+      }
+    })(),
     prisma.metadataGroup.findMany({
       where: { appliesToExercise: true },
       select: { id: true, slug: true, label: true, kind: true },
@@ -57,6 +77,7 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
             name: exercise.name,
             unit: exercise.unit,
             supportsWeight: exercise.supportsWeight,
+            libraryKind: exercise.libraryKind,
             selectedMetadataGroupIds: exercise.metadataGroups.map((entry) => entry.groupId),
           }}
         />

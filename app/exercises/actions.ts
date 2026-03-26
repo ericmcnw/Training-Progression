@@ -1,11 +1,17 @@
 "use server";
 
+import {
+  deriveExerciseLibraryKind,
+  isMissingExerciseLibraryKindError,
+  withDerivedExerciseLibraryKind,
+} from "@/lib/exercise-library";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 type ExerciseUnit = "REPS" | "TIME";
+type ExerciseLibraryKind = "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
 
 async function getValidExerciseMetadataGroupIds(groupIds: Iterable<string>) {
   const uniqueIds = Array.from(
@@ -53,13 +59,35 @@ export async function createExercise(formData: FormData) {
   const unit = String(formData.get("unit") || "REPS") as ExerciseUnit;
   const supportsWeight = String(formData.get("supportsWeight") || "") === "on";
   const metadataGroupIds = await getValidExerciseMetadataGroupIds(formData.getAll("metadataGroupIds").map(String));
+  const selectedLibraryKind = String(formData.get("libraryKind") || "").trim() as ExerciseLibraryKind;
 
   if (!name) throw new Error("Exercise name is required.");
   if (!["REPS", "TIME"].includes(unit)) throw new Error("Invalid unit.");
 
-  const existing = await prisma.exercise.findMany({
-    select: { id: true, name: true, unit: true, supportsWeight: true },
+  const selectedGroups = await prisma.metadataGroup.findMany({
+    where: { id: { in: metadataGroupIds } },
+    select: { slug: true },
   });
+  const libraryKind = selectedLibraryKind || deriveExerciseLibraryKind({
+    name,
+    unit,
+    metadataSlugs: selectedGroups.map((group) => group.slug),
+  });
+
+  const existing = await (async () => {
+    try {
+      return await prisma.exercise.findMany({
+        select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true },
+      });
+    } catch (error) {
+      if (!isMissingExerciseLibraryKindError(error)) throw error;
+      return withDerivedExerciseLibraryKind(
+        await prisma.exercise.findMany({
+          select: { id: true, name: true, unit: true, supportsWeight: true },
+        })
+      );
+    }
+  })();
   const match = findExerciseNameMatch(existing, name);
 
   if (match) {
@@ -69,17 +97,44 @@ export async function createExercise(formData: FormData) {
       );
     }
     if (supportsWeight && !match.supportsWeight) {
-      await prisma.exercise.update({
-        where: { id: match.id },
-        data: { supportsWeight: true },
-      });
+      try {
+        await prisma.exercise.update({
+          where: { id: match.id },
+          data: { supportsWeight: true, libraryKind },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        await prisma.exercise.update({
+          where: { id: match.id },
+          data: { supportsWeight: true },
+        });
+      }
+    } else if (match.libraryKind !== libraryKind) {
+      try {
+        await prisma.exercise.update({
+          where: { id: match.id },
+          data: { libraryKind },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+      }
     }
     await syncExerciseMetadataGroups(match.id, metadataGroupIds);
   } else {
-    const created = await prisma.exercise.create({
-      data: { name: normalizeExerciseName(name), unit, supportsWeight },
-      select: { id: true },
-    });
+    const created = await (async () => {
+      try {
+        return await prisma.exercise.create({
+          data: { name: normalizeExerciseName(name), unit, supportsWeight, libraryKind },
+          select: { id: true },
+        });
+      } catch (error) {
+        if (!isMissingExerciseLibraryKindError(error)) throw error;
+        return prisma.exercise.create({
+          data: { name: normalizeExerciseName(name), unit, supportsWeight },
+          select: { id: true },
+        });
+      }
+    })();
     await syncExerciseMetadataGroups(created.id, metadataGroupIds);
   }
 
@@ -93,6 +148,7 @@ export async function updateExercise(formData: FormData) {
   const unit = String(formData.get("unit") || "REPS") as ExerciseUnit;
   const supportsWeight = String(formData.get("supportsWeight") || "") === "on";
   const metadataGroupIds = await getValidExerciseMetadataGroupIds(formData.getAll("metadataGroupIds").map(String));
+  const selectedLibraryKind = String(formData.get("libraryKind") || "").trim() as ExerciseLibraryKind;
 
   if (!id) throw new Error("Missing exercise id.");
   if (!name) throw new Error("Exercise name is required.");
@@ -112,14 +168,37 @@ export async function updateExercise(formData: FormData) {
     throw new Error("An exercise with that name already exists.");
   }
 
-  await prisma.exercise.update({
-    where: { id },
-    data: {
-      name: normalizeExerciseName(name),
-      unit,
-      supportsWeight,
-    },
+  const selectedGroups = await prisma.metadataGroup.findMany({
+    where: { id: { in: metadataGroupIds } },
+    select: { slug: true },
   });
+  const libraryKind = selectedLibraryKind || deriveExerciseLibraryKind({
+    name,
+    unit,
+    metadataSlugs: selectedGroups.map((group) => group.slug),
+  });
+
+  try {
+    await prisma.exercise.update({
+      where: { id },
+      data: {
+        name: normalizeExerciseName(name),
+        unit,
+        supportsWeight,
+        libraryKind,
+      },
+    });
+  } catch (error) {
+    if (!isMissingExerciseLibraryKindError(error)) throw error;
+    await prisma.exercise.update({
+      where: { id },
+      data: {
+        name: normalizeExerciseName(name),
+        unit,
+        supportsWeight,
+      },
+    });
+  }
   await syncExerciseMetadataGroups(id, metadataGroupIds);
 
   revalidatePath("/exercises");

@@ -9,6 +9,7 @@ type ExerciseOption = {
   name: string;
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
+  libraryKind?: "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
 };
 
 export default function ExercisePicker({
@@ -45,6 +46,9 @@ export default function ExercisePicker({
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "grid", gap: 6, maxWidth: 640 }}>
         <label style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Search Existing Exercises</label>
+        <div style={{ fontSize: 12, opacity: 0.72 }}>
+          Showing the workout library by default, so stretch, mobility, and breathwork entries stay in guided flows unless you classify them differently.
+        </div>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
