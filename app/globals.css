@@ -211,6 +211,8 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileBottomNavLink{
     display: grid;
     place-items: center;
+    justify-items: center;
+    align-content: center;
     min-height: 58px;
     padding: 9px 6px;
     border: 1px solid rgba(255,255,255,0.06);
@@ -254,8 +256,11 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileBottomNavText{
+    display: block;
+    width: 100%;
     line-height: 1.1;
     font-size: 10px;
+    text-align: center;
   }
 
   .appMain{
@@ -489,6 +494,15 @@ details[open] > summary[data-collapsible-summary]::before{
     align-items: stretch !important;
   }
 
+  .mobileProgressFocusHeader{
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .mobileProgressFocusHeader > span{
+    align-self: flex-start !important;
+  }
+
   .mobileProgressFocusTitle{
     font-size: 18px !important;
   }
@@ -496,7 +510,7 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileProgressFocusSummary{
     font-size: 13px !important;
     line-height: 1.38 !important;
-    margin-top: -2px !important;
+    margin-top: -4px !important;
   }
 
   .mobileProgressFocusActions > a{
