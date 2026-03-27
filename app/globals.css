@@ -220,21 +220,21 @@ details[open] > summary[data-collapsible-summary]::before{
     letter-spacing: 0.01em;
     text-align: center;
     color: var(--muted);
-    background: rgba(255,255,255,0.04);
+    background: rgb(17,27,46);
     transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
     gap: 4px;
   }
 
   .mobileBottomNavLink[aria-current="page"]{
     color: var(--success);
-    background: linear-gradient(180deg, rgba(51,255,122,0.16), rgba(51,255,122,0.08));
+    background: linear-gradient(180deg, rgba(28,60,46,1), rgba(16,38,29,1));
     border-color: rgba(51,255,122,0.28);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
   }
 
   .mobileBottomNavLink:hover{
     color: var(--success);
-    background: rgba(51,255,122,0.08);
+    background: rgb(22,34,56);
     border-color: rgba(51,255,122,0.18);
     transform: translateY(-1px);
   }
@@ -495,6 +495,8 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileProgressFocusSummary{
     font-size: 13px !important;
+    line-height: 1.38 !important;
+    margin-top: -2px !important;
   }
 
   .mobileProgressFocusActions > a{
