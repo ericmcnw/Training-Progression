@@ -342,9 +342,9 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       }
     >
       <SectionCard title="This Week" subtitle="Scan the high-level state first, then use Focus Now for the clearest next review.">
-        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
-          <div style={{ display: "grid", gap: 14 }}>
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+        <div className="mobileProgressOverviewGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+          <div className="mobileProgressOverviewPrimary" style={{ display: "grid", gap: 14 }}>
+            <div className="mobileProgressOverviewMetrics" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
               <SummaryMetric label="This Week" value={`${weekCoverageOverview.totalLogs} logs`} trend={trendLabel(weekCoverageOverview.totalLogs, baselineWeeklyLogs)} detail={`${weekActiveDays} active days this week`} />
               <SummaryMetric label="On Track" value={`${onTrackRoutines}/${activeRoutines.length}`} trend={onTrackRoutines >= Math.ceil(activeRoutines.length * 0.6) ? "Stable" : "Behind"} detail="Routines meeting or exceeding current target windows" />
               <SummaryMetric label="Coverage Breadth" value={String(weekCoverageBreadth)} trend={trendLabel(weekCoverageBreadth, longCoverageBreadthAverage)} detail={`${weekCoverageOverview.coveredCategoryCounts.muscles} muscles, ${weekCoverageOverview.coveredCategoryCounts.patterns} patterns, ${weekCoverageOverview.coveredCategoryCounts.sports} sports`} />
@@ -352,21 +352,21 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
             </div>
 
             {primaryFocusCard ? (
-              <div style={{ display: "grid", gap: 14, padding: 16, borderRadius: 20, border: "1px solid rgba(120,190,255,0.18)", background: "radial-gradient(circle at top right, rgba(120,190,255,0.16), transparent 34%), linear-gradient(180deg, rgba(18,34,58,0.96), rgba(12,19,33,0.94))" }}>
-                <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <div style={{ display: "grid", gap: 6, minWidth: 0, flex: "1 1 320px" }}>
+              <div className="mobileProgressFocusCard" style={{ display: "grid", gap: 14, padding: 16, borderRadius: 20, border: "1px solid rgba(120,190,255,0.18)", background: "radial-gradient(circle at top right, rgba(120,190,255,0.16), transparent 34%), linear-gradient(180deg, rgba(18,34,58,0.96), rgba(12,19,33,0.94))" }}>
+                <div className="mobileProgressFocusHeader" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div className="mobileProgressFocusCopy" style={{ display: "grid", gap: 6, minWidth: 0, flex: "1 1 320px" }}>
                     <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Focus Now</div>
-                    <div style={{ fontSize: 22, lineHeight: 1.15, fontWeight: 950 }}>{primaryFocusCard.title}</div>
-                    <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>{primaryFocusCard.summary}</div>
+                    <div className="mobileProgressFocusTitle" style={{ fontSize: 22, lineHeight: 1.15, fontWeight: 950 }}>{primaryFocusCard.title}</div>
+                    <div className="mobileProgressFocusSummary" style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>{primaryFocusCard.summary}</div>
                   </div>
                   <span style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid rgba(255,196,107,0.28)", background: "rgba(255,196,107,0.12)", fontSize: 12, fontWeight: 800 }}>{primaryFocusCard.status}</span>
                 </div>
-                <div style={{ display: "grid", gap: 8 }}>
+                <div className="mobileProgressFocusEvidence" style={{ display: "grid", gap: 8 }}>
                   {primaryFocusCard.evidence.map((item) => (
                     <div key={item} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(255,255,255,0.045)", fontSize: 13, lineHeight: 1.45, opacity: 0.9 }}>{item}</div>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="mobileProgressFocusActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Link href={primaryFocusCard.href} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(84,203,130,0.34)", background: "rgba(84,203,130,0.18)", fontSize: 12, fontWeight: 900 }}>{primaryFocusCard.ctaLabel}</Link>
                   <Link href="/" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 12, fontWeight: 800 }}>Open dashboard</Link>
                 </div>
@@ -374,7 +374,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
             ) : null}
           </div>
 
-          <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="mobileProgressOverviewSecondary" style={{ display: "grid", gap: 10, alignContent: "start" }}>
             <div style={{ display: "grid", gap: 4 }}>
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Needs Attention</div>
               <div style={{ fontSize: 16, fontWeight: 900 }}>Concrete watch items</div>
@@ -388,16 +388,16 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         title="Coverage"
         subtitle={`${selectedCoverageSection.label} in ${coverageOverview.rangeLabel.toLowerCase()}. Quiet rows stay hidden by default so the active evidence is easier to scan.`}
         actions={
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="mobileCoverageHeaderActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <Link href={coverageHref(coverageLens, coverageRange, !showQuietCoverage, showAllCoverage)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showQuietCoverage ? "Hide quiet" : `Show quiet (${hiddenQuietCount})`}</Link>
             {hiddenActiveCount > 0 ? <Link href={coverageHref(coverageLens, coverageRange, showQuietCoverage, !showAllCoverage)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showAllCoverage ? "Show less" : `Show all active (${hiddenActiveCount} more)`}</Link> : null}
           </div>
         }
       >
-        <div style={{ display: "grid", gap: 14 }}>
-          <div style={{ display: "grid", gap: 10 }}>
-            <PillNav items={[{ href: coverageHref("muscles"), label: "Muscle Groups", active: coverageLens === "muscles" }, { href: coverageHref("patterns"), label: "Movement Patterns", active: coverageLens === "patterns" }, { href: coverageHref("sports"), label: "Sports", active: coverageLens === "sports" }]} />
-            <div style={coverageRangeRowStyle}>
+          <div className="mobileCoverageSectionBody" style={{ display: "grid", gap: 14 }}>
+            <div className="mobileCoverageControls" style={{ display: "grid", gap: 10 }}>
+              <PillNav items={[{ href: coverageHref("muscles"), label: "Muscle Groups", active: coverageLens === "muscles" }, { href: coverageHref("patterns"), label: "Movement Patterns", active: coverageLens === "patterns" }, { href: coverageHref("sports"), label: "Sports", active: coverageLens === "sports" }]} />
+            <div className="mobileCoverageRangeRow" style={coverageRangeRowStyle}>
               {[
                 { key: "week", label: "This Week" },
                 { key: "2w", label: "Last 2 Weeks" },
@@ -418,7 +418,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="mobileCoverageSummaryRow" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
             <div style={subtleText}>{selectedCoverageSection.description}</div>
             <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700 }}>{showQuietCoverage ? "Quiet rows visible." : hiddenQuietCount > 0 ? `${hiddenQuietCount} quiet rows hidden.` : "Only active rows showing."}</div>
           </div>
@@ -427,13 +427,13 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       </SectionCard>
 
       <SectionCard title="Drill Down" subtitle="Use these focused entry points when you already know which layer you want to inspect.">
-        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
-          <div style={{ display: "grid", gap: 14 }}>
+        <div className="mobileProgressDrillGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+          <div className="mobileProgressDrillPrimary" style={{ display: "grid", gap: 14 }}>
             {query ? (
-              <div style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <div className="mobileProgressSearchResults" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
                 <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Search results</div>
                 {searchResults.length > 0 ? (
-                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                  <div className="mobileProgressSearchResultsGrid" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                     {searchResults.map((result) => (
                       <Link key={`${result.href}-${result.title}`} href={result.href} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "inherit", textDecoration: "none" }}>
                         <div style={{ fontWeight: 800 }}>{result.title}</div>
@@ -447,7 +447,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
               </div>
             ) : null}
 
-            <div style={cardGrid}>
+            <div className="mobileProgressTargetGrid" style={cardGrid}>
               <TargetCard href="/progress?section=routines" eyebrow="Overview" title="Routines" subtitle="Consistency, frequency targets, adherence, and recent momentum." description="Best when the question is whether you are doing the plan often enough." />
               <TargetCard href="/progress?section=exercises" eyebrow="Strength" title="Exercises" subtitle="Top-set trends, reps, volume, and single-movement progression." description="Best when the question is whether one lift or drill is moving." />
               <TargetCard href="/progress?section=cardio" eyebrow="Endurance" title="Cardio" subtitle="Mileage, pace, duration, elevation, and sport-specific conditioning." description="Best when the question is whether cardio or sport output is building." />
@@ -455,7 +455,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="mobileProgressDrillSidebar" style={{ display: "grid", gap: 12 }}>
             <SidebarList title="Most Active Routines" subtitle="Fast links into the routines driving most of the recent history." items={recentActive.map(({ routine, summary }) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${summary.sessions} sessions | ${formatShortDate(summary.lastSession)}` }))} />
             <SidebarList title="Quick Cardio Targets" subtitle="High-utility rollups for mileage, duration, and elevation." items={[...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions | ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })), ...cardioRoutines.slice(0, 1).map((routine) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${routine.kind} routine` }))]} />
             <SidebarList title="Useful Group Rollups" subtitle="Shortcuts into broader summaries you are likely to revisit." items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind.replaceAll("_", " ").toLowerCase() }))} />

@@ -92,8 +92,8 @@ export default function CoverageGroupedBarChart({
   }
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={legendRowStyle}>
+    <div className="mobileCoverageChart" style={{ display: "grid", gap: 14 }}>
+      <div className="mobileCoverageLegend" style={legendRowStyle}>
         {legend.map((item) => (
           <span key={item.kind} style={legendChipStyle}>
             <span style={{ ...legendDotStyle, background: item.color }} />
@@ -102,18 +102,19 @@ export default function CoverageGroupedBarChart({
         ))}
       </div>
 
-      <div style={helperStyle}>Bars show how many completed logs in {rangeLabel.toLowerCase()} contributed to each category.</div>
+      <div className="mobileCoverageHelper" style={helperStyle}>Bars show how many completed logs in {rangeLabel.toLowerCase()} contributed to each category.</div>
 
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="mobileCoverageRows" style={{ display: "grid", gap: 12 }}>
         {categories.map((category, categoryIndex) => (
           <div
             key={category.id}
+            className="mobileCoverageCategoryRow"
             style={{
               ...categoryRowStyle,
               ...(focusedBar?.categoryId === category.id ? categoryRowFocusedStyle : null),
             }}
           >
-            <div style={categoryLabelColumnStyle}>
+            <div className="mobileCoverageLabelColumn" style={categoryLabelColumnStyle}>
               <Link href={category.targetHref} style={categoryLinkStyle}>
                 {category.label}
               </Link>
@@ -123,7 +124,7 @@ export default function CoverageGroupedBarChart({
               </div>
             </div>
 
-            <div style={barsColumnStyle}>
+            <div className="mobileCoverageBarsColumn" style={barsColumnStyle}>
               {legend.map((item) => {
                 const count = category.countsByKind[item.kind];
                 const isInteractive = count > 0;
@@ -138,9 +139,10 @@ export default function CoverageGroupedBarChart({
                 const placeBubbleBelow = categoryIndex < 2;
 
                 return (
-                  <div key={barKey(category.id, item.kind)} style={barWrapStyle}>
+                  <div key={barKey(category.id, item.kind)} className="mobileCoverageBarWrap" style={barWrapStyle}>
                     <button
                       type="button"
+                      className="mobileCoverageBarButton"
                       disabled={!isInteractive}
                       style={{
                         ...barButtonStyle,
@@ -163,7 +165,7 @@ export default function CoverageGroupedBarChart({
                       }}
                       aria-label={`${category.label}, ${item.label}, ${count} completed logs`}
                     >
-                      <span style={barTrackStyle}>
+                      <span className="mobileCoverageBarTrack" style={barTrackStyle}>
                         <span
                           style={{
                             ...barFillStyle,
@@ -172,11 +174,12 @@ export default function CoverageGroupedBarChart({
                           }}
                         />
                       </span>
-                      <span style={barCountStyle}>{count}</span>
+                      <span className="mobileCoverageBarCount" style={barCountStyle}>{count}</span>
                     </button>
 
                     {showBubble ? (
                       <div
+                        className="mobileCoverageTooltip"
                         style={{
                           ...tooltipBubbleStyle,
                           ...(placeBubbleBelow ? tooltipBubbleBelowStyle : tooltipBubbleAboveStyle),

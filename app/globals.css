@@ -463,4 +463,129 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileGuidedTemplateActions > *{
     width: 100%;
   }
+
+  .mobileProgressOverviewGrid,
+  .mobileProgressDrillGrid{
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .mobileProgressOverviewMetrics{
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .mobileProgressFocusCard,
+  .mobileProgressSearchResults{
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .mobileProgressFocusHeader,
+  .mobileProgressFocusActions,
+  .mobileCoverageSummaryRow,
+  .mobileCoverageHeaderActions{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .mobileProgressFocusTitle{
+    font-size: 18px !important;
+  }
+
+  .mobileProgressFocusSummary{
+    font-size: 13px !important;
+  }
+
+  .mobileProgressFocusActions > a{
+    width: 100%;
+  }
+
+  .mobileProgressTargetGrid,
+  .mobileProgressSearchResultsGrid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileCoverageSectionBody{
+    gap: 12px !important;
+  }
+
+  .mobileCoverageControls{
+    gap: 8px !important;
+  }
+
+  .mobileCoverageRangeRow{
+    gap: 5px !important;
+  }
+
+  .mobileCoverageRangeRow a{
+    padding: 5px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .mobileCoverageChart{
+    gap: 10px !important;
+  }
+
+  .mobileCoverageLegend{
+    gap: 6px !important;
+  }
+
+  .mobileCoverageLegend > *{
+    padding: 5px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .mobileCoverageHelper{
+    font-size: 11px !important;
+  }
+
+  .mobileCoverageRows{
+    gap: 10px !important;
+  }
+
+  .mobileCoverageCategoryRow{
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .mobileCoverageLabelColumn{
+    gap: 6px !important;
+  }
+
+  .mobileCoverageBarsColumn{
+    gap: 5px !important;
+  }
+
+  .mobileCoverageBarButton{
+    grid-template-columns: minmax(0, 1fr) 24px !important;
+    gap: 6px !important;
+  }
+
+  .mobileCoverageBarTrack{
+    height: 12px !important;
+  }
+
+  .mobileCoverageBarCount{
+    font-size: 11px !important;
+  }
+
+  .mobileCoverageTooltip{
+    left: 0 !important;
+    right: auto !important;
+    width: min(280px, calc(100vw - 56px)) !important;
+    max-width: calc(100vw - 56px) !important;
+    padding: 9px !important;
+    gap: 7px !important;
+  }
+
+  .mobileCoverageTooltip .mobileCoverageLegend > *,
+  .mobileCoverageTooltip span{
+    font-size: 10px;
+  }
+
+  .mobileProgressDrillSidebar{
+    gap: 10px !important;
+  }
 }
