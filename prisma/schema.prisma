@@ -105,6 +105,7 @@ model Routine {
   targetFrequencyCount    Int?
   targetFrequencyUnit     RoutineFrequencyUnit?
   targetFrequencyInterval Int?
+  frequencyGoalEnabled    Boolean     @default(true)
   isActive     Boolean     @default(true)
 
   // soft delete (hide from UI, keep logs for progress)

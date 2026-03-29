@@ -72,6 +72,20 @@ export type StimulusOverviewModel = {
   inferredSuggestion: InferredStimulusSuggestion;
 };
 
+function isUnavailableStimulusError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message.includes("AppProfile") ||
+    message.includes("UserStimulusPreference") ||
+    message.includes("RoutineLogStimulus") ||
+    message.includes("StimulusCategory") ||
+    message.includes("Error validating datasource") ||
+    message.includes("the URL must start with the protocol") ||
+    message.includes("Can't reach database server") ||
+    message.includes("Error opening a TLS connection")
+  );
+}
+
 function round(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -175,8 +189,7 @@ export async function ensureAppProfile() {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("AppProfile") || message.includes("UserStimulusPreference")) {
+    if (isUnavailableStimulusError(error)) {
       return null;
     }
     throw error;
@@ -377,13 +390,7 @@ export async function inferLikelyStimulusPreset() {
       reasons: top[1].reasons.slice(0, 2),
     } satisfies InferredStimulusSuggestion;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (
-      message.includes("AppProfile") ||
-      message.includes("UserStimulusPreference") ||
-      message.includes("RoutineLogStimulus") ||
-      message.includes("StimulusCategory")
-    ) {
+    if (isUnavailableStimulusError(error)) {
       return null;
     }
     throw error;
@@ -494,13 +501,7 @@ export async function getStimulusOverviewModel() {
       inferredSuggestion,
     } satisfies StimulusOverviewModel;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (
-      message.includes("AppProfile") ||
-      message.includes("UserStimulusPreference") ||
-      message.includes("RoutineLogStimulus") ||
-      message.includes("StimulusCategory")
-    ) {
+    if (isUnavailableStimulusError(error)) {
       const effectivePreferences = mergeStimulusPresetPreferences({ selectedPresetKeys: [] });
       return {
         selectedPresetKeys: [],

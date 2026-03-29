@@ -19,6 +19,7 @@ import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferGuidedStepMet
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
+import { formatRoutineTargetLabel, getRoutineFrequencyStatus, getRoutineTargetWindow, normalizeRoutineFrequencyTarget } from "@/lib/routine-frequency";
 import {
   sessionMetricGoalValueLabel,
   sessionMetricNumericValue,
@@ -80,6 +81,10 @@ export type GoalInsight = {
   targetLabel: string;
   targetKindLabel: string;
   targetHref: string | null;
+  detailHref?: string | null;
+  editHref?: string | null;
+  toggleFrequencyGoalHref?: string | null;
+  isToggleEnabled?: boolean;
   goalTypeLabel: string;
   metricLabel: string;
   timeframeLabel: string;
@@ -115,6 +120,25 @@ type GoalChartCandidate = {
   targetType: GoalTargetTypeValue;
   targetId: string;
 };
+
+type RoutineFrequencyGoalRow = {
+  id: string;
+  name: string;
+  category: string;
+  kind: string;
+  subtype: string | null;
+  isActive: boolean;
+  frequencyGoalEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  targetFrequencyCount: number | null;
+  targetFrequencyUnit: "DAY" | "WEEK" | "MONTH" | null;
+  targetFrequencyInterval: number | null;
+};
+
+function isRoutineFrequencyGoalLike(goal: Pick<Goal, "goalType" | "targetType" | "metricType" | "targetId">) {
+  return goal.goalType === "FREQUENCY" && goal.targetType === "ROUTINE" && goal.metricType === "SESSIONS" && goal.targetId.trim().length > 0;
+}
 
 type GoalWindow = {
   currentStart: Date;
@@ -731,11 +755,26 @@ async function buildGoalInsight(goal: Goal) {
     contributionLabel: recentContributionLabel(parsedGoal, log, exerciseIds),
   }));
 
+  const linkedRoutine =
+    isRoutineFrequencyGoalLike(parsedGoal)
+      ? await prisma.routine.findUnique({
+          where: { id: parsedGoal.targetId },
+          select: {
+            id: true,
+            frequencyGoalEnabled: true,
+          },
+        })
+      : null;
+
   return {
     goal: parsedGoal,
     targetLabel: descriptor.label,
     targetKindLabel: descriptor.kindLabel,
     targetHref: descriptor.href,
+    detailHref: `/goals/${parsedGoal.id}`,
+    editHref: `/goals/${parsedGoal.id}?mode=edit`,
+    toggleFrequencyGoalHref: linkedRoutine?.id ?? null,
+    isToggleEnabled: linkedRoutine ? linkedRoutine.frequencyGoalEnabled : parsedGoal.isActive,
     goalTypeLabel: GOAL_TYPE_LABELS[parsedGoal.goalType as GoalTypeValue],
     metricLabel:
       parsedGoal.metricType === "SESSION_METRIC"
@@ -754,6 +793,151 @@ async function buildGoalInsight(goal: Goal) {
     hasData: status.hasData,
     history: aggregateHistory(parsedGoal, allLogs, exerciseIds),
     recentItems,
+  } satisfies GoalInsight;
+}
+
+function timeframeForRoutineFrequencyGoal(routine: RoutineFrequencyGoalRow): GoalTimeframeValue {
+  if (routine.targetFrequencyUnit === "DAY") return "DAY";
+  if (routine.targetFrequencyUnit === "MONTH") return "MONTH";
+  return "WEEK";
+}
+
+function titleCaseFrequencyStatus(status: ReturnType<typeof getRoutineFrequencyStatus>["status"]) {
+  if (status === "behind") return "Behind";
+  if (status === "ahead") return "Ahead";
+  if (status === "on_track") return "On track";
+  return "No target";
+}
+
+function historyForRoutineFrequencyGoal(params: {
+  routine: RoutineFrequencyGoalRow;
+  logs: Array<{ performedAt: Date }>;
+}) {
+  const normalized = normalizeRoutineFrequencyTarget(params.routine);
+  if (!normalized.hasTarget) return [];
+
+  const window = getRoutineTargetWindow(params.routine);
+  if (!window) return [];
+
+  const historyLength = 8;
+  const bucketMs = window.days * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  return Array.from({ length: historyLength }, (_, index) => {
+    const offset = historyLength - index;
+    const end = new Date(now - (offset - 1) * bucketMs);
+    const start = new Date(end.getTime() - bucketMs);
+    const value = params.logs.filter(
+      (log) => log.performedAt.getTime() >= start.getTime() && log.performedAt.getTime() <= end.getTime()
+    ).length;
+
+    return {
+      label:
+        params.routine.targetFrequencyUnit === "DAY"
+          ? formatAppDate(end, { month: "short", day: "numeric" })
+          : params.routine.targetFrequencyUnit === "MONTH"
+          ? new Intl.DateTimeFormat(undefined, { month: "short", year: "2-digit" }).format(end)
+          : formatWeekLabel(getWeekBoundsSunday(end).start.toISOString().slice(0, 10)),
+      value,
+    };
+  });
+}
+
+function recentFrequencyContributionLabel() {
+  return "1 session";
+}
+
+async function buildRoutineFrequencyGoalInsight(routine: RoutineFrequencyGoalRow) {
+  const targetForProgress = { ...routine, frequencyGoalEnabled: true };
+  const window = getRoutineTargetWindow(targetForProgress);
+  const historyStart = window ? new Date(window.start.getTime() - window.days * 7 * 24 * 60 * 60 * 1000) : new Date();
+  const logs = await prisma.routineLog.findMany({
+    where: {
+      routineId: routine.id,
+      performedAt: window ? { gte: historyStart, lte: window.end } : undefined,
+    },
+    select: {
+      id: true,
+      routineId: true,
+      performedAt: true,
+      routine: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: { performedAt: "desc" },
+  });
+
+  const frequency = getRoutineFrequencyStatus({
+    target: targetForProgress,
+    logs: logs.map((log) => ({ performedAt: log.performedAt })),
+  });
+  const timeframe = timeframeForRoutineFrequencyGoal(routine);
+  const currentWindowLogs = frequency.window
+    ? logs.filter(
+        (log) =>
+          log.performedAt.getTime() >= frequency.window!.start.getTime() &&
+          log.performedAt.getTime() <= frequency.window!.end.getTime()
+      )
+    : [];
+  const actualValue = frequency.currentCount;
+  const targetValue = frequency.targetCount ?? 0;
+  const fractionComplete = targetValue > 0 ? Math.min(1, actualValue / targetValue) : 0;
+  const achieved = actualValue >= targetValue && targetValue > 0;
+  const routineTypeLabel = formatRoutineSubtype(routine.subtype) ?? routine.kind;
+
+  return {
+    goal: {
+      id: `routine-frequency:${routine.id}`,
+      name: routine.name,
+      goalType: "FREQUENCY",
+      targetType: "ROUTINE",
+      targetId: routine.id,
+      metricType: "SESSIONS",
+      targetValue,
+      timeframe,
+      unit: null,
+      startDate: routine.createdAt,
+      endDate: null,
+      isActive: routine.frequencyGoalEnabled,
+      notes: null,
+      config: null,
+      createdAt: routine.createdAt,
+      updatedAt: routine.updatedAt,
+    },
+    targetLabel: routine.name,
+    targetKindLabel: GOAL_TARGET_TYPE_LABELS.ROUTINE,
+    targetHref: `/progress/routines/${routine.id}?tab=overview&range=4w`,
+    detailHref: null,
+    editHref: `/routines/${routine.id}/edit`,
+    toggleFrequencyGoalHref: routine.id,
+    isToggleEnabled: routine.frequencyGoalEnabled,
+    goalTypeLabel: GOAL_TYPE_LABELS.FREQUENCY,
+    metricLabel: GOAL_METRIC_LABELS.SESSIONS,
+    timeframeLabel: GOAL_TIMEFRAME_LABELS[timeframe],
+    timeframeStatusLabel: titleCaseFrequencyStatus(frequency.status),
+    timeframeWindowLabel: frequency.windowLabel.replace(/^last/, "Last"),
+    summaryLabel: `${routine.name} | ${routineTypeLabel} | ${formatRoutineTargetLabel(targetForProgress)}`,
+    actualValue,
+    targetValue,
+    actualDisplay: String(actualValue),
+    targetDisplay: String(targetValue),
+    fractionComplete,
+    isAchieved: achieved,
+    hasData: actualValue > 0,
+    history: historyForRoutineFrequencyGoal({
+      routine: targetForProgress,
+      logs: logs.map((log) => ({ performedAt: log.performedAt })),
+    }),
+    recentItems: currentWindowLogs.slice(0, 8).map((log) => ({
+      id: log.id,
+      routineId: log.routineId,
+      routineName: log.routine.name,
+      performedAt: log.performedAt,
+      contributionLabel: recentFrequencyContributionLabel(),
+    })),
   } satisfies GoalInsight;
 }
 
@@ -870,12 +1054,59 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
     ...(filters.type && filters.type !== "all" ? { goalType: filters.type as GoalTypeValue } : {}),
     ...(filters.active === "active" ? { isActive: true } : filters.active === "inactive" ? { isActive: false } : {}),
   };
-  const goals = await prisma.goal.findMany({
-    where,
-    orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+  const includeRoutineFrequencyGoals = !filters.type || filters.type === "all" || filters.type === "FREQUENCY";
+  const [goals, routineFrequencyGoals] = await Promise.all([
+    prisma.goal.findMany({
+      where,
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+    }),
+    includeRoutineFrequencyGoals
+      ? prisma.routine.findMany({
+          where: {
+            isDeleted: false,
+            targetFrequencyCount: { gt: 0 },
+            targetFrequencyUnit: { not: null },
+            targetFrequencyInterval: { gt: 0 },
+          },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            kind: true,
+            subtype: true,
+            isActive: true,
+            frequencyGoalEnabled: true,
+            createdAt: true,
+            updatedAt: true,
+            targetFrequencyCount: true,
+            targetFrequencyUnit: true,
+            targetFrequencyInterval: true,
+          },
+          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
+  const [manualInsights, routineInsights] = await Promise.all([
+    Promise.all(goals.map((goal) => buildGoalInsight(goal))),
+    Promise.all(routineFrequencyGoals.map((routine) => buildRoutineFrequencyGoalInsight(routine))),
+  ]);
+  const manualRoutineFrequencyTargetIds = new Set(
+    manualInsights
+      .filter((entry) => isRoutineFrequencyGoalLike(entry.goal))
+      .map((entry) => entry.goal.targetId)
+  );
+
+  const filteredRoutineInsights = routineInsights.filter((entry) => {
+    if (manualRoutineFrequencyTargetIds.has(entry.goal.targetId)) return false;
+    if (filters.active === "active") return entry.goal.isActive;
+    if (filters.active === "inactive") return !entry.goal.isActive;
+    return true;
   });
-  const insights = await Promise.all(goals.map((goal) => buildGoalInsight(goal)));
-  return insights;
+
+  return [...filteredRoutineInsights, ...manualInsights].sort((left, right) => {
+    if (left.goal.isActive !== right.goal.isActive) return left.goal.isActive ? -1 : 1;
+    return right.goal.createdAt.getTime() - left.goal.createdAt.getTime();
+  });
 }
 
 export async function getGoalById(goalId: string) {

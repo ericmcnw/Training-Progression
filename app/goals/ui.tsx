@@ -141,19 +141,19 @@ export function GoalMetaLine({ children }: { children: React.ReactNode }) {
 export function GoalCardShell({
   children,
   href,
+  action,
 }: {
   children: React.ReactNode;
   href?: string;
+  action?: React.ReactNode;
 }) {
-  if (href) {
-    return (
-      <Link href={href} style={{ ...cardStyle, color: "inherit", textDecoration: "none" }}>
-        {children}
-      </Link>
-    );
-  }
-
-  return <div style={cardStyle}>{children}</div>;
+  return (
+    <div style={{ ...cardStyle, position: "relative" }}>
+      {href ? <Link href={href} aria-label="Open goal" style={stretchedLinkStyle} /> : null}
+      {action ? <div style={cardActionStyle}>{action}</div> : null}
+      <div style={{ position: "relative", zIndex: 1 }}>{children}</div>
+    </div>
+  );
 }
 
 export const cardStyle: React.CSSProperties = {
@@ -183,4 +183,35 @@ export const formInputStyle: React.CSSProperties = {
 export const subtleTextStyle: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.76,
+};
+
+export const smallActionLinkStyle: React.CSSProperties = {
+  position: "relative",
+  zIndex: 2,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "6px 10px",
+  border: "1px solid rgba(128,128,128,0.42)",
+  borderRadius: 999,
+  background: "rgba(128,128,128,0.12)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const stretchedLinkStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  borderRadius: 16,
+  zIndex: 0,
+};
+
+const cardActionStyle: React.CSSProperties = {
+  position: "relative",
+  zIndex: 2,
+  display: "flex",
+  justifyContent: "flex-end",
+  marginBottom: 10,
 };

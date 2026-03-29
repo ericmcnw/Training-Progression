@@ -27,6 +27,7 @@ const routineScalarSelectWithFrequency = {
   targetFrequencyCount: true,
   targetFrequencyUnit: true,
   targetFrequencyInterval: true,
+  frequencyGoalEnabled: true,
 } as const;
 
 const routineRelationSelectBase = {
@@ -55,6 +56,7 @@ const routineRelationSelectWithFrequency = {
   targetFrequencyCount: true,
   targetFrequencyUnit: true,
   targetFrequencyInterval: true,
+  frequencyGoalEnabled: true,
 } as const;
 
 export async function getRoutineIndex() {

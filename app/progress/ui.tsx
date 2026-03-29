@@ -5,23 +5,36 @@ import { progressRanges, progressSections, progressTabDescription, progressTabs,
 export function ProgressShell({
   section,
   title,
+  subtitle,
   children,
   actions,
+  displayTitle,
+  navLabel,
+  navHint,
+  navItems,
 }: {
   section: ProgressSection;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
+  displayTitle?: string;
+  navLabel?: string;
+  navHint?: string;
+  navItems?: Array<{ href: string; label: string; active?: boolean }>;
 }) {
   const sectionItem = progressSections().find((item) => item.key === section);
-  const displayTitle = `Progress - ${sectionItem?.label ?? title}`;
+  const resolvedTitle = displayTitle ?? `Progress - ${sectionItem?.label ?? title}`;
+  const resolvedNavItems = navItems ?? progressSections().map((item) => ({ ...item, active: item.key === section }));
 
   return (
     <div style={styles.container}>
       <div style={styles.progressTopBar}>
         <div style={styles.progressTitleRow}>
-          <h1 style={styles.progressH1}>{displayTitle}</h1>
+          <div style={styles.progressTitleStack}>
+            <h1 style={styles.progressH1}>{resolvedTitle}</h1>
+            {subtitle ? <div style={styles.progressSub}>{subtitle}</div> : null}
+          </div>
           {section !== "overview" ? (
             <Link href="/progress" style={styles.backBtn}>
               Back
@@ -32,8 +45,9 @@ export function ProgressShell({
       </div>
 
       <NavCluster
-        label="Choose Type to Review"
-        items={progressSections().map((item) => ({ ...item, active: item.key === section }))}
+        label={navLabel ?? "Choose Type to Review"}
+        hint={navHint}
+        items={resolvedNavItems}
       />
 
       <div style={styles.content}>{children}</div>
@@ -313,7 +327,9 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     minWidth: 0,
   },
+  progressTitleStack: { display: "grid", gap: 4 },
   progressH1: { margin: 0, fontSize: 24, lineHeight: 1.05, fontWeight: 950 },
+  progressSub: { fontSize: 13, lineHeight: 1.4, opacity: 0.78, maxWidth: 760 },
   progressTopActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
   backBtn: {
     display: "inline-flex",

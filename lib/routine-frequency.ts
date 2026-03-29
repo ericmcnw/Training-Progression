@@ -4,6 +4,7 @@ export type RoutineFrequencyTargetShape = {
   targetFrequencyCount: number | null;
   targetFrequencyUnit: RoutineFrequencyUnit | null;
   targetFrequencyInterval: number | null;
+  frequencyGoalEnabled?: boolean | null;
 };
 
 export type RoutineFrequencyWindow = {
@@ -36,6 +37,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function doesRoutineHaveTarget(target: RoutineFrequencyTargetShape) {
   return (
+    target.frequencyGoalEnabled !== false &&
     Number.isFinite(target.targetFrequencyCount) &&
     (target.targetFrequencyCount ?? 0) > 0 &&
     !!target.targetFrequencyUnit &&

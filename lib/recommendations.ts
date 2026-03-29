@@ -588,6 +588,7 @@ const routineScalarSelect = {
   targetFrequencyCount: true,
   targetFrequencyUnit: true,
   targetFrequencyInterval: true,
+  frequencyGoalEnabled: true,
   isActive: true,
   isDeleted: true,
   createdAt: true,

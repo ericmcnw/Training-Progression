@@ -3,7 +3,8 @@ export function isMissingRoutineFrequencyColumnsError(error: unknown) {
   return (
     message.includes("Routine.targetFrequencyCount") ||
     message.includes("Routine.targetFrequencyUnit") ||
-    message.includes("Routine.targetFrequencyInterval")
+    message.includes("Routine.targetFrequencyInterval") ||
+    message.includes("Routine.frequencyGoalEnabled")
   );
 }
 
@@ -13,5 +14,6 @@ export function withNullRoutineFrequencyTargets<T extends object>(routine: T) {
     targetFrequencyCount: null,
     targetFrequencyUnit: null,
     targetFrequencyInterval: null,
+    frequencyGoalEnabled: true,
   };
 }

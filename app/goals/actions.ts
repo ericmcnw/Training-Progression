@@ -44,6 +44,47 @@ function inferUnit(metricType: string) {
   return null;
 }
 
+function isRoutineFrequencyGoalInput(input: {
+  goalType: string;
+  targetType: string;
+  metricType: string;
+  timeframe: string;
+  targetId: string;
+}) {
+  return (
+    input.goalType === "FREQUENCY" &&
+    input.targetType === "ROUTINE" &&
+    input.metricType === "SESSIONS" &&
+    input.timeframe !== "ONE_TIME" &&
+    input.targetId.trim().length > 0
+  );
+}
+
+async function syncRoutineFrequencyGoalFromInput(input: {
+  goalType: string;
+  targetType: string;
+  metricType: string;
+  timeframe: string;
+  targetId: string;
+  targetValue: number;
+  isActive: boolean;
+}) {
+  if (!isRoutineFrequencyGoalInput(input)) return;
+
+  const targetFrequencyUnit =
+    input.timeframe === "DAY" ? "DAY" : input.timeframe === "MONTH" ? "MONTH" : "WEEK";
+
+  await prisma.routine.update({
+    where: { id: input.targetId },
+    data: {
+      targetFrequencyCount: Math.max(1, Math.floor(input.targetValue)),
+      targetFrequencyUnit,
+      targetFrequencyInterval: 1,
+      frequencyGoalEnabled: input.isActive,
+    },
+  });
+}
+
 async function getSessionMetricDefinitionForForm(formData: FormData, targetType: string, targetId: string) {
   const definitionId = String(formData.get("sessionMetricDefinitionId") ?? "").trim();
   if (!definitionId) throw new Error("Session metric is required.");
@@ -162,10 +203,13 @@ async function parseGoalInput(formData: FormData) {
 function revalidateGoals() {
   revalidatePath("/goals");
   revalidatePath("/progress");
+  revalidatePath("/routines");
+  revalidatePath("/");
 }
 
 export async function createGoal(formData: FormData) {
   const input = await parseGoalInput(formData);
+  await syncRoutineFrequencyGoalFromInput(input);
   const goal = await prisma.goal.create({
     data: input,
     select: { id: true },
@@ -177,6 +221,7 @@ export async function createGoal(formData: FormData) {
 export async function updateGoal(formData: FormData) {
   const goalId = parseRequiredString(formData, "goalId", "Goal");
   const input = await parseGoalInput(formData);
+  await syncRoutineFrequencyGoalFromInput(input);
   await prisma.goal.update({
     where: { id: goalId },
     data: input,
@@ -194,4 +239,42 @@ export async function deleteGoal(input: { goalId: string }) {
   await prisma.goal.delete({ where: { id: goalId } });
   revalidateGoals();
   redirect("/goals");
+}
+
+export async function toggleRoutineFrequencyGoal(formData: FormData) {
+  const routineId = parseRequiredString(formData, "routineId", "Routine");
+  const goalId = String(formData.get("goalId") ?? "").trim();
+  const nextEnabled = String(formData.get("enabled") ?? "") !== "0";
+  const returnTo = String(formData.get("returnTo") ?? "").trim() || "/goals";
+
+  await prisma.$transaction(async (tx) => {
+    await tx.routine.update({
+      where: { id: routineId },
+      data: { frequencyGoalEnabled: nextEnabled },
+    });
+
+    if (goalId) {
+      await tx.goal.update({
+        where: { id: goalId },
+        data: { isActive: nextEnabled },
+      });
+    }
+  });
+
+  revalidateGoals();
+  redirect(returnTo);
+}
+
+export async function toggleGoalActive(formData: FormData) {
+  const goalId = parseRequiredString(formData, "goalId", "Goal");
+  const nextEnabled = String(formData.get("enabled") ?? "") !== "0";
+  const returnTo = String(formData.get("returnTo") ?? "").trim() || "/goals";
+
+  await prisma.goal.update({
+    where: { id: goalId },
+    data: { isActive: nextEnabled },
+  });
+
+  revalidateGoals();
+  redirect(returnTo);
 }
