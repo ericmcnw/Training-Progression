@@ -78,6 +78,11 @@ export default async function GoalDetailPage(props: {
     return <div style={{ padding: 20 }}>Goal not found.</div>;
   }
 
+  const isSessionBasedExerciseTopWeight =
+    entry.goal.goalType === "PERFORMANCE" &&
+    entry.goal.targetType === "EXERCISE" &&
+    entry.goal.metricType === "MAX_WEIGHT";
+
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: 20, display: "grid", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
@@ -122,9 +127,9 @@ export default async function GoalDetailPage(props: {
 
       <SectionCard title="History">
         <MetricLineChart
-          title={`${entry.goal.name}: recent history`}
+          title={isSessionBasedExerciseTopWeight ? `${entry.goal.name}: top weight vs session` : `${entry.goal.name}: recent history`}
           yLabel={entry.metricLabel}
-          xLabel={entry.goal.timeframe === "MONTH" ? "Month" : entry.goal.timeframe === "DAY" ? "Day" : "Week"}
+          xLabel={isSessionBasedExerciseTopWeight ? "Session" : entry.goal.timeframe === "MONTH" ? "Month" : entry.goal.timeframe === "DAY" ? "Day" : "Week"}
           points={entry.history}
           decimals={entry.goal.metricType === "DISTANCE" ? 1 : entry.goal.metricType === "MAX_WEIGHT" ? 1 : 0}
           unit={

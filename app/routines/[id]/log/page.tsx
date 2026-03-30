@@ -5,7 +5,9 @@ import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import {
   exerciseLibraryWhereForKinds,
+  guidedPreferredLibraryKinds,
   isMissingExerciseLibraryKindError,
+  orderExercisesForLibraryContext,
   withDerivedExerciseLibraryKind,
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
@@ -144,6 +146,41 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
               },
             })
           ).filter((exercise) => workoutLibraryKinds().includes(exercise.libraryKind));
+        }
+      })()
+    : [];
+  const availableGuidedExercises = isGuidedKind(kind)
+    ? await (async () => {
+        try {
+          return orderExercisesForLibraryContext(
+            await prisma.exercise.findMany({
+              orderBy: { name: "asc" },
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                supportsWeight: true,
+                libraryKind: true,
+              },
+            }),
+            guidedPreferredLibraryKinds()
+          );
+        } catch (error) {
+          if (!isMissingExerciseLibraryKindError(error)) throw error;
+          return orderExercisesForLibraryContext(
+            withDerivedExerciseLibraryKind(
+              await prisma.exercise.findMany({
+                orderBy: { name: "asc" },
+                select: {
+                  id: true,
+                  name: true,
+                  unit: true,
+                  supportsWeight: true,
+                },
+              })
+            ),
+            guidedPreferredLibraryKinds()
+          );
         }
       })()
     : [];
@@ -344,6 +381,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
           ) : isGuidedKind(kind) ? (
             <GuidedLogForm
               routineId={routineId}
+              availableExercises={availableGuidedExercises}
               steps={routine.guidedSteps.map((step) => ({
                 id: step.id,
                 kind: step.kind,

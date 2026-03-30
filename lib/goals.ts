@@ -66,6 +66,8 @@ export type GoalFormOptions = {
 export type GoalHistoryPoint = {
   label: string;
   value: number;
+  detailLines?: string[];
+  tooltipLabel?: string;
 };
 
 export type GoalRecentItem = {
@@ -601,7 +603,57 @@ function bucketLabelForGoal(goal: GoalWithConfig, key: string) {
   return formatWeekLabel(key);
 }
 
+function isExerciseTopWeightGoal(goal: GoalWithConfig) {
+  return goal.goalType === "PERFORMANCE" && goal.targetType === "EXERCISE" && goal.metricType === "MAX_WEIGHT";
+}
+
+function exerciseWeightDetailLines(log: GoalLog, exerciseIds: Set<string>) {
+  const relevantExercises = relevantExerciseIdsForLog(log, exerciseIds);
+  const grouped = new Map<number, number[]>();
+
+  for (const entry of relevantExercises) {
+    for (const set of entry.sets) {
+      const weight = set.weightLb ?? 0;
+      const reps = set.reps ?? 0;
+      if (weight <= 0 || reps <= 0) continue;
+      const current = grouped.get(weight) ?? [];
+      current.push(reps);
+      grouped.set(weight, current);
+    }
+  }
+
+  return Array.from(grouped.entries())
+    .sort((left, right) => right[0] - left[0])
+    .map(([weight, reps]) => `${weight.toFixed(1)} lb: ${reps.join(", ")} reps`);
+}
+
+function aggregateExerciseTopWeightSessionHistory(goal: GoalWithConfig, logs: GoalLog[], exerciseIds: Set<string>) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 43 * 7);
+
+  return logs
+    .filter((log) => log.performedAt.getTime() >= cutoff.getTime())
+    .sort((left, right) => left.performedAt.getTime() - right.performedAt.getTime())
+    .map((log) => ({
+      label: formatAppDate(log.performedAt, { month: "short", day: "numeric" }),
+      tooltipLabel: formatAppDateTime(log.performedAt, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      value: metricForLog(goal, log, exerciseIds),
+      detailLines: exerciseWeightDetailLines(log, exerciseIds),
+    }))
+    .filter((point) => point.value > 0);
+}
+
 function aggregateHistory(goal: GoalWithConfig, logs: GoalLog[], exerciseIds: Set<string>) {
+  if (isExerciseTopWeightGoal(goal)) {
+    return aggregateExerciseTopWeightSessionHistory(goal, logs, exerciseIds);
+  }
+
   const byBucket = new Map<string, number>();
   const lowerIsBetter = metricIsLowerBetter(goal.metricType as GoalMetricTypeValue);
 

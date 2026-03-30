@@ -6,6 +6,7 @@ type Point = {
   label: string;
   value: number;
   detailLines?: string[];
+  tooltipLabel?: string;
 };
 
 function formatValue(value: number, decimals: number, unit: string) {
@@ -102,6 +103,7 @@ export default function MetricLineChart({
   const hovered = focusedIndex !== null ? points[focusedIndex] : null;
   const hoveredSeriesPoint = focusedIndex !== null ? series[focusedIndex] : null;
   const hoverMetricLabel = valueLabel ?? yLabel;
+  const hoverLabel = hovered?.tooltipLabel ?? hovered?.label ?? "";
   const hoverValueText =
     hovered && hoveredSeriesPoint
       ? `${hoverMetricLabel}: ${formatValue(hovered.value, decimals, unit)}`
@@ -110,7 +112,7 @@ export default function MetricLineChart({
   const hoverTextWidth = Math.max(
     120,
     Math.max(
-      (hovered?.label ?? "").length * 6.2 + 14,
+      hoverLabel.length * 6.2 + 14,
       hoverValueText.length * 6.2 + 14,
       ...detailLines.map((line) => line.length * 6.2 + 14),
     ),
@@ -281,7 +283,7 @@ export default function MetricLineChart({
                 stroke="rgba(51,255,122,0.65)"
               />
               <text x={hoverX + 7} y={hoverY + 13} fontSize="11" fill="rgba(255,255,255,0.95)">
-                {hovered?.label}
+                {hoverLabel}
               </text>
               <text x={hoverX + 7} y={hoverY + 27} fontSize="11" fill="rgba(255,255,255,0.95)">
                 {hoverValueText}

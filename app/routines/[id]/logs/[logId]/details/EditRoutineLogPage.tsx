@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import {
   exerciseLibraryWhereForKinds,
+  guidedPreferredLibraryKinds,
   isMissingExerciseLibraryKindError,
+  orderExercisesForLibraryContext,
   withDerivedExerciseLibraryKind,
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
@@ -190,6 +192,41 @@ export default async function EditRoutineLogPage(props: {
         }
       })()
     : [];
+  const availableGuidedExercises = isGuidedKind(logKind)
+    ? await (async () => {
+        try {
+          return orderExercisesForLibraryContext(
+            await prisma.exercise.findMany({
+              orderBy: { name: "asc" },
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                supportsWeight: true,
+                libraryKind: true,
+              },
+            }),
+            guidedPreferredLibraryKinds()
+          );
+        } catch (error) {
+          if (!isMissingExerciseLibraryKindError(error)) throw error;
+          return orderExercisesForLibraryContext(
+            withDerivedExerciseLibraryKind(
+              await prisma.exercise.findMany({
+                orderBy: { name: "asc" },
+                select: {
+                  id: true,
+                  name: true,
+                  unit: true,
+                  supportsWeight: true,
+                },
+              })
+            ),
+            guidedPreferredLibraryKinds()
+          );
+        }
+      })()
+    : [];
 
   const initialExercises = isWorkoutKind(logKind)
     ? [
@@ -292,6 +329,7 @@ export default async function EditRoutineLogPage(props: {
               initialDurationSec={log.durationSec ?? 0}
               initialNotes={log.notes ?? ""}
               initialPerformedAt={log.performedAt}
+              availableExercises={availableGuidedExercises}
               steps={log.guidedSteps.map((step) => ({
                 guidedStepId: step.guidedStepId,
                 kind: step.kind,

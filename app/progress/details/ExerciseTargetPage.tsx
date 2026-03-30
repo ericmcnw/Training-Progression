@@ -97,6 +97,16 @@ export default async function ExerciseTargetPage(props: {
         const topMetric = isTimeExercise
           ? Math.max(0, ...setSeconds)
           : Math.max(0, ...entry.sets.map((set) => set.weightLb ?? 0));
+        const topWeightReps = isTimeExercise
+          ? 0
+          : entry.sets
+              .filter((set) => (set.weightLb ?? 0) === topMetric)
+              .reduce((sum, set) => sum + (set.reps ?? 0), 0);
+        const lowerWeightReps = isTimeExercise
+          ? 0
+          : entry.sets
+              .filter((set) => (set.weightLb ?? 0) > 0 && (set.weightLb ?? 0) < topMetric)
+              .reduce((sum, set) => sum + (set.reps ?? 0), 0);
 
         return {
           performedAt: log.performedAt,
@@ -106,6 +116,13 @@ export default async function ExerciseTargetPage(props: {
           totalSeconds,
           avgSecondsPerSet,
           topMetric,
+          topWeightRepLines:
+            isTimeExercise || topMetric <= 0
+              ? []
+              : [
+                  `${topWeightReps.toFixed(0)} reps @ ${topMetric.toFixed(1)} lb`,
+                  ...(lowerWeightReps > 0 ? [`${lowerWeightReps.toFixed(0)} reps below ${topMetric.toFixed(1)} lb`] : []),
+                ],
           setDurationLines: entry.sets.map((set, index) => `Set ${index + 1}: ${formatSeconds(set.seconds ?? 0)}`),
         };
       })
@@ -115,7 +132,7 @@ export default async function ExerciseTargetPage(props: {
     topMetric: rows.map((row) => ({
       label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }),
       value: row.topMetric,
-      detailLines: isTimeExercise ? row.setDurationLines : undefined,
+      detailLines: isTimeExercise ? row.setDurationLines : row.topWeightRepLines,
     })),
     totalReps: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalReps })),
     totalVolume: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalVolume })),
