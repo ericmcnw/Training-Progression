@@ -15,7 +15,7 @@ export function FormStack({
   children: React.ReactNode;
   maxWidth?: number;
 }) {
-  return <div style={{ display: "grid", gap: 14, width: "100%", maxWidth }}>{children}</div>;
+  return <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth }}>{children}</div>;
 }
 
 export function FormSection({
@@ -28,7 +28,7 @@ export function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <section style={sectionStyle}>
+    <section className="mobileCard" style={sectionStyle}>
       {title ? <div style={sectionTitleStyle}>{title}</div> : null}
       {description ? <div style={sectionDescriptionStyle}>{description}</div> : null}
       <div style={{ display: "grid", gap: 12 }}>{children}</div>
@@ -61,7 +61,7 @@ export function FieldGrid({
   children: React.ReactNode;
   minWidth?: number;
 }) {
-  return <div style={{ display: "grid", gap: 12, gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))` }}>{children}</div>;
+  return <div className="mobileFormGrid" style={{ display: "grid", gap: 12, gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))` }}>{children}</div>;
 }
 
 export function OptionalDateSection({
@@ -101,7 +101,7 @@ export function FormActions({
   backHref: string;
 }) {
   return (
-    <div style={actionsStyle}>
+    <div className="mobileStickyActions mobileActionRow" style={actionsStyle}>
       <button onClick={onPrimary} disabled={saving} style={primaryButtonStyle}>
         {saving ? primaryPendingLabel : primaryLabel}
       </button>
@@ -139,7 +139,7 @@ export const pillButtonStyle: React.CSSProperties = {
 const sectionStyle: React.CSSProperties = {
   border: `1px solid ${borderColor}`,
   borderRadius: 16,
-  padding: 14,
+  padding: 16,
   background: surfaceColor,
 };
 
@@ -185,6 +185,7 @@ const actionsStyle: React.CSSProperties = {
   display: "flex",
   gap: 10,
   flexWrap: "wrap",
+  alignItems: "center",
 };
 
 const primaryButtonStyle: React.CSSProperties = {

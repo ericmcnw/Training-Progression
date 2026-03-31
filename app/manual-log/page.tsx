@@ -57,18 +57,18 @@ export default async function ManualLogPage({
   const orderedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+    <div className="mobileManualLogPage mobilePageShell" style={{ maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 }}>
       <div style={{ display: "grid", gap: 8 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Profile & History</h1>
-        <div style={{ opacity: 0.75, fontSize: 13 }}>
+        <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Profile & History</h1>
+        <div className="mobilePageSubtitle" style={{ opacity: 0.75, fontSize: 13 }}>
           Keep log history, training emphases, and future profile preferences in one place without adding setup friction.
         </div>
       </div>
 
-      <section style={panel}>
-        <div style={panelHeader}>OVERVIEW</div>
-        <div style={{ padding: 14, display: "grid", gap: 14 }}>
-          <div style={heroCard}>
+      <section className="mobileSectionCard" style={panel}>
+        <div className="mobileSectionHeader" style={panelHeader}>OVERVIEW</div>
+        <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 14 }}>
+          <div className="mobileCard" style={heroCard}>
             <div style={{ display: "grid", gap: 6 }}>
               <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>PROFILE HOME</div>
               <div style={{ fontSize: 20, fontWeight: 900 }}>Keep training preferences lightweight and the full log archive close.</div>
@@ -76,7 +76,7 @@ export default async function ManualLogPage({
                 Use this area as the home for recent review now, then let it grow into profile, account, and preferences later.
               </div>
             </div>
-            <div style={heroActionRow}>
+            <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
               <Link href="/manual-log" style={primaryLinkBtn}>
                 Profile
               </Link>
@@ -116,9 +116,9 @@ export default async function ManualLogPage({
       </section>
 
       {!showHistory ? (
-        <section style={panel}>
-          <div style={panelHeader}>TRAINING EMPHASES</div>
-          <div style={{ padding: 14, display: "grid", gap: 14 }}>
+        <section className="mobileSectionCard" style={panel}>
+          <div className="mobileSectionHeader" style={panelHeader}>TRAINING EMPHASES</div>
+          <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 14 }}>
             <div style={{ fontSize: 13, opacity: 0.8, maxWidth: 760 }}>
               Choose any combination that matches what matters right now. The app uses these selections to interpret load stimulus and stretching stimulus without expecting a perfectly balanced split.
             </div>
@@ -146,7 +146,7 @@ export default async function ManualLogPage({
               </div>
             </form>
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button type="submit" form="stimulusPresetForm" style={primaryButton}>
                 Save Emphases
               </button>
@@ -194,9 +194,9 @@ export default async function ManualLogPage({
         </section>
       ) : null}
 
-      <section style={panel}>
-        <div style={panelHeader}>RECENT ACTIVITY</div>
-        <div style={{ padding: 14, display: "grid", gap: 10 }}>
+      <section className="mobileSectionCard" style={panel}>
+        <div className="mobileSectionHeader" style={panelHeader}>RECENT ACTIVITY</div>
+        <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 10 }}>
           {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
           {recentLogs.slice(0, 5).map((log) => {
             const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -204,7 +204,7 @@ export default async function ManualLogPage({
             const typeLabel = formatRoutineTypeLabel(routineKind);
             const categoryLabel = (log.routine.category || "General").trim() || "General";
             return (
-              <div key={log.id} style={activityCard}>
+              <div key={log.id} className="mobileCard" style={activityCard}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 800 }}>{log.routine.name}</div>
                   <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
@@ -232,14 +232,14 @@ export default async function ManualLogPage({
       </section>
 
       {showHistory ? (
-        <section style={panel}>
-          <div style={{ ...panelHeader, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <section className="mobileSectionCard" style={panel}>
+          <div className="mobileSectionHeader" style={{ ...panelHeader, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span>LOG HISTORY</span>
             <Link href="/manual-log" style={miniLinkBtn}>
               Back to Profile
             </Link>
           </div>
-          <div style={{ padding: 12, display: "grid", gap: 14 }}>
+          <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 14 }}>
             {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
             {orderedDates.map((dateKey) => {
               const logs = byDate.get(dateKey) ?? [];
@@ -262,7 +262,7 @@ export default async function ManualLogPage({
                     const editHref = `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(historyReturnTo)}`;
 
                     return (
-                      <div key={log.id} style={historyCard}>
+                      <div key={log.id} className="mobileManualLogHistoryCard mobileCard" style={historyCard}>
                         <div style={{ fontSize: 13 }}>
                           <div style={{ fontWeight: 800 }}>
                             {log.routine.name} | {categoryLabel} | {typeLabel}
@@ -302,9 +302,8 @@ export default async function ManualLogPage({
 }
 
 const panel: React.CSSProperties = {
-  marginTop: 16,
   border: "1px solid rgba(128,128,128,0.35)",
-  borderRadius: 16,
+  borderRadius: 18,
   overflow: "hidden",
   background: "rgba(255,255,255,0.02)",
 };
@@ -318,8 +317,8 @@ const panelHeader: React.CSSProperties = {
 
 const heroCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.26)",
-  borderRadius: 16,
-  padding: 16,
+  borderRadius: 18,
+  padding: 18,
   background: "linear-gradient(180deg, rgba(128,128,128,0.14), rgba(128,128,128,0.06))",
   display: "grid",
   gap: 14,
@@ -359,7 +358,7 @@ function presetCard(selected: boolean): React.CSSProperties {
 
 const summaryCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.24)",
-  borderRadius: 14,
+  borderRadius: 16,
   padding: 14,
   background: "rgba(128,128,128,0.07)",
   display: "grid",
@@ -385,8 +384,8 @@ const summaryMeta: React.CSSProperties = {
 
 const activityCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.24)",
-  borderRadius: 12,
-  padding: 12,
+  borderRadius: 16,
+  padding: 14,
   background: "rgba(128,128,128,0.06)",
 };
 
@@ -410,8 +409,8 @@ const insightCard: React.CSSProperties = {
 
 const historyCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.28)",
-  borderRadius: 10,
-  padding: 10,
+  borderRadius: 16,
+  padding: 14,
   display: "flex",
   justifyContent: "space-between",
   gap: 8,

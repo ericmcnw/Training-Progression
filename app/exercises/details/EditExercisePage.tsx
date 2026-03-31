@@ -52,11 +52,11 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
   if (!exercise) return <div style={{ padding: 20 }}>Exercise not found.</div>;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topRow}>
+    <div className="mobileExercisesPage mobilePageShell" style={styles.container}>
+      <div className="mobileExercisesTopRow mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 style={styles.h1}>Edit Exercise</h1>
-          <div style={styles.sub}>{exercise.name}</div>
+          <h1 className="mobilePageTitle" style={styles.h1}>Edit Exercise</h1>
+          <div className="mobilePageSubtitle" style={styles.sub}>{exercise.name}</div>
         </div>
 
         <Link href="/exercises" style={styles.linkBtn}>
@@ -64,8 +64,8 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
         </Link>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.panelHeader}>DETAILS</div>
+      <div className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>DETAILS</div>
 
         <ExerciseForm
           action={updateExercise}
@@ -90,11 +90,11 @@ const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
 const styles = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 20 },
-  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" as const },
   h1: { fontSize: 26, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
-  panel: { marginTop: 16, border, borderRadius: 12, overflow: "hidden" },
+  panel: { border, borderRadius: 16, overflow: "hidden" },
   panelHeader: { padding: "10px 14px", background: bgBar, borderBottom: border, fontWeight: 900 as const },
   label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
   input: {
@@ -114,9 +114,10 @@ const styles = {
     fontWeight: 900 as const,
   },
   linkBtn: {
-    padding: "8px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textDecoration: "none",
     color: "inherit",
     fontWeight: 800 as const,

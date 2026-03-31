@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="appBody">
         <header className="appHeader">
           <div className="appHeaderInner">
             <Link href="/" className="appBrand">

@@ -96,24 +96,24 @@ export default async function ExercisesPage({
     .filter((group) => group.length > 1);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topRow}>
+    <div className="mobileExercisesPage mobilePageShell" style={styles.container}>
+      <div className="mobileExercisesTopRow mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 style={styles.h1}>Exercises</h1>
-          <div style={styles.sub}>Library of movements with cleaner search, cleaner unit labels, and metadata only when it helps.</div>
+          <h1 className="mobilePageTitle" style={styles.h1}>Exercises</h1>
+          <div className="mobilePageSubtitle" style={styles.sub}>Library of movements with cleaner search, cleaner unit labels, and metadata only when it helps.</div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Link href="/routines" style={styles.linkBtn}>
             Back to Routines
           </Link>
         </div>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.panelHeader}>SEARCH LIBRARY</div>
-        <form method="get" style={{ padding: 14, display: "grid", gap: 12 }}>
-          <div style={styles.filterGrid}>
+      <div className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>SEARCH LIBRARY</div>
+        <form method="get" className="mobileSectionBody mobileListStack" style={{ padding: 14, display: "grid", gap: 12 }}>
+          <div className="mobileFormGrid" style={styles.filterGrid}>
             <label style={{ display: "grid", gap: 6 }}>
               <span style={styles.label}>Search</span>
               <input
@@ -144,7 +144,7 @@ export default async function ExercisesPage({
               </select>
             </label>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="submit" style={styles.btn}>
               Search
             </button>
@@ -160,17 +160,17 @@ export default async function ExercisesPage({
         </form>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.panelHeader}>NEW EXERCISE</div>
+      <div className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>NEW EXERCISE</div>
 
-        <div style={{ padding: 14 }}>
+        <div className="mobileSectionBody" style={{ padding: 14 }}>
           <ExerciseForm action={createExercise} metadataGroups={metadataGroups} submitLabel="Create Exercise" />
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+      <div className="mobileListStack" style={{ display: "grid", gap: 12 }}>
         {possibleDuplicateGroups.length > 0 ? (
-          <div style={styles.warningCard}>
+          <div className="mobileCard" style={styles.warningCard}>
             <div style={{ fontWeight: 900 }}>Possible duplicate names to review</div>
             <div style={styles.subtleText}>
               Older entries with different punctuation can still normalize to the same search key. New duplicates are now blocked.
@@ -186,8 +186,8 @@ export default async function ExercisesPage({
         ) : null}
 
         {filteredExercises.map((exercise) => (
-          <div key={exercise.id} style={styles.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+          <div key={exercise.id} className="mobileCard" style={styles.card}>
+            <div className="mobileExercisesCardHeader" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div style={{ fontWeight: 900 }}>{exercise.name}</div>
               <Link href={`/exercises/${exercise.id}`} style={styles.smallLink}>
                 Edit
@@ -229,38 +229,41 @@ const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 20 },
+  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
   topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" },
   h1: { fontSize: 26, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
 
-  panel: { marginTop: 16, border, borderRadius: 12, overflow: "hidden" },
+  panel: { border, borderRadius: 16, overflow: "hidden" },
   panelHeader: { padding: "10px 14px", background: bgBar, borderBottom: border, fontWeight: 900 as const },
   filterGrid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" },
 
   label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
   input: {
     width: "100%",
-    padding: 8,
+    minHeight: 46,
+    padding: 10,
     border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "rgba(128,128,128,0.08)",
     color: "inherit",
   },
 
   btn: {
+    minHeight: 44,
     padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "rgba(128,128,128,0.12)",
     color: "inherit",
     fontWeight: 900 as const,
   },
 
   linkBtn: {
-    padding: "8px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textDecoration: "none",
     color: "inherit",
     fontWeight: 800 as const,
@@ -274,11 +277,11 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
   },
 
-  card: { border, borderRadius: 12, padding: 12, background: "rgba(128,128,128,0.06)" },
+  card: { border, borderRadius: 16, padding: 14, background: "rgba(128,128,128,0.06)" },
   warningCard: {
     border,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     background: "rgba(245,158,11,0.12)",
   },
   badge: {

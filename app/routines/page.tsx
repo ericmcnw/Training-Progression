@@ -38,13 +38,14 @@ function getParam(params: SearchParams, key: string) {
 }
 
 const styles = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 20 },
-  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" as const },
   subText: { marginTop: 6, opacity: 0.75, fontSize: 13 },
   primaryLink: {
-    padding: "8px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textDecoration: "none",
     color: "inherit",
     fontWeight: 800,
@@ -52,7 +53,7 @@ const styles = {
   },
   section: {
     border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
   },
   sectionHeader: {
@@ -70,9 +71,10 @@ const styles = {
     position: "absolute" as const,
     right: 14,
     top: 8,
-    padding: "6px 10px",
+    minHeight: 40,
+    padding: "8px 10px",
     border: "1px solid rgba(128,128,128,0.7)",
-    borderRadius: 8,
+    borderRadius: 10,
     textDecoration: "none",
     color: "inherit",
     background: "rgba(255,255,255,0.06)",
@@ -82,14 +84,15 @@ const styles = {
   },
   card: {
     border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     background: "rgba(128,128,128,0.06)",
   },
   btnLink: {
-    padding: "8px 10px",
+    minHeight: 42,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textAlign: "center" as const,
     textDecoration: "none",
     color: "inherit",
@@ -97,9 +100,10 @@ const styles = {
     fontWeight: 700,
   },
   compactBtnLink: {
-    padding: "5px 8px",
+    minHeight: 38,
+    padding: "7px 10px",
     border: "1px solid rgba(128,128,128,0.55)",
-    borderRadius: 8,
+    borderRadius: 10,
     textAlign: "center" as const,
     textDecoration: "none",
     color: "inherit",
@@ -116,9 +120,9 @@ const styles = {
   },
   detailsBox: {
     border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background: "rgba(128,128,128,0.06)",
+    borderRadius: 12,
+    padding: "10px 12px",
+    background: "rgba(128,128,128,0.05)",
   },
   detailsSummary: {
     cursor: "pointer",
@@ -143,7 +147,8 @@ const styles = {
   },
   input: {
     width: "100%",
-    padding: 8,
+    minHeight: 46,
+    padding: 10,
     border: "1px solid rgba(128,128,128,0.6)",
     borderRadius: 10,
     background: "#111827",
@@ -473,16 +478,16 @@ export default async function RoutinesPage(props: {
   const orderedTypes = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="mobileRoutinesPage" style={styles.container}>
-      <div className="mobileRoutinesTopRow" style={styles.topRow}>
+    <div className="mobileRoutinesPage mobilePageShell" style={styles.container}>
+      <div className="mobileRoutinesTopRow mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Routines</h1>
-          <div style={styles.subText}>
+          <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Routines</h1>
+          <div className="mobilePageSubtitle" style={styles.subText}>
             Week (Sun-Sat): {formatAppDate(start)} - {formatAppDate(new Date(end.getTime() - 1))}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/routines?mode=starter" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
             Starter Pack
           </Link>
@@ -495,7 +500,7 @@ export default async function RoutinesPage(props: {
         </div>
       </div>
 
-      <form method="get" style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+      <form method="get" className="mobileActionStack" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
         <label style={{ flex: "1 1 280px", display: "grid", gap: 6 }}>
           <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>Search</span>
           <input
@@ -516,7 +521,7 @@ export default async function RoutinesPage(props: {
         ) : null}
       </form>
 
-      <div style={{ marginTop: 18, display: "grid", gap: 18 }}>
+      <div className="mobileListStack" style={{ display: "grid", gap: 18 }}>
         {searchQuery && filteredRoutines.length === 0 ? (
           <section style={styles.section}>
             <div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>
@@ -528,11 +533,11 @@ export default async function RoutinesPage(props: {
           const list = groups.get(typeLabel)!;
           const isWorkoutSection = typeLabel === formatRoutineTypeLabel("WORKOUT");
           return (
-            <section key={typeLabel} style={styles.section}>
+            <section key={typeLabel} className="mobileSectionCard" style={styles.section}>
               <details open style={{ position: "relative" }}>
                 <summary
                   data-collapsible-summary
-                  className="mobileRoutinesHeader"
+                  className="mobileRoutinesHeader mobileSectionHeader"
                   style={{
                     ...styles.sectionHeader,
                     ...(isWorkoutSection ? { paddingRight: 118 } : null),
@@ -546,7 +551,7 @@ export default async function RoutinesPage(props: {
                     Quick Log
                   </Link>
                 ) : null}
-                <div style={{ padding: 12, display: "grid", gap: 10 }}>
+                <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 10 }}>
                   {list.map((routine) => (
                     <RoutineCard
                       key={routine.id}
@@ -564,13 +569,13 @@ export default async function RoutinesPage(props: {
         })}
 
         {archived.length > 0 && (
-          <section style={styles.section}>
+          <section className="mobileSectionCard" style={styles.section}>
             <details open>
-              <summary data-collapsible-summary className="mobileRoutinesHeader" style={styles.sectionHeader}>
+              <summary data-collapsible-summary className="mobileRoutinesHeader mobileSectionHeader" style={styles.sectionHeader}>
                 <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>ARCHIVED</div>
                 <div style={{ fontSize: 12, opacity: 0.75 }}>{archived.length} routines</div>
               </summary>
-              <div style={{ padding: 12, display: "grid", gap: 10 }}>
+              <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 10 }}>
                 {archived
                   .slice()
                   .sort((a, b) => {

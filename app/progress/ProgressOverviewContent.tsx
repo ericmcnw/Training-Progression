@@ -89,7 +89,7 @@ function recommendationStatus(item: TrainingRecommendation) {
 
 function SummaryMetric({ label, value, trend, detail }: { label: string; value: string; trend: string; detail: string }) {
   return (
-    <div style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 18, padding: 14, minHeight: 116, background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))", display: "grid", gap: 6 }}>
+    <div className="mobileCard" style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 18, padding: 14, minHeight: 116, background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))", display: "grid", gap: 6 }}>
       <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.7, fontWeight: 900 }}>{label}</div>
       <div style={{ fontSize: 28, lineHeight: 1, fontWeight: 950 }}>{value}</div>
       <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(170,218,255,0.92)" }}>{trend}</div>
@@ -116,8 +116,8 @@ function FocusCard({
   ctaLabel: string;
 }) {
   return (
-    <div style={{ display: "grid", gap: 10, padding: 14, borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.035)" }}>
-      <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div className="mobileCard" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.035)" }}>
+      <div className="mobileProgressFocusHeader" style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.68, fontWeight: 900 }}>{eyebrow}</div>
           <div style={{ marginTop: 4, fontSize: 15, lineHeight: 1.3, fontWeight: 900 }}>{title}</div>
@@ -147,7 +147,7 @@ function SidebarList({
   items: Array<{ href: string; title: string; meta: string }>;
 }) {
   return (
-    <div style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+    <div className="mobileCard" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
       <div style={{ display: "grid", gap: 4 }}>
         <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>{title}</div>
         <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.72 }}>{subtitle}</div>
@@ -379,7 +379,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Needs Attention</div>
               <div style={{ fontSize: 16, fontWeight: 900 }}>Concrete watch items</div>
             </div>
-            {secondaryFocusCards.length > 0 ? secondaryFocusCards.map((card) => <FocusCard key={`${card.eyebrow}-${card.title}`} {...card} />) : <div style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", fontSize: 13, opacity: 0.78 }}>No additional high-priority watch items right now.</div>}
+            {secondaryFocusCards.length > 0 ? secondaryFocusCards.map((card) => <FocusCard key={`${card.eyebrow}-${card.title}`} {...card} />) : <div className="mobileCard" style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", fontSize: 13, opacity: 0.78 }}>No additional high-priority watch items right now.</div>}
           </div>
         </div>
       </SectionCard>

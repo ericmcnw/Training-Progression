@@ -272,7 +272,7 @@ export default function WorkoutExerciseEditor({
       </FormSection>
 
       <FormSection title="Exercise blocks" description="Add, swap, or remove exercises here. The template stays editable without leaving the logging flow.">
-        <div style={styles.addPanel}>
+        <div className="mobileCard" style={styles.addPanel}>
         <div style={{ display: "grid", gap: 6 }}>
           <div style={{ fontWeight: 900, fontSize: 14 }}>{addExerciseTitle}</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{addExerciseHelp}</div>
@@ -287,7 +287,7 @@ export default function WorkoutExerciseEditor({
           placeholder="Search by name, even without punctuation"
         />
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="mobileWorkoutPickerRow" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={activeSelectedExerciseId}
               onChange={(event) => setSelectedExerciseId(event.target.value)}
@@ -308,7 +308,7 @@ export default function WorkoutExerciseEditor({
 
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.82 }}>Create Custom</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="mobileWorkoutCreateRow" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <select value={customUnit} onChange={(event) => setCustomUnit(event.target.value as "REPS" | "TIME")} style={{ ...inputStyle, width: 140 }}>
                 <option value="REPS">Rep-based</option>
                 <option value="TIME">Timed</option>
@@ -345,7 +345,7 @@ export default function WorkoutExerciseEditor({
       </FormSection>
 
       {blocks.length === 0 && emptyStateHelp ? (
-        <div style={{ ...styles.card, fontSize: 13, opacity: 0.82 }}>{emptyStateHelp}</div>
+        <div className="mobileCard" style={{ ...styles.card, fontSize: 13, opacity: 0.82 }}>{emptyStateHelp}</div>
       ) : null}
 
       {blocks.map((block) => {
@@ -355,8 +355,8 @@ export default function WorkoutExerciseEditor({
         const metricLabel = exerciseUnitFieldLabel(block.unit);
 
         return (
-          <div key={block.exerciseId} style={styles.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <div key={block.exerciseId} className="mobileCard" style={styles.card}>
+            <div className="mobileWorkoutBlockHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={{ fontSize: 16, fontWeight: 900 }}>{block.name}</div>
                 <div style={{ fontSize: 12, opacity: 0.72 }}>
@@ -373,63 +373,56 @@ export default function WorkoutExerciseEditor({
               </div>
             </div>
 
-            <div style={{ marginTop: 10, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Set</th>
-                    {showWeight && <th style={styles.th}>Weight (lb)</th>}
-                    {(showReps || showTime) && <th style={styles.th}>{metricLabel}</th>}
-                    <th style={styles.th}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {block.rows.map((row) => (
-                    <tr key={row.setNumber}>
-                      <td style={styles.tdCenter}>{row.setNumber}</td>
-                      {showWeight && (
-                        <td style={styles.td}>
-                          <input
-                            style={inputStyle}
-                            value={row.weightLb ?? ""}
-                            inputMode="decimal"
-                            onChange={(event) => updateCell(block.exerciseId, row.setNumber, "weightLb", event.target.value)}
-                          />
-                        </td>
-                      )}
-                      {showReps && (
-                        <td style={styles.td}>
-                          <input
-                            style={inputStyle}
-                            value={row.reps ?? ""}
-                            inputMode="numeric"
-                            onChange={(event) => updateCell(block.exerciseId, row.setNumber, "reps", event.target.value)}
-                          />
-                        </td>
-                      )}
-                      {showTime && (
-                        <td style={styles.td}>
-                          <input
-                            style={inputStyle}
-                            value={row.seconds ?? ""}
-                            inputMode="numeric"
-                            onChange={(event) => updateCell(block.exerciseId, row.setNumber, "seconds", event.target.value)}
-                          />
-                        </td>
-                      )}
-                      <td style={styles.tdCenter}>
-                        <button
-                          type="button"
-                          onClick={() => removeRow(block.exerciseId, row.setNumber)}
-                          style={styles.smallBtn}
-                        >
-                          -
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mobileWorkoutSetList" style={{ marginTop: 10, display: "grid", gap: 8 }}>
+              {block.rows.map((row) => (
+                <div key={row.setNumber} className="mobileWorkoutSetCard" style={styles.setCard}>
+                  <div className="mobileWorkoutSetRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.4, opacity: 0.78 }}>Set {row.setNumber}</div>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(block.exerciseId, row.setNumber)}
+                      style={styles.smallBtn}
+                    >
+                      Remove Set
+                    </button>
+                  </div>
+                  <div className="mobileWorkoutSetGrid mobileFormGrid" style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${showWeight && (showReps || showTime) ? 2 : 1}, minmax(0, 1fr))` }}>
+                    {showWeight && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label style={styles.fieldLabel}>Weight (lb)</label>
+                        <input
+                          style={inputStyle}
+                          value={row.weightLb ?? ""}
+                          inputMode="decimal"
+                          onChange={(event) => updateCell(block.exerciseId, row.setNumber, "weightLb", event.target.value)}
+                        />
+                      </div>
+                    )}
+                    {showReps && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label style={styles.fieldLabel}>{metricLabel}</label>
+                        <input
+                          style={inputStyle}
+                          value={row.reps ?? ""}
+                          inputMode="numeric"
+                          onChange={(event) => updateCell(block.exerciseId, row.setNumber, "reps", event.target.value)}
+                        />
+                      </div>
+                    )}
+                    {showTime && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label style={styles.fieldLabel}>{metricLabel}</label>
+                        <input
+                          style={inputStyle}
+                          value={row.seconds ?? ""}
+                          inputMode="numeric"
+                          onChange={(event) => updateCell(block.exerciseId, row.setNumber, "seconds", event.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -449,42 +442,37 @@ export default function WorkoutExerciseEditor({
 const styles = {
   addPanel: {
     border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     background: "rgba(128,128,128,0.06)",
     display: "grid",
-    gap: 10,
+    gap: 12,
   },
   card: {
     border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     background: "rgba(128,128,128,0.06)",
   },
-  th: {
-    textAlign: "left" as const,
-    borderBottom: "1px solid rgba(128,128,128,0.35)",
-    padding: "8px 6px",
-    fontSize: 12,
-    opacity: 0.85,
+  setCard: {
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: 12,
+    background: "rgba(255,255,255,0.04)",
   },
-  td: { borderBottom: "1px solid rgba(128,128,128,0.18)", padding: 6 },
-  tdCenter: {
-    borderBottom: "1px solid rgba(128,128,128,0.18)",
-    padding: 6,
-    textAlign: "center" as const,
-    width: 50,
-  },
+  fieldLabel: { fontSize: 12, fontWeight: 800, opacity: 0.8 },
   smallBtn: {
-    padding: "6px 10px",
-    borderRadius: 10,
+    minHeight: 38,
+    padding: "7px 11px",
+    borderRadius: 12,
     border: "1px solid rgba(128,128,128,0.35)",
     background: "rgba(128,128,128,0.10)",
     fontWeight: 800,
   },
   warnBtn: {
-    padding: "6px 10px",
-    borderRadius: 10,
+    minHeight: 38,
+    padding: "7px 11px",
+    borderRadius: 12,
     border: "1px solid rgba(220,38,38,0.45)",
     background: "rgba(220,38,38,0.10)",
     color: "inherit",

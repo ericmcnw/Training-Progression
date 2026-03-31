@@ -346,22 +346,22 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
   const sessionDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topRow}>
+    <div className="mobileRoutineDetailPage mobilePageShell" style={styles.container}>
+      <div className="mobileRoutineLogTopRow mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 style={styles.h1}>
+          <h1 className="mobilePageTitle" style={styles.h1}>
             {routine.name} - Log {isWorkoutKind(kind) ? "Workout" : isCardioKind(kind) ? "Cardio" : isGuidedKind(kind) ? "Guided Routine" : isSessionKind(kind) ? "Session" : "Completion"}
           </h1>
-          <div style={styles.sub}>{routine.category}</div>
+          <div className="mobilePageSubtitle" style={styles.sub}>{routine.category}</div>
         </div>
         <Link href="/routines" style={styles.linkBtn}>
           Back
         </Link>
       </div>
 
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>{getDetailHeading(kind)}</div>
-        <div style={{ padding: 14 }}>
+      <section className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>{getDetailHeading(kind)}</div>
+        <div className="mobileSectionBody" style={{ padding: 14 }}>
           {isWorkoutKind(kind) ? (
             <LogWorkoutForm
               routineId={routineId}
@@ -410,12 +410,12 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
         </div>
       </section>
 
-      <section style={{ ...styles.panel, marginTop: 16 }}>
-        <div style={styles.panelHeader}>{getRecentLogHeading(kind)}</div>
-        <div style={{ padding: 12, display: "grid", gap: 8 }}>
+      <section className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>{getRecentLogHeading(kind)}</div>
+        <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 10 }}>
           {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
           {recentLogs.map((log) => (
-            <div key={log.id} style={styles.logCard}>
+            <div key={log.id} className="mobileRoutineLogCard mobileCard" style={styles.logCard}>
               <div style={{ fontSize: 13 }}>
                 <div style={{ fontWeight: 800 }}>{new Date(log.performedAt).toLocaleString()}</div>
                 <div style={{ opacity: 0.8, marginTop: 2 }}>
@@ -449,11 +449,11 @@ const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 20 },
+  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
   topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" },
   h1: { fontSize: 24, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
-  panel: { marginTop: 16, border, borderRadius: 12, overflow: "hidden" },
+  panel: { border, borderRadius: 16, overflow: "hidden" },
   panelHeader: { padding: "10px 14px", background: bgBar, borderBottom: border, fontWeight: 900 as const },
   linkBtn: {
     padding: "8px 12px",
@@ -466,8 +466,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   logCard: {
     border: "1px solid rgba(128,128,128,0.28)",
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 16,
+    padding: 14,
     display: "flex",
     justifyContent: "space-between",
     gap: 8,

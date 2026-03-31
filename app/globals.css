@@ -7,9 +7,16 @@
   --text: rgba(255,255,255,0.92);
   --muted: rgba(255,255,255,0.70);
   --success: #33ff7a;   /* bright green */
+  --app-max-width: 1180px;
+  --app-edge-padding: clamp(14px, 3vw, 24px);
+  --app-mobile-bottom-offset: calc(116px + env(safe-area-inset-bottom));
 }
 
 html, body { height: 100%; }
+
+html{
+  overflow-x: hidden;
+}
 
 body{
   margin: 0;
@@ -19,10 +26,16 @@ body{
     var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  overflow-x: hidden;
 }
 
 *{
   box-sizing: border-box;
+}
+
+*:focus-visible{
+  outline: 2px solid rgba(51,255,122,0.6);
+  outline-offset: 2px;
 }
 
 a{ color: var(--text); text-decoration: none; }
@@ -33,7 +46,8 @@ input, select, textarea{
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px 12px;
+  min-height: 44px;
+  padding: 11px 12px;
   outline: none;
 }
 
@@ -54,6 +68,7 @@ button{
   color: var(--text);
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 12px;
+  min-height: 44px;
   padding: 10px 14px;
   font-weight: 700;
   cursor: pointer;
@@ -113,9 +128,9 @@ details[open] > summary[data-collapsible-summary]::before{
 }
 
 .appHeaderInner{
-  max-width: 980px;
+  max-width: var(--app-max-width);
   margin: 0 auto;
-  padding: 14px 18px;
+  padding: 16px var(--app-edge-padding);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -140,9 +155,10 @@ details[open] > summary[data-collapsible-summary]::before{
 }
 
 .appMain{
-  max-width: 980px;
+  width: min(100%, var(--app-max-width));
   margin: 0 auto;
-  padding: 18px;
+  padding: 22px var(--app-edge-padding) 34px;
+  overflow-x: clip;
 }
 
 .mobileOnlyHomeSection{
@@ -177,8 +193,13 @@ details[open] > summary[data-collapsible-summary]::before{
 }
 
 @media (max-width: 720px){
+  :root{
+    --app-edge-padding: 14px;
+  }
+
   .appHeaderInner{
     padding: 12px 14px;
+    min-height: 68px;
   }
 
   .appNav{
@@ -190,7 +211,7 @@ details[open] > summary[data-collapsible-summary]::before{
     top: 0;
     z-index: 20;
     backdrop-filter: blur(14px);
-    background: rgba(11,18,32,0.86);
+    background: rgba(11,18,32,0.9);
   }
 
   .mobileBottomNav{
@@ -199,13 +220,24 @@ details[open] > summary[data-collapsible-summary]::before{
     right: 0;
     bottom: 0;
     z-index: 40;
+    display: block;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+
+  .mobileBottomNavInner{
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
-    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-    background: transparent;
-    backdrop-filter: none;
-    box-shadow: none;
+    max-width: min(100%, 620px);
+    margin: 0 auto;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    background: rgba(9,15,27,0.92);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+    pointer-events: auto;
   }
 
   .mobileBottomNavLink{
@@ -215,14 +247,14 @@ details[open] > summary[data-collapsible-summary]::before{
     align-content: center;
     min-height: 58px;
     padding: 9px 6px;
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 16px;
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.01em;
     text-align: center;
     color: var(--muted);
-    background: rgb(17,27,46);
+    background: rgba(255,255,255,0.03);
     transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
     gap: 4px;
   }
@@ -264,7 +296,86 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .appMain{
-    padding: 14px 14px calc(108px + env(safe-area-inset-bottom));
+    padding: 16px 14px var(--app-mobile-bottom-offset);
+  }
+
+  input,
+  select,
+  textarea{
+    font-size: 16px;
+  }
+
+  .mobilePageShell{
+    padding: 2px 0 0 !important;
+    gap: 18px !important;
+  }
+
+  .mobilePageHeader{
+    display: grid !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+  }
+
+  .mobilePageTitle{
+    font-size: 28px !important;
+    line-height: 1.04 !important;
+  }
+
+  .mobilePageSubtitle{
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    max-width: none !important;
+  }
+
+  .mobileActionRow,
+  .mobileActionStack{
+    display: grid !important;
+    gap: 8px !important;
+    width: 100%;
+  }
+
+  .mobileActionRow > *,
+  .mobileActionStack > *{
+    width: 100%;
+  }
+
+  .mobileSectionCard{
+    border-radius: 18px !important;
+    overflow: hidden !important;
+  }
+
+  .mobileSectionHeader{
+    padding: 12px 14px !important;
+  }
+
+  .mobileSectionBody{
+    padding: 14px !important;
+    gap: 14px !important;
+  }
+
+  .mobileListStack{
+    gap: 12px !important;
+  }
+
+  .mobileCard{
+    border-radius: 16px !important;
+    padding: 14px !important;
+  }
+
+  .mobileFormGrid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobileStickyActions{
+    position: sticky;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 10;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    background: rgba(9,15,27,0.92);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.24);
   }
 
   .mobileHomePage,
@@ -333,6 +444,8 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileRoutinesPage,
   .mobileProgressPage,
+  .mobileExercisesPage,
+  .mobileManualLogPage,
   .mobileRoutineDetailPage,
   .mobileRoutineTemplatePage,
   .mobileGuidedTemplatePage{
@@ -343,6 +456,11 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileRoutinesHeader,
   .mobileRoutinesCardShell,
   .mobileRoutinesCardMain,
+  .mobileExercisesTopRow,
+  .mobileExercisesCardHeader,
+  .mobileManualLogTopRow,
+  .mobileManualLogHeroActions,
+  .mobileManualLogHistoryCard,
   .mobileRoutinesCardHeading,
   .mobileRoutinesCardActions,
   .mobileRoutinesCardMeta,
@@ -364,6 +482,7 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileRoutinesQuickDate,
   .mobileProgressSearch,
   .mobileProgressSearchRow,
+  .mobileExerciseSearchAction,
   .mobileRoutineDetailSelect,
   .mobileRoutineTemplateInput{
     min-width: 0 !important;
@@ -464,6 +583,7 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileRoutineDetailBack,
+  .mobileExercisePrimaryAction,
   .mobileRoutineTemplateActions > *,
   .mobileGuidedTemplateActions > *{
     width: 100%;
@@ -603,5 +723,32 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileProgressDrillSidebar{
     gap: 10px !important;
+  }
+
+  .mobileRoutineLogTopRow,
+  .mobileRoutineLogCard,
+  .mobileWorkoutBlockHeader,
+  .mobileWorkoutPickerRow,
+  .mobileWorkoutCreateRow,
+  .mobileWorkoutSetRow,
+  .mobileExerciseFormToggleRow{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .mobileWorkoutSetList{
+    display: grid !important;
+    gap: 10px !important;
+  }
+
+  .mobileWorkoutSetCard{
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 14px !important;
+    padding: 12px !important;
+    background: rgba(255,255,255,0.04) !important;
+  }
+
+  .mobileWorkoutSetGrid{
+    grid-template-columns: 1fr !important;
   }
 }

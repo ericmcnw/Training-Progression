@@ -45,6 +45,7 @@ export function MobileBottomNavigation() {
 
   return (
     <nav className="mobileBottomNav" aria-label="Mobile primary">
+      <div className="mobileBottomNavInner">
       {mobileNavItems.map((item) => {
           const active = item.match(pathname);
 
@@ -63,6 +64,7 @@ export function MobileBottomNavigation() {
             </Link>
           );
       })}
+      </div>
     </nav>
   );
 }

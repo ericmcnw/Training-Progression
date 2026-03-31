@@ -59,11 +59,11 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
   });
 
   return (
-    <div style={styles.container}>
-      <div style={styles.topRow}>
+    <div className="mobileRoutineDetailPage mobilePageShell" style={styles.container}>
+      <div className="mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 style={styles.h1}>Edit Routine</h1>
-          <div style={styles.sub}>
+          <h1 className="mobilePageTitle" style={styles.h1}>Edit Routine</h1>
+          <div className="mobilePageSubtitle" style={styles.sub}>
             {routine.name} | {routine.isActive ? "Active" : "Archived"}
           </div>
         </div>
@@ -73,8 +73,8 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
         </Link>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.panelHeader}>ROUTINE SETUP</div>
+      <div className="mobileSectionCard" style={styles.panel}>
+        <div className="mobileSectionHeader" style={styles.panelHeader}>ROUTINE SETUP</div>
         <EditRoutineForm
           routine={{
             id: routine.id,
@@ -94,7 +94,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
         />
       </div>
 
-      <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <form
           action={async () => {
             "use server";
@@ -132,27 +132,29 @@ const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
 const styles = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 20 },
-  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" as const },
   h1: { fontSize: 26, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
 
-  panel: { marginTop: 16, border, borderRadius: 12, overflow: "hidden" },
+  panel: { border, borderRadius: 16, overflow: "hidden" },
   panelHeader: { padding: "10px 14px", background: bgBar, borderBottom: border, fontWeight: 900 as const },
 
   btn: {
+    minHeight: 44,
     padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "rgba(128,128,128,0.12)",
     color: "inherit",
     fontWeight: 900 as const,
   },
 
   linkBtn: {
-    padding: "8px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textDecoration: "none",
     color: "inherit",
     fontWeight: 800 as const,

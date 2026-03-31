@@ -28,12 +28,12 @@ export function ProgressShell({
   const resolvedNavItems = navItems ?? progressSections().map((item) => ({ ...item, active: item.key === section }));
 
   return (
-    <div style={styles.container}>
-      <div style={styles.progressTopBar}>
+    <div className="mobileProgressPage mobilePageShell" style={styles.container}>
+      <div className="mobileProgressTopRow mobilePageHeader" style={styles.progressTopBar}>
         <div style={styles.progressTitleRow}>
           <div style={styles.progressTitleStack}>
-            <h1 style={styles.progressH1}>{resolvedTitle}</h1>
-            {subtitle ? <div style={styles.progressSub}>{subtitle}</div> : null}
+            <h1 className="mobilePageTitle" style={styles.progressH1}>{resolvedTitle}</h1>
+            {subtitle ? <div className="mobilePageSubtitle" style={styles.progressSub}>{subtitle}</div> : null}
           </div>
           {section !== "overview" ? (
             <Link href="/progress" style={styles.backBtn}>
@@ -41,7 +41,7 @@ export function ProgressShell({
             </Link>
           ) : null}
         </div>
-        {actions ? <div style={styles.progressTopActions}>{actions}</div> : null}
+        {actions ? <div className="mobileActionRow" style={styles.progressTopActions}>{actions}</div> : null}
       </div>
 
       <NavCluster
@@ -50,7 +50,7 @@ export function ProgressShell({
         items={resolvedNavItems}
       />
 
-      <div style={styles.content}>{children}</div>
+      <div className="mobileListStack" style={styles.content}>{children}</div>
     </div>
   );
 }
@@ -75,17 +75,17 @@ export function TargetHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div style={styles.container}>
-      <div style={styles.hero}>
+    <div className="mobileProgressPage mobilePageShell" style={styles.container}>
+      <div className="mobileSectionCard" style={styles.hero}>
         <div style={styles.heroCopy}>
           <div style={styles.eyebrow}>Progress Target</div>
-          <h1 style={styles.h1}>{title}</h1>
-          {subtitle ? <div style={styles.sub}>{subtitle}</div> : null}
+          <h1 className="mobilePageTitle" style={styles.h1}>{title}</h1>
+          {subtitle ? <div className="mobilePageSubtitle" style={styles.sub}>{subtitle}</div> : null}
         </div>
-        {actions ? <div style={styles.heroActions}>{actions}</div> : null}
+        {actions ? <div className="mobileActionRow" style={styles.heroActions}>{actions}</div> : null}
       </div>
 
-      <div style={styles.navStack}>
+      <div className="mobileListStack" style={styles.navStack}>
         <NavCluster
           label="Area"
           hint="Switch between routines, exercises, cardio, and group rollups."
@@ -128,15 +128,15 @@ export function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section style={styles.section}>
-      <div style={styles.sectionHeaderRow}>
+    <section className="mobileSectionCard" style={styles.section}>
+      <div className="mobileSectionHeader" style={styles.sectionHeaderRow}>
         <div style={{ minWidth: 0 }}>
           <div style={styles.sectionHeader}>{title}</div>
           {subtitle ? <div style={styles.sectionSub}>{subtitle}</div> : null}
         </div>
-        {actions ? <div style={styles.sectionActions}>{actions}</div> : null}
+        {actions ? <div className="mobileActionRow" style={styles.sectionActions}>{actions}</div> : null}
       </div>
-      <div style={styles.sectionBody}>{children}</div>
+      <div className="mobileSectionBody" style={styles.sectionBody}>{children}</div>
     </section>
   );
 }
@@ -309,8 +309,8 @@ const border = "1px solid rgba(255,255,255,0.12)";
 const cardBackground = "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 1120, margin: "0 auto", padding: "10px 14px 20px" },
-  content: { marginTop: 12, display: "grid", gap: 16 },
+  container: { maxWidth: 1120, margin: "0 auto", padding: "4px 0 20px", display: "grid", gap: 18 },
+  content: { marginTop: 2, display: "grid", gap: 16 },
   progressTopBar: {
     display: "flex",
     justifyContent: "space-between",
@@ -318,7 +318,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
     minHeight: 40,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   progressTitleRow: {
     display: "flex",
@@ -358,7 +358,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 14px 30px rgba(0,0,0,0.14)",
   },
   heroCopy: { display: "grid", gap: 6, flex: "1 1 520px", minWidth: 0 },
-  heroActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
+  heroActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" },
   eyebrow: {
     fontSize: 11,
     letterSpacing: 1.1,

@@ -66,7 +66,7 @@ export default function ExerciseForm({
   }, [suggestedMetadataGroupIds]);
 
   return (
-    <form action={action} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 720 }}>
+    <form action={action} className="mobileSectionBody mobileListStack" style={{ padding: 14, display: "grid", gap: 14, maxWidth: 720 }}>
       {exercise ? <input type="hidden" name="id" value={exercise.id} /> : null}
 
       <div>
@@ -80,7 +80,7 @@ export default function ExerciseForm({
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="mobileFormGrid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label style={styles.label}>Logging style</label>
           <select
@@ -95,7 +95,7 @@ export default function ExerciseForm({
           <div style={styles.hint}>{exerciseUnitDescription(unit)}</div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 22 }}>
+        <div className="mobileExerciseFormToggleRow" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 22 }}>
           <input
             id="supportsWeight"
             name="supportsWeight"
@@ -137,7 +137,7 @@ export default function ExerciseForm({
         collapsible
       />
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="mobileStickyActions mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="submit" style={styles.btn}>
           {submitLabel}
         </button>
@@ -152,28 +152,31 @@ export default function ExerciseForm({
 }
 
 const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
+  label: { display: "block", fontWeight: 900 as const, marginBottom: 6 },
   input: {
     width: "100%",
-    padding: 8,
+    minHeight: 46,
+    padding: 10,
     border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "rgba(128,128,128,0.08)",
     color: "inherit",
   },
   hint: { marginTop: 6, fontSize: 12, opacity: 0.72 },
   btn: {
+    minHeight: 44,
     padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "rgba(128,128,128,0.12)",
     color: "inherit",
     fontWeight: 900 as const,
   },
   linkBtn: {
-    padding: "8px 12px",
+    minHeight: 44,
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
+    borderRadius: 12,
     textDecoration: "none",
     color: "inherit",
     fontWeight: 800 as const,
