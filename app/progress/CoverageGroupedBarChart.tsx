@@ -11,20 +11,30 @@ type LegendItem = {
   color: string;
 };
 
-type ActiveBar = {
+type ActiveCell = {
   categoryId: string;
   routineKind: RoutineKind;
 };
 
-function barKey(categoryId: string, routineKind: RoutineKind) {
-  return `${categoryId}:${routineKind}`;
+function withAlpha(color: string, alpha: number) {
+  return color.replace(/[\d.]+\)$/, `${alpha})`);
 }
 
-function categoryStatus(totalCount: number, rangeLabel: string) {
-  if (totalCount === 0) return { label: "Quiet", tone: quietPillStyle };
-  if (rangeLabel === "This Week" && totalCount <= 1) return { label: "Thin", tone: thinPillStyle };
-  if (rangeLabel === "Last 4 Weeks" && totalCount <= 2) return { label: "Light", tone: thinPillStyle };
-  return { label: "Active", tone: activePillStyle };
+function kindAbbr(kind: RoutineKind): string {
+  switch (kind) {
+    case "WORKOUT": return "WO";
+    case "CARDIO": return "CA";
+    case "GUIDED": return "GU";
+    case "SESSION": return "SE";
+    case "COMPLETION": return "CO";
+  }
+}
+
+function statusBorderColor(totalCount: number, rangeLabel: string): string {
+  if (totalCount === 0) return "transparent";
+  if (rangeLabel === "This Week" && totalCount <= 1) return "rgba(255,196,107,0.5)";
+  if (rangeLabel === "Last 4 Weeks" && totalCount <= 2) return "rgba(255,196,107,0.5)";
+  return "rgba(84,203,130,0.45)";
 }
 
 function groupDetails(logs: CoverageDetailLog[]) {
@@ -48,10 +58,75 @@ function groupDetails(logs: CoverageDetailLog[]) {
   return Array.from(grouped.values())
     .map((entry) => ({
       ...entry,
-      dates: [...entry.dates].sort((left, right) => right.localeCompare(left)),
-      relevantParts: Array.from(new Set(entry.relevantParts)).sort((left, right) => left.localeCompare(right)),
+      dates: [...entry.dates].sort((a, b) => b.localeCompare(a)),
+      relevantParts: Array.from(new Set(entry.relevantParts)).sort((a, b) => a.localeCompare(b)),
     }))
-    .sort((left, right) => right.dates.length - left.dates.length || left.routineName.localeCompare(right.routineName));
+    .sort((a, b) => b.dates.length - a.dates.length || a.routineName.localeCompare(b.routineName));
+}
+
+type GroupedLog = ReturnType<typeof groupDetails>[number];
+
+function DetailPanel({
+  details,
+  onClose,
+}: {
+  details: {
+    kindLabel: string;
+    kindColor: string;
+    category: CoverageCategoryRow;
+    logs: CoverageDetailLog[];
+    groupedLogs: GroupedLog[];
+  };
+  onClose: () => void;
+}) {
+  const hasExercises = details.groupedLogs.some((entry) => entry.relevantParts.length > 0);
+
+  return (
+    <div style={detailPanelStyle}>
+      <div style={detailHeaderStyle}>
+        <div style={detailHeaderLeftStyle}>
+          <span style={{ ...dotStyle, background: details.kindColor }} />
+          <span style={detailKindStyle}>{details.kindLabel}</span>
+          <span style={detailSepStyle}>·</span>
+          <Link href={details.category.targetHref} style={detailCategoryLinkStyle}>
+            {details.category.label}
+          </Link>
+          <span style={detailCountBadgeStyle}>
+            {details.logs.length} {details.logs.length === 1 ? "session" : "sessions"}
+          </span>
+        </div>
+        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Close detail">
+          ✕
+        </button>
+      </div>
+
+      <div style={detailListStyle}>
+        {details.groupedLogs.slice(0, 6).map((entry) => (
+          <div key={`${entry.routineName}-${entry.dates[0] ?? ""}`} style={detailRowStyle}>
+            <div style={detailRowTopStyle}>
+              <span style={routineNameStyle}>
+                {entry.routineName}
+                {entry.dates.length > 1 ? (
+                  <span style={routineRepeatStyle}> ×{entry.dates.length}</span>
+                ) : null}
+              </span>
+              <span style={datesStyle}>{entry.dates.slice(0, 3).join(", ")}</span>
+            </div>
+            {entry.relevantParts.length > 0 ? (
+              <div style={partsStyle}>{entry.relevantParts.join("  ·  ")}</div>
+            ) : null}
+          </div>
+        ))}
+        {details.groupedLogs.length > 6 ? (
+          <div style={detailMoreStyle}>+{details.groupedLogs.length - 6} more routines</div>
+        ) : null}
+      </div>
+
+      {hasExercises ? (
+        <div style={detailHintStyle}>Exercises shown are the ones that contributed to this group.</div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function CoverageGroupedBarChart({
@@ -65,169 +140,273 @@ export default function CoverageGroupedBarChart({
   rangeLabel: string;
   emptyMessage: string;
 }) {
-  const [hoveredBar, setHoveredBar] = useState<ActiveBar | null>(null);
-  const [activeBar, setActiveBar] = useState<ActiveBar | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
+  const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
 
-  const maxCount = Math.max(
-    1,
-    ...categories.flatMap((category) => legend.map((item) => category.countsByKind[item.kind]))
-  );
+  // Hover only shows preview when no cell is locked active
+  const focusedCell = activeCell ?? hoveredCell;
 
-  const focusedBar = activeBar ?? hoveredBar;
   const focusedDetails = useMemo(() => {
-    if (!focusedBar) return null;
-    const category = categories.find((entry) => entry.id === focusedBar.categoryId);
+    if (!focusedCell) return null;
+    const category = categories.find((c) => c.id === focusedCell.categoryId);
     if (!category) return null;
-    const logs = category.contributingLogsByKind[focusedBar.routineKind];
+    const logs = category.contributingLogsByKind[focusedCell.routineKind];
+    const legendItem = legend.find((l) => l.kind === focusedCell.routineKind);
     return {
       category,
-      routineKind: focusedBar.routineKind,
+      routineKind: focusedCell.routineKind,
+      kindLabel: legendItem?.label ?? focusedCell.routineKind,
+      kindColor: legendItem?.color ?? "rgba(255,255,255,0.8)",
       logs,
       groupedLogs: groupDetails(logs),
     };
-  }, [categories, focusedBar]);
+  }, [categories, focusedCell, legend]);
 
   if (categories.length === 0) {
     return <div style={emptyStateStyle}>{emptyMessage}</div>;
   }
 
+  // Label col is 1fr (min 100px), each kind col is 52px
+  const colTemplate = `minmax(100px, 1fr) repeat(${legend.length}, 52px)`;
+  // Minimum inner width: 120px label + 52px per kind
+  const minInnerWidth = 120 + legend.length * 52;
+
   return (
-    <div className="mobileCoverageChart" style={{ display: "grid", gap: 14 }}>
-      <div className="mobileCoverageLegend" style={legendRowStyle}>
-        {legend.map((item) => (
-          <span key={item.kind} style={legendChipStyle}>
-            <span style={{ ...legendDotStyle, background: item.color }} />
-            {item.label}
-          </span>
-        ))}
-      </div>
+    <div style={outerScrollStyle}>
+      <div style={{ minWidth: minInnerWidth }}>
 
-      <div className="mobileCoverageHelper" style={helperStyle}>Bars show how many completed logs in {rangeLabel.toLowerCase()} contributed to each category.</div>
-
-      <div className="mobileCoverageRows" style={{ display: "grid", gap: 12 }}>
-        {categories.map((category, categoryIndex) => (
-          <div
-            key={category.id}
-            className="mobileCoverageCategoryRow"
-            style={{
-              ...categoryRowStyle,
-              ...(focusedBar?.categoryId === category.id ? categoryRowFocusedStyle : null),
-            }}
-          >
-            <div className="mobileCoverageLabelColumn" style={categoryLabelColumnStyle}>
-              <Link href={category.targetHref} style={categoryLinkStyle}>
-                {category.label}
-              </Link>
-              <div style={categoryMetaRowStyle}>
-                <span style={categoryMetaStyle}>{category.totalCount} total</span>
-                <span style={categoryStatus(category.totalCount, rangeLabel).tone}>{categoryStatus(category.totalCount, rangeLabel).label}</span>
-              </div>
+        {/* Column headers */}
+        <div style={{ display: "grid", gridTemplateColumns: colTemplate, marginBottom: 4, paddingInline: "10px 6px" }}>
+          <div /> {/* empty corner */}
+          {legend.map((item) => (
+            <div key={item.kind} style={kindHeaderStyle} title={item.label}>
+              <span style={{ ...dotStyle, background: item.color }} />
+              <span style={kindAbbrStyle}>{kindAbbr(item.kind)}</span>
             </div>
+          ))}
+        </div>
 
-            <div className="mobileCoverageBarsColumn" style={barsColumnStyle}>
-              {legend.map((item) => {
-                const count = category.countsByKind[item.kind];
-                const isInteractive = count > 0;
-                const isFocused = focusedBar
-                  ? focusedBar.categoryId === category.id && focusedBar.routineKind === item.kind
-                  : false;
-                const showBubble =
-                  isFocused &&
-                  focusedDetails &&
-                  focusedDetails.category.id === category.id &&
-                  focusedDetails.routineKind === item.kind;
-                const placeBubbleBelow = categoryIndex < 2;
+        {/* Full legend key below column headers */}
+        <div style={legendKeyRowStyle}>
+          {legend.map((item) => (
+            <span key={item.kind} style={legendKeyItemStyle}>
+              <span style={{ ...dotStyle, background: item.color }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
 
-                return (
-                  <div key={barKey(category.id, item.kind)} className="mobileCoverageBarWrap" style={barWrapStyle}>
-                    <button
-                      type="button"
-                      className="mobileCoverageBarButton"
-                      disabled={!isInteractive}
-                      style={{
-                        ...barButtonStyle,
-                        ...(isInteractive ? interactiveBarButtonStyle : inactiveBarButtonStyle),
-                        ...(isFocused ? focusedBarButtonStyle : {}),
-                      }}
-                      onMouseEnter={() => {
-                        if (activeBar === null && isInteractive) setHoveredBar({ categoryId: category.id, routineKind: item.kind });
-                      }}
-                      onMouseLeave={() => {
-                        if (activeBar === null) setHoveredBar(null);
-                      }}
-                      onClick={() => {
-                        if (!isInteractive) return;
-                        setActiveBar((current) =>
-                          current && current.categoryId === category.id && current.routineKind === item.kind
-                            ? null
-                            : { categoryId: category.id, routineKind: item.kind }
-                        );
-                      }}
-                      aria-label={`${category.label}, ${item.label}, ${count} completed logs`}
-                    >
-                      <span className="mobileCoverageBarTrack" style={barTrackStyle}>
-                        <span
-                          style={{
-                            ...barFillStyle,
-                            background: item.color,
-                            width: count > 0 ? `${Math.max(8, (count / maxCount) * 100)}%` : "0%",
-                          }}
-                        />
-                      </span>
-                      <span className="mobileCoverageBarCount" style={barCountStyle}>{count}</span>
-                    </button>
+        {/* Category rows */}
+        <div style={{ display: "grid", gap: 2, marginTop: 8 }}>
+          {categories.map((category) => {
+            const border = statusBorderColor(category.totalCount, rangeLabel);
+            const isRowFocused = focusedCell?.categoryId === category.id;
+            const isRowActive = activeCell?.categoryId === category.id;
 
-                    {showBubble ? (
-                      <div
-                        className="mobileCoverageTooltip"
-                        style={{
-                          ...tooltipBubbleStyle,
-                          ...(placeBubbleBelow ? tooltipBubbleBelowStyle : tooltipBubbleAboveStyle),
-                        }}
-                      >
-                        <div style={tooltipHeaderStyle}>
-                          <span style={legendChipStyle}>
-                            <span
-                              style={{
-                                ...legendDotStyle,
-                                background: legend.find((entry) => entry.kind === item.kind)?.color ?? "rgba(255,255,255,0.8)",
-                              }}
-                            />
-                            {item.label}
-                          </span>
-                          <span style={detailCountChipStyle}>{focusedDetails.logs.length} logs</span>
-                        </div>
-
-                        <div style={tooltipListStyle}>
-                          {focusedDetails.groupedLogs.slice(0, 4).map((entry) => (
-                            <div key={`${entry.routineName}-${entry.dates.join(",")}`} style={tooltipRowStyle}>
-                              <div style={tooltipTitleStyle}>
-                                {entry.routineName}
-                                {entry.dates.length > 1 ? ` x${entry.dates.length}` : ""}
-                              </div>
-                              <div style={tooltipDatesStyle}>{entry.dates.slice(0, 3).join(", ")}</div>
-                              {entry.relevantParts.length > 0 ? (
-                                <div style={tooltipPartsStyle}>{entry.relevantParts.slice(0, 2).join(" | ")}</div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-
-                        {focusedDetails.groupedLogs.length > 4 ? (
-                          <div style={tooltipMoreStyle}>+{focusedDetails.groupedLogs.length - 4} more routines</div>
-                        ) : null}
-                      </div>
+            return (
+              <div key={category.id}>
+                {/* Row */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: colTemplate,
+                    alignItems: "stretch",
+                    minHeight: 48,
+                    borderRadius: 10,
+                    borderLeft: `3px solid ${border}`,
+                    background: isRowFocused
+                      ? "rgba(120,190,255,0.07)"
+                      : "rgba(255,255,255,0.028)",
+                    transition: "background 0.1s",
+                  }}
+                >
+                  {/* Label column */}
+                  <div style={labelColStyle}>
+                    <Link href={category.targetHref} style={categoryLinkStyle}>
+                      {category.label}
+                    </Link>
+                    {category.totalCount > 0 ? (
+                      <span style={rowTotalStyle}>{category.totalCount}</span>
                     ) : null}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+
+                  {/* Kind count cells */}
+                  {legend.map((item) => {
+                    const count = category.countsByKind[item.kind];
+                    const isActive =
+                      activeCell?.categoryId === category.id &&
+                      activeCell.routineKind === item.kind;
+                    const isHovered =
+                      !activeCell &&
+                      hoveredCell?.categoryId === category.id &&
+                      hoveredCell.routineKind === item.kind;
+
+                    return (
+                      <div key={item.kind} style={kindCellStyle}>
+                        {count > 0 ? (
+                          <button
+                            type="button"
+                            style={{
+                              ...countBtnBase,
+                              background: isActive
+                                ? withAlpha(item.color, 0.28)
+                                : isHovered
+                                ? withAlpha(item.color, 0.18)
+                                : withAlpha(item.color, 0.11),
+                              borderColor: isActive || isHovered
+                                ? withAlpha(item.color, 0.55)
+                                : withAlpha(item.color, 0.22),
+                              boxShadow: isActive
+                                ? `0 0 0 2px ${withAlpha(item.color, 0.18)}`
+                                : "none",
+                            }}
+                            onMouseEnter={() => {
+                              if (!activeCell) {
+                                setHoveredCell({ categoryId: category.id, routineKind: item.kind });
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (!activeCell) setHoveredCell(null);
+                            }}
+                            onClick={() => {
+                              setHoveredCell(null);
+                              setActiveCell((current) =>
+                                current?.categoryId === category.id &&
+                                current.routineKind === item.kind
+                                  ? null
+                                  : { categoryId: category.id, routineKind: item.kind }
+                              );
+                            }}
+                            aria-label={`${category.label} — ${item.label}: ${count} ${count === 1 ? "session" : "sessions"}`}
+                            aria-pressed={isActive}
+                          >
+                            {count}
+                          </button>
+                        ) : (
+                          <span style={emptyCellStyle} aria-hidden="true" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Inline detail panel — expands below the row when active */}
+                {isRowActive && focusedDetails?.category.id === category.id ? (
+                  <DetailPanel
+                    details={focusedDetails}
+                    onClose={() => setActiveCell(null)}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const outerScrollStyle: React.CSSProperties = {
+  overflowX: "auto",
+};
+
+const dotStyle: React.CSSProperties = {
+  display: "inline-block",
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+
+const kindHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 3,
+  paddingBottom: 4,
+};
+
+const kindAbbrStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  opacity: 0.7,
+  textAlign: "center",
+};
+
+const legendKeyRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
+  paddingInline: 10,
+};
+
+const legendKeyItemStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.72,
+};
+
+const labelColStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "0 8px 0 10px",
+  minWidth: 0,
+};
+
+const categoryLinkStyle: React.CSSProperties = {
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 13,
+  textDecoration: "none",
+  lineHeight: 1.3,
+  minWidth: 0,
+};
+
+const rowTotalStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.45,
+  flexShrink: 0,
+};
+
+const kindCellStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 48,
+};
+
+const countBtnBase: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  minHeight: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 8,
+  border: "1px solid",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
+  padding: 0,
+  color: "inherit",
+  transition: "background 0.1s, border-color 0.1s, box-shadow 0.1s",
+};
+
+const emptyCellStyle: React.CSSProperties = {
+  display: "block",
+  width: 38,
+  height: 38,
+};
 
 const emptyStateStyle: React.CSSProperties = {
   padding: "14px 16px",
@@ -238,239 +417,135 @@ const emptyStateStyle: React.CSSProperties = {
   opacity: 0.82,
 };
 
-const helperStyle: React.CSSProperties = {
-  fontSize: 12,
-  lineHeight: 1.45,
-  opacity: 0.74,
+// ─── Detail panel ─────────────────────────────────────────────────────────────
+
+const detailPanelStyle: React.CSSProperties = {
+  margin: "4px 0 6px",
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(120,190,255,0.2)",
+  background: "rgba(120,190,255,0.04)",
+  display: "grid",
+  gap: 10,
 };
 
-const legendRowStyle: React.CSSProperties = {
+const detailHeaderStyle: React.CSSProperties = {
   display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
   gap: 8,
   flexWrap: "wrap",
 };
 
-const legendChipStyle: React.CSSProperties = {
-  display: "inline-flex",
+const detailHeaderLeftStyle: React.CSSProperties = {
+  display: "flex",
   alignItems: "center",
-  gap: 8,
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.05)",
+  gap: 6,
+  flexWrap: "wrap",
+  minWidth: 0,
+};
+
+const detailKindStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
+  letterSpacing: 0.3,
 };
 
-const legendDotStyle: React.CSSProperties = {
-  width: 10,
-  height: 10,
+const detailSepStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.35,
+};
+
+const detailCategoryLinkStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  color: "inherit",
+  textDecoration: "none",
+  opacity: 0.85,
+};
+
+const detailCountBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.6,
+  padding: "2px 7px",
   borderRadius: 999,
-  display: "inline-block",
+  border: "1px solid rgba(255,255,255,0.1)",
+  background: "rgba(255,255,255,0.05)",
 };
 
-const categoryRowStyle: React.CSSProperties = {
+const closeBtnStyle: React.CSSProperties = {
+  flexShrink: 0,
+  width: 30,
+  height: 30,
+  minHeight: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 7,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.05)",
+  cursor: "pointer",
+  fontSize: 13,
+  padding: 0,
+  color: "inherit",
+};
+
+const detailListStyle: React.CSSProperties = {
   display: "grid",
-  gap: 12,
-  gridTemplateColumns: "minmax(120px, 180px) minmax(0, 1fr)",
-  alignItems: "start",
-  padding: "10px 12px",
-  borderRadius: 14,
-  background: "rgba(255,255,255,0.03)",
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.06)",
+  gap: 5,
 };
 
-const categoryRowFocusedStyle: React.CSSProperties = {
-  borderColor: "rgba(120,190,255,0.26)",
-  background: "rgba(120,190,255,0.08)",
-};
-
-const categoryLabelColumnStyle: React.CSSProperties = {
+const detailRowStyle: React.CSSProperties = {
+  padding: "9px 10px",
+  borderRadius: 9,
+  background: "rgba(255,255,255,0.04)",
   display: "grid",
   gap: 4,
 };
 
-const categoryMetaRowStyle: React.CSSProperties = {
+const detailRowTopStyle: React.CSSProperties = {
   display: "flex",
-  gap: 8,
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  gap: 10,
   flexWrap: "wrap",
-  alignItems: "center",
 };
 
-const categoryLinkStyle: React.CSSProperties = {
-  color: "inherit",
-  fontWeight: 900,
-  textDecoration: "none",
+const routineNameStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 800,
+  lineHeight: 1.3,
 };
 
-const categoryMetaStyle: React.CSSProperties = {
+const routineRepeatStyle: React.CSSProperties = {
+  fontWeight: 600,
+  opacity: 0.65,
+};
+
+const datesStyle: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.7,
+  opacity: 0.62,
+  flexShrink: 0,
+  lineHeight: 1.3,
 };
 
-const activePillStyle: React.CSSProperties = {
-  padding: "4px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 800,
-  border: "1px solid rgba(84,203,130,0.22)",
-  background: "rgba(84,203,130,0.14)",
-};
-
-const thinPillStyle: React.CSSProperties = {
-  padding: "4px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 800,
-  border: "1px solid rgba(255,196,107,0.22)",
-  background: "rgba(255,196,107,0.14)",
-};
-
-const quietPillStyle: React.CSSProperties = {
-  padding: "4px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 800,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.05)",
-};
-
-const barsColumnStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 6,
-};
-
-const barWrapStyle: React.CSSProperties = {
-  position: "relative",
-  width: "100%",
-  minWidth: 0,
-  zIndex: 1,
-};
-
-const barButtonStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 32px",
-  width: "100%",
-  minWidth: 0,
-  gap: 8,
-  alignItems: "center",
-  padding: 0,
-  border: "none",
-  background: "transparent",
-  color: "inherit",
-  textAlign: "left",
-};
-
-const interactiveBarButtonStyle: React.CSSProperties = {
-  cursor: "pointer",
-};
-
-const inactiveBarButtonStyle: React.CSSProperties = {
-  cursor: "default",
-};
-
-const focusedBarButtonStyle: React.CSSProperties = {
-  filter: "brightness(1.08)",
-};
-
-const barTrackStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  height: 16,
-  borderRadius: 999,
-  overflow: "hidden",
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.08)",
-};
-
-const barFillStyle: React.CSSProperties = {
-  display: "block",
-  height: "100%",
-  borderRadius: 999,
-};
-
-const barCountStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.9,
-  textAlign: "right",
-};
-
-const detailCountChipStyle: React.CSSProperties = {
-  padding: "5px 9px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.05)",
-  fontSize: 12,
-  fontWeight: 800,
-};
-
-const tooltipBubbleStyle: React.CSSProperties = {
-  position: "absolute",
-  right: 36,
-  width: "min(320px, calc(100vw - 96px))",
-  maxWidth: "calc(100vw - 96px)",
-  display: "grid",
-  gap: 8,
-  padding: 10,
-  borderRadius: 14,
-  border: "1px solid rgba(120,190,255,0.24)",
-  background: "rgb(10,16,27)",
-  boxShadow: "0 14px 28px rgba(0,0,0,0.28)",
-  zIndex: 20,
-  pointerEvents: "none",
-};
-
-const tooltipBubbleAboveStyle: React.CSSProperties = {
-  bottom: "calc(100% + 6px)",
-};
-
-const tooltipBubbleBelowStyle: React.CSSProperties = {
-  top: "calc(100% + 6px)",
-};
-
-const tooltipHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
-  alignItems: "center",
-};
-
-const tooltipListStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 6,
-};
-
-const tooltipRowStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 3,
-  padding: "8px 9px",
-  borderRadius: 10,
-  background: "rgba(255,255,255,0.04)",
-};
-
-const tooltipTitleStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  lineHeight: 1.35,
-};
-
-const tooltipDatesStyle: React.CSSProperties = {
+const partsStyle: React.CSSProperties = {
   fontSize: 12,
   lineHeight: 1.45,
-  opacity: 0.76,
+  opacity: 0.82,
 };
 
-const tooltipPartsStyle: React.CSSProperties = {
+const detailMoreStyle: React.CSSProperties = {
   fontSize: 11,
+  opacity: 0.6,
+  paddingTop: 2,
+  paddingInline: 2,
+};
+
+const detailHintStyle: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.55,
   lineHeight: 1.4,
-  opacity: 0.88,
-};
-
-const tooltipMoreStyle: React.CSSProperties = {
-  fontSize: 11,
-  lineHeight: 1.35,
-  opacity: 0.72,
+  paddingTop: 2,
 };
