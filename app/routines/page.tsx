@@ -197,14 +197,13 @@ function RoutineCard({
         <div
           className="mobileRoutinesCardHeader"
           style={{
-            display: "flex",
-            justifyContent: "space-between",
+            display: "grid",
+            gridTemplateColumns: "1fr auto",
             gap: 14,
-            alignItems: "flex-start",
-            flexWrap: "wrap",
+            alignItems: "start",
           }}
         >
-          <div className="mobileRoutinesCardPrimary" style={{ flex: "1 1 320px", display: "grid", gap: 8, minWidth: 0 }}>
+          <div className="mobileRoutinesCardPrimary" style={{ display: "grid", gap: 8, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
             <div style={{ fontSize: 12, opacity: 0.75 }}>
               {routine.category} | {formatRoutineTypeLabel(kind)}
@@ -307,12 +306,9 @@ function RoutineCard({
             className="mobileRoutinesCardMetaWrap"
             style={{
               display: "flex",
+              flexDirection: "column",
               gap: 10,
-              alignItems: "flex-start",
-              justifyContent: "flex-end",
-              flexWrap: "wrap",
-              marginLeft: "auto",
-              minWidth: 0,
+              alignItems: "flex-end",
             }}
           >
             {exercisePreview ? (

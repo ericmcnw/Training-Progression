@@ -377,6 +377,8 @@ const styles: Record<string, React.CSSProperties> = {
     border,
     borderRadius: 16,
     background: "rgba(255,255,255,0.035)",
+    minWidth: 0,
+    overflow: "hidden",
   },
   navHeader: { display: "grid", gap: 2 },
   navLabel: {
@@ -390,6 +392,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
     gap: 6,
+    minWidth: 0,
+    overflow: "hidden",
   },
   segment: {
     padding: "9px 10px",
@@ -403,6 +407,9 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
     fontSize: 12,
     fontWeight: 800,
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    textOverflow: "ellipsis",
   },
   segmentActive: {
     background: "linear-gradient(180deg, rgba(120,190,255,0.24), rgba(120,190,255,0.12))",
@@ -524,6 +531,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     background: "rgba(255,255,255,0.06)",
     color: "inherit",
-    minWidth: 180,
+    minWidth: 0,
+    width: "100%",
   },
 };

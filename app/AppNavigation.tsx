@@ -19,7 +19,6 @@ const mobileNavItems = [
   { href: "/progress", label: "Progress", icon: <ProgressIcon />, match: (pathname: string) => pathname.startsWith("/progress") },
   { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "Profile", icon: <HistoryIcon />, match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 export default function AppNavigation() {
@@ -136,11 +135,29 @@ function ScheduleIcon() {
   );
 }
 
-function HistoryIcon() {
+export function MobileProfileButton() {
+  const pathname = usePathname();
+  const active = pathname.startsWith("/manual-log");
   return (
-    <MobileNavIcon>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4.5l3 1.5" />
-    </MobileNavIcon>
+    <Link
+      href="/manual-log"
+      className="mobileProfileButton"
+      aria-current={active ? "page" : undefined}
+      aria-label="Profile"
+    >
+      <span className="mobileProfileButtonIcon" aria-hidden="true">
+        <ProfileIcon />
+      </span>
+      <span>Profile</span>
+    </Link>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.866 3.134-7 7-7s7 3.134 7 7" />
+    </svg>
   );
 }

@@ -154,6 +154,10 @@ details[open] > summary[data-collapsible-summary]::before{
   display: none;
 }
 
+.mobileProfileButton{
+  display: none;
+}
+
 .appMain{
   width: min(100%, var(--app-max-width));
   margin: 0 auto;
@@ -225,9 +229,37 @@ details[open] > summary[data-collapsible-summary]::before{
     pointer-events: none;
   }
 
+  .mobileProfileButton{
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .mobileProfileButton[aria-current="page"]{
+    border-color: rgba(51,255,122,0.35);
+    background: rgba(51,255,122,0.08);
+    color: var(--success);
+  }
+
+  .mobileProfileButtonIcon{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .mobileBottomNavInner{
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     max-width: min(100%, 620px);
     margin: 0 auto;
@@ -780,13 +812,45 @@ details[open] > summary[data-collapsible-summary]::before{
     font-size: 24px !important;
   }
 
-  /* Routine card primary: tighter spacing on small screens */
+  /* Routine card: collapse 2-col grid to single column */
   .mobileRoutinesCardHeader{
+    grid-template-columns: 1fr !important;
     gap: 10px !important;
+  }
+
+  /* Routine card meta wrap: reset right-column alignment when stacked */
+  .mobileRoutinesCardMetaWrap{
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  /* Routine card exercise list: full width when stacked */
+  .mobileRoutinesExerciseList{
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+
+  /* Routine card action buttons: compact on mobile */
+  .mobileRoutinesCardActions > *{
+    padding: 5px 9px !important;
+    font-size: 11px !important;
+    min-height: 34px !important;
   }
 
   /* Routine card body gaps */
   .mobileRoutinesCardShell{
     gap: 10px !important;
+  }
+
+  /* Focus Now copy: don't apply flex-basis as height in column mode */
+  .mobileProgressFocusCopy{
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: 100% !important;
   }
 }
