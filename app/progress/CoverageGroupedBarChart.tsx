@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RoutineKind } from "@/generated/prisma";
 import type { CoverageCategoryRow, CoverageDetailLog } from "./coverage";
 
@@ -142,6 +142,15 @@ export default function CoverageGroupedBarChart({
 }) {
   const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 600px)");
+    setCompact(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Hover only shows preview when no cell is locked active
   const focusedCell = activeCell ?? hoveredCell;
@@ -162,37 +171,41 @@ export default function CoverageGroupedBarChart({
     };
   }, [categories, focusedCell, legend]);
 
+  const totalByKind = useMemo(() => {
+    const totals = new Map<RoutineKind, number>();
+    for (const cat of categories) {
+      for (const item of legend) {
+        totals.set(item.kind, (totals.get(item.kind) ?? 0) + (cat.countsByKind[item.kind] ?? 0));
+      }
+    }
+    return totals;
+  }, [categories, legend]);
+
   if (categories.length === 0) {
     return <div style={emptyStateStyle}>{emptyMessage}</div>;
   }
 
-  // Label col is 1fr (min 100px), each kind col is 52px
-  const colTemplate = `minmax(100px, 1fr) repeat(${legend.length}, 52px)`;
-  // Minimum inner width: 120px label + 52px per kind
-  const minInnerWidth = 120 + legend.length * 52;
+  const kindColWidth = compact ? 40 : 52;
+  const labelMinWidth = compact ? 80 : 100;
+  const btnSize = compact ? 32 : 38;
+  const colTemplate = `minmax(${labelMinWidth}px, 1fr) repeat(${legend.length}, ${kindColWidth}px)`;
+  const minInnerWidth = labelMinWidth + legend.length * kindColWidth;
 
   return (
     <div style={outerScrollStyle}>
       <div style={{ minWidth: minInnerWidth }}>
 
-        {/* Column headers */}
+        {/* Column headers — dot + abbreviation + total count */}
         <div style={{ display: "grid", gridTemplateColumns: colTemplate, marginBottom: 4, paddingInline: "10px 6px" }}>
           <div /> {/* empty corner */}
           {legend.map((item) => (
             <div key={item.kind} style={kindHeaderStyle} title={item.label}>
               <span style={{ ...dotStyle, background: item.color }} />
               <span style={kindAbbrStyle}>{kindAbbr(item.kind)}</span>
+              <span style={{ fontSize: 11, fontWeight: 900, color: item.color, lineHeight: 1, opacity: 0.9 }}>
+                {totalByKind.get(item.kind) ?? 0}
+              </span>
             </div>
-          ))}
-        </div>
-
-        {/* Full legend key below column headers */}
-        <div style={legendKeyRowStyle}>
-          {legend.map((item) => (
-            <span key={item.kind} style={legendKeyItemStyle}>
-              <span style={{ ...dotStyle, background: item.color }} />
-              {item.label}
-            </span>
           ))}
         </div>
 
@@ -248,6 +261,8 @@ export default function CoverageGroupedBarChart({
                             type="button"
                             style={{
                               ...countBtnBase,
+                              width: btnSize,
+                              height: btnSize,
                               background: isActive
                                 ? withAlpha(item.color, 0.28)
                                 : isHovered
@@ -283,7 +298,7 @@ export default function CoverageGroupedBarChart({
                             {count}
                           </button>
                         ) : (
-                          <span style={emptyCellStyle} aria-hidden="true" />
+                          <span style={{ ...emptyCellStyle, width: btnSize, height: btnSize }} aria-hidden="true" />
                         )}
                       </div>
                     );
@@ -326,7 +341,8 @@ const kindHeaderStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "flex-end",
   gap: 3,
-  paddingBottom: 4,
+  paddingBottom: 6,
+  paddingTop: 4,
 };
 
 const kindAbbrStyle: React.CSSProperties = {
@@ -337,22 +353,6 @@ const kindAbbrStyle: React.CSSProperties = {
   textAlign: "center",
 };
 
-const legendKeyRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-  paddingInline: 10,
-};
-
-const legendKeyItemStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 5,
-  fontSize: 11,
-  fontWeight: 700,
-  opacity: 0.72,
-};
 
 const labelColStyle: React.CSSProperties = {
   display: "flex",
