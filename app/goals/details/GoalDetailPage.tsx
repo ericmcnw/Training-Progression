@@ -97,7 +97,7 @@ export default async function GoalDetailPage(props: {
       </div>
 
       <SectionCard title="Current Progress">
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(160px, 200px) 1fr" }}>
+        <div className="mobileGoalDetailLayout" style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(160px, 200px) 1fr" }}>
           <div style={{ display: "grid", justifyItems: "center", alignContent: "start", gap: 10 }}>
             <GoalProgressRing current={entry.actualDisplay} target={entry.targetDisplay} fraction={entry.fractionComplete} />
             <GoalStatusBadge label={entry.timeframeStatusLabel} achieved={entry.isAchieved} />

@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const cardGrid: React.CSSProperties = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" };
+const cardGrid: React.CSSProperties = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" };
 const subtleText: React.CSSProperties = { fontSize: 13, lineHeight: 1.5, opacity: 0.75 };
 const coverageRangeRowStyle: React.CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" };
 const coverageRangeButtonStyle: React.CSSProperties = {

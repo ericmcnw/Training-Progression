@@ -439,7 +439,7 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileScheduleCalendar{
-    min-width: 760px;
+    min-width: 580px;
   }
 
   .mobileRoutinesPage,
@@ -750,5 +750,43 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileWorkoutSetGrid{
     grid-template-columns: 1fr !important;
+  }
+
+  /* Schedule workspace / cycle builder: stack sidebar + board on mobile */
+  .mobileScheduleWorkspaceLayout,
+  .mobileCycleBuilderLayout{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Routine card meta wrap: reset right-alignment and go full width */
+  .mobileRoutinesCardMetaWrap{
+    margin-left: 0 !important;
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+
+  /* Goal detail progress ring + info: stack on mobile */
+  .mobileGoalDetailLayout{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Progress overview summary metric cards: single column on mobile */
+  .mobileProgressCardGrid{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Mileage value: reduce font size so it doesn't dominate on small screens */
+  .mobileHomeMileageValue{
+    font-size: 24px !important;
+  }
+
+  /* Routine card primary: tighter spacing on small screens */
+  .mobileRoutinesCardHeader{
+    gap: 10px !important;
+  }
+
+  /* Routine card body gaps */
+  .mobileRoutinesCardShell{
+    gap: 10px !important;
   }
 }

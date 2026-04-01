@@ -152,7 +152,7 @@ function WeeklyMomentumSection({
             <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Cardio Mileage</div>
             <div style={sectionSub}>Combined miles from all cardio routines this week.</div>
           </div>
-          <div style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
+          <div className="mobileHomeMileageValue" style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
           <details style={cardioDetails}>
             <summary data-collapsible-summary style={cardioSummary}>
               Show cardio routine breakdown
@@ -1137,7 +1137,7 @@ const weeklySubheaderRow: React.CSSProperties = {
 
 const tomorrowPreviewGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
   gap: 8,
 };
 

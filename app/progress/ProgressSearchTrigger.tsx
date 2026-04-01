@@ -221,7 +221,7 @@ const searchShellStyle: React.CSSProperties = {
   borderRadius: 14,
   border: "1px solid rgba(120,190,255,0.24)",
   background: "rgba(8,14,25,0.88)",
-  minWidth: "min(100%, 380px)",
+  minWidth: 0,
   boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
 };
 

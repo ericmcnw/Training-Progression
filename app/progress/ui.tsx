@@ -357,7 +357,7 @@ const styles: Record<string, React.CSSProperties> = {
       "radial-gradient(circle at top left, rgba(51,255,122,0.09), transparent 34%), radial-gradient(circle at top right, rgba(120,190,255,0.14), transparent 26%), linear-gradient(180deg, rgba(20,31,52,0.96), rgba(10,18,31,0.92))",
     boxShadow: "0 14px 30px rgba(0,0,0,0.14)",
   },
-  heroCopy: { display: "grid", gap: 6, flex: "1 1 520px", minWidth: 0 },
+  heroCopy: { display: "grid", gap: 6, flex: "1 1 260px", minWidth: 0 },
   heroActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" },
   eyebrow: {
     fontSize: 11,

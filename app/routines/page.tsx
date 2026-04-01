@@ -312,6 +312,7 @@ function RoutineCard({
               justifyContent: "flex-end",
               flexWrap: "wrap",
               marginLeft: "auto",
+              minWidth: 0,
             }}
           >
             {exercisePreview ? (

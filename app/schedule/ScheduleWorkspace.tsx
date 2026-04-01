@@ -228,7 +228,7 @@ export default function ScheduleWorkspace({
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,280px) 1fr", gap: 12 }}>
+      <div className="mobileScheduleWorkspaceLayout" style={{ display: "grid", gridTemplateColumns: "minmax(220px,280px) 1fr", gap: 12 }}>
         <section style={panel}>
           <div style={panelHeader}>ROUTINE LIBRARY</div>
           <div style={{ padding: 10, display: "grid", gap: 8, maxHeight: 640, overflowY: "auto" }}>

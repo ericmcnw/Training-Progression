@@ -115,7 +115,7 @@ export default function CycleBuilder({
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(240px,300px) 1fr", gap: 12 }}>
+    <div className="mobileCycleBuilderLayout" style={{ display: "grid", gridTemplateColumns: "minmax(240px,300px) 1fr", gap: 12 }}>
       <section style={panel}>
         <div style={panelHeader}>ROUTINES</div>
         <div style={{ padding: 10, display: "grid", gap: 8, maxHeight: 640, overflowY: "auto" }}>
