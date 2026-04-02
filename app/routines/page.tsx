@@ -260,7 +260,7 @@ export default async function RoutinesPage(props: {
                     Quick Log
                   </Link>
                 ) : null}
-                <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 10 }}>
+                <div className="mobileSectionBody" style={{ padding: 10, display: "grid", gap: 8 }}>
                   {list.map((routine) => (
                     <RoutineCard
                       key={routine.id}
@@ -285,7 +285,7 @@ export default async function RoutinesPage(props: {
                 <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>ARCHIVED</div>
                 <div style={{ fontSize: 12, opacity: 0.75 }}>{archived.length} routines</div>
               </summary>
-              <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 10 }}>
+              <div className="mobileSectionBody" style={{ padding: 10, display: "grid", gap: 8 }}>
                 {archived
                   .slice()
                   .sort((a, b) => {

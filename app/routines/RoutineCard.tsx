@@ -34,13 +34,32 @@ function loggingHref(routine: Pick<RoutineWithExercises, "id" | "kind">) {
   return `/routines/${routine.id}/log`;
 }
 
-function loggingLabel(kind: string) {
-  const normalized = normalizeRoutineKind(kind);
-  if (normalized === "WORKOUT") return "Log Workout";
-  if (normalized === "CARDIO") return "Log Cardio";
-  if (normalized === "GUIDED") return "Log Guided";
-  if (normalized === "SESSION") return "Log Session";
-  return "Log Completion";
+function getDefiningLabel(routine: RoutineWithExercises) {
+  const subtypeLabel = formatRoutineSubtype(routine.subtype);
+  if (subtypeLabel && subtypeLabel !== "Other") return subtypeLabel;
+  const firstTag = routine.tagAssignments[0]?.tag.name?.trim();
+  if (firstTag) return firstTag;
+  const firstExercise = routine.exercises[0]?.exercise.name?.trim();
+  if (firstExercise) return firstExercise;
+  return null;
+}
+
+function statusTone(summary: RoutineFrequencySummary) {
+  if (!summary.hasTarget) return "rgba(255,255,255,0.54)";
+  if (summary.status === "on_track") return "rgba(51,255,122,0.78)";
+  if (summary.status === "ahead") return "rgba(96,165,250,0.82)";
+  return "rgba(255,199,92,0.85)";
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+      <path
+        d="M11.854 1.646a.5.5 0 0 1 .707 0l1.086 1.086a.5.5 0 0 1 0 .707l-7.5 7.5L4 11.5l.561-2.147zM3.5 12.5l2.244-.59L13 4.654 11.346 3 4.09 10.256zM3 13h10v1H3z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
 export default function RoutineCard({
@@ -60,9 +79,12 @@ export default function RoutineCard({
 }) {
   const kind = normalizeRoutineKind(routine.kind);
   const count = weeklyMap.get(routine.id) ?? 0;
-  const subtypeLabel = formatRoutineSubtype(routine.subtype);
+  const definingLabel = getDefiningLabel(routine);
   const exercisePreview = isWorkoutKind(kind)
-    ? routine.exercises.map((item) => item.exercise.name).join(", ")
+    ? routine.exercises
+        .slice(0, 3)
+        .map((item) => item.exercise.name)
+        .join(", ")
     : "";
   const lastCompletedAt = lastCompletedMap.get(routine.id) ?? null;
   const lastCompletedLabel = lastCompletedAt ? formatAppDate(lastCompletedAt) : "Never";
@@ -71,101 +93,61 @@ export default function RoutineCard({
   const undoLastAction = removeLastRoutineCompletion.bind(null, routine.id);
   const datedLogAction = logCompletionWithDate.bind(null, routine.id);
 
+  const secondarySummary = exercisePreview
+    ? `Exercises: ${exercisePreview}${routine.exercises.length > 3 ? "..." : ""}`
+    : goalContributions.length > 0
+    ? `Goals: ${goalContributions.join(", ")}`
+    : null;
+
   return (
-    <div style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
-      <div className="mobileRoutinesCardShell" style={{ display: "grid", gap: 12 }}>
-        <div
-          className="mobileRoutinesCardHeader"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: 14,
-            alignItems: "start",
-          }}
-        >
-          <div className="mobileRoutinesCardPrimary" style={{ display: "grid", gap: 8, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              {routine.category} | {formatRoutineTypeLabel(kind)}
-              {subtypeLabel ? ` | ${subtypeLabel}` : ""}
+    <div className="routineCard" style={{ opacity: allowLogging ? 1 : 0.72 }}>
+      <div className="routineCardLayout">
+        <div className="routineCardContent">
+          <div className="routineCardTitleRow">
+            <div className="routineCardTitle">{routine.name}</div>
+            {!allowLogging ? <span className="routineCardArchivedPill">Archived</span> : null}
+          </div>
+
+          <div className="routineCardPills">
+            <span className="routineCardPill">{formatRoutineTypeLabel(kind)}</span>
+            {definingLabel ? <span className="routineCardPill routineCardPillMuted">{definingLabel}</span> : null}
+          </div>
+
+          <div className="routineCardMetaLine">
+            <span>This week: <b>{count}</b></span>
+            <span>Last: <b>{lastCompletedLabel}</b></span>
+          </div>
+
+          <div className="routineCardFrequencyRow">
+            <div className="routineCardMetaLine" style={{ gap: 6 }}>
+              <span>Target Frequency: <b>{formatRoutineTargetLabel(routine)}</b></span>
+              <span style={{ color: statusTone(frequencySummary) }}>{frequencySummary.shortStatusLabel}</span>
             </div>
 
-            {allowLogging && (
-              <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Link href={loggingHref(routine)} style={styles.compactBtnLink}>
-                  {loggingLabel(kind)}
-                </Link>
-                {isWorkoutKind(kind) && (
-                  <Link href={`/routines/${routine.id}/template`} style={styles.compactBtnLink}>
-                    Template
-                  </Link>
-                )}
-                {isGuidedKind(kind) && (
-                  <Link href={`/routines/${routine.id}/guided`} style={styles.compactBtnLink}>
-                    Steps
-                  </Link>
-                )}
-                {isCompletionKind(kind) && (
-                  <form action={quickLogAction}>
-                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                      Quick Log
-                    </button>
-                  </form>
-                )}
-                {isCompletionKind(kind) && (
-                  <form action={undoLastAction}>
-                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                      Undo Last
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-
-            <div style={{ fontSize: 13, opacity: 0.85 }}>
-              This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
-            </div>
-            <div style={{ fontSize: 13, opacity: 0.82 }}>
-              Target: <b>{frequencySummary.summaryLabel}</b>
-              {frequencySummary.hasTarget ? ` | ${frequencySummary.detailLabel}` : ""}
-            </div>
-            {goalContributions.length > 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.72 }}>
-                Counts toward: <b>{goalContributions.join(", ")}</b>
-              </div>
-            ) : null}
-            {routine.tagAssignments.length > 0 ? (
-              <div style={{ fontSize: 11, opacity: 0.58, display: "flex", gap: 4, flexWrap: "wrap" as const }}>
-                {routine.tagAssignments.map((a) => (
-                  <span key={a.tag.name} style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 6, padding: "1px 6px" }}>
-                    {a.tag.name}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            <details style={styles.detailsBox}>
-              <summary data-collapsible-summary style={styles.detailsSummary}>
-                Adjust target frequency
+            <details className="routineTargetPopover">
+              <summary className="routineTargetPopoverButton" aria-label={`Edit target frequency for ${routine.name}`}>
+                <PencilIcon />
               </summary>
-              <form action={updateRoutineFrequencyTarget} style={{ marginTop: 8, display: "grid", gap: 8 }}>
+              <form action={updateRoutineFrequencyTarget} className="routineTargetPopoverPanel">
                 <input type="hidden" name="routineId" value={routine.id} />
-                <div style={styles.targetEditorRow}>
+                <div className="routineTargetPopoverTitle">Target Frequency</div>
+                <div className="routineTargetPopoverFields">
                   <input
                     name="targetFrequencyCount"
-                    style={{ ...styles.input, width: 76 }}
+                    className="routineTargetPopoverInput"
                     inputMode="numeric"
                     defaultValue={routine.targetFrequencyCount ?? 3}
                   />
-                  <span style={styles.targetEditorLabel}>times per</span>
+                  <span className="routineTargetPopoverText">times per</span>
                   <input
                     name="targetFrequencyInterval"
-                    style={{ ...styles.input, width: 76 }}
+                    className="routineTargetPopoverInput"
                     inputMode="numeric"
                     defaultValue={routine.targetFrequencyInterval ?? 1}
                   />
                   <select
                     name="targetFrequencyUnit"
-                    style={{ ...styles.input, width: 110 }}
+                    className="routineTargetPopoverSelect"
                     defaultValue={routine.targetFrequencyUnit ?? "WEEK"}
                   >
                     <option value="DAY">day</option>
@@ -173,175 +155,74 @@ export default function RoutineCard({
                     <option value="MONTH">month</option>
                   </select>
                 </div>
-                <div style={styles.helpText}>Current target: {formatRoutineTargetLabel(routine)}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="submit" name="intent" value="save" suppressHydrationWarning style={styles.compactBtnLink}>
-                    Save Target
+                <div className="routineTargetPopoverHint">{frequencySummary.summaryLabel}</div>
+                <div className="routineTargetPopoverActions">
+                  <button type="submit" name="intent" value="save" suppressHydrationWarning className="routineCardMiniButton">
+                    Save
                   </button>
-                  <button type="submit" name="intent" value="clear" suppressHydrationWarning style={styles.compactBtnLink}>
-                    Clear Target
+                  <button type="submit" name="intent" value="clear" suppressHydrationWarning className="routineCardMiniButton routineCardMiniButtonGhost">
+                    Clear
                   </button>
                 </div>
               </form>
             </details>
           </div>
 
-          <div
-            className="mobileRoutinesCardMetaWrap"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              alignItems: "flex-end",
-            }}
-          >
-            {exercisePreview ? (
-              <div
-                className="mobileRoutinesExerciseList"
-                style={{
-                  fontSize: 12,
-                  opacity: 0.78,
-                  display: "grid",
-                  gap: 6,
-                  minWidth: 180,
-                  maxWidth: 240,
-                  alignContent: "start",
-                  padding: 10,
-                  border: "1px solid rgba(128,128,128,0.25)",
-                  borderRadius: 12,
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.7 }}>
-                  Exercises
-                </div>
-                {routine.exercises.map((item) => (
-                  <div
-                    key={`${routine.id}-${item.exercise.name}`}
-                    style={{
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      width: "100%",
-                      paddingBottom: 2,
-                    }}
-                  >
-                    {item.exercise.name}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div
-              className="mobileRoutinesCardMeta"
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                justifyContent: "flex-end",
-                flexShrink: 0,
-                alignSelf: "flex-start",
-              }}
-            >
-              <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
-                Edit
-              </Link>
-              {allowLogging && <DeleteRoutineButton routineId={routine.id} compact />}
-            </div>
-          </div>
+          {secondarySummary ? <div className="routineCardSecondaryLine">{secondarySummary}</div> : null}
         </div>
 
-        {allowLogging && isCompletionKind(kind) && (
-          <div className="mobileRoutinesQuickDate" style={{ minWidth: 0, width: "100%", maxWidth: 320 }}>
-            <details style={styles.detailsBox}>
-              <summary data-collapsible-summary style={styles.detailsSummary}>
-                Quick log with custom date/time
-              </summary>
-              <form action={datedLogAction} style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                <input type="datetime-local" name="performedAtLocal" style={styles.input} />
-                <button type="submit" suppressHydrationWarning style={{ ...styles.btnLink, width: "100%" }}>
-                  Save Dated Log
+        <div className="routineCardActions">
+          {allowLogging ? (
+            <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
+              Log
+            </Link>
+          ) : null}
+
+          <div className="routineCardActionRow">
+            {isWorkoutKind(kind) ? (
+              <Link href={`/routines/${routine.id}/template`} className="routineCardMiniLink">
+                Template
+              </Link>
+            ) : null}
+            {isGuidedKind(kind) ? (
+              <Link href={`/routines/${routine.id}/guided`} className="routineCardMiniLink">
+                Steps
+              </Link>
+            ) : null}
+            <Link href={`/routines/${routine.id}/edit`} className="routineCardMiniLink">
+              Edit
+            </Link>
+            {allowLogging ? <DeleteRoutineButton routineId={routine.id} compact /> : null}
+          </div>
+
+          {allowLogging && isCompletionKind(kind) ? (
+            <div className="routineCardActionRow">
+              <form action={quickLogAction}>
+                <button type="submit" suppressHydrationWarning className="routineCardMiniButton">
+                  Quick
+                </button>
+              </form>
+              <form action={undoLastAction}>
+                <button type="submit" suppressHydrationWarning className="routineCardMiniButton routineCardMiniButtonGhost">
+                  Undo
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {allowLogging && isCompletionKind(kind) ? (
+            <details className="routineCardDateDetails">
+              <summary className="routineCardMiniLink">Date</summary>
+              <form action={datedLogAction} className="routineCardDateForm">
+                <input type="datetime-local" name="performedAtLocal" className="routineCardDateInput" />
+                <button type="submit" suppressHydrationWarning className="routineCardMiniButton">
+                  Save
                 </button>
               </form>
             </details>
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  card: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 16,
-    padding: 14,
-    background: "rgba(128,128,128,0.06)",
-  },
-  compactBtnLink: {
-    minHeight: 38,
-    padding: "7px 10px",
-    border: "1px solid rgba(128,128,128,0.55)",
-    borderRadius: 10,
-    textAlign: "center" as const,
-    textDecoration: "none",
-    color: "inherit",
-    background: "rgba(255,255,255,0.05)",
-    fontWeight: 700,
-    fontSize: 12,
-    lineHeight: 1.2,
-  },
-  btnLink: {
-    minHeight: 42,
-    padding: "10px 12px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 12,
-    textAlign: "center" as const,
-    textDecoration: "none",
-    color: "inherit",
-    background: "rgba(128,128,128,0.12)",
-    fontWeight: 700,
-  },
-  detailsBox: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    background: "rgba(128,128,128,0.05)",
-  },
-  detailsSummary: {
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 800,
-    opacity: 0.9,
-  },
-  targetEditorRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap" as const,
-    alignItems: "center" as const,
-  },
-  targetEditorLabel: {
-    fontSize: 12,
-    fontWeight: 800,
-    opacity: 0.82,
-  },
-  helpText: {
-    fontSize: 12,
-    opacity: 0.74,
-  },
-  input: {
-    width: "100%",
-    minHeight: 46,
-    padding: 10,
-    border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
-    background: "#111827",
-    color: "#ffffff",
-  },
-  smallLink: {
-    fontSize: 13,
-    color: "inherit",
-    opacity: 0.85,
-    textDecoration: "none",
-  },
-};
