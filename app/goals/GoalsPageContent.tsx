@@ -4,6 +4,7 @@ import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
 import { getGoalFormOptions, getGoalsOverview } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "./GoalForm";
 import { createGoal, toggleGoalActive, toggleRoutineFrequencyGoal } from "./actions";
+import { createFrequencyGoal } from "@/app/routines/actions";
 import { GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
 import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
 import FrequencyGoalsSection from "./FrequencyGoalsSection";
@@ -117,6 +118,7 @@ export default async function GoalsPage({
         <SectionCard title={builderMode === "advanced" ? "Advanced Goal Setup" : "Create Goal"}>
           <GoalForm
             action={createGoal}
+            groupFrequencyAction={createFrequencyGoal}
             options={options}
             submitLabel="Save Goal"
             initial={initial}

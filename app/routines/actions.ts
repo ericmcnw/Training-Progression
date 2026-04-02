@@ -1136,6 +1136,7 @@ export async function createFrequencyGoal(formData: FormData) {
 
   revalidatePath("/routines");
   revalidatePath("/goals");
+  redirect("/goals");
 }
 
 export async function updateFrequencyGoal(formData: FormData) {

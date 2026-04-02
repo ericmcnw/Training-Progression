@@ -82,6 +82,7 @@ function targetFieldLabel(targetType: GoalTargetTypeValue) {
 
 export default function GoalForm({
   action,
+  groupFrequencyAction,
   options,
   submitLabel,
   initial,
@@ -89,6 +90,7 @@ export default function GoalForm({
   initialTemplateKey,
 }: {
   action: (formData: FormData) => void | Promise<void>;
+  groupFrequencyAction?: (formData: FormData) => void | Promise<void>;
   options: GoalFormOptions;
   submitLabel: string;
   initial: GoalFormInitial;
@@ -115,6 +117,11 @@ export default function GoalForm({
         timeframe: initial.timeframe,
       })
   );
+  const [gfTargetCount, setGfTargetCount] = useState("3");
+  const [gfTargetInterval, setGfTargetInterval] = useState("1");
+  const [gfTargetUnit, setGfTargetUnit] = useState("WEEK");
+
+  const isGroupFrequency = templateKey === "GROUP_ROUTINE_FREQUENCY";
 
   const allowedMetrics = useMemo(() => getAllowedMetricTypes(goalType, targetType), [goalType, targetType]);
 
@@ -185,10 +192,10 @@ export default function GoalForm({
   }
 
   return (
-    <form action={action} style={{ display: "grid", gap: 16 }}>
-      {initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
-      <input type="hidden" name="targetValue" value={canonicalTargetValue} />
-      <input type="hidden" name="sessionMetricDefinitionId" value={effectiveSessionMetricDefinitionId} />
+    <form action={isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action} style={{ display: "grid", gap: 16 }}>
+      {!isGroupFrequency && initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
+      {!isGroupFrequency && <input type="hidden" name="targetValue" value={canonicalTargetValue} />}
+      {!isGroupFrequency && <input type="hidden" name="sessionMetricDefinitionId" value={effectiveSessionMetricDefinitionId} />}
 
       {mode === "guided" ? (
         <section style={sectionStyle}>
@@ -215,6 +222,73 @@ export default function GoalForm({
         </section>
       ) : null}
 
+      {isGroupFrequency ? (
+        <>
+          <section style={sectionStyle}>
+            <div style={sectionTitleStyle}>Goal Details</div>
+            <div style={gridStyle}>
+              <label style={fieldStyle}>
+                <span>Goal name</span>
+                <input name="name" style={formInputStyle} placeholder="Push Days, Climbing Sessions..." required />
+              </label>
+              <div style={fieldStyle}>
+                <span>Target frequency</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    name="targetCount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={gfTargetCount}
+                    onChange={(e) => setGfTargetCount(e.target.value)}
+                    style={{ ...formInputStyle, width: 72 }}
+                    inputMode="numeric"
+                  />
+                  <span style={hintStyle}>times per</span>
+                  <input
+                    name="targetInterval"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={gfTargetInterval}
+                    onChange={(e) => setGfTargetInterval(e.target.value)}
+                    style={{ ...formInputStyle, width: 72 }}
+                    inputMode="numeric"
+                  />
+                  <select
+                    name="targetUnit"
+                    value={gfTargetUnit}
+                    onChange={(e) => setGfTargetUnit(e.target.value)}
+                    style={{ ...formInputStyle, width: 110 }}
+                  >
+                    <option value="DAY">day</option>
+                    <option value="WEEK">week</option>
+                    <option value="MONTH">month</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section style={sectionStyle}>
+            <div style={sectionTitleStyle}>Included Routines</div>
+            <div style={hintStyle}>Sessions from any checked routine count toward this goal.</div>
+            <div style={routineChecklistStyle}>
+              {options.routines.map((r) => (
+                <label key={r.id} style={checkboxRowStyle}>
+                  <input type="checkbox" name="routineIds" value={r.id} />
+                  <span style={{ fontSize: 13 }}>
+                    {r.label}
+                    {r.subtitle ? <span style={{ ...hintStyle, marginLeft: 6 }}>{r.subtitle}</span> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" style={submitStyle}>{submitLabel}</button>
+          </div>
+        </>
+      ) : (
       <section style={sectionStyle}>
         <div style={sectionTitleStyle}>{mode === "guided" ? "Goal Details" : "Basics"}</div>
         <div style={gridStyle}>
@@ -429,6 +503,7 @@ export default function GoalForm({
           {submitLabel}
         </button>
       </div>
+      )}
     </form>
   );
 }
@@ -506,6 +581,24 @@ const submitStyle: React.CSSProperties = {
   background: "rgba(34,197,94,0.12)",
   color: "inherit",
   fontWeight: 800,
+};
+
+const routineChecklistStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: "8px 10px",
+  border: "1px solid rgba(128,128,128,0.3)",
+  borderRadius: 8,
+  background: "rgba(128,128,128,0.04)",
+  maxHeight: 240,
+  overflowY: "auto",
+};
+
+const checkboxRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  cursor: "pointer",
 };
 
 export type { GoalFormInitial };

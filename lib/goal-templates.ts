@@ -14,7 +14,8 @@ export type GoalTemplateKey =
   | "CARDIO_DISTANCE"
   | "CARDIO_ELEVATION"
   | "CARDIO_PACE"
-  | "GROUP_VOLUME";
+  | "GROUP_VOLUME"
+  | "GROUP_ROUTINE_FREQUENCY";
 
 export type GoalTemplate = {
   key: GoalTemplateKey;
@@ -27,6 +28,7 @@ export type GoalTemplate = {
   targetValue: number;
   benchmarkDistanceMi?: number;
   benchmarkLabel?: string;
+  isGroupFrequency?: true;
 };
 
 export const GOAL_TEMPLATES: GoalTemplate[] = [
@@ -121,6 +123,17 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
     metricType: "VOLUME",
     timeframe: "WEEK",
     targetValue: 8000,
+  },
+  {
+    key: "GROUP_ROUTINE_FREQUENCY",
+    label: "Group routine frequency",
+    description: "Track sessions across multiple routines — e.g. any Push day, any Climbing session.",
+    goalType: "FREQUENCY",
+    targetType: "ROUTINE",
+    metricType: "SESSIONS",
+    timeframe: "WEEK",
+    targetValue: 3,
+    isGroupFrequency: true,
   },
 ];
 

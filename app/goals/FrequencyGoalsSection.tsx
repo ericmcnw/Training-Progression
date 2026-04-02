@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
-import { createFrequencyGoal, deleteFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions";
+import { deleteFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions";
 import { SectionCard } from "@/app/progress/ui";
 import { formInputStyle, subtleTextStyle } from "./ui";
 import { normalizeRoutineKind } from "@/lib/routines";
@@ -166,55 +166,9 @@ export default async function FrequencyGoalsSection() {
           </div>
         )}
 
-        {/* Create new goal */}
-        <details style={detailsBoxStyle}>
-          <summary data-collapsible-summary style={detailsSummaryStyle}>+ New group frequency goal</summary>
-          <form action={createFrequencyGoal} style={{ marginTop: 10, display: "grid", gap: 10 }}>
-            <div>
-              <label style={labelStyle}>Goal name</label>
-              <input name="name" style={formInputStyle} placeholder="Pull Sessions, Climbing, Leg Days..." required />
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <div style={{ flex: "0 0 auto" }}>
-                <label style={labelStyle}>Target</label>
-                <input name="targetCount" defaultValue={3} style={{ ...formInputStyle, width: 72 }} inputMode="numeric" />
-              </div>
-              <span style={{ alignSelf: "flex-end", paddingBottom: 6, fontSize: 12, opacity: 0.8 }}>times per</span>
-              <div style={{ flex: "0 0 auto" }}>
-                <label style={labelStyle}>Every</label>
-                <input name="targetInterval" defaultValue={1} style={{ ...formInputStyle, width: 72 }} inputMode="numeric" />
-              </div>
-              <div style={{ flex: "0 0 auto" }}>
-                <label style={labelStyle}>Unit</label>
-                <select name="targetUnit" defaultValue="WEEK" style={{ ...formInputStyle, width: 110 }}>
-                  <option value="DAY">day</option>
-                  <option value="WEEK">week</option>
-                  <option value="MONTH">month</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Included routines</label>
-              <div style={routineChecklistStyle}>
-                {allRoutines.map((r) => (
-                  <label key={r.id} style={checkboxRowStyle}>
-                    <input type="checkbox" name="routineIds" value={r.id} />
-                    <span style={{ fontSize: 13 }}>
-                      {r.name}
-                      <span style={{ fontSize: 11, opacity: 0.6, marginLeft: 6 }}>
-                        {normalizeRoutineKind(r.kind)}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <button type="submit" suppressHydrationWarning style={btnStyle}>Create Goal</button>
-          </form>
-        </details>
+        <div style={{ fontSize: 13, opacity: 0.7 }}>
+          To add a new group frequency goal, use <a href="/goals?mode=new&template=GROUP_ROUTINE_FREQUENCY" style={{ color: "inherit" }}>New Goal</a> and select the &ldquo;Group routine frequency&rdquo; template.
+        </div>
       </div>
     </SectionCard>
   );
