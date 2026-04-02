@@ -75,8 +75,10 @@ const btnStyle: React.CSSProperties = {
 
 const compactBtnStyle: React.CSSProperties = {
   ...btnStyle,
-  padding: "5px 8px",
-  borderRadius: 8,
+  minHeight: 30,
+  minWidth: 52,
+  padding: "5px 10px",
+  borderRadius: 9,
   fontSize: 12,
   lineHeight: 1.2,
 };

@@ -44,13 +44,6 @@ function getDefiningLabel(routine: RoutineWithExercises) {
   return null;
 }
 
-function statusTone(summary: RoutineFrequencySummary) {
-  if (!summary.hasTarget) return "rgba(255,255,255,0.54)";
-  if (summary.status === "on_track") return "rgba(51,255,122,0.78)";
-  if (summary.status === "ahead") return "rgba(96,165,250,0.82)";
-  return "rgba(255,199,92,0.85)";
-}
-
 function PencilIcon() {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
@@ -98,6 +91,7 @@ export default function RoutineCard({
     : goalContributions.length > 0
     ? `Goals: ${goalContributions.join(", ")}`
     : null;
+  const kindSummary = definingLabel ? `${formatRoutineTypeLabel(kind)} - ${definingLabel}` : formatRoutineTypeLabel(kind);
 
   return (
     <div className="routineCard" style={{ opacity: allowLogging ? 1 : 0.72 }}>
@@ -105,13 +99,15 @@ export default function RoutineCard({
         <div className="routineCardContent">
           <div className="routineCardTitleRow">
             <div className="routineCardTitle">{routine.name}</div>
+            {allowLogging ? (
+              <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
+                Log
+              </Link>
+            ) : null}
             {!allowLogging ? <span className="routineCardArchivedPill">Archived</span> : null}
           </div>
 
-          <div className="routineCardPills">
-            <span className="routineCardPill">{formatRoutineTypeLabel(kind)}</span>
-            {definingLabel ? <span className="routineCardPill routineCardPillMuted">{definingLabel}</span> : null}
-          </div>
+          <div className="routineCardKindLine">{kindSummary}</div>
 
           <div className="routineCardMetaLine">
             <span>This week: <b>{count}</b></span>
@@ -119,11 +115,6 @@ export default function RoutineCard({
           </div>
 
           <div className="routineCardFrequencyRow">
-            <div className="routineCardMetaLine" style={{ gap: 6 }}>
-              <span>Target Frequency: <b>{formatRoutineTargetLabel(routine)}</b></span>
-              <span style={{ color: statusTone(frequencySummary) }}>{frequencySummary.shortStatusLabel}</span>
-            </div>
-
             <details className="routineTargetPopover">
               <summary className="routineTargetPopoverButton" aria-label={`Edit target frequency for ${routine.name}`}>
                 <PencilIcon />
@@ -166,18 +157,15 @@ export default function RoutineCard({
                 </div>
               </form>
             </details>
+            <div className="routineCardMetaLine" style={{ gap: 6 }}>
+              <span>Target Frequency: <b>{formatRoutineTargetLabel(routine)}</b></span>
+            </div>
           </div>
 
           {secondarySummary ? <div className="routineCardSecondaryLine">{secondarySummary}</div> : null}
         </div>
 
         <div className="routineCardActions">
-          {allowLogging ? (
-            <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
-              Log
-            </Link>
-          ) : null}
-
           <div className="routineCardActionRow">
             {isWorkoutKind(kind) ? (
               <Link href={`/routines/${routine.id}/template`} className="routineCardMiniLink">
