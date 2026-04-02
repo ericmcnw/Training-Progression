@@ -100,9 +100,21 @@ export default function RoutineCard({
           <div className="routineCardTitleRow">
             <div className="routineCardTitle">{routine.name}</div>
             {allowLogging ? (
-              <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
-                Log
-              </Link>
+              <div className="routineCardActionRow">
+                <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
+                  Log
+                </Link>
+                {isWorkoutKind(kind) ? (
+                  <Link href={`/routines/${routine.id}/template`} className="routineCardMiniLink">
+                    Template
+                  </Link>
+                ) : null}
+                {isGuidedKind(kind) ? (
+                  <Link href={`/routines/${routine.id}/guided`} className="routineCardMiniLink">
+                    Steps
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
             {!allowLogging ? <span className="routineCardArchivedPill">Archived</span> : null}
           </div>
@@ -167,16 +179,6 @@ export default function RoutineCard({
 
         <div className="routineCardActions">
           <div className="routineCardActionRow">
-            {isWorkoutKind(kind) ? (
-              <Link href={`/routines/${routine.id}/template`} className="routineCardMiniLink">
-                Template
-              </Link>
-            ) : null}
-            {isGuidedKind(kind) ? (
-              <Link href={`/routines/${routine.id}/guided`} className="routineCardMiniLink">
-                Steps
-              </Link>
-            ) : null}
             <Link href={`/routines/${routine.id}/edit`} className="routineCardMiniLink">
               Edit
             </Link>

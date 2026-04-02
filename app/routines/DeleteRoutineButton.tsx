@@ -3,6 +3,24 @@
 import { useState, useTransition } from "react";
 import { deleteRoutine } from "./actions";
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M6 1h4l.5 1H13a1 1 0 1 1 0 2h-.6l-.6 8.1A2 2 0 0 1 9.8 14H6.2a2 2 0 0 1-1.99-1.9L3.6 4H3A1 1 0 1 1 3 2h2.5zM5.6 4l.58 7.84a.4.4 0 0 0 .4.36h3.24a.4.4 0 0 0 .4-.36L10.4 4z"
+        fill="currentColor"
+      />
+      <path
+        d="M8 6.1v4"
+        fill="none"
+        stroke="#f87171"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function DeleteRoutineButton({
   routineId,
   compact = false,
@@ -27,8 +45,10 @@ export default function DeleteRoutineButton({
         onClick={() => setIsConfirmOpen(true)}
         disabled={isPending}
         style={compact ? compactBtnStyle : btnStyle}
+        aria-label="Delete routine"
+        title="Delete routine"
       >
-        {isPending ? "Deleting..." : "Delete"}
+        {compact ? (isPending ? "..." : <TrashIcon />) : isPending ? "Deleting..." : "Delete"}
       </button>
 
       {isConfirmOpen && (
@@ -76,11 +96,13 @@ const btnStyle: React.CSSProperties = {
 const compactBtnStyle: React.CSSProperties = {
   ...btnStyle,
   minHeight: 30,
-  minWidth: 52,
-  padding: "5px 10px",
+  minWidth: 30,
+  padding: "5px 8px",
   borderRadius: 9,
   fontSize: 12,
   lineHeight: 1.2,
+  color: "#f87171",
+  border: "1px solid rgba(248,113,113,0.6)",
 };
 
 const overlayStyle: React.CSSProperties = {
