@@ -1,35 +1,19 @@
 import Link from "next/link";
-import type { Prisma, Routine } from "@/generated/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import NewRoutinePageContent from "./NewRoutinePageContent";
 import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
-import {
-  formatRoutineSubtype,
-  formatRoutineTypeLabel,
-  isCompletionKind,
-  isGuidedKind,
-  isWorkoutKind,
-  normalizeRoutineKind,
-} from "@/lib/routines";
-import { formatRoutineTargetLabel, getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, type RoutineFrequencySummary } from "@/lib/routine-frequency";
+import { formatRoutineTypeLabel, normalizeRoutineKind } from "@/lib/routines";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
-import { logRoutineCompletion, removeLastRoutineCompletion, updateRoutineFrequencyTarget } from "./actions";
-import DeleteRoutineButton from "./DeleteRoutineButton";
+import RoutineCard from "./RoutineCard";
+import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
+import { createFrequencyGoal, deleteFrequencyGoal, updateFrequencyGoal } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-type RoutineWithExercises = Prisma.RoutineGetPayload<{
-  include: {
-    exercises: {
-      orderBy: { sortOrder: "asc" };
-      include: { exercise: { select: { name: true } } };
-    };
-  };
-}>;
 
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
@@ -82,12 +66,6 @@ const styles = {
     fontSize: 12,
     lineHeight: 1.2,
   },
-  card: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 16,
-    padding: 14,
-    background: "rgba(128,128,128,0.06)",
-  },
   btnLink: {
     minHeight: 42,
     padding: "10px 12px",
@@ -99,52 +77,6 @@ const styles = {
     background: "rgba(128,128,128,0.12)",
     fontWeight: 700,
   },
-  compactBtnLink: {
-    minHeight: 38,
-    padding: "7px 10px",
-    border: "1px solid rgba(128,128,128,0.55)",
-    borderRadius: 10,
-    textAlign: "center" as const,
-    textDecoration: "none",
-    color: "inherit",
-    background: "rgba(255,255,255,0.05)",
-    fontWeight: 700,
-    fontSize: 12,
-    lineHeight: 1.2,
-  },
-  smallLink: {
-    fontSize: 13,
-    color: "inherit",
-    opacity: 0.85,
-    textDecoration: "none",
-  },
-  detailsBox: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    background: "rgba(128,128,128,0.05)",
-  },
-  detailsSummary: {
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 800,
-    opacity: 0.9,
-  },
-  targetEditorRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap" as const,
-    alignItems: "center" as const,
-  },
-  targetEditorLabel: {
-    fontSize: 12,
-    fontWeight: 800,
-    opacity: 0.82,
-  },
-  helpText: {
-    fontSize: 12,
-    opacity: 0.74,
-  },
   input: {
     width: "100%",
     minHeight: 46,
@@ -154,245 +86,38 @@ const styles = {
     background: "#111827",
     color: "#ffffff",
   },
+  goalCard: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 12,
+    padding: "12px 14px",
+    background: "rgba(128,128,128,0.05)",
+    display: "grid",
+    gap: 6,
+  },
+  detailsBox: {
+    border: "1px solid rgba(128,128,128,0.3)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    background: "rgba(128,128,128,0.04)",
+    marginTop: 4,
+  },
+  detailsSummary: {
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 800,
+    opacity: 0.85,
+  },
+  compactBtn: {
+    minHeight: 36,
+    padding: "6px 10px",
+    border: "1px solid rgba(128,128,128,0.6)",
+    borderRadius: 8,
+    background: "rgba(128,128,128,0.1)",
+    color: "inherit",
+    fontWeight: 700,
+    fontSize: 12,
+  },
 };
-
-function loggingHref(routine: Pick<Routine, "id" | "kind">) {
-  return `/routines/${routine.id}/log`;
-}
-
-function loggingLabel(kind: string) {
-  const normalized = normalizeRoutineKind(kind);
-  if (normalized === "WORKOUT") return "Log Workout";
-  if (normalized === "CARDIO") return "Log Cardio";
-  if (normalized === "GUIDED") return "Log Guided";
-  if (normalized === "SESSION") return "Log Session";
-  return "Log Completion";
-}
-
-function RoutineCard({
-  routine,
-  weeklyMap,
-  lastCompletedMap,
-  allowLogging,
-  frequencySummary,
-}: {
-  routine: RoutineWithExercises;
-  weeklyMap: Map<string, number>;
-  lastCompletedMap: Map<string, Date | null>;
-  allowLogging: boolean;
-  frequencySummary: RoutineFrequencySummary;
-}) {
-  const kind = normalizeRoutineKind(routine.kind);
-  const count = weeklyMap.get(routine.id) ?? 0;
-  const subtypeLabel = formatRoutineSubtype(routine.subtype);
-  const exercisePreview = isWorkoutKind(kind)
-    ? routine.exercises.map((item) => item.exercise.name).join(", ")
-    : "";
-  const lastCompletedAt = lastCompletedMap.get(routine.id) ?? null;
-  const lastCompletedLabel = lastCompletedAt ? formatAppDate(lastCompletedAt) : "Never";
-
-  return (
-    <div key={routine.id} style={{ ...styles.card, opacity: allowLogging ? 1 : 0.7 }}>
-      <div className="mobileRoutinesCardShell" style={{ display: "grid", gap: 12 }}>
-        <div
-          className="mobileRoutinesCardHeader"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: 14,
-            alignItems: "start",
-          }}
-        >
-          <div className="mobileRoutinesCardPrimary" style={{ display: "grid", gap: 8, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>{routine.name}</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              {routine.category} | {formatRoutineTypeLabel(kind)}
-              {subtypeLabel ? ` | ${subtypeLabel}` : ""}
-            </div>
-
-            {allowLogging && (
-              <div className="mobileRoutinesCardActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Link href={loggingHref(routine)} style={styles.compactBtnLink}>
-                  {loggingLabel(kind)}
-                </Link>
-                {isWorkoutKind(kind) && (
-                  <Link href={`/routines/${routine.id}/template`} style={styles.compactBtnLink}>
-                    Template
-                  </Link>
-                )}
-                {isGuidedKind(kind) && (
-                  <Link href={`/routines/${routine.id}/guided`} style={styles.compactBtnLink}>
-                    Steps
-                  </Link>
-                )}
-                {isCompletionKind(kind) && (
-                  <form
-                    action={async () => {
-                      "use server";
-                      await logRoutineCompletion(routine.id);
-                    }}
-                  >
-                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                      Quick Log
-                    </button>
-                  </form>
-                )}
-                {isCompletionKind(kind) && (
-                  <form
-                    action={async () => {
-                      "use server";
-                      await removeLastRoutineCompletion(routine.id);
-                    }}
-                  >
-                    <button type="submit" suppressHydrationWarning style={styles.compactBtnLink}>
-                      Undo Last
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-
-            <div style={{ fontSize: 13, opacity: 0.85 }}>
-              This week: <b>{count}</b> logs | Last completed: <b>{lastCompletedLabel}</b>
-            </div>
-            <div style={{ fontSize: 13, opacity: 0.82 }}>
-              Target: <b>{frequencySummary.summaryLabel}</b>
-              {frequencySummary.hasTarget ? ` | ${frequencySummary.detailLabel}` : ""}
-            </div>
-            <details style={styles.detailsBox}>
-              <summary data-collapsible-summary style={styles.detailsSummary}>
-                Adjust target frequency
-              </summary>
-              <form action={updateRoutineFrequencyTarget} style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                <input type="hidden" name="routineId" value={routine.id} />
-                <div style={styles.targetEditorRow}>
-                  <input
-                    name="targetFrequencyCount"
-                    style={{ ...styles.input, width: 76 }}
-                    inputMode="numeric"
-                    defaultValue={routine.targetFrequencyCount ?? 3}
-                  />
-                  <span style={styles.targetEditorLabel}>times per</span>
-                  <input
-                    name="targetFrequencyInterval"
-                    style={{ ...styles.input, width: 76 }}
-                    inputMode="numeric"
-                    defaultValue={routine.targetFrequencyInterval ?? 1}
-                  />
-                  <select
-                    name="targetFrequencyUnit"
-                    style={{ ...styles.input, width: 110 }}
-                    defaultValue={routine.targetFrequencyUnit ?? "WEEK"}
-                  >
-                    <option value="DAY">day</option>
-                    <option value="WEEK">week</option>
-                    <option value="MONTH">month</option>
-                  </select>
-                </div>
-                <div style={styles.helpText}>Current target: {formatRoutineTargetLabel(routine)}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="submit" name="intent" value="save" suppressHydrationWarning style={styles.compactBtnLink}>
-                    Save Target
-                  </button>
-                  <button type="submit" name="intent" value="clear" suppressHydrationWarning style={styles.compactBtnLink}>
-                    Clear Target
-                  </button>
-                </div>
-              </form>
-            </details>
-          </div>
-
-          <div
-            className="mobileRoutinesCardMetaWrap"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              alignItems: "flex-end",
-            }}
-          >
-            {exercisePreview ? (
-              <div
-                className="mobileRoutinesExerciseList"
-                style={{
-                  fontSize: 12,
-                  opacity: 0.78,
-                  display: "grid",
-                  gap: 6,
-                  minWidth: 180,
-                  maxWidth: 240,
-                  alignContent: "start",
-                  padding: 10,
-                  border: "1px solid rgba(128,128,128,0.25)",
-                  borderRadius: 12,
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.7 }}>
-                  Exercises
-                </div>
-                {routine.exercises.map((item) => (
-                  <div
-                    key={`${routine.id}-${item.exercise.name}`}
-                    style={{
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      width: "100%",
-                      paddingBottom: 2,
-                    }}
-                  >
-                    {item.exercise.name}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div
-              className="mobileRoutinesCardMeta"
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                justifyContent: "flex-end",
-                flexShrink: 0,
-                alignSelf: "flex-start",
-              }}
-            >
-              <Link href={`/routines/${routine.id}/edit`} style={styles.smallLink}>
-                Edit
-              </Link>
-              {allowLogging && <DeleteRoutineButton routineId={routine.id} compact />}
-            </div>
-          </div>
-        </div>
-
-        {allowLogging && isCompletionKind(kind) && (
-          <div className="mobileRoutinesQuickDate" style={{ minWidth: 0, width: "100%", maxWidth: 320 }}>
-            <details style={styles.detailsBox}>
-              <summary data-collapsible-summary style={styles.detailsSummary}>
-                Quick log with custom date/time
-              </summary>
-              <form
-                style={{ marginTop: 8, display: "grid", gap: 8 }}
-                action={async (formData) => {
-                  "use server";
-                  const performedAtLocal = String(formData.get("performedAtLocal") || "").trim();
-                  await logRoutineCompletion(routine.id, performedAtLocal || undefined);
-                }}
-              >
-                <input type="datetime-local" name="performedAtLocal" style={styles.input} />
-                <button type="submit" suppressHydrationWarning style={{ ...styles.btnLink, width: "100%" }}>
-                  Save Dated Log
-                </button>
-              </form>
-            </details>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default async function RoutinesPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
@@ -414,24 +139,40 @@ export default async function RoutinesPage(props: {
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
-  const routines = await prisma.routine.findMany({
-    where: { isDeleted: false },
-    orderBy: [{ kind: "asc" }, { name: "asc" }],
-    include: {
-      exercises: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          exercise: {
-            select: { name: true },
+  const [routines, frequencyGoals] = await Promise.all([
+    prisma.routine.findMany({
+      where: { isDeleted: false },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+      include: {
+        exercises: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            exercise: {
+              select: { name: true },
+            },
           },
         },
+        tagAssignments: {
+          select: { tag: { select: { name: true } } },
+        },
       },
-    },
-  });
+    }),
+    prisma.frequencyGoal.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
+  const maxGoalWindowDays = frequencyGoals.reduce(
+    (max, goal) => Math.max(max, getFrequencyGoalWindowDays(goal)),
+    0
+  );
+  const maxWindowDays = Math.max(maxFrequencyWindowDays, maxGoalWindowDays);
   const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
-  const [weeklyCounts, latestLogs, frequencyLogs] = await Promise.all([
+  const goalsWindowStart = new Date(now.getTime() - Math.max(1, maxWindowDays) * 24 * 60 * 60 * 1000);
+
+  const [weeklyCounts, latestLogs, frequencyLogs, goalLogs] = await Promise.all([
     prisma.routineLog.groupBy({
       by: ["routineId"],
       where: { performedAt: { gte: start, lt: end } },
@@ -447,7 +188,32 @@ export default async function RoutinesPage(props: {
           select: { routineId: true, performedAt: true },
         })
       : Promise.resolve([]),
+    frequencyGoals.length > 0
+      ? prisma.routineLog.findMany({
+          where: { performedAt: { gte: goalsWindowStart } },
+          select: { routineId: true, performedAt: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const routineTags = new Map(
+    routines.map((r) => [r.id, r.tagAssignments.map((a) => a.tag.name)])
+  );
+  const goalProgressList = getFrequencyGoalProgressList({
+    goals: frequencyGoals,
+    routineTags,
+    logs: goalLogs,
+    now,
+  });
+  // Map: routineId → goal names it contributes to
+  const goalContributionsByRoutineId = new Map<string, string[]>();
+  for (const progress of goalProgressList) {
+    for (const routineId of progress.matchingRoutineIds) {
+      const current = goalContributionsByRoutineId.get(routineId) ?? [];
+      current.push(progress.goal.name);
+      goalContributionsByRoutineId.set(routineId, current);
+    }
+  }
 
   const weeklyMap = new Map(weeklyCounts.map((row) => [row.routineId, row._count._all]));
   const lastCompletedMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
@@ -518,6 +284,83 @@ export default async function RoutinesPage(props: {
         ) : null}
       </form>
 
+      {/* Group Frequency Goals section */}
+      <section className="mobileSectionCard" style={styles.section}>
+        <details>
+          <summary data-collapsible-summary className="mobileSectionHeader" style={styles.sectionHeader}>
+            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>GROUP FREQUENCY GOALS</div>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>{goalProgressList.length} goals</div>
+          </summary>
+          <div style={{ padding: 12, display: "grid", gap: 12 }}>
+            {goalProgressList.length === 0 ? (
+              <div style={{ fontSize: 13, opacity: 0.75 }}>No group goals yet. Add one below to track frequency across multiple routines.</div>
+            ) : (
+              goalProgressList.map((progress) => (
+                <div key={progress.goal.id} style={styles.goalCard}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
+                    <div style={{ fontWeight: 800, fontSize: 14 }}>{progress.goal.name}</div>
+                    <div style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: progress.status === "behind" ? "rgba(255,100,100,0.9)" : progress.status === "ahead" ? "rgba(100,220,100,0.9)" : "rgba(100,200,255,0.9)",
+                    }}>
+                      {progress.summaryLabel}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>{progress.detailLabel}</div>
+                  <div style={{ fontSize: 11, opacity: 0.65 }}>
+                    Tags: {progress.goal.matchTags.join(", ")} · {progress.matchingRoutineIds.length} matching routines
+                  </div>
+                  <details style={styles.detailsBox}>
+                    <summary data-collapsible-summary style={styles.detailsSummary}>Edit goal</summary>
+                    <form action={updateFrequencyGoal} style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                      <input type="hidden" name="id" value={progress.goal.id} />
+                      <input name="name" defaultValue={progress.goal.name} style={styles.input} placeholder="Goal name" />
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
+                        <input name="targetCount" defaultValue={progress.goal.targetCount} style={{ ...styles.input, width: 70 }} inputMode="numeric" />
+                        <span style={{ fontSize: 12, opacity: 0.8 }}>times per</span>
+                        <input name="targetInterval" defaultValue={progress.goal.targetInterval} style={{ ...styles.input, width: 70 }} inputMode="numeric" />
+                        <select name="targetUnit" defaultValue={progress.goal.targetUnit} style={{ ...styles.input, width: 110 }}>
+                          <option value="DAY">day</option>
+                          <option value="WEEK">week</option>
+                          <option value="MONTH">month</option>
+                        </select>
+                      </div>
+                      <input name="matchTags" defaultValue={progress.goal.matchTags.join(", ")} style={styles.input} placeholder="pull, climbing..." />
+                      <div style={{ fontSize: 11, opacity: 0.65 }}>Comma-separated tags — any routine with a matching tag counts toward this goal.</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button type="submit" suppressHydrationWarning style={styles.compactBtn}>Save</button>
+                        <button formAction={deleteFrequencyGoal.bind(null, progress.goal.id)} type="submit" suppressHydrationWarning style={{ ...styles.compactBtn, borderColor: "rgba(255,80,80,0.5)" }}>Delete</button>
+                      </div>
+                    </form>
+                  </details>
+                </div>
+              ))
+            )}
+
+            <details style={styles.detailsBox}>
+              <summary data-collapsible-summary style={styles.detailsSummary}>+ New group goal</summary>
+              <form action={createFrequencyGoal} style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                <input name="name" style={styles.input} placeholder="Goal name (e.g. Pull Sessions)" required />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
+                  <input name="targetCount" defaultValue={3} style={{ ...styles.input, width: 70 }} inputMode="numeric" />
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>times per</span>
+                  <input name="targetInterval" defaultValue={1} style={{ ...styles.input, width: 70 }} inputMode="numeric" />
+                  <select name="targetUnit" defaultValue="WEEK" style={{ ...styles.input, width: 110 }}>
+                    <option value="DAY">day</option>
+                    <option value="WEEK">week</option>
+                    <option value="MONTH">month</option>
+                  </select>
+                </div>
+                <input name="matchTags" style={styles.input} placeholder="pull, climbing, strength..." required />
+                <div style={{ fontSize: 11, opacity: 0.65 }}>Any routine tagged with any of these will count toward this goal.</div>
+                <button type="submit" suppressHydrationWarning style={styles.compactBtn}>Create Goal</button>
+              </form>
+            </details>
+          </div>
+        </details>
+      </section>
+
       <div className="mobileListStack" style={{ display: "grid", gap: 18 }}>
         {searchQuery && filteredRoutines.length === 0 ? (
           <section style={styles.section}>
@@ -557,6 +400,7 @@ export default async function RoutinesPage(props: {
                       lastCompletedMap={lastCompletedMap}
                       allowLogging={true}
                       frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+                      goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
                     />
                   ))}
                 </div>
@@ -588,6 +432,7 @@ export default async function RoutinesPage(props: {
                       lastCompletedMap={lastCompletedMap}
                       allowLogging={false}
                       frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+                      goalContributions={[]}
                     />
                   ))}
               </div>

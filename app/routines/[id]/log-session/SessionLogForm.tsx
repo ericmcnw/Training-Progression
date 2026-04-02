@@ -111,6 +111,15 @@ export default function SessionLogForm({
         </Field>
 
         {templateName ? <div style={helperTextStyle}>Template: {templateName}</div> : null}
+        {!templateKey && definitions.length === 0 ? (
+          <div style={{ ...helperTextStyle, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
+            No template configured — only duration and notes will be saved.{" "}
+            <a href={`/routines/${routineId}/edit`} style={{ color: "inherit", opacity: 0.9 }}>
+              Add a template
+            </a>{" "}
+            to track structured metrics for this session type.
+          </div>
+        ) : null}
       </FormSection>
 
       {isClimbingTemplateKey(templateKey) ? (

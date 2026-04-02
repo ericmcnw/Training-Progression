@@ -102,9 +102,13 @@ const COVERAGE_CATEGORY_ORDER: Record<CoverageLens, string[]> = {
     "rowing",
     "swimming",
     "climbing",
+    "board-sports",
     "cardio",
   ],
 };
+
+// TRAINING_GROUP slugs that should appear in the sports lens (alongside CARDIO_ACTIVITY groups)
+const SPORTS_TRAINING_GROUP_SLUGS = new Set(["climbing", "board-sports"]);
 
 function createEmptyKindCountRecord() {
   return {
@@ -159,8 +163,11 @@ function lensKind(lens: CoverageLens): MetadataGroupKind {
 }
 
 function shouldShowGroupInLens(group: GroupRow, lens: CoverageLens) {
+  if (lens === "sports") {
+    if (EXCLUDED_SPORT_SLUGS.has(group.slug)) return false;
+    return group.kind === "CARDIO_ACTIVITY" || SPORTS_TRAINING_GROUP_SLUGS.has(group.slug);
+  }
   if (group.kind !== lensKind(lens)) return false;
-  if (lens === "sports" && EXCLUDED_SPORT_SLUGS.has(group.slug)) return false;
   return true;
 }
 

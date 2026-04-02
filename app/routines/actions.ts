@@ -230,7 +230,17 @@ async function syncRoutineClassificationMetadata(params: {
   selectedGroupIds: string[];
   tags: string[];
 }) {
-  await syncRoutineMetadataGroups(params.routineId, params.selectedGroupIds);
+  // Auto-include metadata groups whose slug matches any tag name (e.g. tag "climbing" → climbing group)
+  const tagMatchedGroups =
+    params.tags.length > 0
+      ? await prisma.metadataGroup.findMany({
+          where: { slug: { in: params.tags }, appliesToRoutine: true },
+          select: { id: true },
+        })
+      : [];
+  const mergedGroupIds = Array.from(new Set([...params.selectedGroupIds, ...tagMatchedGroups.map((g) => g.id)]));
+
+  await syncRoutineMetadataGroups(params.routineId, mergedGroupIds);
   await syncRoutineTags(params.routineId, params.tags);
 }
 
@@ -1084,6 +1094,61 @@ export async function deleteRoutine(id: string) {
   redirect("/routines");
 }
 
+// --- FrequencyGoal CRUD ---
+
+export async function createFrequencyGoal(formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  const targetCount = Math.floor(Number(String(formData.get("targetCount") || "").trim()));
+  const targetInterval = Math.floor(Number(String(formData.get("targetInterval") || "1").trim()));
+  const unitRaw = String(formData.get("targetUnit") || "").trim().toUpperCase();
+  const targetUnit =
+    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH" ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit) : null;
+  const matchTags = parseTagNames(String(formData.get("matchTags") || ""));
+
+  if (!name) throw new Error("Goal name is required.");
+  if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
+  if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
+  if (!targetUnit) throw new Error("Target unit is required.");
+
+  await prisma.frequencyGoal.create({
+    data: { name, targetCount, targetInterval, targetUnit, matchTags },
+  });
+
+  revalidatePath("/routines");
+}
+
+export async function updateFrequencyGoal(formData: FormData) {
+  const id = String(formData.get("id") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const targetCount = Math.floor(Number(String(formData.get("targetCount") || "").trim()));
+  const targetInterval = Math.floor(Number(String(formData.get("targetInterval") || "1").trim()));
+  const unitRaw = String(formData.get("targetUnit") || "").trim().toUpperCase();
+  const targetUnit =
+    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH" ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit) : null;
+  const matchTags = parseTagNames(String(formData.get("matchTags") || ""));
+
+  if (!id) throw new Error("Missing goal id.");
+  if (!name) throw new Error("Goal name is required.");
+  if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
+  if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
+  if (!targetUnit) throw new Error("Target unit is required.");
+
+  await prisma.frequencyGoal.update({
+    where: { id },
+    data: { name, targetCount, targetInterval, targetUnit, matchTags },
+  });
+
+  revalidatePath("/routines");
+}
+
+export async function deleteFrequencyGoal(id: string) {
+  if (!id) throw new Error("Missing goal id.");
+  await prisma.frequencyGoal.delete({ where: { id } });
+  revalidatePath("/routines");
+}
+
+// --- End FrequencyGoal CRUD ---
+
 export async function createCompletionLog(params: {
   routineId: string;
   notes?: string;
@@ -1109,8 +1174,13 @@ export async function createCompletionLog(params: {
   revalidateRoutineSurfaces(params.routineId);
 }
 
-export async function logRoutineCompletion(routineId: string, performedAtLocal?: string) {
-  await createCompletionLog({ routineId, performedAtLocal });
+export async function logRoutineCompletion(routineId: string, _formData?: FormData) {
+  await createCompletionLog({ routineId });
+}
+
+export async function logCompletionWithDate(routineId: string, formData: FormData) {
+  const performedAtLocal = String(formData.get("performedAtLocal") || "").trim();
+  await createCompletionLog({ routineId, performedAtLocal: performedAtLocal || undefined });
 }
 
 export async function removeLastRoutineCompletion(routineId: string) {

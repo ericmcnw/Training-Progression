@@ -627,3 +627,17 @@ model Goal {
   @@index([targetType, targetId])
   @@index([timeframe, startDate, endDate])
 }
+
+model FrequencyGoal {
+  id             String               @id @default(cuid())
+  name           String
+  targetCount    Int
+  targetInterval Int
+  targetUnit     RoutineFrequencyUnit
+  matchTags      String[]
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([isActive])
+}

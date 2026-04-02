@@ -42,6 +42,7 @@ export default function EditRoutineForm({
   }>;
 }) {
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>(() => inferRoutinePreset(routine.kind, routine.subtype));
+  const [tags, setTags] = useState(() => routine.tags.join(", "));
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
   const [category, setCategory] = useState(routine.category.trim() || getRoutinePreset(presetKey).categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
@@ -93,7 +94,7 @@ export default function EditRoutineForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="category" value={category} />
-      <input type="hidden" name="tags" value={routine.tags.join(", ")} />
+      <input type="hidden" name="tags" value={tags} />
 
       <div>
         <label style={styles.label}>Routine Type Selection</label>
@@ -136,6 +137,17 @@ export default function EditRoutineForm({
       <div>
         <label style={styles.label}>Name</label>
         <input name="name" style={styles.input} defaultValue={routine.name} />
+      </div>
+
+      <div>
+        <label style={styles.label}>Group Tags (optional)</label>
+        <input
+          style={styles.input}
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="pull, climbing, strength..."
+        />
+        <div style={styles.help}>Comma-separated tags for grouping frequency goals across routines. Tags matching a known activity (e.g. climbing, pull) also update coverage.</div>
       </div>
 
       <div>

@@ -30,6 +30,7 @@ export default function NewRoutineForm({
 }) {
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>("HABIT");
   const initialPreset = getRoutinePreset(presetKey);
+  const [tags, setTags] = useState("");
   const [kind, setKind] = useState<RoutineKind>(initialPreset.kind);
   const [category, setCategory] = useState(initialPreset.categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
@@ -78,7 +79,7 @@ export default function NewRoutineForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="category" value={category} />
-      <input type="hidden" name="tags" value="" />
+      <input type="hidden" name="tags" value={tags} />
 
       <div>
         <label style={styles.label}>Routine Type Selection</label>
@@ -126,6 +127,17 @@ export default function NewRoutineForm({
           placeholder="Morning mobility, Lift A, Trail run, Climbing..."
           required
         />
+      </div>
+
+      <div>
+        <label style={styles.label}>Group Tags (optional)</label>
+        <input
+          style={styles.input}
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="pull, climbing, strength..."
+        />
+        <div style={styles.help}>Comma-separated tags for grouping frequency goals across routines. Tags matching a known activity (e.g. climbing, pull) also update coverage.</div>
       </div>
 
       <div>
