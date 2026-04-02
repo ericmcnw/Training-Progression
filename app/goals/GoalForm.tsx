@@ -289,6 +289,7 @@ export default function GoalForm({
           </div>
         </>
       ) : (
+      <>
       <section style={sectionStyle}>
         <div style={sectionTitleStyle}>{mode === "guided" ? "Goal Details" : "Basics"}</div>
         <div style={gridStyle}>
@@ -503,6 +504,7 @@ export default function GoalForm({
           {submitLabel}
         </button>
       </div>
+      </>
       )}
     </form>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { RoutineKind } from "@/generated/prisma";
 import type { CoverageCategoryRow, CoverageDetailLog } from "./coverage";
 
@@ -142,15 +142,7 @@ export default function CoverageGroupedBarChart({
 }) {
   const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
-  const [compact, setCompact] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 600px)");
-    setCompact(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  const compact = useSyncExternalStore(subscribeToCompactMediaQuery, getCompactSnapshot, () => false);
 
   // Hover only shows preview when no cell is locked active
   const focusedCell = activeCell ?? hoveredCell;
@@ -319,6 +311,19 @@ export default function CoverageGroupedBarChart({
       </div>
     </div>
   );
+}
+
+function subscribeToCompactMediaQuery(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const mq = window.matchMedia("(max-width: 600px)");
+  const handler = () => onStoreChange();
+  mq.addEventListener("change", handler);
+  return () => mq.removeEventListener("change", handler);
+}
+
+function getCompactSnapshot() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 600px)").matches;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────

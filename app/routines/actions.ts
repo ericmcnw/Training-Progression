@@ -1188,7 +1188,7 @@ export async function createCompletionLog(params: {
   revalidateRoutineSurfaces(params.routineId);
 }
 
-export async function logRoutineCompletion(routineId: string, _formData?: FormData) {
+export async function logRoutineCompletion(routineId: string) {
   await createCompletionLog({ routineId });
 }
 

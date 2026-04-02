@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 import { deleteFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions";
@@ -6,6 +7,7 @@ import { formInputStyle, subtleTextStyle } from "./ui";
 import { normalizeRoutineKind } from "@/lib/routines";
 
 export default async function FrequencyGoalsSection() {
+  const now = new Date();
   const [goals, allRoutines] = await Promise.all([
     prisma.frequencyGoal.findMany({
       orderBy: { name: "asc" },
@@ -29,7 +31,7 @@ export default async function FrequencyGoalsSection() {
   const logs =
     maxWindowDays > 0
       ? await prisma.routineLog.findMany({
-          where: { performedAt: { gte: new Date(Date.now() - maxWindowDays * 24 * 60 * 60 * 1000) } },
+          where: { performedAt: { gte: new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000) } },
           select: { routineId: true, performedAt: true },
         })
       : [];
@@ -167,7 +169,11 @@ export default async function FrequencyGoalsSection() {
         )}
 
         <div style={{ fontSize: 13, opacity: 0.7 }}>
-          To add a new group frequency goal, use <a href="/goals?mode=new&template=GROUP_ROUTINE_FREQUENCY" style={{ color: "inherit" }}>New Goal</a> and select the &ldquo;Group routine frequency&rdquo; template.
+          To add a new group frequency goal, use{" "}
+          <Link href="/goals?mode=new&template=GROUP_ROUTINE_FREQUENCY" style={{ color: "inherit" }}>
+            New Goal
+          </Link>{" "}
+          and select the &ldquo;Group routine frequency&rdquo; template.
         </div>
       </div>
     </SectionCard>

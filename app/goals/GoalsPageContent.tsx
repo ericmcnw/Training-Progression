@@ -7,7 +7,6 @@ import { createGoal, toggleGoalActive, toggleRoutineFrequencyGoal } from "./acti
 import { createFrequencyGoal } from "@/app/routines/actions";
 import { GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
 import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
-import FrequencyGoalsSection from "./FrequencyGoalsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -237,8 +236,6 @@ export default async function GoalsPage({
           </div>
         )}
       </SectionCard>
-
-      <FrequencyGoalsSection />
     </ProgressShell>
   );
 }
