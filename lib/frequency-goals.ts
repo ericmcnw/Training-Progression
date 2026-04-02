@@ -8,8 +8,8 @@ export type FrequencyGoalShape = {
   targetCount: number;
   targetInterval: number;
   targetUnit: RoutineFrequencyUnit;
-  matchTags: string[];
   isActive: boolean;
+  routineIds: string[];
 };
 
 export type FrequencyGoalProgress = {
@@ -22,7 +22,6 @@ export type FrequencyGoalProgress = {
   detailLabel: string;
   windowDays: number;
   windowLabel: string;
-  matchingRoutineIds: string[];
 };
 
 export function getFrequencyGoalWindowDays(goal: Pick<FrequencyGoalShape, "targetInterval" | "targetUnit">) {
@@ -33,25 +32,16 @@ export function getFrequencyGoalWindowDays(goal: Pick<FrequencyGoalShape, "targe
 
 export function getFrequencyGoalProgress(params: {
   goal: FrequencyGoalShape;
-  routineTags: Map<string, string[]>; // routineId → tag names
   logs: Array<{ routineId: string; performedAt: Date }>;
   now?: Date;
 }): FrequencyGoalProgress {
-  const { goal, routineTags, logs, now = new Date() } = params;
+  const { goal, logs, now = new Date() } = params;
   const windowDays = getFrequencyGoalWindowDays(goal);
   const windowStart = new Date(now.getTime() - windowDays * DAY_MS);
-  const matchTagSet = new Set(goal.matchTags);
-
-  const matchingRoutineIds: string[] = [];
-  for (const [routineId, tags] of routineTags) {
-    if (tags.some((tag) => matchTagSet.has(tag))) {
-      matchingRoutineIds.push(routineId);
-    }
-  }
-  const matchingRoutineIdSet = new Set(matchingRoutineIds);
+  const routineIdSet = new Set(goal.routineIds);
 
   const currentCount = logs.filter(
-    (log) => matchingRoutineIdSet.has(log.routineId) && log.performedAt >= windowStart && log.performedAt <= now
+    (log) => routineIdSet.has(log.routineId) && log.performedAt >= windowStart && log.performedAt <= now
   ).length;
 
   const remainingCount = Math.max(0, goal.targetCount - currentCount);
@@ -75,29 +65,15 @@ export function getFrequencyGoalProgress(params: {
       ? `${excessCount} ahead in the ${windowLabel}`
       : "On track";
 
-  return {
-    goal,
-    currentCount,
-    remainingCount,
-    excessCount,
-    status,
-    summaryLabel,
-    detailLabel,
-    windowDays,
-    windowLabel,
-    matchingRoutineIds,
-  };
+  return { goal, currentCount, remainingCount, excessCount, status, summaryLabel, detailLabel, windowDays, windowLabel };
 }
 
 export function getFrequencyGoalProgressList(params: {
   goals: FrequencyGoalShape[];
-  routineTags: Map<string, string[]>;
   logs: Array<{ routineId: string; performedAt: Date }>;
   now?: Date;
 }): FrequencyGoalProgress[] {
   return params.goals
     .filter((goal) => goal.isActive)
-    .map((goal) =>
-      getFrequencyGoalProgress({ goal, routineTags: params.routineTags, logs: params.logs, now: params.now })
-    );
+    .map((goal) => getFrequencyGoalProgress({ goal, logs: params.logs, now: params.now }));
 }

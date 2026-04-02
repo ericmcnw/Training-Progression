@@ -1096,55 +1096,68 @@ export async function deleteRoutine(id: string) {
 
 // --- FrequencyGoal CRUD ---
 
-export async function createFrequencyGoal(formData: FormData) {
+function parseFrequencyGoalFields(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const targetCount = Math.floor(Number(String(formData.get("targetCount") || "").trim()));
   const targetInterval = Math.floor(Number(String(formData.get("targetInterval") || "1").trim()));
   const unitRaw = String(formData.get("targetUnit") || "").trim().toUpperCase();
   const targetUnit =
-    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH" ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit) : null;
-  const matchTags = parseTagNames(String(formData.get("matchTags") || ""));
+    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH"
+      ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit)
+      : null;
+  const routineIds = formData.getAll("routineIds").map(String).filter(Boolean);
 
   if (!name) throw new Error("Goal name is required.");
   if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
   if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
   if (!targetUnit) throw new Error("Target unit is required.");
 
-  await prisma.frequencyGoal.create({
-    data: { name, targetCount, targetInterval, targetUnit, matchTags },
+  return { name, targetCount, targetInterval, targetUnit, routineIds };
+}
+
+async function syncFrequencyGoalRoutines(goalId: string, routineIds: string[]) {
+  await prisma.frequencyGoalRoutine.deleteMany({ where: { goalId } });
+  if (routineIds.length > 0) {
+    await prisma.frequencyGoalRoutine.createMany({
+      data: routineIds.map((routineId) => ({ goalId, routineId })),
+      skipDuplicates: true,
+    });
+  }
+}
+
+export async function createFrequencyGoal(formData: FormData) {
+  const { name, targetCount, targetInterval, targetUnit, routineIds } = parseFrequencyGoalFields(formData);
+
+  const goal = await prisma.frequencyGoal.create({
+    data: { name, targetCount, targetInterval, targetUnit },
+    select: { id: true },
   });
+  await syncFrequencyGoalRoutines(goal.id, routineIds);
 
   revalidatePath("/routines");
+  revalidatePath("/goals");
 }
 
 export async function updateFrequencyGoal(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
-  const name = String(formData.get("name") || "").trim();
-  const targetCount = Math.floor(Number(String(formData.get("targetCount") || "").trim()));
-  const targetInterval = Math.floor(Number(String(formData.get("targetInterval") || "1").trim()));
-  const unitRaw = String(formData.get("targetUnit") || "").trim().toUpperCase();
-  const targetUnit =
-    unitRaw === "DAY" || unitRaw === "WEEK" || unitRaw === "MONTH" ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit) : null;
-  const matchTags = parseTagNames(String(formData.get("matchTags") || ""));
-
   if (!id) throw new Error("Missing goal id.");
-  if (!name) throw new Error("Goal name is required.");
-  if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
-  if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
-  if (!targetUnit) throw new Error("Target unit is required.");
+  const { name, targetCount, targetInterval, targetUnit, routineIds } = parseFrequencyGoalFields(formData);
 
   await prisma.frequencyGoal.update({
     where: { id },
-    data: { name, targetCount, targetInterval, targetUnit, matchTags },
+    data: { name, targetCount, targetInterval, targetUnit },
   });
+  await syncFrequencyGoalRoutines(id, routineIds);
 
   revalidatePath("/routines");
+  revalidatePath("/goals");
 }
 
 export async function deleteFrequencyGoal(id: string) {
   if (!id) throw new Error("Missing goal id.");
   await prisma.frequencyGoal.delete({ where: { id } });
   revalidatePath("/routines");
+  revalidatePath("/goals");
 }
 
 // --- End FrequencyGoal CRUD ---
