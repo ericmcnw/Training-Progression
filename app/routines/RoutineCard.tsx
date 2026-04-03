@@ -38,12 +38,18 @@ function loggingHref(routine: Pick<RoutineWithExercises, "id" | "kind">) {
   return `/routines/${routine.id}/log`;
 }
 
+function formatRoutinePreviewExerciseName(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s*\((reps|time)\)\s*$/i, "");
+}
+
 function getDefiningLabel(routine: RoutineWithExercises) {
   const subtypeLabel = formatRoutineSubtype(routine.subtype);
   if (subtypeLabel && subtypeLabel !== "Other") return subtypeLabel;
   const firstTag = routine.tagAssignments[0]?.tag.name?.trim();
   if (firstTag) return firstTag;
-  const firstExercise = routine.exercises[0]?.exercise.name?.trim();
+  const firstExercise = formatRoutinePreviewExerciseName(routine.exercises[0]?.exercise.name);
   if (firstExercise) return firstExercise;
   return null;
 }
@@ -84,11 +90,11 @@ export default function RoutineCard({
   const kind = normalizeRoutineKind(routine.kind);
   const definingLabel = getDefiningLabel(routine);
   const exercisePreview = isWorkoutKind(kind)
-    ? routine.exercises.map((item) => item.exercise.name).join(", ")
+    ? routine.exercises.map((item) => formatRoutinePreviewExerciseName(item.exercise.name)).join(", ")
     : "";
   const guidedPreview = isGuidedKind(kind)
     ? routine.guidedSteps
-        .map((step) => step.title.trim() || step.exercise?.name?.trim() || "")
+        .map((step) => step.title.trim() || formatRoutinePreviewExerciseName(step.exercise?.name) || "")
         .filter(Boolean)
         .join(", ")
     : "";
@@ -106,7 +112,11 @@ export default function RoutineCard({
     : goalContributions.length > 0
     ? `Goals: ${goalContributions.join(", ")}`
     : null;
-  const kindSummary = definingLabel ? `${formatRoutineTypeLabel(kind)} - ${definingLabel}` : formatRoutineTypeLabel(kind);
+  const kindSummary = isWorkoutKind(kind)
+    ? ""
+    : definingLabel
+    ? `${formatRoutineTypeLabel(kind)} - ${definingLabel}`
+    : formatRoutineTypeLabel(kind);
   const frequencyWindowProgress = frequencySummary.hasTarget
     ? `[${frequencySummary.currentCount}/${frequencySummary.targetCount} ${frequencySummary.windowLabel}]`
     : null;
@@ -158,7 +168,7 @@ export default function RoutineCard({
             {!allowLogging ? <span className="routineCardArchivedPill">Archived</span> : null}
           </div>
 
-          <div className="routineCardKindLine">{kindSummary}</div>
+          {kindSummary ? <div className="routineCardKindLine">{kindSummary}</div> : null}
 
           <div className="routineCardMetaLine">
             <span>Last: <b>{lastCompletedLabel}</b></span>
