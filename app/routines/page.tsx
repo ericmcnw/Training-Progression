@@ -89,6 +89,14 @@ export default async function RoutinesPage(props: {
             },
           },
         },
+        guidedSteps: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            exercise: {
+              select: { name: true },
+            },
+          },
+        },
         tagAssignments: {
           select: { tag: { select: { name: true } } },
         },

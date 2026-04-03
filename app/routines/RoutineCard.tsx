@@ -24,6 +24,10 @@ export type RoutineWithExercises = Prisma.RoutineGetPayload<{
       orderBy: { sortOrder: "asc" };
       include: { exercise: { select: { name: true } } };
     };
+    guidedSteps: {
+      orderBy: { sortOrder: "asc" };
+      include: { exercise: { select: { name: true } } };
+    };
     tagAssignments: {
       select: { tag: { select: { name: true } } };
     };
@@ -78,12 +82,14 @@ export default function RoutineCard({
   goalContributions?: string[];
 }) {
   const kind = normalizeRoutineKind(routine.kind);
-  const count = weeklyMap.get(routine.id) ?? 0;
   const definingLabel = getDefiningLabel(routine);
   const exercisePreview = isWorkoutKind(kind)
-    ? routine.exercises
-        .slice(0, 3)
-        .map((item) => item.exercise.name)
+    ? routine.exercises.map((item) => item.exercise.name).join(", ")
+    : "";
+  const guidedPreview = isGuidedKind(kind)
+    ? routine.guidedSteps
+        .map((step) => step.title.trim() || step.exercise?.name?.trim() || "")
+        .filter(Boolean)
         .join(", ")
     : "";
   const lastCompletedAt = lastCompletedMap.get(routine.id) ?? null;
@@ -94,7 +100,9 @@ export default function RoutineCard({
   const datedLogAction = logCompletionWithDate.bind(null, routine.id);
 
   const secondarySummary = exercisePreview
-    ? `Exercises: ${exercisePreview}${routine.exercises.length > 3 ? "..." : ""}`
+    ? `Exercises: ${exercisePreview}`
+    : guidedPreview
+    ? `Steps: ${guidedPreview}`
     : goalContributions.length > 0
     ? `Goals: ${goalContributions.join(", ")}`
     : null;
@@ -117,9 +125,24 @@ export default function RoutineCard({
             <div className="routineCardTitle">{routine.name}</div>
             {allowLogging ? (
               <div className="routineCardActionRow">
-                <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
-                  Log
-                </Link>
+                {isCompletionKind(kind) ? (
+                  <form action={quickLogAction}>
+                    <button type="submit" suppressHydrationWarning className="routineCardPrimaryAction">
+                      Log
+                    </button>
+                  </form>
+                ) : (
+                  <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
+                    Log
+                  </Link>
+                )}
+                {isCompletionKind(kind) ? (
+                  <form action={undoLastAction}>
+                    <button type="submit" suppressHydrationWarning className="routineCardMiniButton routineCardMiniButtonGhost">
+                      Undo
+                    </button>
+                  </form>
+                ) : null}
                 {isWorkoutKind(kind) ? (
                   <Link href={`/routines/${routine.id}/template`} className="routineCardMiniLink">
                     Template
@@ -138,7 +161,6 @@ export default function RoutineCard({
           <div className="routineCardKindLine">{kindSummary}</div>
 
           <div className="routineCardMetaLine">
-            <span>This week: <b>{count}</b></span>
             <span>Last: <b>{lastCompletedLabel}</b></span>
           </div>
 
@@ -207,23 +229,8 @@ export default function RoutineCard({
           </div>
 
           {allowLogging && isCompletionKind(kind) ? (
-            <div className="routineCardActionRow">
-              <form action={quickLogAction}>
-                <button type="submit" suppressHydrationWarning className="routineCardMiniButton">
-                  Quick
-                </button>
-              </form>
-              <form action={undoLastAction}>
-                <button type="submit" suppressHydrationWarning className="routineCardMiniButton routineCardMiniButtonGhost">
-                  Undo
-                </button>
-              </form>
-            </div>
-          ) : null}
-
-          {allowLogging && isCompletionKind(kind) ? (
             <details className="routineCardDateDetails">
-              <summary className="routineCardMiniLink">Date</summary>
+              <summary className="routineCardMiniLink">More</summary>
               <form action={datedLogAction} className="routineCardDateForm">
                 <input type="datetime-local" name="performedAtLocal" className="routineCardDateInput" />
                 <button type="submit" suppressHydrationWarning className="routineCardMiniButton">
