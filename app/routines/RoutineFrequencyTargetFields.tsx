@@ -8,10 +8,12 @@ export default function RoutineFrequencyTargetFields({
   initialCount,
   initialUnit,
   initialInterval,
+  initialEnabled,
 }: {
   initialCount?: number | null;
   initialUnit?: RoutineFrequencyUnit | null;
   initialInterval?: number | null;
+  initialEnabled?: boolean;
 }) {
   const hasInitialTarget =
     Number.isFinite(initialCount) &&
@@ -19,7 +21,7 @@ export default function RoutineFrequencyTargetFields({
     !!initialUnit &&
     Number.isFinite(initialInterval) &&
     (initialInterval ?? 0) > 0;
-  const [enabled, setEnabled] = useState(hasInitialTarget);
+  const [enabled, setEnabled] = useState(initialEnabled ?? hasInitialTarget);
   const [count, setCount] = useState(String(initialCount ?? 3));
   const [unit, setUnit] = useState<RoutineFrequencyUnit>(initialUnit ?? "WEEK");
   const [interval, setInterval] = useState(String(initialInterval ?? 1));

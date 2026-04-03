@@ -103,6 +103,7 @@ function parseRoutineFrequencyTarget(formData: FormData) {
   const enabled = String(formData.get("frequencyTargetEnabled") || "").trim() === "1";
   if (!enabled) {
     return {
+      frequencyGoalEnabled: false,
       targetFrequencyCount: null,
       targetFrequencyUnit: null,
       targetFrequencyInterval: null,
@@ -133,6 +134,7 @@ function parseRoutineFrequencyTarget(formData: FormData) {
   }
 
   return {
+    frequencyGoalEnabled: true,
     targetFrequencyCount: Math.floor(targetFrequencyCount),
     targetFrequencyUnit,
     targetFrequencyInterval: Math.floor(targetFrequencyInterval),
@@ -191,6 +193,79 @@ async function syncRoutineMetadataGroups(routineId: string, groupIds: string[]) 
     if (currentIds.has(groupId)) continue;
     await prisma.routineMetadataGroup.create({ data: { routineId, groupId } });
   }
+}
+
+async function syncRoutineMetadataGroupsTx(tx: PrismaTx, routineId: string, groupIds: string[]) {
+  const current = await tx.routineMetadataGroup.findMany({
+    where: { routineId },
+    select: { groupId: true },
+  });
+  const currentIds = new Set(current.map((entry) => entry.groupId));
+  const nextIds = new Set(groupIds);
+
+  await tx.routineMetadataGroup.deleteMany({
+    where: {
+      routineId,
+      groupId: { notIn: groupIds.length > 0 ? groupIds : ["__none__"] },
+    },
+  });
+
+  for (const groupId of nextIds) {
+    if (currentIds.has(groupId)) continue;
+    await tx.routineMetadataGroup.create({ data: { routineId, groupId } });
+  }
+}
+
+async function mergeWorkoutExerciseMetadataIntoRoutineTx(tx: PrismaTx, routineId: string, exerciseIds: string[]) {
+  const uniqueExerciseIds = Array.from(
+    new Set(
+      exerciseIds
+        .map((exerciseId) => String(exerciseId || "").trim())
+        .filter((exerciseId) => exerciseId.length > 0)
+    )
+  );
+
+  const [currentRoutineGroups, exerciseMetadataGroups, exercises] = await Promise.all([
+    tx.routineMetadataGroup.findMany({
+      where: { routineId },
+      select: { groupId: true },
+    }),
+    uniqueExerciseIds.length > 0
+      ? tx.exerciseMetadataGroup.findMany({
+          where: { exerciseId: { in: uniqueExerciseIds } },
+          select: { groupId: true },
+        })
+      : Promise.resolve([]),
+    uniqueExerciseIds.length > 0
+      ? tx.exercise.findMany({
+          where: { id: { in: uniqueExerciseIds } },
+          select: { name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const inferredExerciseSlugs = Array.from(
+    new Set(exercises.flatMap((exercise) => inferExerciseMetadataSlugs(exercise.name)))
+  );
+  const inferredExerciseMetadataGroups =
+    inferredExerciseSlugs.length > 0
+      ? await tx.metadataGroup.findMany({
+          where: { slug: { in: inferredExerciseSlugs } },
+          select: { id: true },
+        })
+      : [];
+
+  const mergedGroupIds = Array.from(
+    new Set([
+      ...currentRoutineGroups.map((entry) => entry.groupId),
+      ...exerciseMetadataGroups.map((entry) => entry.groupId),
+      ...inferredExerciseMetadataGroups.map((entry) => entry.id),
+    ])
+  );
+
+  // TODO(workout-metadata): If a workout exercise is removed from the template and the routine keeps getting logged
+  // without it for long enough, consider pruning stale derived routine metadata instead of only merging it forward.
+  await syncRoutineMetadataGroupsTx(tx, routineId, mergedGroupIds);
 }
 
 async function syncRoutineTags(routineId: string, tagNames: string[]) {
@@ -655,6 +730,12 @@ async function syncWorkoutTemplateTx(tx: PrismaTx, routineId: string, exercises:
       },
     });
   }
+
+  await mergeWorkoutExerciseMetadataIntoRoutineTx(
+    tx,
+    routineId,
+    exercises.map((exercise) => exercise.exerciseId)
+  );
 }
 
 async function buildStepTemplateFromWorkoutTx(tx: PrismaTx, routineId: string): Promise<RoutineStepTemplateInput[]> {
@@ -843,6 +924,7 @@ export async function createRoutine(formData: FormData) {
       domain,
       kind,
       subtype,
+      frequencyGoalEnabled: frequencyTarget.frequencyGoalEnabled,
       targetFrequencyCount: frequencyTarget.targetFrequencyCount,
       targetFrequencyUnit: frequencyTarget.targetFrequencyUnit,
       targetFrequencyInterval: frequencyTarget.targetFrequencyInterval,
@@ -943,7 +1025,14 @@ export async function updateRoutine(formData: FormData) {
 
   const existing = await prisma.routine.findUnique({
     where: { id },
-    select: { isDeleted: true, kind: true },
+    select: {
+      isDeleted: true,
+      kind: true,
+      frequencyGoalEnabled: true,
+      targetFrequencyCount: true,
+      targetFrequencyUnit: true,
+      targetFrequencyInterval: true,
+    },
   });
   if (!existing) throw new Error("Routine not found.");
   if (existing.isDeleted) {
@@ -952,6 +1041,14 @@ export async function updateRoutine(formData: FormData) {
   }
 
   const currentKind = normalizeRoutineKind(existing.kind);
+  const nextFrequencyTarget = frequencyTarget.frequencyGoalEnabled
+    ? frequencyTarget
+    : {
+        frequencyGoalEnabled: false,
+        targetFrequencyCount: existing.targetFrequencyCount,
+        targetFrequencyUnit: existing.targetFrequencyUnit,
+        targetFrequencyInterval: existing.targetFrequencyInterval,
+      };
 
   await prisma.$transaction(async (tx) => {
     await convertRoutineStructureTx(tx, {
@@ -968,10 +1065,11 @@ export async function updateRoutine(formData: FormData) {
         domain,
         kind,
         subtype,
-        targetFrequencyCount: frequencyTarget.targetFrequencyCount,
-        targetFrequencyUnit: frequencyTarget.targetFrequencyUnit,
-        targetFrequencyInterval: frequencyTarget.targetFrequencyInterval,
-        timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
+        frequencyGoalEnabled: nextFrequencyTarget.frequencyGoalEnabled,
+        targetFrequencyCount: nextFrequencyTarget.targetFrequencyCount,
+        targetFrequencyUnit: nextFrequencyTarget.targetFrequencyUnit,
+        targetFrequencyInterval: nextFrequencyTarget.targetFrequencyInterval,
+        timesPerWeek: suggestedTimesPerWeekForRoutineTarget(nextFrequencyTarget),
       },
     });
   });

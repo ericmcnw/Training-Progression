@@ -246,6 +246,10 @@ export async function toggleRoutineFrequencyGoal(formData: FormData) {
   const goalId = String(formData.get("goalId") ?? "").trim();
   const nextEnabled = String(formData.get("enabled") ?? "") !== "0";
   const returnTo = String(formData.get("returnTo") ?? "").trim() || "/goals";
+  const shouldSyncGoalRecord =
+    goalId.length > 0 &&
+    !goalId.startsWith("routine-frequency:") &&
+    !goalId.startsWith("group-frequency:");
 
   await prisma.$transaction(async (tx) => {
     await tx.routine.update({
@@ -253,7 +257,7 @@ export async function toggleRoutineFrequencyGoal(formData: FormData) {
       data: { frequencyGoalEnabled: nextEnabled },
     });
 
-    if (goalId) {
+    if (shouldSyncGoalRecord) {
       await tx.goal.update({
         where: { id: goalId },
         data: { isActive: nextEnabled },

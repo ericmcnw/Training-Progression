@@ -76,7 +76,7 @@ export default async function RoutinesPage(props: {
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
-  const [routines, goalRoutines] = await Promise.all([
+  const [routines, goalRoutines, routineFrequencyGoals] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
@@ -107,6 +107,18 @@ export default async function RoutinesPage(props: {
       where: { goal: { isActive: true } },
       select: { routineId: true, goal: { select: { name: true } } },
     }),
+    prisma.goal.findMany({
+      where: {
+        isActive: true,
+        goalType: "FREQUENCY",
+        targetType: "ROUTINE",
+        metricType: "SESSIONS",
+      },
+      select: {
+        name: true,
+        targetId: true,
+      },
+    }),
   ]);
 
   // Build routineId → goal name list
@@ -115,6 +127,16 @@ export default async function RoutinesPage(props: {
     const current = goalContributionsByRoutineId.get(row.routineId) ?? [];
     current.push(row.goal.name);
     goalContributionsByRoutineId.set(row.routineId, current);
+  }
+  for (const goal of routineFrequencyGoals) {
+    const routineId = goal.targetId.trim();
+    if (!routineId) continue;
+    const current = goalContributionsByRoutineId.get(routineId) ?? [];
+    current.push(goal.name);
+    goalContributionsByRoutineId.set(routineId, current);
+  }
+  for (const [routineId, names] of goalContributionsByRoutineId) {
+    goalContributionsByRoutineId.set(routineId, Array.from(new Set(names)).sort((a, b) => a.localeCompare(b)));
   }
 
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);

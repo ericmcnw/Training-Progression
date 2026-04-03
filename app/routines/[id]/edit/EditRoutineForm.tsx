@@ -24,6 +24,7 @@ export default function EditRoutineForm({
     targetFrequencyCount: number | null;
     targetFrequencyUnit: RoutineFrequencyUnit | null;
     targetFrequencyInterval: number | null;
+    frequencyGoalEnabled: boolean;
     sessionTemplateId: string | null;
     selectedMetadataGroupIds: string[];
     tags: string[];
@@ -156,6 +157,7 @@ export default function EditRoutineForm({
           initialCount={routine.targetFrequencyCount}
           initialUnit={routine.targetFrequencyUnit}
           initialInterval={routine.targetFrequencyInterval}
+          initialEnabled={routine.frequencyGoalEnabled}
         />
       </div>
 

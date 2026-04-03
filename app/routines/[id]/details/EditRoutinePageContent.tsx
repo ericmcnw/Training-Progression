@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
+import { inferExerciseMetadataSlugs, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 import { deleteRoutine, toggleArchiveRoutine } from "../../actions";
 import EditRoutineForm from "../edit/EditRoutineForm";
 
@@ -23,6 +23,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       subtype: true,
       kind: true,
       isActive: true,
+      frequencyGoalEnabled: true,
       targetFrequencyCount: true,
       targetFrequencyUnit: true,
       targetFrequencyInterval: true,
@@ -32,6 +33,20 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
       metadataGroups: {
         select: {
           groupId: true,
+        },
+      },
+      exercises: {
+        select: {
+          exercise: {
+            select: {
+              name: true,
+              metadataGroups: {
+                select: {
+                  groupId: true,
+                },
+              },
+            },
+          },
         },
       },
       tagAssignments: {
@@ -45,13 +60,29 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
 
+  const derivedExerciseMetadataGroupIds = Array.from(
+    new Set(
+      routine.exercises.flatMap((entry) => entry.exercise.metadataGroups.map((groupEntry) => groupEntry.groupId))
+    )
+  );
+  const inferredExerciseMetadataSlugs = Array.from(
+    new Set(routine.exercises.flatMap((entry) => inferExerciseMetadataSlugs(entry.exercise.name)))
+  );
+
   const metadataGroups = await prisma.metadataGroup.findMany({
     where: {
-      OR: [{ appliesToRoutine: true }, { kind: { in: ROUTINE_METADATA_SELECTABLE_KINDS } }],
+      OR: [
+        { appliesToRoutine: true },
+        { kind: { in: ROUTINE_METADATA_SELECTABLE_KINDS } },
+        ...(inferredExerciseMetadataSlugs.length > 0 ? [{ slug: { in: inferredExerciseMetadataSlugs } }] : []),
+      ],
     },
     select: { id: true, slug: true, label: true, kind: true },
     orderBy: [{ kind: "asc" }, { label: "asc" }],
   });
+  const inferredExerciseMetadataGroupIds = metadataGroups
+    .filter((group) => inferredExerciseMetadataSlugs.includes(group.slug))
+    .map((group) => group.id);
   const sessionTemplates = await prisma.sessionTemplate.findMany({
     where: { isSystem: true },
     select: { id: true, name: true, description: true, sessionSubtype: true },
@@ -82,11 +113,18 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
             category: routine.category || "General",
             subtype: routine.subtype,
             kind: routine.kind,
+            frequencyGoalEnabled: routine.frequencyGoalEnabled,
             targetFrequencyCount: routine.targetFrequencyCount,
             targetFrequencyUnit: routine.targetFrequencyUnit,
             targetFrequencyInterval: routine.targetFrequencyInterval,
             sessionTemplateId: routine.sessionDetails?.templateId ?? null,
-            selectedMetadataGroupIds: routine.metadataGroups.map((entry) => entry.groupId),
+            selectedMetadataGroupIds: Array.from(
+              new Set([
+                ...routine.metadataGroups.map((entry) => entry.groupId),
+                ...derivedExerciseMetadataGroupIds,
+                ...inferredExerciseMetadataGroupIds,
+              ])
+            ),
             tags: routine.tagAssignments.map((entry) => entry.tag.name),
           }}
           metadataGroups={metadataGroups}
