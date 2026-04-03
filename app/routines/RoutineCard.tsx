@@ -55,6 +55,13 @@ function PencilIcon() {
   );
 }
 
+function targetProgressTone(summary: RoutineFrequencySummary) {
+  if (!summary.hasTarget) return "rgba(255,255,255,0.62)";
+  if (summary.currentCount <= 0) return "#f87171";
+  if (summary.currentCount < (summary.targetCount ?? 0)) return "#fbbf24";
+  return "#4ade80";
+}
+
 export default function RoutineCard({
   routine,
   weeklyMap,
@@ -92,6 +99,15 @@ export default function RoutineCard({
     ? `Goals: ${goalContributions.join(", ")}`
     : null;
   const kindSummary = definingLabel ? `${formatRoutineTypeLabel(kind)} - ${definingLabel}` : formatRoutineTypeLabel(kind);
+  const frequencyWindowProgress = frequencySummary.hasTarget
+    ? `[${frequencySummary.currentCount}/${frequencySummary.targetCount} ${frequencySummary.windowLabel}]`
+    : null;
+  const targetFrequencyLabel =
+    frequencySummary.hasTarget && frequencySummary.targetCount && frequencySummary.unit
+      ? `${frequencySummary.targetCount} ${
+          frequencySummary.targetCount === 1 ? "log" : "logs"
+        }/${frequencySummary.interval === 1 ? frequencySummary.unit.toLowerCase() : `${frequencySummary.interval} ${frequencySummary.unit.toLowerCase()}s`}`
+      : formatRoutineTargetLabel(routine);
 
   return (
     <div className="routineCard" style={{ opacity: allowLogging ? 1 : 0.72 }}>
@@ -170,7 +186,12 @@ export default function RoutineCard({
               </form>
             </details>
             <div className="routineCardMetaLine" style={{ gap: 6 }}>
-              <span>Target Frequency: <b>{formatRoutineTargetLabel(routine)}</b></span>
+              <span>Target Frequency: <b>{targetFrequencyLabel}</b></span>
+              {frequencyWindowProgress ? (
+                <span style={{ color: targetProgressTone(frequencySummary) }}>
+                  <b>{frequencyWindowProgress}</b>
+                </span>
+              ) : null}
             </div>
           </div>
 
