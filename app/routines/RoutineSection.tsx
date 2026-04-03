@@ -63,6 +63,33 @@ export default function RoutineSection({
           <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{title}</span>
         </button>
 
+        {quickLogHref ? (
+          <Link
+            href={quickLogHref}
+            style={{
+              position: "absolute",
+              left: 34,
+              top: "50%",
+              transform: "translateY(-50%)",
+              minHeight: 28,
+              padding: "4px 8px",
+              border: "1px solid rgba(128,128,128,0.7)",
+              borderRadius: 8,
+              textDecoration: "none",
+              color: "inherit",
+              background: "rgba(255,255,255,0.06)",
+              fontWeight: 800,
+              fontSize: 11,
+              lineHeight: 1.2,
+              display: "inline-flex",
+              alignItems: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Quick Log
+          </Link>
+        ) : null}
+
         <div
           style={{
             position: "absolute",
@@ -74,28 +101,6 @@ export default function RoutineSection({
             gap: 8,
           }}
         >
-          {quickLogHref ? (
-            <Link
-              href={quickLogHref}
-              style={{
-                minHeight: 28,
-                padding: "4px 8px",
-                border: "1px solid rgba(128,128,128,0.7)",
-                borderRadius: 8,
-                textDecoration: "none",
-                color: "inherit",
-                background: "rgba(255,255,255,0.06)",
-                fontWeight: 800,
-                fontSize: 11,
-                lineHeight: 1.2,
-                display: "inline-flex",
-                alignItems: "center",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Quick Log
-            </Link>
-          ) : null}
           <span style={{ fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>{count} routines</span>
         </div>
       </div>
