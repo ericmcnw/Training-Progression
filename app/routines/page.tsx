@@ -8,6 +8,7 @@ import { formatRoutineTypeLabel, normalizeRoutineKind } from "@/lib/routines";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import RoutineCard from "./RoutineCard";
+import RoutineSection from "./RoutineSection";
 
 export const dynamic = "force-dynamic";
 
@@ -32,37 +33,6 @@ const styles = {
     color: "inherit",
     fontWeight: 800,
     background: "rgba(128,128,128,0.12)",
-  },
-  section: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  sectionHeader: {
-    padding: "10px 14px",
-    background: "rgba(128,128,128,0.14)",
-    borderBottom: "1px solid rgba(128,128,128,0.25)",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    color: "inherit",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-  sectionActionLink: {
-    position: "absolute" as const,
-    right: 14,
-    top: 8,
-    minHeight: 40,
-    padding: "8px 10px",
-    border: "1px solid rgba(128,128,128,0.7)",
-    borderRadius: 10,
-    textDecoration: "none",
-    color: "inherit",
-    background: "rgba(255,255,255,0.06)",
-    fontWeight: 800,
-    fontSize: 12,
-    lineHeight: 1.2,
   },
   btnLink: {
     minHeight: 42,
@@ -232,7 +202,7 @@ export default async function RoutinesPage(props: {
 
       <div className="mobileListStack" style={{ display: "grid", gap: 18 }}>
         {searchQuery && filteredRoutines.length === 0 ? (
-          <section style={styles.section}>
+          <section style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 16, overflow: "hidden" }}>
             <div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>
               No routines match <b>{searchQuery}</b>.
             </div>
@@ -242,71 +212,48 @@ export default async function RoutinesPage(props: {
           const list = groups.get(typeLabel)!;
           const isWorkoutSection = typeLabel === formatRoutineTypeLabel("WORKOUT");
           return (
-            <section key={typeLabel} className="mobileSectionCard" style={styles.section}>
-              <details open style={{ position: "relative" }}>
-                <summary
-                  data-collapsible-summary
-                  className="mobileRoutinesHeader mobileSectionHeader"
-                  style={{
-                    ...styles.sectionHeader,
-                    ...(isWorkoutSection ? { paddingRight: 118 } : null),
-                  }}
-                >
-                  <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{typeLabel.toUpperCase()}</div>
-                  <div style={{ fontSize: 12, opacity: 0.75 }}>{list.length} routines</div>
-                </summary>
-                {isWorkoutSection ? (
-                  <Link href="/routines?mode=quick-log" style={styles.sectionActionLink}>
-                    Quick Log
-                  </Link>
-                ) : null}
-                <div className="mobileSectionBody" style={{ padding: 10, display: "grid", gap: 8 }}>
-                  {list.map((routine) => (
-                    <RoutineCard
-                      key={routine.id}
-                      routine={routine}
-                      weeklyMap={weeklyMap}
-                      lastCompletedMap={lastCompletedMap}
-                      allowLogging={true}
-                      frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
-                      goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
-                    />
-                  ))}
-                </div>
-              </details>
-            </section>
+            <RoutineSection
+              key={typeLabel}
+              title={typeLabel.toUpperCase()}
+              count={list.length}
+              quickLogHref={isWorkoutSection ? "/routines?mode=quick-log" : undefined}
+            >
+              {list.map((routine) => (
+                <RoutineCard
+                  key={routine.id}
+                  routine={routine}
+                  weeklyMap={weeklyMap}
+                  lastCompletedMap={lastCompletedMap}
+                  allowLogging={true}
+                  frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+                  goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
+                />
+              ))}
+            </RoutineSection>
           );
         })}
 
         {archived.length > 0 && (
-          <section className="mobileSectionCard" style={styles.section}>
-            <details open>
-              <summary data-collapsible-summary className="mobileRoutinesHeader mobileSectionHeader" style={styles.sectionHeader}>
-                <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>ARCHIVED</div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>{archived.length} routines</div>
-              </summary>
-              <div className="mobileSectionBody" style={{ padding: 10, display: "grid", gap: 8 }}>
-                {archived
-                  .slice()
-                  .sort((a, b) => {
-                    const aType = formatRoutineTypeLabel(normalizeRoutineKind(a.kind));
-                    const bType = formatRoutineTypeLabel(normalizeRoutineKind(b.kind));
-                    return aType.localeCompare(bType) || a.name.localeCompare(b.name);
-                  })
-                  .map((routine) => (
-                    <RoutineCard
-                      key={routine.id}
-                      routine={routine}
-                      weeklyMap={weeklyMap}
-                      lastCompletedMap={lastCompletedMap}
-                      allowLogging={false}
-                      frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
-                      goalContributions={[]}
-                    />
-                  ))}
-              </div>
-            </details>
-          </section>
+          <RoutineSection title="ARCHIVED" count={archived.length}>
+            {archived
+              .slice()
+              .sort((a, b) => {
+                const aType = formatRoutineTypeLabel(normalizeRoutineKind(a.kind));
+                const bType = formatRoutineTypeLabel(normalizeRoutineKind(b.kind));
+                return aType.localeCompare(bType) || a.name.localeCompare(b.name);
+              })
+              .map((routine) => (
+                <RoutineCard
+                  key={routine.id}
+                  routine={routine}
+                  weeklyMap={weeklyMap}
+                  lastCompletedMap={lastCompletedMap}
+                  allowLogging={false}
+                  frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+                  goalContributions={[]}
+                />
+              ))}
+          </RoutineSection>
         )}
       </div>
 
