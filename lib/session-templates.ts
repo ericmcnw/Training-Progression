@@ -10,6 +10,9 @@ export const SESSION_TEMPLATE_KEYS = [
   "hiking",
   "surfing",
   "snowboarding",
+  "basketball-pickup",
+  "basketball-shooting",
+  "golf",
 ] as const;
 
 export type SessionTemplateKey = (typeof SESSION_TEMPLATE_KEYS)[number];

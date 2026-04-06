@@ -52,6 +52,8 @@ const metadataGroups = [
   { slug: "swimming", label: "Swimming", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "hiking", label: "Hiking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "rowing", label: "Rowing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "basketball", label: "Basketball", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "golf", label: "Golf", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "strength", label: "Strength", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
   { slug: "hypertrophy", label: "Hypertrophy", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
   { slug: "rehab", label: "Rehab", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
@@ -154,6 +156,9 @@ const climbingOutdoorTemplateMetadata = [...climbingTemplateMetadata, "outdoor"]
 const hikingTemplateMetadata = ["hiking", "cardio", "endurance", "outdoor", "legs", "quads", "glutes", "calves", "core"];
 const surfingTemplateMetadata = ["board-sports", "outdoor", "cardio", "skill-practice", "full-body", "upper-body", "core", "shoulders", "back"];
 const snowboardingTemplateMetadata = ["board-sports", "outdoor", "legs", "quads", "glutes", "calves", "core", "skill-practice"];
+const basketballPickupTemplateMetadata = ["basketball", "cardio", "full-body", "legs", "core", "skill-practice"];
+const basketballShootingTemplateMetadata = ["basketball", "skill-practice", "upper-body", "core", "shoulders"];
+const golfTemplateMetadata = ["golf", "outdoor", "skill-practice", "core", "rotation"];
 
 function deriveExerciseLibraryKind({ name, metadata, unit }) {
   const normalizedName = String(name || "").trim().toLowerCase();
@@ -411,6 +416,52 @@ const sessionTemplates = [
       { key: "mountain_name", label: "Mountain / Location", valueType: "TEXT", sortOrder: 10, showInGoals: false },
       { key: "runs_completed", label: "Runs Completed", valueType: "INTEGER", sortOrder: 20, unit: "runs", showInProgress: true, showInGoals: true },
       { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 30, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "basketball-pickup",
+    name: "Basketball Pickup",
+    description: "Track pickup runs with court details, games, wins, and scoring.",
+    sessionSubtype: "BASKETBALL",
+    sortOrder: 60,
+    metadataSlugs: basketballPickupTemplateMetadata,
+    metrics: [
+      { key: "court_name", label: "Court / Place", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "games_played", label: "Games Played", valueType: "INTEGER", sortOrder: 20, unit: "games", showInProgress: true, showInGoals: true },
+      { key: "wins", label: "Wins", valueType: "INTEGER", sortOrder: 30, unit: "wins", showInProgress: true, showInGoals: true },
+      { key: "points_scored", label: "Points Scored", valueType: "INTEGER", sortOrder: 40, unit: "pts", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 50, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "basketball-shooting",
+    name: "Basketball Shooting",
+    description: "Track shootarounds with court details and shot volume.",
+    sessionSubtype: "BASKETBALL",
+    sortOrder: 61,
+    metadataSlugs: basketballShootingTemplateMetadata,
+    metrics: [
+      { key: "court_name", label: "Court / Place", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "shots_made", label: "Shots Made", valueType: "INTEGER", sortOrder: 20, unit: "shots", showInProgress: true, showInGoals: true },
+      { key: "shots_attempted", label: "Shots Attempted", valueType: "INTEGER", sortOrder: 30, unit: "shots", showInProgress: true, showInGoals: true },
+      { key: "three_pt_made", label: "3PT Made", valueType: "INTEGER", sortOrder: 40, unit: "threes", showInProgress: true, showInGoals: true },
+      { key: "free_throws_made", label: "Free Throws Made", valueType: "INTEGER", sortOrder: 50, unit: "fts", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 60, showInGoals: false, config: { input: "textarea" } },
+    ],
+  },
+  {
+    key: "golf",
+    name: "Golf",
+    description: "Track rounds with course details, holes played, total score, and score to par.",
+    sessionSubtype: "GOLF",
+    sortOrder: 70,
+    metadataSlugs: golfTemplateMetadata,
+    metrics: [
+      { key: "course_name", label: "Course / Place", valueType: "TEXT", sortOrder: 10, showInGoals: false },
+      { key: "holes_played", label: "Holes Played", valueType: "INTEGER", sortOrder: 20, unit: "holes", showInProgress: true, showInGoals: true },
+      { key: "total_score", label: "Total Score", valueType: "INTEGER", sortOrder: 30, unit: "strokes", showInProgress: true, showInGoals: false },
+      { key: "score_to_par", label: "Score to Par", valueType: "INTEGER", sortOrder: 40, unit: "to par", showInProgress: true, showInGoals: false },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 50, showInGoals: false, config: { input: "textarea" } },
     ],
   },
 ];

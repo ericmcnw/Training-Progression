@@ -79,6 +79,8 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "swimming", label: "Swimming", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "hiking", label: "Hiking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "rowing", label: "Rowing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "basketball", label: "Basketball", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "golf", label: "Golf", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
 
   { slug: "strength", label: "Strength", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
   { slug: "hypertrophy", label: "Hypertrophy", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
@@ -104,6 +106,8 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   CLIMBING: ["climbing", "skill-practice", "strength"],
   SURFING: ["board-sports", "cardio", "core", "grip"],
   SNOWBOARDING: ["board-sports", "cardio", "core"],
+  BASKETBALL: ["basketball", "cardio", "core", "skill-practice"],
+  GOLF: ["golf", "outdoor", "core", "skill-practice"],
   TEAM_SPORT: ["cardio", "core"],
   SKILL_PRACTICE: ["skill-practice", "core"],
   HIKE_DAY: ["hiking", "cardio"],
