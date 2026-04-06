@@ -1,6 +1,7 @@
 import Link from "next/link";
 import MetricLineChart from "@/app/progress/MetricLineChart";
 import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
+import { toAppYmd } from "@/lib/dates";
 import { getGoalById, getGoalFormOptions, getGoalInsight, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "../GoalForm";
 import { updateGoal } from "../actions";
@@ -18,7 +19,7 @@ function getParam(params: SearchParams, key: string) {
 }
 
 function toYmd(date: Date | null) {
-  return date ? date.toISOString().slice(0, 10) : "";
+  return date ? toAppYmd(date) : "";
 }
 
 export default async function GoalDetailPage(props: {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FilterBar, FilterSelect, ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
+import { todayAppYmd } from "@/lib/dates";
 import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
 import { getGoalFormOptions, getGoalsOverview } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "./GoalForm";
@@ -83,7 +84,7 @@ export default async function GoalsPage({
     metricType: template.metricType,
     timeframe: template.timeframe,
     targetValue: template.targetValue,
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: todayAppYmd(),
     endDate: "",
     isActive: true,
     notes: "",

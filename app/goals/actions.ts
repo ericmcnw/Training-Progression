@@ -1,5 +1,6 @@
 "use server";
 
+import { getAppDayRange } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { parseSessionMetricGoalTarget, withSessionMetricConfig } from "@/lib/session-templates";
 import {
@@ -29,9 +30,9 @@ function parseBoolean(formData: FormData, key: string) {
 }
 
 function parseDateInput(value: string, label: string) {
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) throw new Error(`${label} is invalid.`);
-  return parsed;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) throw new Error(`${label} is invalid.`);
+  return getAppDayRange(trimmed).start;
 }
 
 function inferUnit(metricType: string) {

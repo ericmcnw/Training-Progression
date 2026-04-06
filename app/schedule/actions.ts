@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { todayAppYmd } from "@/lib/dates";
+import { getAppDayRange, todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -20,16 +20,16 @@ function makeId() {
 function normalizeDateInput(dateInput: string) {
   const value = dateInput.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Invalid date.");
-  return `${value}T00:00:00.000Z`;
+  return getAppDayRange(value).start;
 }
 
-function parseUtcDayStart(ymd: string) {
+function parseAppDayStart(ymd: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) throw new Error("Invalid date.");
-  return new Date(`${ymd}T00:00:00.000Z`);
+  return getAppDayRange(ymd).start;
 }
 
-function nextUtcDayStart(date: Date) {
-  return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+function nextAppDayStart(ymd: string) {
+  return getAppDayRange(ymd).end;
 }
 
 function redirectToSchedule(returnMode: string, planId?: string, returnTab?: string) {
@@ -48,7 +48,7 @@ export async function createCyclePlan(formData: FormData) {
   const raw = Number(String(formData.get("cycleLengthDays") || "7"));
   const cycleLengthDays = clampCycleDays(Number.isFinite(raw) ? raw : 7);
   const startDateInput = String(formData.get("startDate") || "").trim();
-  const startDateIso = startDateInput ? normalizeDateInput(startDateInput) : `${todayAppYmd()}T00:00:00.000Z`;
+  const startDate = startDateInput ? normalizeDateInput(startDateInput) : getAppDayRange(todayAppYmd()).start;
 
   const planId = makeId();
   const activationId = makeId();
@@ -66,7 +66,7 @@ export async function createCyclePlan(formData: FormData) {
       activationId,
       planId,
       false,
-      startDateIso
+      startDate
     );
   });
 
@@ -109,7 +109,7 @@ export async function setCycleActivation(formData: FormData) {
   const returnTab = String(formData.get("returnTab") || "").trim();
   const isEnabled = String(formData.get("isEnabled") || "") === "on";
   const startDateInput = String(formData.get("startDate") || "").trim();
-  const startDateIso = normalizeDateInput(startDateInput);
+  const startDate = normalizeDateInput(startDateInput);
 
   if (!planId) throw new Error("Missing planId.");
 
@@ -120,18 +120,18 @@ export async function setCycleActivation(formData: FormData) {
 
   if (existing[0]) {
     await prisma.$executeRawUnsafe(
-      'UPDATE "SchedulePlanActivation" SET "isEnabled" = ?, "startDate" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "schedulePlanId" = ?',
-      isEnabled,
-      startDateIso,
-      planId
-    );
+        'UPDATE "SchedulePlanActivation" SET "isEnabled" = ?, "startDate" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "schedulePlanId" = ?',
+        isEnabled,
+        startDate,
+        planId
+      );
   } else {
     await prisma.$executeRawUnsafe(
       'INSERT INTO "SchedulePlanActivation" ("id","schedulePlanId","isEnabled","startDate","createdAt","updatedAt") VALUES (?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
       makeId(),
       planId,
       isEnabled,
-      startDateIso
+      startDate
     );
   }
 
@@ -270,7 +270,7 @@ export async function saveManualEntries(formData: FormData) {
         'INSERT INTO "ScheduleManualEntry" ("id","routineId","scheduledDate","sortOrder","createdAt","updatedAt") VALUES (?,?,?, ?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
         makeId(),
         entry.routineId,
-        `${entry.scheduledDate}T00:00:00.000Z`,
+        parseAppDayStart(entry.scheduledDate),
         entry.sortOrder
       );
     }
@@ -295,8 +295,8 @@ export async function quickAddManualEntry(formData: FormData) {
   });
   if (!routine) throw new Error("Routine not found.");
 
-  const dayStart = parseUtcDayStart(scheduledDate);
-  const nextDayStart = nextUtcDayStart(dayStart);
+  const dayStart = parseAppDayStart(scheduledDate);
+  const nextDayStart = nextAppDayStart(scheduledDate);
   const existing = await prisma.scheduleManualEntry.aggregate({
     where: {
       scheduledDate: {

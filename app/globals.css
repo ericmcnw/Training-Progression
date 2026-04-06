@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+@keyframes skeletonShimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.skeleton {
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.05) 25%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.05) 75%
+  );
+  background-size: 1200px 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonPage {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 4px;
+  display: grid;
+  gap: 18px;
+}
+
 :root{
   --bg: #0b1220;        /* dark blue-gray */
   --panel: #111b2e;     /* cards */

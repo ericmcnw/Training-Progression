@@ -24,8 +24,7 @@ function todayLocalYmd() {
 }
 
 function toYmd(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toISOString().slice(0, 10);
+  return toAppYmd(value);
 }
 
 function addDays(ymd: string, plus: number) {

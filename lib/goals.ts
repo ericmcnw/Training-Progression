@@ -2,7 +2,7 @@ import {
   type Goal,
   type MetadataGroupKind,
 } from "@/generated/prisma";
-import { formatAppDate, formatAppDateTime } from "@/lib/dates";
+import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 import {
   GOAL_METRIC_LABELS,
@@ -601,12 +601,12 @@ function metricForLog(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<strin
 
 function bucketKeyForGoal(goal: GoalWithConfig, date: Date) {
   if (goal.timeframe === "DAY") {
-    return date.toISOString().slice(0, 10);
+    return toAppYmd(date);
   }
   if (goal.timeframe === "MONTH") {
-    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    return toAppYmd(date).slice(0, 7);
   }
-  return getWeekBoundsSunday(date).start.toISOString().slice(0, 10);
+  return toAppYmd(getWeekBoundsSunday(date).start);
 }
 
 function bucketLabelForGoal(goal: GoalWithConfig, key: string) {
