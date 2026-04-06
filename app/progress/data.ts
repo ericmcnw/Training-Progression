@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { formatAppDate, formatAppDateTime } from "@/lib/dates";
 import { isMissingExerciseLibraryKindError, withDerivedExerciseLibraryKind } from "@/lib/exercise-library";
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
@@ -59,7 +60,7 @@ const routineRelationSelectWithFrequency = {
   frequencyGoalEnabled: true,
 } as const;
 
-export async function getRoutineIndex() {
+export const getRoutineIndex = cache(async function getRoutineIndex() {
   try {
     return await prisma.routine.findMany({
       where: { isDeleted: false },
@@ -107,9 +108,9 @@ export async function getRoutineIndex() {
     });
     return routines.map((routine) => withNullRoutineFrequencyTargets(routine));
   }
-}
+});
 
-export async function getExerciseIndex() {
+export const getExerciseIndex = cache(async function getExerciseIndex() {
   try {
     try {
       return await prisma.exercise.findMany({
@@ -178,9 +179,9 @@ export async function getExerciseIndex() {
       })
     );
   }
-}
+});
 
-export async function getMetadataIndex() {
+export const getMetadataIndex = cache(async function getMetadataIndex() {
   return prisma.metadataGroup.findMany({
     orderBy: [{ kind: "asc" }, { label: "asc" }],
     include: {
@@ -191,9 +192,9 @@ export async function getMetadataIndex() {
       guidedStepAssignments: true,
     },
   });
-}
+});
 
-export async function getRoutineLogs(range: ProgressRange, filter?: {
+export const getRoutineLogs = cache(async function getRoutineLogs(range: ProgressRange, filter?: {
   logIds?: string[];
   routineIds?: string[];
   exerciseIds?: string[];
@@ -297,7 +298,7 @@ export async function getRoutineLogs(range: ProgressRange, filter?: {
       routine: withNullRoutineFrequencyTargets(log.routine),
     }));
   }
-}
+});
 
 export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWeek: number | null) {
   const sessionWeekMap = new Map<string, number>();

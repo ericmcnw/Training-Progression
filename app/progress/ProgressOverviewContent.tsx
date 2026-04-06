@@ -180,9 +180,9 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "groups") return <GroupsIndexView searchParams={params} />;
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
 
-  const [routines, exercises, groups, recentLogs] = await Promise.all([getRoutineIndex(), getExerciseIndex(), getMetadataIndex(), getRoutineLogs("4w")]);
   const needsExtraCoverageOverview = coverageRange !== "week" && coverageRange !== "4w";
-  const [weekCoverageOverview, fourWeekCoverageOverview, extraCoverageOverview, recommendationModel] = await Promise.all([
+  const [[routines, exercises, groups, recentLogs], weekCoverageOverview, fourWeekCoverageOverview, extraCoverageOverview, recommendationModel] = await Promise.all([
+    Promise.all([getRoutineIndex(), getExerciseIndex(), getMetadataIndex(), getRoutineLogs("4w")]),
     getCoverageOverviewModel("week"),
     getCoverageOverviewModel("4w"),
     needsExtraCoverageOverview ? getCoverageOverviewModel(coverageRange) : Promise.resolve(null),
