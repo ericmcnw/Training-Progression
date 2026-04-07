@@ -2,9 +2,10 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getRecommendationModel } from "@/lib/recommendations";
 import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
+import WeekAtGlanceClient from "./WeekAtGlanceClient";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
-import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, ROUTINE_DOMAIN_OPTIONS, type RoutineDomain } from "@/lib/routines";
+import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -82,16 +83,6 @@ function kindAccent(kind: string) {
   return routineKindColor(kind);
 }
 
-function kindDotColor(kind: string): string {
-  switch (normalizeRoutineKind(kind)) {
-    case "WORKOUT":    return "rgba(84,203,130,0.95)";
-    case "CARDIO":     return "rgba(78,148,255,0.95)";
-    case "GUIDED":     return "rgba(192,132,252,0.95)";
-    case "SESSION":    return "rgba(251,146,60,0.95)";
-    default:           return "rgba(251,199,92,0.88)";
-  }
-}
-
 function domainColor(domain: RoutineDomain): string {
   switch (domain) {
     case "strength":  return "rgba(84,203,130,0.9)";
@@ -103,58 +94,6 @@ function domainColor(domain: RoutineDomain): string {
     case "habit":     return "rgba(156,163,175,0.9)";
     default:          return "rgba(156,163,175,0.7)";
   }
-}
-
-function WeekDotGrid({ weekDays, dotLogs, today }: {
-  weekDays: string[];
-  dotLogs: Array<{ ymd: string; kind: string }>;
-  today: string;
-}) {
-  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
-      {weekDays.map((day, i) => {
-        const isToday = day === today;
-        const dayLogs = dotLogs.filter((l) => l.ymd === day);
-        return (
-          <div key={day} style={{ display: "grid", gap: 4, justifyItems: "center" }}>
-            <div style={{
-              fontSize: 10,
-              fontWeight: isToday ? 900 : 700,
-              color: isToday ? "rgba(84,203,130,0.95)" : "rgba(255,255,255,0.5)",
-            }}>
-              {dayLabels[i]}
-            </div>
-            <div style={{
-              width: "100%",
-              minWidth: 0,
-              aspectRatio: "1",
-              borderRadius: 10,
-              border: isToday ? "1px solid rgba(84,203,130,0.45)" : "1px solid rgba(255,255,255,0.07)",
-              background: isToday ? "rgba(84,203,130,0.05)" : "rgba(255,255,255,0.02)",
-              display: "flex",
-              flexWrap: "wrap",
-              alignContent: "center",
-              justifyContent: "center",
-              gap: 3,
-              padding: 4,
-            }}>
-              {dayLogs.length === 0 ? (
-                <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
-              ) : (
-                dayLogs.slice(0, 6).map((log, j) => (
-                  <div key={j} style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), flexShrink: 0 }} />
-                ))
-              )}
-            </div>
-            {dayLogs.length > 0 && (
-              <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.72 }}>{dayLogs.length}</div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function TrainingBalance({ rows }: {
@@ -481,6 +420,8 @@ export default async function HomePage() {
   const weekBounds = getWeekBoundsSunday(new Date());
   const weekStart = toAppYmd(weekBounds.start);
   const sparkStart = addDays(weekStart, -35);
+  const glanceWeekCount = 12;
+  const glanceStart = addDays(weekStart, -(glanceWeekCount - 1) * 7);
 
   const [
     routines,
@@ -491,6 +432,7 @@ export default async function HomePage() {
     planEntriesRaw,
     manualEntriesRaw,
     sparkLogs,
+    glanceLogs,
     recommendationModel,
   ] = await Promise.all([
     prisma.$queryRawUnsafe<
@@ -558,6 +500,20 @@ export default async function HomePage() {
         performedAt: true,
         distanceMi: true,
         routine: { select: { id: true, name: true, kind: true } },
+      },
+    }),
+    prisma.routineLog.findMany({
+      where: {
+        performedAt: {
+          gte: new Date(`${glanceStart}T00:00:00.000Z`),
+          lt: weekBounds.end,
+        },
+      },
+      orderBy: { performedAt: "asc" },
+      select: {
+        id: true,
+        performedAt: true,
+        routine: { select: { name: true, kind: true, domain: true, subtype: true } },
       },
     }),
     getRecommendationModel(),
@@ -747,6 +703,7 @@ export default async function HomePage() {
   const weekLoggedByRoutine = new Map(weeklyCards.map((item) => [item.id, item.count]));
   const weekLoggedTotal = weeklyCards.reduce((sum, item) => sum + item.count, 0);
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const weekPlannedByRoutine = new Map<string, number>();
   for (const day of weekDays) {
     const dayPlan = buildPlanForDay(day);
@@ -773,14 +730,34 @@ export default async function HomePage() {
     .slice(0, 4);
   const weekEnd = addDays(weekStart, 6);
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
-
-  // 7-day dot grid: one entry per log in the current week with its day and kind
-  const weekDotLogs = sparkLogs
-    .filter((log) => {
-      const ymd = toAppYmd(log.performedAt);
-      return ymd >= weekStart && ymd <= weekEnd;
-    })
-    .map((log) => ({ ymd: toAppYmd(log.performedAt), kind: log.routine.kind }));
+  const glanceLogsByDay = new Map<
+    string,
+    Array<{ id: string; routineName: string; kind: string; domain: RoutineDomain }>
+  >();
+  for (const log of glanceLogs) {
+    const ymd = toAppYmd(log.performedAt);
+    if (!glanceLogsByDay.has(ymd)) glanceLogsByDay.set(ymd, []);
+    glanceLogsByDay.get(ymd)!.push({
+      id: log.id,
+      routineName: log.routine.name,
+      kind: log.routine.kind,
+      domain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
+    });
+  }
+  const glanceWeeks = Array.from({ length: glanceWeekCount }, (_, index) => {
+    const start = addDays(glanceStart, index * 7);
+    const end = addDays(start, 6);
+    const days = Array.from({ length: 7 }, (_, dayIndex) => {
+      const ymd = addDays(start, dayIndex);
+      return {
+        ymd,
+        label: dayLabels[dayIndex],
+        dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
+        logs: glanceLogsByDay.get(ymd) ?? [],
+      };
+    });
+    return { start, end, days };
+  });
 
   // Consecutive active-day streak ending today
   const loggedDaySet = new Set(sparkLogs.map((log) => toAppYmd(log.performedAt)));
@@ -931,20 +908,7 @@ export default async function HomePage() {
       <section style={panel}>
         <div style={panelHeader}>WEEK AT A GLANCE</div>
         <div style={{ padding: "12px 14px 14px" }}>
-          <WeekDotGrid weekDays={weekDays} dotLogs={weekDotLogs} today={today} />
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
-            {(["WORKOUT", "CARDIO", "GUIDED", "SESSION", "COMPLETION"] as const).map((k) => {
-              const count = weekDotLogs.filter((l) => normalizeRoutineKind(l.kind) === k).length;
-              if (count === 0) return null;
-              return (
-                <div key={k} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 999, background: kindDotColor(k), flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, opacity: 0.75 }}>{formatRoutineTypeLabel(k)} · {count}</span>
-                </div>
-              );
-            })}
-            {weekDotLogs.length === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No sessions logged this week yet.</div>}
-          </div>
+          <WeekAtGlanceClient weeks={glanceWeeks} today={today} />
         </div>
       </section>
 

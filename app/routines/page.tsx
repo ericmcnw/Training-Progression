@@ -142,12 +142,7 @@ export default async function RoutinesPage(props: {
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
   const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
 
-  const [weeklyCounts, latestLogs, frequencyLogs] = await Promise.all([
-    prisma.routineLog.groupBy({
-      by: ["routineId"],
-      where: { performedAt: { gte: start, lt: end } },
-      _count: { _all: true },
-    }),
+  const [latestLogs, frequencyLogs] = await Promise.all([
     prisma.routineLog.groupBy({
       by: ["routineId"],
       _max: { performedAt: true },
@@ -160,7 +155,6 @@ export default async function RoutinesPage(props: {
       : Promise.resolve([]),
   ]);
 
-  const weeklyMap = new Map(weeklyCounts.map((row) => [row.routineId, row._count._all]));
   const lastCompletedMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
   const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({
     routines,
@@ -252,7 +246,6 @@ export default async function RoutinesPage(props: {
                 <RoutineCard
                   key={routine.id}
                   routine={routine}
-                  weeklyMap={weeklyMap}
                   lastCompletedMap={lastCompletedMap}
                   allowLogging={true}
                   frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
@@ -276,7 +269,6 @@ export default async function RoutinesPage(props: {
                 <RoutineCard
                   key={routine.id}
                   routine={routine}
-                  weeklyMap={weeklyMap}
                   lastCompletedMap={lastCompletedMap}
                   allowLogging={false}
                   frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}

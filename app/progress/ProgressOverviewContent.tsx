@@ -89,17 +89,6 @@ function recommendationStatus(item: TrainingRecommendation) {
   return "Watch";
 }
 
-function SummaryMetric({ label, value, trend, detail }: { label: string; value: string; trend: string; detail: string }) {
-  return (
-    <div className="mobileCard" style={{ border: "1px solid rgba(255,255,255,0.1)", borderRadius: 18, padding: 14, minHeight: 116, background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))", display: "grid", gap: 6 }}>
-      <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.7, fontWeight: 900 }}>{label}</div>
-      <div style={{ fontSize: 28, lineHeight: 1, fontWeight: 950 }}>{value}</div>
-      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(170,218,255,0.92)" }}>{trend}</div>
-      <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.74 }}>{detail}</div>
-    </div>
-  );
-}
-
 function QuickStatChip({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: string }) {
   return (
     <div style={{ display: "grid", gap: 3, padding: "10px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", minWidth: 0 }}>
@@ -293,11 +282,6 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   const weekLogs = recentLogs.filter((log) => log.performedAt >= weekStart);
   const weekActiveDays = new Set(weekLogs.map((log) => log.performedAt.toISOString().slice(0, 10))).size;
   const baselineWeeklyLogs = fourWeekCoverageOverview.totalLogs / 4;
-  const weekCoverageBreadth = weekCoverageOverview.coveredCategoryCounts.muscles + weekCoverageOverview.coveredCategoryCounts.patterns + weekCoverageOverview.coveredCategoryCounts.sports;
-  const longCoverageBreadthAverage = (fourWeekCoverageOverview.coveredCategoryCounts.muscles + fourWeekCoverageOverview.coveredCategoryCounts.patterns + fourWeekCoverageOverview.coveredCategoryCounts.sports) / 4;
-
-  // Quick stats: cardio miles and active streak from 4-week window
-  const totalCardioMiles4w = recentLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
   const totalCardioMilesWeek = weekLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
 
   // Domain heat matrix: domain × week for last 4 weeks

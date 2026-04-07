@@ -74,14 +74,12 @@ function targetProgressTone(summary: RoutineFrequencySummary) {
 
 export default function RoutineCard({
   routine,
-  weeklyMap,
   lastCompletedMap,
   allowLogging,
   frequencySummary,
   goalContributions = [],
 }: {
   routine: RoutineWithExercises;
-  weeklyMap: Map<string, number>;
   lastCompletedMap: Map<string, Date | null>;
   allowLogging: boolean;
   frequencySummary: RoutineFrequencySummary;
