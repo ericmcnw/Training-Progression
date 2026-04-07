@@ -37,6 +37,13 @@ function formatShortWeekRangeLabel(startYmd: string) {
   return `${start}-${end}`;
 }
 
+function formatHeroWeekRange(startYmd: string) {
+  const endYmd = addDays(startYmd, 6);
+  const start = formatUtcDateLabel(startYmd, { month: "short", day: "numeric" });
+  const end = formatUtcDateLabel(endYmd, { day: "numeric" });
+  return `${start}–${end}`;
+}
+
 function formatWeeklyPointTooltip(week: {
   label: string;
   sessions: number;
@@ -857,54 +864,54 @@ export default async function HomePage() {
   return (
     <div className="mobileHomePage" style={page}>
       {/* ── HERO STATUS STRIP ── */}
-      <div style={heroStrip}>
+      <div className="mobileHeroStrip" style={heroStrip}>
         <div style={heroCell}>
           <div style={heroCellLabel}>THIS WEEK</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ position: "relative", width: 54, height: 54, flexShrink: 0 }}>
-              <svg width={54} height={54} style={{ transform: "rotate(-90deg)" }}>
-                <circle cx={27} cy={27} r={22} stroke="rgba(255,255,255,0.12)" strokeWidth={6} fill="none" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ position: "relative", width: 46, height: 46, flexShrink: 0 }}>
+              <svg width={46} height={46} style={{ transform: "rotate(-90deg)" }}>
+                <circle cx={23} cy={23} r={18} stroke="rgba(255,255,255,0.12)" strokeWidth={5} fill="none" />
                 <circle
-                  cx={27} cy={27} r={22}
-                  stroke="rgba(84,203,130,0.95)" strokeWidth={6} fill="none"
+                  cx={23} cy={23} r={18}
+                  stroke="rgba(84,203,130,0.95)" strokeWidth={5} fill="none"
                   strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 22}
-                  strokeDashoffset={2 * Math.PI * 22 * (1 - Math.min(1, weekSessionTargetTotal > 0 ? weekLoggedTotal / weekSessionTargetTotal : 0))}
+                  strokeDasharray={2 * Math.PI * 18}
+                  strokeDashoffset={2 * Math.PI * 18 * (1 - Math.min(1, weekSessionTargetTotal > 0 ? weekLoggedTotal / weekSessionTargetTotal : 0))}
                 />
               </svg>
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", lineHeight: 1.1 }}>
-                <span style={{ fontSize: 13, fontWeight: 900 }}>{weekLoggedTotal}</span>
+                <span style={{ fontSize: 12, fontWeight: 900 }}>{weekLoggedTotal}</span>
                 <span style={{ fontSize: 9, opacity: 0.6 }}>/{weekSessionTargetTotal}</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 900 }}>{weekLoggedTotal} sessions</div>
-              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{weekDateRangeLabel}</div>
+            <div style={{ minWidth: 0, overflow: "hidden" }}>
+              <div style={{ fontSize: 14, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{weekLoggedTotal} sessions</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatHeroWeekRange(weekStart)}</div>
             </div>
           </div>
         </div>
 
-        <div style={{ ...heroCell, borderLeft: "1px solid rgba(255,255,255,0.07)", borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="mobileHeroPriority" style={{ ...heroCell, borderLeft: "1px solid rgba(255,255,255,0.07)", borderRight: "1px solid rgba(255,255,255,0.07)" }}>
           <div style={heroCellLabel}>TODAY&apos;S PRIORITY</div>
           {todayNextAction ? (
-            <div style={{ display: "grid", gap: 4 }}>
-              <div style={{ fontSize: 15, fontWeight: 900, lineHeight: 1.2 }}>{todayNextAction.routineName}</div>
-              <div style={{ fontSize: 11, opacity: 0.6 }}>{todayNextAction.category} · {formatRoutineTypeLabel(todayNextAction.kind)}</div>
+            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{todayNextAction.routineName}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{todayNextAction.category} · {formatRoutineTypeLabel(todayNextAction.kind)}</div>
               <Link href={loggingHref(todayNextAction)} style={heroCTALink}>Log Now →</Link>
             </div>
           ) : (
-            <div style={{ display: "grid", gap: 4 }}>
-              <div style={{ fontSize: 15, fontWeight: 900 }}>
+            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 900 }}>
                 {todayFocus.length > 0 ? "All done today!" : "Rest day"}
               </div>
               <div style={{ fontSize: 11, opacity: 0.6 }}>
-                {todayFocus.length > 0 ? `${todayDoneRoutines} routine${todayDoneRoutines !== 1 ? "s" : ""} completed` : "Nothing scheduled"}
+                {todayFocus.length > 0 ? `${todayDoneRoutines} done` : "Nothing scheduled"}
               </div>
             </div>
           )}
         </div>
 
-        <div style={heroCell}>
+        <div className="mobileHeroStreak" style={heroCell}>
           <div style={heroCellLabel}>STREAK</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color: currentStreak >= 7 ? "rgba(251,199,92,0.95)" : currentStreak >= 3 ? "rgba(84,203,130,0.95)" : "inherit" }}>

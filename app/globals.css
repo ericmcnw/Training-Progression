@@ -1167,4 +1167,34 @@ details[open] > summary[data-collapsible-summary]::before{
     min-width: 0 !important;
     width: 100% !important;
   }
+
+  /* Hero strip: tighten cell padding on small phones */
+  .mobileHeroStrip > *{
+    padding: 12px 10px !important;
+  }
+}
+
+/* ── Hero strip: 2-col layout on very narrow phones ─────────────────── */
+@media (max-width: 480px){
+  .mobileHeroStrip{
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Streak spans full width on its own row */
+  .mobileHeroStreak{
+    grid-column: 1 / -1 !important;
+    border-top: 1px solid rgba(255,255,255,0.07) !important;
+    border-left: none !important;
+    border-right: none !important;
+    flex-direction: row !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    padding: 10px 14px !important;
+  }
+
+  /* Priority cell: drop the right border divider in 2-col mode */
+  .mobileHeroPriority{
+    border-right: none !important;
+  }
 }
