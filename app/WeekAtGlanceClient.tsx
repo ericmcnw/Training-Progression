@@ -17,34 +17,48 @@ type GlanceDay = {
 };
 
 const WINDOW_SIZE = 7;
-const CELL_WIDTH = 74;
 const CELL_GAP = 6;
-const STEP_WIDTH = CELL_WIDTH + CELL_GAP;
 
 export default function WeekAtGlanceClient({
   days,
   today,
+  currentWeekStart,
 }: {
   days: GlanceDay[];
   today: string;
+  currentWeekStart: string;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const todayIndex = Math.max(
-    0,
-    days.findIndex((day) => day.ymd === today)
-  );
-  const maxStartIndex = Math.max(0, days.length - WINDOW_SIZE);
-  const initialStartIndex = Math.min(todayIndex, maxStartIndex);
-  const [startIndex, setStartIndex] = useState(initialStartIndex);
+  const todayIndex = Math.max(0, days.findIndex((day) => day.ymd === today));
+  const currentWeekStartIndex = Math.max(0, days.findIndex((day) => day.ymd === currentWeekStart));
+  const [visibleCount, setVisibleCount] = useState(WINDOW_SIZE);
+  const [dayWidth, setDayWidth] = useState(72);
+  const maxStartIndex = Math.max(0, days.length - visibleCount);
+  const initialStartIndex = Math.min(currentWeekStartIndex, maxStartIndex);
+  const [startIndex, setStartIndex] = useState(currentWeekStartIndex);
   const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(today);
+  const effectiveStartIndex = Math.min(startIndex, maxStartIndex);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    viewport.scrollLeft = initialStartIndex * STEP_WIDTH;
-  }, [initialStartIndex]);
+    const updateViewportMetrics = () => {
+      const nextVisibleCount = getVisibleCount(viewport.clientWidth);
+      setVisibleCount(nextVisibleCount);
+      setDayWidth(getDayWidth(viewport.clientWidth, nextVisibleCount));
+    };
+    updateViewportMetrics();
+    window.addEventListener("resize", updateViewportMetrics);
+    return () => window.removeEventListener("resize", updateViewportMetrics);
+  }, []);
 
-  const visibleDays = days.slice(startIndex, startIndex + WINDOW_SIZE);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = initialStartIndex * getStepWidth(viewport);
+  }, [initialStartIndex, visibleCount]);
+
+  const visibleDays = days.slice(effectiveStartIndex, effectiveStartIndex + visibleCount);
   const selectedDay =
     days.find((day) => day.ymd === selectedDayYmd) ??
     visibleDays.find((day) => day.ymd === today) ??
@@ -67,15 +81,16 @@ export default function WeekAtGlanceClient({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const nextIndex = Math.max(0, Math.min(index, maxStartIndex));
-    viewport.scrollTo({ left: nextIndex * STEP_WIDTH, behavior: "smooth" });
+    viewport.scrollTo({ left: nextIndex * getStepWidth(viewport), behavior: "smooth" });
     setStartIndex(nextIndex);
   }
 
   function handleScroll() {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const nextIndex = Math.max(0, Math.min(Math.round(viewport.scrollLeft / STEP_WIDTH), maxStartIndex));
-    if (nextIndex !== startIndex) setStartIndex(nextIndex);
+    const stepWidth = getStepWidth(viewport);
+    const nextIndex = Math.max(0, Math.min(Math.round(viewport.scrollLeft / stepWidth), maxStartIndex));
+    if (nextIndex !== effectiveStartIndex) setStartIndex(nextIndex);
   }
 
   if (visibleDays.length === 0 || !rangeStart || !rangeEnd) return null;
@@ -85,12 +100,12 @@ export default function WeekAtGlanceClient({
       <div style={headerRow}>
         <button
           type="button"
-          onClick={() => scrollToIndex(startIndex - 1)}
-          disabled={startIndex === 0}
+          onClick={() => scrollToIndex(effectiveStartIndex - 1)}
+          disabled={effectiveStartIndex === 0}
           style={{
             ...navButton,
-            opacity: startIndex === 0 ? 0.35 : 1,
-            cursor: startIndex === 0 ? "default" : "pointer",
+            opacity: effectiveStartIndex === 0 ? 0.35 : 1,
+            cursor: effectiveStartIndex === 0 ? "default" : "pointer",
           }}
           aria-label="View earlier days"
         >
@@ -99,17 +114,17 @@ export default function WeekAtGlanceClient({
         <div style={{ textAlign: "center", minWidth: 0 }}>
           <div style={rangeLabel}>{formatRange(rangeStart, rangeEnd)}</div>
           <div style={rangeSub}>
-            {rangeEnd === today ? "Ends today" : `${Math.max(0, todayIndex - startIndex)} days before today`}
+            {rangeEnd === today ? "Ends today" : `${Math.max(0, todayIndex - effectiveStartIndex)} days before today`}
           </div>
         </div>
         <button
           type="button"
-          onClick={() => scrollToIndex(startIndex + 1)}
-          disabled={startIndex === maxStartIndex}
+          onClick={() => scrollToIndex(effectiveStartIndex + 1)}
+          disabled={effectiveStartIndex === maxStartIndex}
           style={{
             ...navButton,
-            opacity: startIndex === maxStartIndex ? 0.35 : 1,
-            cursor: startIndex === maxStartIndex ? "default" : "pointer",
+            opacity: effectiveStartIndex === maxStartIndex ? 0.35 : 1,
+            cursor: effectiveStartIndex === maxStartIndex ? "default" : "pointer",
           }}
           aria-label="View later days"
         >
@@ -134,6 +149,8 @@ export default function WeekAtGlanceClient({
                 onClick={() => setSelectedDayYmd((current) => (current === day.ymd ? null : day.ymd))}
                 style={{
                   ...dayButton,
+                  width: dayWidth,
+                  minWidth: dayWidth,
                   border: isToday
                     ? "1px solid rgba(84,203,130,0.5)"
                     : isSelected
@@ -309,8 +326,6 @@ const rail: CSSProperties = {
 };
 
 const dayButton: CSSProperties = {
-  width: CELL_WIDTH,
-  minWidth: CELL_WIDTH,
   minHeight: 98,
   borderRadius: 14,
   padding: "10px 6px 8px",
@@ -351,3 +366,18 @@ const detailRow: CSSProperties = {
   padding: "9px 10px",
   background: "rgba(255,255,255,0.04)",
 };
+
+function getStepWidth(viewport: HTMLDivElement) {
+  return (viewport.clientWidth + CELL_GAP) / getVisibleCount(viewport.clientWidth);
+}
+
+function getDayWidth(viewportWidth: number, visibleCount: number) {
+  return Math.floor((viewportWidth - CELL_GAP * (visibleCount - 1)) / visibleCount);
+}
+
+function getVisibleCount(viewportWidth: number) {
+  if (viewportWidth >= 1280) return 11;
+  if (viewportWidth >= 1024) return 10;
+  if (viewportWidth >= 768) return 8;
+  return WINDOW_SIZE;
+}

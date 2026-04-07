@@ -903,7 +903,7 @@ export default async function HomePage() {
       <section style={panel}>
         <div style={panelHeader}>WEEK AT A GLANCE</div>
         <div style={{ padding: "12px 14px 14px" }}>
-          <WeekAtGlanceClient days={glanceDays} today={today} />
+          <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
         </div>
       </section>
 
