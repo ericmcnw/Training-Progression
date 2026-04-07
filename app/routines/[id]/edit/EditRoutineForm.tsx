@@ -5,7 +5,7 @@ import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetF
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
-import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind } from "@/lib/routines";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind, ROUTINE_DOMAIN_OPTIONS, deriveRoutineDomain, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, inferRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
@@ -20,6 +20,7 @@ export default function EditRoutineForm({
     name: string;
     category: string;
     subtype: string | null;
+    domain: string;
     kind: RoutineKind;
     targetFrequencyCount: number | null;
     targetFrequencyUnit: RoutineFrequencyUnit | null;
@@ -45,6 +46,11 @@ export default function EditRoutineForm({
   const [presetKey, setPresetKey] = useState<RoutinePresetKey>(() => inferRoutinePreset(routine.kind, routine.subtype));
   const [tags, setTags] = useState(() => routine.tags.join(", "));
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
+  const [domainOverride, setDomainOverride] = useState<RoutineDomain | "">(() => {
+    const eff = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+    const derived = deriveRoutineDomain(routine.kind, routine.subtype);
+    return eff !== derived ? eff : "";
+  });
   const [category, setCategory] = useState(routine.category.trim() || getRoutinePreset(presetKey).categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(routine.subtype && subtypeOptions.includes(routine.subtype) ? routine.subtype : subtypeOptions[0]);
@@ -89,6 +95,9 @@ export default function EditRoutineForm({
 
   const activePreset = getRoutinePreset(presetKey);
 
+  const derivedDomain = deriveRoutineDomain(kind, subtype);
+  const effectiveDomainValue: RoutineDomain = domainOverride || derivedDomain;
+
   return (
     <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="id" value={routine.id} />
@@ -96,6 +105,7 @@ export default function EditRoutineForm({
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="category" value={category} />
       <input type="hidden" name="tags" value={tags} />
+      <input type="hidden" name="domain" value={effectiveDomainValue} />
 
       <div>
         <label style={styles.label}>Routine Type Selection</label>
@@ -138,6 +148,22 @@ export default function EditRoutineForm({
       <div>
         <label style={styles.label}>Name</label>
         <input name="name" style={styles.input} defaultValue={routine.name} />
+      </div>
+
+      <div>
+        <label style={styles.label}>Training Domain</label>
+        <select
+          style={styles.input as React.CSSProperties}
+          value={effectiveDomainValue}
+          onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
+        >
+          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
+            </option>
+          ))}
+        </select>
+        <div style={styles.help}>Controls which category this routine appears under in Training Balance. Auto-selected from routine type.</div>
       </div>
 
       <div>

@@ -4,7 +4,7 @@ import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "../RoutineFrequencyTargetFields";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoutine } from "../actions";
-import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype } from "@/lib/routines";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, ROUTINE_DOMAIN_OPTIONS, deriveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
@@ -32,6 +32,7 @@ export default function NewRoutineForm({
   const initialPreset = getRoutinePreset(presetKey);
   const [tags, setTags] = useState("");
   const [kind, setKind] = useState<RoutineKind>(initialPreset.kind);
+  const [domainOverride, setDomainOverride] = useState<RoutineDomain | "">("");
   const [category, setCategory] = useState(initialPreset.categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(initialPreset.subtype ?? subtypeOptions[0] ?? "OTHER");
@@ -74,12 +75,16 @@ export default function NewRoutineForm({
 
   const activePreset = getRoutinePreset(presetKey);
 
+  const derivedDomain = deriveRoutineDomain(kind, subtype);
+  const effectiveDomain: RoutineDomain = domainOverride || derivedDomain;
+
   return (
     <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="category" value={category} />
       <input type="hidden" name="tags" value={tags} />
+      <input type="hidden" name="domain" value={effectiveDomain} />
 
       <div>
         <label style={styles.label}>Routine Type Selection</label>
@@ -127,6 +132,22 @@ export default function NewRoutineForm({
           placeholder="Morning mobility, Lift A, Trail run, Climbing..."
           required
         />
+      </div>
+
+      <div>
+        <label style={styles.label}>Training Domain</label>
+        <select
+          style={styles.input as React.CSSProperties}
+          value={effectiveDomain}
+          onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
+        >
+          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
+            </option>
+          ))}
+        </select>
+        <div style={styles.help}>Controls which category this routine appears under in the Training Balance view. Auto-selected from your routine type.</div>
       </div>
 
       <div>

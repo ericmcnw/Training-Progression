@@ -12,6 +12,7 @@ import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { getRecommendationModel, type TrainingRecommendation } from "@/lib/recommendations";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { prisma } from "@/lib/prisma";
+import { effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,90 @@ function SummaryMetric({ label, value, trend, detail }: { label: string; value: 
       <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.74 }}>{detail}</div>
     </div>
   );
+}
+
+function QuickStatChip({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: string }) {
+  return (
+    <div style={{ display: "grid", gap: 3, padding: "10px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", minWidth: 0 }}>
+      <div style={{ fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.55, fontWeight: 900 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 950, lineHeight: 1, color: accent ?? "inherit" }}>{value}</div>
+      <div style={{ fontSize: 11, opacity: 0.65, lineHeight: 1.3 }}>{sub}</div>
+    </div>
+  );
+}
+
+type DomainWeekCell = { domain: RoutineDomain; label: string; weeks: number[] };
+
+function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLabels: string[] }) {
+  const maxSessions = Math.max(1, ...rows.flatMap((r) => r.weeks));
+
+  function cellFill(count: number): string {
+    if (count === 0) return "rgba(255,255,255,0.04)";
+    const intensity = Math.min(1, count / Math.max(3, maxSessions));
+    return `rgba(84,203,130,${0.12 + intensity * 0.60})`;
+  }
+
+  function cellBorder(count: number): string {
+    if (count === 0) return "rgba(255,255,255,0.06)";
+    return `rgba(84,203,130,${0.15 + Math.min(0.5, (count / Math.max(3, maxSessions)) * 0.5)})`;
+  }
+
+  if (rows.length === 0) return <div style={{ fontSize: 13, opacity: 0.55 }}>No training logged in this period.</div>;
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `140px repeat(${weekLabels.length}, minmax(48px, 1fr))`, gap: 4, minWidth: 0 }}>
+        {/* Header row */}
+        <div />
+        {weekLabels.map((label) => (
+          <div key={label} style={{ fontSize: 10, fontWeight: 800, opacity: 0.5, textAlign: "center", paddingBottom: 4 }}>{label}</div>
+        ))}
+        {/* Data rows */}
+        {rows.map((row) => (
+          <>
+            <div key={`label-${row.domain}`} style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8 }}>
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: domainAccent(row.domain), marginRight: 7, flexShrink: 0 }} />
+              {row.label}
+            </div>
+            {row.weeks.map((count, wi) => (
+              <div
+                key={`cell-${row.domain}-${wi}`}
+                title={count > 0 ? `${count} session${count !== 1 ? "s" : ""}` : "None"}
+                style={{
+                  height: 36,
+                  borderRadius: 8,
+                  background: cellFill(count),
+                  border: `1px solid ${cellBorder(count)}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: count > 0 ? 900 : 400,
+                  opacity: count > 0 ? 1 : 0.5,
+                  color: count > 0 ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.25)",
+                }}
+              >
+                {count > 0 ? count : "·"}
+              </div>
+            ))}
+          </>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function domainAccent(domain: RoutineDomain): string {
+  switch (domain) {
+    case "strength":  return "rgba(84,203,130,0.9)";
+    case "cardio":    return "rgba(78,148,255,0.9)";
+    case "mobility":  return "rgba(192,132,252,0.9)";
+    case "sport":     return "rgba(251,146,60,0.9)";
+    case "recovery":  return "rgba(251,113,133,0.9)";
+    case "skill":     return "rgba(251,199,92,0.9)";
+    case "habit":     return "rgba(156,163,175,0.85)";
+    default:          return "rgba(156,163,175,0.7)";
+  }
 }
 
 function FocusCard({
@@ -209,6 +294,57 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   const baselineWeeklyLogs = fourWeekCoverageOverview.totalLogs / 4;
   const weekCoverageBreadth = weekCoverageOverview.coveredCategoryCounts.muscles + weekCoverageOverview.coveredCategoryCounts.patterns + weekCoverageOverview.coveredCategoryCounts.sports;
   const longCoverageBreadthAverage = (fourWeekCoverageOverview.coveredCategoryCounts.muscles + fourWeekCoverageOverview.coveredCategoryCounts.patterns + fourWeekCoverageOverview.coveredCategoryCounts.sports) / 4;
+
+  // Quick stats: cardio miles and active streak from 4-week window
+  const totalCardioMiles4w = recentLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
+  const totalCardioMilesWeek = weekLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
+
+  // Domain heat matrix: domain × week for last 4 weeks
+  const routineDomainMap = new Map(
+    routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)])
+  );
+  // Build 4 ISO-week labels (Sun-based) going backwards from now
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
+  const heatWeekLabels: string[] = heatWeekStarts.map((d) => {
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    return `${m}/${day}`;
+  });
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
+  const domainLabel: Record<RoutineDomain, string> = {
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
+    habit: "Habits", general: "General",
+  };
+  // Build a 2D count: domain -> week index -> session count
+  const heatData = new Map<RoutineDomain, number[]>();
+  for (const d of domainOrder) heatData.set(d, Array(4).fill(0));
+  for (const log of recentLogs) {
+    const domain = routineDomainMap.get(log.routineId);
+    if (!domain || domain === "general") continue;
+    const logTime = log.performedAt.getTime();
+    const weekIdx = heatWeekStarts.findIndex((wStart, i) => {
+      const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
+      return logTime >= wStart.getTime() && logTime < wEnd;
+    });
+    if (weekIdx >= 0) {
+      const row = heatData.get(domain)!;
+      row[weekIdx]++;
+    }
+  }
+  const heatMatrixRows: DomainWeekCell[] = domainOrder
+    .filter((domain) => {
+      const weeks = heatData.get(domain)!;
+      const hasLogs = weeks.some((c) => c > 0);
+      const hasRoutine = routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === domain && r.isActive);
+      return hasLogs || hasRoutine;
+    })
+    .map((domain) => ({
+      domain,
+      label: domainLabel[domain],
+      weeks: heatData.get(domain)!,
+    }));
 
   const routineSnapshots = activeRoutines
     .map((routine) => {
@@ -342,14 +478,18 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       }
     >
       <SectionCard title="This Week" subtitle="Scan the high-level state first, then use Focus Now for the clearest next review.">
+        {/* Quick Stats Strip */}
+        <div className="mobileProgressQuickStats" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", marginBottom: 14 }}>
+          <QuickStatChip label="Sessions" value={String(weekCoverageOverview.totalLogs)} sub={`${trendLabel(weekCoverageOverview.totalLogs, baselineWeeklyLogs)} vs avg`} accent={weekCoverageOverview.totalLogs > baselineWeeklyLogs ? "rgba(84,203,130,0.95)" : undefined} />
+          <QuickStatChip label="Active Days" value={String(weekActiveDays)} sub="this week" />
+          <QuickStatChip label="Cardio Miles" value={totalCardioMilesWeek > 0 ? `${totalCardioMilesWeek.toFixed(1)} mi` : "—"} sub="this week" accent={totalCardioMilesWeek > 0 ? "rgba(78,148,255,0.9)" : undefined} />
+          <QuickStatChip label="On Target" value={`${onTrackRoutines}/${activeRoutines.length}`} sub="routines" accent={onTrackRoutines >= Math.ceil(activeRoutines.length * 0.6) ? "rgba(84,203,130,0.9)" : "rgba(251,199,92,0.9)"} />
+          <QuickStatChip label="Coverage" value={String(weekCoverageOverview.coveredCategoryCounts.muscles)} sub={`muscle groups hit`} />
+        </div>
+
         <div className="mobileProgressOverviewGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
           <div className="mobileProgressOverviewPrimary" style={{ display: "grid", gap: 14 }}>
-            <div className="mobileProgressOverviewMetrics" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-              <SummaryMetric label="This Week" value={`${weekCoverageOverview.totalLogs} logs`} trend={trendLabel(weekCoverageOverview.totalLogs, baselineWeeklyLogs)} detail={`${weekActiveDays} active days this week`} />
-              <SummaryMetric label="On Track" value={`${onTrackRoutines}/${activeRoutines.length}`} trend={onTrackRoutines >= Math.ceil(activeRoutines.length * 0.6) ? "Stable" : "Behind"} detail="Routines meeting or exceeding current target windows" />
-              <SummaryMetric label="Coverage Breadth" value={String(weekCoverageBreadth)} trend={trendLabel(weekCoverageBreadth, longCoverageBreadthAverage)} detail={`${weekCoverageOverview.coveredCategoryCounts.muscles} muscles, ${weekCoverageOverview.coveredCategoryCounts.patterns} patterns, ${weekCoverageOverview.coveredCategoryCounts.sports} sports`} />
-              <SummaryMetric label="Training Mix" value={String(weekCoverageOverview.countsByKind.WORKOUT + weekCoverageOverview.countsByKind.CARDIO + weekCoverageOverview.countsByKind.GUIDED + weekCoverageOverview.countsByKind.SESSION)} trend={weekCoverageOverview.countsByKind.WORKOUT > 0 && weekCoverageOverview.countsByKind.CARDIO > 0 ? "Balanced" : "Narrow"} detail={`${weekCoverageOverview.countsByKind.WORKOUT} workout, ${weekCoverageOverview.countsByKind.CARDIO} cardio, ${weekCoverageOverview.countsByKind.GUIDED + weekCoverageOverview.countsByKind.SESSION} guided/session`} />
-            </div>
+            <div />
 
             {primaryFocusCard ? (
               <div className="mobileProgressFocusCard" style={{ display: "grid", gap: 14, padding: 16, borderRadius: 20, border: "1px solid rgba(120,190,255,0.18)", background: "radial-gradient(circle at top right, rgba(120,190,255,0.16), transparent 34%), linear-gradient(180deg, rgba(18,34,58,0.96), rgba(12,19,33,0.94))" }}>
@@ -381,6 +521,20 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
             </div>
             {secondaryFocusCards.length > 0 ? secondaryFocusCards.map((card) => <FocusCard key={`${card.eyebrow}-${card.title}`} {...card} />) : <div className="mobileCard" style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", fontSize: 13, opacity: 0.78 }}>No additional high-priority watch items right now.</div>}
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Training Balance"
+        subtitle="Sessions logged per training domain, week by week. Empty cells for active domains are where the gaps are."
+      >
+        <DomainHeatMatrix rows={heatMatrixRows} weekLabels={heatWeekLabels} />
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {heatMatrixRows.filter((r) => r.weeks.every((c) => c === 0)).map((r) => (
+            <span key={r.domain} style={{ fontSize: 11, padding: "4px 9px", borderRadius: 999, border: "1px solid rgba(251,113,133,0.3)", background: "rgba(251,113,133,0.08)", color: "rgba(251,113,133,0.9)", fontWeight: 800 }}>
+              {r.label} — no sessions in 4 weeks
+            </span>
+          ))}
         </div>
       </SectionCard>
 

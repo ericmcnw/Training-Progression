@@ -4,7 +4,7 @@ import { getRecommendationModel } from "@/lib/recommendations";
 import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
-import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
+import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, ROUTINE_DOMAIN_OPTIONS, type RoutineDomain } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +73,128 @@ function localDayRange(ymd: string) {
 
 function kindAccent(kind: string) {
   return routineKindColor(kind);
+}
+
+function kindDotColor(kind: string): string {
+  switch (normalizeRoutineKind(kind)) {
+    case "WORKOUT":    return "rgba(84,203,130,0.95)";
+    case "CARDIO":     return "rgba(78,148,255,0.95)";
+    case "GUIDED":     return "rgba(192,132,252,0.95)";
+    case "SESSION":    return "rgba(251,146,60,0.95)";
+    default:           return "rgba(251,199,92,0.88)";
+  }
+}
+
+function domainColor(domain: RoutineDomain): string {
+  switch (domain) {
+    case "strength":  return "rgba(84,203,130,0.9)";
+    case "cardio":    return "rgba(78,148,255,0.9)";
+    case "mobility":  return "rgba(192,132,252,0.9)";
+    case "sport":     return "rgba(251,146,60,0.9)";
+    case "recovery":  return "rgba(251,113,133,0.9)";
+    case "skill":     return "rgba(251,199,92,0.9)";
+    case "habit":     return "rgba(156,163,175,0.9)";
+    default:          return "rgba(156,163,175,0.7)";
+  }
+}
+
+function WeekDotGrid({ weekDays, dotLogs, today }: {
+  weekDays: string[];
+  dotLogs: Array<{ ymd: string; kind: string }>;
+  today: string;
+}) {
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+      {weekDays.map((day, i) => {
+        const isToday = day === today;
+        const dayLogs = dotLogs.filter((l) => l.ymd === day);
+        return (
+          <div key={day} style={{ display: "grid", gap: 4, justifyItems: "center" }}>
+            <div style={{
+              fontSize: 10,
+              fontWeight: isToday ? 900 : 700,
+              color: isToday ? "rgba(84,203,130,0.95)" : "rgba(255,255,255,0.5)",
+            }}>
+              {dayLabels[i]}
+            </div>
+            <div style={{
+              width: "100%",
+              minWidth: 0,
+              aspectRatio: "1",
+              borderRadius: 10,
+              border: isToday ? "1px solid rgba(84,203,130,0.45)" : "1px solid rgba(255,255,255,0.07)",
+              background: isToday ? "rgba(84,203,130,0.05)" : "rgba(255,255,255,0.02)",
+              display: "flex",
+              flexWrap: "wrap",
+              alignContent: "center",
+              justifyContent: "center",
+              gap: 3,
+              padding: 4,
+            }}>
+              {dayLogs.length === 0 ? (
+                <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
+              ) : (
+                dayLogs.slice(0, 6).map((log, j) => (
+                  <div key={j} style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), flexShrink: 0 }} />
+                ))
+              )}
+            </div>
+            {dayLogs.length > 0 && (
+              <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.72 }}>{dayLogs.length}</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TrainingBalance({ rows }: {
+  rows: Array<{ domain: RoutineDomain; label: string; sessions: number; maxSessions: number }>;
+}) {
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map((r) => r.maxSessions));
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {rows.map((row) => {
+        const fillPct = max > 0 ? (row.sessions / max) * 100 : 0;
+        const color = domainColor(row.domain);
+        const status = row.sessions === 0 ? "absent" : row.sessions < 2 ? "light" : "active";
+        return (
+          <div key={row.domain} style={{ display: "grid", gap: 5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.3 }}>{row.label}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  background: status === "absent" ? "rgba(255,255,255,0.06)" : status === "light" ? "rgba(251,199,92,0.15)" : "rgba(84,203,130,0.12)",
+                  color: status === "absent" ? "rgba(255,255,255,0.4)" : status === "light" ? "rgba(251,199,92,0.9)" : "rgba(84,203,130,0.9)",
+                  border: `1px solid ${status === "absent" ? "rgba(255,255,255,0.08)" : status === "light" ? "rgba(251,199,92,0.25)" : "rgba(84,203,130,0.25)"}`,
+                }}>
+                  {status === "absent" ? "Quiet" : status === "light" ? "Light" : "Active"}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>{row.sessions}</span>
+              </div>
+            </div>
+            <div style={{ height: 7, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                borderRadius: 999,
+                width: `${fillPct}%`,
+                background: color,
+                transition: "width 0.4s ease",
+                minWidth: row.sessions > 0 ? 10 : 0,
+              }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function loggingHref(routine: { routineId: string; kind: string }) {
@@ -370,10 +492,11 @@ export default async function HomePage() {
         name: string;
         category: string;
         subtype: string | null;
+        domain: string;
         kind: string;
       }>
     >(
-      'SELECT "id","name","category","subtype","kind" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
+      'SELECT "id","name","category","subtype","domain","kind" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
     ),
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
@@ -427,7 +550,7 @@ export default async function HomePage() {
       select: {
         performedAt: true,
         distanceMi: true,
-        routine: { select: { name: true } },
+        routine: { select: { id: true, name: true, kind: true } },
       },
     }),
     getRecommendationModel(),
@@ -644,6 +767,68 @@ export default async function HomePage() {
   const weekEnd = addDays(weekStart, 6);
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
 
+  // 7-day dot grid: one entry per log in the current week with its day and kind
+  const weekDotLogs = sparkLogs
+    .filter((log) => {
+      const ymd = toAppYmd(log.performedAt);
+      return ymd >= weekStart && ymd <= weekEnd;
+    })
+    .map((log) => ({ ymd: toAppYmd(log.performedAt), kind: log.routine.kind }));
+
+  // Consecutive active-day streak ending today
+  const loggedDaySet = new Set(sparkLogs.map((log) => toAppYmd(log.performedAt)));
+  let currentStreak = 0;
+  {
+    let check = today;
+    while (loggedDaySet.has(check)) {
+      currentStreak++;
+      check = addDays(check, -1);
+    }
+    // If today has no log yet, check if yesterday kept the streak alive
+    if (currentStreak === 0) {
+      const yesterday = addDays(today, -1);
+      if (loggedDaySet.has(yesterday)) {
+        let check2 = yesterday;
+        while (loggedDaySet.has(check2)) {
+          currentStreak++;
+          check2 = addDays(check2, -1);
+        }
+      }
+    }
+  }
+
+  // Training balance: sessions per domain over last 4 weeks (sparkLogs window)
+  const domainSessionMap = new Map<RoutineDomain, number>();
+  for (const log of sparkLogs) {
+    const routine = routineMap.get(log.routine.id);
+    if (!routine) continue;
+    const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+    domainSessionMap.set(domain, (domainSessionMap.get(domain) ?? 0) + 1);
+  }
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
+  const domainLabels: Record<RoutineDomain, string> = {
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
+    habit: "Habits", general: "General",
+  };
+  const trainingBalanceRows = domainOrder
+    .map((domain) => ({
+      domain,
+      label: domainLabels[domain],
+      sessions: domainSessionMap.get(domain) ?? 0,
+      maxSessions: domainSessionMap.get(domain) ?? 0,
+    }))
+    .filter((row) => {
+      // Always show domains with sessions; also show domains that have active routines
+      const hasRoutine = routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === row.domain);
+      return row.sessions > 0 || hasRoutine;
+    });
+  const maxDomainSessions = Math.max(1, ...trainingBalanceRows.map((r) => r.sessions));
+  const trainingBalanceRowsWithMax = trainingBalanceRows.map((r) => ({ ...r, maxSessions: maxDomainSessions }));
+
+  // Today's top unlogged planned item for the hero CTA
+  const todayNextAction = todayFocus.find((item) => item.planned > item.logged) ?? null;
+
   const recentItems = recentLogs.map((log) => {
     const setCount = log.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
     const isRun = log.distanceMi !== null && log.durationSec !== null;
@@ -671,6 +856,91 @@ export default async function HomePage() {
 
   return (
     <div className="mobileHomePage" style={page}>
+      {/* ── HERO STATUS STRIP ── */}
+      <div style={heroStrip}>
+        <div style={heroCell}>
+          <div style={heroCellLabel}>THIS WEEK</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ position: "relative", width: 54, height: 54, flexShrink: 0 }}>
+              <svg width={54} height={54} style={{ transform: "rotate(-90deg)" }}>
+                <circle cx={27} cy={27} r={22} stroke="rgba(255,255,255,0.12)" strokeWidth={6} fill="none" />
+                <circle
+                  cx={27} cy={27} r={22}
+                  stroke="rgba(84,203,130,0.95)" strokeWidth={6} fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 22}
+                  strokeDashoffset={2 * Math.PI * 22 * (1 - Math.min(1, weekSessionTargetTotal > 0 ? weekLoggedTotal / weekSessionTargetTotal : 0))}
+                />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", lineHeight: 1.1 }}>
+                <span style={{ fontSize: 13, fontWeight: 900 }}>{weekLoggedTotal}</span>
+                <span style={{ fontSize: 9, opacity: 0.6 }}>/{weekSessionTargetTotal}</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 900 }}>{weekLoggedTotal} sessions</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{weekDateRangeLabel}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...heroCell, borderLeft: "1px solid rgba(255,255,255,0.07)", borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={heroCellLabel}>TODAY&apos;S PRIORITY</div>
+          {todayNextAction ? (
+            <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 900, lineHeight: 1.2 }}>{todayNextAction.routineName}</div>
+              <div style={{ fontSize: 11, opacity: 0.6 }}>{todayNextAction.category} · {formatRoutineTypeLabel(todayNextAction.kind)}</div>
+              <Link href={loggingHref(todayNextAction)} style={heroCTALink}>Log Now →</Link>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 900 }}>
+                {todayFocus.length > 0 ? "All done today!" : "Rest day"}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.6 }}>
+                {todayFocus.length > 0 ? `${todayDoneRoutines} routine${todayDoneRoutines !== 1 ? "s" : ""} completed` : "Nothing scheduled"}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={heroCell}>
+          <div style={heroCellLabel}>STREAK</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color: currentStreak >= 7 ? "rgba(251,199,92,0.95)" : currentStreak >= 3 ? "rgba(84,203,130,0.95)" : "inherit" }}>
+              {currentStreak}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>day{currentStreak !== 1 ? "s" : ""}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 1 }}>
+                {currentStreak === 0 ? "Start today" : currentStreak >= 7 ? "On fire!" : currentStreak >= 3 ? "Building" : "Keep it up"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── WEEK AT A GLANCE ── */}
+      <section style={panel}>
+        <div style={panelHeader}>WEEK AT A GLANCE</div>
+        <div style={{ padding: "12px 14px 14px" }}>
+          <WeekDotGrid weekDays={weekDays} dotLogs={weekDotLogs} today={today} />
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+            {(["WORKOUT", "CARDIO", "GUIDED", "SESSION", "COMPLETION"] as const).map((k) => {
+              const count = weekDotLogs.filter((l) => normalizeRoutineKind(l.kind) === k).length;
+              if (count === 0) return null;
+              return (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 999, background: kindDotColor(k), flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, opacity: 0.75 }}>{formatRoutineTypeLabel(k)} · {count}</span>
+                </div>
+              );
+            })}
+            {weekDotLogs.length === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No sessions logged this week yet.</div>}
+          </div>
+        </div>
+      </section>
+
       <div className="mobileHomeMainGrid" style={mainGrid}>
         <div className="mobileHomePrimaryColumn" style={{ display: "grid", gap: 14 }}>
           <section style={panel}>
@@ -836,6 +1106,22 @@ export default async function HomePage() {
         </div>
 
         <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
+          <section style={panel}>
+            <div style={panelHeader}>TRAINING BALANCE <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}>· last 4 weeks</span></div>
+            <div style={{ padding: "12px 14px 14px", display: "grid", gap: 10 }}>
+              <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.45 }}>
+                Sessions across all training domains. Quiet domains may need attention.
+              </div>
+              <TrainingBalance rows={trainingBalanceRowsWithMax} />
+              {trainingBalanceRowsWithMax.length === 0 && (
+                <div style={{ fontSize: 12, opacity: 0.55 }}>No training logged yet. Start a session to see your balance.</div>
+              )}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+                <Link href="/progress" style={secondaryLinkBlock}>Full Progress View →</Link>
+              </div>
+            </div>
+          </section>
+
           <div className="homeMomentumSection">
             <WeeklyMomentumSectionBoundary
               weekDateRangeLabel={weekDateRangeLabel}
@@ -1348,4 +1634,44 @@ const recommendationWhyRow: React.CSSProperties = {
   fontSize: 12,
   lineHeight: 1.45,
   opacity: 0.78,
+};
+
+const heroStrip: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  borderRadius: 20,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "linear-gradient(180deg, rgba(20,29,46,0.95), rgba(13,19,31,0.97))",
+  boxShadow: "0 12px 34px rgba(0,0,0,0.18)",
+};
+
+const heroCell: React.CSSProperties = {
+  padding: "16px 18px",
+  display: "grid",
+  gap: 8,
+  alignContent: "start",
+};
+
+const heroCellLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+  opacity: 0.5,
+};
+
+const heroCTALink: React.CSSProperties = {
+  display: "inline-flex",
+  alignSelf: "start",
+  alignItems: "center",
+  padding: "6px 11px",
+  borderRadius: 8,
+  border: "1px solid rgba(84,203,130,0.4)",
+  background: "rgba(84,203,130,0.12)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 900,
+  marginTop: 2,
 };
