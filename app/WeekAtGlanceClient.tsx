@@ -1,109 +1,117 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 
-type WeekAtGlanceWeek = {
-  start: string;
-  end: string;
-  days: Array<{
-    ymd: string;
-    label: string;
-    dayNumber: string;
-    logs: Array<{
-      id: string;
-      routineName: string;
-      kind: string;
-      domain: RoutineDomain;
-    }>;
+type GlanceDay = {
+  ymd: string;
+  label: string;
+  dayNumber: string;
+  logs: Array<{
+    id: string;
+    routineName: string;
+    kind: string;
+    domain: RoutineDomain;
   }>;
 };
 
+const WINDOW_SIZE = 7;
+const CELL_WIDTH = 74;
+const CELL_GAP = 6;
+const STEP_WIDTH = CELL_WIDTH + CELL_GAP;
+
 export default function WeekAtGlanceClient({
-  weeks,
+  days,
   today,
 }: {
-  weeks: WeekAtGlanceWeek[];
+  days: GlanceDay[];
   today: string;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const currentWeekIndex = Math.max(0, weeks.length - 1);
-  const [activeIndex, setActiveIndex] = useState(currentWeekIndex);
-  const [selectedDayByWeek, setSelectedDayByWeek] = useState<Record<string, string | null>>(() =>
-    weeks[currentWeekIndex] ? { [weeks[currentWeekIndex].start]: today } : {}
+  const todayIndex = Math.max(
+    0,
+    days.findIndex((day) => day.ymd === today)
   );
+  const maxStartIndex = Math.max(0, days.length - WINDOW_SIZE);
+  const initialStartIndex = Math.min(todayIndex, maxStartIndex);
+  const [startIndex, setStartIndex] = useState(initialStartIndex);
+  const [selectedDayYmd, setSelectedDayYmd] = useState<string | null>(today);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    viewport.scrollLeft = viewport.clientWidth * currentWeekIndex;
-  }, [currentWeekIndex]);
+    viewport.scrollLeft = initialStartIndex * STEP_WIDTH;
+  }, [initialStartIndex]);
 
-  const activeWeek = weeks[activeIndex] ?? weeks[currentWeekIndex] ?? null;
-  const selectedDayYmd = activeWeek
-    ? selectedDayByWeek[activeWeek.start] ?? (activeWeek.days.some((day) => day.ymd === today) ? today : null)
-    : null;
-  const selectedDay = activeWeek?.days.find((day) => day.ymd === selectedDayYmd) ?? null;
-  const weekKindCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const day of activeWeek?.days ?? []) {
-      for (const log of day.logs) {
-        const kind = normalizeRoutineKind(log.kind);
-        counts.set(kind, (counts.get(kind) ?? 0) + 1);
-      }
+  const visibleDays = days.slice(startIndex, startIndex + WINDOW_SIZE);
+  const selectedDay =
+    days.find((day) => day.ymd === selectedDayYmd) ??
+    visibleDays.find((day) => day.ymd === today) ??
+    visibleDays[0] ??
+    null;
+
+  const visibleKindCounts = new Map<string, number>();
+  for (const day of visibleDays) {
+    for (const log of day.logs) {
+      const kind = normalizeRoutineKind(log.kind);
+      visibleKindCounts.set(kind, (visibleKindCounts.get(kind) ?? 0) + 1);
     }
-    return counts;
-  }, [activeWeek]);
-  const weekLogTotal = Array.from(weekKindCounts.values()).reduce((sum, count) => sum + count, 0);
+  }
 
-  function scrollToWeek(index: number) {
+  const visibleLogTotal = Array.from(visibleKindCounts.values()).reduce((sum, count) => sum + count, 0);
+  const rangeStart = visibleDays[0]?.ymd ?? null;
+  const rangeEnd = visibleDays[visibleDays.length - 1]?.ymd ?? null;
+
+  function scrollToIndex(index: number) {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const nextIndex = Math.max(0, Math.min(index, weeks.length - 1));
-    viewport.scrollTo({ left: viewport.clientWidth * nextIndex, behavior: "smooth" });
-    setActiveIndex(nextIndex);
+    const nextIndex = Math.max(0, Math.min(index, maxStartIndex));
+    viewport.scrollTo({ left: nextIndex * STEP_WIDTH, behavior: "smooth" });
+    setStartIndex(nextIndex);
   }
 
   function handleScroll() {
     const viewport = viewportRef.current;
-    if (!viewport || viewport.clientWidth === 0) return;
-    const nextIndex = Math.round(viewport.scrollLeft / viewport.clientWidth);
-    if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+    if (!viewport) return;
+    const nextIndex = Math.max(0, Math.min(Math.round(viewport.scrollLeft / STEP_WIDTH), maxStartIndex));
+    if (nextIndex !== startIndex) setStartIndex(nextIndex);
   }
 
-  if (!activeWeek) return null;
+  if (visibleDays.length === 0 || !rangeStart || !rangeEnd) return null;
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={headerRow}>
         <button
           type="button"
-          onClick={() => scrollToWeek(activeIndex - 1)}
-          disabled={activeIndex === 0}
+          onClick={() => scrollToIndex(startIndex - 1)}
+          disabled={startIndex === 0}
           style={{
             ...navButton,
-            opacity: activeIndex === 0 ? 0.35 : 1,
-            cursor: activeIndex === 0 ? "default" : "pointer",
+            opacity: startIndex === 0 ? 0.35 : 1,
+            cursor: startIndex === 0 ? "default" : "pointer",
           }}
-          aria-label="View previous week"
+          aria-label="View earlier days"
         >
           {"<"}
         </button>
         <div style={{ textAlign: "center", minWidth: 0 }}>
-          <div style={rangeLabel}>{formatWeekRange(activeWeek.start, activeWeek.end)}</div>
-          <div style={rangeSub}>{activeIndex === currentWeekIndex ? "Current week" : `${currentWeekIndex - activeIndex} week${currentWeekIndex - activeIndex === 1 ? "" : "s"} back`}</div>
+          <div style={rangeLabel}>{formatRange(rangeStart, rangeEnd)}</div>
+          <div style={rangeSub}>
+            {rangeEnd === today ? "Ends today" : `${Math.max(0, todayIndex - startIndex)} days before today`}
+          </div>
         </div>
         <button
           type="button"
-          onClick={() => scrollToWeek(activeIndex + 1)}
-          disabled={activeIndex === currentWeekIndex}
+          onClick={() => scrollToIndex(startIndex + 1)}
+          disabled={startIndex === maxStartIndex}
           style={{
             ...navButton,
-            opacity: activeIndex === currentWeekIndex ? 0.35 : 1,
-            cursor: activeIndex === currentWeekIndex ? "default" : "pointer",
+            opacity: startIndex === maxStartIndex ? 0.35 : 1,
+            cursor: startIndex === maxStartIndex ? "default" : "pointer",
           }}
-          aria-label="View next week"
+          aria-label="View later days"
         >
           {">"}
         </button>
@@ -113,75 +121,63 @@ export default function WeekAtGlanceClient({
         ref={viewportRef}
         onScroll={handleScroll}
         style={viewport}
-        aria-label="Week at a glance week scroller"
+        aria-label="Week at a glance day scroller"
       >
-        {weeks.map((week) => (
-          <div key={week.start} style={page}>
-            <div style={grid}>
-              {week.days.map((day) => {
-                const isToday = day.ymd === today;
-                const isSelected = day.ymd === selectedDayYmd;
-                return (
-                  <button
-                    key={day.ymd}
-                    type="button"
-                    onClick={() =>
-                      setSelectedDayByWeek((current) => ({
-                        ...current,
-                        [week.start]: current[week.start] === day.ymd ? null : day.ymd,
-                      }))
-                    }
+        <div style={rail}>
+          {days.map((day) => {
+            const isToday = day.ymd === today;
+            const isSelected = day.ymd === selectedDay?.ymd;
+            return (
+              <button
+                key={day.ymd}
+                type="button"
+                onClick={() => setSelectedDayYmd((current) => (current === day.ymd ? null : day.ymd))}
+                style={{
+                  ...dayButton,
+                  border: isToday
+                    ? "1px solid rgba(84,203,130,0.5)"
+                    : isSelected
+                    ? "1px solid rgba(255,255,255,0.2)"
+                    : "1px solid rgba(255,255,255,0.07)",
+                  background: isToday
+                    ? "linear-gradient(180deg, rgba(84,203,130,0.2), rgba(84,203,130,0.08))"
+                    : isSelected
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(255,255,255,0.02)",
+                  boxShadow: isToday ? "0 0 0 1px rgba(84,203,130,0.22) inset" : "none",
+                }}
+                aria-pressed={isSelected}
+              >
+                <div style={{ display: "grid", gap: 2, justifyItems: "center" }}>
+                  <div
                     style={{
-                      ...dayButton,
-                      border: isToday
-                        ? "1px solid rgba(84,203,130,0.5)"
-                        : isSelected
-                        ? "1px solid rgba(255,255,255,0.2)"
-                        : "1px solid rgba(255,255,255,0.07)",
-                      background: isToday
-                        ? "linear-gradient(180deg, rgba(84,203,130,0.2), rgba(84,203,130,0.08))"
-                        : isSelected
-                        ? "rgba(255,255,255,0.08)"
-                        : "rgba(255,255,255,0.02)",
-                      boxShadow: isToday ? "0 0 0 1px rgba(84,203,130,0.22) inset" : "none",
+                      fontSize: 10,
+                      fontWeight: isToday ? 900 : 700,
+                      color: isToday ? "rgba(84,203,130,0.98)" : "rgba(255,255,255,0.56)",
                     }}
-                    aria-pressed={isSelected}
                   >
-                    <div style={{ display: "grid", gap: 2, justifyItems: "center" }}>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          fontWeight: isToday ? 900 : 700,
-                          color: isToday ? "rgba(84,203,130,0.98)" : "rgba(255,255,255,0.56)",
-                        }}
-                      >
-                        {day.label}
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: isToday ? 900 : 800, lineHeight: 1 }}>{day.dayNumber}</div>
-                    </div>
-                    <div style={dotWrap}>
-                      {day.logs.length === 0 ? (
-                        <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
-                      ) : (
-                        day.logs.slice(0, 6).map((log) => (
-                          <div key={log.id} style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), flexShrink: 0 }} />
-                        ))
-                      )}
-                    </div>
-                    <div style={{ fontSize: 10, fontWeight: 800, opacity: day.logs.length > 0 ? 0.78 : 0.38 }}>
-                      {day.logs.length > 0 ? `${day.logs.length} logged` : "Open"}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                    {day.label}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: isToday ? 900 : 800, lineHeight: 1 }}>{day.dayNumber}</div>
+                </div>
+                <div style={dotWrap}>
+                  {day.logs.length === 0 ? (
+                    <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
+                  ) : (
+                    day.logs.slice(0, 6).map((log) => (
+                      <div key={log.id} style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), flexShrink: 0 }} />
+                    ))
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         {(["WORKOUT", "CARDIO", "GUIDED", "SESSION", "COMPLETION"] as const).map((kind) => {
-          const count = weekKindCounts.get(kind) ?? 0;
+          const count = visibleKindCounts.get(kind) ?? 0;
           if (count === 0) return null;
           return (
             <div key={kind} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -190,7 +186,7 @@ export default function WeekAtGlanceClient({
             </div>
           );
         })}
-        {weekLogTotal === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No sessions logged in this week.</div>}
+        {visibleLogTotal === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No sessions logged in this range.</div>}
       </div>
 
       <div style={detailCard}>
@@ -222,7 +218,7 @@ export default function WeekAtGlanceClient({
   );
 }
 
-function formatWeekRange(startYmd: string, endYmd: string) {
+function formatRange(startYmd: string, endYmd: string) {
   const start = formatUtcDateLabel(startYmd, { month: "short", day: "numeric" });
   const sameMonth = startYmd.slice(5, 7) === endYmd.slice(5, 7);
   const end = formatUtcDateLabel(endYmd, sameMonth ? { day: "numeric" } : { month: "short", day: "numeric" });
@@ -300,29 +296,22 @@ const rangeSub: CSSProperties = {
 };
 
 const viewport: CSSProperties = {
-  display: "flex",
   overflowX: "auto",
-  scrollSnapType: "x mandatory",
   scrollbarWidth: "none",
   WebkitOverflowScrolling: "touch",
 };
 
-const page: CSSProperties = {
-  flex: "0 0 100%",
-  minWidth: "100%",
-  scrollSnapAlign: "start",
-};
-
-const grid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-  gap: 6,
+const rail: CSSProperties = {
+  display: "flex",
+  gap: CELL_GAP,
+  width: "max-content",
+  paddingBottom: 2,
 };
 
 const dayButton: CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  minHeight: 108,
+  width: CELL_WIDTH,
+  minWidth: CELL_WIDTH,
+  minHeight: 98,
   borderRadius: 14,
   padding: "10px 6px 8px",
   display: "grid",
@@ -362,5 +351,3 @@ const detailRow: CSSProperties = {
   padding: "9px 10px",
   background: "rgba(255,255,255,0.04)",
 };
-
-

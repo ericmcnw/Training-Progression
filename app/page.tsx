@@ -744,19 +744,14 @@ export default async function HomePage() {
       domain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
     });
   }
-  const glanceWeeks = Array.from({ length: glanceWeekCount }, (_, index) => {
-    const start = addDays(glanceStart, index * 7);
-    const end = addDays(start, 6);
-    const days = Array.from({ length: 7 }, (_, dayIndex) => {
-      const ymd = addDays(start, dayIndex);
-      return {
-        ymd,
-        label: dayLabels[dayIndex],
-        dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
-        logs: glanceLogsByDay.get(ymd) ?? [],
-      };
-    });
-    return { start, end, days };
+  const glanceDays = Array.from({ length: glanceWeekCount * 7 }, (_, index) => {
+    const ymd = addDays(glanceStart, index);
+    return {
+      ymd,
+      label: dayLabels[index % 7],
+      dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
+      logs: glanceLogsByDay.get(ymd) ?? [],
+    };
   });
 
   // Consecutive active-day streak ending today
@@ -908,7 +903,7 @@ export default async function HomePage() {
       <section style={panel}>
         <div style={panelHeader}>WEEK AT A GLANCE</div>
         <div style={{ padding: "12px 14px 14px" }}>
-          <WeekAtGlanceClient weeks={glanceWeeks} today={today} />
+          <WeekAtGlanceClient days={glanceDays} today={today} />
         </div>
       </section>
 
