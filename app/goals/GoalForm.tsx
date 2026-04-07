@@ -80,6 +80,16 @@ function targetFieldLabel(targetType: GoalTargetTypeValue) {
   return "Group";
 }
 
+function resolveSessionMetricOptions(
+  options: GoalFormOptions,
+  targetType: GoalTargetTypeValue,
+  targetId: string
+) {
+  if (targetType === "ROUTINE") return options.sessionMetricsByRoutineId[targetId] ?? [];
+  if (targetType === "SESSION_TEMPLATE") return options.sessionMetricsByTemplateId[targetId] ?? [];
+  return [];
+}
+
 export default function GoalForm({
   action,
   groupFrequencyAction,
@@ -175,6 +185,16 @@ export default function GoalForm({
     ? sessionMetricDefinitionId
     : (preferredBoulderingMetricId || sessionMetricOptions[0]?.id || "");
   const selectedSessionMetric = sessionMetricOptions.find((option) => option.id === effectiveSessionMetricDefinitionId) ?? null;
+  const shouldAutoShiftGradeGoals = !initial.id;
+
+  function maybePromoteGradeGoal(metricOption?: GoalFormOptions["sessionTemplates"][number] | GoalFormOptions["routines"][number] | GoalFormOptions["sessionMetricsByRoutineId"][string][number] | null) {
+    if (!shouldAutoShiftGradeGoals) return;
+    if (!metricOption || !("gradeSystem" in metricOption) || !metricOption.gradeSystem) return;
+    if (goalType === "VOLUME" && timeframe === "WEEK") {
+      setGoalType("PERFORMANCE");
+      setTimeframe("ONE_TIME");
+    }
+  }
 
   function applyTemplate(nextTemplateKey: GoalTemplateKey) {
     const template = getGoalTemplate(nextTemplateKey);
@@ -304,7 +324,30 @@ export default function GoalForm({
           </label>
           <label style={fieldStyle}>
             <span>{targetFieldLabel(targetType)}</span>
-            <select name="targetId" value={effectiveTargetId} onChange={(event) => setTargetId(event.target.value)} style={formInputStyle}>
+            <select
+              name="targetId"
+              value={effectiveTargetId}
+              onChange={(event) => {
+                const nextTargetId = event.target.value;
+                setTargetId(nextTargetId);
+                if (effectiveMetricType !== "SESSION_METRIC") return;
+                const nextMetricOptions = resolveSessionMetricOptions(options, targetType, nextTargetId);
+                const nextTarget = activeTargetOptions.find((option) => option.id === nextTargetId);
+                const nextPreferredBoulderingMetricId =
+                  (targetType === "ROUTINE" || targetType === "SESSION_TEMPLATE") && nextTarget?.sessionTemplateKey?.includes("bouldering")
+                    ? (nextMetricOptions.find(
+                        (option) => option.metricKey === "highest_send_grade" && option.gradeSystem === "BOULDER_V"
+                      )?.id ?? "")
+                    : "";
+                const nextMetricOption =
+                  nextMetricOptions.find((option) => option.id === sessionMetricDefinitionId) ??
+                  nextMetricOptions.find((option) => option.id === nextPreferredBoulderingMetricId) ??
+                  nextMetricOptions[0] ??
+                  null;
+                maybePromoteGradeGoal(nextMetricOption);
+              }}
+              style={formInputStyle}
+            >
               {activeTargetOptions.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.label}
@@ -319,7 +362,11 @@ export default function GoalForm({
                 <span>Session metric</span>
                 <select
                   value={effectiveSessionMetricDefinitionId}
-                  onChange={(event) => setSessionMetricDefinitionId(event.target.value)}
+                  onChange={(event) => {
+                    const nextMetricId = event.target.value;
+                    setSessionMetricDefinitionId(nextMetricId);
+                    maybePromoteGradeGoal(sessionMetricOptions.find((option) => option.id === nextMetricId) ?? null);
+                  }}
                   style={formInputStyle}
                 >
                   {sessionMetricOptions.map((option) => (
@@ -458,7 +505,18 @@ export default function GoalForm({
               </label>
               <label style={fieldStyle}>
                 <span>Metric</span>
-                <select name="metricType" value={effectiveMetricType} onChange={(event) => setMetricType(event.target.value as GoalMetricTypeValue)} style={formInputStyle}>
+                <select
+                  name="metricType"
+                  value={effectiveMetricType}
+                  onChange={(event) => {
+                    const nextMetricType = event.target.value as GoalMetricTypeValue;
+                    setMetricType(nextMetricType);
+                    if (nextMetricType === "SESSION_METRIC") {
+                      maybePromoteGradeGoal(selectedSessionMetric);
+                    }
+                  }}
+                  style={formInputStyle}
+                >
                   {filteredAllowedMetrics.map((value) => (
                     <option key={value} value={value}>
                       {GOAL_METRIC_LABELS[value]}

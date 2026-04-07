@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import CoverageGroupedBarChart from "./CoverageGroupedBarChart";
 import ProgressSearchTrigger, { type ProgressSearchSuggestion } from "./ProgressSearchTrigger";
 import { getExerciseIndex, getMetadataIndex, getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "./data";
@@ -137,8 +138,8 @@ function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLa
         ))}
         {/* Data rows */}
         {rows.map((row) => (
-          <>
-            <div key={`label-${row.domain}`} style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8 }}>
+          <Fragment key={row.domain}>
+            <div style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8 }}>
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: domainAccent(row.domain), marginRight: 7, flexShrink: 0 }} />
               {row.label}
             </div>
@@ -163,7 +164,7 @@ function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLa
                 {count > 0 ? count : "·"}
               </div>
             ))}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>
