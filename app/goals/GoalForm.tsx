@@ -286,7 +286,7 @@ export default function GoalForm({
                   <select
                     name="targetUnit"
                     value={gfTargetUnit}
-                    onChange={(e) => setGfTargetUnit(e.target.value)}
+                    onChange={(e) => setGfTargetUnit(e.target.value as "DAY" | "WEEK" | "MONTH")}
                     style={{ ...formInputStyle, width: 110 }}
                   >
                     <option value="DAY">day</option>
@@ -668,5 +668,3 @@ const checkboxRowStyle: React.CSSProperties = {
   alignItems: "center",
   cursor: "pointer",
 };
-
-export type { GoalFormInitial };
