@@ -803,9 +803,11 @@ function recentContributionLabel(goal: GoalWithConfig, log: GoalLog, exerciseIds
   return formatMetricValue(goal, metricForLog(goal, log, exerciseIds));
 }
 
-async function buildGoalInsight(goal: Goal) {
-  const parsedGoal = toGoalWithConfig(goal);
-  const descriptor = await getTargetDescriptor(parsedGoal);
+async function buildGoalInsightCore(
+  parsedGoal: GoalWithConfig,
+  descriptor: Awaited<ReturnType<typeof getTargetDescriptor>>,
+  linkedRoutine: { id: string; frequencyGoalEnabled: boolean } | null
+): Promise<GoalInsight> {
   const window = currentWindowForGoal(parsedGoal);
   const allLogs = await getLogsForGoal(parsedGoal, descriptor, window.historyStart, window.historyEnd);
   const currentLogs = allLogs.filter(
@@ -825,17 +827,6 @@ async function buildGoalInsight(goal: Goal) {
     performedAt: log.performedAt,
     contributionLabel: recentContributionLabel(parsedGoal, log, exerciseIds),
   }));
-
-  const linkedRoutine =
-    isRoutineFrequencyGoalLike(parsedGoal)
-      ? await prisma.routine.findUnique({
-          where: { id: parsedGoal.targetId },
-          select: {
-            id: true,
-            frequencyGoalEnabled: true,
-          },
-        })
-      : null;
 
   return {
     goal: parsedGoal,
@@ -865,6 +856,100 @@ async function buildGoalInsight(goal: Goal) {
     history: aggregateHistory(parsedGoal, allLogs, exerciseIds),
     recentItems,
   } satisfies GoalInsight;
+}
+
+async function buildGoalInsight(goal: Goal) {
+  const parsedGoal = toGoalWithConfig(goal);
+  const descriptor = await getTargetDescriptor(parsedGoal);
+  const linkedRoutine = isRoutineFrequencyGoalLike(parsedGoal)
+    ? await prisma.routine.findUnique({
+        where: { id: parsedGoal.targetId },
+        select: { id: true, frequencyGoalEnabled: true },
+      })
+    : null;
+  return buildGoalInsightCore(parsedGoal, descriptor, linkedRoutine);
+}
+
+// Batched version: avoids N+1 findUnique calls for ROUTINE/EXERCISE/SESSION_TEMPLATE goals
+async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> {
+  if (rawGoals.length === 0) return [];
+  const goals = rawGoals.map(toGoalWithConfig);
+
+  // Collect IDs to batch-fetch by target type
+  const routineTargetIds = Array.from(
+    new Set(
+      goals
+        .filter((g) => g.targetType === "ROUTINE" || isRoutineFrequencyGoalLike(g))
+        .map((g) => g.targetId)
+    )
+  );
+  const exerciseTargetIds = Array.from(new Set(goals.filter((g) => g.targetType === "EXERCISE").map((g) => g.targetId)));
+  const templateTargetIds = Array.from(new Set(goals.filter((g) => g.targetType === "SESSION_TEMPLATE").map((g) => g.targetId)));
+
+  const [routines, exercises, templates] = await Promise.all([
+    routineTargetIds.length > 0
+      ? prisma.routine.findMany({
+          where: { id: { in: routineTargetIds } },
+          select: { id: true, name: true, kind: true, subtype: true, category: true, frequencyGoalEnabled: true },
+        })
+      : Promise.resolve([]),
+    exerciseTargetIds.length > 0
+      ? prisma.exercise.findMany({
+          where: { id: { in: exerciseTargetIds } },
+          select: { id: true, name: true, unit: true, supportsWeight: true },
+        })
+      : Promise.resolve([]),
+    templateTargetIds.length > 0
+      ? prisma.sessionTemplate.findMany({
+          where: { id: { in: templateTargetIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const routineMap = new Map(routines.map((r) => [r.id, r]));
+  const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
+  const templateMap = new Map(templates.map((t) => [t.id, t]));
+
+  return Promise.all(
+    goals.map(async (parsedGoal) => {
+      let descriptor: Awaited<ReturnType<typeof getTargetDescriptor>>;
+      if (parsedGoal.targetType === "ROUTINE") {
+        const routine = routineMap.get(parsedGoal.targetId) ?? null;
+        descriptor = {
+          label: routine?.name ?? "Unknown routine",
+          kindLabel: GOAL_TARGET_TYPE_LABELS.ROUTINE,
+          href: routine ? `/progress/routines/${routine.id}?tab=overview&range=4w` : null,
+          filter: { routineIds: routine ? [routine.id] : [], exerciseIds: [], sessionTemplateIds: [] },
+        };
+      } else if (parsedGoal.targetType === "EXERCISE") {
+        const exercise = exerciseMap.get(parsedGoal.targetId) ?? null;
+        descriptor = {
+          label: exercise?.name ?? "Unknown exercise",
+          kindLabel: GOAL_TARGET_TYPE_LABELS.EXERCISE,
+          href: exercise ? `/progress/exercises/${exercise.id}?tab=overview&range=4w` : null,
+          filter: { routineIds: [], exerciseIds: exercise ? [exercise.id] : [], sessionTemplateIds: [] },
+        };
+      } else if (parsedGoal.targetType === "SESSION_TEMPLATE") {
+        const template = templateMap.get(parsedGoal.targetId) ?? null;
+        descriptor = {
+          label: template?.name ?? "Unknown session template",
+          kindLabel: GOAL_TARGET_TYPE_LABELS.SESSION_TEMPLATE,
+          href: null,
+          filter: { routineIds: [], exerciseIds: [], sessionTemplateIds: template ? [template.id] : [] },
+        };
+      } else {
+        // GROUP / CARDIO: hierarchical resolution still needs its own queries
+        descriptor = await getTargetDescriptor(parsedGoal);
+      }
+
+      const linkedRoutine = isRoutineFrequencyGoalLike(parsedGoal)
+        ? (routineMap.get(parsedGoal.targetId) ?? null)
+        : null;
+
+      return buildGoalInsightCore(parsedGoal, descriptor, linkedRoutine);
+    })
+  );
 }
 
 function timeframeForRoutineFrequencyGoal(routine: RoutineFrequencyGoalRow): GoalTimeframeValue {
@@ -918,29 +1003,10 @@ function recentFrequencyContributionLabel() {
   return "1 session";
 }
 
-async function buildRoutineFrequencyGoalInsight(routine: RoutineFrequencyGoalRow) {
-  const targetForProgress = { ...routine, frequencyGoalEnabled: true };
-  const window = getRoutineTargetWindow(targetForProgress);
-  const historyStart = window ? new Date(window.start.getTime() - window.days * 7 * 24 * 60 * 60 * 1000) : new Date();
-  const logs = await prisma.routineLog.findMany({
-    where: {
-      routineId: routine.id,
-      performedAt: window ? { gte: historyStart, lte: window.end } : undefined,
-    },
-    select: {
-      id: true,
-      routineId: true,
-      performedAt: true,
-      routine: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-    orderBy: { performedAt: "desc" },
-  });
+type RoutineFrequencyLogRow = { id: string; routineId: string; performedAt: Date; routine: { id: string; name: string } };
 
+function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, logs: RoutineFrequencyLogRow[]): GoalInsight {
+  const targetForProgress = { ...routine, frequencyGoalEnabled: true };
   const frequency = getRoutineFrequencyStatus({
     target: targetForProgress,
     logs: logs.map((log) => ({ performedAt: log.performedAt })),
@@ -1012,37 +1078,39 @@ async function buildRoutineFrequencyGoalInsight(routine: RoutineFrequencyGoalRow
   } satisfies GoalInsight;
 }
 
+async function batchBuildRoutineFrequencyGoalInsights(routines: RoutineFrequencyGoalRow[]): Promise<GoalInsight[]> {
+  if (routines.length === 0) return [];
+  const now = new Date();
+  let minHistoryStart = now;
+  for (const routine of routines) {
+    const win = getRoutineTargetWindow({ ...routine, frequencyGoalEnabled: true }, now);
+    if (!win) continue;
+    const hs = new Date(win.start.getTime() - win.days * 7 * 24 * 60 * 60 * 1000);
+    if (hs < minHistoryStart) minHistoryStart = hs;
+  }
+  const allLogs = await prisma.routineLog.findMany({
+    where: { routineId: { in: routines.map((r) => r.id) }, performedAt: { gte: minHistoryStart } },
+    select: { id: true, routineId: true, performedAt: true, routine: { select: { id: true, name: true } } },
+    orderBy: { performedAt: "desc" },
+  });
+  const logsByRoutineId = new Map<string, RoutineFrequencyLogRow[]>();
+  for (const log of allLogs) {
+    const bucket = logsByRoutineId.get(log.routineId) ?? [];
+    bucket.push(log);
+    logsByRoutineId.set(log.routineId, bucket);
+  }
+  return routines.map((routine) => buildRoutineFrequencyGoalInsightCore(routine, logsByRoutineId.get(routine.id) ?? []));
+}
+
 function timeframeForGroupFrequencyGoal(goal: Pick<GroupFrequencyGoalRow, "targetUnit">): GoalTimeframeValue {
   if (goal.targetUnit === "DAY") return "DAY";
   if (goal.targetUnit === "MONTH") return "MONTH";
   return "WEEK";
 }
 
-async function buildGroupFrequencyGoalInsight(goal: GroupFrequencyGoalRow) {
-  const now = new Date();
-  const windowDays = getFrequencyGoalWindowDays(goal);
-  const logs =
-    windowDays > 0
-      ? await prisma.routineLog.findMany({
-          where: {
-            routineId: { in: goal.routines.map((entry) => entry.routineId) },
-            performedAt: { gte: new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000) },
-          },
-          select: {
-            id: true,
-            routineId: true,
-            performedAt: true,
-            routine: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: { performedAt: "desc" },
-        })
-      : [];
+type GroupFrequencyLogRow = { id: string; routineId: string; performedAt: Date; routine: { id: string; name: string } };
 
+function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: GroupFrequencyLogRow[], now: Date): GoalInsight {
   const progress = getFrequencyGoalProgressList({
     goals: [
       {
@@ -1119,6 +1187,29 @@ async function buildGroupFrequencyGoalInsight(goal: GroupFrequencyGoalRow) {
       contributionLabel: "1 session",
     })),
   } satisfies GoalInsight;
+}
+
+async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow[]): Promise<GoalInsight[]> {
+  if (goals.length === 0) return [];
+  const now = new Date();
+  const maxWindowDays = Math.max(0, ...goals.map((g) => getFrequencyGoalWindowDays(g)));
+  if (maxWindowDays === 0) return goals.map((goal) => buildGroupFrequencyGoalInsightCore(goal, [], now));
+  const allRoutineIds = Array.from(new Set(goals.flatMap((g) => g.routines.map((r) => r.routineId))));
+  const allLogs = await prisma.routineLog.findMany({
+    where: {
+      routineId: { in: allRoutineIds },
+      performedAt: { gte: new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true, routineId: true, performedAt: true, routine: { select: { id: true, name: true } } },
+    orderBy: { performedAt: "desc" },
+  });
+  return goals.map((goal) => {
+    const goalRoutineIds = new Set(goal.routines.map((r) => r.routineId));
+    const windowMs = getFrequencyGoalWindowDays(goal) * 24 * 60 * 60 * 1000;
+    const windowStart = new Date(now.getTime() - windowMs);
+    const goalLogs = allLogs.filter((log) => goalRoutineIds.has(log.routineId) && log.performedAt >= windowStart);
+    return buildGroupFrequencyGoalInsightCore(goal, goalLogs, now);
+  });
 }
 
 export async function getGoalFormOptions(): Promise<GoalFormOptions> {
@@ -1291,9 +1382,9 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
       : Promise.resolve([]),
   ]);
   const [manualInsights, routineInsights, groupFrequencyInsights] = await Promise.all([
-    Promise.all(goals.map((goal) => buildGoalInsight(goal))),
-    Promise.all(routineFrequencyGoals.map((routine) => buildRoutineFrequencyGoalInsight(routine))),
-    Promise.all(groupFrequencyGoals.map((goal) => buildGroupFrequencyGoalInsight(goal))),
+    batchBuildGoalInsights(goals),
+    batchBuildRoutineFrequencyGoalInsights(routineFrequencyGoals),
+    batchBuildGroupFrequencyGoalInsights(groupFrequencyGoals),
   ]);
   const manualRoutineFrequencyTargetIds = new Set(
     manualInsights

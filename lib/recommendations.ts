@@ -1615,7 +1615,21 @@ function dedupeRecommendations(recommendations: Array<{ recommendation: Training
   const seenRoutineIds = new Set<string>();
   const seenKeys = new Set<string>();
 
-  for (const item of recommendations.sort((left, right) => right.sortScore - left.sortScore || left.recommendation.title.localeCompare(right.recommendation.title))) {
+  const sourceTypePriority: Record<string, number> = {
+    ROUTINE_TARGET: 0,
+    COVERAGE_GAP: 1,
+    REPETITION: 2,
+    MAINTENANCE: 3,
+    LIGHT: 4,
+    FOUNDATION: 5,
+  };
+
+  for (const item of recommendations.sort((left, right) => {
+    const leftPri = sourceTypePriority[left.recommendation.sourceType] ?? 9;
+    const rightPri = sourceTypePriority[right.recommendation.sourceType] ?? 9;
+    if (leftPri !== rightPri) return leftPri - rightPri;
+    return right.sortScore - left.sortScore || left.recommendation.title.localeCompare(right.recommendation.title);
+  })) {
     const recommendation = { ...item.recommendation, sortScore: item.sortScore };
     const categoryKey = `${recommendation.sourceType}:${recommendation.targetLens ?? "GLOBAL"}:${recommendation.targetLabel ?? recommendation.id}`;
     if (seenKeys.has(categoryKey)) continue;

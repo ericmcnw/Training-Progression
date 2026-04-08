@@ -5,10 +5,17 @@ import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetF
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
-import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind, ROUTINE_DOMAIN_OPTIONS, deriveRoutineDomain, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind, ROUTINE_DOMAIN_OPTIONS, ROUTINE_KIND_OPTIONS, deriveRoutineDomain, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { getRoutinePreset, inferRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
+
+// Presets that show a contextual subtype selector (not Habit/Strength which are fixed)
+const SUBTYPE_SELECTOR_LABEL: Partial<Record<RoutinePresetKey, string>> = {
+  CARDIO_SESSION: "Activity",
+  GUIDED_FLOW: "Style",
+  OPEN_SESSION: "Sport",
+};
 
 export default function EditRoutineForm({
   routine,
@@ -54,28 +61,28 @@ export default function EditRoutineForm({
   const [category, setCategory] = useState(routine.category.trim() || getRoutinePreset(presetKey).categoryHint);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
   const [subtype, setSubtype] = useState(routine.subtype && subtypeOptions.includes(routine.subtype) ? routine.subtype : subtypeOptions[0]);
+
   const matchingSessionTemplates = useMemo(
-    () => sessionTemplates.filter((template) => !template.sessionSubtype || template.sessionSubtype === subtype),
+    () => sessionTemplates.filter((t) => !t.sessionSubtype || t.sessionSubtype === subtype),
     [sessionTemplates, subtype]
   );
   const sessionTemplateOptions = matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates;
   const [sessionTemplateId, setSessionTemplateId] = useState(routine.sessionTemplateId ?? "");
-  const effectiveSessionTemplateId = sessionTemplateOptions.some((template) => template.id === sessionTemplateId)
-      ? sessionTemplateId
-      : "";
+  const effectiveSessionTemplateId = sessionTemplateOptions.some((t) => t.id === sessionTemplateId) ? sessionTemplateId : "";
   const selectedSessionTemplate =
-    sessionTemplateOptions.find((template) => template.id === effectiveSessionTemplateId) ??
-    sessionTemplates.find((template) => template.id === effectiveSessionTemplateId) ??
+    sessionTemplateOptions.find((t) => t.id === effectiveSessionTemplateId) ??
+    sessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
     null;
+
   const metadataGroupIdBySlug = useMemo(
-    () => new Map(metadataGroups.map((group) => [group.slug, group.id])),
+    () => new Map(metadataGroups.map((g) => [g.slug, g.id])),
     [metadataGroups]
   );
   const suggestedMetadataGroupIds = useMemo(
     () =>
       (ROUTINE_SUBTYPE_GROUP_DEFAULTS[subtype] ?? [])
         .map((slug) => metadataGroupIdBySlug.get(slug))
-        .filter((value): value is string => Boolean(value)),
+        .filter((v): v is string => Boolean(v)),
     [metadataGroupIdBySlug, subtype]
   );
   const [selectedMetadataGroupIds, setSelectedMetadataGroupIds] = useState<string[]>(() =>
@@ -88,18 +95,19 @@ export default function EditRoutineForm({
     const next = new Set(suggestedMetadataGroupIds);
     const additions = Array.from(next).filter((id) => !previous.has(id));
     if (additions.length > 0) {
-      setSelectedMetadataGroupIds((current) => Array.from(new Set([...current, ...additions])));
+      setSelectedMetadataGroupIds((cur) => Array.from(new Set([...cur, ...additions])));
     }
     previousSuggestedRef.current = suggestedMetadataGroupIds;
   }, [suggestedMetadataGroupIds]);
 
   const activePreset = getRoutinePreset(presetKey);
-
   const derivedDomain = deriveRoutineDomain(kind, subtype);
   const effectiveDomainValue: RoutineDomain = domainOverride || derivedDomain;
+  const subtypeSelectorLabel = SUBTYPE_SELECTOR_LABEL[presetKey];
+  const showFocusArea = presetKey === "HABIT" || presetKey === "STRENGTH_WORKOUT" || presetKey === "CUSTOM";
 
   return (
-    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 12, maxWidth: 980 }}>
+    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 700 }}>
       <input type="hidden" name="id" value={routine.id} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
@@ -107,9 +115,10 @@ export default function EditRoutineForm({
       <input type="hidden" name="tags" value={tags} />
       <input type="hidden" name="domain" value={effectiveDomainValue} />
 
+      {/* TYPE SELECTION — compact pills */}
       <div>
-        <label style={styles.label}>Routine Type Selection</label>
-        <div style={styles.presetGrid}>
+        <label style={styles.label}>Routine type</label>
+        <div style={styles.pillRow}>
           {ROUTINE_PRESETS.map((preset) => (
             <button
               key={preset.key}
@@ -118,67 +127,105 @@ export default function EditRoutineForm({
                 setPresetKey(preset.key);
                 if (preset.key !== "CUSTOM") {
                   setKind(preset.kind);
-                  setSubtype(preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER");
+                  const nextSubtype = preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER";
+                  setSubtype(nextSubtype);
                   setCategory(preset.categoryHint);
+                  setDomainOverride("");
                 }
               }}
-              style={{
-                ...styles.presetCard,
-                ...(presetKey === preset.key ? styles.presetCardActive : null),
-              }}
+              style={{ ...styles.pill, ...(presetKey === preset.key ? styles.pillActive : {}) }}
             >
-              <div style={styles.presetTitle}>{preset.label}</div>
-              <div style={styles.presetDescription}>{preset.description}</div>
+              {preset.label}
             </button>
           ))}
         </div>
-        <div style={styles.help}>
-          Presets control the tracking shape. Advanced is reserved for metadata adjustments only.
-        </div>
+        <div style={styles.typeDesc}>{activePreset.description}</div>
       </div>
 
-      <div style={styles.selectionCard}>
-        <div style={styles.selectionLabel}>Selected setup</div>
-        <div style={styles.selectionTitle}>{activePreset.label}</div>
-        <div style={styles.selectionSub}>
-          {kind} | {formatRoutineSubtype(subtype)} | {category}
+      {/* CUSTOM: explicit kind + subtype selectors */}
+      {presetKey === "CUSTOM" && (
+        <div style={styles.twoCol}>
+          <div>
+            <label style={styles.label}>Kind</label>
+            <select
+              style={styles.input as React.CSSProperties}
+              value={kind}
+              onChange={(e) => {
+                const nextKind = e.target.value as RoutineKind;
+                setKind(nextKind);
+                setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
+              }}
+            >
+              {ROUTINE_KIND_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={styles.label}>Subtype</label>
+            <select
+              style={styles.input as React.CSSProperties}
+              value={subtype}
+              onChange={(e) => setSubtype(e.target.value)}
+            >
+              {subtypeOptions.map((opt) => (
+                <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
+      {/* CONTEXTUAL SUBTYPE (Cardio activity / Guided style / Session sport) */}
+      {subtypeSelectorLabel && (
+        <div>
+          <label style={styles.label}>{subtypeSelectorLabel}</label>
+          <select
+            style={styles.input as React.CSSProperties}
+            value={subtype}
+            onChange={(e) => setSubtype(e.target.value)}
+          >
+            {subtypeOptions.map((opt) => (
+              <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* NAME */}
       <div>
         <label style={styles.label}>Name</label>
         <input name="name" style={styles.input} defaultValue={routine.name} />
       </div>
 
-      <div>
-        <label style={styles.label}>Training Domain</label>
-        <select
-          style={styles.input as React.CSSProperties}
-          value={effectiveDomainValue}
-          onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
-        >
-          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
-            </option>
-          ))}
-        </select>
-        <div style={styles.help}>Controls which category this routine appears under in Training Balance. Auto-selected from routine type.</div>
-      </div>
+      {/* SESSION TEMPLATE — shown right after name for SESSION kind */}
+      {kind === "SESSION" && (
+        <div>
+          <label style={styles.label}>
+            Session template <span style={styles.optional}>(optional)</span>
+          </label>
+          <select
+            name="sessionTemplateId"
+            style={styles.input as React.CSSProperties}
+            value={effectiveSessionTemplateId}
+            onChange={(e) => setSessionTemplateId(e.target.value)}
+          >
+            <option value="">Open session — no template</option>
+            {sessionTemplateOptions.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {selectedSessionTemplate?.description && (
+            <div style={styles.help}>{selectedSessionTemplate.description}</div>
+          )}
+        </div>
+      )}
 
+      {/* FREQUENCY GOAL */}
       <div>
-        <label style={styles.label}>Group Tags (optional)</label>
-        <input
-          style={styles.input}
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          placeholder="pull, climbing, strength..."
-        />
-        <div style={styles.help}>Comma-separated tags for grouping frequency goals across routines. Tags matching a known activity (e.g. climbing, pull) also update coverage.</div>
-      </div>
-
-      <div>
-        <label style={styles.label}>Frequency Target (optional)</label>
+        <label style={styles.label}>
+          Frequency goal <span style={styles.optional}>(optional)</span>
+        </label>
         <RoutineFrequencyTargetFields
           initialCount={routine.targetFrequencyCount}
           initialUnit={routine.targetFrequencyUnit}
@@ -187,33 +234,61 @@ export default function EditRoutineForm({
         />
       </div>
 
-      {kind === "SESSION" ? (
-        <div style={styles.sessionTemplateCard}>
-          <label style={styles.label}>Session template</label>
+      {/* FOCUS AREA — only for types where override is meaningful */}
+      {showFocusArea && (
+        <div>
+          <label style={styles.label}>Focus Area</label>
           <select
-            name="sessionTemplateId"
             style={styles.input as React.CSSProperties}
-            value={effectiveSessionTemplateId}
-            onChange={(event) => setSessionTemplateId(event.target.value)}
+            value={effectiveDomainValue}
+            onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
           >
-            <option value="">Open session (no metric template)</option>
-            {sessionTemplateOptions.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
+            {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
               </option>
             ))}
           </select>
-          <div style={styles.help}>
-            {selectedSessionTemplate?.description ??
-              "Leave this open for a free-form session, or choose a template for structured metric fields."}
-          </div>
+          <div style={styles.help}>How this routine is grouped in Training Balance. Auto-set from your routine type.</div>
         </div>
-      ) : null}
+      )}
+
+      {/* MORE OPTIONS — Tags + advanced metadata */}
+      <details style={styles.moreCard}>
+        <summary style={styles.moreSummary}>More options</summary>
+        <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+          <div>
+            <label style={styles.label}>
+              Group Tags <span style={styles.optional}>(optional)</span>
+            </label>
+            <input
+              style={styles.input}
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="pull, climbing, strength..."
+            />
+            <div style={styles.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
+          </div>
+
+          <details style={styles.advancedCard}>
+            <summary style={styles.advancedSummary}>Advanced metadata</summary>
+            <div style={{ marginTop: 12 }}>
+              <MetadataGroupPicker
+                title="Organization & analysis"
+                help="These groups power rollups in Progress. Preselected from your routine type — only adjust if the default grouping is wrong."
+                groups={metadataGroups}
+                selectedIds={selectedMetadataGroupIds}
+                onSelectionChange={setSelectedMetadataGroupIds}
+                collapsible
+                defaultOpen={selectedMetadataGroupIds.length > 0}
+              />
+            </div>
+          </details>
+        </div>
+      </details>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="submit" style={styles.btn}>
-          Save
-        </button>
+        <button type="submit" style={styles.btn}>Save</button>
         {isGuidedKind(kind) && !isGuidedKind(routine.kind) && (
           <button type="submit" name="postSave" value="steps" style={styles.btn}>
             Save + Open Steps
@@ -224,43 +299,21 @@ export default function EditRoutineForm({
             Save + Open Template
           </button>
         )}
-        <Link href="/routines" style={styles.linkBtn}>
-          Back
-        </Link>
+        <Link href="/routines" style={styles.linkBtn}>Back</Link>
         {isWorkoutKind(kind) && isWorkoutKind(routine.kind) && (
-          <Link href={`/routines/${routine.id}/template`} style={styles.linkBtn}>
-            Template
-          </Link>
+          <Link href={`/routines/${routine.id}/template`} style={styles.linkBtn}>Template</Link>
         )}
         {isGuidedKind(kind) && isGuidedKind(routine.kind) && (
-          <Link href={`/routines/${routine.id}/guided`} style={styles.linkBtn}>
-            Steps
-          </Link>
+          <Link href={`/routines/${routine.id}/guided`} style={styles.linkBtn}>Steps</Link>
         )}
       </div>
-
-      <details style={styles.advancedCard}>
-        <summary data-collapsible-summary style={styles.advancedSummary}>
-          Advanced metadata
-        </summary>
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <MetadataGroupPicker
-            title="Organization & analysis (optional)"
-            help="These groups power rollups in Progress. The app preselects suggestions from subtype, so you only need to change this when the default grouping is wrong."
-            groups={metadataGroups}
-            selectedIds={selectedMetadataGroupIds}
-            onSelectionChange={setSelectedMetadataGroupIds}
-            collapsible
-            defaultOpen={selectedMetadataGroupIds.length > 0}
-          />
-        </div>
-      </details>
     </form>
   );
 }
 
 const styles = {
-  label: { display: "block", fontWeight: 900 as const, marginBottom: 4 },
+  label: { display: "block", fontWeight: 700 as const, marginBottom: 5, fontSize: 14 },
+  optional: { fontWeight: 400 as const, opacity: 0.6, fontSize: 12 },
   input: {
     width: "100%",
     padding: 8,
@@ -268,70 +321,75 @@ const styles = {
     borderRadius: 10,
     background: "#111827",
     color: "#ffffff",
+    boxSizing: "border-box" as const,
   },
   btn: {
-    padding: "10px 12px",
+    padding: "10px 14px",
     border: "1px solid rgba(128,128,128,0.8)",
     borderRadius: 10,
     background: "rgba(128,128,128,0.12)",
     color: "inherit",
-    fontWeight: 900 as const,
+    fontWeight: 700 as const,
   },
   linkBtn: {
-    padding: "8px 12px",
+    padding: "8px 14px",
     border: "1px solid rgba(128,128,128,0.8)",
     borderRadius: 10,
     textDecoration: "none",
     color: "inherit",
-    fontWeight: 800 as const,
+    fontWeight: 700 as const,
     background: "rgba(128,128,128,0.12)",
   },
-  presetGrid: {
-    display: "grid",
-    gap: 12,
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    alignItems: "stretch" as const,
+  pillRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 8,
   },
-  presetCard: {
-    textAlign: "left" as const,
-    minHeight: 112,
-    padding: 14,
-    borderWidth: 1,
-    borderStyle: "solid" as const,
-    borderColor: "rgba(128,128,128,0.4)",
-    borderRadius: 12,
+  pill: {
+    padding: "7px 13px",
+    border: "1px solid rgba(128,128,128,0.4)",
+    borderRadius: 20,
     background: "rgba(128,128,128,0.06)",
     color: "inherit",
+    fontWeight: 600 as const,
+    fontSize: 13,
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
   },
-  presetCardActive: {
+  pillActive: {
     borderColor: "rgba(76,163,255,0.7)",
-    background: "rgba(76,163,255,0.12)",
+    background: "rgba(76,163,255,0.15)",
+    fontWeight: 700 as const,
   },
-  presetTitle: { fontWeight: 900 as const, marginBottom: 6 },
-  presetDescription: { fontSize: 12, opacity: 0.8 },
-  selectionCard: {
-    border: "1px solid rgba(128,128,128,0.3)",
-    borderRadius: 12,
-    padding: 12,
-    background: "rgba(128,128,128,0.05)",
+  typeDesc: {
+    marginTop: 8,
+    fontSize: 12,
+    opacity: 0.65,
+    lineHeight: 1.4 as const,
+  },
+  twoCol: {
     display: "grid",
-    gap: 4,
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
   },
-  selectionLabel: { fontSize: 11, fontWeight: 900 as const, letterSpacing: 0.4, opacity: 0.7, textTransform: "uppercase" as const },
-  selectionTitle: { fontSize: 15, fontWeight: 900 as const },
-  selectionSub: { fontSize: 12, opacity: 0.74 },
-  sessionTemplateCard: {
+  moreCard: {
     border: "1px solid rgba(128,128,128,0.3)",
     borderRadius: 12,
-    padding: 12,
-    background: "rgba(128,128,128,0.05)",
-  },
-  advancedCard: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    padding: 12,
+    padding: "12px 14px",
     background: "rgba(128,128,128,0.04)",
   },
-  advancedSummary: { cursor: "pointer", fontWeight: 900 as const },
-  help: { marginTop: 6, opacity: 0.7, fontSize: 12 },
+  moreSummary: {
+    cursor: "pointer",
+    fontWeight: 600 as const,
+    fontSize: 13,
+    opacity: 0.8,
+  },
+  advancedCard: {
+    border: "1px solid rgba(128,128,128,0.25)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    background: "rgba(128,128,128,0.03)",
+  },
+  advancedSummary: { cursor: "pointer", fontWeight: 600 as const, fontSize: 13 },
+  help: { marginTop: 6, opacity: 0.65, fontSize: 12, lineHeight: 1.4 as const },
 };

@@ -19,28 +19,29 @@ export default function ExercisePicker({
   routineId: string;
   available: ExerciseOption[];
 }) {
-  const [query, setQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [createName, setCreateName] = useState("");
   const [selectedId, setSelectedId] = useState(available[0]?.id ?? "");
   const [unit, setUnit] = useState<"REPS" | "TIME">("REPS");
   const [supportsWeight, setSupportsWeight] = useState(false);
 
   const filtered = useMemo(() => {
     const sorted = [...available].sort((left, right) => compareExerciseNames(left.name, right.name));
-    if (!query.trim()) return sorted.slice(0, 12);
-    return sorted.filter((exercise) => exerciseMatchesQuery(exercise.name, query)).slice(0, 12);
-  }, [available, query]);
+    if (!searchQuery.trim()) return sorted.slice(0, 12);
+    return sorted.filter((exercise) => exerciseMatchesQuery(exercise.name, searchQuery)).slice(0, 12);
+  }, [available, searchQuery]);
 
   const activeSelectedId = filtered.some((exercise) => exercise.id === selectedId)
     ? selectedId
     : filtered[0]?.id ?? "";
 
   const hasExactMatch = useMemo(() => {
-    const normalizedQuery = condensedExerciseName(query);
-    if (!normalizedQuery) return false;
-    return available.some((exercise) => condensedExerciseName(exercise.name) === normalizedQuery);
-  }, [available, query]);
+    const normalized = condensedExerciseName(createName);
+    if (!normalized) return false;
+    return available.some((exercise) => condensedExerciseName(exercise.name) === normalized);
+  }, [available, createName]);
 
-  const normalizedQuery = normalizeExerciseName(query);
+  const normalizedQuery = normalizeExerciseName(createName);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -50,8 +51,8 @@ export default function ExercisePicker({
           Showing the workout library by default, so stretch, mobility, and breathwork entries stay in guided flows unless you classify them differently.
         </div>
         <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Search by name, even without punctuation"
           style={input}
         />
@@ -62,7 +63,7 @@ export default function ExercisePicker({
         <input type="hidden" name="mode" value="existing" />
         <select
           name="exerciseId"
-          style={{ ...input, minWidth: 340 }}
+          style={input}
           value={activeSelectedId}
           onChange={(event) => setSelectedId(event.target.value)}
           disabled={filtered.length === 0}
@@ -88,10 +89,10 @@ export default function ExercisePicker({
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <input
             name="customName"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={createName}
+            onChange={(event) => setCreateName(event.target.value)}
             placeholder="Custom exercise name"
-            style={{ ...input, minWidth: 300 }}
+            style={input}
           />
           <select name="unit" value={unit} onChange={(event) => setUnit(event.target.value as "REPS" | "TIME")} style={input}>
             <option value="REPS">Rep-based</option>

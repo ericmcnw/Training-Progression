@@ -12,7 +12,7 @@ export const ROUTINE_SUBTYPE_OPTIONS: Record<RoutineKind, string[]> = {
   COMPLETION: ["HABIT", "HEALTH", "RECOVERY", "OTHER"],
   WORKOUT: ["STRENGTH", "HYPERTROPHY", "REHAB", "SKILL", "OTHER"],
   CARDIO: ["RUN", "WALK", "BIKE", "SWIM", "HIKE", "ROW", "OTHER"],
-  GUIDED: ["MOBILITY", "STRETCHING", "WARMUP", "COOLDOWN", "REHAB", "BREATHWORK", "OTHER"],
+  GUIDED: ["MOBILITY", "STRETCHING", "EXERCISE", "WARMUP", "COOLDOWN", "REHAB", "BREATHWORK", "OTHER"],
   SESSION: ["CLIMBING", "SURFING", "SNOWBOARDING", "BASKETBALL", "GOLF", "TEAM_SPORT", "SKILL_PRACTICE", "HIKE_DAY", "OTHER"],
 };
 
@@ -136,6 +136,7 @@ export function deriveRoutineDomain(
 
   if (k === "GUIDED") {
     if (s === "REHAB" || s === "BREATHWORK" || s === "COOLDOWN") return "recovery";
+    if (s === "EXERCISE") return "strength";
     return "mobility"; // MOBILITY, STRETCHING, WARMUP, OTHER
   }
 

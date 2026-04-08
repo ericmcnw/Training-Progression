@@ -131,8 +131,8 @@ function GuidedTemplateItemFields({
               }}
               style={input}
             >
-              <option value="STEP">Step</option>
-              <option value="EXERCISE">Exercise</option>
+              <option value="STEP">Step — breathwork, stretch, cue</option>
+              <option value="EXERCISE">Exercise — tracked movement</option>
             </select>
           </label>
 
@@ -212,12 +212,18 @@ function GuidedTemplateItemFields({
           <div style={compactGrid}>
             <label style={field}>
               <span>Work duration (sec)</span>
-              <input name="durationSec" value={durationSec} onChange={(event) => setDurationSec(event.target.value)} style={input} inputMode="numeric" placeholder="7" />
+              <input name="durationSec" value={durationSec} onChange={(event) => setDurationSec(event.target.value)} style={input} inputMode="numeric" placeholder="30" />
+              {durationSec && Number(durationSec) > 0 && (
+                <span style={secHint}>{formatGuidedSeconds(Number(durationSec))}</span>
+              )}
             </label>
 
             <label style={field}>
               <span>Rest duration (sec)</span>
-              <input name="restSec" value={restSec} onChange={(event) => setRestSec(event.target.value)} style={input} inputMode="numeric" placeholder="3" />
+              <input name="restSec" value={restSec} onChange={(event) => setRestSec(event.target.value)} style={input} inputMode="numeric" placeholder="15" />
+              {restSec && Number(restSec) > 0 && (
+                <span style={secHint}>{formatGuidedSeconds(Number(restSec))}</span>
+              )}
             </label>
           </div>
         </div>
@@ -773,4 +779,10 @@ const cardActions: React.CSSProperties = {
   gap: 12,
   flexWrap: "wrap",
   alignItems: "center",
+};
+
+const secHint: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.65,
+  fontWeight: 700,
 };

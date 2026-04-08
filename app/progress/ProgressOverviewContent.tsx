@@ -128,10 +128,13 @@ function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLa
         {/* Data rows */}
         {rows.map((row) => (
           <Fragment key={row.domain}>
-            <div style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8 }}>
+            <Link
+              href={`?tab=routines&domain=${row.domain}`}
+              style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8, textDecoration: "none", color: "inherit", opacity: 0.9 }}
+            >
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: domainAccent(row.domain), marginRight: 7, flexShrink: 0 }} />
               {row.label}
-            </div>
+            </Link>
             {row.weeks.map((count, wi) => (
               <div
                 key={`cell-${row.domain}-${wi}`}

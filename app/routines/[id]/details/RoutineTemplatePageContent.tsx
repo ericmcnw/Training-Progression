@@ -79,7 +79,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
           <form id="template-save-form" action={saveRoutineTemplate}>
             <input type="hidden" name="routineId" value={routineId} />
             <button type="submit" style={saveBtn}>
-              Save
+              Save Template
             </button>
           </form>
           <Link href="/exercises" style={linkBtn}>
@@ -138,14 +138,14 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
                     <input type="hidden" name="routineId" value={routineId} />
                     <input type="hidden" name="routineExerciseId" value={re.id} />
                     <input type="hidden" name="dir" value="up" />
-                    <button type="submit" style={btnSmall}>Up</button>
+                    <button type="submit" style={btnSmall}>↑ Up</button>
                   </form>
 
                   <form action={moveRoutineExercise}>
                     <input type="hidden" name="routineId" value={routineId} />
                     <input type="hidden" name="routineExerciseId" value={re.id} />
                     <input type="hidden" name="dir" value="down" />
-                    <button type="submit" style={btnSmall}>Down</button>
+                    <button type="submit" style={btnSmall}>↓ Down</button>
                   </form>
 
                   <form className="mobileRoutineTemplateDefaultSets" action={setDefaultSets} style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -155,11 +155,11 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
                     <input
                       name="defaultSets"
                       className="mobileRoutineTemplateInput"
-                      style={{ ...inputStyle, width: 90 }}
+                      style={{ ...inputStyle, width: 70 }}
                       inputMode="numeric"
                       defaultValue={re.defaultSets}
                     />
-                    <button type="submit" style={btnSmall}>Save</button>
+                    <button type="submit" style={btnSmall}>Set</button>
                   </form>
 
                   <form action={removeRoutineExercise}>
@@ -192,7 +192,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 10,
   background: "rgba(128,128,128,0.08)",
   color: "inherit",
-  minWidth: 280,
 };
 
 const btnSmall: React.CSSProperties = {
