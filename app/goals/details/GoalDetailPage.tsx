@@ -2,9 +2,10 @@ import Link from "next/link";
 import MetricLineChart from "@/app/progress/MetricLineChart";
 import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
 import { toAppYmd } from "@/lib/dates";
-import { getGoalById, getGoalFormOptions, getGoalInsight, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
+import { getGoalById, getGoalFormOptions, getGoalInsight, getGroupFrequencyGoalById, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "../GoalForm";
 import { updateGoal } from "../actions";
+import { updateFrequencyGoal } from "@/app/routines/actions";
 import DeleteGoalButton from "../DeleteGoalButton";
 import { GoalMetaLine, GoalProgressRing, GoalStatusBadge, cardStyle, chipStyle, subtleTextStyle } from "../ui";
 
@@ -29,12 +30,68 @@ export default async function GoalDetailPage(props: {
   const params = await Promise.resolve(props.params);
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const mode = getParam(searchParams, "mode") === "edit" ? "edit" : "detail";
+  const normalizedGoalId = decodeURIComponent(params.goalId);
+  const isGroupFrequencyGoal = normalizedGoalId.startsWith("group-frequency:");
 
   if (mode === "edit") {
-    const [goal, options] = await Promise.all([
-      getGoalById(params.goalId),
-      getGoalFormOptions(),
-    ]);
+    if (isGroupFrequencyGoal) {
+      const [goal, options] = await Promise.all([
+        getGroupFrequencyGoalById(normalizedGoalId),
+        getGoalFormOptions(),
+      ]);
+
+      if (!goal) {
+        return <div style={{ padding: 20 }}>Goal not found.</div>;
+      }
+
+      const initial: GoalFormInitial = {
+        name: goal.name,
+        goalType: "FREQUENCY",
+        targetType: "GROUP",
+        targetId: "",
+        metricType: "SESSIONS",
+        timeframe: goal.targetUnit,
+        targetValue: goal.targetCount,
+        startDate: "",
+        endDate: "",
+        isActive: goal.isActive,
+        notes: "",
+        benchmarkDistanceMi: "",
+        benchmarkLabel: "",
+        sessionMetricDefinitionId: "",
+        sessionMetricTarget: "",
+        groupFrequencyGoalId: goal.id,
+        groupFrequency: {
+          targetCount: goal.targetCount,
+          targetInterval: goal.targetInterval,
+          targetUnit: goal.targetUnit,
+          routineIds: goal.routines.map((entry) => entry.routineId),
+        },
+      };
+
+      return (
+        <ProgressShell
+          section="overview"
+          title={`Edit: ${goal.name}`}
+          subtitle="Update the grouped routine frequency target and included routines."
+          actions={<SectionLinkButton href="/goals" label="Back to Goals" />}
+        >
+          <SectionCard title="Edit Goal">
+            <GoalForm
+              action={updateGoal}
+              groupFrequencyAction={updateFrequencyGoal}
+              options={options}
+              submitLabel="Update Goal"
+              initial={initial}
+              mode="advanced"
+              initialTemplateKey="GROUP_ROUTINE_FREQUENCY"
+            />
+          </SectionCard>
+        </ProgressShell>
+      );
+    }
+
+    const [goal, options] = await Promise.all([getGoalById(normalizedGoalId), getGoalFormOptions()]);
 
     if (!goal) {
       return <div style={{ padding: 20 }}>Goal not found.</div>;
@@ -73,7 +130,7 @@ export default async function GoalDetailPage(props: {
     );
   }
 
-  const entry = await getGoalInsight(params.goalId);
+  const entry = await getGoalInsight(normalizedGoalId);
 
   if (!entry) {
     return <div style={{ padding: 20 }}>Goal not found.</div>;

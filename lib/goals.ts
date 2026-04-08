@@ -1156,8 +1156,8 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
     targetLabel: goal.name,
     targetKindLabel: GOAL_TARGET_TYPE_LABELS.GROUP,
     targetHref: null,
-    detailHref: null,
-    editHref: null,
+    detailHref: `/goals/group-frequency:${goal.id}?mode=edit`,
+    editHref: `/goals/group-frequency:${goal.id}?mode=edit`,
     toggleFrequencyGoalHref: null,
     isToggleEnabled: goal.isActive,
     goalTypeLabel: GOAL_TYPE_LABELS.FREQUENCY,
@@ -1411,6 +1411,20 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
 export async function getGoalById(goalId: string) {
   const goal = await prisma.goal.findUnique({ where: { id: goalId } });
   return goal ? toGoalWithConfig(goal) : null;
+}
+
+export async function getGroupFrequencyGoalById(goalId: string) {
+  const normalizedGoalId = decodeURIComponent(goalId);
+  const id = normalizedGoalId.startsWith("group-frequency:") ? normalizedGoalId.slice("group-frequency:".length) : normalizedGoalId;
+  if (!id) return null;
+  return prisma.frequencyGoal.findUnique({
+    where: { id },
+    include: {
+      routines: {
+        select: { routineId: true },
+      },
+    },
+  });
 }
 
 export async function getGoalInsight(goalId: string) {

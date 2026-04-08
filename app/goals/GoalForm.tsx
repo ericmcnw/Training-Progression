@@ -16,7 +16,7 @@ import type { GoalFormOptions } from "@/lib/goals";
 import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
 import { formInputStyle } from "./ui";
 
-type GoalFormInitial = {
+export type GoalFormInitial = {
   id?: string;
   name: string;
   goalType: GoalTypeValue;
@@ -33,6 +33,13 @@ type GoalFormInitial = {
   benchmarkLabel: string;
   sessionMetricDefinitionId: string;
   sessionMetricTarget: string;
+  groupFrequencyGoalId?: string;
+  groupFrequency?: {
+    targetCount: number;
+    targetInterval: number;
+    targetUnit: "DAY" | "WEEK" | "MONTH";
+    routineIds: string[];
+  };
 };
 
 function splitSeconds(value: number) {
@@ -127,9 +134,9 @@ export default function GoalForm({
         timeframe: initial.timeframe,
       })
   );
-  const [gfTargetCount, setGfTargetCount] = useState("3");
-  const [gfTargetInterval, setGfTargetInterval] = useState("1");
-  const [gfTargetUnit, setGfTargetUnit] = useState("WEEK");
+  const [gfTargetCount, setGfTargetCount] = useState(String(initial.groupFrequency?.targetCount ?? 3));
+  const [gfTargetInterval, setGfTargetInterval] = useState(String(initial.groupFrequency?.targetInterval ?? 1));
+  const [gfTargetUnit, setGfTargetUnit] = useState(initial.groupFrequency?.targetUnit ?? "WEEK");
 
   const isGroupFrequency = templateKey === "GROUP_ROUTINE_FREQUENCY";
 
@@ -213,6 +220,7 @@ export default function GoalForm({
 
   return (
     <form action={isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action} style={{ display: "grid", gap: 16 }}>
+      {isGroupFrequency && initial.groupFrequencyGoalId ? <input type="hidden" name="id" value={initial.groupFrequencyGoalId} /> : null}
       {!isGroupFrequency && initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
       {!isGroupFrequency && <input type="hidden" name="targetValue" value={canonicalTargetValue} />}
       {!isGroupFrequency && <input type="hidden" name="sessionMetricDefinitionId" value={effectiveSessionMetricDefinitionId} />}
@@ -249,7 +257,7 @@ export default function GoalForm({
             <div style={gridStyle}>
               <label style={fieldStyle}>
                 <span>Goal name</span>
-                <input name="name" style={formInputStyle} placeholder="Push Days, Climbing Sessions..." required />
+                <input name="name" defaultValue={initial.name} style={formInputStyle} placeholder="Push Days, Climbing Sessions..." required />
               </label>
               <div style={fieldStyle}>
                 <span>Target frequency</span>
@@ -295,7 +303,7 @@ export default function GoalForm({
             <div style={routineChecklistStyle}>
               {options.routines.map((r) => (
                 <label key={r.id} style={checkboxRowStyle}>
-                  <input type="checkbox" name="routineIds" value={r.id} />
+                  <input type="checkbox" name="routineIds" value={r.id} defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false} />
                   <span style={{ fontSize: 13 }}>
                     {r.label}
                     {r.subtitle ? <span style={{ ...hintStyle, marginLeft: 6 }}>{r.subtitle}</span> : null}
