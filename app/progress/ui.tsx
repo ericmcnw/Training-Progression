@@ -36,7 +36,7 @@ export function ProgressShell({
             {subtitle ? <div className="mobilePageSubtitle" style={styles.progressSub}>{subtitle}</div> : null}
           </div>
           {section !== "overview" ? (
-            <Link href="/progress" style={styles.backBtn}>
+            <Link href="/progress" scroll={false} prefetch={true} style={styles.backBtn}>
               Back
             </Link>
           ) : null}
@@ -293,6 +293,8 @@ function SegmentedNav({
         <Link
           key={`${item.href}-${item.label}`}
           href={item.href}
+          scroll={false}
+          prefetch={true}
           style={{
             ...styles.segment,
             ...(item.active ? styles.segmentActive : {}),

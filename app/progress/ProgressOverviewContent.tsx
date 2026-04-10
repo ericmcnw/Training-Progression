@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 import CoverageGroupedBarChart from "./CoverageGroupedBarChart";
 import ProgressSearchTrigger, { type ProgressSearchSuggestion } from "./ProgressSearchTrigger";
 import { getExerciseIndex, getMetadataIndex, getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "./data";
@@ -11,7 +11,7 @@ import { PillNav, ProgressShell, SectionCard, SectionLinkButton, TargetCard } fr
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { getRecommendationModel, type TrainingRecommendation } from "@/lib/recommendations";
-import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
+import { getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { prisma } from "@/lib/prisma";
 import { effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 
@@ -130,6 +130,7 @@ function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLa
           <Fragment key={row.domain}>
             <Link
               href={`?tab=routines&domain=${row.domain}`}
+              scroll={false}
               style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8, textDecoration: "none", color: "inherit", opacity: 0.9 }}
             >
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: domainAccent(row.domain), marginRight: 7, flexShrink: 0 }} />
@@ -208,7 +209,7 @@ function FocusCard({
           <div key={item}>{item}</div>
         ))}
       </div>
-      <Link href={href} style={{ display: "inline-flex", width: "fit-content", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 12, fontWeight: 800 }}>
+      <Link href={href} scroll={false} style={{ display: "inline-flex", width: "fit-content", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 12, fontWeight: 800 }}>
         {ctaLabel}
       </Link>
     </div>
@@ -232,7 +233,7 @@ function SidebarList({
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         {items.map((item) => (
-          <Link key={`${item.href}-${item.title}`} href={item.href} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <Link key={`${item.href}-${item.title}`} href={item.href} scroll={false} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div style={{ fontWeight: 800 }}>{item.title}</div>
             <div style={{ fontSize: 12, opacity: 0.72, lineHeight: 1.4 }}>{item.meta}</div>
           </Link>
@@ -242,155 +243,42 @@ function SidebarList({
   );
 }
 
-export default async function ProgressOverviewPage({ searchParams }: { searchParams?: Promise<SearchParams> | SearchParams }) {
-  const params = await Promise.resolve(searchParams ?? {});
-  const rawQuery = (getParam(params, "q") ?? "").trim();
-  const query = rawQuery.toLowerCase();
-  const section = (getParam(params, "section") ?? "overview").trim().toLowerCase();
-  const coverageLens = normalizeCoverageLens(getParam(params, "coverageLens"));
-  const coverageRange = normalizeCoverageRange(getParam(params, "coverageRange"));
-  const showQuietCoverage = truthyParam(getParam(params, "showQuiet"));
-  const showAllCoverage = truthyParam(getParam(params, "showAllCoverage"));
-  const now = new Date();
+// ─── Async server component: Focus / Recommendations (streams in) ─────────────
 
-  if (section === "routines") return <RoutinesIndexView searchParams={params} />;
-  if (section === "exercises") return <ExercisesIndexView searchParams={params} />;
-  if (section === "groups") return <GroupsIndexView searchParams={params} />;
-  if (section === "cardio") return <CardioIndexView searchParams={params} />;
+type RoutineSnapshotItem = {
+  routine: { id: string; name: string; kind: string; category: string; timesPerWeek: number | null };
+  summary: { sessions: number; weeksActive: number; lastSession: Date | null };
+  gap: number;
+  progressRatio: number;
+  targetSessions: number;
+};
 
-  const needsExtraCoverageOverview = coverageRange !== "week" && coverageRange !== "4w";
-  const [[routines, exercises, groups, recentLogs], weekCoverageOverview, fourWeekCoverageOverview, extraCoverageOverview, recommendationModel] = await Promise.all([
-    Promise.all([getRoutineIndex(), getExerciseIndex(), getMetadataIndex(), getRoutineLogs("4w")]),
-    getCoverageOverviewModel("week"),
-    getCoverageOverviewModel("4w"),
-    needsExtraCoverageOverview ? getCoverageOverviewModel(coverageRange) : Promise.resolve(null),
-    getRecommendationModel(),
-  ]);
-  const coverageOverview =
-    coverageRange === "week"
-      ? weekCoverageOverview
-      : coverageRange === "4w"
-      ? fourWeekCoverageOverview
-      : extraCoverageOverview ?? fourWeekCoverageOverview;
-
-  const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
-  const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
-  const frequencyLogs = maxFrequencyWindowDays > 0 ? await prisma.routineLog.findMany({ where: { performedAt: { gte: frequencyWindowStart } }, select: { routineId: true, performedAt: true } }) : [];
-  const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({ routines, logs: frequencyLogs, now });
-
-  const activeRoutines = routines.filter((routine) => routine.isActive);
-  const cardioRoutines = routines.filter((routine) => routine.kind === "CARDIO");
-  const cardioGroups = groups.filter((group) => group.kind === "CARDIO_ACTIVITY");
-  const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const weekLogs = recentLogs.filter((log) => log.performedAt >= weekStart);
-  const weekActiveDays = new Set(weekLogs.map((log) => log.performedAt.toISOString().slice(0, 10))).size;
-  const baselineWeeklyLogs = fourWeekCoverageOverview.totalLogs / 4;
-  const totalCardioMilesWeek = weekLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
-
-  // Domain heat matrix: domain × week for last 4 weeks
-  const routineDomainMap = new Map(
-    routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)])
-  );
-  // Build 4 ISO-week labels (Sun-based) going backwards from now
-  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-  const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
-  const heatWeekLabels: string[] = heatWeekStarts.map((d) => {
-    const m = d.getMonth() + 1;
-    const day = d.getDate();
-    return `${m}/${day}`;
-  });
-  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
-  const domainLabel: Record<RoutineDomain, string> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
-    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
-    habit: "Habits", general: "General",
-  };
-  // Build a 2D count: domain -> week index -> session count
-  const heatData = new Map<RoutineDomain, number[]>();
-  for (const d of domainOrder) heatData.set(d, Array(4).fill(0));
-  for (const log of recentLogs) {
-    const domain = routineDomainMap.get(log.routineId);
-    if (!domain || domain === "general") continue;
-    const logTime = log.performedAt.getTime();
-    const weekIdx = heatWeekStarts.findIndex((wStart, i) => {
-      const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
-      return logTime >= wStart.getTime() && logTime < wEnd;
-    });
-    if (weekIdx >= 0) {
-      const row = heatData.get(domain)!;
-      row[weekIdx]++;
-    }
+type FrequencyStatusMap = Map<
+  string,
+  {
+    hasTarget?: boolean;
+    status: string;
+    detailLabel?: string | null;
+    currentCount?: number;
+    remainingCount?: number;
+    targetCount?: number | null;
   }
-  const heatMatrixRows: DomainWeekCell[] = domainOrder
-    .filter((domain) => {
-      const weeks = heatData.get(domain)!;
-      const hasLogs = weeks.some((c) => c > 0);
-      const hasRoutine = routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === domain && r.isActive);
-      return hasLogs || hasRoutine;
-    })
-    .map((domain) => ({
-      domain,
-      label: domainLabel[domain],
-      weeks: heatData.get(domain)!,
-    }));
+>;
 
-  const routineSnapshots = activeRoutines
-    .map((routine) => {
-      const logs = recentLogs.filter((log) => log.routineId === routine.id);
-      const summary = summarizeRoutineLogs(logs, routine.timesPerWeek);
-      const targetSessions = (routine.timesPerWeek ?? 0) * 4;
-      const gap = Math.max(0, targetSessions - summary.sessions);
-      const progressRatio = targetSessions > 0 ? summary.sessions / targetSessions : summary.weeksActive / 4;
-      return { routine, summary, gap, progressRatio, targetSessions };
-    })
-    .sort((a, b) => b.summary.sessions - a.summary.sessions || a.routine.name.localeCompare(b.routine.name));
-  const routineSnapshotById = new Map(routineSnapshots.map((snapshot) => [snapshot.routine.id, snapshot]));
-  const recentActive = routineSnapshots.slice(0, 5);
+async function FocusSection({
+  routineSnapshots,
+  frequencyStatusByRoutineId,
+}: {
+  routineSnapshots: RoutineSnapshotItem[];
+  frequencyStatusByRoutineId: FrequencyStatusMap;
+}) {
+  const recommendationModel = await getRecommendationModel();
+  const routineSnapshotById = new Map(routineSnapshots.map((s) => [s.routine.id, s]));
+
   const attentionRoutine =
-    routineSnapshots.filter((entry) => entry.targetSessions > 0).sort((a, b) => b.gap - a.gap || a.progressRatio - b.progressRatio || b.summary.sessions - a.summary.sessions)[0] ??
-    recentActive[0] ??
+    routineSnapshots.filter((e) => e.targetSessions > 0).sort((a, b) => b.gap - a.gap || a.progressRatio - b.progressRatio || b.summary.sessions - a.summary.sessions)[0] ??
+    routineSnapshots[0] ??
     null;
-
-  const onTrackRoutines = activeRoutines.filter((routine) => {
-    const frequencySummary = frequencyStatusByRoutineId.get(routine.id);
-    return frequencySummary?.status === "on_track" || frequencySummary?.status === "ahead";
-  }).length;
-
-  const featuredExercise =
-    exercises
-      .map((exercise) => {
-        const sessions = recentLogs.flatMap((log) =>
-          log.exercises.filter((entry) => entry.exerciseId === exercise.id).map((entry) => ({
-            totalSets: entry.sets.length,
-            totalReps: entry.sets.reduce((sum, set) => sum + (set.reps ?? 0), 0),
-            topWeight: Math.max(0, ...entry.sets.map((set) => set.weightLb ?? 0)),
-            topSeconds: Math.max(0, ...entry.sets.map((set) => set.seconds ?? 0)),
-          }))
-        );
-        return {
-          exercise,
-          sessionCount: sessions.length,
-          totalSets: sessions.reduce((sum, session) => sum + session.totalSets, 0),
-          totalReps: sessions.reduce((sum, session) => sum + session.totalReps, 0),
-          topMetric: exercise.unit === "TIME" && !exercise.supportsWeight ? Math.max(0, ...sessions.map((session) => session.topSeconds)) : Math.max(0, ...sessions.map((session) => session.topWeight)),
-        };
-      })
-      .filter((entry) => entry.sessionCount > 0)
-      .sort((a, b) => b.sessionCount - a.sessionCount || a.exercise.name.localeCompare(b.exercise.name))[0] ?? null;
-
-  const quickCardioTargets = (
-    await Promise.all(cardioGroups.filter((group) => group.slug !== "climbing").map(async (group) => ({ group, target: await resolveGroupTarget(group.slug, "4w") })))
-  )
-    .sort((a, b) => (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label))
-    .slice(0, 3);
-
-  const featuredGroups = groups.filter((group) => group.appliesToRoutine || group.appliesToExercise).slice(0, 4);
-  const selectedCoverageSection = coverageOverview.sections.find((entry) => entry.lens === coverageLens) ?? coverageOverview.sections[0];
-  const activeCoverageCategories = selectedCoverageSection.categories.filter((category) => category.totalCount > 0);
-  const hiddenQuietCount = selectedCoverageSection.categories.length - activeCoverageCategories.length;
-  const categoryPool = showQuietCoverage ? selectedCoverageSection.categories : activeCoverageCategories;
-  const visibleCoverageCategories = showAllCoverage ? categoryPool : categoryPool.slice(0, 10);
-  const hiddenActiveCount = Math.max(0, categoryPool.length - visibleCoverageCategories.length);
 
   const focusCards = [recommendationModel.primaryRecommendation, ...recommendationModel.secondaryRecommendations]
     .filter((item): item is TrainingRecommendation => Boolean(item))
@@ -403,7 +291,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         status: recommendationStatus(item),
         title: item.title,
         summary: item.summary,
-        evidence: [item.rationale[0], item.behindByCount ? `${item.behindByCount} short in the current window.` : null, suggestedRoutine ? formatShortDate(suggestedRoutine.summary.lastSession) : null].filter((value): value is string => Boolean(value)),
+        evidence: [item.rationale[0], item.behindByCount ? `${item.behindByCount} short in the current window.` : null, suggestedRoutine ? formatShortDate(suggestedRoutine.summary.lastSession) : null].filter((v): v is string => Boolean(v)),
         href: item.suggestedAction.href,
         ctaLabel: item.suggestedAction.label,
       };
@@ -422,36 +310,379 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
     : null);
   const secondaryFocusCards = focusCards.slice(1, 3);
 
+  return (
+    <div className="mobileProgressOverviewGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+      <div className="mobileProgressOverviewPrimary" style={{ display: "grid", gap: 14 }}>
+        <div />
+        {primaryFocusCard ? (
+          <div className="mobileProgressFocusCard" style={{ display: "grid", gap: 14, padding: 16, borderRadius: 20, border: "1px solid rgba(120,190,255,0.18)", background: "radial-gradient(circle at top right, rgba(120,190,255,0.16), transparent 34%), linear-gradient(180deg, rgba(18,34,58,0.96), rgba(12,19,33,0.94))" }}>
+            <div className="mobileProgressFocusHeader" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div className="mobileProgressFocusCopy" style={{ display: "grid", gap: 6, minWidth: 0, flex: "1 1 320px" }}>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Focus Now</div>
+                <div className="mobileProgressFocusTitle" style={{ fontSize: 22, lineHeight: 1.15, fontWeight: 950 }}>{primaryFocusCard.title}</div>
+                <div className="mobileProgressFocusSummary" style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>{primaryFocusCard.summary}</div>
+              </div>
+              <span style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid rgba(255,196,107,0.28)", background: "rgba(255,196,107,0.12)", fontSize: 12, fontWeight: 800 }}>{primaryFocusCard.status}</span>
+            </div>
+            <div className="mobileProgressFocusEvidence" style={{ display: "grid", gap: 8 }}>
+              {primaryFocusCard.evidence.map((item) => (
+                <div key={item} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(255,255,255,0.045)", fontSize: 13, lineHeight: 1.45, opacity: 0.9 }}>{item}</div>
+              ))}
+            </div>
+            <div className="mobileProgressFocusActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Link href={primaryFocusCard.href} scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(84,203,130,0.34)", background: "rgba(84,203,130,0.18)", fontSize: 12, fontWeight: 900 }}>{primaryFocusCard.ctaLabel}</Link>
+              <Link href="/" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 12, fontWeight: 800 }}>Open dashboard</Link>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mobileProgressOverviewSecondary" style={{ display: "grid", gap: 10, alignContent: "start" }}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Needs Attention</div>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>Concrete watch items</div>
+        </div>
+        {secondaryFocusCards.length > 0
+          ? secondaryFocusCards.map((card) => <FocusCard key={`${card.eyebrow}-${card.title}`} {...card} />)
+          : <div className="mobileCard" style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", fontSize: 13, opacity: 0.78 }}>No additional high-priority watch items right now.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Async server component: Coverage (streams in) ────────────────────────────
+
+async function CoverageSection({
+  coverageLens,
+  coverageRange,
+  showQuiet,
+  showAll,
+}: {
+  coverageLens: CoverageLens;
+  coverageRange: CoverageRange;
+  showQuiet: boolean;
+  showAll: boolean;
+}) {
+  const coverageOverview = await getCoverageOverviewModel(coverageRange);
+
+  const selectedCoverageSection = coverageOverview.sections.find((e) => e.lens === coverageLens) ?? coverageOverview.sections[0];
+  const activeCoverageCategories = selectedCoverageSection.categories.filter((c) => c.totalCount > 0);
+  const hiddenQuietCount = selectedCoverageSection.categories.length - activeCoverageCategories.length;
+  const categoryPool = showQuiet ? selectedCoverageSection.categories : activeCoverageCategories;
+  const visibleCoverageCategories = showAll ? categoryPool : categoryPool.slice(0, 10);
+  const hiddenActiveCount = Math.max(0, categoryPool.length - visibleCoverageCategories.length);
+
+  const coverageHref = (nextLens: CoverageLens, nextRange: CoverageRange = coverageRange, nextQuiet = showQuiet, nextAll = showAll) =>
+    `/progress?coverageLens=${nextLens}&coverageRange=${nextRange}${nextQuiet ? "&showQuiet=1" : ""}${nextAll ? "&showAllCoverage=1" : ""}`;
+
+  return (
+    <SectionCard
+      title="Coverage"
+      subtitle={`${selectedCoverageSection.label} in ${coverageOverview.rangeLabel.toLowerCase()}. Quiet rows stay hidden by default so the active evidence is easier to scan.`}
+      actions={
+        <div className="mobileCoverageHeaderActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Link href={coverageHref(coverageLens, coverageRange, !showQuiet, showAll)} scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showQuiet ? "Hide quiet" : `Show quiet (${hiddenQuietCount})`}</Link>
+          {hiddenActiveCount > 0 ? <Link href={coverageHref(coverageLens, coverageRange, showQuiet, !showAll)} scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showAll ? "Show less" : `Show all active (${hiddenActiveCount} more)`}</Link> : null}
+        </div>
+      }
+    >
+      <div className="mobileCoverageSectionBody" style={{ display: "grid", gap: 14 }}>
+        <div className="mobileCoverageControls" style={{ display: "grid", gap: 10 }}>
+          <PillNav items={[{ href: coverageHref("muscles"), label: "Muscle Groups", active: coverageLens === "muscles" }, { href: coverageHref("patterns"), label: "Movement Patterns", active: coverageLens === "patterns" }, { href: coverageHref("sports"), label: "Sports", active: coverageLens === "sports" }]} />
+          <div className="mobileCoverageRangeRow" style={coverageRangeRowStyle}>
+            {[
+              { key: "week", label: "Last 7 Days" },
+              { key: "2w", label: "Last 2 Weeks" },
+              { key: "4w", label: "Last 4 Weeks" },
+              { key: "12w", label: "Last 12 Weeks" },
+              { key: "ytd", label: "YTD" },
+            ].map((item) => (
+              <Link
+                key={item.key}
+                href={coverageHref(coverageLens, item.key as CoverageRange)}
+                scroll={false}
+                style={{
+                  ...coverageRangeButtonStyle,
+                  ...((coverageRange === item.key ? coverageRangeButtonActiveStyle : {}) as React.CSSProperties),
+                }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mobileCoverageSummaryRow" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={subtleText}>{selectedCoverageSection.description}</div>
+          <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700 }}>{showQuiet ? "Quiet rows visible." : hiddenQuietCount > 0 ? `${hiddenQuietCount} quiet rows hidden.` : "Only active rows showing."}</div>
+        </div>
+        <CoverageGroupedBarChart categories={visibleCoverageCategories} legend={coverageOverview.routineKindLegend} rangeLabel={coverageOverview.rangeLabel} emptyMessage={selectedCoverageSection.emptyMessage} />
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── Async server component: Drill Down (streams in) ──────────────────────────
+
+type RoutineIndexItem = Awaited<ReturnType<typeof getRoutineIndex>>[number];
+type ExerciseIndexItem = Awaited<ReturnType<typeof getExerciseIndex>>[number];
+type GroupIndexItem = Awaited<ReturnType<typeof getMetadataIndex>>[number];
+type RoutineLogItem = Awaited<ReturnType<typeof getRoutineLogs>>[number];
+
+async function DrillDownSection({
+  routines,
+  exercises,
+  groups,
+  recentLogs,
+  recentActive,
+  featuredExercise,
+  featuredGroups,
+  cardioRoutines,
+  searchResults,
+  hasQuery,
+}: {
+  routines: RoutineIndexItem[];
+  exercises: ExerciseIndexItem[];
+  groups: GroupIndexItem[];
+  recentLogs: RoutineLogItem[];
+  recentActive: RoutineSnapshotItem[];
+  featuredExercise: {
+    exercise: ExerciseIndexItem;
+    sessionCount: number;
+    totalSets: number;
+    totalReps: number;
+    topMetric: number;
+  } | null;
+  featuredGroups: GroupIndexItem[];
+  cardioRoutines: RoutineIndexItem[];
+  searchResults: Array<{ href: string; title: string; subtitle: string }>;
+  hasQuery: boolean;
+}) {
+  const cardioGroups = groups.filter((g) => g.kind === "CARDIO_ACTIVITY" && g.slug !== "climbing");
+  const quickCardioTargets = (
+    await Promise.all(cardioGroups.map(async (group) => ({ group, target: await resolveGroupTarget(group.slug, "4w") })))
+  )
+    .sort((a, b) => (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label))
+    .slice(0, 3);
+
+  return (
+    <SectionCard title="Drill Down" subtitle="Use these focused entry points when you already know which layer you want to inspect.">
+      <div className="mobileProgressDrillGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+        <div className="mobileProgressDrillPrimary" style={{ display: "grid", gap: 14 }}>
+          {hasQuery && searchResults.length > 0 ? (
+            <div className="mobileProgressSearchResults" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Search results</div>
+              <div className="mobileProgressSearchResultsGrid" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                {searchResults.map((result) => (
+                  <Link key={`${result.href}-${result.title}`} href={result.href} scroll={false} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "inherit", textDecoration: "none" }}>
+                    <div style={{ fontWeight: 800 }}>{result.title}</div>
+                    <div style={{ fontSize: 12, opacity: 0.72, lineHeight: 1.4 }}>{result.subtitle}</div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : hasQuery ? (
+            <div style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", ...subtleText }}>No progress targets matched that search.</div>
+          ) : null}
+
+          <div className="mobileProgressTargetGrid" style={cardGrid}>
+            <TargetCard href="/progress?section=routines" eyebrow="Overview" title="Routines" subtitle="Consistency, frequency targets, adherence, and recent momentum." description="Best when the question is whether you are doing the plan often enough." />
+            <TargetCard href="/progress?section=exercises" eyebrow="Strength" title="Exercises" subtitle="Top-set trends, reps, volume, and single-movement progression." description="Best when the question is whether one lift or drill is moving." />
+            <TargetCard href="/progress?section=cardio" eyebrow="Endurance" title="Cardio" subtitle="Mileage, pace, duration, elevation, and sport-specific conditioning." description="Best when the question is whether cardio or sport output is building." />
+            <TargetCard href="/progress?section=groups" eyebrow="Evidence" title="Groups" subtitle="Body-area and movement-pattern rollups across routines." description="Best when the question is what has been covered or neglected lately." />
+          </div>
+        </div>
+
+        <div className="mobileProgressDrillSidebar" style={{ display: "grid", gap: 12 }}>
+          <SidebarList
+            title="Most Active Routines"
+            subtitle="Fast links into the routines driving most of the recent history."
+            items={recentActive.map(({ routine, summary }) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${summary.sessions} sessions | ${formatShortDate(summary.lastSession)}` }))}
+          />
+          <SidebarList
+            title="Quick Cardio Targets"
+            subtitle="High-utility rollups for mileage, duration, and elevation."
+            items={[
+              ...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions | ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })),
+              ...cardioRoutines.slice(0, 1).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: r.name, meta: `${r.kind} routine` })),
+            ]}
+          />
+          <SidebarList
+            title="Useful Group Rollups"
+            subtitle="Shortcuts into broader summaries you are likely to revisit."
+            items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind.replaceAll("_", " ").toLowerCase() }))}
+          />
+          {featuredExercise ? (
+            <TargetCard
+              href={`/progress/exercises/${featuredExercise.exercise.id}?tab=overview&range=4w`}
+              eyebrow="Featured Exercise"
+              title={featuredExercise.exercise.name}
+              subtitle={featuredExercise.exercise.supportsWeight ? `${featuredExercise.topMetric.toFixed(1)} lb top set` : `${featuredExercise.totalReps} reps logged`}
+              description="A fast single-click check when you want the clearest evidence of progression."
+              chips={[`${featuredExercise.sessionCount} sessions`, `${featuredExercise.totalSets} sets`]}
+            />
+          ) : null}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── Main page component ──────────────────────────────────────────────────────
+
+export default async function ProgressOverviewPage({ searchParams }: { searchParams?: Promise<SearchParams> | SearchParams }) {
+  const params = await Promise.resolve(searchParams ?? {});
+  const rawQuery = (getParam(params, "q") ?? "").trim();
+  const query = rawQuery.toLowerCase();
+  const section = (getParam(params, "section") ?? "overview").trim().toLowerCase();
+  const coverageLens = normalizeCoverageLens(getParam(params, "coverageLens"));
+  const coverageRange = normalizeCoverageRange(getParam(params, "coverageRange"));
+  const showQuietCoverage = truthyParam(getParam(params, "showQuiet"));
+  const showAllCoverage = truthyParam(getParam(params, "showAllCoverage"));
+  const now = new Date();
+
+  // Early return for index sections (no heavy data needed)
+  if (section === "routines") return <RoutinesIndexView searchParams={params} />;
+  if (section === "exercises") return <ExercisesIndexView searchParams={params} />;
+  if (section === "groups") return <GroupsIndexView searchParams={params} />;
+  if (section === "cardio") return <CardioIndexView searchParams={params} />;
+
+  // Fetch all fast data in a single parallel batch.
+  // Frequency logs use a fixed 35-day window so they can run in parallel
+  // without waiting for routines to compute the max window first.
+  const FREQ_WINDOW_MS = 35 * 24 * 60 * 60 * 1000;
+  const [routines, exercises, groups, recentLogs, frequencyLogs] = await Promise.all([
+    getRoutineIndex(),
+    getExerciseIndex(),
+    getMetadataIndex(),
+    getRoutineLogs("4w"),
+    prisma.routineLog.findMany({
+      where: { performedAt: { gte: new Date(now.getTime() - FREQ_WINDOW_MS) } },
+      select: { routineId: true, performedAt: true },
+    }),
+  ]);
+
+  // In-memory computations (fast)
+  const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({ routines, logs: frequencyLogs, now });
+  const activeRoutines = routines.filter((r) => r.isActive);
+  const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weekLogs = recentLogs.filter((log) => log.performedAt >= weekStart);
+  const weekActiveDays = new Set(weekLogs.map((log) => log.performedAt.toISOString().slice(0, 10))).size;
+  const totalCardioMilesWeek = weekLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
+  // Only count active routines that have an actual frequency target — routines
+  // without one have status "no_target" and should not inflate the denominator.
+  const activeRoutinesWithTarget = activeRoutines.filter(
+    (r) => frequencyStatusByRoutineId.get(r.id)?.hasTarget === true
+  );
+  const onTrackRoutines = activeRoutinesWithTarget.filter((r) => {
+    const fs = frequencyStatusByRoutineId.get(r.id);
+    return fs?.status === "on_track" || fs?.status === "ahead";
+  }).length;
+  const baselineWeeklyLogs = recentLogs.length / 4;
+
+  // Domain heat matrix
+  const routineDomainMap = new Map(routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)]));
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
+  const heatWeekLabels: string[] = heatWeekStarts.map((d) => `${d.getMonth() + 1}/${d.getDate()}`);
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
+  const domainLabel: Record<RoutineDomain, string> = {
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
+    habit: "Habits", general: "General",
+  };
+  const heatData = new Map<RoutineDomain, number[]>();
+  for (const d of domainOrder) heatData.set(d, Array(4).fill(0));
+  for (const log of recentLogs) {
+    const domain = routineDomainMap.get(log.routineId);
+    if (!domain || domain === "general") continue;
+    const weekIdx = heatWeekStarts.findIndex((wStart, i) => {
+      const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
+      return log.performedAt.getTime() >= wStart.getTime() && log.performedAt.getTime() < wEnd;
+    });
+    if (weekIdx >= 0) heatData.get(domain)![weekIdx]++;
+  }
+  const heatMatrixRows: DomainWeekCell[] = domainOrder
+    .filter((d) => heatData.get(d)!.some((c) => c > 0) || routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === d && r.isActive))
+    .map((domain) => ({ domain, label: domainLabel[domain], weeks: heatData.get(domain)! }));
+
+  // Routine snapshots
+  const routineSnapshots = activeRoutines
+    .map((routine) => {
+      const logs = recentLogs.filter((log) => log.routineId === routine.id);
+      const summary = summarizeRoutineLogs(logs, routine.timesPerWeek);
+      const frequencySummary = frequencyStatusByRoutineId.get(routine.id);
+      const targetSessions =
+        frequencySummary?.hasTarget && typeof frequencySummary.targetCount === "number"
+          ? frequencySummary.targetCount
+          : 0;
+      const gap =
+        frequencySummary?.hasTarget && typeof frequencySummary.remainingCount === "number"
+          ? frequencySummary.remainingCount
+          : 0;
+      const progressRatio =
+        frequencySummary?.hasTarget && targetSessions > 0
+          ? (frequencySummary.currentCount ?? 0) / targetSessions
+          : summary.weeksActive / 4;
+      return { routine, summary, gap, progressRatio, targetSessions };
+    })
+    .sort((a, b) => b.summary.sessions - a.summary.sessions || a.routine.name.localeCompare(b.routine.name));
+  const recentActive = routineSnapshots.slice(0, 5);
+
+  // Featured exercise
+  const featuredExercise =
+    exercises
+      .map((exercise) => {
+        const sessions = recentLogs.flatMap((log) =>
+          log.exercises.filter((entry) => entry.exerciseId === exercise.id).map((entry) => ({
+            totalSets: entry.sets.length,
+            totalReps: entry.sets.reduce((sum, set) => sum + (set.reps ?? 0), 0),
+            topWeight: Math.max(0, ...entry.sets.map((set) => set.weightLb ?? 0)),
+            topSeconds: Math.max(0, ...entry.sets.map((set) => set.seconds ?? 0)),
+          }))
+        );
+        return {
+          exercise,
+          sessionCount: sessions.length,
+          totalSets: sessions.reduce((sum, s) => sum + s.totalSets, 0),
+          totalReps: sessions.reduce((sum, s) => sum + s.totalReps, 0),
+          topMetric: exercise.unit === "TIME" && !exercise.supportsWeight ? Math.max(0, ...sessions.map((s) => s.topSeconds)) : Math.max(0, ...sessions.map((s) => s.topWeight)),
+        };
+      })
+      .filter((e) => e.sessionCount > 0)
+      .sort((a, b) => b.sessionCount - a.sessionCount || a.exercise.name.localeCompare(b.exercise.name))[0] ?? null;
+
+  // Search
   const searchResults = query
     ? [
-        ...routines.filter((routine) => routine.name.toLowerCase().includes(query) || routine.category.toLowerCase().includes(query)).slice(0, 4).map((routine) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: `Routine: ${routine.name}`, subtitle: `${routine.kind.toLowerCase()} routine in ${routine.category.toLowerCase()}` })),
-        ...exercises.filter((exercise) => exerciseMatchesQuery(exercise.name, query)).slice(0, 4).map((exercise) => ({ href: `/progress/exercises/${exercise.id}?tab=overview&range=4w`, title: `Exercise: ${exercise.name}`, subtitle: `${exerciseUnitLabel(exercise.unit)}${exercise.supportsWeight ? ", weighted" : ""} progress view` })),
-        ...groups.filter((group) => group.label.toLowerCase().includes(query) || group.slug.includes(query)).slice(0, 6).map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: `${group.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${group.label}`, subtitle: group.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${group.kind.replaceAll("_", " ").toLowerCase()} coverage rollup` })),
+        ...routines.filter((r) => r.name.toLowerCase().includes(query) || r.category.toLowerCase().includes(query)).slice(0, 4).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: `Routine: ${r.name}`, subtitle: `${r.kind.toLowerCase()} routine in ${r.category.toLowerCase()}` })),
+        ...exercises.filter((e) => exerciseMatchesQuery(e.name, query)).slice(0, 4).map((e) => ({ href: `/progress/exercises/${e.id}?tab=overview&range=4w`, title: `Exercise: ${e.name}`, subtitle: `${exerciseUnitLabel(e.unit)}${e.supportsWeight ? ", weighted" : ""} progress view` })),
+        ...groups.filter((g) => g.label.toLowerCase().includes(query) || g.slug.includes(query)).slice(0, 6).map((g) => ({ href: g.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`, title: `${g.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${g.label}`, subtitle: g.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${g.kind.replaceAll("_", " ").toLowerCase()} coverage rollup` })),
       ].slice(0, 10)
     : [];
 
   const searchSuggestions: ProgressSearchSuggestion[] = [
-    ...routines.slice(0, 40).map((routine) => ({
-      href: `/progress/routines/${routine.id}?tab=overview&range=4w`,
-      title: `Routine: ${routine.name}`,
-      subtitle: `${routine.kind.toLowerCase()} routine in ${routine.category.toLowerCase()}`,
-      keywords: [routine.name, routine.category, routine.kind],
+    ...routines.slice(0, 40).map((r) => ({
+      href: `/progress/routines/${r.id}?tab=overview&range=4w`,
+      title: `Routine: ${r.name}`,
+      subtitle: `${r.kind.toLowerCase()} routine in ${r.category.toLowerCase()}`,
+      keywords: [r.name, r.category, r.kind],
     })),
-    ...exercises.slice(0, 40).map((exercise) => ({
-      href: `/progress/exercises/${exercise.id}?tab=overview&range=4w`,
-      title: `Exercise: ${exercise.name}`,
-      subtitle: `${exerciseUnitLabel(exercise.unit)}${exercise.supportsWeight ? ", weighted" : ""} progress view`,
-      keywords: [exercise.name, exercise.unit, exercise.supportsWeight ? "weighted" : "bodyweight"],
+    ...exercises.slice(0, 40).map((e) => ({
+      href: `/progress/exercises/${e.id}?tab=overview&range=4w`,
+      title: `Exercise: ${e.name}`,
+      subtitle: `${exerciseUnitLabel(e.unit)}${e.supportsWeight ? ", weighted" : ""} progress view`,
+      keywords: [e.name, e.unit, e.supportsWeight ? "weighted" : "bodyweight"],
     })),
-    ...groups.slice(0, 40).map((group) => ({
-      href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`,
-      title: `${group.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${group.label}`,
-      subtitle: group.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${group.kind.replaceAll("_", " ").toLowerCase()} coverage rollup`,
-      keywords: [group.label, group.slug, group.kind.replaceAll("_", " ")],
+    ...groups.slice(0, 40).map((g) => ({
+      href: g.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`,
+      title: `${g.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${g.label}`,
+      subtitle: g.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${g.kind.replaceAll("_", " ").toLowerCase()} coverage rollup`,
+      keywords: [g.label, g.slug, g.kind.replaceAll("_", " ")],
     })),
   ];
 
-  const coverageHref = (nextLens: CoverageLens, nextRange: CoverageRange = coverageRange, nextQuiet = showQuietCoverage, nextAll = showAllCoverage) => `/progress?coverageLens=${nextLens}&coverageRange=${nextRange}${nextQuiet ? "&showQuiet=1" : ""}${nextAll ? "&showAllCoverage=1" : ""}`;
+  const featuredGroups = groups.filter((g) => g.appliesToRoutine || g.appliesToExercise).slice(0, 4);
+  const cardioRoutines = routines.filter((r) => r.kind === "CARDIO");
 
   return (
     <ProgressShell
@@ -465,53 +696,34 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         </>
       }
     >
-      <SectionCard title="This Week" subtitle="Scan the high-level state first, then use Focus Now for the clearest next review.">
-        {/* Quick Stats Strip */}
+      {/* ── Last 7 Days: fast stats + streamed focus section ── */}
+      <SectionCard title="Last 7 Days" subtitle="Scan the high-level state first, then use Focus Now for the clearest next review.">
         <div className="mobileProgressQuickStats" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", marginBottom: 14 }}>
-          <QuickStatChip label="Sessions" value={String(weekCoverageOverview.totalLogs)} sub={`${trendLabel(weekCoverageOverview.totalLogs, baselineWeeklyLogs)} vs avg`} accent={weekCoverageOverview.totalLogs > baselineWeeklyLogs ? "rgba(84,203,130,0.95)" : undefined} />
-          <QuickStatChip label="Active Days" value={String(weekActiveDays)} sub="this week" />
-          <QuickStatChip label="Cardio Miles" value={totalCardioMilesWeek > 0 ? `${totalCardioMilesWeek.toFixed(1)} mi` : "—"} sub="this week" accent={totalCardioMilesWeek > 0 ? "rgba(78,148,255,0.9)" : undefined} />
-          <QuickStatChip label="On Target" value={`${onTrackRoutines}/${activeRoutines.length}`} sub="routines" accent={onTrackRoutines >= Math.ceil(activeRoutines.length * 0.6) ? "rgba(84,203,130,0.9)" : "rgba(251,199,92,0.9)"} />
-          <QuickStatChip label="Coverage" value={String(weekCoverageOverview.coveredCategoryCounts.muscles)} sub={`muscle groups hit`} />
+          <QuickStatChip label="Sessions" value={String(weekLogs.length)} sub={`${trendLabel(weekLogs.length, baselineWeeklyLogs)} vs avg`} accent={weekLogs.length > baselineWeeklyLogs ? "rgba(84,203,130,0.95)" : undefined} />
+          <QuickStatChip label="Active Days" value={String(weekActiveDays)} sub="last 7 days" />
+          <QuickStatChip label="Cardio Miles" value={totalCardioMilesWeek > 0 ? `${totalCardioMilesWeek.toFixed(1)} mi` : "—"} sub="last 7 days" accent={totalCardioMilesWeek > 0 ? "rgba(78,148,255,0.9)" : undefined} />
+          <QuickStatChip label="On Target" value={activeRoutinesWithTarget.length > 0 ? `${onTrackRoutines}/${activeRoutinesWithTarget.length}` : "—"} sub={activeRoutinesWithTarget.length > 0 ? "w/ frequency target" : "no targets set"} accent={activeRoutinesWithTarget.length > 0 && onTrackRoutines >= Math.ceil(activeRoutinesWithTarget.length * 0.6) ? "rgba(84,203,130,0.9)" : activeRoutinesWithTarget.length > 0 ? "rgba(251,199,92,0.9)" : undefined} />
         </div>
 
-        <div className="mobileProgressOverviewGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
-          <div className="mobileProgressOverviewPrimary" style={{ display: "grid", gap: 14 }}>
-            <div />
-
-            {primaryFocusCard ? (
-              <div className="mobileProgressFocusCard" style={{ display: "grid", gap: 14, padding: 16, borderRadius: 20, border: "1px solid rgba(120,190,255,0.18)", background: "radial-gradient(circle at top right, rgba(120,190,255,0.16), transparent 34%), linear-gradient(180deg, rgba(18,34,58,0.96), rgba(12,19,33,0.94))" }}>
-                <div className="mobileProgressFocusHeader" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <div className="mobileProgressFocusCopy" style={{ display: "grid", gap: 6, minWidth: 0, flex: "1 1 320px" }}>
-                    <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Focus Now</div>
-                    <div className="mobileProgressFocusTitle" style={{ fontSize: 22, lineHeight: 1.15, fontWeight: 950 }}>{primaryFocusCard.title}</div>
-                    <div className="mobileProgressFocusSummary" style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>{primaryFocusCard.summary}</div>
-                  </div>
-                  <span style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid rgba(255,196,107,0.28)", background: "rgba(255,196,107,0.12)", fontSize: 12, fontWeight: 800 }}>{primaryFocusCard.status}</span>
-                </div>
-                <div className="mobileProgressFocusEvidence" style={{ display: "grid", gap: 8 }}>
-                  {primaryFocusCard.evidence.map((item) => (
-                    <div key={item} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(255,255,255,0.045)", fontSize: 13, lineHeight: 1.45, opacity: 0.9 }}>{item}</div>
-                  ))}
-                </div>
-                <div className="mobileProgressFocusActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link href={primaryFocusCard.href} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(84,203,130,0.34)", background: "rgba(84,203,130,0.18)", fontSize: 12, fontWeight: 900 }}>{primaryFocusCard.ctaLabel}</Link>
-                  <Link href="/" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "9px 12px", borderRadius: 12, textDecoration: "none", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 12, fontWeight: 800 }}>Open dashboard</Link>
-                </div>
+        <Suspense
+          fallback={
+            <div className="mobileProgressOverviewGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+              <div className="skeleton" style={{ height: 200, borderRadius: 20 }} />
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="skeleton" style={{ height: 90, borderRadius: 16 }} />
+                <div className="skeleton" style={{ height: 90, borderRadius: 16 }} />
               </div>
-            ) : null}
-          </div>
-
-          <div className="mobileProgressOverviewSecondary" style={{ display: "grid", gap: 10, alignContent: "start" }}>
-            <div style={{ display: "grid", gap: 4 }}>
-              <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Needs Attention</div>
-              <div style={{ fontSize: 16, fontWeight: 900 }}>Concrete watch items</div>
             </div>
-            {secondaryFocusCards.length > 0 ? secondaryFocusCards.map((card) => <FocusCard key={`${card.eyebrow}-${card.title}`} {...card} />) : <div className="mobileCard" style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", fontSize: 13, opacity: 0.78 }}>No additional high-priority watch items right now.</div>}
-          </div>
-        </div>
+          }
+        >
+          <FocusSection
+            routineSnapshots={routineSnapshots}
+            frequencyStatusByRoutineId={frequencyStatusByRoutineId}
+          />
+        </Suspense>
       </SectionCard>
 
+      {/* ── Training Balance: fast, in-memory ── */}
       <SectionCard
         title="Training Balance"
         subtitle="Sessions logged per training domain, week by week. Empty cells for active domains are where the gaps are."
@@ -526,85 +738,61 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         </div>
       </SectionCard>
 
-      <SectionCard
-        title="Coverage"
-        subtitle={`${selectedCoverageSection.label} in ${coverageOverview.rangeLabel.toLowerCase()}. Quiet rows stay hidden by default so the active evidence is easier to scan.`}
-        actions={
-          <div className="mobileCoverageHeaderActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Link href={coverageHref(coverageLens, coverageRange, !showQuietCoverage, showAllCoverage)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showQuietCoverage ? "Hide quiet" : `Show quiet (${hiddenQuietCount})`}</Link>
-            {hiddenActiveCount > 0 ? <Link href={coverageHref(coverageLens, coverageRange, showQuietCoverage, !showAllCoverage)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showAllCoverage ? "Show less" : `Show all active (${hiddenActiveCount} more)`}</Link> : null}
+      {/* ── Coverage: streams in independently ── */}
+      <Suspense
+        fallback={
+          <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, overflow: "hidden" }}>
+            <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.03)", display: "grid", gap: 6 }}>
+              <div className="skeleton" style={{ width: 100, height: 16 }} />
+              <div className="skeleton" style={{ width: 280, height: 12 }} />
+            </div>
+            <div style={{ padding: 14, display: "grid", gap: 10 }}>
+              <div className="skeleton" style={{ height: 32, borderRadius: 12 }} />
+              <div className="skeleton" style={{ height: 200, borderRadius: 12 }} />
+            </div>
           </div>
         }
       >
-          <div className="mobileCoverageSectionBody" style={{ display: "grid", gap: 14 }}>
-            <div className="mobileCoverageControls" style={{ display: "grid", gap: 10 }}>
-              <PillNav items={[{ href: coverageHref("muscles"), label: "Muscle Groups", active: coverageLens === "muscles" }, { href: coverageHref("patterns"), label: "Movement Patterns", active: coverageLens === "patterns" }, { href: coverageHref("sports"), label: "Sports", active: coverageLens === "sports" }]} />
-            <div className="mobileCoverageRangeRow" style={coverageRangeRowStyle}>
-              {[
-                { key: "week", label: "This Week" },
-                { key: "2w", label: "Last 2 Weeks" },
-                { key: "4w", label: "Last 4 Weeks" },
-                { key: "12w", label: "Last 12 Weeks" },
-                { key: "ytd", label: "YTD" },
-              ].map((item) => (
-                <Link
-                  key={item.key}
-                  href={coverageHref(coverageLens, item.key as CoverageRange)}
-                  style={{
-                    ...coverageRangeButtonStyle,
-                    ...((coverageRange === item.key ? coverageRangeButtonActiveStyle : {}) as React.CSSProperties),
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div className="mobileCoverageSummaryRow" style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
-            <div style={subtleText}>{selectedCoverageSection.description}</div>
-            <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700 }}>{showQuietCoverage ? "Quiet rows visible." : hiddenQuietCount > 0 ? `${hiddenQuietCount} quiet rows hidden.` : "Only active rows showing."}</div>
-          </div>
-          <CoverageGroupedBarChart categories={visibleCoverageCategories} legend={coverageOverview.routineKindLegend} rangeLabel={coverageOverview.rangeLabel} emptyMessage={selectedCoverageSection.emptyMessage} />
-        </div>
-      </SectionCard>
+        <CoverageSection
+          coverageLens={coverageLens}
+          coverageRange={coverageRange}
+          showQuiet={showQuietCoverage}
+          showAll={showAllCoverage}
+        />
+      </Suspense>
 
-      <SectionCard title="Drill Down" subtitle="Use these focused entry points when you already know which layer you want to inspect.">
-        <div className="mobileProgressDrillGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
-          <div className="mobileProgressDrillPrimary" style={{ display: "grid", gap: 14 }}>
-            {query ? (
-              <div className="mobileProgressSearchResults" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
-                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Search results</div>
-                {searchResults.length > 0 ? (
-                  <div className="mobileProgressSearchResultsGrid" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-                    {searchResults.map((result) => (
-                      <Link key={`${result.href}-${result.title}`} href={result.href} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "inherit", textDecoration: "none" }}>
-                        <div style={{ fontWeight: 800 }}>{result.title}</div>
-                        <div style={{ fontSize: 12, opacity: 0.72, lineHeight: 1.4 }}>{result.subtitle}</div>
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={subtleText}>No progress targets matched that search.</div>
-                )}
+      {/* ── Drill Down: streams in independently ── */}
+      <Suspense
+        fallback={
+          <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, overflow: "hidden" }}>
+            <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.03)", display: "grid", gap: 6 }}>
+              <div className="skeleton" style={{ width: 120, height: 16 }} />
+              <div className="skeleton" style={{ width: 320, height: 12 }} />
+            </div>
+            <div style={{ padding: 14, display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 110, borderRadius: 18 }} />)}
               </div>
-            ) : null}
-
-            <div className="mobileProgressTargetGrid" style={cardGrid}>
-              <TargetCard href="/progress?section=routines" eyebrow="Overview" title="Routines" subtitle="Consistency, frequency targets, adherence, and recent momentum." description="Best when the question is whether you are doing the plan often enough." />
-              <TargetCard href="/progress?section=exercises" eyebrow="Strength" title="Exercises" subtitle="Top-set trends, reps, volume, and single-movement progression." description="Best when the question is whether one lift or drill is moving." />
-              <TargetCard href="/progress?section=cardio" eyebrow="Endurance" title="Cardio" subtitle="Mileage, pace, duration, elevation, and sport-specific conditioning." description="Best when the question is whether cardio or sport output is building." />
-              <TargetCard href="/progress?section=groups" eyebrow="Evidence" title="Groups" subtitle="Body-area and movement-pattern rollups across routines." description="Best when the question is what has been covered or neglected lately." />
+              <div style={{ display: "grid", gap: 10 }}>
+                {[1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 18 }} />)}
+              </div>
             </div>
           </div>
-
-          <div className="mobileProgressDrillSidebar" style={{ display: "grid", gap: 12 }}>
-            <SidebarList title="Most Active Routines" subtitle="Fast links into the routines driving most of the recent history." items={recentActive.map(({ routine, summary }) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${summary.sessions} sessions | ${formatShortDate(summary.lastSession)}` }))} />
-            <SidebarList title="Quick Cardio Targets" subtitle="High-utility rollups for mileage, duration, and elevation." items={[...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions | ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })), ...cardioRoutines.slice(0, 1).map((routine) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${routine.kind} routine` }))]} />
-            <SidebarList title="Useful Group Rollups" subtitle="Shortcuts into broader summaries you are likely to revisit." items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind.replaceAll("_", " ").toLowerCase() }))} />
-            {featuredExercise ? <TargetCard href={`/progress/exercises/${featuredExercise.exercise.id}?tab=overview&range=4w`} eyebrow="Featured Exercise" title={featuredExercise.exercise.name} subtitle={featuredExercise.exercise.supportsWeight ? `${featuredExercise.topMetric.toFixed(1)} lb top set` : `${featuredExercise.totalReps} reps logged`} description="A fast single-click check when you want the clearest evidence of progression." chips={[`${featuredExercise.sessionCount} sessions`, `${featuredExercise.totalSets} sets`]} /> : null}
-          </div>
-        </div>
-      </SectionCard>
+        }
+      >
+        <DrillDownSection
+          routines={routines}
+          exercises={exercises}
+          groups={groups}
+          recentLogs={recentLogs}
+          recentActive={recentActive}
+          featuredExercise={featuredExercise}
+          featuredGroups={featuredGroups}
+          cardioRoutines={cardioRoutines}
+          searchResults={searchResults}
+          hasQuery={!!query}
+        />
+      </Suspense>
     </ProgressShell>
   );
 }

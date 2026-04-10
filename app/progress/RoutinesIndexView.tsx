@@ -5,6 +5,8 @@ import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@
 import { effectiveRoutineDomain, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { prisma } from "@/lib/prisma";
 
+const DORMANT_DAYS = 14; // show as dormant if no log in this many days
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function getParam(params: SearchParams, key: string) {
@@ -58,6 +60,48 @@ export default async function RoutinesIndexView(props: {
       a.routine.name.localeCompare(b.routine.name)
     );
 
+  // Needs Attention: active routines that have a real frequency target (new
+  // targetFrequencyCount system, not the legacy timesPerWeek field) and are
+  // either behind or haven't been logged in DORMANT_DAYS days.
+  const needsAttention = routines
+    .filter((r) => r.isActive && frequencyStatusByRoutineId.get(r.id)?.hasTarget === true)
+    .map((routine) => {
+      const routineLogs = logs.filter((l) => l.routineId === routine.id);
+      const summary = summarizeRoutineLogs(routineLogs, routine.timesPerWeek);
+      const fs = frequencyStatusByRoutineId.get(routine.id);
+      const daysSinceLastSession = summary.lastSession
+        ? Math.floor((now.getTime() - summary.lastSession.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      const isDormant = daysSinceLastSession === null || daysSinceLastSession >= DORMANT_DAYS;
+      const isBehind = fs?.hasTarget && fs.status === "behind";
+      const detailLabel =
+        isBehind
+          ? fs!.detailLabel
+          : daysSinceLastSession === null
+          ? "Never logged - has a frequency target set."
+          : `Last session ${daysSinceLastSession} days ago - ${fs!.detailLabel}`;
+      if (!isBehind && !isDormant) return null;
+      return {
+        routine,
+        summary,
+        fs,
+        isDormant,
+        isBehind,
+        daysSinceLastSession,
+        statusLabel: isBehind ? fs!.shortStatusLabel : "No recent activity",
+        detailLabel,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => {
+      // behind first, then by days since last session descending
+      if (a.isBehind && !b.isBehind) return -1;
+      if (!a.isBehind && b.isBehind) return 1;
+      const aDays = a.daysSinceLastSession ?? 9999;
+      const bDays = b.daysSinceLastSession ?? 9999;
+      return bDays - aDays;
+    });
+
   return (
     <ProgressShell
       section="routines"
@@ -65,6 +109,32 @@ export default async function RoutinesIndexView(props: {
       subtitle="Find a routine quickly, then switch between summary, completion, performance, and workload."
       actions={<SectionLinkButton href="/routines" label="Manage Routines" />}
     >
+      {needsAttention.length > 0 && !query && !domainFilter ? (
+        <SectionCard
+          title="Needs Attention"
+          subtitle={`${needsAttention.length} routine${needsAttention.length !== 1 ? "s" : ""} with a frequency target that are behind or haven't been logged recently.`}
+        >
+          <div style={{ display: "grid", gap: 8 }}>
+            {needsAttention.map(({ routine, statusLabel, detailLabel, isBehind }) => (
+              <Link
+                key={routine.id}
+                href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
+                scroll={false}
+                style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, padding: "12px 14px", borderRadius: 14, textDecoration: "none", color: "inherit", border: `1px solid ${isBehind ? "rgba(251,113,133,0.25)" : "rgba(251,199,92,0.2)"}`, background: isBehind ? "rgba(251,113,133,0.06)" : "rgba(251,199,92,0.05)", alignItems: "center" }}
+              >
+                <div style={{ display: "grid", gap: 4 }}>
+                  <div style={{ fontWeight: 900, fontSize: 14 }}>{routine.name}</div>
+                  <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.4 }}>{detailLabel}</div>
+                </div>
+                <span style={{ fontSize: 11, padding: "4px 9px", borderRadius: 999, fontWeight: 800, whiteSpace: "nowrap", border: `1px solid ${isBehind ? "rgba(251,113,133,0.35)" : "rgba(251,199,92,0.3)"}`, background: isBehind ? "rgba(251,113,133,0.12)" : "rgba(251,199,92,0.1)", color: isBehind ? "rgba(251,113,133,0.95)" : "rgba(251,199,92,0.95)" }}>
+                  {statusLabel}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="Find a Routine">
         {domainFilter ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
