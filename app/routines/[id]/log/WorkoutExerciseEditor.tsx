@@ -10,6 +10,7 @@ export type ExerciseOption = {
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
   libraryKind?: "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
+  injuryWarning?: string;
 };
 
 export type SetRow = {
@@ -297,7 +298,8 @@ export default function WorkoutExerciseEditor({
               {availableToAdd.length === 0 && <option value="">No matches</option>}
               {availableToAdd.slice(0, 20).map((exercise) => (
                 <option key={exercise.id} value={exercise.id}>
-                  {exercise.name} ({exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " + weight" : ""})
+                  {exercise.injuryWarning ? "Warning: " : ""}{exercise.name} ({exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " + weight" : ""})
+                  {exercise.injuryWarning ? ` - loads ${exercise.injuryWarning}` : ""}
                 </option>
               ))}
             </select>

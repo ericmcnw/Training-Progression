@@ -227,7 +227,11 @@ export function FilterBar({
 }: {
   children: React.ReactNode;
 }) {
-  return <form method="get" style={styles.filterBar}>{children}</form>;
+  return (
+    <form method="get" style={styles.filterBar} suppressHydrationWarning>
+      {children}
+    </form>
+  );
 }
 
 export function FilterInput({
@@ -239,7 +243,7 @@ export function FilterInput({
   defaultValue?: string;
   placeholder: string;
 }) {
-  return <input name={name} defaultValue={defaultValue} placeholder={placeholder} style={styles.input} />;
+  return <input name={name} defaultValue={defaultValue} placeholder={placeholder} style={styles.input} suppressHydrationWarning />;
 }
 
 export function FilterSelect({
@@ -252,13 +256,21 @@ export function FilterSelect({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <select name={name} defaultValue={defaultValue} style={styles.input}>
+    <select name={name} defaultValue={defaultValue} style={styles.input} suppressHydrationWarning>
       {options.map((option) => (
         <option key={option.value} value={option.value}>
           {option.label}
         </option>
       ))}
     </select>
+  );
+}
+
+export function FilterSubmitButton({ label = "Apply" }: { label?: string }) {
+  return (
+    <button type="submit" style={styles.filterSubmitButton} suppressHydrationWarning>
+      {label}
+    </button>
   );
 }
 
@@ -527,6 +539,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
   filterBar: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  filterSubmitButton: { padding: "8px 12px" },
   input: {
     padding: "10px 12px",
     border: "1px solid rgba(255,255,255,0.14)",

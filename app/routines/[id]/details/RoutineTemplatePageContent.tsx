@@ -10,6 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { moveRoutineExercise, removeRoutineExercise, saveRoutineTemplate, setDefaultSets } from "../template/actions";
 import ExercisePicker from "../template/ExercisePicker";
 import TemplateMetricControl from "../template/TemplateMetricControl";
+import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
+import { getRoutineInjuryLoadWarning } from "@/lib/injury-warnings";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
 
   const attachedIds = new Set(attached.map((x) => x.exerciseId));
   const available = allExercises.filter((x) => !attachedIds.has(x.id));
+  const injuryWarning = await getRoutineInjuryLoadWarning(routineId);
 
   return (
     <div className="mobileRoutineTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
@@ -92,6 +95,10 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
             Back
           </Link>
         </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <RoutineInjuryWarningBanner warning={injuryWarning} />
       </div>
 
       <div style={{ marginTop: 16, border: border, borderRadius: 12, overflow: "hidden" }}>

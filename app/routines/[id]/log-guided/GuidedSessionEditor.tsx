@@ -7,6 +7,8 @@ import { EXERCISE_LIBRARY_KIND_LABELS, guidedPreferredLibraryKinds, orderExercis
 import { buildGuidedRunnerSegments, formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
 import { Field, FieldGrid, FormActions, FormSection, FormStack, OptionalDateSection, helperTextStyle, inputStyle, pillButtonStyle, textareaStyle } from "../log/form-ui";
+import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 
 type ExerciseOption = { id: string; name: string; unit: "REPS" | "TIME"; supportsWeight: boolean; libraryKind: ExerciseLibraryKind };
 type InitialStep = {
@@ -166,7 +168,7 @@ function payloadStep(step: DraftStep, index: number, exerciseById: Map<string, E
 }
 
 export default function GuidedSessionEditor({
-  routineId, backHref, saveLabel, savePendingLabel, initialSteps, availableExercises, initialDurationSec = 0, initialNotes = "", initialPerformedAt, logId,
+  routineId, backHref, saveLabel, savePendingLabel, initialSteps, availableExercises, initialDurationSec = 0, initialNotes = "", initialPerformedAt, logId, activePainZones = [], bodyZones = [],
 }: {
   routineId: string;
   backHref: string;
@@ -178,6 +180,8 @@ export default function GuidedSessionEditor({
   initialNotes?: string;
   initialPerformedAt?: Date;
   logId?: string;
+  activePainZones?: PainCheckZone[];
+  bodyZones?: PainCheckZone[];
 }) {
   const orderedExercises = useMemo(() => orderExercisesForLibraryContext(availableExercises, guidedPreferredLibraryKinds()), [availableExercises]);
   const exerciseById = useMemo(() => new Map(orderedExercises.map((exercise) => [exercise.id, exercise])), [orderedExercises]);
@@ -193,6 +197,8 @@ export default function GuidedSessionEditor({
   const [remainingSec, setRemainingSec] = useState(0);
   const [saving, setSaving] = useState(false);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
+  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
 
   const activeDraftSteps = useMemo(() => draftSteps.filter((step) => step.includeInLog), [draftSteps]);
   const runnerSteps = useMemo(() => activeDraftSteps.map((step, index) => ({
@@ -287,7 +293,15 @@ export default function GuidedSessionEditor({
       if (logId) {
         await updateGuidedLog({ routineId, logId, durationSec, notes, performedAtLocal: performedAtLocal || undefined, steps });
       } else {
-        await logGuided({ routineId, durationSec, notes, performedAtLocal: performedAtLocal || undefined, steps });
+        const createdLogId = await logGuided({ routineId, durationSec, notes, performedAtLocal: performedAtLocal || undefined, steps });
+        if (createdLogId && bodyZones.length > 0) {
+          setSportTagLogId(createdLogId);
+          return;
+        }
+        if (createdLogId && activePainZones.length > 0) {
+          setPainCheckLogId(createdLogId);
+          return;
+        }
       }
       window.location.href = backHref;
     } catch (error) {
@@ -295,6 +309,26 @@ export default function GuidedSessionEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (painCheckLogId) {
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = backHref; }} />;
+  }
+
+  if (sportTagLogId) {
+    return (
+      <SportZoneTagger
+        zones={bodyZones}
+        routineLogId={sportTagLogId}
+        label="Guided session"
+        onDone={() => {
+          const createdLogId = sportTagLogId;
+          setSportTagLogId(null);
+          if (activePainZones.length > 0) setPainCheckLogId(createdLogId);
+          else window.location.href = backHref;
+        }}
+      />
+    );
   }
 
   return (

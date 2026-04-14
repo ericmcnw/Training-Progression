@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getRoutineIndex, getRoutineLogs, routineSubtitle, summarizeRoutineLogs } from "./data";
-import { EmptyState, FilterBar, FilterInput, FilterSelect, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
+import { EmptyState, FilterBar, FilterInput, FilterSelect, FilterSubmitButton, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { effectiveRoutineDomain, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { prisma } from "@/lib/prisma";
@@ -171,9 +171,7 @@ export default async function RoutinesIndexView(props: {
               { value: "archived", label: "Archived only" },
             ]}
           />
-          <button type="submit" style={{ padding: "8px 12px" }}>
-            Apply
-          </button>
+          <FilterSubmitButton />
         </FilterBar>
       </SectionCard>
 

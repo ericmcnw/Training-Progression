@@ -4,6 +4,7 @@ import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/
 import { inferExerciseMetadataSlugs, parseTagNames, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
+import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
@@ -1360,9 +1361,13 @@ export async function logWorkout(params: {
     }
     return log.id;
   });
-  if (logId) await recalculateRoutineLogStimulus(logId);
+  if (logId) {
+    await recalculateRoutineLogStimulus(logId);
+    await createExerciseZoneActivitiesForLog(prisma, logId);
+  }
 
   revalidateRoutineSurfaces(params.routineId);
+  return logId;
 }
 
 export async function logAdHocWorkout(params: {
@@ -1404,7 +1409,10 @@ export async function logAdHocWorkout(params: {
     }
     return log.id;
   });
-  if (logId) await recalculateRoutineLogStimulus(logId);
+  if (logId) {
+    await recalculateRoutineLogStimulus(logId);
+    await createExerciseZoneActivitiesForLog(prisma, logId);
+  }
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1585,6 +1593,7 @@ export async function logCardio(params: {
   await recalculateRoutineLogStimulus(log.id);
 
   revalidateRoutineSurfaces(params.routineId);
+  return log.id;
 }
 
 export async function logRun(params: {
@@ -1595,7 +1604,7 @@ export async function logRun(params: {
   notes?: string;
   performedAtLocal?: string;
 }) {
-  await logCardio(params);
+  return logCardio(params);
 }
 
 export async function logGuided(params: {
@@ -1641,6 +1650,7 @@ export async function logGuided(params: {
   await recalculateRoutineLogStimulus(log.id);
 
   revalidateRoutineSurfaces(params.routineId);
+  return log.id;
 }
 
 export async function logSession(params: {
@@ -1702,6 +1712,7 @@ export async function logSession(params: {
       preferredClimbingGrades: sanitizePreferredClimbingGrades(params.preferredClimbingGrades),
     });
   }
+  return logId;
 }
 
 export async function updateCardioLog(params: {

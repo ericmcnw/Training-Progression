@@ -24,6 +24,8 @@ import CompletionLogForm from "../log-completion/CompletionLogForm";
 import GuidedLogForm from "../log-guided/GuidedLogForm";
 import SessionLogForm from "../log-session/SessionLogForm";
 import LogWorkoutForm from "./ui";
+import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
+import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning } from "@/lib/injury-warnings";
 
 export const dynamic = "force-dynamic";
 
@@ -344,6 +346,28 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
   });
 
   const sessionDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
+  const [activePainZones, bodyZones] = await Promise.all([
+    prisma.injuryZone
+      .findMany({
+        where: { injury: { status: { in: ["ACTIVE", "FLARED"] } } },
+        distinct: ["zoneId"],
+        orderBy: { zone: { sortOrder: "asc" } },
+        select: { zone: { select: { slug: true, label: true } } },
+      })
+      .then((rows) => rows.map((entry) => entry.zone)),
+    prisma.bodyZone.findMany({
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { slug: true, label: true },
+    }),
+  ]);
+  const [routineInjuryWarning, exerciseInjuryWarnings] = await Promise.all([
+    getRoutineInjuryLoadWarning(routineId),
+    isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((exercise) => exercise.id)) : Promise.resolve(new Map<string, string>()),
+  ]);
+  const availableExercisesForLog = availableExercises.map((exercise) => ({
+    ...exercise,
+    injuryWarning: exerciseInjuryWarnings.get(exercise.id),
+  }));
 
   return (
     <div className="mobileRoutineDetailPage mobilePageShell" style={styles.container}>
@@ -362,11 +386,12 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
       <section className="mobileSectionCard" style={styles.panel}>
         <div className="mobileSectionHeader" style={styles.panelHeader}>{getDetailHeading(kind)}</div>
         <div className="mobileSectionBody" style={{ padding: 14 }}>
+          <RoutineInjuryWarningBanner warning={routineInjuryWarning} />
           {isWorkoutKind(kind) ? (
             <LogWorkoutForm
               routineId={routineId}
               initialBlocks={initialBlocks}
-              availableExercises={availableExercises}
+              availableExercises={availableExercisesForLog}
               smartDefaultLabel={
                 lastWorkoutLog?.performedAt
                   ? `Prefilled from your last workout on ${new Intl.DateTimeFormat("en-US", {
@@ -375,9 +400,10 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
                     }).format(lastWorkoutLog.performedAt)}.`
                   : null
               }
+              activePainZones={activePainZones}
             />
           ) : isCardioKind(kind) ? (
-            <LogRunForm routineId={routineId} />
+            <LogRunForm routineId={routineId} routineName={routine.name} activePainZones={activePainZones} bodyZones={bodyZones} />
           ) : isGuidedKind(kind) ? (
             <GuidedLogForm
               routineId={routineId}
@@ -395,14 +421,19 @@ export default async function LogRoutinePage(props: { params: Promise<Params> | 
                 setCount: step.setCount,
                 sortOrder: step.sortOrder,
               }))}
+              activePainZones={activePainZones}
+              bodyZones={bodyZones}
             />
           ) : isSessionKind(kind) ? (
             <SessionLogForm
               routineId={routineId}
+              routineName={routine.name}
               templateKey={routine.sessionDetails?.template?.key ?? null}
               templateName={routine.sessionDetails?.template?.name ?? null}
               definitions={sessionDefinitions}
               preferredClimbingGrades={preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
+              activePainZones={activePainZones}
+              bodyZones={bodyZones}
             />
           ) : (
             <CompletionLogForm routineId={routineId} />

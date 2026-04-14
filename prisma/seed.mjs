@@ -1,4 +1,5 @@
 import { PrismaClient } from "../generated/prisma/index.js";
+import { seedBodyZones } from "./seed-body-zones.mjs";
 
 const prisma = new PrismaClient();
 
@@ -867,8 +868,9 @@ async function main() {
   await seedExercises(groupMap);
   await seedSessionTemplates(groupMap);
   await seedMetadataStimulusMappings(groupMap, stimulusMap);
+  await seedBodyZones(prisma);
 
-  console.log(`Seeded ${metadataGroups.length} metadata groups, ${stimulusCategories.length} stimulus categories, ${starterExercises.length} starter exercises, and ${sessionTemplates.length} session templates.`);
+  console.log(`Seeded ${metadataGroups.length} metadata groups, ${stimulusCategories.length} stimulus categories, ${starterExercises.length} starter exercises, ${sessionTemplates.length} session templates, and body zones.`);
 }
 
 main()

@@ -1,5 +1,5 @@
 import { getExerciseIndex, getRoutineLogs } from "./data";
-import { EmptyState, FilterBar, FilterInput, FilterSelect, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
+import { EmptyState, FilterBar, FilterInput, FilterSelect, FilterSubmitButton, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { trendLabel } from "@/lib/progress-v2";
 
@@ -66,9 +66,7 @@ export default async function ExercisesIndexView(props: {
               { value: "time", label: "Time-based only" },
             ]}
           />
-          <button type="submit" style={{ padding: "8px 12px" }}>
-            Apply
-          </button>
+          <FilterSubmitButton />
         </FilterBar>
       </SectionCard>
 

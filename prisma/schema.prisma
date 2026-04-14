@@ -4,8 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -94,36 +94,73 @@ enum GuidedStepKind {
   EXERCISE
 }
 
+enum Side {
+  LEFT
+  RIGHT
+  BILATERAL
+  CENTRAL
+}
+
+enum BodyView {
+  FRONT
+  BACK
+  BOTH
+}
+
+enum ActivitySource {
+  EXERCISE
+  SPORT_TAG
+  MANUAL
+}
+
+enum PainContext {
+  AT_REST
+  DURING_ACTIVITY
+  AFTER_ACTIVITY
+  MORNING
+  GENERAL
+}
+
+enum InjuryStatus {
+  ACTIVE
+  RECOVERING
+  RESOLVED
+  FLARED
+}
+
+// ZoneFreshness is derived in application code:
+// FRESH, WORKED_TODAY, RECENTLY_WORKED, RECOVERING, INJURED
+
 model Routine {
-  id           String      @id @default(cuid())
-  name         String
-  category     String      @default("General")
-  subtype      String?
-  domain       String      @default("general")
-  kind         RoutineKind @default(COMPLETION)
-  timesPerWeek Int?
+  id                      String                @id @default(cuid())
+  name                    String
+  category                String                @default("General")
+  subtype                 String?
+  domain                  String                @default("general")
+  kind                    RoutineKind           @default(COMPLETION)
+  timesPerWeek            Int?
   targetFrequencyCount    Int?
   targetFrequencyUnit     RoutineFrequencyUnit?
   targetFrequencyInterval Int?
-  frequencyGoalEnabled    Boolean     @default(true)
-  isActive     Boolean     @default(true)
+  frequencyGoalEnabled    Boolean               @default(true)
+  isActive                Boolean               @default(true)
 
   // soft delete (hide from UI, keep logs for progress)
-  isDeleted    Boolean     @default(false)
-  deletedAt    DateTime?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
 
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  logs         RoutineLog[]
-  exercises    RoutineExercise[]
-  guidedSteps  GuidedStep[]
-  cardioDetails CardioRoutineDetails?
-  sessionDetails SessionRoutineDetails?
-  scheduleEntries ScheduleEntry[]
+  logs                  RoutineLog[]
+  exercises             RoutineExercise[]
+  guidedSteps           GuidedStep[]
+  cardioDetails         CardioRoutineDetails?
+  sessionDetails        SessionRoutineDetails?
+  scheduleEntries       ScheduleEntry[]
   manualScheduleEntries ScheduleManualEntry[]
-  metadataGroups RoutineMetadataGroup[]
-  tagAssignments RoutineTagAssignment[]
+  metadataGroups        RoutineMetadataGroup[]
+  tagAssignments        RoutineTagAssignment[]
   frequencyGoalRoutines FrequencyGoalRoutine[]
 
   @@index([isActive])
@@ -134,15 +171,15 @@ model Routine {
 }
 
 model SessionTemplate {
-  id             String                     @id @default(cuid())
-  key            String                     @unique
+  id             String   @id @default(cuid())
+  key            String   @unique
   name           String
   description    String?
   sessionSubtype String?
-  isSystem       Boolean                    @default(true)
-  sortOrder      Int                        @default(0)
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
+  isSystem       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   metricDefinitions SessionMetricDefinition[]
   routines          SessionRoutineDetails[]
@@ -153,42 +190,42 @@ model SessionTemplate {
 }
 
 model SchedulePlan {
-  id               String          @id @default(cuid())
-  name             String
-  cycleLengthDays  Int             @default(7)
-  isActive         Boolean         @default(false)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  cycleLengthDays Int      @default(7)
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  entries          ScheduleEntry[]
-  activation       SchedulePlanActivation?
+  entries    ScheduleEntry[]
+  activation SchedulePlanActivation?
 }
 
 model ScheduleEntry {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   schedulePlanId String
   routineId      String
   dayOffset      Int
-  sortOrder      Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  schedulePlan   SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
-  routine        Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  schedulePlan SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
+  routine      Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
   @@index([schedulePlanId, dayOffset, sortOrder])
   @@index([routineId])
 }
 
 model SchedulePlanActivation {
-  id             String       @id @default(cuid())
-  schedulePlanId String       @unique
-  isEnabled      Boolean      @default(false)
+  id             String   @id @default(cuid())
+  schedulePlanId String   @unique
+  isEnabled      Boolean  @default(false)
   startDate      DateTime
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  schedulePlan   SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
+  schedulePlan SchedulePlan @relation(fields: [schedulePlanId], references: [id], onDelete: Cascade)
 }
 
 model ScheduleManualEntry {
@@ -199,7 +236,7 @@ model ScheduleManualEntry {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  routine       Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
   @@index([scheduledDate, sortOrder])
   @@index([routineId])
@@ -216,37 +253,112 @@ model RoutineLog {
   elevationGainFt Int?
   location        String?
 
-  routine         Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
-  exercises       SessionExercise[]
-  guidedSteps     GuidedStepLog[]
-  metrics         RoutineLogMetric[]
+  exercises           SessionExercise[]
+  guidedSteps         GuidedStepLog[]
+  metrics             RoutineLogMetric[]
   sessionMetricValues SessionLogMetricValue[]
-  stimuli         RoutineLogStimulus[]
+  stimuli             RoutineLogStimulus[]
+  zoneActivities      ZoneActivity[]
+  painLogs            PainLog[]
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([routineId, performedAt])
 }
 
+model BodyZone {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  label             String
+  region            String
+  side              Side
+  bodyView          BodyView
+  metadataGroupSlug String?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  activities  ZoneActivity[]
+  painLogs    PainLog[]
+  injuryZones InjuryZone[]
+}
+
+model ZoneActivity {
+  id           String         @id @default(cuid())
+  zoneId       String
+  zone         BodyZone       @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  routineLogId String?
+  routineLog   RoutineLog?    @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  performedAt  DateTime
+  source       ActivitySource
+  label        String
+  intensity    String?
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  @@index([zoneId, performedAt])
+  @@index([routineLogId])
+}
+
+model PainLog {
+  id           String      @id @default(cuid())
+  zoneId       String
+  zone         BodyZone    @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  level        Int
+  context      PainContext
+  notes        String?
+  loggedAt     DateTime    @default(now())
+  routineLogId String?
+  routineLog   RoutineLog? @relation(fields: [routineLogId], references: [id], onDelete: SetNull)
+
+  @@index([zoneId, loggedAt])
+  @@index([loggedAt])
+}
+
+model ActiveInjury {
+  id         String       @id @default(cuid())
+  name       String
+  severity   Int
+  status     InjuryStatus @default(ACTIVE)
+  startedAt  DateTime
+  resolvedAt DateTime?
+  notes      String?
+  zones      InjuryZone[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([status])
+}
+
+model InjuryZone {
+  id       String       @id @default(cuid())
+  injuryId String
+  injury   ActiveInjury @relation(fields: [injuryId], references: [id], onDelete: Cascade)
+  zoneId   String
+  zone     BodyZone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([injuryId, zoneId])
+}
+
 model GuidedStep {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   routineId   String
   kind        GuidedStepKind @default(STEP)
   title       String
   exerciseId  String?
   durationSec Int?
   restSec     Int?
-  repeatCount Int      @default(1)
-  repCount    Int      @default(1)
-  setCount    Int      @default(1)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  repeatCount Int            @default(1)
+  repCount    Int            @default(1)
+  setCount    Int            @default(1)
+  sortOrder   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  routine     Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  exercise    Exercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
-  logSteps    GuidedStepLog[]
+  routine        Routine                   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise       Exercise?                 @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  logSteps       GuidedStepLog[]
   metadataGroups GuidedStepMetadataGroup[]
 
   @@index([routineId, sortOrder])
@@ -254,24 +366,24 @@ model GuidedStep {
 }
 
 model GuidedStepLog {
-  id            String      @id @default(cuid())
-  routineLogId   String
-  guidedStepId   String?
-  kind           GuidedStepKind @default(STEP)
-  title          String
-  exerciseId     String?
-  durationSec    Int?
-  restSec        Int?
-  repeatCount    Int      @default(1)
-  repCount       Int      @default(1)
-  setCount       Int      @default(1)
-  weightLb       Float?
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
+  id           String         @id @default(cuid())
+  routineLogId String
+  guidedStepId String?
+  kind         GuidedStepKind @default(STEP)
+  title        String
+  exerciseId   String?
+  durationSec  Int?
+  restSec      Int?
+  repeatCount  Int            @default(1)
+  repCount     Int            @default(1)
+  setCount     Int            @default(1)
+  weightLb     Float?
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
 
-  routineLog     RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
-  guidedStep     GuidedStep? @relation(fields: [guidedStepId], references: [id], onDelete: SetNull)
-  exercise       Exercise?   @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  routineLog RoutineLog  @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  guidedStep GuidedStep? @relation(fields: [guidedStepId], references: [id], onDelete: SetNull)
+  exercise   Exercise?   @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
 
   @@index([routineLogId, sortOrder])
   @@index([guidedStepId])
@@ -287,32 +399,32 @@ model RoutineLogMetric {
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
 
-  routineLog   RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  routineLog RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
 
   @@index([routineLogId, sortOrder])
 }
 
 model CardioRoutineDetails {
-  id                 String   @id @default(cuid())
-  routineId          String   @unique
-  defaultDistanceUnit String  @default("mi")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  routineId           String   @unique
+  defaultDistanceUnit String   @default("mi")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  routine            Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
 }
 
 model SessionRoutineDetails {
-  id             String   @id @default(cuid())
-  routineId      String   @unique
-  templateId     String?
-  templateConfig Json?
-  supportsLocation Boolean @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(cuid())
+  routineId        String   @unique
+  templateId       String?
+  templateConfig   Json?
+  supportsLocation Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  routine        Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  template       SessionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  routine  Routine          @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  template SessionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([templateId])
 }
@@ -332,78 +444,79 @@ model SessionMetricDefinition {
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
-  template       SessionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  metricValues   SessionLogMetricValue[]
+  template     SessionTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  metricValues SessionLogMetricValue[]
 
   @@unique([templateId, key])
   @@index([templateId, sortOrder])
 }
 
 model SessionLogMetricValue {
-  id                 String                  @id @default(cuid())
+  id                 String   @id @default(cuid())
   routineLogId       String
   metricDefinitionId String
   numberValue        Float?
   textValue          String?
   booleanValue       Boolean?
-  createdAt          DateTime                @default(now())
+  createdAt          DateTime @default(now())
 
-  routineLog         RoutineLog              @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
-  metricDefinition   SessionMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Cascade)
+  routineLog       RoutineLog              @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  metricDefinition SessionMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Cascade)
 
   @@unique([routineLogId, metricDefinitionId])
   @@index([metricDefinitionId])
 }
 
 model SessionTemplateMetadataGroup {
-  templateId  String
-  groupId     String
-  assignedAt  DateTime        @default(now())
+  templateId String
+  groupId    String
+  assignedAt DateTime @default(now())
 
-  template    SessionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  group       MetadataGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  template SessionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  group    MetadataGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@id([templateId, groupId])
   @@index([groupId])
 }
 
 model Exercise {
-  id             String       @id @default(cuid())
-  name           String       @unique
-  unit           ExerciseUnit @default(REPS)
-  supportsWeight Boolean      @default(false)
+  id             String              @id @default(cuid())
+  name           String              @unique
+  unit           ExerciseUnit        @default(REPS)
+  supportsWeight Boolean             @default(false)
   libraryKind    ExerciseLibraryKind @default(STRENGTH)
+  isUnilateral   Boolean             @default(false)
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  routines        RoutineExercise[]
+  routines         RoutineExercise[]
   sessionExercises SessionExercise[]
-  metadataGroups  ExerciseMetadataGroup[]
-  guidedSteps     GuidedStep[]
-  guidedStepLogs  GuidedStepLog[]
+  metadataGroups   ExerciseMetadataGroup[]
+  guidedSteps      GuidedStep[]
+  guidedStepLogs   GuidedStepLog[]
 
   @@index([libraryKind, name])
 }
 
 model MetadataGroup {
-  id                String                  @id @default(cuid())
-  slug              String                  @unique
+  id                String            @id @default(cuid())
+  slug              String            @unique
   label             String
   kind              MetadataGroupKind
   description       String?
-  appliesToRoutine  Boolean                 @default(false)
-  appliesToExercise Boolean                 @default(false)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  appliesToRoutine  Boolean           @default(false)
+  appliesToExercise Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  parentRelations   MetadataGroupRelation[] @relation("MetadataGroupParent")
-  childRelations    MetadataGroupRelation[] @relation("MetadataGroupChild")
-  routineAssignments RoutineMetadataGroup[]
-  exerciseAssignments ExerciseMetadataGroup[]
+  parentRelations            MetadataGroupRelation[]        @relation("MetadataGroupParent")
+  childRelations             MetadataGroupRelation[]        @relation("MetadataGroupChild")
+  routineAssignments         RoutineMetadataGroup[]
+  exerciseAssignments        ExerciseMetadataGroup[]
   sessionTemplateAssignments SessionTemplateMetadataGroup[]
-  guidedStepAssignments GuidedStepMetadataGroup[]
-  stimulusMappings   MetadataStimulusMapping[]
+  guidedStepAssignments      GuidedStepMetadataGroup[]
+  stimulusMappings           MetadataStimulusMapping[]
 
   @@index([kind, label])
   @@index([appliesToRoutine])
@@ -411,12 +524,12 @@ model MetadataGroup {
 }
 
 model StimulusCategory {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  label       String
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   metadataMappings MetadataStimulusMapping[]
   logStimuli       RoutineLogStimulus[]
@@ -426,60 +539,60 @@ model StimulusCategory {
 }
 
 model AppProfile {
-  id                         String                  @id @default(cuid())
-  key                        String                  @unique @default("default")
-  selectedStimulusPresetKeys String[]                @default([])
-  createdAt                  DateTime                @default(now())
-  updatedAt                  DateTime                @updatedAt
+  id                         String   @id @default(cuid())
+  key                        String   @unique @default("default")
+  selectedStimulusPresetKeys String[] @default([])
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
-  stimulusPreferences        UserStimulusPreference[]
+  stimulusPreferences UserStimulusPreference[]
 }
 
 model UserStimulusPreference {
-  id                 String           @id @default(cuid())
+  id                 String   @id @default(cuid())
   profileId          String
   stimulusCategoryId String
-  priorityWeight     Float            @default(1)
+  priorityWeight     Float    @default(1)
   maintenanceFloor   Float?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  profile            AppProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+  profile          AppProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  stimulusCategory StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, stimulusCategoryId])
   @@index([stimulusCategoryId])
 }
 
 model MetadataStimulusMapping {
-  id                 String           @id @default(cuid())
+  id                 String   @id @default(cuid())
   metadataGroupId    String
   stimulusCategoryId String
-  loadWeight         Float            @default(0)
-  stretchWeight      Float            @default(0)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  loadWeight         Float    @default(0)
+  stretchWeight      Float    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  metadataGroup      MetadataGroup    @relation(fields: [metadataGroupId], references: [id], onDelete: Cascade)
-  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+  metadataGroup    MetadataGroup    @relation(fields: [metadataGroupId], references: [id], onDelete: Cascade)
+  stimulusCategory StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
 
   @@unique([metadataGroupId, stimulusCategoryId])
   @@index([stimulusCategoryId])
 }
 
 model RoutineLogStimulus {
-  id                 String           @id @default(cuid())
+  id                 String   @id @default(cuid())
   routineLogId       String
   stimulusCategoryId String
-  loadValue          Float            @default(0)
-  stretchValue       Float            @default(0)
+  loadValue          Float    @default(0)
+  stretchValue       Float    @default(0)
   confidence         Float?
   sourceKind         String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  routineLog         RoutineLog       @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
-  stimulusCategory   StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
+  routineLog       RoutineLog       @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  stimulusCategory StimulusCategory @relation(fields: [stimulusCategoryId], references: [id], onDelete: Cascade)
 
   @@unique([routineLogId, stimulusCategoryId])
   @@index([stimulusCategoryId])
@@ -488,34 +601,34 @@ model RoutineLogStimulus {
 model MetadataGroupRelation {
   parentGroupId String
   childGroupId  String
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime @default(now())
 
-  parentGroup   MetadataGroup @relation("MetadataGroupParent", fields: [parentGroupId], references: [id], onDelete: Cascade)
-  childGroup    MetadataGroup @relation("MetadataGroupChild", fields: [childGroupId], references: [id], onDelete: Cascade)
+  parentGroup MetadataGroup @relation("MetadataGroupParent", fields: [parentGroupId], references: [id], onDelete: Cascade)
+  childGroup  MetadataGroup @relation("MetadataGroupChild", fields: [childGroupId], references: [id], onDelete: Cascade)
 
   @@id([parentGroupId, childGroupId])
   @@index([childGroupId])
 }
 
 model RoutineMetadataGroup {
-  routineId   String
-  groupId     String
-  assignedAt  DateTime      @default(now())
+  routineId  String
+  groupId    String
+  assignedAt DateTime @default(now())
 
-  routine     Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  group       MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  routine Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  group   MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@id([routineId, groupId])
   @@index([groupId])
 }
 
 model ExerciseMetadataGroup {
-  exerciseId  String
-  groupId     String
-  assignedAt  DateTime      @default(now())
+  exerciseId String
+  groupId    String
+  assignedAt DateTime @default(now())
 
-  exercise    Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  group       MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  exercise Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  group    MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@id([exerciseId, groupId])
   @@index([groupId])
@@ -524,83 +637,83 @@ model ExerciseMetadataGroup {
 model GuidedStepMetadataGroup {
   guidedStepId String
   groupId      String
-  assignedAt   DateTime      @default(now())
+  assignedAt   DateTime @default(now())
 
-  guidedStep   GuidedStep    @relation(fields: [guidedStepId], references: [id], onDelete: Cascade)
-  group        MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  guidedStep GuidedStep    @relation(fields: [guidedStepId], references: [id], onDelete: Cascade)
+  group      MetadataGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@id([guidedStepId, groupId])
   @@index([groupId])
 }
 
 model RoutineTag {
-  id          String               @id @default(cuid())
-  name        String               @unique
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  routines    RoutineTagAssignment[]
+  routines RoutineTagAssignment[]
 }
 
 model RoutineTagAssignment {
-  routineId   String
-  tagId       String
-  assignedAt  DateTime   @default(now())
+  routineId  String
+  tagId      String
+  assignedAt DateTime @default(now())
 
-  routine     Routine    @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  tag         RoutineTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  routine Routine    @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  tag     RoutineTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([routineId, tagId])
   @@index([tagId])
 }
 
 model RoutineExercise {
-  id          String   @id @default(cuid())
-  routineId   String
-  exerciseId  String
-  sortOrder   Int      @default(0)
+  id         String @id @default(cuid())
+  routineId  String
+  exerciseId String
+  sortOrder  Int    @default(0)
 
   // this is the "remember 4 rows next time" value
-  defaultSets Int      @default(3)
+  defaultSets Int @default(3)
 
-  routine     Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  routine  Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([routineId, exerciseId])
   @@index([routineId, sortOrder])
 }
 
 model SessionExercise {
-  id            String   @id @default(cuid())
-  routineLogId  String
-  exerciseId    String
+  id           String @id @default(cuid())
+  routineLogId String
+  exerciseId   String
 
-  routineLog    RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
-  exercise      Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  routineLog RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  exercise   Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
-  sets          SetEntry[]
+  sets SetEntry[]
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([routineLogId])
   @@index([exerciseId])
 }
 
 model SetEntry {
-  id                String   @id @default(cuid())
+  id                String @id @default(cuid())
   sessionExerciseId String
   setNumber         Int
 
-  reps              Int?
-  seconds           Int?
-  weightLb          Float?
+  reps     Int?
+  seconds  Int?
+  weightLb Float?
 
-  sessionExercise   SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+  sessionExercise SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([sessionExerciseId, setNumber])
   @@index([sessionExerciseId])
@@ -630,16 +743,16 @@ model Goal {
 }
 
 model FrequencyGoal {
-  id             String                @id @default(cuid())
+  id             String               @id @default(cuid())
   name           String
   targetCount    Int
   targetInterval Int
   targetUnit     RoutineFrequencyUnit
-  isActive       Boolean               @default(true)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
-  routines       FrequencyGoalRoutine[]
+  routines FrequencyGoalRoutine[]
 
   @@index([isActive])
 }
@@ -647,10 +760,10 @@ model FrequencyGoal {
 model FrequencyGoalRoutine {
   goalId    String
   routineId String
-  addedAt   DateTime      @default(now())
+  addedAt   DateTime @default(now())
 
-  goal      FrequencyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  routine   Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  goal    FrequencyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  routine Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
   @@id([goalId, routineId])
   @@index([routineId])

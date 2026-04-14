@@ -149,6 +149,12 @@ export type RecommendationModel = {
   recommendations: TrainingRecommendation[];
   primaryRecommendation: TrainingRecommendation | null;
   secondaryRecommendations: TrainingRecommendation[];
+  hiddenDueToInjury: Array<{
+    routineId: string;
+    routineName: string;
+    reason: string;
+    href: string;
+  }>;
 };
 
 type GroupRow = {
@@ -197,6 +203,13 @@ type RepetitionSignal = {
   suggestedRoutineIds: string[];
   suggestedRoutines: SuggestedRoutineOption[];
   suggestedAction: RecommendationAction;
+};
+
+type InjuryRecommendationContext = {
+  activeZoneLabels: string[];
+  activeMetadataSlugs: Set<string>;
+  flaredMetadataSlugs: Set<string>;
+  recoveringMetadataSlugs: Set<string>;
 };
 
 function round(value: number) {
@@ -1646,11 +1659,158 @@ function dedupeRecommendations(recommendations: Array<{ recommendation: Training
   return selected;
 }
 
+async function loadInjuryRecommendationContext(): Promise<InjuryRecommendationContext> {
+  const injuryZones = await prisma.injuryZone.findMany({
+    where: { injury: { status: { in: ["ACTIVE", "FLARED", "RECOVERING"] } } },
+    include: {
+      injury: { select: { status: true } },
+      zone: { select: { label: true, metadataGroupSlug: true, region: true } },
+    },
+  });
+
+  const activeZoneLabels = new Set<string>();
+  const activeMetadataSlugs = new Set<string>();
+  const flaredMetadataSlugs = new Set<string>();
+  const recoveringMetadataSlugs = new Set<string>();
+
+  for (const entry of injuryZones) {
+    const slug = entry.zone.metadataGroupSlug ?? entry.zone.region;
+    if (entry.injury.status === "ACTIVE") {
+      activeZoneLabels.add(entry.zone.label);
+      activeMetadataSlugs.add(slug);
+    } else if (entry.injury.status === "FLARED") {
+      activeZoneLabels.add(entry.zone.label);
+      flaredMetadataSlugs.add(slug);
+    } else if (entry.injury.status === "RECOVERING") {
+      recoveringMetadataSlugs.add(slug);
+    }
+  }
+
+  return {
+    activeZoneLabels: Array.from(activeZoneLabels),
+    activeMetadataSlugs,
+    flaredMetadataSlugs,
+    recoveringMetadataSlugs,
+  };
+}
+
+function routineFocusSlugs(routine: LoadedRoutine) {
+  return new Set(
+    routine.metadataGroups
+      .filter((entry) => entry.group.kind === "ROUTINE_FOCUS" || entry.group.kind === "TRAINING_GROUP")
+      .map((entry) => entry.group.slug)
+  );
+}
+
+function routineHitsInjury(routine: RoutineInsight, context: InjuryRecommendationContext) {
+  const muscleSlugs = new Set(routine.lensSlugs.muscles);
+  const hitsFlared = Array.from(context.flaredMetadataSlugs).some((slug) => muscleSlugs.has(slug));
+  const hitsActive = Array.from(context.activeMetadataSlugs).some((slug) => muscleSlugs.has(slug));
+  const hitsRecovering = Array.from(context.recoveringMetadataSlugs).some((slug) => muscleSlugs.has(slug));
+  return { hitsFlared, hitsActive, hitsRecovering };
+}
+
+function applyInjuryContextToRecommendations(params: {
+  recommendations: TrainingRecommendation[];
+  routineInsights: RoutineInsight[];
+  routines: LoadedRoutine[];
+  context: InjuryRecommendationContext;
+}) {
+  if (
+    params.context.activeMetadataSlugs.size === 0 &&
+    params.context.flaredMetadataSlugs.size === 0 &&
+    params.context.recoveringMetadataSlugs.size === 0
+  ) {
+    return { recommendations: params.recommendations, hiddenDueToInjury: [] as RecommendationModel["hiddenDueToInjury"] };
+  }
+
+  const insightById = new Map(params.routineInsights.map((routine) => [routine.routineId, routine]));
+  const routineById = new Map(params.routines.map((routine) => [routine.id, routine]));
+  const hidden = new Map<string, RecommendationModel["hiddenDueToInjury"][number]>();
+  const injuredLabel = params.context.activeZoneLabels.slice(0, 3).join(", ") || "injured zone";
+
+  const recommendations = params.recommendations
+    .map((recommendation) => {
+      let changed = false;
+      const suggestedRoutines = recommendation.suggestedRoutines.filter((routine) => {
+        const insight = insightById.get(routine.id);
+        const loadedRoutine = routineById.get(routine.id);
+        if (!insight || !loadedRoutine) return true;
+        const focusSlugs = routineFocusSlugs(loadedRoutine);
+        const isRehab = ["rehab", "mobility", "recovery"].some((slug) => focusSlugs.has(slug));
+        const hit = routineHitsInjury(insight, params.context);
+
+        if (hit.hitsFlared) {
+          hidden.set(routine.id, {
+            routineId: routine.id,
+            routineName: routine.name,
+            href: routine.href,
+            reason: `Not recommended - loads your ${injuredLabel}.`,
+          });
+          changed = true;
+          return false;
+        }
+
+        if (hit.hitsActive && !isRehab) {
+          hidden.set(routine.id, {
+            routineId: routine.id,
+            routineName: routine.name,
+            href: routine.href,
+            reason: `Avoiding exercises that load your ${injuredLabel}.`,
+          });
+          changed = true;
+          return false;
+        }
+
+        return true;
+      });
+
+      const survivingRoutineIds = suggestedRoutines.map((routine) => routine.id);
+      const injuryRationale =
+        suggestedRoutines.length !== recommendation.suggestedRoutines.length
+          ? [`Avoiding exercises that load your ${injuredLabel}.`]
+          : suggestedRoutines.some((routine) => {
+              const insight = insightById.get(routine.id);
+              const loadedRoutine = routineById.get(routine.id);
+              return Boolean(
+                insight &&
+                  loadedRoutine &&
+                  routineHitsInjury(insight, params.context).hitsActive &&
+                  ["rehab", "mobility", "recovery"].some((slug) => routineFocusSlugs(loadedRoutine).has(slug))
+              );
+            })
+          ? [`Supporting recovery of your ${injuredLabel}.`]
+          : [];
+
+      if (changed && suggestedRoutines.length === 0 && recommendation.suggestedRoutines.length > 0) return null;
+
+      return {
+        ...recommendation,
+        rationale: [...injuryRationale, ...recommendation.rationale],
+        suggestedRoutines,
+        suggestedRoutineIds: survivingRoutineIds,
+        matchingRoutineIds: recommendation.matchingRoutineIds.filter((id) => survivingRoutineIds.includes(id)),
+        suggestedAction: suggestedRoutines[0]
+          ? {
+              kind: "log_routine" as const,
+              label: `Log ${suggestedRoutines[0].name}`,
+              href: suggestedRoutines[0].href,
+              routineId: suggestedRoutines[0].id,
+            }
+          : recommendation.suggestedAction,
+      };
+    })
+    .filter((recommendation): recommendation is TrainingRecommendation => Boolean(recommendation));
+
+  return { recommendations, hiddenDueToInjury: Array.from(hidden.values()) };
+}
+
 export async function getRecommendationModel(): Promise<RecommendationModel> {
   try {
     const inputs = await loadRecommendationInputs();
     const density = buildDensitySnapshot(inputs.logs);
     const insights = buildInsights(inputs);
+    const injuryContext = await loadInjuryRecommendationContext();
     const isNewUser = insights.baselineLogCount < NEW_USER_MIN_LOGS;
     const hasEnoughHistory = insights.baselineLogCount >= SPARSE_HISTORY_MIN_LOGS;
 
@@ -1664,6 +1824,14 @@ export async function getRecommendationModel(): Promise<RecommendationModel> {
         descendantsByGroupId: insights.descendantsByGroupId,
       });
 
+      const injuryAdjusted = applyInjuryContextToRecommendations({
+        recommendations: [foundation],
+        routineInsights: insights.routineInsights,
+        routines: inputs.routines,
+        context: injuryContext,
+      });
+      const adjustedFoundation = injuryAdjusted.recommendations[0] ?? foundation;
+
       return {
         generatedAt: new Date(),
         windows: {
@@ -1676,9 +1844,10 @@ export async function getRecommendationModel(): Promise<RecommendationModel> {
         emphasisLabels: inputs.stimulusOverview.selectedPresetLabels,
         categorySnapshots: insights.coverageInsights,
         density,
-        recommendations: [foundation],
-        primaryRecommendation: foundation,
+        recommendations: [adjustedFoundation],
+        primaryRecommendation: adjustedFoundation,
         secondaryRecommendations: [],
+        hiddenDueToInjury: injuryAdjusted.hiddenDueToInjury,
       };
     }
 
@@ -1718,12 +1887,27 @@ export async function getRecommendationModel(): Promise<RecommendationModel> {
       ...maintenanceRecommendations,
     ]);
 
-    const finalRecommendations =
+    const unfilteredFinalRecommendations =
       rankedRecommendations.length > 0
         ? rankedRecommendations.map(({ sortScore, ...rest }) => {
             void sortScore;
             return rest;
           })
+        : [buildLightRecommendation({
+            routineInsights: insights.routineInsights,
+            density,
+            groupBySlug: insights.groupBySlug,
+            descendantsByGroupId: insights.descendantsByGroupId,
+          })];
+    const injuryAdjusted = applyInjuryContextToRecommendations({
+      recommendations: unfilteredFinalRecommendations,
+      routineInsights: insights.routineInsights,
+      routines: inputs.routines,
+      context: injuryContext,
+    });
+    const finalRecommendations =
+      injuryAdjusted.recommendations.length > 0
+        ? injuryAdjusted.recommendations
         : [buildLightRecommendation({
             routineInsights: insights.routineInsights,
             density,
@@ -1749,6 +1933,7 @@ export async function getRecommendationModel(): Promise<RecommendationModel> {
       recommendations: finalRecommendations,
       primaryRecommendation,
       secondaryRecommendations,
+      hiddenDueToInjury: injuryAdjusted.hiddenDueToInjury,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -1777,6 +1962,7 @@ export async function getRecommendationModel(): Promise<RecommendationModel> {
         recommendations: [],
         primaryRecommendation: null,
         secondaryRecommendations: [],
+        hiddenDueToInjury: [],
       };
     }
     throw error;

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getRecommendationModel } from "@/lib/recommendations";
 import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
 import WeekAtGlanceClient from "./WeekAtGlanceClient";
+import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
+import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
@@ -947,9 +949,12 @@ export default async function HomePage() {
             </div>
           </section>
 
+          <DashboardBodyMap />
+
           <section style={panel}>
             <div style={panelHeader}>SUGGESTED NEXT</div>
             <div style={{ padding: 14, display: "grid", gap: 12 }}>
+              <RehabRoutinePrompt />
               <div style={sectionSub}>
                 Recommendations prioritize behind-target routines, thin recent coverage, and recent overconcentration. Focus only nudges the ranking when the main evidence is close.
               </div>
@@ -1026,6 +1031,23 @@ export default async function HomePage() {
                     </div>
                   ))}
                 </div>
+              ) : null}
+              {recommendationModel.hiddenDueToInjury.length > 0 ? (
+                <details style={recommendationDetails}>
+                  <summary data-collapsible-summary style={recommendationSummary}>
+                    Hidden due to injury
+                  </summary>
+                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                    {recommendationModel.hiddenDueToInjury.map((item) => (
+                      <div key={item.routineId} style={recommendationWhyRow}>
+                        <Link href={item.href} style={{ color: "inherit", fontWeight: 900 }}>
+                          {item.routineName}
+                        </Link>{" "}
+                        - {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               ) : null}
             </div>
           </section>

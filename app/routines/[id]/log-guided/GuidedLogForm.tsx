@@ -2,6 +2,7 @@
 
 import GuidedSessionEditor from "./GuidedSessionEditor";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
+import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 
 type Step = {
   id: string;
@@ -29,10 +30,14 @@ export default function GuidedLogForm({
   routineId,
   steps,
   availableExercises,
+  activePainZones = [],
+  bodyZones = [],
 }: {
   routineId: string;
   steps: Step[];
   availableExercises: ExerciseOption[];
+  activePainZones?: PainCheckZone[];
+  bodyZones?: PainCheckZone[];
 }) {
   return (
     <GuidedSessionEditor
@@ -40,6 +45,8 @@ export default function GuidedLogForm({
       backHref="/routines"
       saveLabel="Save Guided Log"
       savePendingLabel="Saving..."
+      activePainZones={activePainZones}
+      bodyZones={bodyZones}
       availableExercises={availableExercises}
       initialSteps={steps.map((step) => ({
         guidedStepId: step.id,

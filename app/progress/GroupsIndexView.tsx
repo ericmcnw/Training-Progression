@@ -1,5 +1,5 @@
 import { getMetadataIndex, resolveGroupTarget } from "./data";
-import { EmptyState, FilterBar, FilterInput, ProgressShell, SectionCard, TargetCard } from "./ui";
+import { EmptyState, FilterBar, FilterInput, FilterSubmitButton, ProgressShell, SectionCard, TargetCard } from "./ui";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -80,9 +80,7 @@ export default async function GroupsIndexView(props: {
         <FilterBar>
           <input type="hidden" name="section" value="groups" />
           <FilterInput name="q" defaultValue={query} placeholder="Search group" />
-          <button type="submit" style={{ padding: "8px 12px" }}>
-            Apply
-          </button>
+          <FilterSubmitButton />
         </FilterBar>
       </SectionCard>
 

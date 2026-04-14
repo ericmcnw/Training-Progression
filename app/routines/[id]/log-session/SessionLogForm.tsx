@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { logSession } from "../../actions";
+import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import {
@@ -27,12 +29,18 @@ export default function SessionLogForm({
   templateName,
   definitions,
   preferredClimbingGrades,
+  routineName,
+  activePainZones = [],
+  bodyZones = [],
 }: {
   routineId: string;
+  routineName: string;
   templateKey: string | null;
   templateName: string | null;
   definitions: SessionMetricDefinitionWithConfig[];
   preferredClimbingGrades: string[];
+  activePainZones?: PainCheckZone[];
+  bodyZones?: PainCheckZone[];
 }) {
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
@@ -41,6 +49,28 @@ export default function SessionLogForm({
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
+
+  if (sportTagLogId) {
+    return (
+      <SportZoneTagger
+        zones={bodyZones}
+        routineLogId={sportTagLogId}
+        label={routineName}
+        onDone={() => {
+          const logId = sportTagLogId;
+          setSportTagLogId(null);
+          if (activePainZones.length > 0) setPainCheckLogId(logId);
+          else window.location.href = "/routines";
+        }}
+      />
+    );
+  }
+
+  if (painCheckLogId) {
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
+  }
 
   async function onSave() {
     const trimmedDuration = durationMin.trim();
@@ -82,7 +112,7 @@ export default function SessionLogForm({
 
     setSaving(true);
     try {
-      await logSession({
+      const logId = await logSession({
         routineId,
         durationSec,
         location,
@@ -91,6 +121,14 @@ export default function SessionLogForm({
         sessionMetricValues: structuredValues,
         preferredClimbingGrades: isClimbingTemplateKey(templateKey) ? selectedClimbingGrades : undefined,
       });
+      if (logId && activePainZones.length > 0) {
+        setSportTagLogId(logId);
+        return;
+      }
+      if (logId && bodyZones.length > 0) {
+        setSportTagLogId(logId);
+        return;
+      }
       window.location.href = "/routines";
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save session.");

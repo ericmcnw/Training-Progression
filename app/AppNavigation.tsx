@@ -8,6 +8,7 @@ const desktopNavItems = [
   { href: "/", label: "Dashboard", match: (pathname: string) => pathname === "/" },
   { href: "/routines", label: "Routines", match: (pathname: string) => pathname.startsWith("/routines") },
   { href: "/progress", label: "Progress", match: (pathname: string) => pathname.startsWith("/progress") },
+  { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
   { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
@@ -17,7 +18,7 @@ const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
   { href: "/progress", label: "Progress", icon: <ProgressIcon />, match: (pathname: string) => pathname.startsWith("/progress") },
-  { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
+  { href: "/body", label: "Body", icon: <BodyIcon />, match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
 ];
 
@@ -99,16 +100,6 @@ function LogIcon() {
   );
 }
 
-function GoalsIcon() {
-  return (
-    <MobileNavIcon>
-      <path d="M4 12a8 8 0 1 1 3 6.25" />
-      <path d="M12 7.5v5l3 1.5" />
-      <path d="M4 18.5h4v-4" />
-    </MobileNavIcon>
-  );
-}
-
 function ProgressIcon() {
   return (
     <MobileNavIcon>
@@ -117,6 +108,18 @@ function ProgressIcon() {
       <path d="M10.5 16V9.5" />
       <path d="M14.5 16V6.5" />
       <path d="M18.5 16V11" />
+    </MobileNavIcon>
+  );
+}
+
+function BodyIcon() {
+  return (
+    <MobileNavIcon>
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M12 7.5v6" />
+      <path d="M7.5 10h9" />
+      <path d="m12 13.5-4 6" />
+      <path d="m12 13.5 4 6" />
     </MobileNavIcon>
   );
 }

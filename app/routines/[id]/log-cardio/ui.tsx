@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { logRun } from "../../actions";
+import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import {
   Field,
   FieldGrid,
@@ -13,7 +15,17 @@ import {
   textareaStyle,
 } from "../log/form-ui";
 
-export default function LogRunForm({ routineId }: { routineId: string }) {
+export default function LogRunForm({
+  routineId,
+  routineName,
+  activePainZones = [],
+  bodyZones = [],
+}: {
+  routineId: string;
+  routineName: string;
+  activePainZones?: PainCheckZone[];
+  bodyZones?: PainCheckZone[];
+}) {
   const [distanceMi, setDistanceMi] = useState("");
   const [elevationGainFt, setElevationGainFt] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -21,6 +33,28 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
+
+  if (sportTagLogId) {
+    return (
+      <SportZoneTagger
+        zones={bodyZones}
+        routineLogId={sportTagLogId}
+        label={routineName}
+        onDone={() => {
+          const logId = sportTagLogId;
+          setSportTagLogId(null);
+          if (activePainZones.length > 0) setPainCheckLogId(logId);
+          else window.location.href = "/routines";
+        }}
+      />
+    );
+  }
+
+  if (painCheckLogId) {
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
+  }
 
   async function onSave() {
     const distance = Number(distanceMi);
@@ -48,7 +82,7 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
 
     setSaving(true);
     try {
-      await logRun({
+      const logId = await logRun({
         routineId,
         distanceMi: distance,
         durationSec,
@@ -56,6 +90,14 @@ export default function LogRunForm({ routineId }: { routineId: string }) {
         notes,
         performedAtLocal: performedAtLocal || undefined,
       });
+      if (logId && activePainZones.length > 0) {
+        setSportTagLogId(logId);
+        return;
+      }
+      if (logId && bodyZones.length > 0) {
+        setSportTagLogId(logId);
+        return;
+      }
 
       window.location.href = "/routines";
     } finally {
