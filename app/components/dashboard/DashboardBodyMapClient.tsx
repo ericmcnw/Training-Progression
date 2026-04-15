@@ -60,7 +60,7 @@ export default function DashboardBodyMapClient({ zones }: { zones: ZoneState[] }
             {selectedZone.activityCount != null && (
               <div style={stat}>
                 <div style={statVal}>{selectedZone.activityCount}</div>
-                <div style={statLbl}>this week</div>
+                <div style={statLbl}>work entries this week</div>
               </div>
             )}
             {selectedZone.painLevel != null && (
@@ -70,6 +70,21 @@ export default function DashboardBodyMapClient({ zones }: { zones: ZoneState[] }
               </div>
             )}
           </div>
+
+          {selectedZone.recentWorkEntries && selectedZone.recentWorkEntries.length > 0 ? (
+            <div style={activityList}>
+              <div style={activityHeading}>What worked it</div>
+              {selectedZone.recentWorkEntries.slice(0, 3).map((activity) => (
+                <div key={activity.id} style={activityRow}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={activityLabel}>{activity.label}</div>
+                    <div style={activityMeta}>{formatActivityDate(activity.performedAt)}</div>
+                  </div>
+                  <span style={chip}>{activity.source.toLowerCase().replace(/_/g, " ")}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div style={linkRow}>
             <Link href={`/body/${selectedZone.slug}`} style={linkPrimary}>
@@ -87,6 +102,10 @@ export default function DashboardBodyMapClient({ zones }: { zones: ZoneState[] }
 
 function formatSlug(slug: string) {
   return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatActivityDate(value: string) {
+  return new Date(value).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
 const infoCard: React.CSSProperties = {
@@ -134,6 +153,55 @@ const statVal: React.CSSProperties = {
 const statLbl: React.CSSProperties = {
   fontSize: 11,
   color: "rgba(255,255,255,0.55)",
+};
+
+const activityList: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+};
+
+const activityHeading: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.8,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.45)",
+};
+
+const activityRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 8,
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.07)",
+  background: "rgba(255,255,255,0.025)",
+  padding: 8,
+};
+
+const activityLabel: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 850,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const activityMeta: React.CSSProperties = {
+  marginTop: 2,
+  fontSize: 11,
+  color: "rgba(255,255,255,0.52)",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 8,
+  padding: "3px 6px",
+  fontSize: 10,
+  fontWeight: 800,
+  background: "rgba(255,255,255,0.04)",
+  textTransform: "capitalize",
+  flexShrink: 0,
 };
 
 const linkRow: React.CSSProperties = {

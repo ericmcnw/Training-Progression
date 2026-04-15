@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma";
+import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 
 type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -14,11 +15,13 @@ function summarizeSets(sets: Array<{ reps: number | null; seconds: number | null
   return parts.join(" · ");
 }
 
-function deriveIntensity(sets: Array<{ weightLb: number | null }>) {
+function deriveIntensity(sets: Array<{ reps: number | null; seconds: number | null; weightLb: number | null }>) {
   const heaviest = Math.max(0, ...sets.map((set) => set.weightLb ?? 0));
-  if (heaviest <= 0) return null;
+  const reps = sets.reduce((sum, set) => sum + (set.reps ?? 0), 0);
+  const seconds = sets.reduce((sum, set) => sum + (set.seconds ?? 0), 0);
+  if (heaviest <= 0 && reps <= 0 && seconds <= 0) return null;
   if (heaviest >= 100) return "hard";
-  if (heaviest >= 50) return "moderate";
+  if (heaviest >= 50 || reps >= 30 || seconds >= 180) return "moderate";
   return "easy";
 }
 
@@ -57,13 +60,20 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
   await tx.zoneActivity.deleteMany({ where: { routineLogId: log.id, source: "EXERCISE" } });
 
   // ── Collect muscle group slugs from exercises ─────────────────────────────
-  const exerciseGroupSlugs = new Set(
-    log.exercises.flatMap((entry) =>
-      entry.exercise.metadataGroups
-        .filter((g) => g.group.kind === "MUSCLE_GROUP")
-        .map((g) => g.group.slug)
-    )
-  );
+  const allMuscleGroups = await tx.metadataGroup.findMany({
+    where: { kind: "MUSCLE_GROUP" },
+    select: { slug: true },
+  });
+  const muscleGroupSlugs = new Set(allMuscleGroups.map((group) => group.slug));
+  const exerciseMuscleSlugs = (entry: (typeof log.exercises)[number]) => {
+    const direct = entry.exercise.metadataGroups
+      .filter((g) => g.group.kind === "MUSCLE_GROUP")
+      .map((g) => g.group.slug);
+    if (direct.length > 0) return Array.from(new Set(direct));
+    return Array.from(new Set(inferExerciseMetadataSlugs(entry.exercise.name).filter((slug) => muscleGroupSlugs.has(slug))));
+  };
+
+  const exerciseGroupSlugs = new Set(log.exercises.flatMap((entry) => exerciseMuscleSlugs(entry)));
 
   // ── Collect muscle group slugs from the routine itself ────────────────────
   const routineGroupSlugs = log.routine.metadataGroups
@@ -90,13 +100,7 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
 
   // ── Per-exercise zone activities ──────────────────────────────────────────
   const exerciseData = log.exercises.flatMap((entry) => {
-    const groupSlugs = Array.from(
-      new Set(
-        entry.exercise.metadataGroups
-          .filter((g) => g.group.kind === "MUSCLE_GROUP")
-          .map((g) => g.group.slug)
-      )
-    );
+    const groupSlugs = exerciseMuscleSlugs(entry);
     const label = `${entry.exercise.name} ${summarizeSets(entry.sets)}`;
     const intensity = deriveIntensity(entry.sets);
     return groupSlugs.flatMap((slug) =>

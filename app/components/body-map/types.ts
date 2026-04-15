@@ -8,6 +8,14 @@ export type ZoneState = {
   freshness: ZoneFreshness;
   painLevel?: number;
   activityCount?: number;
+  recentWorkEntries?: Array<{
+    id: string;
+    label: string;
+    performedAt: string;
+    source: string;
+    intensity: string | null;
+    routineLogId?: string | null;
+  }>;
 };
 
 export type BodyMapProps = {

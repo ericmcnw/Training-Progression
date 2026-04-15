@@ -3,8 +3,8 @@ import { PrismaClient } from "../generated/prisma/index.js";
 const standalonePrisma = new PrismaClient();
 
 export const bodyZones = [
-  { slug: "left-shoulder-front", label: "Left Shoulder (front)", region: "shoulder", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 10 },
-  { slug: "right-shoulder-front", label: "Right Shoulder (front)", region: "shoulder", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 11 },
+  { slug: "left-shoulder-front", label: "Left Shoulder (front)", region: "shoulder", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "shoulders", sortOrder: 10 },
+  { slug: "right-shoulder-front", label: "Right Shoulder (front)", region: "shoulder", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "shoulders", sortOrder: 11 },
   { slug: "left-chest", label: "Left Chest", region: "chest", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "chest", sortOrder: 20 },
   { slug: "right-chest", label: "Right Chest", region: "chest", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "chest", sortOrder: 21 },
   { slug: "left-bicep", label: "Left Bicep", region: "bicep", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "biceps", sortOrder: 30 },
@@ -26,16 +26,16 @@ export const bodyZones = [
   { slug: "abs", label: "Abdominals", region: "abs", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "abs", sortOrder: 25 },
   { slug: "obliques", label: "Obliques", region: "oblique", side: "BILATERAL", bodyView: "FRONT", metadataGroupSlug: "obliques", sortOrder: 26 },
   { slug: "neck-front", label: "Neck (front)", region: "neck", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "neck", sortOrder: 5 },
-  { slug: "left-shoulder-back", label: "Left Shoulder (back)", region: "shoulder", side: "LEFT", bodyView: "BACK", metadataGroupSlug: null, sortOrder: 110 },
-  { slug: "right-shoulder-back", label: "Right Shoulder (back)", region: "shoulder", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: null, sortOrder: 111 },
+  { slug: "left-shoulder-back", label: "Left Shoulder (back)", region: "shoulder", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "shoulders", sortOrder: 110 },
+  { slug: "right-shoulder-back", label: "Right Shoulder (back)", region: "shoulder", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "shoulders", sortOrder: 111 },
   { slug: "left-upper-back", label: "Left Upper Back", region: "upper-back", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "upper-back", sortOrder: 120 },
   { slug: "right-upper-back", label: "Right Upper Back", region: "upper-back", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "upper-back", sortOrder: 121 },
   { slug: "left-lat", label: "Left Lat", region: "lat", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "lats", sortOrder: 130 },
   { slug: "right-lat", label: "Right Lat", region: "lat", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "lats", sortOrder: 131 },
   { slug: "left-tricep", label: "Left Tricep", region: "tricep", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "triceps", sortOrder: 140 },
   { slug: "right-tricep", label: "Right Tricep", region: "tricep", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "triceps", sortOrder: 141 },
-  { slug: "left-forearm-back", label: "Left Forearm (back)", region: "forearm", side: "LEFT", bodyView: "BACK", metadataGroupSlug: null, sortOrder: 150 },
-  { slug: "right-forearm-back", label: "Right Forearm (back)", region: "forearm", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: null, sortOrder: 151 },
+  { slug: "left-forearm-back", label: "Left Forearm (back)", region: "forearm", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "forearms", sortOrder: 150 },
+  { slug: "right-forearm-back", label: "Right Forearm (back)", region: "forearm", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "forearms", sortOrder: 151 },
   { slug: "left-glute", label: "Left Glute", region: "glute", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "glutes", sortOrder: 160 },
   { slug: "right-glute", label: "Right Glute", region: "glute", side: "RIGHT", bodyView: "BACK", metadataGroupSlug: "glutes", sortOrder: 161 },
   { slug: "left-lateral-hip", label: "Left Lateral Hip (Glute Med)", region: "hip-lateral", side: "LEFT", bodyView: "BACK", metadataGroupSlug: "glute-medius", sortOrder: 170 },
@@ -66,6 +66,10 @@ export async function seedBodyZones(prisma = standalonePrisma) {
     select: { slug: true },
   });
   const existingSlugs = new Set(existingGroups.map((group) => group.slug));
+  const missingSlugs = candidateSlugs.filter((slug) => !existingSlugs.has(slug));
+  if (missingSlugs.length > 0) {
+    console.warn(`Body zone metadata groups missing and left unmapped: ${missingSlugs.join(", ")}`);
+  }
 
   for (const zone of bodyZones) {
     await prisma.bodyZone.upsert({

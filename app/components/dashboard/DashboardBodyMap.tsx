@@ -5,6 +5,7 @@ import { getAllZonesWithState } from "@/lib/body-zones";
 export default async function DashboardBodyMap() {
   const zones = await getAllZonesWithState();
   const workedThisWeek = zones.filter((zone) => (zone.activityCount ?? 0) > 0).length;
+  const workEntriesThisWeek = zones.reduce((sum, zone) => sum + (zone.activityCount ?? 0), 0);
   const recovering = zones.filter((zone) => zone.freshness === "RECOVERING").length;
   const injured = zones.filter((zone) => zone.freshness === "INJURED").length;
 
@@ -13,7 +14,7 @@ export default async function DashboardBodyMap() {
       <div style={header}>
         <div>
           <div style={title}>BODY MAP</div>
-          <div style={subtitle}>Tap any area for details</div>
+          <div style={subtitle}>{workEntriesThisWeek} work entries this week</div>
         </div>
         <Link href="/body/log-pain" style={logPainLink}>
           Log pain

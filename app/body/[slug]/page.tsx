@@ -137,7 +137,7 @@ export default async function BodyZoneDetailPage(props: {
   const headerDescription =
     detail.activeInjuries.length > 0
       ? `Currently injured since ${formatAppDate(detail.activeInjuries[0].startedAt, { month: "short", day: "numeric", year: "numeric" })}`
-      : `This zone has been worked ${detail.activityCount ?? 0} time${detail.activityCount === 1 ? "" : "s"} in the last 7 days.`;
+      : `This zone has ${detail.activityCount ?? 0} work entr${detail.activityCount === 1 ? "y" : "ies"} in the last 7 days.`;
 
   return (
     <main style={page}>
@@ -224,9 +224,9 @@ export default async function BodyZoneDetailPage(props: {
 
       <div style={contentGrid}>
         <section style={panel}>
-          <div style={panelHeader}>RECENT ACTIVITIES</div>
+          <div style={panelHeader}>WHAT WORKED IT</div>
           <div style={panelBody}>
-            {filteredActivities.length === 0 ? <div style={emptyState}>No activities found for this zone.</div> : null}
+            {filteredActivities.length === 0 ? <div style={emptyState}>No work entries found for this zone.</div> : null}
             {Array.from(groupedActivities.entries()).map(([day, activities]) => (
               <div key={day} style={activityGroup}>
                 <div style={groupTitle}>{relativeDayLabel(day, today)}</div>

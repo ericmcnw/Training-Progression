@@ -17,9 +17,49 @@ export type ZoneStateDetail = ZoneState & {
   daysSinceWorked: number | null;
 };
 
+export type ZoneGroupDetailResult = {
+  slug: string;
+  label: string;
+  isGroup: boolean;
+  includedZoneCount: number;
+  freshness: ZoneFreshness;
+  painLevel?: number;
+  activityCount?: number;
+  daysSinceWorked: number | null;
+  activeInjuries: Array<{
+    id: string;
+    name: string;
+    severity: number;
+    status: string;
+    startedAt: string;
+    notes: string | null;
+  }>;
+  recentActivities: Array<{
+    id: string;
+    label: string;
+    performedAt: string;
+    source: string;
+    intensity: string | null;
+    zoneLabel: string;
+  }>;
+  weekActivityCounts: Record<string, number>;
+  today: string;
+};
+
 export function daysSinceDate(value: Date | null | undefined, now = new Date()) {
   if (!value) return null;
   return Math.max(0, diffYmdDays(toAppYmd(now), toAppYmd(value)));
+}
+
+function maxFreshness(states: ZoneFreshness[]) {
+  const rank: Record<ZoneFreshness, number> = {
+    FRESH: 0,
+    RECOVERING: 1,
+    RECENTLY_WORKED: 2,
+    WORKED_TODAY: 3,
+    INJURED: 4,
+  };
+  return states.reduce<ZoneFreshness>((best, current) => (rank[current] > rank[best] ? current : best), "FRESH");
 }
 
 export function computeFreshness(lastWorkedAt: Date | null, injuries: InjuryLike[] = [], now = new Date()): ZoneFreshness {
@@ -132,8 +172,141 @@ export async function getAllZonesWithState(): Promise<ZoneState[]> {
       freshness: computed.freshness,
       painLevel: computed.painLevel,
       activityCount: computed.activityCount,
+      recentWorkEntries: zone.activities.slice(0, 4).map((activity) => ({
+        id: activity.id,
+        label: activity.label,
+        performedAt: activity.performedAt.toISOString(),
+        source: activity.source,
+        intensity: activity.intensity ?? null,
+        routineLogId: activity.routineLogId ?? null,
+      })),
     };
   });
+}
+
+export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailResult | null> {
+  const now = new Date();
+  const today = toAppYmd(now);
+  const since = daysAgo(30, now);
+  const weekSince = daysAgo(7, now);
+  const painSince = daysAgo(30, now);
+
+  const clickedZone = await prisma.bodyZone.findUnique({ where: { slug } });
+  if (!clickedZone) return null;
+
+  const groupSlug = clickedZone.metadataGroupSlug;
+  const [zonesInGroup, group] = await Promise.all([
+    groupSlug
+      ? prisma.bodyZone.findMany({
+          where: { metadataGroupSlug: groupSlug },
+          include: {
+            activities: {
+              where: { performedAt: { gte: since } },
+              orderBy: { performedAt: "desc" },
+            },
+            painLogs: {
+              where: { loggedAt: { gte: painSince } },
+              orderBy: { loggedAt: "desc" },
+            },
+            injuryZones: {
+              include: { injury: true },
+            },
+          },
+        })
+      : prisma.bodyZone.findMany({
+          where: { id: clickedZone.id },
+          include: {
+            activities: {
+              where: { performedAt: { gte: since } },
+              orderBy: { performedAt: "desc" },
+            },
+            painLogs: {
+              where: { loggedAt: { gte: painSince } },
+              orderBy: { loggedAt: "desc" },
+            },
+            injuryZones: {
+              include: { injury: true },
+            },
+          },
+        }),
+    groupSlug ? prisma.metadataGroup.findUnique({ where: { slug: groupSlug } }) : Promise.resolve(null),
+  ]);
+
+  const zoneIds = zonesInGroup.map((zone) => zone.id);
+  const activities = await prisma.zoneActivity.findMany({
+    where: { zoneId: { in: zoneIds }, performedAt: { gte: weekSince } },
+    orderBy: { performedAt: "desc" },
+    take: 30,
+    include: { zone: { select: { label: true } } },
+  });
+
+  const computedStates = zonesInGroup.map((zone) =>
+    toZoneState({
+      zone,
+      activities: zone.activities,
+      painLogs: zone.painLogs,
+      injuries: zone.injuryZones.map((entry) => entry.injury),
+      now,
+    })
+  );
+  const latestWorked = computedStates
+    .map((state) => state.lastWorkedAt)
+    .filter((value): value is Date => Boolean(value))
+    .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
+  const painLevels = computedStates
+    .map((state) => state.painLevel)
+    .filter((value): value is number => value != null);
+
+  const seenInjuryIds = new Set<string>();
+  const activeInjuries = zonesInGroup
+    .flatMap((zone) => zone.injuryZones.map((entry) => entry.injury))
+    .filter((injury) => injury.status === "ACTIVE" || injury.status === "FLARED" || injury.status === "RECOVERING")
+    .filter((injury) => {
+      if (seenInjuryIds.has(injury.id)) return false;
+      seenInjuryIds.add(injury.id);
+      return true;
+    });
+
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(date.getDate() + index - 6);
+    return toAppYmd(date);
+  });
+  const weekActivityCounts: Record<string, number> = {};
+  for (const day of weekDays) weekActivityCounts[day] = 0;
+  for (const activity of activities) {
+    const ymd = toAppYmd(activity.performedAt);
+    if (ymd in weekActivityCounts) weekActivityCounts[ymd]++;
+  }
+
+  return {
+    slug: clickedZone.slug,
+    label: group?.label ?? clickedZone.label,
+    isGroup: Boolean(group),
+    includedZoneCount: zonesInGroup.length,
+    freshness: maxFreshness(computedStates.map((state) => state.freshness)),
+    painLevel: painLevels.length > 0 ? Math.max(...painLevels) : undefined,
+    activityCount: activities.length,
+    daysSinceWorked: daysSinceDate(latestWorked, now),
+    activeInjuries: activeInjuries.map((injury) => ({
+      id: injury.id,
+      name: injury.name,
+      severity: injury.severity,
+      status: injury.status,
+      startedAt: injury.startedAt.toISOString(),
+      notes: injury.notes ?? null,
+    })),
+    recentActivities: activities.map((activity) => ({
+      id: activity.id,
+      label: activity.label,
+      performedAt: activity.performedAt.toISOString(),
+      source: activity.source,
+      intensity: activity.intensity ?? null,
+      zoneLabel: activity.zone.label,
+    })),
+    weekActivityCounts,
+    today,
+  };
 }
 
 export async function getZoneState(slug: string): Promise<ZoneStateDetail | null> {

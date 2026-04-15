@@ -40,13 +40,11 @@ const CUSTOM_FRONT_ZONES: Array<{ slug: string; label: string; d: string }> = [
   {
     slug: "left-hip-flexor",
     label: "Left Hip Flexor",
-    // Narrow teardrop: wider at the inguinal crease, tapering to a blunt point below
     d: "M262 648 C272 634 308 634 316 648 C322 662 320 694 310 712 C298 724 274 722 266 708 C256 692 252 664 262 648 Z",
   },
   {
     slug: "right-hip-flexor",
     label: "Right Hip Flexor",
-    // Mirror of left around x=362
     d: "M408 648 C416 634 452 634 462 648 C472 664 472 692 458 708 C450 722 426 724 414 712 C404 694 402 662 408 648 Z",
   },
 ];
@@ -319,6 +317,8 @@ function BodyPanel({
                   vectorEffect="non-scaling-stroke"
                   className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}
                   onClick={onZoneClick ? () => onZoneClick(zone.slug) : undefined}
+                  onMouseEnter={onZoneHover ? () => onZoneHover(zone.slug) : undefined}
+                  onMouseLeave={onZoneHover ? () => onZoneHover(null) : undefined}
                   aria-label={zone.label}
                 />
               );

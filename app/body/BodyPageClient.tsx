@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import type { ZoneState, ZoneFreshness } from "@/app/components/body-map/types";
 import { fetchZoneDetail, type ZoneDetailResult } from "./_actions";
@@ -59,8 +59,8 @@ function ZonePanel({
           </div>
           <div style={mutedText}>
             {detail.activityCount != null
-              ? `${detail.activityCount} activit${detail.activityCount === 1 ? "y" : "ies"} this week`
-              : "No recent activity"}
+              ? `${detail.activityCount} work entr${detail.activityCount === 1 ? "y" : "ies"} this week`
+              : "No recent work entries"}
             {detail.daysSinceWorked != null
               ? ` · last worked ${detail.daysSinceWorked === 0 ? "today" : `${detail.daysSinceWorked}d ago`}`
               : ""}
@@ -109,7 +109,7 @@ function ZonePanel({
       {/* Recent activities */}
       {detail.recentActivities.length > 0 && (
         <div style={section}>
-          <div style={sectionHead}>RECENT ACTIVITIES</div>
+          <div style={sectionHead}>WHAT WORKED IT</div>
           <div style={{ display: "grid", gap: 6 }}>
             {detail.recentActivities.map((a) => (
               <div key={a.id} style={activityRow}>
@@ -142,16 +142,21 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [detail, setDetail] = useState<ZoneDetailResult | null>(null);
   const [isPending, startTransition] = useTransition();
+  const requestId = useRef(0);
 
   function handleZoneClick(slug: string) {
     if (slug === selectedSlug) {
+      requestId.current += 1;
       setSelectedSlug(null);
       setDetail(null);
       return;
     }
     setSelectedSlug(slug);
+    const currentRequest = requestId.current + 1;
+    requestId.current = currentRequest;
     startTransition(async () => {
       const result = await fetchZoneDetail(slug);
+      if (requestId.current !== currentRequest) return;
       setDetail(result);
     });
   }
@@ -174,7 +179,7 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
       {detail && (
         <ZonePanel
           detail={detail}
-          onClose={() => { setSelectedSlug(null); setDetail(null); }}
+          onClose={() => { requestId.current += 1; setSelectedSlug(null); setDetail(null); }}
           loading={isPending}
         />
       )}
