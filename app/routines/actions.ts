@@ -896,6 +896,7 @@ function revalidateRoutineSurfaces(routineId?: string) {
   revalidatePath("/progress");
   revalidatePath("/goals");
   revalidatePath("/schedule");
+  revalidatePath("/body");
   if (routineId) {
     revalidatePath(`/routines/${routineId}/log`);
     revalidatePath(`/routines/${routineId}/logs`);
@@ -1285,6 +1286,7 @@ export async function createCompletionLog(params: {
     select: { id: true },
   });
   await recalculateRoutineLogStimulus(log.id);
+  await createExerciseZoneActivitiesForLog(prisma, log.id);
   revalidateRoutineSurfaces(params.routineId);
 }
 
@@ -1591,6 +1593,7 @@ export async function logCardio(params: {
     });
   }
   await recalculateRoutineLogStimulus(log.id);
+  await createExerciseZoneActivitiesForLog(prisma, log.id);
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -1648,6 +1651,7 @@ export async function logGuided(params: {
       });
   }
   await recalculateRoutineLogStimulus(log.id);
+  await createExerciseZoneActivitiesForLog(prisma, log.id);
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -1704,7 +1708,10 @@ export async function logSession(params: {
     }
     return log.id;
   });
-  if (logId) await recalculateRoutineLogStimulus(logId);
+  if (logId) {
+    await recalculateRoutineLogStimulus(logId);
+    await createExerciseZoneActivitiesForLog(prisma, logId);
+  }
 
   revalidateRoutineSurfaces(params.routineId);
   if (params.preferredClimbingGrades) {
@@ -1766,6 +1773,7 @@ export async function updateCardioLog(params: {
     }
   });
   await recalculateRoutineLogStimulus(params.logId);
+  await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1844,6 +1852,7 @@ export async function updateWorkoutLog(params: {
     }
   });
   await recalculateRoutineLogStimulus(params.logId);
+  await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1896,6 +1905,7 @@ export async function updateCompletionLog(params: {
     },
   });
   await recalculateRoutineLogStimulus(params.logId);
+  await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -1951,6 +1961,7 @@ export async function updateGuidedLog(params: {
     }
   });
   await recalculateRoutineLogStimulus(params.logId);
+  await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -2013,6 +2024,7 @@ export async function updateSessionLog(params: {
     }
   });
   await recalculateRoutineLogStimulus(params.logId);
+  await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
   if (params.preferredClimbingGrades) {

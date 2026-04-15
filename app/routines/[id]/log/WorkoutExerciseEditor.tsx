@@ -278,7 +278,7 @@ export default function WorkoutExerciseEditor({
           <div style={{ fontWeight: 900, fontSize: 14 }}>{addExerciseTitle}</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{addExerciseHelp}</div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Workout search uses the workout library by default, so stretch, mobility, and breathwork items do not crowd this picker.
+            Workout search includes strength, conditioning, skill, mobility, and stretch exercises. Breathwork stays in guided flows.
           </div>
         </div>
         <input

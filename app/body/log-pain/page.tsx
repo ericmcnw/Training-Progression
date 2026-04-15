@@ -11,8 +11,8 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LogPainPage(props: { searchParams?: Promise<SearchParams> | SearchParams }) {
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
+export default async function LogPainPage(props: { searchParams?: Promise<SearchParams> }) {
+  const searchParams = props.searchParams ? await props.searchParams : {};
   const zoneParam = getParam(searchParams, "zone");
   const zones = await prisma.bodyZone.findMany({
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],

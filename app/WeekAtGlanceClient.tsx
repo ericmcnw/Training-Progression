@@ -8,8 +8,17 @@ type GlanceDay = {
   ymd: string;
   label: string;
   dayNumber: string;
+  planned: Array<{
+    routineId: string;
+    routineName: string;
+    kind: string;
+    domain: RoutineDomain;
+    planned: number;
+    logged: number;
+  }>;
   logs: Array<{
     id: string;
+    routineId: string;
     routineName: string;
     kind: string;
     domain: RoutineDomain;
@@ -67,13 +76,13 @@ export default function WeekAtGlanceClient({
 
   const visibleKindCounts = new Map<string, number>();
   for (const day of visibleDays) {
-    for (const log of day.logs) {
-      const kind = normalizeRoutineKind(log.kind);
-      visibleKindCounts.set(kind, (visibleKindCounts.get(kind) ?? 0) + 1);
+    for (const item of day.planned) {
+      const kind = normalizeRoutineKind(item.kind);
+      visibleKindCounts.set(kind, (visibleKindCounts.get(kind) ?? 0) + item.planned);
     }
   }
 
-  const visibleLogTotal = Array.from(visibleKindCounts.values()).reduce((sum, count) => sum + count, 0);
+  const visiblePlannedTotal = Array.from(visibleKindCounts.values()).reduce((sum, count) => sum + count, 0);
   const rangeStart = visibleDays[0]?.ymd ?? null;
   const rangeEnd = visibleDays[visibleDays.length - 1]?.ymd ?? null;
 
@@ -178,12 +187,34 @@ export default function WeekAtGlanceClient({
                   <div style={{ fontSize: 16, fontWeight: isToday ? 900 : 800, lineHeight: 1 }}>{day.dayNumber}</div>
                 </div>
                 <div style={dotWrap}>
-                  {day.logs.length === 0 ? (
+                  {day.planned.length === 0 && day.logs.length === 0 ? (
                     <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
-                  ) : (
+                  ) : day.planned.length === 0 ? (
                     day.logs.slice(0, 6).map((log) => (
-                      <div key={log.id} style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), flexShrink: 0 }} />
+                      <div
+                        key={log.id}
+                        title={log.routineName}
+                        style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), opacity: 0.72, flexShrink: 0 }}
+                      />
                     ))
+                  ) : (
+                    day.planned.flatMap((item) =>
+                      Array.from({ length: Math.min(item.planned, 3) }, (_, index) => (
+                        <div
+                          key={`${item.routineId}-${index}`}
+                          title={item.routineName}
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 999,
+                            background: kindDotColor(item.kind),
+                            opacity: item.logged > index ? 1 : 0.42,
+                            border: item.logged > index ? "0" : "1px solid rgba(255,255,255,0.18)",
+                            flexShrink: 0,
+                          }}
+                        />
+                      ))
+                    ).slice(0, 8)
                   )}
                 </div>
               </button>
@@ -203,29 +234,43 @@ export default function WeekAtGlanceClient({
             </div>
           );
         })}
-        {visibleLogTotal === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No sessions logged in this range.</div>}
+        {visiblePlannedTotal === 0 && <div style={{ fontSize: 11, opacity: 0.5 }}>No routines planned in this range.</div>}
       </div>
 
       <div style={detailCard}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
           <div style={{ fontSize: 13, fontWeight: 900 }}>
-            {selectedDay ? formatDayDetailLabel(selectedDay.ymd) : "Tap a day to inspect sessions"}
+            {selectedDay ? formatDayDetailLabel(selectedDay.ymd) : "Tap a day to inspect routines"}
           </div>
-          {selectedDay ? <div style={{ fontSize: 11, opacity: 0.6 }}>{selectedDay.logs.length} session{selectedDay.logs.length === 1 ? "" : "s"}</div> : null}
+          {selectedDay ? <div style={{ fontSize: 11, opacity: 0.6 }}>{plannedCount(selectedDay)} planned</div> : null}
         </div>
         {!selectedDay ? (
-          <div style={{ fontSize: 12, opacity: 0.62 }}>Select any day cell to see the routines logged there.</div>
-        ) : selectedDay.logs.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.62 }}>No sessions logged on this day.</div>
+          <div style={{ fontSize: 12, opacity: 0.62 }}>Select any day cell to see the routines planned there.</div>
+        ) : selectedDay.planned.length === 0 && selectedDay.logs.length === 0 ? (
+          <div style={{ fontSize: 12, opacity: 0.62 }}>No routines planned on this day.</div>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
-            {selectedDay.logs.map((log) => (
-              <div key={log.id} style={detailRow}>
+            {selectedDay.planned.length === 0 ? (
+              <div style={{ fontSize: 12, opacity: 0.62 }}>No routines planned. Logged sessions are listed below.</div>
+            ) : null}
+            {selectedDay.planned.map((item) => (
+              <div key={item.routineId} style={item.logged > 0 ? completedDetailRow : detailRow}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <div style={{ width: 9, height: 9, borderRadius: 999, background: domainColor(item.domain), flexShrink: 0 }} />
+                  <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.routineName}</div>
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>
+                  {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizeRoutineKind(item.kind))}
+                </div>
+              </div>
+            ))}
+            {selectedDay.logs.filter((log) => !selectedDay.planned.some((item) => item.routineId === log.routineId)).map((log) => (
+              <div key={log.id} style={unplannedDetailRow}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <div style={{ width: 9, height: 9, borderRadius: 999, background: domainColor(log.domain), flexShrink: 0 }} />
                   <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{log.routineName}</div>
                 </div>
-                <div style={{ fontSize: 11, opacity: 0.62 }}>{formatRoutineTypeLabel(normalizeRoutineKind(log.kind))}</div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>Logged extra | {formatRoutineTypeLabel(normalizeRoutineKind(log.kind))}</div>
               </div>
             ))}
           </div>
@@ -244,6 +289,10 @@ function formatRange(startYmd: string, endYmd: string) {
 
 function formatDayDetailLabel(ymd: string) {
   return formatUtcDateLabel(ymd, { weekday: "long", month: "short", day: "numeric" });
+}
+
+function plannedCount(day: GlanceDay) {
+  return day.planned.reduce((sum, item) => sum + item.planned, 0);
 }
 
 function kindDotColor(kind: string): string {
@@ -365,6 +414,18 @@ const detailRow: CSSProperties = {
   borderRadius: 12,
   padding: "9px 10px",
   background: "rgba(255,255,255,0.04)",
+};
+
+const completedDetailRow: CSSProperties = {
+  ...detailRow,
+  border: "1px solid rgba(84,203,130,0.38)",
+  background: "rgba(84,203,130,0.08)",
+};
+
+const unplannedDetailRow: CSSProperties = {
+  ...detailRow,
+  border: "1px solid rgba(251,199,92,0.32)",
+  background: "rgba(251,199,92,0.07)",
 };
 
 function getStepWidth(viewport: HTMLDivElement) {

@@ -57,9 +57,9 @@ const styles = {
 };
 
 export default async function RoutinesPage(props: {
-  searchParams?: Promise<SearchParams> | SearchParams;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const searchParams = props.searchParams ? await props.searchParams : {};
   const mode = getParam(searchParams, "mode");
   if (mode === "new") {
     return <NewRoutinePageContent />;

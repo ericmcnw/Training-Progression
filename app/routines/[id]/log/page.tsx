@@ -60,8 +60,8 @@ function getRecentLogHeading(kind: string) {
   return "RECENT COMPLETION LOGS";
 }
 
-export default async function LogRoutinePage(props: { params: Promise<Params> | Params }) {
-  const params = await Promise.resolve(props.params);
+export default async function LogRoutinePage(props: { params: Promise<Params> }) {
+  const params = await props.params;
   const routineId = params?.id;
 
   if (!routineId) return <div style={{ padding: 20 }}>Missing routine id.</div>;

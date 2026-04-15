@@ -1,9 +1,12 @@
 import Link from "next/link";
-import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
+import { getAllZonesWithState } from "@/lib/body-zones";
+import BodyPageClient from "./BodyPageClient";
 
 export const dynamic = "force-dynamic";
 
-export default function BodyPage() {
+export default async function BodyPage() {
+  const zones = await getAllZonesWithState();
+
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
       <div>
@@ -11,14 +14,10 @@ export default function BodyPage() {
         <h1 style={{ margin: "5px 0 0", fontSize: 32, lineHeight: 1.08 }}>Body</h1>
       </div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link href="/body/log-pain" style={linkStyle}>
-          Log pain
-        </Link>
-        <Link href="/injuries" style={linkStyle}>
-          Injuries
-        </Link>
+        <Link href="/body/log-pain" style={linkStyle}>Log pain</Link>
+        <Link href="/injuries" style={linkStyle}>Injuries</Link>
       </div>
-      <DashboardBodyMap />
+      <BodyPageClient zones={zones} />
     </main>
   );
 }

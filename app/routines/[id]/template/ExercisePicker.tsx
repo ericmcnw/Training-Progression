@@ -48,7 +48,7 @@ export default function ExercisePicker({
       <div style={{ display: "grid", gap: 6, maxWidth: 640 }}>
         <label style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Search Existing Exercises</label>
         <div style={{ fontSize: 12, opacity: 0.72 }}>
-          Showing the workout library by default, so stretch, mobility, and breathwork entries stay in guided flows unless you classify them differently.
+          Showing strength, conditioning, skill, mobility, and stretch exercises. Breathwork stays in guided flows.
         </div>
         <input
           value={searchQuery}

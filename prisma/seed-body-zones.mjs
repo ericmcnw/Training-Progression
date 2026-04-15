@@ -11,6 +11,8 @@ export const bodyZones = [
   { slug: "right-bicep", label: "Right Bicep", region: "bicep", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "biceps", sortOrder: 31 },
   { slug: "left-forearm-front", label: "Left Forearm", region: "forearm", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "forearms", sortOrder: 40 },
   { slug: "right-forearm-front", label: "Right Forearm", region: "forearm", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "forearms", sortOrder: 41 },
+  { slug: "left-fingers", label: "Left Fingers", region: "fingers", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "fingers", sortOrder: 43 },
+  { slug: "right-fingers", label: "Right Fingers", region: "fingers", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "fingers", sortOrder: 44 },
   { slug: "left-hip-flexor", label: "Left Hip Flexor", region: "hip-flexor", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "hip-flexors", sortOrder: 50 },
   { slug: "right-hip-flexor", label: "Right Hip Flexor", region: "hip-flexor", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "hip-flexors", sortOrder: 51 },
   { slug: "left-quad", label: "Left Quad", region: "quad", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "quads", sortOrder: 60 },

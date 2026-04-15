@@ -28,6 +28,14 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     select: {
       id: true,
       performedAt: true,
+      routine: {
+        select: {
+          name: true,
+          metadataGroups: {
+            include: { group: { select: { slug: true, kind: true } } },
+          },
+        },
+      },
       exercises: {
         include: {
           sets: { orderBy: { setNumber: "asc" } },
@@ -48,20 +56,30 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
 
   await tx.zoneActivity.deleteMany({ where: { routineLogId: log.id, source: "EXERCISE" } });
 
-  const slugs = Array.from(
-    new Set(
-      log.exercises.flatMap((entry) =>
-        entry.exercise.metadataGroups
-          .filter((groupEntry) => groupEntry.group.kind === "MUSCLE_GROUP")
-          .map((groupEntry) => groupEntry.group.slug)
-      )
+  // ── Collect muscle group slugs from exercises ─────────────────────────────
+  const exerciseGroupSlugs = new Set(
+    log.exercises.flatMap((entry) =>
+      entry.exercise.metadataGroups
+        .filter((g) => g.group.kind === "MUSCLE_GROUP")
+        .map((g) => g.group.slug)
     )
   );
-  if (slugs.length === 0) return;
 
+  // ── Collect muscle group slugs from the routine itself ────────────────────
+  const routineGroupSlugs = log.routine.metadataGroups
+    .filter((g) => g.group.kind === "MUSCLE_GROUP")
+    .map((g) => g.group.slug);
+
+  // Routine groups that aren't already covered per-exercise get their own entries
+  const routineOnlySlugs = routineGroupSlugs.filter((slug) => !exerciseGroupSlugs.has(slug));
+
+  const allSlugs = Array.from(new Set([...exerciseGroupSlugs, ...routineOnlySlugs]));
+  if (allSlugs.length === 0) return;
+
+  // ── Fetch body zones for all slugs ────────────────────────────────────────
   const zones = await tx.bodyZone.findMany({
-    where: { metadataGroupSlug: { in: slugs } },
-    select: { id: true, metadataGroupSlug: true, side: true },
+    where: { metadataGroupSlug: { in: allSlugs } },
+    select: { id: true, metadataGroupSlug: true },
   });
   const zonesBySlug = new Map<string, typeof zones>();
   for (const zone of zones) {
@@ -70,30 +88,42 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     zonesBySlug.set(zone.metadataGroupSlug ?? "", current);
   }
 
-  const data = log.exercises.flatMap((entry) => {
+  // ── Per-exercise zone activities ──────────────────────────────────────────
+  const exerciseData = log.exercises.flatMap((entry) => {
     const groupSlugs = Array.from(
       new Set(
         entry.exercise.metadataGroups
-          .filter((groupEntry) => groupEntry.group.kind === "MUSCLE_GROUP")
-          .map((groupEntry) => groupEntry.group.slug)
+          .filter((g) => g.group.kind === "MUSCLE_GROUP")
+          .map((g) => g.group.slug)
       )
     );
     const label = `${entry.exercise.name} ${summarizeSets(entry.sets)}`;
     const intensity = deriveIntensity(entry.sets);
     return groupSlugs.flatMap((slug) =>
-      (zonesBySlug.get(slug) ?? [])
-        .filter((zone) => !entry.exercise.isUnilateral || zone.side === "BILATERAL" || zone.side === "CENTRAL")
-        .map((zone) => ({
-          zoneId: zone.id,
-          routineLogId: log.id,
-          performedAt: log.performedAt,
-          source: "EXERCISE" as const,
-          label,
-          intensity,
-        }))
+      (zonesBySlug.get(slug) ?? []).map((zone) => ({
+        zoneId: zone.id,
+        routineLogId: log.id,
+        performedAt: log.performedAt,
+        source: "EXERCISE" as const,
+        label,
+        intensity,
+      }))
     );
   });
 
+  // ── Routine-level zone activities (groups not covered by any exercise) ────
+  const routineData = routineOnlySlugs.flatMap((slug) =>
+    (zonesBySlug.get(slug) ?? []).map((zone) => ({
+      zoneId: zone.id,
+      routineLogId: log.id,
+      performedAt: log.performedAt,
+      source: "EXERCISE" as const,
+      label: log.routine.name,
+      intensity: null as string | null,
+    }))
+  );
+
+  const data = [...exerciseData, ...routineData];
   if (data.length > 0) {
     await tx.zoneActivity.createMany({ data, skipDuplicates: true });
   }

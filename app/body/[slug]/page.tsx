@@ -106,11 +106,11 @@ function PainChart({ logs }: { logs: Array<{ id: string; level: number; loggedAt
 }
 
 export default async function BodyZoneDetailPage(props: {
-  params: Promise<Params> | Params;
-  searchParams?: Promise<SearchParams> | SearchParams;
+  params: Promise<Params>;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const params = await Promise.resolve(props.params);
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const params = await props.params;
+  const searchParams = props.searchParams ? await props.searchParams : {};
   const selectedDay = getParam(searchParams, "day");
   const showManualForm = getParam(searchParams, "manual") === "1";
   const detail = await getZoneState(params.slug);

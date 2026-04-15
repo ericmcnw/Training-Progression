@@ -11,9 +11,9 @@ type Params = {
 };
 
 export default async function RoutineSubpage(props: {
-  params: Promise<Params> | Params;
+  params: Promise<Params>;
 }) {
-  const params = await Promise.resolve(props.params);
+  const params = await props.params;
   const { id, segments = [] } = params;
 
   if (segments.length === 1 && segments[0] === "edit") {

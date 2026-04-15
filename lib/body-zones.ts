@@ -128,6 +128,7 @@ export async function getAllZonesWithState(): Promise<ZoneState[]> {
 
     return {
       slug: computed.slug,
+      label: zone.label,
       freshness: computed.freshness,
       painLevel: computed.painLevel,
       activityCount: computed.activityCount,

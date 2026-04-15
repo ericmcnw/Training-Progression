@@ -4,6 +4,7 @@ export type BodyMapView = "front" | "back" | "both";
 
 export type ZoneState = {
   slug: string;
+  label?: string;
   freshness: ZoneFreshness;
   painLevel?: number;
   activityCount?: number;
@@ -18,6 +19,8 @@ export type BodyMapProps = {
   onZoneHover?: (slug: string | null) => void;
   size?: "sm" | "md" | "lg";
   showLegend?: boolean;
+  /** Defaults to "male". TODO: read from user account once gender preference is collected at sign-up. */
+  gender?: "male" | "female";
 };
 
 export type BodyZonePath = {

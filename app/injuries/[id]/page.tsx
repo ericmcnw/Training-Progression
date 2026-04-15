@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 
 type Params = { id: string };
 
-export default async function InjuryDetailPage(props: { params: Promise<Params> | Params }) {
-  const params = await Promise.resolve(props.params);
+export default async function InjuryDetailPage(props: { params: Promise<Params> }) {
+  const params = await props.params;
   const injury = await getInjury(params.id);
   if (!injury) notFound();
 

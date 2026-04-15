@@ -12,11 +12,11 @@ type Params = {
 type SearchParams = Record<string, string | string[] | undefined>;
 
 export default async function RoutineLogPage(props: {
-  params: Promise<Params> | Params;
-  searchParams?: Promise<SearchParams> | SearchParams;
+  params: Promise<Params>;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const params = await Promise.resolve(props.params);
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const params = await props.params;
+  const searchParams = props.searchParams ? await props.searchParams : {};
   const { id, logId, segments = [] } = params;
 
   if (segments.length === 0) {

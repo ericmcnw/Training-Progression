@@ -75,7 +75,7 @@ export function deriveExerciseLibraryKind(params: {
 }
 
 export function workoutLibraryKinds(): ExerciseLibraryKind[] {
-  return ["STRENGTH", "CONDITIONING", "SKILL"];
+  return ["STRENGTH", "CONDITIONING", "SKILL", "MOBILITY", "STRETCH"];
 }
 
 export function guidedPreferredLibraryKinds(): ExerciseLibraryKind[] {

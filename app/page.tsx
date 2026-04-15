@@ -514,6 +514,7 @@ export default async function HomePage() {
       orderBy: { performedAt: "asc" },
       select: {
         id: true,
+        routineId: true,
         performedAt: true,
         routine: { select: { name: true, kind: true, domain: true, subtype: true } },
       },
@@ -734,13 +735,14 @@ export default async function HomePage() {
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
   const glanceLogsByDay = new Map<
     string,
-    Array<{ id: string; routineName: string; kind: string; domain: RoutineDomain }>
+    Array<{ id: string; routineId: string; routineName: string; kind: string; domain: RoutineDomain }>
   >();
   for (const log of glanceLogs) {
     const ymd = toAppYmd(log.performedAt);
     if (!glanceLogsByDay.has(ymd)) glanceLogsByDay.set(ymd, []);
     glanceLogsByDay.get(ymd)!.push({
       id: log.id,
+      routineId: log.routineId,
       routineName: log.routine.name,
       kind: log.routine.kind,
       domain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
@@ -748,11 +750,30 @@ export default async function HomePage() {
   }
   const glanceDays = Array.from({ length: glanceWeekCount * 7 }, (_, index) => {
     const ymd = addDays(glanceStart, index);
+    const logs = glanceLogsByDay.get(ymd) ?? [];
+    const logCountByRoutine = new Map<string, number>();
+    for (const log of logs) {
+      logCountByRoutine.set(log.routineId, (logCountByRoutine.get(log.routineId) ?? 0) + 1);
+    }
+    const planned = Array.from(buildPlanForDay(ymd).values())
+      .map((item) => {
+        const routine = routineMap.get(item.routineId);
+        return {
+          routineId: item.routineId,
+          routineName: item.routineName,
+          kind: item.kind,
+          domain: routine ? effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype) : ("general" as RoutineDomain),
+          planned: item.planned,
+          logged: logCountByRoutine.get(item.routineId) ?? 0,
+        };
+      })
+      .sort((a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName));
     return {
       ymd,
       label: dayLabels[index % 7],
       dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
-      logs: glanceLogsByDay.get(ymd) ?? [],
+      planned,
+      logs,
     };
   });
 
