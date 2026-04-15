@@ -32,21 +32,27 @@ const BODY_COLORS = [
 // ─── Custom overlay zones ────────────────────────────────────────────────────
 // Drawn as SVG overlays because the library has no matching body part.
 // Coordinates use the library's front-view space: viewBox "0 0 724 1448", center x=362.
+// Hip flexor paths calibrated to the library's front-view space (viewBox "0 0 724 1448").
+// Reference: obliques bottom ≈ y657, adductors top ≈ y647 → hip crease is right in that band.
+// Each shape is ~50px wide × 82px tall — comparable to small zones like knees.
+// Left center x≈287, right center x≈437 (symmetric around body center 362).
 const CUSTOM_FRONT_ZONES: Array<{ slug: string; label: string; d: string }> = [
   {
     slug: "left-hip-flexor",
     label: "Left Hip Flexor",
-    d: "M258 692 C272 674 330 674 344 692 C356 712 352 758 334 782 C314 800 272 800 252 782 C234 758 240 712 258 692 Z",
+    // Narrow teardrop: wider at the inguinal crease, tapering to a blunt point below
+    d: "M262 648 C272 634 308 634 316 648 C322 662 320 694 310 712 C298 724 274 722 266 708 C256 692 252 664 262 648 Z",
   },
   {
     slug: "right-hip-flexor",
     label: "Right Hip Flexor",
-    d: "M380 692 C394 674 452 674 466 692 C484 712 490 758 472 782 C454 800 414 800 388 782 C360 758 368 712 380 692 Z",
+    // Mirror of left around x=362
+    d: "M408 648 C416 634 452 634 462 648 C472 664 472 692 458 708 C450 722 426 724 414 712 C404 694 402 662 408 648 Z",
   },
 ];
 
 const FRESHNESS_FILL: Record<ZoneFreshness, string> = {
-  FRESH:            "#6a7282",
+  FRESH:            "transparent", // invisible when unworked — only border shows
   RECENTLY_WORKED:  "#38BDF8",
   RECOVERING:       "#FACC15",
   WORKED_TODAY:     "#2DD4BF",
@@ -300,12 +306,15 @@ function BodyPanel({
               const freshness = zoneStateMap.get(zone.slug) ?? "FRESH";
               const isSelected = selectable && selectedSet.has(zone.slug);
               const fill = isSelected ? SELECTED_FILL : FRESHNESS_FILL[freshness];
+              const fresh = freshness === "FRESH" && !isSelected;
               return (
                 <path
                   key={zone.slug}
                   d={zone.d}
                   fill={fill}
-                  stroke="rgba(148,163,184,0.4)"
+                  // transparent fill still needs to be clickable
+                  pointerEvents="all"
+                  stroke={fresh ? "rgba(148,163,184,0.22)" : "rgba(148,163,184,0.55)"}
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}

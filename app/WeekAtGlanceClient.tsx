@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
@@ -238,11 +239,18 @@ export default function WeekAtGlanceClient({
       </div>
 
       <div style={detailCard}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-          <div style={{ fontSize: 13, fontWeight: 900 }}>
-            {selectedDay ? formatDayDetailLabel(selectedDay.ymd) : "Tap a day to inspect routines"}
+        <div style={detailHeaderRow}>
+          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 900 }}>
+              {selectedDay ? formatDayDetailLabel(selectedDay.ymd) : "Tap a day to inspect routines"}
+            </div>
+            {selectedDay ? <div style={{ fontSize: 11, opacity: 0.6 }}>{plannedCount(selectedDay)} planned</div> : null}
           </div>
-          {selectedDay ? <div style={{ fontSize: 11, opacity: 0.6 }}>{plannedCount(selectedDay)} planned</div> : null}
+          {selectedDay ? (
+            <Link href="/routines" style={logButton}>
+              Log
+            </Link>
+          ) : null}
         </div>
         {!selectedDay ? (
           <div style={{ fontSize: 12, opacity: 0.62 }}>Select any day cell to see the routines planned there.</div>
@@ -259,8 +267,13 @@ export default function WeekAtGlanceClient({
                   <div style={{ width: 9, height: 9, borderRadius: 999, background: domainColor(item.domain), flexShrink: 0 }} />
                   <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.routineName}</div>
                 </div>
-                <div style={{ fontSize: 11, opacity: 0.7 }}>
-                  {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizeRoutineKind(item.kind))}
+                <div style={detailActions}>
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>
+                    {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizeRoutineKind(item.kind))}
+                  </div>
+                  <Link href={`/routines/${item.routineId}/log`} style={rowLogButton}>
+                    Log
+                  </Link>
                 </div>
               </div>
             ))}
@@ -406,6 +419,13 @@ const detailCard: CSSProperties = {
   gap: 10,
 };
 
+const detailHeaderRow: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  alignItems: "center",
+};
+
 const detailRow: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -414,6 +434,36 @@ const detailRow: CSSProperties = {
   borderRadius: 12,
   padding: "9px 10px",
   background: "rgba(255,255,255,0.04)",
+};
+
+const detailActions: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  flexShrink: 0,
+};
+
+const logButton: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "7px 11px",
+  borderRadius: 8,
+  border: "1px solid rgba(84,203,130,0.38)",
+  background: "rgba(84,203,130,0.13)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 900,
+  flexShrink: 0,
+};
+
+const rowLogButton: CSSProperties = {
+  ...logButton,
+  padding: "5px 9px",
+  fontSize: 11,
 };
 
 const completedDetailRow: CSSProperties = {
