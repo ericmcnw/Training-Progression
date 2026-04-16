@@ -25,13 +25,18 @@ export default function DashboardBodyMapClient({ zones }: { zones: ZoneState[] }
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   const selectedZone = selectedSlug ? zones.find((z) => z.slug === selectedSlug) ?? null : null;
+  const zoneSlugs = zones.map((zone) => zone.slug);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <BodyMap
         zones={zones}
         size="sm"
-        onZoneClick={(slug) => setSelectedSlug((prev) => (prev === slug ? null : slug))}
+        onZoneClick={(slug) => {
+          const resolved = resolveVisibleZoneSlug(slug, zoneSlugs);
+          if (!resolved) return;
+          setSelectedSlug((prev) => (prev === resolved ? null : resolved));
+        }}
         selectedSlugs={selectedSlug ? [selectedSlug] : []}
       />
 
@@ -102,6 +107,29 @@ export default function DashboardBodyMapClient({ zones }: { zones: ZoneState[] }
 
 function formatSlug(slug: string) {
   return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function resolveVisibleZoneSlug(slug: string, zoneSlugs: string[]) {
+  if (zoneSlugs.includes(slug)) return slug;
+  const aliases: Record<string, string[]> = {
+    "left-hamstring-proximal": ["left-hamstring-distal", "left-hamstring"],
+    "right-hamstring-proximal": ["right-hamstring-distal", "right-hamstring"],
+    "left-shoulder-front": ["left-shoulder-back", "left-shoulder"],
+    "right-shoulder-front": ["right-shoulder-back", "right-shoulder"],
+    "left-forearm-front": ["left-forearm-back", "left-forearm"],
+    "right-forearm-front": ["right-forearm-back", "right-forearm"],
+    "left-knee-front": ["left-knee-back", "left-knee"],
+    "right-knee-front": ["right-knee-back", "right-knee"],
+  };
+  for (const candidate of aliases[slug] ?? []) {
+    const match = zoneSlugs.find((zoneSlug) => zoneSlug === candidate || zoneSlug.startsWith(`${candidate}-`));
+    if (match) return match;
+  }
+
+  const sideRegion = slug.match(/^(left|right)-([a-z-]+?)(?:-(front|back|proximal|distal))?$/);
+  if (!sideRegion) return null;
+  const [, side, region] = sideRegion;
+  return zoneSlugs.find((zoneSlug) => zoneSlug.startsWith(`${side}-${region}`)) ?? null;
 }
 
 function formatActivityDate(value: string) {

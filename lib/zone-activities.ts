@@ -25,6 +25,19 @@ function deriveIntensity(sets: Array<{ reps: number | null; seconds: number | nu
   return "easy";
 }
 
+export async function syncRoutineLogZoneActivityDates(tx: Tx, routineLogId: string) {
+  const log = await tx.routineLog.findUnique({
+    where: { id: routineLogId },
+    select: { id: true, performedAt: true },
+  });
+  if (!log) return;
+
+  await tx.zoneActivity.updateMany({
+    where: { routineLogId: log.id },
+    data: { performedAt: log.performedAt },
+  });
+}
+
 export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: string) {
   const log = await tx.routineLog.findUnique({
     where: { id: routineLogId },
@@ -58,6 +71,7 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
   if (!log) return;
 
   await tx.zoneActivity.deleteMany({ where: { routineLogId: log.id, source: "EXERCISE" } });
+  await syncRoutineLogZoneActivityDates(tx, log.id);
 
   // ── Collect muscle group slugs from exercises ─────────────────────────────
   const allMuscleGroups = await tx.metadataGroup.findMany({

@@ -228,6 +228,8 @@ function buildLibData(
     if (entry.left > 0 || entry.right > 0) {
       if (entry.left > 0)  part.leftSideIntensity  = entry.left;
       if (entry.right > 0) part.rightSideIntensity = entry.right;
+      if (entry.left > 0 && entry.right === 0) part.side = "left";
+      if (entry.right > 0 && entry.left === 0) part.side = "right";
     } else {
       part.intensity = entry.central;
     }

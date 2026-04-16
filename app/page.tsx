@@ -9,6 +9,7 @@ import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
+import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 
 export const dynamic = "force-dynamic";
 
@@ -203,7 +204,7 @@ function WeeklyMomentumSection({
   }>;
   weeklySparkPoints: Array<{ x: number; y: number }>;
   recentCompletions: Array<{ id: string; name: string; lastCompletedAt: Date | null }>;
-  needsAttention: Array<{ id: string; name: string; lastCompletedAt: Date | null }>;
+  needsAttention: Array<{ id: string; name: string; lastCompletedAt: Date | null; detailLabel?: string; href?: string }>;
 }) {
   return (
     <section style={panel}>
@@ -314,8 +315,12 @@ function WeeklyMomentumSection({
               {needsAttention.length === 0 && <div style={emptyState}>Everything has been completed recently.</div>}
               {needsAttention.map((item) => (
                 <div key={item.id} style={miniCardWarn}>
-                  <div style={{ fontWeight: 800 }}>{item.name}</div>
-                  <div style={miniCardMeta}>{formatLastCompletedLabel(item.lastCompletedAt)}</div>
+                  {item.href ? (
+                    <Link href={item.href} style={miniCardTitleLink}>{item.name}</Link>
+                  ) : (
+                    <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  )}
+                  <div style={miniCardMeta}>{item.detailLabel ?? formatLastCompletedLabel(item.lastCompletedAt)}</div>
                 </div>
               ))}
             </div>
@@ -436,6 +441,7 @@ export default async function HomePage() {
     sparkLogs,
     glanceLogs,
     recommendationModel,
+    groupFrequencyGoals,
   ] = await Promise.all([
     prisma.$queryRawUnsafe<
       Array<{
@@ -520,6 +526,15 @@ export default async function HomePage() {
       },
     }),
     getRecommendationModel(),
+    prisma.frequencyGoal.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        routines: {
+          select: { routineId: true },
+        },
+      },
+    }),
   ]);
 
   const routineMap = new Map(routines.map((routine) => [routine.id, routine]));
@@ -720,16 +735,66 @@ export default async function HomePage() {
     return sum + Math.max(0, logged - planned);
   }, 0);
   const weekSessionTargetTotal = weekPlannedTotal + weekUnplannedLoggedTotal;
-  const needsAttention = weeklyCards
+  const routineNeedsAttention = weeklyCards
     .map((item) => {
       const lastCompletedYmd = item.lastCompletedAt ? toAppYmd(item.lastCompletedAt) : null;
       return {
         ...item,
         daysSinceLastCompleted: lastCompletedYmd ? dayDiff(today, lastCompletedYmd) : Number.POSITIVE_INFINITY,
+        attentionPriority: lastCompletedYmd ? dayDiff(today, lastCompletedYmd) : 9999,
       };
     })
     .filter((item) => item.daysSinceLastCompleted > 7)
-    .sort((a, b) => b.daysSinceLastCompleted - a.daysSinceLastCompleted || a.name.localeCompare(b.name))
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      lastCompletedAt: item.lastCompletedAt,
+      attentionPriority: item.attentionPriority,
+    }));
+  const groupFrequencyGoalShapes = groupFrequencyGoals
+    .filter((goal) => goal.routines.length > 0)
+    .map((goal) => ({
+      id: goal.id,
+      name: goal.name,
+      targetCount: goal.targetCount,
+      targetInterval: goal.targetInterval,
+      targetUnit: goal.targetUnit,
+      isActive: goal.isActive,
+      routineIds: goal.routines.map((entry) => entry.routineId),
+    }));
+  const groupFrequencyMaxWindowDays = Math.max(0, ...groupFrequencyGoalShapes.map((goal) => getFrequencyGoalWindowDays(goal)));
+  const groupFrequencyRoutineIds = Array.from(new Set(groupFrequencyGoalShapes.flatMap((goal) => goal.routineIds)));
+  const groupFrequencyLogs =
+    groupFrequencyMaxWindowDays > 0 && groupFrequencyRoutineIds.length > 0
+      ? await prisma.routineLog.findMany({
+          where: {
+            routineId: { in: groupFrequencyRoutineIds },
+            performedAt: { gte: new Date(new Date().getTime() - groupFrequencyMaxWindowDays * 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { performedAt: "desc" },
+          select: { routineId: true, performedAt: true },
+        })
+      : [];
+  const groupFrequencyProgress = getFrequencyGoalProgressList({
+    goals: groupFrequencyGoalShapes,
+    logs: groupFrequencyLogs,
+  });
+  const groupFrequencyNeedsAttention = groupFrequencyProgress
+    .filter((progress) => progress.status === "behind")
+    .map((progress) => {
+      const routineIdSet = new Set(progress.goal.routineIds);
+      const lastCompletedAt = groupFrequencyLogs.find((log) => routineIdSet.has(log.routineId))?.performedAt ?? null;
+      return {
+        id: `group-frequency:${progress.goal.id}`,
+        name: progress.goal.name,
+        lastCompletedAt,
+        detailLabel: `${progress.detailLabel} (${progress.summaryLabel})`,
+        href: `/goals/group-frequency:${progress.goal.id}?mode=edit`,
+        attentionPriority: 10000 + progress.remainingCount,
+      };
+    });
+  const needsAttention = [...groupFrequencyNeedsAttention, ...routineNeedsAttention]
+    .sort((a, b) => b.attentionPriority - a.attentionPriority || a.name.localeCompare(b.name))
     .slice(0, 4);
   const weekEnd = addDays(weekStart, 6);
   const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
@@ -1477,6 +1542,12 @@ const miniCardMeta: React.CSSProperties = {
   marginTop: 4,
   fontSize: 12,
   opacity: 0.78,
+};
+
+const miniCardTitleLink: React.CSSProperties = {
+  color: "inherit",
+  fontWeight: 800,
+  textDecoration: "none",
 };
 
 const activityRow: React.CSSProperties = {

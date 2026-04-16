@@ -51,6 +51,60 @@ export function daysSinceDate(value: Date | null | undefined, now = new Date()) 
   return Math.max(0, diffYmdDays(toAppYmd(now), toAppYmd(value)));
 }
 
+const BODY_ZONE_ALIASES: Record<string, string> = {
+  "left-hamstring": "left-hamstring-proximal",
+  "right-hamstring": "right-hamstring-proximal",
+  "left-shoulder": "left-shoulder-front",
+  "right-shoulder": "right-shoulder-front",
+  "left-forearm": "left-forearm-front",
+  "right-forearm": "right-forearm-front",
+  "left-knee": "left-knee-front",
+  "right-knee": "right-knee-front",
+};
+
+async function resolveBodyZoneSlug(slug: string) {
+  const normalized = decodeURIComponent(slug).trim();
+  if (!normalized) return null;
+
+  const exact = await prisma.bodyZone.findUnique({
+    where: { slug: normalized },
+    select: { slug: true },
+  });
+  if (exact) return exact.slug;
+
+  const alias = BODY_ZONE_ALIASES[normalized];
+  if (alias) {
+    const aliasZone = await prisma.bodyZone.findUnique({
+      where: { slug: alias },
+      select: { slug: true },
+    });
+    if (aliasZone) return aliasZone.slug;
+  }
+
+  const groupZone = await prisma.bodyZone.findFirst({
+    where: { metadataGroupSlug: normalized },
+    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    select: { slug: true },
+  });
+  if (groupZone) return groupZone.slug;
+
+  const side = normalized.startsWith("left-") ? "LEFT" : normalized.startsWith("right-") ? "RIGHT" : null;
+  if (side) {
+    const region = normalized
+      .replace(/^left-/, "")
+      .replace(/^right-/, "")
+      .replace(/-(front|back|proximal|distal)$/, "");
+    const sideRegionZone = await prisma.bodyZone.findFirst({
+      where: { side, region },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { slug: true },
+    });
+    if (sideRegionZone) return sideRegionZone.slug;
+  }
+
+  return null;
+}
+
 function maxFreshness(states: ZoneFreshness[]) {
   const rank: Record<ZoneFreshness, number> = {
     FRESH: 0,
@@ -190,8 +244,10 @@ export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailR
   const since = daysAgo(30, now);
   const weekSince = daysAgo(7, now);
   const painSince = daysAgo(30, now);
+  const resolvedSlug = await resolveBodyZoneSlug(slug);
+  if (!resolvedSlug) return null;
 
-  const clickedZone = await prisma.bodyZone.findUnique({ where: { slug } });
+  const clickedZone = await prisma.bodyZone.findUnique({ where: { slug: resolvedSlug } });
   if (!clickedZone) return null;
 
   const groupSlug = clickedZone.metadataGroupSlug;
@@ -312,9 +368,11 @@ export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailR
 export async function getZoneState(slug: string): Promise<ZoneStateDetail | null> {
   const now = new Date();
   const since = daysAgo(30, now);
+  const resolvedSlug = await resolveBodyZoneSlug(slug);
+  if (!resolvedSlug) return null;
 
   const zone = await prisma.bodyZone.findUnique({
-    where: { slug },
+    where: { slug: resolvedSlug },
     include: {
       activities: {
         where: { performedAt: { gte: since } },
