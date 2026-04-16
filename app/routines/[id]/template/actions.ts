@@ -265,6 +265,15 @@ export async function setDefaultSets(formData: FormData) {
   redirect(`/routines/${routineId}/template`);
 }
 
+export async function updateDefaultSetsQuiet(routineId: string, routineExerciseId: string, defaultSets: number) {
+  if (!Number.isFinite(defaultSets) || defaultSets < 1 || defaultSets > 20) return;
+  await prisma.routineExercise.update({
+    where: { id: routineExerciseId },
+    data: { defaultSets },
+  });
+  revalidatePath(`/routines/${routineId}/template`);
+}
+
 export async function moveRoutineExercise(formData: FormData) {
   const routineId = String(formData.get("routineId") || "");
   const routineExerciseId = String(formData.get("routineExerciseId") || "");

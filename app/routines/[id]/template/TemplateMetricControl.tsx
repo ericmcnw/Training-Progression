@@ -15,48 +15,42 @@ export default function TemplateMetricControl({
   const [unit, setUnit] = useState<"REPS" | "TIME">(initialUnit);
   const [isPending, startTransition] = useTransition();
 
-  function onSet() {
+  function select(next: "REPS" | "TIME") {
+    if (next === unit || isPending) return;
+    setUnit(next);
     startTransition(async () => {
-      await switchRoutineExerciseMetric({ routineId, routineExerciseId, unit });
+      await switchRoutineExerciseMetric({ routineId, routineExerciseId, unit: next });
     });
   }
 
+  const pill = (label: "REPS" | "TIME"): React.CSSProperties => ({
+    padding: "5px 12px",
+    border: "none",
+    background: unit === label ? "rgba(115,220,152,0.22)" : "rgba(128,128,128,0.08)",
+    color: "inherit",
+    fontWeight: unit === label ? 900 : 700,
+    fontSize: 12,
+    cursor: isPending ? "default" : "pointer",
+    opacity: isPending ? 0.6 : 1,
+    letterSpacing: 0.3,
+    borderRight: label === "REPS" ? "1px solid rgba(128,128,128,0.3)" : undefined,
+  });
+
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <label style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>Metric</label>
-      <select
-        name={`metric:${routineExerciseId}`}
-        form="template-save-form"
-        value={unit}
-        onChange={(event) => setUnit(event.target.value as "REPS" | "TIME")}
-        style={{
-          padding: "7px 8px",
-          border: "1px solid rgba(128,128,128,0.6)",
-          borderRadius: 10,
-          background: "rgba(128,128,128,0.08)",
-          color: "inherit",
-          minWidth: 120,
-        }}
-      >
-        <option value="REPS">REPS</option>
-        <option value="TIME">TIME</option>
-      </select>
-      <button
-        type="button"
-        onClick={onSet}
-        disabled={isPending}
-        style={{
-          padding: "7px 10px",
-          border: "1px solid rgba(128,128,128,0.8)",
-          borderRadius: 10,
-          background: "rgba(128,128,128,0.12)",
-          color: "inherit",
-          fontWeight: 900,
-        }}
-      >
-        {isPending ? "Saving..." : "Set"}
+    <div
+      style={{
+        display: "flex",
+        border: "1px solid rgba(128,128,128,0.45)",
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+    >
+      <button type="button" onClick={() => select("REPS")} disabled={isPending} style={pill("REPS")}>
+        REPS
+      </button>
+      <button type="button" onClick={() => select("TIME")} disabled={isPending} style={pill("TIME")}>
+        TIME
       </button>
     </div>
   );
 }
-

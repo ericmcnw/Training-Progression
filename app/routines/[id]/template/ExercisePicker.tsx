@@ -1,7 +1,8 @@
 "use client";
 
-import { compareExerciseNames, condensedExerciseName, exerciseMatchesQuery, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
+import { compareExerciseNames, exerciseMatchesQuery, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
 import { useMemo, useState } from "react";
+import type React from "react";
 import { addExerciseToRoutine } from "./actions";
 
 type ExerciseOption = {
@@ -21,121 +22,152 @@ export default function ExercisePicker({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [createName, setCreateName] = useState("");
-  const [selectedId, setSelectedId] = useState(available[0]?.id ?? "");
   const [unit, setUnit] = useState<"REPS" | "TIME">("REPS");
   const [supportsWeight, setSupportsWeight] = useState(false);
 
   const filtered = useMemo(() => {
-    const sorted = [...available].sort((left, right) => compareExerciseNames(left.name, right.name));
-    if (!searchQuery.trim()) return sorted.slice(0, 12);
-    return sorted.filter((exercise) => exerciseMatchesQuery(exercise.name, searchQuery)).slice(0, 12);
+    const sorted = [...available].sort((a, b) => compareExerciseNames(a.name, b.name));
+    if (!searchQuery.trim()) return sorted.slice(0, 10);
+    return sorted.filter((ex) => exerciseMatchesQuery(ex.name, searchQuery)).slice(0, 12);
   }, [available, searchQuery]);
-
-  const activeSelectedId = filtered.some((exercise) => exercise.id === selectedId)
-    ? selectedId
-    : filtered[0]?.id ?? "";
-
-  const hasExactMatch = useMemo(() => {
-    const normalized = condensedExerciseName(createName);
-    if (!normalized) return false;
-    return available.some((exercise) => condensedExerciseName(exercise.name) === normalized);
-  }, [available, createName]);
 
   const normalizedQuery = normalizeExerciseName(createName);
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "grid", gap: 6, maxWidth: 640 }}>
-        <label style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Search Existing Exercises</label>
-        <div style={{ fontSize: 12, opacity: 0.72 }}>
-          Showing strength, conditioning, skill, mobility, and stretch exercises. Breathwork stays in guided flows.
+    <div style={{ display: "grid", gap: 14 }}>
+      {/* Search */}
+      <div style={{ display: "grid", gap: 6 }}>
+        <label style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>Search Existing</label>
+        <div style={{ fontSize: 12, opacity: 0.65 }}>
+          Includes strength, conditioning, skill, mobility, and stretch. Breathwork stays in guided flows.
         </div>
         <input
           value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search by name, even without punctuation"
-          style={input}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Type to filter…"
+          style={inputStyle}
         />
       </div>
 
-      <form action={addExerciseToRoutine} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input type="hidden" name="routineId" value={routineId} />
-        <input type="hidden" name="mode" value="existing" />
-        <select
-          name="exerciseId"
-          style={input}
-          value={activeSelectedId}
-          onChange={(event) => setSelectedId(event.target.value)}
-          disabled={filtered.length === 0}
-        >
-          {filtered.length === 0 && <option value="">No matches</option>}
-          {filtered.map((exercise) => (
-            <option key={exercise.id} value={exercise.id}>
-              {exercise.name} ({exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " + weight" : ""})
-            </option>
-          ))}
-        </select>
-        <button type="submit" style={btn} disabled={!activeSelectedId}>
-          Add Selected
-        </button>
-      </form>
-
-      <form action={addExerciseToRoutine} style={{ display: "grid", gap: 10 }}>
-        <input type="hidden" name="routineId" value={routineId} />
-        <input type="hidden" name="mode" value="new" />
-
-        <div style={{ fontWeight: 800, fontSize: 13 }}>Create Custom Exercise Inline</div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            name="customName"
-            value={createName}
-            onChange={(event) => setCreateName(event.target.value)}
-            placeholder="Custom exercise name"
-            style={input}
-          />
-          <select name="unit" value={unit} onChange={(event) => setUnit(event.target.value as "REPS" | "TIME")} style={input}>
-            <option value="REPS">Rep-based</option>
-            <option value="TIME">Timed</option>
-          </select>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
-            <input
-              name="supportsWeight"
-              type="checkbox"
-              checked={supportsWeight}
-              onChange={(event) => setSupportsWeight(event.target.checked)}
-            />
-            Supports Weight
-          </label>
-          <button type="submit" style={btn} disabled={!normalizedQuery}>
-            {hasExactMatch ? "Add Exact Match" : "Create + Add"}
-          </button>
-        </div>
-
-        {!hasExactMatch && normalizedQuery && (
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            No exact match found for &quot;{normalizedQuery}&quot;. Submitting will create both metric variants
-            (Reps + Time) and attach the selected metric.
+      {/* Filtered list */}
+      <div style={{ display: "grid", gap: 4, maxHeight: 300, overflowY: "auto" }}>
+        {filtered.length === 0 && searchQuery.trim() && (
+          <div style={{ fontSize: 12, opacity: 0.65, padding: "6px 0" }}>
+            No matches for &quot;{searchQuery}&quot; — create one below.
           </div>
         )}
-      </form>
+        {filtered.length === 0 && !searchQuery.trim() && available.length === 0 && (
+          <div style={{ fontSize: 12, opacity: 0.65, padding: "6px 0" }}>
+            All exercises are already attached.
+          </div>
+        )}
+        {filtered.map((exercise) => (
+          <form key={exercise.id} action={addExerciseToRoutine} style={{ display: "contents" }}>
+            <input type="hidden" name="routineId" value={routineId} />
+            <input type="hidden" name="mode" value="existing" />
+            <input type="hidden" name="exerciseId" value={exercise.id} />
+            <button type="submit" style={listItem}>
+              <div style={{ textAlign: "left", flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>{exercise.name}</div>
+                <div style={{ fontSize: 11, opacity: 0.65, marginTop: 1 }}>
+                  {exerciseUnitLabel(exercise.unit)}{exercise.supportsWeight ? " · Weighted" : ""}
+                </div>
+              </div>
+              <span style={addBadge}>+ Add</span>
+            </button>
+          </form>
+        ))}
+      </div>
+
+      {/* Create new */}
+      <div style={{ borderTop: "1px solid rgba(128,128,128,0.25)", paddingTop: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.82, marginBottom: 8 }}>Create New Exercise</div>
+        <form action={addExerciseToRoutine} style={{ display: "grid", gap: 10 }}>
+          <input type="hidden" name="routineId" value={routineId} />
+          <input type="hidden" name="mode" value="new" />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              name="customName"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Exercise name"
+              style={{ ...inputStyle, flex: "1 1 160px", minWidth: 140 }}
+            />
+            <select
+              name="unit"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as "REPS" | "TIME")}
+              style={{ ...inputStyle, width: 120, flex: "0 0 auto" }}
+            >
+              <option value="REPS">Rep-based</option>
+              <option value="TIME">Timed</option>
+            </select>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+              <input
+                name="supportsWeight"
+                type="checkbox"
+                checked={supportsWeight}
+                onChange={(e) => setSupportsWeight(e.target.checked)}
+              />
+              Weighted
+            </label>
+            <button type="submit" style={createBtn} disabled={!normalizedQuery}>
+              Create + Add
+            </button>
+          </div>
+          {normalizedQuery && (
+            <div style={{ fontSize: 11, opacity: 0.65 }}>
+              Will create both metric variants (Reps + Time) and attach the selected one.
+            </div>
+          )}
+        </form>
+      </div>
     </div>
   );
 }
 
-const input: React.CSSProperties = {
-  padding: 8,
+const inputStyle: React.CSSProperties = {
+  padding: "8px 10px",
   border: "1px solid rgba(128,128,128,0.6)",
   borderRadius: 10,
   background: "rgba(128,128,128,0.08)",
   color: "inherit",
+  width: "100%",
 };
 
-const btn: React.CSSProperties = {
-  padding: "9px 12px",
-  border: "1px solid rgba(128,128,128,0.8)",
+const listItem: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.22)",
+  background: "rgba(128,128,128,0.06)",
+  color: "inherit",
+  cursor: "pointer",
+  textAlign: "left",
+  minHeight: 52,
+};
+
+const addBadge: React.CSSProperties = {
+  padding: "4px 9px",
+  borderRadius: 8,
+  border: "1px solid rgba(115,220,152,0.45)",
+  background: "rgba(115,220,152,0.1)",
+  fontWeight: 800,
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const createBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  border: "1px solid rgba(128,128,128,0.6)",
   borderRadius: 10,
   background: "rgba(128,128,128,0.12)",
   color: "inherit",
   fontWeight: 900,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
 };

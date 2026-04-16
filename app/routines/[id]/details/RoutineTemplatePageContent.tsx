@@ -1,3 +1,4 @@
+import type React from "react";
 import Link from "next/link";
 import {
   exerciseLibraryWhereForKinds,
@@ -7,9 +8,10 @@ import {
 } from "@/lib/exercise-library";
 import { exerciseUnitLabel } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
-import { moveRoutineExercise, removeRoutineExercise, saveRoutineTemplate, setDefaultSets } from "../template/actions";
+import { moveRoutineExercise, removeRoutineExercise } from "../template/actions";
 import ExercisePicker from "../template/ExercisePicker";
 import TemplateMetricControl from "../template/TemplateMetricControl";
+import DefaultSetsControl from "../template/DefaultSetsControl";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
 import { getRoutineInjuryLoadWarning } from "@/lib/injury-warnings";
 
@@ -70,30 +72,18 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
 
   return (
     <div className="mobileRoutineTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+      {/* Header */}
       <div className="mobileRoutineTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Template: {routine.name}</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-            Attach exercises + set default sets (remembers extra rows).
+            Attach exercises and set default sets per exercise.
           </div>
         </div>
-
-        <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <form id="template-save-form" action={saveRoutineTemplate}>
-            <input type="hidden" name="routineId" value={routineId} />
-            <button type="submit" style={saveBtn}>
-              Save Template
-            </button>
-          </form>
-          <Link href="/exercises" style={linkBtn}>
-            Exercises
-          </Link>
-          <Link href={`/routines/${routineId}/edit`} style={linkBtn}>
-            Edit Routine
-          </Link>
-          <Link href="/routines" style={linkBtn}>
-            Back
-          </Link>
+        <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href="/exercises" style={linkBtn}>Exercises</Link>
+          <Link href={`/routines/${routineId}/edit`} style={linkBtn}>Edit Routine</Link>
+          <Link href="/routines" style={linkBtn}>Back</Link>
         </div>
       </div>
 
@@ -101,88 +91,81 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
         <RoutineInjuryWarningBanner warning={injuryWarning} />
       </div>
 
+      {/* Add Exercise */}
       <div style={{ marginTop: 16, border: border, borderRadius: 12, overflow: "hidden" }}>
         <div style={{ padding: "10px 14px", background: bgBar, borderBottom: border }}>
           <div style={{ fontWeight: 900, letterSpacing: 0.3 }}>ADD EXERCISE</div>
         </div>
-
         <div style={{ padding: 14 }}>
           <ExercisePicker routineId={routineId} available={available} />
-          {available.length === 0 && (
-            <div style={{ opacity: 0.75, marginTop: 8 }}>
-              Every existing exercise is already attached. Use custom create above to add a new one.
-            </div>
-          )}
         </div>
       </div>
 
+      {/* Exercise list */}
       <div style={{ marginTop: 16, border: border, borderRadius: 12, overflow: "hidden" }}>
         <div style={{ padding: "10px 14px", background: bgBar, borderBottom: border }}>
-          <div style={{ fontWeight: 900, letterSpacing: 0.3 }}>EXERCISES IN THIS ROUTINE</div>
+          <div style={{ fontWeight: 900, letterSpacing: 0.3 }}>
+            EXERCISES IN THIS ROUTINE
+            {attached.length > 0 && (
+              <span style={{ fontWeight: 500, opacity: 0.65, marginLeft: 8, fontSize: 12 }}>
+                ({attached.length})
+              </span>
+            )}
+          </div>
         </div>
 
-        <div style={{ padding: 12, display: "grid", gap: 10 }}>
+        <div style={{ padding: 12, display: "grid", gap: 8 }}>
           {attached.map((re, i) => (
-            <div key={re.id} style={{ border: border, borderRadius: 12, padding: 12, background: "rgba(128,128,128,0.06)" }}>
-              <div className="mobileRoutineTemplateCardRow" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 16 }}>
-                    {i + 1}. {re.exercise.name}
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>
-                    Style: <b>{exerciseUnitLabel(re.exercise.unit)}</b> | Weight: <b>{re.exercise.supportsWeight ? "Yes" : "No"}</b>
-                  </div>
+            <div key={re.id} style={exerciseCard}>
+              {/* Order column */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
+                <form action={moveRoutineExercise}>
+                  <input type="hidden" name="routineId" value={routineId} />
+                  <input type="hidden" name="routineExerciseId" value={re.id} />
+                  <input type="hidden" name="dir" value="up" />
+                  <button type="submit" style={arrowBtn} title="Move up">↑</button>
+                </form>
+                <form action={moveRoutineExercise}>
+                  <input type="hidden" name="routineId" value={routineId} />
+                  <input type="hidden" name="routineExerciseId" value={re.id} />
+                  <input type="hidden" name="dir" value="down" />
+                  <button type="submit" style={arrowBtn} title="Move down">↓</button>
+                </form>
+              </div>
+
+              {/* Exercise info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: 15 }}>
+                  {i + 1}. {re.exercise.name}
                 </div>
-
-                <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <TemplateMetricControl
-                    routineId={routineId}
-                    routineExerciseId={re.id}
-                    initialUnit={re.exercise.unit}
-                  />
-
-                  <form action={moveRoutineExercise}>
-                    <input type="hidden" name="routineId" value={routineId} />
-                    <input type="hidden" name="routineExerciseId" value={re.id} />
-                    <input type="hidden" name="dir" value="up" />
-                    <button type="submit" style={btnSmall}>↑ Up</button>
-                  </form>
-
-                  <form action={moveRoutineExercise}>
-                    <input type="hidden" name="routineId" value={routineId} />
-                    <input type="hidden" name="routineExerciseId" value={re.id} />
-                    <input type="hidden" name="dir" value="down" />
-                    <button type="submit" style={btnSmall}>↓ Down</button>
-                  </form>
-
-                  <form className="mobileRoutineTemplateDefaultSets" action={setDefaultSets} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input type="hidden" name="routineId" value={routineId} />
-                    <input type="hidden" name="routineExerciseId" value={re.id} />
-                    <label style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>Default sets</label>
-                    <input
-                      name="defaultSets"
-                      className="mobileRoutineTemplateInput"
-                      style={{ ...inputStyle, width: 70 }}
-                      inputMode="numeric"
-                      defaultValue={re.defaultSets}
-                    />
-                    <button type="submit" style={btnSmall}>Set</button>
-                  </form>
-
-                  <form action={removeRoutineExercise}>
-                    <input type="hidden" name="routineId" value={routineId} />
-                    <input type="hidden" name="routineExerciseId" value={re.id} />
-                    <button type="submit" style={{ ...btnSmall, borderColor: "rgba(255,0,0,0.55)" }}>
-                      Remove
-                    </button>
-                  </form>
+                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 3 }}>
+                  {exerciseUnitLabel(re.exercise.unit)}{re.exercise.supportsWeight ? " · Weighted" : ""}
                 </div>
+              </div>
+
+              {/* Controls */}
+              <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", flexShrink: 0 }}>
+                <TemplateMetricControl
+                  routineId={routineId}
+                  routineExerciseId={re.id}
+                  initialUnit={re.exercise.unit}
+                />
+                <DefaultSetsControl
+                  routineId={routineId}
+                  routineExerciseId={re.id}
+                  initialValue={re.defaultSets}
+                />
+                <form action={removeRoutineExercise}>
+                  <input type="hidden" name="routineId" value={routineId} />
+                  <input type="hidden" name="routineExerciseId" value={re.id} />
+                  <button type="submit" style={removeBtn} title="Remove exercise">✕</button>
+                </form>
               </div>
             </div>
           ))}
 
           {attached.length === 0 && (
-            <div style={{ opacity: 0.75 }}>No exercises attached yet. Add one above.</div>
+            <div style={{ opacity: 0.65, fontSize: 13, padding: "4px 2px" }}>No exercises attached yet. Add one above.</div>
           )}
         </div>
       </div>
@@ -193,21 +176,46 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
 const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
-const inputStyle: React.CSSProperties = {
-  padding: 8,
-  border: "1px solid rgba(128,128,128,0.6)",
-  borderRadius: 10,
-  background: "rgba(128,128,128,0.08)",
-  color: "inherit",
+const exerciseCard: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  alignItems: "center",
+  flexWrap: "wrap",
+  border: "1px solid rgba(128,128,128,0.28)",
+  borderRadius: 12,
+  padding: "10px 12px",
+  background: "rgba(128,128,128,0.05)",
 };
 
-const btnSmall: React.CSSProperties = {
-  padding: "7px 10px",
-  border: "1px solid rgba(128,128,128,0.8)",
-  borderRadius: 10,
-  background: "rgba(128,128,128,0.12)",
+const arrowBtn: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid rgba(128,128,128,0.45)",
+  borderRadius: 7,
+  background: "rgba(128,128,128,0.1)",
   color: "inherit",
   fontWeight: 900,
+  fontSize: 13,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const removeBtn: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid rgba(220,38,38,0.4)",
+  borderRadius: 8,
+  background: "rgba(220,38,38,0.08)",
+  color: "inherit",
+  fontWeight: 900,
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const linkBtn: React.CSSProperties = {
@@ -218,13 +226,4 @@ const linkBtn: React.CSSProperties = {
   color: "inherit",
   fontWeight: 800,
   background: "rgba(128,128,128,0.12)",
-};
-
-const saveBtn: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid rgba(115,220,152,0.75)",
-  borderRadius: 10,
-  color: "inherit",
-  fontWeight: 800,
-  background: "rgba(115,220,152,0.16)",
 };
