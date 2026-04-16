@@ -17,10 +17,10 @@ const freshnessLabel: Record<ZoneFreshness, string> = {
 
 const freshnessBadge: Record<ZoneFreshness, React.CSSProperties> = {
   FRESH:           { background: "rgba(229,231,235,0.10)", borderColor: "rgba(229,231,235,0.18)", color: "#E5E7EB" },
-  WORKED_TODAY:    { background: "rgba(45,212,191,0.14)",  borderColor: "rgba(45,212,191,0.30)",  color: "#99F6E4" },
-  RECENTLY_WORKED: { background: "rgba(56,189,248,0.14)",  borderColor: "rgba(56,189,248,0.28)",  color: "#BAE6FD" },
-  RECOVERING:      { background: "rgba(250,204,21,0.14)",  borderColor: "rgba(250,204,21,0.30)",  color: "#FEF08A" },
-  INJURED:         { background: "rgba(251,113,133,0.14)", borderColor: "rgba(251,113,133,0.30)", color: "#FCA5A5" },
+  WORKED_TODAY:    { background: "rgba(67,56,202,0.18)",  borderColor: "rgba(129,140,248,0.36)",  color: "#C7D2FE" },
+  RECENTLY_WORKED: { background: "rgba(37,99,235,0.16)",  borderColor: "rgba(96,165,250,0.34)",  color: "#BFDBFE" },
+  RECOVERING:      { background: "rgba(147,197,253,0.16)",  borderColor: "rgba(147,197,253,0.34)",  color: "#DBEAFE" },
+  INJURED:         { background: "rgba(225,29,29,0.18)", borderColor: "rgba(255,56,56,0.42)", color: "#FCA5A5" },
 };
 
 function dayLabel(ymd: string, today: string) {

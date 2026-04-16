@@ -22,10 +22,10 @@ const SELECTED_INTENSITY = 5;
 
 // Colors: index 0 → intensity 1, index 4 → intensity 5
 const BODY_COLORS = [
-  "#38BDF8", // 1 = recently worked (sky blue)
-  "#FACC15", // 2 = recovering (yellow)
-  "#2DD4BF", // 3 = worked today (teal)
-  "#FB7185", // 4 = injured (red)
+  "#2563EB", // 1 = recently worked (blue)
+  "#93C5FD", // 2 = recovering (light blue)
+  "#4338CA", // 3 = worked today (dark blue-purple)
+  "#E11D1D", // 4 = injured (deep vivid red)
   "#ECFEFF", // 5 = selected (bright cyan-white)
 ] as const;
 
@@ -51,10 +51,10 @@ const CUSTOM_FRONT_ZONES: Array<{ slug: string; label: string; d: string }> = [
 
 const FRESHNESS_FILL: Record<ZoneFreshness, string> = {
   FRESH:            "transparent", // invisible when unworked — only border shows
-  RECENTLY_WORKED:  "#38BDF8",
-  RECOVERING:       "#FACC15",
-  WORKED_TODAY:     "#2DD4BF",
-  INJURED:          "#FB7185",
+  RECENTLY_WORKED:  "#2563EB",
+  RECOVERING:       "#93C5FD",
+  WORKED_TODAY:     "#4338CA",
+  INJURED:          "#E11D1D",
 };
 const SELECTED_FILL = "#ECFEFF";
 
