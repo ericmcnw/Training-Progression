@@ -276,7 +276,7 @@ export default function WorkoutExerciseEditor({
     .join(" · ");
 
   return (
-    <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth: 880 }}>
+    <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth: 880, minWidth: 0 }}>
 
       {/* Exercise blocks card */}
       <div className="mobileCard" style={styles.blocksCard}>
@@ -569,13 +569,17 @@ const styles = {
     borderRadius: 16,
     padding: 14,
     background: "rgba(128,128,128,0.06)",
+    minWidth: 0,
   } as React.CSSProperties,
 
   tabBar: {
     display: "flex",
     gap: 6,
     overflowX: "auto",
-    paddingBottom: 4,
+    overflowY: "visible",
+    paddingBottom: 6,
+    marginBottom: -2,
+    width: "100%",
   } as React.CSSProperties,
 
   tab: {
