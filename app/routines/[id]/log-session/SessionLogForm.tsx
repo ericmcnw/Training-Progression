@@ -42,6 +42,9 @@ export default function SessionLogForm({
   activePainZones?: PainCheckZone[];
   bodyZones?: PainCheckZone[];
 }) {
+  // If the template already has a "Session Notes" textarea metric, hide the generic notes section
+  const templateHasNotes = definitions.some((d) => d.config?.input === "textarea" && d.valueType === "TEXT");
+
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
@@ -197,11 +200,13 @@ export default function SessionLogForm({
         />
       </FormSection>
 
-      <FormSection title="Notes">
-        <Field label="Session notes (optional)">
-          <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
-        </Field>
-      </FormSection>
+      {!templateHasNotes && (
+        <FormSection title="Notes">
+          <Field label="Session notes (optional)">
+            <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </Field>
+        </FormSection>
+      )}
 
       <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 

@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useMemo, useState, useTransition } from "react";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import { logPain } from "@/app/body/actions";
@@ -90,8 +91,10 @@ export default function PainLogForm({ zones, initialSelected = [] }: { zones: Zo
             return (
               <div key={slug} style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: 900 }}>{zone.label}</div>
-                  <div style={{ fontSize: 24, fontWeight: 900 }}>{draft.level}/10</div>
+                  <div style={{ fontWeight: 900, fontSize: 15 }}>{zone.label}</div>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: draft.level >= 7 ? "#F87171" : draft.level >= 4 ? "#FBBF24" : "inherit" }}>
+                    {draft.level}<span style={{ fontSize: 14, fontWeight: 700, opacity: 0.55 }}>/10</span>
+                  </div>
                 </div>
                 <input
                   type="range"
@@ -99,17 +102,26 @@ export default function PainLogForm({ zones, initialSelected = [] }: { zones: Zo
                   max={10}
                   value={draft.level}
                   onChange={(event) => updateDraft(slug, { level: Number(event.target.value) })}
-                  style={{ width: "100%", accentColor: "#F87171", minHeight: 44 }}
+                  style={{ width: "100%", accentColor: "#F87171", minHeight: 44, cursor: "pointer" }}
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 220px) minmax(0, 1fr)", gap: 10 }}>
-                  <select value={draft.context} onChange={(event) => updateDraft(slug, { context: event.target.value as PainContext })}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <select
+                    value={draft.context}
+                    onChange={(event) => updateDraft(slug, { context: event.target.value as PainContext })}
+                    style={selectStyle}
+                  >
                     {contextOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
-                  <input value={draft.notes} onChange={(event) => updateDraft(slug, { notes: event.target.value })} placeholder="Notes optional" />
+                  <input
+                    value={draft.notes}
+                    onChange={(event) => updateDraft(slug, { notes: event.target.value })}
+                    placeholder="Notes (optional)"
+                    style={notesInputStyle}
+                  />
                 </div>
               </div>
             );
@@ -120,12 +132,12 @@ export default function PainLogForm({ zones, initialSelected = [] }: { zones: Zo
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, color: "rgba(255,255,255,0.74)" }}>
+        <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, color: "rgba(255,255,255,0.74)", cursor: "pointer" }}>
           <input type="checkbox" checked={logAnother} onChange={(event) => setLogAnother(event.target.checked)} />
           Log another after submit
         </label>
-        <button type="button" disabled={!canSubmit || pending} onClick={submit}>
-          {pending ? "Logging..." : "Log pain"}
+        <button type="button" disabled={!canSubmit || pending} onClick={submit} style={submitButtonStyle}>
+          {pending ? "Logging..." : "Log Pain"}
         </button>
       </div>
       {status ? <div style={empty}>{status}</div> : null}
@@ -149,4 +161,41 @@ const empty: React.CSSProperties = {
   padding: 12,
   color: "rgba(255,255,255,0.68)",
   fontSize: 13,
+};
+
+const selectStyle: React.CSSProperties = {
+  flex: "0 0 auto",
+  minWidth: 160,
+  padding: "10px 12px",
+  border: "1px solid rgba(128,128,128,0.55)",
+  borderRadius: 12,
+  background: "rgba(128,128,128,0.1)",
+  color: "inherit",
+  fontSize: 14,
+  fontWeight: 700,
+  minHeight: 44,
+};
+
+const notesInputStyle: React.CSSProperties = {
+  flex: "1 1 160px",
+  minWidth: 120,
+  padding: "10px 12px",
+  border: "1px solid rgba(128,128,128,0.55)",
+  borderRadius: 12,
+  background: "rgba(128,128,128,0.08)",
+  color: "inherit",
+  fontSize: 14,
+  minHeight: 44,
+};
+
+const submitButtonStyle: React.CSSProperties = {
+  padding: "11px 22px",
+  border: "1px solid rgba(248,113,113,0.5)",
+  borderRadius: 12,
+  background: "rgba(248,113,113,0.12)",
+  color: "inherit",
+  fontWeight: 900,
+  fontSize: 15,
+  cursor: "pointer",
+  minHeight: 44,
 };

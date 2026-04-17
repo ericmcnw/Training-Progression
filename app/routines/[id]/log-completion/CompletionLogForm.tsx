@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { createCompletionLog } from "../../actions";
 import { Field, FormActions, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
@@ -9,6 +10,17 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [quickSaving, setQuickSaving] = useState(false);
+
+  async function quickSave() {
+    setQuickSaving(true);
+    try {
+      await createCompletionLog({ routineId, completionCount: null, notes: "", performedAtLocal: undefined });
+      window.location.href = "/routines";
+    } finally {
+      setQuickSaving(false);
+    }
+  }
 
   async function onSave() {
     const parsedCount = completionCount.trim() ? Number(completionCount) : null;
@@ -31,21 +43,27 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
     }
   }
 
+  const anyPending = saving || quickSaving;
+
   return (
     <FormStack maxWidth={560}>
-      <FormSection title="Completion details" description="Keep this lightweight. Add a count only when the routine benefits from one.">
+      {/* Quick save — tap once and done */}
+      <button type="button" onClick={quickSave} disabled={anyPending} style={quickSaveBtn}>
+        {quickSaving ? "Saving..." : "✓ Mark Done"}
+      </button>
+
+      {/* Detailed entry */}
+      <FormSection title="Log with details" description="Add a count or notes when you want to track more than just completion.">
         <Field label="Count (optional)" hint="Leave blank for a simple done log.">
           <input
             style={inputStyle}
             value={completionCount}
             onChange={(event) => setCompletionCount(event.target.value)}
             inputMode="numeric"
-            placeholder="Leave blank for a simple done log"
+            placeholder="e.g. 3"
           />
         </Field>
-      </FormSection>
 
-      <FormSection title="Notes">
         <Field label="Session notes (optional)">
           <textarea
             style={textareaStyle}
@@ -59,7 +77,7 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
       <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 
       <FormActions
-        primaryLabel="Save Completion"
+        primaryLabel="Save with Details"
         primaryPendingLabel="Saving..."
         saving={saving}
         onPrimary={onSave}
@@ -68,3 +86,16 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
     </FormStack>
   );
 }
+
+const quickSaveBtn: React.CSSProperties = {
+  width: "100%",
+  padding: "18px 20px",
+  border: "1px solid rgba(115,220,152,0.5)",
+  borderRadius: 16,
+  background: "rgba(115,220,152,0.12)",
+  color: "inherit",
+  fontWeight: 900,
+  fontSize: 18,
+  cursor: "pointer",
+  letterSpacing: 0.3,
+};
