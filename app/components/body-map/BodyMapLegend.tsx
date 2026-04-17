@@ -5,8 +5,8 @@ export const freshnessColors = BODY_FRESHNESS_COLORS;
 
 const legendItems: Array<{ state: ZoneFreshness; label: string }> = [
   { state: "FRESH", label: "Fresh (7+ days or none)" },
-  { state: "WORKED_TODAY", label: "Worked today / yesterday (0-1 days ago)" },
-  { state: "RECENTLY_WORKED", label: "Recently worked (2-3 days ago)" },
+  { state: "WORKED_TODAY", label: "Worked today" },
+  { state: "RECENTLY_WORKED", label: "Recently worked (1-3 days ago)" },
   { state: "RECOVERING", label: "Recovering (4-6 days ago)" },
   { state: "INJURED", label: "Injured (active or flared)" },
 ];

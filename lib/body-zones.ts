@@ -124,7 +124,7 @@ export function computeFreshness(lastWorkedAt: Date | null, injuries: InjuryLike
   const daysSinceWorked = daysSinceDate(lastWorkedAt, now);
   let freshness: ZoneFreshness = "FRESH";
 
-  if (daysSinceWorked != null && daysSinceWorked <= 1) {
+  if (daysSinceWorked === 0) {
     freshness = "WORKED_TODAY";
   } else if (daysSinceWorked != null && daysSinceWorked <= 3) {
     freshness = "RECENTLY_WORKED";

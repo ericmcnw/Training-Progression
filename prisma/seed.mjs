@@ -691,7 +691,7 @@ const starterExercises = [
   { name: "Handstand Hold", unit: "TIME", supportsWeight: false, metadata: ["shoulders", "triceps", "core", "push", "upper-body", "vertical-push", "isometric"] },
   { name: "Shoulder Wall Slide", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "upper-body", "mobility", "rehab"] },
   { name: "Serratus Wall Slide", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "push", "upper-body", "rehab"] },
-  { name: "Serratus Punch", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "push", "upper-body", "rehab"] },
+  { name: "Serratus Punch", unit: "REPS", supportsWeight: true, metadata: ["shoulders", "upper-back", "push", "upper-body", "rehab"] },
   { name: "Wall Angel", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "upper-body", "mobility", "rehab"] },
   { name: "Scapular Push-Up", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "push", "upper-body", "rehab"] },
   { name: "Prone Y Raise", unit: "REPS", supportsWeight: false, metadata: ["shoulders", "upper-back", "pull", "upper-body", "rehab"] },
