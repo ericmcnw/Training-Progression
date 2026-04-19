@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment, Suspense } from "react";
 import CoverageGroupedBarChart from "./CoverageGroupedBarChart";
+import DomainHeatMatrix, { type DomainWeekCell, type DomainWeekLog } from "./DomainHeatMatrix";
 import ProgressSearchTrigger, { type ProgressSearchSuggestion } from "./ProgressSearchTrigger";
 import { getExerciseIndex, getMetadataIndex, getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "./data";
 import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from "./coverage";
@@ -99,83 +100,6 @@ function QuickStatChip({ label, value, sub, accent }: { label: string; value: st
   );
 }
 
-type DomainWeekCell = { domain: RoutineDomain; label: string; weeks: number[] };
-
-function DomainHeatMatrix({ rows, weekLabels }: { rows: DomainWeekCell[]; weekLabels: string[] }) {
-  const maxSessions = Math.max(1, ...rows.flatMap((r) => r.weeks));
-
-  function cellFill(count: number): string {
-    if (count === 0) return "rgba(255,255,255,0.04)";
-    const intensity = Math.min(1, count / Math.max(3, maxSessions));
-    return `rgba(84,203,130,${0.12 + intensity * 0.60})`;
-  }
-
-  function cellBorder(count: number): string {
-    if (count === 0) return "rgba(255,255,255,0.06)";
-    return `rgba(84,203,130,${0.15 + Math.min(0.5, (count / Math.max(3, maxSessions)) * 0.5)})`;
-  }
-
-  if (rows.length === 0) return <div style={{ fontSize: 13, opacity: 0.55 }}>No training logged in this period.</div>;
-
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `140px repeat(${weekLabels.length}, minmax(48px, 1fr))`, gap: 4, minWidth: 0 }}>
-        {/* Header row */}
-        <div />
-        {weekLabels.map((label) => (
-          <div key={label} style={{ fontSize: 10, fontWeight: 800, opacity: 0.5, textAlign: "center", paddingBottom: 4 }}>{label}</div>
-        ))}
-        {/* Data rows */}
-        {rows.map((row) => (
-          <Fragment key={row.domain}>
-            <Link
-              href={`?tab=routines&domain=${row.domain}`}
-              scroll={false}
-              style={{ fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", paddingRight: 8, textDecoration: "none", color: "inherit", opacity: 0.9 }}
-            >
-              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: domainAccent(row.domain), marginRight: 7, flexShrink: 0 }} />
-              {row.label}
-            </Link>
-            {row.weeks.map((count, wi) => (
-              <div
-                key={`cell-${row.domain}-${wi}`}
-                title={count > 0 ? `${count} session${count !== 1 ? "s" : ""}` : "None"}
-                style={{
-                  height: 36,
-                  borderRadius: 8,
-                  background: cellFill(count),
-                  border: `1px solid ${cellBorder(count)}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  fontWeight: count > 0 ? 900 : 400,
-                  opacity: count > 0 ? 1 : 0.5,
-                  color: count > 0 ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.25)",
-                }}
-              >
-                {count > 0 ? count : "·"}
-              </div>
-            ))}
-          </Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function domainAccent(domain: RoutineDomain): string {
-  switch (domain) {
-    case "strength":  return "rgba(84,203,130,0.9)";
-    case "cardio":    return "rgba(78,148,255,0.9)";
-    case "mobility":  return "rgba(192,132,252,0.9)";
-    case "sport":     return "rgba(251,146,60,0.9)";
-    case "recovery":  return "rgba(251,113,133,0.9)";
-    case "skill":     return "rgba(251,199,92,0.9)";
-    case "habit":     return "rgba(156,163,175,0.85)";
-    default:          return "rgba(156,163,175,0.7)";
-  }
-}
 
 function FocusCard({
   eyebrow,
@@ -581,6 +505,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
 
   // Domain heat matrix
   const routineDomainMap = new Map(routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)]));
+  const routineNameMap = new Map(routines.map((r) => [r.id, r.name]));
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
   const heatWeekLabels: string[] = heatWeekStarts.map((d) => `${d.getMonth() + 1}/${d.getDate()}`);
@@ -591,7 +516,12 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
     habit: "Habits", general: "General",
   };
   const heatData = new Map<RoutineDomain, number[]>();
-  for (const d of domainOrder) heatData.set(d, Array(4).fill(0));
+  const heatLogDetails = new Map<RoutineDomain, DomainWeekLog[][]>();
+  for (const d of domainOrder) {
+    heatData.set(d, Array(4).fill(0));
+    heatLogDetails.set(d, Array.from({ length: 4 }, () => []));
+  }
+  const shortDateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
   for (const log of recentLogs) {
     const domain = routineDomainMap.get(log.routineId);
     if (!domain || domain === "general") continue;
@@ -599,11 +529,21 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
       return log.performedAt.getTime() >= wStart.getTime() && log.performedAt.getTime() < wEnd;
     });
-    if (weekIdx >= 0) heatData.get(domain)![weekIdx]++;
+    if (weekIdx >= 0) {
+      heatData.get(domain)![weekIdx]++;
+      const routineName = routineNameMap.get(log.routineId);
+      if (routineName) {
+        heatLogDetails.get(domain)![weekIdx].push({
+          routineId: log.routineId,
+          routineName,
+          performedAtLabel: shortDateFmt.format(log.performedAt),
+        });
+      }
+    }
   }
   const heatMatrixRows: DomainWeekCell[] = domainOrder
     .filter((d) => heatData.get(d)!.some((c) => c > 0) || routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === d && r.isActive))
-    .map((domain) => ({ domain, label: domainLabel[domain], weeks: heatData.get(domain)! }));
+    .map((domain) => ({ domain, label: domainLabel[domain], weeks: heatData.get(domain)!, weekLogs: heatLogDetails.get(domain)! }));
 
   // Routine snapshots
   const routineSnapshots = activeRoutines
