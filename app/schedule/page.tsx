@@ -402,7 +402,7 @@ export default async function SchedulePage({
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
                         <div style={{ display: "grid", gap: 3 }}>
                           {dayItem.tasks.map((task) => (
-                            <div key={task.routineId} style={task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow}>
+                            <div key={task.routineId} style={task.logged > 0 ? completedCalendarTaskRow : { ...calendarTaskRow, borderLeft: `2px solid ${routineKindColor(task.kind)}` }}>
                               {task.latestLogId ? (
                                 <Link
                                   href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}
@@ -495,7 +495,7 @@ const dayLabelBlock: React.CSSProperties = {
 const taskRow: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 7,
-  padding: "1px 7px",
+  padding: "3px 8px",
   background: "rgba(128,128,128,0.06)",
 };
 
@@ -620,12 +620,12 @@ const quickAddBtn: React.CSSProperties = {
 };
 
 const removeBtn: React.CSSProperties = {
-  padding: "1px 5px",
+  padding: "1px 7px",
   border: "1px solid rgba(255,80,80,0.5)",
   borderRadius: 999,
   background: "rgba(255,80,80,0.10)",
   color: "inherit",
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 800,
   cursor: "pointer",
 };
