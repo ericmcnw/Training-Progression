@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
+import { routineKindColor } from "@/lib/routines";
 import ScheduleBoard from "./ScheduleBoard";
 import { quickAddManualEntry, removeManualEntry } from "./actions";
 
@@ -160,6 +161,7 @@ export default async function SchedulePage({
   const routineNameMap = new Map(
     [...routines, ...inactiveReferencedRoutines].map((routine) => [routine.id, fallbackRoutineLabel(routine.name)])
   );
+  const routineKindMap = new Map(routines.map((r) => [r.id, r.kind as string]));
 
   const loggedMap = new Map<string, number>();
   const latestLogIdByDay = new Map<string, string>();
@@ -206,6 +208,7 @@ export default async function SchedulePage({
           return {
             routineId,
             routineName: routineNameMap.get(routineId) ?? "Deleted routine",
+            kind: routineKindMap.get(routineId) ?? null,
             planned,
             logged,
             remaining: Math.max(0, planned - logged),
@@ -309,7 +312,7 @@ export default async function SchedulePage({
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
-                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={task.logged > 0 ? completedTaskRow : taskRow}>
+                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={task.logged > 0 ? completedTaskRow : { ...taskRow, borderLeftColor: routineKindColor(task.kind), borderLeftWidth: 3 }}>
                           <div style={taskRowTop}>
                             {task.latestLogId ? (
                               <Link
@@ -492,12 +495,12 @@ const dayLabelBlock: React.CSSProperties = {
 const taskRow: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 7,
-  padding: "2px 8px",
+  padding: "1px 7px",
   background: "rgba(128,128,128,0.06)",
 };
 
 const logBtn: React.CSSProperties = {
-  padding: "2px 8px",
+  padding: "1px 7px",
   border: "1px solid rgba(84,203,130,0.5)",
   borderRadius: 999,
   background: "rgba(84,203,130,0.12)",
@@ -617,12 +620,12 @@ const quickAddBtn: React.CSSProperties = {
 };
 
 const removeBtn: React.CSSProperties = {
-  padding: "2px 6px",
+  padding: "1px 5px",
   border: "1px solid rgba(255,80,80,0.5)",
   borderRadius: 999,
   background: "rgba(255,80,80,0.10)",
   color: "inherit",
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 800,
   cursor: "pointer",
 };

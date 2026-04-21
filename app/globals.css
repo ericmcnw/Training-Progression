@@ -728,7 +728,7 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileScheduleTaskItem{
-    padding: 2px 7px !important;
+    padding: 1px 6px !important;
     font-size: 12px;
   }
 
