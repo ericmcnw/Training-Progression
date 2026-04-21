@@ -707,14 +707,37 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileScheduleTopRow,
   .mobileScheduleToolbar,
   .mobileScheduleMonthPicker,
-  .mobileScheduleDayRow,
   .mobileScheduleInlineRow{
     flex-direction: column !important;
     align-items: stretch !important;
   }
 
+  .mobileScheduleDayRow{
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 6px 8px !important;
+    gap: 4px !important;
+  }
+
   .mobileScheduleDayLabel{
     min-width: 0 !important;
+  }
+
+  .mobileScheduleTasksGrid{
+    gap: 2px !important;
+  }
+
+  .mobileScheduleTaskItem{
+    border: none !important;
+    border-left: 2px solid rgba(128,128,128,0.3) !important;
+    border-radius: 0 4px 4px 0 !important;
+    padding: 2px 7px !important;
+    background: transparent !important;
+    font-size: 12px;
+  }
+
+  .mobileScheduleTaskDone{
+    border-left-color: rgba(84,203,130,0.55) !important;
   }
 
   .mobileScheduleQuickAdd{

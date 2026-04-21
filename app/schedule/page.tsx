@@ -294,22 +294,22 @@ export default async function SchedulePage({
               </div>
             </div>
 
-            <div style={{ padding: 12, display: "grid", gap: 8 }}>
+            <div style={{ padding: 12, display: "grid", gap: 6 }}>
               {agenda.map((dayItem) => {
                 const isToday = dayItem.day === today;
                 return (
-                  <div key={dayItem.day} style={isToday ? todayDayRow : dayRow}>
-                    <div style={dayLabelBlock}>
-                      <div style={{ fontWeight: 900, fontSize: 13 }}>{formatDayTitle(dayItem.day)}</div>
+                  <div key={dayItem.day} className="mobileScheduleDayRow" style={isToday ? todayDayRow : dayRow}>
+                    <div className="mobileScheduleDayLabel" style={dayLabelBlock}>
+                      <div style={{ fontWeight: 900, fontSize: 12 }}>{formatDayTitle(dayItem.day)}</div>
                     </div>
-                    <div style={{ display: "grid", gap: 5, flex: 1, minWidth: 0 }}>
+                    <div className="mobileScheduleTasksGrid" style={{ display: "grid", gap: 3, flex: 1, minWidth: 0 }}>
                       {dayItem.tasks.length === 0 && (
                         <div style={{ fontSize: 12, opacity: 0.4, fontStyle: "italic" }}>
                           {dayItem.isPastOrToday ? "No activity" : "Nothing planned"}
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
-                        <div key={task.routineId} style={task.logged > 0 ? completedTaskRow : taskRow}>
+                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={task.logged > 0 ? completedTaskRow : taskRow}>
                           <div style={taskRowTop}>
                             {task.latestLogId ? (
                               <Link
@@ -482,7 +482,7 @@ const dayLabelBlock: React.CSSProperties = {
 const taskRow: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 7,
-  padding: "5px 8px",
+  padding: "3px 8px",
   background: "rgba(128,128,128,0.06)",
 };
 
