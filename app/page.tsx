@@ -996,274 +996,281 @@ export default async function HomePage() {
       </section>
 
       <div className="mobileHomeMainGrid" style={mainGrid}>
-        <div className="mobileHomePrimaryColumn" style={{ display: "grid", gap: 14 }}>
-          <section style={panel}>
-            <div style={panelHeader}>TODAY&apos;S FOCUS</div>
-            <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              <div style={sectionSub}>{formatDayLabel(today)}</div>
-              <div className="mobileHomeSummaryGrid" style={summaryGrid}>
-                <div style={summaryRingCard}>
-                  <SummaryFractionRing current={todayDoneRoutines} target={todayPlannedTotal} />
-                </div>
+        {/* ── Column 1: TODAY'S FOCUS ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>TODAY&apos;S FOCUS</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div style={sectionSub}>{formatDayLabel(today)}</div>
+            <div className="mobileHomeSummaryGrid" style={summaryGrid}>
+              <div style={summaryRingCard}>
+                <SummaryFractionRing current={todayDoneRoutines} target={todayPlannedTotal} />
               </div>
-              {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
-              {todayFocus.map((item) => (
-                <div key={item.routineId} style={item.logged > 0 ? focusDoneCard : focusCard}>
-                  <div style={focusCardTopRow}>
-                    <div style={focusCardInfo}>
-                      <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
-                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
-                        {item.category} | {formatRoutineTypeLabel(item.kind)}
-                      </div>
-                      <div style={focusMetaLine}>
-                        Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
-                      </div>
-                    </div>
-                    <div style={focusStatusColumn}>
-                      <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
-                        {item.logged > 0 ? "DONE" : "PLANNED"}
-                      </div>
-                      {item.planned > 0 && (
-                        <Link href={loggingHref(item)} style={focusActionLink}>
-                          Log
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
-          </section>
-
-          <DashboardBodyMap />
-
-          <section style={panel}>
-            <div style={panelHeader}>SUGGESTED NEXT</div>
-            <div style={{ padding: 14, display: "grid", gap: 12 }}>
-              <RehabRoutinePrompt />
-              <div style={sectionSub}>
-                Recommendations prioritize behind-target routines, thin recent coverage, and recent overconcentration. Focus only nudges the ranking when the main evidence is close.
-              </div>
-              {recommendationModel.primaryRecommendation ? (
-                <div style={recommendationPrimaryCard}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 18 }}>{recommendationModel.primaryRecommendation.title}</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.82 }}>{recommendationModel.primaryRecommendation.summary}</div>
+            {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
+            {todayFocus.map((item) => (
+              <div key={item.routineId} style={item.logged > 0 ? focusDoneCard : focusCard}>
+                <div style={focusCardTopRow}>
+                  <div style={focusCardInfo}>
+                    <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
+                      {item.category} | {formatRoutineTypeLabel(item.kind)}
                     </div>
-                    <div style={recommendationPriorityBadge(recommendationModel.primaryRecommendation.priority)}>
-                      {recommendationModel.primaryRecommendation.priority.toUpperCase()}
+                    <div style={focusMetaLine}>
+                      Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
                     </div>
                   </div>
-
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {(recommendationModel.emphasisLabels.length > 0 ? recommendationModel.emphasisLabels : ["No special focus"]).slice(0, 3).map((label) => (
-                      <span key={label} style={recommendationChip}>
-                        {label}
-                      </span>
-                    ))}
-                    {recommendationModel.primaryRecommendation.targetCategories.map((slug) => (
-                      <span key={slug} style={recommendationChipMuted}>
-                        {slug}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <Link href={recommendationModel.primaryRecommendation.suggestedAction.href} style={recommendationActionLink}>
-                      {recommendationModel.primaryRecommendation.suggestedAction.label}
-                    </Link>
-                    {recommendationModel.primaryRecommendation.suggestedRoutines[1] ? (
-                      <Link href={recommendationModel.primaryRecommendation.suggestedRoutines[1].href} style={recommendationSecondaryLink}>
-                        Or {recommendationModel.primaryRecommendation.suggestedRoutines[1].name}
+                  <div style={focusStatusColumn}>
+                    <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
+                      {item.logged > 0 ? "DONE" : "PLANNED"}
+                    </div>
+                    {item.planned > 0 && (
+                      <Link href={loggingHref(item)} style={focusActionLink}>
+                        Log
                       </Link>
-                    ) : null}
+                    )}
                   </div>
-
-                  <details style={recommendationDetails}>
-                    <summary data-collapsible-summary style={recommendationSummary}>
-                      Why?
-                    </summary>
-                    <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                      {recommendationModel.primaryRecommendation.rationale.map((item) => (
-                        <div key={item} style={recommendationWhyRow}>
-                          {item}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
                 </div>
-              ) : (
-                <div style={emptyState}>Recommendations will appear once there is enough recent routine and coverage history to rank the next best move.</div>
-              )}
+              </div>
+            ))}
+          </div>
+        </section>
 
-              {recommendationModel.secondaryRecommendations.length > 0 ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {recommendationModel.secondaryRecommendations.map((item) => (
-                    <div key={item.id} style={recommendationSecondaryCard}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                        <div style={{ display: "grid", gap: 5, minWidth: 0 }}>
-                          <div style={{ fontWeight: 800 }}>{item.title}</div>
-                          <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.76 }}>{item.summary}</div>
-                        </div>
-                        <div style={recommendationPriorityBadge(item.priority)}>{item.priority.toUpperCase()}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <Link href={item.suggestedAction.href} style={recommendationSecondaryLink}>
-                          {item.suggestedAction.label}
-                        </Link>
-                        {item.suggestedRoutines[1] ? <span style={{ fontSize: 12, opacity: 0.62 }}>or {item.suggestedRoutines[1].name}</span> : null}
-                      </div>
-                    </div>
+        {/* ── Column 2: TRAINING BALANCE ── */}
+        <section style={{ ...panel, gridColumn: 2 }}>
+          <div style={panelHeader}>TRAINING BALANCE <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}>· last 4 weeks</span></div>
+          <div style={{ padding: "12px 14px 14px", display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.45 }}>
+              Sessions across all training domains. Quiet domains may need attention.
+            </div>
+            <TrainingBalance rows={trainingBalanceRowsWithMax} />
+            {trainingBalanceRowsWithMax.length === 0 && (
+              <div style={{ fontSize: 12, opacity: 0.55 }}>No training logged yet. Start a session to see your balance.</div>
+            )}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+              <Link href="/progress" style={secondaryLinkBlock}>Full Progress View →</Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 1: BODY MAP ── */}
+        <div style={{ gridColumn: 1 }}>
+          <DashboardBodyMap />
+        </div>
+
+        {/* ── Column 2: WEEKLY MOMENTUM ── */}
+        <div className="homeMomentumSection" style={{ gridColumn: 2 }}>
+          <WeeklyMomentumSectionBoundary
+            weekDateRangeLabel={weekDateRangeLabel}
+            weekLoggedTotal={weekLoggedTotal}
+            weekSessionTargetTotal={weekSessionTargetTotal}
+            totalWeeklyCardioMiles={totalWeeklyCardioMiles}
+            cardioTypeGroups={cardioTypeGroups}
+            weeklySeries={weeklySeries.map((item) => ({
+              ...item,
+              logs: item.logs.map((log) => ({
+                ...log,
+                performedAt: log.performedAt.toISOString(),
+              })),
+            }))}
+            weeklySparkPoints={weeklySparkPoints}
+            recentCompletions={recentCompletions.map((item) => ({
+              ...item,
+              lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+            }))}
+            needsAttention={needsAttention.map((item) => ({
+              ...item,
+              lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+            }))}
+          />
+        </div>
+
+        {/* ── Column 1: SUGGESTED NEXT ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>SUGGESTED NEXT</div>
+          <div style={{ padding: 14, display: "grid", gap: 12 }}>
+            <RehabRoutinePrompt />
+            <div style={sectionSub}>
+              Recommendations prioritize behind-target routines, thin recent coverage, and recent overconcentration. Focus only nudges the ranking when the main evidence is close.
+            </div>
+            {recommendationModel.primaryRecommendation ? (
+              <div style={recommendationPrimaryCard}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <div style={{ fontWeight: 900, fontSize: 18 }}>{recommendationModel.primaryRecommendation.title}</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.82 }}>{recommendationModel.primaryRecommendation.summary}</div>
+                  </div>
+                  <div style={recommendationPriorityBadge(recommendationModel.primaryRecommendation.priority)}>
+                    {recommendationModel.primaryRecommendation.priority.toUpperCase()}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(recommendationModel.emphasisLabels.length > 0 ? recommendationModel.emphasisLabels : ["No special focus"]).slice(0, 3).map((label) => (
+                    <span key={label} style={recommendationChip}>
+                      {label}
+                    </span>
+                  ))}
+                  {recommendationModel.primaryRecommendation.targetCategories.map((slug) => (
+                    <span key={slug} style={recommendationChipMuted}>
+                      {slug}
+                    </span>
                   ))}
                 </div>
-              ) : null}
-              {recommendationModel.hiddenDueToInjury.length > 0 ? (
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <Link href={recommendationModel.primaryRecommendation.suggestedAction.href} style={recommendationActionLink}>
+                    {recommendationModel.primaryRecommendation.suggestedAction.label}
+                  </Link>
+                  {recommendationModel.primaryRecommendation.suggestedRoutines[1] ? (
+                    <Link href={recommendationModel.primaryRecommendation.suggestedRoutines[1].href} style={recommendationSecondaryLink}>
+                      Or {recommendationModel.primaryRecommendation.suggestedRoutines[1].name}
+                    </Link>
+                  ) : null}
+                </div>
+
                 <details style={recommendationDetails}>
                   <summary data-collapsible-summary style={recommendationSummary}>
-                    Hidden due to injury
+                    Why?
                   </summary>
                   <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                    {recommendationModel.hiddenDueToInjury.map((item) => (
-                      <div key={item.routineId} style={recommendationWhyRow}>
-                        <Link href={item.href} style={{ color: "inherit", fontWeight: 900 }}>
-                          {item.routineName}
-                        </Link>{" "}
-                        - {item.reason}
+                    {recommendationModel.primaryRecommendation.rationale.map((item) => (
+                      <div key={item} style={recommendationWhyRow}>
+                        {item}
                       </div>
                     ))}
                   </div>
                 </details>
-              ) : null}
-            </div>
-          </section>
-
-          <section style={panel}>
-            <div style={panelHeader}>TOMORROW PREVIEW</div>
-            <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              <div style={sectionSub}>{formatDayLabel(tomorrow)}</div>
-              <div style={summaryCard}>
-                <div style={summaryLabel}>Tomorrow Planned</div>
-                <div style={summaryValue}>{tomorrowPlannedTotal}</div>
-                <div style={summarySub}>planned entries tomorrow</div>
               </div>
-              {tomorrowPlan.length === 0 && <div style={emptyState}>Nothing planned yet for tomorrow.</div>}
-              <div className="mobileHomeTomorrowGrid" style={tomorrowPreviewGrid}>
-                {tomorrowPlan.slice(0, 8).map((item) => (
-                  <div key={`tomorrow-${item.routineId}`} style={metricChip}>
-                    {item.routineName} ({item.kind}) | planned {item.planned}
+            ) : (
+              <div style={emptyState}>Recommendations will appear once there is enough recent routine and coverage history to rank the next best move.</div>
+            )}
+
+            {recommendationModel.secondaryRecommendations.length > 0 ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                {recommendationModel.secondaryRecommendations.map((item) => (
+                  <div key={item.id} style={recommendationSecondaryCard}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ display: "grid", gap: 5, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800 }}>{item.title}</div>
+                        <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.76 }}>{item.summary}</div>
+                      </div>
+                      <div style={recommendationPriorityBadge(item.priority)}>{item.priority.toUpperCase()}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <Link href={item.suggestedAction.href} style={recommendationSecondaryLink}>
+                        {item.suggestedAction.label}
+                      </Link>
+                      {item.suggestedRoutines[1] ? <span style={{ fontSize: 12, opacity: 0.62 }}>or {item.suggestedRoutines[1].name}</span> : null}
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </section>
-
-          <section style={panel}>
-            <div style={panelHeader}>RECENT ACTIVITY</div>
-            <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              {recentItems.length === 0 && <div style={emptyState}>No logs yet.</div>}
-              {recentItems.map((item) => (
-                <div key={item.id} className="mobileHomeActivityRow" style={activityRow}>
-                  <div style={activityDot(item.kind)} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800 }}>{item.name}</div>
-                    <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
-                      {item.category} | {item.detail}
+            ) : null}
+            {recommendationModel.hiddenDueToInjury.length > 0 ? (
+              <details style={recommendationDetails}>
+                <summary data-collapsible-summary style={recommendationSummary}>
+                  Hidden due to injury
+                </summary>
+                <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                  {recommendationModel.hiddenDueToInjury.map((item) => (
+                    <div key={item.routineId} style={recommendationWhyRow}>
+                      <Link href={item.href} style={{ color: "inherit", fontWeight: 900 }}>
+                        {item.routineName}
+                      </Link>{" "}
+                      - {item.reason}
                     </div>
-                  </div>
-                  <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
+                  ))}
                 </div>
-              ))}
-              <Link href="/manual-log" style={secondaryLinkBlock}>Open Log History</Link>
-            </div>
-          </section>
-        </div>
-
-        <div className="mobileHomeSecondaryColumn" style={{ display: "grid", gap: 14 }}>
-          <section style={panel}>
-            <div style={panelHeader}>TRAINING BALANCE <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}>· last 4 weeks</span></div>
-            <div style={{ padding: "12px 14px 14px", display: "grid", gap: 10 }}>
-              <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.45 }}>
-                Sessions across all training domains. Quiet domains may need attention.
-              </div>
-              <TrainingBalance rows={trainingBalanceRowsWithMax} />
-              {trainingBalanceRowsWithMax.length === 0 && (
-                <div style={{ fontSize: 12, opacity: 0.55 }}>No training logged yet. Start a session to see your balance.</div>
-              )}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
-                <Link href="/progress" style={secondaryLinkBlock}>Full Progress View →</Link>
-              </div>
-            </div>
-          </section>
-
-          <div className="homeMomentumSection">
-            <WeeklyMomentumSectionBoundary
-              weekDateRangeLabel={weekDateRangeLabel}
-              weekLoggedTotal={weekLoggedTotal}
-              weekSessionTargetTotal={weekSessionTargetTotal}
-              totalWeeklyCardioMiles={totalWeeklyCardioMiles}
-              cardioTypeGroups={cardioTypeGroups}
-              weeklySeries={weeklySeries.map((item) => ({
-                ...item,
-                logs: item.logs.map((log) => ({
-                  ...log,
-                  performedAt: log.performedAt.toISOString(),
-                })),
-              }))}
-              weeklySparkPoints={weeklySparkPoints}
-              recentCompletions={recentCompletions.map((item) => ({
-                ...item,
-                lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
-              }))}
-              needsAttention={needsAttention.map((item) => ({
-                ...item,
-                lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
-              }))}
-            />
+              </details>
+            ) : null}
           </div>
+        </section>
 
-          <section style={panel}>
-            <div style={panelHeader}>ACTIVE GOALS</div>
-            <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              {goalCards.length === 0 && <div style={emptyState}>No active goals yet.</div>}
-              {goalCards.map((goal) => (
-                <div key={goal.id} style={goalRow}>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{goal.title}</div>
-                    <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
-                      Target: {goal.target} | Created: {goal.createdAt}
-                    </div>
+        {/* ── Column 2: ACTIVE GOALS ── */}
+        <section style={{ ...panel, gridColumn: 2 }}>
+          <div style={panelHeader}>ACTIVE GOALS</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            {goalCards.length === 0 && <div style={emptyState}>No active goals yet.</div>}
+            {goalCards.map((goal) => (
+              <div key={goal.id} style={goalRow}>
+                <div>
+                  <div style={{ fontWeight: 800 }}>{goal.title}</div>
+                  <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
+                    Target: {goal.target} | Created: {goal.createdAt}
                   </div>
                 </div>
-              ))}
-              <Link href="/goals" style={secondaryLinkBlock}>Manage Goals</Link>
-            </div>
-          </section>
-
-          <section style={panel}>
-            <div style={panelHeader}>QUICK PATHS</div>
-            <div style={{ padding: 14, display: "grid", gap: 10 }}>
-              <div className="mobileHomeQuickGrid" style={quickGrid}>
-                <Link href="/routines?mode=new" style={quickCard}>
-                  <div style={quickTitle}>New Routine</div>
-                  <div style={quickSub}>Add a workout, cardio, or check routine.</div>
-                </Link>
-                <Link href="/schedule" style={quickCard}>
-                  <div style={quickTitle}>Plan Week</div>
-                  <div style={quickSub}>Adjust today and this month on the schedule board.</div>
-                </Link>
-                <Link href="/progress" style={quickCard}>
-                  <div style={quickTitle}>Review Trends</div>
-                  <div style={quickSub}>Open progression charts and completion history.</div>
-                </Link>
-                <Link href="/goals?mode=new" style={quickCard}>
-                  <div style={quickTitle}>Set Goal</div>
-                  <div style={quickSub}>Start from a goal template tied to routine, cardio, exercise, or group progress.</div>
-                </Link>
               </div>
+            ))}
+            <Link href="/goals" style={secondaryLinkBlock}>Manage Goals</Link>
+          </div>
+        </section>
+
+        {/* ── Column 1: TOMORROW PREVIEW ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>TOMORROW PREVIEW</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div style={sectionSub}>{formatDayLabel(tomorrow)}</div>
+            <div style={summaryCard}>
+              <div style={summaryLabel}>Tomorrow Planned</div>
+              <div style={summaryValue}>{tomorrowPlannedTotal}</div>
+              <div style={summarySub}>planned entries tomorrow</div>
             </div>
-          </section>
-        </div>
+            {tomorrowPlan.length === 0 && <div style={emptyState}>Nothing planned yet for tomorrow.</div>}
+            <div className="mobileHomeTomorrowGrid" style={tomorrowPreviewGrid}>
+              {tomorrowPlan.slice(0, 8).map((item) => (
+                <div key={`tomorrow-${item.routineId}`} style={metricChip}>
+                  {item.routineName} ({item.kind}) | planned {item.planned}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 2: QUICK PATHS ── */}
+        <section style={{ ...panel, gridColumn: 2 }}>
+          <div style={panelHeader}>QUICK PATHS</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div className="mobileHomeQuickGrid" style={quickGrid}>
+              <Link href="/routines?mode=new" style={quickCard}>
+                <div style={quickTitle}>New Routine</div>
+                <div style={quickSub}>Add a workout, cardio, or check routine.</div>
+              </Link>
+              <Link href="/schedule" style={quickCard}>
+                <div style={quickTitle}>Plan Week</div>
+                <div style={quickSub}>Adjust today and this month on the schedule board.</div>
+              </Link>
+              <Link href="/progress" style={quickCard}>
+                <div style={quickTitle}>Review Trends</div>
+                <div style={quickSub}>Open progression charts and completion history.</div>
+              </Link>
+              <Link href="/goals?mode=new" style={quickCard}>
+                <div style={quickTitle}>Set Goal</div>
+                <div style={quickSub}>Start from a goal template tied to routine, cardio, exercise, or group progress.</div>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 1: RECENT ACTIVITY ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>RECENT ACTIVITY</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            {recentItems.length === 0 && <div style={emptyState}>No logs yet.</div>}
+            {recentItems.map((item) => (
+              <div key={item.id} className="mobileHomeActivityRow" style={activityRow}>
+                <div style={activityDot(item.kind)} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
+                    {item.category} | {item.detail}
+                  </div>
+                </div>
+                <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
+              </div>
+            ))}
+            <Link href="/manual-log" style={secondaryLinkBlock}>Open Log History</Link>
+          </div>
+        </section>
       </div>
     </div>
   );

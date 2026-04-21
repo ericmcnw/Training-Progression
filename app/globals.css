@@ -431,16 +431,7 @@ details[open] > summary[data-collapsible-summary]::before{
 }
 
 @media (max-width: 900px){
-  .homeMomentumSection{
-    order: -1;
-  }
-
   .mobileHomeMainGrid{
-    grid-template-columns: 1fr !important;
-  }
-
-  .mobileHomePrimaryColumn,
-  .mobileHomeSecondaryColumn{
     grid-template-columns: 1fr !important;
   }
 
