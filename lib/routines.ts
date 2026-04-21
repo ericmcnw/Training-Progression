@@ -70,11 +70,11 @@ export function routineKindColor(kind: string | null | undefined) {
     case "WORKOUT":
       return "rgba(34,197,94,0.85)";
     case "GUIDED":
-      return "rgba(236,153,75,0.85)";
+      return "rgba(168,85,247,0.85)";
     case "SESSION":
-      return "rgba(244,114,182,0.85)";
+      return "rgba(234,179,8,0.85)";
     default:
-      return "rgba(255,199,92,0.85)";
+      return "rgba(244,114,182,0.85)";
   }
 }
 
