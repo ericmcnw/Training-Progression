@@ -321,14 +321,24 @@ export default async function SchedulePage({
                             ) : (
                               <span style={{ fontWeight: 800 }}>{task.routineName}</span>
                             )}
-                            {task.removableManualEntryId ? (
-                              <form action={removeManualEntry}>
-                                <input type="hidden" name="entryId" value={task.removableManualEntryId} />
-                                <input type="hidden" name="returnStart" value={timelineStart} />
-                                <input type="hidden" name="returnMonth" value={selectedMonth} />
-                                <button type="submit" style={removeBtn}>✕</button>
-                              </form>
-                            ) : null}
+                            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+                              {isToday && (
+                                <Link
+                                  href={`/routines/${task.routineId}/log?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}
+                                  style={logBtn}
+                                >
+                                  Log
+                                </Link>
+                              )}
+                              {task.removableManualEntryId ? (
+                                <form action={removeManualEntry}>
+                                  <input type="hidden" name="entryId" value={task.removableManualEntryId} />
+                                  <input type="hidden" name="returnStart" value={timelineStart} />
+                                  <input type="hidden" name="returnMonth" value={selectedMonth} />
+                                  <button type="submit" style={removeBtn}>✕</button>
+                                </form>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -482,8 +492,20 @@ const dayLabelBlock: React.CSSProperties = {
 const taskRow: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 7,
-  padding: "3px 8px",
+  padding: "2px 8px",
   background: "rgba(128,128,128,0.06)",
+};
+
+const logBtn: React.CSSProperties = {
+  padding: "2px 8px",
+  border: "1px solid rgba(84,203,130,0.5)",
+  borderRadius: 999,
+  background: "rgba(84,203,130,0.12)",
+  color: "rgba(84,203,130,1)",
+  fontSize: 11,
+  fontWeight: 800,
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };
 
 const completedTaskRow: React.CSSProperties = {

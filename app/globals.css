@@ -728,16 +728,8 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileScheduleTaskItem{
-    border: none !important;
-    border-left: 2px solid rgba(128,128,128,0.3) !important;
-    border-radius: 0 4px 4px 0 !important;
     padding: 2px 7px !important;
-    background: transparent !important;
     font-size: 12px;
-  }
-
-  .mobileScheduleTaskDone{
-    border-left-color: rgba(84,203,130,0.55) !important;
   }
 
   .mobileScheduleQuickAdd{
