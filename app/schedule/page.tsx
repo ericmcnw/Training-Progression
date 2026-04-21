@@ -621,7 +621,14 @@ const quickAddBtn: React.CSSProperties = {
 };
 
 const removeBtn: React.CSSProperties = {
-  padding: "1px 7px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 20,
+  height: 18,
+  minWidth: 0,
+  minHeight: 0,
+  padding: 0,
   border: "1px solid rgba(255,80,80,0.5)",
   borderRadius: 999,
   background: "rgba(255,80,80,0.10)",
@@ -629,7 +636,7 @@ const removeBtn: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 800,
   cursor: "pointer",
-  lineHeight: "14px",
+  lineHeight: 1,
   appearance: "none",
   WebkitAppearance: "none",
 };
