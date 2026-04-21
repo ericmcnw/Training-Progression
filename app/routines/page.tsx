@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import NewRoutinePageContent from "./NewRoutinePageContent";
 import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
-import { formatRoutineTypeLabel, normalizeRoutineKind } from "@/lib/routines";
+import { formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import RoutineCard from "./RoutineCard";
@@ -235,11 +235,13 @@ export default async function RoutinesPage(props: {
         {orderedTypes.map((typeLabel) => {
           const list = groups.get(typeLabel)!;
           const isWorkoutSection = typeLabel === formatRoutineTypeLabel("WORKOUT");
+          const accentColor = routineKindColor(list[0]?.kind);
           return (
             <RoutineSection
               key={typeLabel}
               title={typeLabel.toUpperCase()}
               count={list.length}
+              accentColor={accentColor}
               quickLogHref={isWorkoutSection ? "/routines?mode=quick-log" : undefined}
             >
               {list.map((routine) => (

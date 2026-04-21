@@ -7,11 +7,13 @@ export default function RoutineSection({
   title,
   count,
   quickLogHref,
+  accentColor,
   children,
 }: {
   title: string;
   count: number;
   quickLogHref?: string;
+  accentColor?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -21,6 +23,7 @@ export default function RoutineSection({
       className="mobileSectionCard"
       style={{
         border: "1px solid rgba(128,128,128,0.35)",
+        borderLeft: accentColor ? `3px solid ${accentColor}` : "1px solid rgba(128,128,128,0.35)",
         borderRadius: 16,
         overflow: "hidden",
       }}
@@ -60,7 +63,7 @@ export default function RoutineSection({
           >
             {open ? "▴" : "▾"}
           </span>
-          <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5 }}>{title}</span>
+          <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5, color: accentColor ?? "inherit" }}>{title}</span>
         </button>
 
         {quickLogHref ? (

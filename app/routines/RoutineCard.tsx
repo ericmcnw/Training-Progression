@@ -8,6 +8,7 @@ import {
   isGuidedKind,
   isWorkoutKind,
   normalizeRoutineKind,
+  routineKindColor,
 } from "@/lib/routines";
 import { formatRoutineTargetLabel, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import {
@@ -86,6 +87,7 @@ export default function RoutineCard({
   goalContributions?: string[];
 }) {
   const kind = normalizeRoutineKind(routine.kind);
+  const kindColor = routineKindColor(kind);
   const definingLabel = getDefiningLabel(routine);
   const exercisePreview = isWorkoutKind(kind)
     ? routine.exercises.map((item) => formatRoutinePreviewExerciseName(item.exercise.name)).join(", ")
@@ -126,7 +128,7 @@ export default function RoutineCard({
       : formatRoutineTargetLabel(routine);
 
   return (
-    <div className="routineCard" style={{ opacity: allowLogging ? 1 : 0.72 }}>
+    <div className="routineCard" style={{ opacity: allowLogging ? 1 : 0.72, borderLeftColor: kindColor, borderLeftWidth: 3 }}>
       <div className="routineCardLayout">
         <div className="routineCardContent">
           <div className="routineCardTitleRow">
@@ -166,7 +168,7 @@ export default function RoutineCard({
             {!allowLogging ? <span className="routineCardArchivedPill">Archived</span> : null}
           </div>
 
-          {kindSummary ? <div className="routineCardKindLine">{kindSummary}</div> : null}
+          {kindSummary ? <div className="routineCardKindLine" style={{ color: kindColor }}>{kindSummary}</div> : null}
 
           <div className="routineCardMetaLine">
             <span>Last: <b>{lastCompletedLabel}</b></span>
