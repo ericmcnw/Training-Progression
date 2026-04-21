@@ -106,7 +106,7 @@ export function getRoutineCompletionCountInTargetWindow(
 ) {
   const window = getRoutineTargetWindow(target, now);
   if (!window) return 0;
-  return logs.filter((log) => log.performedAt.getTime() >= window.start.getTime() && log.performedAt.getTime() <= window.end.getTime()).length;
+  return logs.filter((log) => log.performedAt.getTime() >= window.start.getTime() && log.performedAt.getTime() < window.end.getTime()).length;
 }
 
 export function getRoutineFrequencyStatus(params: {

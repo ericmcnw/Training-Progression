@@ -477,7 +477,7 @@ async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnTy
 
   const logs = await prisma.routineLog.findMany({
     where: {
-      performedAt: { gte: start, lte: end },
+      performedAt: { gte: start, lt: end },
       ...(targetFilters.length > 1 ? { OR: targetFilters } : targetFilters.length === 1 ? targetFilters[0] : { id: "__none__" }),
     },
     include: {
@@ -813,7 +813,7 @@ async function buildGoalInsightCore(
   const currentLogs = allLogs.filter(
     (log) =>
       log.performedAt.getTime() >= window.currentStart.getTime() &&
-      log.performedAt.getTime() <= window.currentEnd.getTime()
+      log.performedAt.getTime() < window.currentEnd.getTime()
   );
   const distinctCurrentLogs = distinctLogs(currentLogs);
   const exerciseIds = new Set(descriptor.filter.exerciseIds);
@@ -1013,10 +1013,10 @@ function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, 
   });
   const timeframe = timeframeForRoutineFrequencyGoal(routine);
   const currentWindowLogs = frequency.window
-    ? logs.filter(
+      ? logs.filter(
         (log) =>
           log.performedAt.getTime() >= frequency.window!.start.getTime() &&
-          log.performedAt.getTime() <= frequency.window!.end.getTime()
+          log.performedAt.getTime() < frequency.window!.end.getTime()
       )
     : [];
   const actualValue = frequency.currentCount;

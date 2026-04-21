@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { todayAppYmd } from "@/lib/dates";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
 import { createInjury } from "../actions";
 import { prisma } from "@/lib/prisma";
@@ -29,7 +30,7 @@ export default async function NewInjuryPage(props: { searchParams?: Promise<Sear
         </Link>
       </div>
       <section style={panel}>
-        <InjuryForm zones={zones} submitLabel="Create injury" action={createInjury} initial={zone ? { name: "", severity: 2, status: "ACTIVE", startedAt: new Date().toISOString().slice(0, 10), zoneSlugs: [zone] } : undefined} />
+        <InjuryForm zones={zones} submitLabel="Create injury" action={createInjury} initial={zone ? { name: "", severity: 2, status: "ACTIVE", startedAt: todayAppYmd(), zoneSlugs: [zone] } : undefined} />
       </section>
     </main>
   );

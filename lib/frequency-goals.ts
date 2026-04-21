@@ -41,7 +41,7 @@ export function getFrequencyGoalProgress(params: {
   const routineIdSet = new Set(goal.routineIds);
 
   const currentCount = logs.filter(
-    (log) => routineIdSet.has(log.routineId) && log.performedAt >= windowStart && log.performedAt <= now
+    (log) => routineIdSet.has(log.routineId) && log.performedAt >= windowStart && log.performedAt < now
   ).length;
 
   const remainingCount = Math.max(0, goal.targetCount - currentCount);

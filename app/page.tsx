@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 function utcDateOnlyYmd(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toISOString().slice(0, 10);
+  return toAppYmd(date);
 }
 
 function addDays(ymd: string, plus: number) {

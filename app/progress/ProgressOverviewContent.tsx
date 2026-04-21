@@ -12,9 +12,10 @@ import { PillNav, ProgressShell, SectionCard, SectionLinkButton, TargetCard } fr
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { getRecommendationModel, type TrainingRecommendation } from "@/lib/recommendations";
-import { getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { prisma } from "@/lib/prisma";
 import { effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
+import { toAppYmd } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -350,13 +351,9 @@ async function CoverageSection({
 type RoutineIndexItem = Awaited<ReturnType<typeof getRoutineIndex>>[number];
 type ExerciseIndexItem = Awaited<ReturnType<typeof getExerciseIndex>>[number];
 type GroupIndexItem = Awaited<ReturnType<typeof getMetadataIndex>>[number];
-type RoutineLogItem = Awaited<ReturnType<typeof getRoutineLogs>>[number];
 
 async function DrillDownSection({
-  routines,
-  exercises,
   groups,
-  recentLogs,
   recentActive,
   featuredExercise,
   featuredGroups,
@@ -364,10 +361,7 @@ async function DrillDownSection({
   searchResults,
   hasQuery,
 }: {
-  routines: RoutineIndexItem[];
-  exercises: ExerciseIndexItem[];
   groups: GroupIndexItem[];
-  recentLogs: RoutineLogItem[];
   recentActive: RoutineSnapshotItem[];
   featuredExercise: {
     exercise: ExerciseIndexItem;
@@ -471,26 +465,28 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
 
   // Fetch all fast data in a single parallel batch.
-  // Frequency logs use a fixed 35-day window so they can run in parallel
-  // without waiting for routines to compute the max window first.
-  const FREQ_WINDOW_MS = 35 * 24 * 60 * 60 * 1000;
-  const [routines, exercises, groups, recentLogs, frequencyLogs] = await Promise.all([
+  const [routines, exercises, groups, recentLogs] = await Promise.all([
     getRoutineIndex(),
     getExerciseIndex(),
     getMetadataIndex(),
     getRoutineLogs("4w"),
-    prisma.routineLog.findMany({
-      where: { performedAt: { gte: new Date(now.getTime() - FREQ_WINDOW_MS) } },
-      select: { routineId: true, performedAt: true },
-    }),
   ]);
+  const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
+  const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
+  const frequencyLogs =
+    maxFrequencyWindowDays > 0
+      ? await prisma.routineLog.findMany({
+          where: { performedAt: { gte: frequencyWindowStart } },
+          select: { routineId: true, performedAt: true },
+        })
+      : [];
 
   // In-memory computations (fast)
   const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({ routines, logs: frequencyLogs, now });
   const activeRoutines = routines.filter((r) => r.isActive);
   const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekLogs = recentLogs.filter((log) => log.performedAt >= weekStart);
-  const weekActiveDays = new Set(weekLogs.map((log) => log.performedAt.toISOString().slice(0, 10))).size;
+  const weekActiveDays = new Set(weekLogs.map((log) => toAppYmd(log.performedAt))).size;
   const totalCardioMilesWeek = weekLogs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0);
   // Only count active routines that have an actual frequency target — routines
   // without one have status "no_target" and should not inflate the denominator.
@@ -721,10 +717,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         }
       >
         <DrillDownSection
-          routines={routines}
-          exercises={exercises}
           groups={groups}
-          recentLogs={recentLogs}
           recentActive={recentActive}
           featuredExercise={featuredExercise}
           featuredGroups={featuredGroups}

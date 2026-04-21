@@ -5,7 +5,7 @@ import InjuryForm from "@/app/components/injuries/InjuryForm";
 import { getInjury, updateInjury } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate, formatAppDateTime } from "@/lib/dates";
+import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +67,8 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
             name: injury.name,
             severity: injury.severity,
             status: injury.status,
-            startedAt: injury.startedAt.toISOString().slice(0, 10),
-            resolvedAt: injury.resolvedAt?.toISOString().slice(0, 10) ?? "",
+            startedAt: toAppYmd(injury.startedAt),
+            resolvedAt: injury.resolvedAt ? toAppYmd(injury.resolvedAt) : "",
             notes: injury.notes ?? "",
             zoneSlugs,
           }}

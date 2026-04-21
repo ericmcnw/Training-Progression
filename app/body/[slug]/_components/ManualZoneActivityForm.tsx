@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addManualZoneActivity } from "@/app/body/actions";
+import { todayAppYmd } from "@/lib/dates";
 
 export default function ManualZoneActivityForm({ zoneSlug }: { zoneSlug: string }) {
   const router = useRouter();
-  const [performedAt, setPerformedAt] = useState(new Date().toISOString().slice(0, 10));
+  const [performedAt, setPerformedAt] = useState(todayAppYmd());
   const [label, setLabel] = useState("");
   const [intensity, setIntensity] = useState("");
   const [notes, setNotes] = useState("");

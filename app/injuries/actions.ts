@@ -1,6 +1,7 @@
 "use server";
 
 import type { InjuryStatus } from "@/generated/prisma";
+import { getAppDayRange } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -21,8 +22,8 @@ function sanitizeInput(data: InjuryInput) {
   if (!name) throw new Error("Name is required.");
   const status = statuses.has(data.status) ? data.status : "ACTIVE";
   const severity = Math.max(1, Math.min(5, Math.round(Number(data.severity))));
-  const startedAt = data.startedAt ? new Date(`${data.startedAt}T00:00:00.000`) : new Date();
-  const resolvedAt = status === "RESOLVED" && data.resolvedAt ? new Date(`${data.resolvedAt}T00:00:00.000`) : null;
+  const startedAt = data.startedAt ? getAppDayRange(data.startedAt).start : new Date();
+  const resolvedAt = status === "RESOLVED" && data.resolvedAt ? getAppDayRange(data.resolvedAt).start : null;
   const zoneSlugs = Array.from(new Set(data.zoneSlugs.map((slug) => slug.trim()).filter(Boolean)));
   if (zoneSlugs.length === 0) throw new Error("Select at least one affected zone.");
   return { name, severity, status, startedAt, resolvedAt, notes: data.notes?.trim() || null, zoneSlugs };

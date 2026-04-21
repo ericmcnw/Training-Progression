@@ -6,6 +6,7 @@ import BodyMap from "@/app/components/body-map/BodyMap";
 import type { InjuryStatus } from "@/generated/prisma";
 import type { ZoneState } from "@/app/components/body-map/types";
 import type { InjuryInput } from "@/app/injuries/actions";
+import { todayAppYmd } from "@/lib/dates";
 
 type ZoneOption = { slug: string; label: string };
 
@@ -35,7 +36,7 @@ export default function InjuryForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [severity, setSeverity] = useState(initial?.severity ?? 2);
   const [status, setStatus] = useState<InjuryStatus>(initial?.status ?? "ACTIVE");
-  const [startedAt, setStartedAt] = useState(initial?.startedAt ?? new Date().toISOString().slice(0, 10));
+  const [startedAt, setStartedAt] = useState(initial?.startedAt ?? todayAppYmd());
   const [resolvedAt, setResolvedAt] = useState(initial?.resolvedAt ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [selected, setSelected] = useState<string[]>(initial?.zoneSlugs ?? []);

@@ -1,4 +1,5 @@
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
+import { toAppYmd } from "@/lib/dates";
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { isMissingRoutineFrequencyColumnsError, withNullRoutineFrequencyTargets } from "@/lib/routine-query-compat";
@@ -233,7 +234,7 @@ function diffInDays(from: Date | null, to = new Date()) {
 }
 
 function dayKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return toAppYmd(date);
 }
 
 function normalizeRelativeLabel(value: number, baseline: number): RelativeBaselineLabel {
