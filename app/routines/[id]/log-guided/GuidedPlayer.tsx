@@ -47,21 +47,27 @@ export default function GuidedPlayer({
     if (currentSegment) setRemainingSec(currentSegment.durationSec);
   }, [currentSegment?.id]);
 
-  // Auto-play countdown
+  // Countdown timer — runs in both auto-play and manual mode
   useEffect(() => {
-    if (!isRunning || !autoPlay || !currentSegment) return;
+    if (!isRunning || !currentSegment) return;
     const timeout = window.setTimeout(() => {
       if (remainingSec > 1) {
         setRemainingSec((v) => v - 1);
         return;
       }
       // Segment finished
-      const dur = currentSegment.durationSec;
-      const nextIndex = currentSegmentIndex + 1;
-      setCompletedDurationSec((v) => v + dur);
-      setCurrentSegmentIndex(nextIndex);
-      setRemainingSec(0);
-      if (nextIndex >= effectiveSegments.length) setIsRunning(false);
+      if (autoPlay) {
+        const dur = currentSegment.durationSec;
+        const nextIndex = currentSegmentIndex + 1;
+        setCompletedDurationSec((v) => v + dur);
+        setCurrentSegmentIndex(nextIndex);
+        setRemainingSec(0);
+        if (nextIndex >= effectiveSegments.length) setIsRunning(false);
+      } else {
+        // Manual: stop at 0, wait for user to press Next
+        setIsRunning(false);
+        setRemainingSec(0);
+      }
     }, 1000);
     return () => clearTimeout(timeout);
   }, [isRunning, autoPlay, remainingSec, currentSegment, currentSegmentIndex, effectiveSegments]);
@@ -256,36 +262,21 @@ export default function GuidedPlayer({
         </div>
 
         {/* Timer */}
-        {autoPlay ? (
-          <div
-            style={{
-              fontSize: 72,
-              fontWeight: 900,
-              lineHeight: 1,
-              color: phaseColor,
-              letterSpacing: -3,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {formatGuidedSeconds(remainingSec)}
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 4 }}>
-            <div
-              style={{
-                fontSize: 72,
-                fontWeight: 900,
-                lineHeight: 1,
-                color: phaseColor,
-                opacity: 0.45,
-                letterSpacing: -3,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {formatGuidedSeconds(currentSegment?.durationSec ?? 0)}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5 }}>target duration</div>
-          </div>
+        <div
+          style={{
+            fontSize: 72,
+            fontWeight: 900,
+            lineHeight: 1,
+            color: phaseColor,
+            letterSpacing: -3,
+            fontVariantNumeric: "tabular-nums",
+            opacity: !autoPlay && !isRunning && remainingSec === currentSegment?.durationSec ? 0.45 : 1,
+          }}
+        >
+          {formatGuidedSeconds(remainingSec)}
+        </div>
+        {!autoPlay && !isRunning && remainingSec === currentSegment?.durationSec && (
+          <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5 }}>target duration · press Start when ready</div>
         )}
 
         {/* Set / rep context */}
@@ -321,34 +312,24 @@ export default function GuidedPlayer({
             ←
           </button>
 
-          {autoPlay ? (
-            <button
-              type="button"
-              onClick={() => setIsRunning((v) => !v)}
-              style={{ ...navBtn(true), flex: 2 }}
-            >
-              {isRunning ? "Pause" : currentSegmentIndex === 0 ? "Start" : "Resume"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={goToNext}
-              style={{ ...navBtn(true), flex: 2 }}
-            >
-              {currentSegmentIndex === 0 ? "Start / Next" : "Next →"}
-            </button>
-          )}
+          {/* Start / Pause — both modes */}
+          <button
+            type="button"
+            onClick={() => setIsRunning((v) => !v)}
+            style={{ ...navBtn(true), flex: 2 }}
+          >
+            {isRunning ? "Pause" : remainingSec === 0 ? "Done" : currentSegmentIndex === 0 && !isRunning ? "Start" : "Resume"}
+          </button>
 
-          {autoPlay && (
-            <button
-              type="button"
-              onClick={goToNext}
-              disabled={currentSegmentIndex >= effectiveSegments.length - 1}
-              style={navBtn(false, currentSegmentIndex >= effectiveSegments.length - 1)}
-            >
-              →
-            </button>
-          )}
+          {/* Next — auto-play shows arrow, manual shows label */}
+          <button
+            type="button"
+            onClick={goToNext}
+            disabled={currentSegmentIndex >= effectiveSegments.length - 1}
+            style={navBtn(false, currentSegmentIndex >= effectiveSegments.length - 1)}
+          >
+            →
+          </button>
         </div>
 
         {/* Skip step */}
