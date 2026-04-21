@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { formatAppDate, formatUtcDateLabel } from "@/lib/dates";
 
 function addDays(ymd: string, plus: number) {
@@ -188,6 +189,25 @@ export default function WeeklyMomentumSectionClient({
               </div>
             ))}
           </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Link
+            href="/reports/weekly"
+            style={{
+              fontSize: 12,
+              fontWeight: 800,
+              padding: "6px 14px",
+              borderRadius: 10,
+              border: "1px solid rgba(84,203,130,0.3)",
+              background: "rgba(84,203,130,0.08)",
+              color: "rgba(84,203,130,0.95)",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            View Weekly Report →
+          </Link>
         </div>
 
         <div className="mobileHomeTwoCol" style={twoColGrid}>

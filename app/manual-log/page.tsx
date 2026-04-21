@@ -92,6 +92,9 @@ export default async function ManualLogPage({
               <Link href="/goals" style={linkBtn}>
                 Goals
               </Link>
+              <Link href="/reports/weekly" style={linkBtn}>
+                Weekly Report
+              </Link>
             </div>
           </div>
 

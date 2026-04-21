@@ -228,6 +228,20 @@ function buildDescendantIdsByGroupId(groups: GroupRow[]) {
 
 function collectLogGroupIds(log: RoutineLogWithRelations, groupIdBySlug: Map<string, string>) {
   const groupIds = new Set<string>();
+
+  // For workouts, only credit muscle groups / movement patterns from exercises
+  // that were actually logged — never from the routine's own metadata tags.
+  if (log.routine.kind === "WORKOUT") {
+    for (const exercise of log.exercises) {
+      const directGroupIds = exercise.exercise.metadataGroups.map((entry) => entry.group.id);
+      const inferredGroupIds =
+        directGroupIds.length > 0 ? [] : groupIdsFromSlugs(inferExerciseMetadataSlugs(exercise.exercise.name), groupIdBySlug);
+      appendSet(groupIds, directGroupIds);
+      appendSet(groupIds, inferredGroupIds);
+    }
+    return groupIds;
+  }
+
   const routineGroupIds = log.routine.metadataGroups.map((entry) => entry.group.id);
   const subtypeGroupIds = groupIdsFromSlugs(inferRoutineMetadataSlugs(log.routine.subtype), groupIdBySlug);
   const templateGroupIds = log.routine.sessionDetails?.template?.metadataGroups.map((entry) => entry.group.id) ?? [];
@@ -235,18 +249,6 @@ function collectLogGroupIds(log: RoutineLogWithRelations, groupIdBySlug: Map<str
   appendSet(groupIds, routineGroupIds);
   appendSet(groupIds, subtypeGroupIds);
   appendSet(groupIds, templateGroupIds);
-
-  if (log.routine.kind === "WORKOUT") {
-    const exerciseGroupIds = new Set<string>();
-    for (const exercise of log.exercises) {
-      const directGroupIds = exercise.exercise.metadataGroups.map((entry) => entry.group.id);
-      const inferredGroupIds =
-        directGroupIds.length > 0 ? [] : groupIdsFromSlugs(inferExerciseMetadataSlugs(exercise.exercise.name), groupIdBySlug);
-      appendSet(exerciseGroupIds, directGroupIds);
-      appendSet(exerciseGroupIds, inferredGroupIds);
-    }
-    appendSet(groupIds, exerciseGroupIds.size > 0 ? exerciseGroupIds : routineGroupIds);
-  }
 
   if (log.routine.kind === "GUIDED") {
     const guidedGroupIds = new Set<string>();

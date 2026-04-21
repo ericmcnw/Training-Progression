@@ -82,7 +82,7 @@ export default async function SchedulePage({
   const mode = getParam(params?.mode) === "edit" ? "edit" : "view";
   const today = todayLocalYmd();
   const requestedStart = getParam(params?.start);
-  const timelineStart = isYmd(requestedStart) ? requestedStart! : addDays(today, -7);
+  const timelineStart = isYmd(requestedStart) ? requestedStart! : today;
   const selectedMonth = isMonthParam(getParam(params?.month)) ? getParam(params?.month)! : monthFromYmd(today);
 
   const [routines, manualRaw, logRange] = await prisma.$transaction([
@@ -126,8 +126,8 @@ export default async function SchedulePage({
     plannedDaysPerWeek: routinePlannedDaysMap.get(routine.id) ?? 0,
   }));
 
-  const timelineDays = buildAgendaDays(timelineStart, 21);
-  const timelineEnd = addDays(timelineStart, 21);
+  const timelineDays = buildAgendaDays(timelineStart, 7);
+  const timelineEnd = addDays(timelineStart, 7);
   const monthStart = startOfMonth(selectedMonth);
   const monthEnd = addDays(startOfMonth(addMonths(selectedMonth, 1)), 0);
   const monthDays = buildAgendaDays(monthStart, dayDiff(monthEnd, monthStart));
@@ -229,12 +229,8 @@ export default async function SchedulePage({
     ...monthDays.map((day) => monthAgendaMap.get(day) ?? { day, tasks: [], isPastOrToday: day <= today }),
     ...Array.from({ length: trailingEmptyDays }, () => null),
   ];
-  const timelinePrevHref = `/schedule?start=${addDays(timelineStart, -7)}&month=${selectedMonth}`;
-  const timelineNextHref = `/schedule?start=${addDays(timelineStart, 7)}&month=${selectedMonth}`;
-  const timelineTodayHref = `/schedule?start=${addDays(today, -7)}&month=${monthFromYmd(today)}`;
-
-  const rangeStartLabel = formatDayTitle(timelineDays[0]);
-  const rangeEndLabel = formatDayTitle(timelineDays[timelineDays.length - 1]);
+  // 8-week strip: 3 weeks back, this week, 4 weeks forward
+  const weekStarts = Array.from({ length: 8 }, (_, i) => addDays(today, (i - 3) * 7));
 
   const earliestKnownYmd = [
     manualEntries[0]?.scheduledDate,
@@ -275,28 +271,41 @@ export default async function SchedulePage({
         <>
           <section style={panel}>
             <div style={panelHeader}>ROLLING TIMELINE</div>
-            <div style={{ padding: 12, display: "grid", gap: 12 }}>
-              <div className="mobileScheduleToolbar" style={toolbar}>
-                <div style={{ fontSize: 13, opacity: 0.82 }}>
-                  Showing {rangeStartLabel} through {rangeEndLabel}
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link href={timelinePrevHref} style={smallControlBtn}>Previous Week</Link>
-                  <Link href={timelineTodayHref} style={smallControlBtn}>Today Focus</Link>
-                  <Link href={timelineNextHref} style={smallControlBtn}>Next Week</Link>
-                </div>
+
+            {/* Week strip */}
+            <div style={{ overflowX: "auto", borderBottom: "1px solid rgba(128,128,128,0.2)" }}>
+              <div style={weekStrip}>
+                {weekStarts.map((ws) => {
+                  const isActive = ws === timelineStart;
+                  const isThisWeek = ws === today;
+                  const label = isThisWeek
+                    ? "This week"
+                    : formatUtcDateLabel(ws, { month: "short", day: "numeric" });
+                  return (
+                    <Link
+                      key={ws}
+                      href={`/schedule?start=${ws}&month=${monthFromYmd(ws)}`}
+                      style={isActive ? activeWeekPill : weekPill}
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
               </div>
-              <div style={{ display: "grid", gap: 10 }}>
-                {agenda.map((dayItem) => (
-                  <div key={dayItem.day} className="mobileScheduleDayRow" style={dayRow}>
-                    <div className="mobileScheduleDayLabel" style={{ minWidth: 190 }}>
-                      <div style={{ fontWeight: 900 }}>{formatDayTitle(dayItem.day)}</div>
-                      <div style={{ fontSize: 12, opacity: 0.75 }}>{dayItem.day}</div>
+            </div>
+
+            <div style={{ padding: 12, display: "grid", gap: 8 }}>
+              {agenda.map((dayItem) => {
+                const isToday = dayItem.day === today;
+                return (
+                  <div key={dayItem.day} style={isToday ? todayDayRow : dayRow}>
+                    <div style={dayLabelBlock}>
+                      <div style={{ fontWeight: 900, fontSize: 13 }}>{formatDayTitle(dayItem.day)}</div>
                     </div>
-                    <div style={{ display: "grid", gap: 6, flex: 1 }}>
+                    <div style={{ display: "grid", gap: 5, flex: 1, minWidth: 0 }}>
                       {dayItem.tasks.length === 0 && (
-                        <div style={{ fontSize: 13, opacity: 0.65 }}>
-                          {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
+                        <div style={{ fontSize: 12, opacity: 0.4, fontStyle: "italic" }}>
+                          {dayItem.isPastOrToday ? "No activity" : "Nothing planned"}
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
@@ -310,19 +319,16 @@ export default async function SchedulePage({
                                 {task.routineName}
                               </Link>
                             ) : (
-                              <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                              <span style={{ fontWeight: 800 }}>{task.routineName}</span>
                             )}
                             {task.removableManualEntryId ? (
                               <form action={removeManualEntry}>
                                 <input type="hidden" name="entryId" value={task.removableManualEntryId} />
                                 <input type="hidden" name="returnStart" value={timelineStart} />
                                 <input type="hidden" name="returnMonth" value={selectedMonth} />
-                                <button type="submit" style={removeBtn}>Remove</button>
+                                <button type="submit" style={removeBtn}>✕</button>
                               </form>
                             ) : null}
-                          </div>
-                          <div style={{ fontSize: 12, opacity: 0.85 }}>
-                            Planned: {task.planned} | Logged: {task.logged} | Remaining: {task.remaining}
                           </div>
                         </div>
                       ))}
@@ -332,20 +338,18 @@ export default async function SchedulePage({
                       <input type="hidden" name="returnStart" value={timelineStart} />
                       <input type="hidden" name="returnMonth" value={selectedMonth} />
                       <select name="routineId" defaultValue="" style={quickAddSelect} required>
-                        <option value="" disabled>
-                          Quick add routine
-                        </option>
+                        <option value="" disabled>Add routine…</option>
                         {routines.map((routine) => (
                           <option key={`${dayItem.day}-${routine.id}`} value={routine.id}>
-                            {routine.name} | {routine.category || "General"} | {routine.kind}
+                            {routine.name} ({routine.kind})
                           </option>
                         ))}
                       </select>
                       <button type="submit" className="mobileScheduleQuickAddButton" style={quickAddBtn}>Add</button>
                     </form>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </section>
 
@@ -382,60 +386,23 @@ export default async function SchedulePage({
                   {monthCalendarCells.map((dayItem, index) =>
                     dayItem ? (
                       <div key={dayItem.day} style={calendarDay}>
-                      <div style={calendarDayHeader}>
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
-                        <div style={{ fontSize: 11, opacity: 0.72 }}>{dayItem.day}</div>
-                      </div>
-                      <form action={quickAddManualEntry} style={calendarQuickAddForm}>
-                        <input type="hidden" name="scheduledDate" value={dayItem.day} />
-                        <input type="hidden" name="returnStart" value={timelineStart} />
-                        <input type="hidden" name="returnMonth" value={selectedMonth} />
-                        <select name="routineId" defaultValue="" style={calendarQuickAddSelect} required>
-                          <option value="" disabled>
-                            Add routine
-                          </option>
-                          {routines.map((routine) => (
-                            <option key={`calendar-${dayItem.day}-${routine.id}`} value={routine.id}>
-                              {routine.name} | {routine.category || "General"} | {routine.kind}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" style={calendarQuickAddBtn}>+</button>
-                      </form>
-                      <div style={{ display: "grid", gap: 6 }}>
-                        {dayItem.tasks.length === 0 && (
-                          <div style={calendarEmptyText}>
-                            {dayItem.isPastOrToday ? "No routines planned or completed." : "No routines planned."}
-                          </div>
-                        )}
-                        {dayItem.tasks.map((task) => (
-                          <div key={task.routineId} style={task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow}>
-                            <div style={taskRowTop}>
+                        <div style={{ display: "grid", gap: 3 }}>
+                          {dayItem.tasks.map((task) => (
+                            <div key={task.routineId} style={task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow}>
                               {task.latestLogId ? (
                                 <Link
                                   href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}
-                                  style={taskLink}
+                                  style={calendarTaskLink}
                                 >
                                   {task.routineName}
                                 </Link>
                               ) : (
-                                <div style={{ fontWeight: 800 }}>{task.routineName}</div>
+                                <div style={calendarTaskName}>{task.routineName}</div>
                               )}
-                              {task.removableManualEntryId ? (
-                                <form action={removeManualEntry}>
-                                  <input type="hidden" name="entryId" value={task.removableManualEntryId} />
-                                  <input type="hidden" name="returnStart" value={timelineStart} />
-                                  <input type="hidden" name="returnMonth" value={selectedMonth} />
-                                  <button type="submit" style={calendarRemoveBtn}>Remove</button>
-                                </form>
-                              ) : null}
                             </div>
-                            <div style={{ fontSize: 11, opacity: 0.85 }}>
-                              Planned: {task.planned} | Logged: {task.logged}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <div key={`empty-${index}`} style={calendarFiller} />
@@ -491,28 +458,38 @@ const panelHeader: React.CSSProperties = {
 };
 
 const dayRow: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.35)",
+  border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 10,
-  padding: 10,
-  background: "rgba(128,128,128,0.06)",
+  padding: "8px 10px",
+  background: "rgba(128,128,128,0.04)",
   display: "flex",
-  gap: 14,
+  gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
 };
 
+const todayDayRow: React.CSSProperties = {
+  ...dayRow,
+  border: "1px solid rgba(84,203,130,0.45)",
+  background: "rgba(84,203,130,0.05)",
+};
+
+const dayLabelBlock: React.CSSProperties = {
+  minWidth: 160,
+  flexShrink: 0,
+};
+
 const taskRow: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.3)",
-  borderRadius: 8,
-  padding: 8,
-  background: "rgba(128,128,128,0.05)",
+  border: "1px solid rgba(128,128,128,0.25)",
+  borderRadius: 7,
+  padding: "5px 8px",
+  background: "rgba(128,128,128,0.06)",
 };
 
 const completedTaskRow: React.CSSProperties = {
   ...taskRow,
-  border: "1px solid rgba(84,203,130,0.75)",
-  background: "rgba(84,203,130,0.12)",
-  boxShadow: "0 0 0 1px rgba(84,203,130,0.18), 0 0 14px rgba(84,203,130,0.22)",
+  border: "1px solid rgba(84,203,130,0.5)",
+  background: "rgba(84,203,130,0.10)",
 };
 
 const taskRowTop: React.CSSProperties = {
@@ -566,6 +543,35 @@ const smallControlBtn: React.CSSProperties = {
   fontSize: 12,
 };
 
+const weekStrip: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  padding: "10px 12px",
+  width: "max-content",
+  minWidth: "100%",
+};
+
+const weekPill: React.CSSProperties = {
+  padding: "6px 14px",
+  border: "1px solid rgba(128,128,128,0.35)",
+  borderRadius: 999,
+  textDecoration: "none",
+  color: "inherit",
+  fontWeight: 700,
+  background: "rgba(128,128,128,0.07)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const activeWeekPill: React.CSSProperties = {
+  ...weekPill,
+  border: "1px solid rgba(84,203,130,0.7)",
+  background: "rgba(84,203,130,0.14)",
+  color: "rgba(84,203,130,1)",
+  fontWeight: 900,
+};
+
 const quickAddForm: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -589,10 +595,10 @@ const quickAddBtn: React.CSSProperties = {
 };
 
 const removeBtn: React.CSSProperties = {
-  padding: "5px 8px",
-  border: "1px solid rgba(255,80,80,0.75)",
+  padding: "2px 6px",
+  border: "1px solid rgba(255,80,80,0.5)",
   borderRadius: 999,
-  background: "rgba(255,80,80,0.12)",
+  background: "rgba(255,80,80,0.10)",
   color: "inherit",
   fontSize: 11,
   fontWeight: 800,
@@ -634,7 +640,7 @@ const monthSelect: React.CSSProperties = {
 const calendarWrap: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-  gap: 8,
+  gap: 6,
 };
 
 const calendarWeekday: React.CSSProperties = {
@@ -648,83 +654,67 @@ const calendarWeekday: React.CSSProperties = {
 
 const calendarDay: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.35)",
-  borderRadius: 12,
-  padding: 8,
-  minHeight: 148,
+  borderRadius: 8,
+  padding: 5,
+  minHeight: 72,
   background: "rgba(128,128,128,0.06)",
   display: "grid",
   alignContent: "start",
-  gap: 8,
-};
-
-const calendarFiller: React.CSSProperties = {
-  minHeight: 148,
-};
-
-const calendarDayHeader: React.CSSProperties = {
-  display: "grid",
   gap: 4,
 };
 
-const calendarQuickAddForm: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  alignItems: "center",
-};
+const calendarFiller: React.CSSProperties = {};
 
-const calendarQuickAddSelect: React.CSSProperties = {
-  ...input,
-  minWidth: 0,
-  flex: 1,
-  padding: "6px 8px",
-  fontSize: 11,
-};
-
-const calendarQuickAddBtn: React.CSSProperties = {
-  ...smallControlBtn,
-  padding: "6px 9px",
-  cursor: "pointer",
-};
 
 const calendarTaskRow: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.3)",
-  borderRadius: 8,
-  padding: "7px 8px",
-  background: "rgba(128,128,128,0.05)",
-  fontSize: 12,
+  borderRadius: 5,
+  padding: "3px 5px",
+  background: "rgba(128,128,128,0.1)",
+  fontSize: 11,
+  overflow: "hidden",
 };
 
 const completedCalendarTaskRow: React.CSSProperties = {
   ...calendarTaskRow,
-  border: "1px solid rgba(84,203,130,0.75)",
-  background: "rgba(84,203,130,0.12)",
-  boxShadow: "0 0 0 1px rgba(84,203,130,0.16), 0 0 10px rgba(84,203,130,0.18)",
+  background: "rgba(84,203,130,0.18)",
 };
 
-const calendarEmptyText: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.58,
+
+const calendarTaskLink: React.CSSProperties = {
+  fontWeight: 800,
+  fontSize: 11,
+  color: "inherit",
+  textDecoration: "none",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  minWidth: 0,
+  flexShrink: 1,
 };
 
-const calendarRemoveBtn: React.CSSProperties = {
-  ...removeBtn,
-  justifySelf: "start",
-  padding: "4px 7px",
-  fontSize: 10,
+const calendarTaskName: React.CSSProperties = {
+  fontWeight: 800,
+  fontSize: 11,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  minWidth: 0,
+  flexShrink: 1,
 };
 
 function dayNumberChip(isToday: boolean): React.CSSProperties {
   return {
-    width: 28,
-    height: 28,
+    width: 22,
+    height: 22,
     borderRadius: 999,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 900,
-    background: isToday ? "rgba(84,203,130,0.18)" : "rgba(255,255,255,0.08)",
-    border: isToday ? "1px solid rgba(84,203,130,0.75)" : "1px solid rgba(255,255,255,0.12)",
+    background: isToday ? "rgba(84,203,130,0.2)" : "transparent",
+    border: isToday ? "1px solid rgba(84,203,130,0.75)" : "none",
+    color: isToday ? "rgba(84,203,130,1)" : "inherit",
   };
 }
 

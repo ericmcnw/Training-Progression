@@ -733,7 +733,7 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobileScheduleCalendar{
-    min-width: 580px;
+    min-width: 700px;
   }
 
   .mobileRoutinesPage,
