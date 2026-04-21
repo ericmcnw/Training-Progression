@@ -1178,6 +1178,31 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileHeroStrip > *{
     padding: 12px 10px !important;
   }
+
+  /* ── Guided logging screens ─────────────────────────────────────────── */
+
+  /* All three guided screens: full bleed, comfortable vertical padding */
+  .mobileRoutineDetailPage .mobileListStack > *:first-child{
+    padding-top: 0;
+  }
+
+  /* Guided player: keep content scrollable but not cramped */
+  .guidedPlayerScreen{
+    padding: 8px 0 !important;
+  }
+
+  /* Sticky save bar on review form: float above content */
+  .guidedStickyActions{
+    position: sticky !important;
+    bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    z-index: 10 !important;
+    border-radius: 16px !important;
+    padding: 10px !important;
+    background: rgba(9,15,27,0.93) !important;
+    backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28) !important;
+  }
 }
 
 /* ── Hero strip: 2-col layout on very narrow phones ─────────────────── */

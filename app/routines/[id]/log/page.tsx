@@ -407,6 +407,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
           ) : isGuidedKind(kind) ? (
             <GuidedLogForm
               routineId={routineId}
+              routineName={routine.name}
               availableExercises={availableGuidedExercises}
               steps={routine.guidedSteps.map((step) => ({
                 id: step.id,

@@ -1,8 +1,15 @@
 "use client";
 
-import GuidedSessionEditor from "./GuidedSessionEditor";
+import { useMemo, useState } from "react";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import PostSessionPainCheck from "@/app/components/pain-log/PostSessionPainCheck";
+import SportZoneTagger from "@/app/components/log/SportZoneTagger";
+import { logGuided } from "../../actions";
+import GuidedEntryScreen from "./GuidedEntryScreen";
+import GuidedPlayer from "./GuidedPlayer";
+import GuidedReviewForm from "./GuidedReviewForm";
+import type { ReviewSaveData } from "./GuidedReviewForm";
 
 type Step = {
   id: string;
@@ -26,30 +33,46 @@ type ExerciseOption = {
   libraryKind: ExerciseLibraryKind;
 };
 
+type Screen = "entry" | "player" | "review";
+
+function toLocalInputValue(date: Date) {
+  const pad = (v: number) => String(v).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function GuidedLogForm({
   routineId,
+  routineName,
   steps,
-  availableExercises,
+  availableExercises: _availableExercises,
   activePainZones = [],
   bodyZones = [],
 }: {
   routineId: string;
+  routineName?: string;
   steps: Step[];
   availableExercises: ExerciseOption[];
   activePainZones?: PainCheckZone[];
   bodyZones?: PainCheckZone[];
 }) {
-  return (
-    <GuidedSessionEditor
-      routineId={routineId}
-      backHref="/routines"
-      saveLabel="Save Guided Log"
-      savePendingLabel="Saving..."
-      activePainZones={activePainZones}
-      bodyZones={bodyZones}
-      availableExercises={availableExercises}
-      initialSteps={steps.map((step) => ({
-        guidedStepId: step.id,
+  const [screen, setScreen] = useState<Screen>("entry");
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [sessionStartedAt, setSessionStartedAt] = useState<Date | null>(null);
+
+  // Data flowing from player → review
+  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set());
+  const [completedDurationSec, setCompletedDurationSec] = useState(0);
+  const [reviewMode, setReviewMode] = useState<"review" | "log-after">("log-after");
+
+  // Post-save pain check / sport tag
+  const [saving, setSaving] = useState(false);
+  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
+
+  const templateSteps = useMemo(
+    () =>
+      steps.map((step) => ({
+        id: step.id,
         kind: step.kind,
         title: step.title,
         exerciseId: step.exerciseId,
@@ -60,7 +83,171 @@ export default function GuidedLogForm({
         repCount: step.repCount,
         setCount: step.setCount,
         sortOrder: step.sortOrder,
-      }))}
+      })),
+    [steps]
+  );
+
+  function startPlayer() {
+    setSessionStartedAt(new Date());
+    setScreen("player");
+  }
+
+  function startLogAfter() {
+    setSkippedStepIds(new Set());
+    setCompletedDurationSec(0);
+    setReviewMode("log-after");
+    setScreen("review");
+  }
+
+  function onPlayerDone(result: { skippedStepIds: Set<string>; completedDurationSec: number }) {
+    setSkippedStepIds(result.skippedStepIds);
+    setCompletedDurationSec(result.completedDurationSec);
+    setReviewMode("review");
+    setScreen("review");
+  }
+
+  async function onSave({ reviewMap, notes, performedAtLocal, durationOverrideMin }: ReviewSaveData) {
+    const parsedDurationMin = durationOverrideMin.trim() ? Number(durationOverrideMin) : null;
+    if (
+      parsedDurationMin !== null &&
+      (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)
+    ) {
+      alert("Enter a valid duration in minutes or leave it blank.");
+      return;
+    }
+
+    const completedSteps = steps.filter((step) => !reviewMap.get(step.id)?.skipped);
+
+    const stepsPayload = completedSteps.map((step, idx) => {
+      const review = reviewMap.get(step.id) ?? { skipped: false, weightLb: "" };
+      const weightLbRaw = review.weightLb.trim();
+      const weightLb =
+        step.kind === "EXERCISE" && weightLbRaw
+          ? Number.isFinite(Number(weightLbRaw))
+            ? Number(weightLbRaw)
+            : null
+          : null;
+      const repeatCount = step.repeatCount ?? 1;
+      return {
+        guidedStepId: step.id,
+        kind: step.kind,
+        title: step.kind === "EXERCISE" ? (step.exerciseName ?? step.title) : step.title,
+        exerciseId: step.kind === "EXERCISE" ? step.exerciseId : null,
+        durationSec: step.durationSec,
+        restSec: step.restSec,
+        repeatCount,
+        repCount: step.repCount ?? repeatCount,
+        setCount: step.setCount ?? 1,
+        weightLb,
+        sortOrder: idx,
+      };
+    });
+
+    const durationSec =
+      parsedDurationMin !== null
+        ? Math.round(parsedDurationMin * 60)
+        : completedDurationSec > 0
+        ? completedDurationSec
+        : null;
+
+    setSaving(true);
+    try {
+      const createdLogId = await logGuided({
+        routineId,
+        durationSec,
+        notes,
+        performedAtLocal: performedAtLocal || undefined,
+        steps: stepsPayload,
+      });
+      if (createdLogId && bodyZones.length > 0) {
+        setSportTagLogId(createdLogId);
+        return;
+      }
+      if (createdLogId && activePainZones.length > 0) {
+        setPainCheckLogId(createdLogId);
+        return;
+      }
+      window.location.href = "/routines";
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save guided session.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Pain check screen
+  if (painCheckLogId) {
+    return (
+      <PostSessionPainCheck
+        zones={activePainZones}
+        routineLogId={painCheckLogId}
+        onDone={() => {
+          window.location.href = "/routines";
+        }}
+      />
+    );
+  }
+
+  // Sport zone tagger
+  if (sportTagLogId) {
+    return (
+      <SportZoneTagger
+        zones={bodyZones}
+        routineLogId={sportTagLogId}
+        label="Guided session"
+        onDone={() => {
+          const logId = sportTagLogId;
+          setSportTagLogId(null);
+          if (activePainZones.length > 0) setPainCheckLogId(logId);
+          else window.location.href = "/routines";
+        }}
+      />
+    );
+  }
+
+  const name = routineName ?? "Guided Routine";
+
+  if (screen === "entry") {
+    return (
+      <GuidedEntryScreen
+        routineName={name}
+        steps={templateSteps}
+        autoPlay={autoPlay}
+        onAutoPlayChange={setAutoPlay}
+        onGuideMe={startPlayer}
+        onLogAfter={startLogAfter}
+        backHref="/routines"
+      />
+    );
+  }
+
+  if (screen === "player") {
+    return (
+      <GuidedPlayer
+        steps={templateSteps}
+        autoPlay={autoPlay}
+        onDone={onPlayerDone}
+        onBack={() => setScreen("entry")}
+      />
+    );
+  }
+
+  // review screen
+  const initialPerformedAt =
+    reviewMode === "review" && sessionStartedAt
+      ? toLocalInputValue(sessionStartedAt)
+      : undefined;
+
+  return (
+    <GuidedReviewForm
+      steps={templateSteps}
+      initialSkippedStepIds={skippedStepIds}
+      initialPerformedAtLocal={initialPerformedAt}
+      completedDurationSec={completedDurationSec}
+      mode={reviewMode}
+      saving={saving}
+      onSave={onSave}
+      onBack={() => setScreen(reviewMode === "review" ? "player" : "entry")}
     />
   );
 }
