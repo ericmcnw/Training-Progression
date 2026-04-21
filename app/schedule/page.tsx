@@ -507,6 +507,7 @@ const logBtn: React.CSSProperties = {
   color: "rgba(84,203,130,1)",
   fontSize: 11,
   fontWeight: 800,
+  lineHeight: "14px",
   textDecoration: "none",
   whiteSpace: "nowrap",
 };
@@ -629,6 +630,8 @@ const removeBtn: React.CSSProperties = {
   fontWeight: 800,
   cursor: "pointer",
   lineHeight: "14px",
+  appearance: "none",
+  WebkitAppearance: "none",
 };
 
 const monthPill: React.CSSProperties = {
