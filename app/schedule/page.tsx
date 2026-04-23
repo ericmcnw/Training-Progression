@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
-import { routineKindColor } from "@/lib/routines";
+import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import ScheduleBoard from "./ScheduleBoard";
 import { quickAddManualEntry, removeManualEntry } from "./actions";
 
@@ -90,7 +90,7 @@ export default async function SchedulePage({
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ isActive: "desc" }, { kind: "asc" }, { category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, kind: true, category: true, timesPerWeek: true },
+      select: { id: true, name: true, kind: true, subtype: true, domain: true, category: true, timesPerWeek: true },
     }),
     prisma.$queryRawUnsafe<Array<{ id: string; routineId: string; scheduledDate: string; sortOrder: number }>>(
       'SELECT "id","routineId","scheduledDate","sortOrder" FROM "ScheduleManualEntry" ORDER BY "scheduledDate" ASC, "sortOrder" ASC'
@@ -123,6 +123,7 @@ export default async function SchedulePage({
   }
   const routinesWithPlanned = routines.map((routine) => ({
     ...routine,
+    domain: effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype),
     suggestedTimesPerWeek: routine.timesPerWeek ?? 0,
     plannedDaysPerWeek: routinePlannedDaysMap.get(routine.id) ?? 0,
   }));
@@ -161,7 +162,7 @@ export default async function SchedulePage({
   const routineNameMap = new Map(
     [...routines, ...inactiveReferencedRoutines].map((routine) => [routine.id, fallbackRoutineLabel(routine.name)])
   );
-  const routineKindMap = new Map(routines.map((r) => [r.id, r.kind as string]));
+  const routineDomainMap = new Map(routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)]));
 
   const loggedMap = new Map<string, number>();
   const latestLogIdByDay = new Map<string, string>();
@@ -208,7 +209,7 @@ export default async function SchedulePage({
           return {
             routineId,
             routineName: routineNameMap.get(routineId) ?? "Deleted routine",
-            kind: routineKindMap.get(routineId) ?? null,
+            domain: routineDomainMap.get(routineId) ?? null,
             planned,
             logged,
             remaining: Math.max(0, planned - logged),
@@ -312,7 +313,7 @@ export default async function SchedulePage({
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
-                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={{ ...(task.logged > 0 ? completedTaskRow : taskRow), borderLeftColor: routineKindColor(task.kind), borderLeftWidth: 3 }}>
+                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={{ ...(task.logged > 0 ? completedTaskRow : taskRow), borderLeftColor: domainColor(task.domain ?? ""), borderLeftWidth: 3 }}>
                           <div style={taskRowTop}>
                             {task.latestLogId ? (
                               <Link
@@ -402,7 +403,7 @@ export default async function SchedulePage({
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
                         <div style={{ display: "grid", gap: 3 }}>
                           {dayItem.tasks.map((task) => (
-                            <div key={task.routineId} style={{ ...(task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow), borderLeft: `2px solid ${routineKindColor(task.kind)}` }}>
+                            <div key={task.routineId} style={{ ...(task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow), borderLeft: `2px solid ${domainColor(task.domain ?? "")}` }}>
                               {task.latestLogId ? (
                                 <Link
                                   href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}

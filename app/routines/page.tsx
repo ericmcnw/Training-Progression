@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { formatAppDate } from "@/lib/dates";
+import { formatAppDate, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import NewRoutinePageContent from "./NewRoutinePageContent";
 import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
-import { formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
+import { formatRoutineTypeLabel, normalizeRoutineKind, effectiveRoutineDomain, domainColor, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
+import { computeHabitStats } from "@/lib/habits";
 import RoutineCard from "./RoutineCard";
 import RoutineSection from "./RoutineSection";
 
@@ -73,6 +74,7 @@ export default async function RoutinesPage(props: {
 
   const searchQuery = (getParam(searchParams, "q") ?? "").trim();
   const normalizedSearchQuery = searchQuery.toLowerCase();
+  const domainFilter = (getParam(searchParams, "domain") ?? "").trim().toLowerCase();
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
@@ -162,22 +164,53 @@ export default async function RoutinesPage(props: {
     now,
   });
 
+  // Habit streak computation — fetch 90 days of logs for habit-domain routines
+  const habitRoutineIds = routines
+    .filter((r) => r.isActive && effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit")
+    .map((r) => r.id);
+  const habitLogs = habitRoutineIds.length > 0
+    ? await prisma.routineLog.findMany({
+        where: {
+          routineId: { in: habitRoutineIds },
+          performedAt: { gte: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000) },
+        },
+        select: { routineId: true, performedAt: true },
+      })
+    : [];
+  const today = todayAppYmd();
+  const habitStatsByRoutineId = new Map(
+    habitRoutineIds.map((id) => [
+      id,
+      computeHabitStats(
+        habitLogs.filter((l) => l.routineId === id).map((l) => l.performedAt),
+        today
+      ),
+    ])
+  );
+
   const filteredRoutines = routines.filter((routine) => {
-    if (!normalizedSearchQuery) return true;
-    return routine.name.toLowerCase().includes(normalizedSearchQuery);
+    if (normalizedSearchQuery && !routine.name.toLowerCase().includes(normalizedSearchQuery)) return false;
+    if (domainFilter) {
+      const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+      if (domain !== domainFilter) return false;
+    }
+    return true;
   });
 
   const active = filteredRoutines.filter((routine) => routine.isActive);
   const archived = filteredRoutines.filter((routine) => !routine.isActive);
 
+  const domainOrder = ROUTINE_DOMAIN_OPTIONS.map((opt) => opt.value);
+  const domainLabelMap = Object.fromEntries(ROUTINE_DOMAIN_OPTIONS.map((opt) => [opt.value, opt.label]));
+
   const groups = new Map<string, typeof active>();
   for (const routine of active) {
-    const key = formatRoutineTypeLabel(normalizeRoutineKind(routine.kind));
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(routine);
+    const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+    if (!groups.has(domain)) groups.set(domain, []);
+    groups.get(domain)!.push(routine);
   }
 
-  const orderedTypes = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+  const orderedDomains = domainOrder.filter((d) => groups.has(d));
 
   return (
     <div className="mobileRoutinesPage mobilePageShell" style={styles.container}>
@@ -216,33 +249,65 @@ export default async function RoutinesPage(props: {
         <button type="submit" style={{ ...styles.btnLink, minWidth: 110 }}>
           Search
         </button>
-        {searchQuery ? (
+        {searchQuery || domainFilter ? (
           <Link href="/routines" style={styles.btnLink}>
             Clear
           </Link>
         ) : null}
       </form>
 
+      {/* Domain filter pills */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, letterSpacing: 0.5, marginRight: 2 }}>FILTER</span>
+        {ROUTINE_DOMAIN_OPTIONS.map((opt) => {
+          const isActive = domainFilter === opt.value;
+          const color = domainColor(opt.value);
+          return (
+            <Link
+              key={opt.value}
+              href={isActive ? "/routines" : `/routines?domain=${opt.value}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 10px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 800,
+                textDecoration: "none",
+                color: "inherit",
+                border: `1px solid ${isActive ? color.replace("0.9", "0.5") : "rgba(255,255,255,0.12)"}`,
+                background: isActive ? color.replace("0.9", "0.15") : "rgba(255,255,255,0.04)",
+                transition: "background 0.12s, border-color 0.12s",
+              }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: color, display: "inline-block", flexShrink: 0 }} />
+              {opt.label}
+            </Link>
+          );
+        })}
+      </div>
 
       <div className="mobileListStack" style={{ display: "grid", gap: 18 }}>
-        {searchQuery && filteredRoutines.length === 0 ? (
+        {(searchQuery || domainFilter) && filteredRoutines.length === 0 ? (
           <section style={{ border: "1px solid rgba(128,128,128,0.35)", borderRadius: 16, overflow: "hidden" }}>
             <div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>
-              No routines match <b>{searchQuery}</b>.
+              No routines match{searchQuery ? <> <b>{searchQuery}</b></> : null}{domainFilter ? <> in <b>{domainLabelMap[domainFilter] ?? domainFilter}</b></> : null}.
             </div>
           </section>
         ) : null}
-        {orderedTypes.map((typeLabel) => {
-          const list = groups.get(typeLabel)!;
-          const isWorkoutSection = typeLabel === formatRoutineTypeLabel("WORKOUT");
-          const accentColor = routineKindColor(list[0]?.kind);
+        {orderedDomains.map((domain) => {
+          const list = groups.get(domain)!;
+          const accent = domainColor(domain);
+          const label = domainLabelMap[domain] ?? domain;
           return (
             <RoutineSection
-              key={typeLabel}
-              title={typeLabel.toUpperCase()}
+              key={domain}
+              title={label.toUpperCase()}
               count={list.length}
-              accentColor={accentColor}
-              quickLogHref={isWorkoutSection ? "/routines?mode=quick-log" : undefined}
+              accentColor={accent}
+              quickLogHref={domain === "strength" ? "/routines?mode=quick-log" : undefined}
+              defaultOpen={!!domainFilter}
             >
               {list.map((routine) => (
                 <RoutineCard
@@ -252,6 +317,7 @@ export default async function RoutinesPage(props: {
                   allowLogging={true}
                   frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
                   goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
+                  habitStats={habitStatsByRoutineId.get(routine.id)}
                 />
               ))}
             </RoutineSection>

@@ -435,6 +435,11 @@ details[open] > summary[data-collapsible-summary]::before{
     grid-template-columns: 1fr !important;
   }
 
+  /* Prevent explicit gridColumn values from creating implicit overflow columns */
+  .mobileHomeMainGrid > *{
+    grid-column: 1 !important;
+  }
+
   .mobileHomeSparkMeta,
   .mobileHomeSummaryGrid,
   .mobileHomeQuickGrid,

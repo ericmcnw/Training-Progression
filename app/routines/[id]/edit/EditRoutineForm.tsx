@@ -5,17 +5,20 @@ import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetF
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { updateRoutine } from "../../actions";
-import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, isGuidedKind, isWorkoutKind, ROUTINE_DOMAIN_OPTIONS, ROUTINE_KIND_OPTIONS, deriveRoutineDomain, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
+import {
+  ROUTINE_SUBTYPE_OPTIONS,
+  formatRoutineSubtype,
+  isGuidedKind,
+  isWorkoutKind,
+  ROUTINE_DOMAIN_OPTIONS,
+  ROUTINE_KIND_OPTIONS,
+  deriveRoutineDomain,
+  effectiveRoutineDomain,
+  type RoutineDomain,
+} from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
-import { getRoutinePreset, inferRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
+import { inferRoutinePreset } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
-
-// Presets that show a contextual subtype selector (not Habit/Strength which are fixed)
-const SUBTYPE_SELECTOR_LABEL: Partial<Record<RoutinePresetKey, string>> = {
-  CARDIO_SESSION: "Activity",
-  GUIDED_FLOW: "Style",
-  OPEN_SESSION: "Sport",
-};
 
 export default function EditRoutineForm({
   routine,
@@ -50,17 +53,22 @@ export default function EditRoutineForm({
     sessionSubtype: string | null;
   }>;
 }) {
-  const [presetKey, setPresetKey] = useState<RoutinePresetKey>(() => inferRoutinePreset(routine.kind, routine.subtype));
   const [tags, setTags] = useState(() => routine.tags.join(", "));
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
-  const [domainOverride, setDomainOverride] = useState<RoutineDomain | "">(() => {
+  const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
+  const [subtype, setSubtype] = useState(() =>
+    routine.subtype && ROUTINE_SUBTYPE_OPTIONS[routine.kind]?.includes(routine.subtype)
+      ? routine.subtype
+      : ROUTINE_SUBTYPE_OPTIONS[routine.kind]?.[0] ?? "OTHER"
+  );
+  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general"> | "">(() => {
     const eff = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
     const derived = deriveRoutineDomain(routine.kind, routine.subtype);
     return eff !== derived ? eff : "";
   });
-  const [category, setCategory] = useState(routine.category.trim() || getRoutinePreset(presetKey).categoryHint);
-  const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
-  const [subtype, setSubtype] = useState(routine.subtype && subtypeOptions.includes(routine.subtype) ? routine.subtype : subtypeOptions[0]);
+
+  const derivedDomain = deriveRoutineDomain(kind, subtype);
+  const effectiveDomainValue = domainOverride || derivedDomain;
 
   const matchingSessionTemplates = useMemo(
     () => sessionTemplates.filter((t) => !t.sessionSubtype || t.sessionSubtype === subtype),
@@ -100,105 +108,58 @@ export default function EditRoutineForm({
     previousSuggestedRef.current = suggestedMetadataGroupIds;
   }, [suggestedMetadataGroupIds]);
 
-  const activePreset = getRoutinePreset(presetKey);
-  const derivedDomain = deriveRoutineDomain(kind, subtype);
-  const effectiveDomainValue: RoutineDomain = domainOverride || derivedDomain;
-  const subtypeSelectorLabel = SUBTYPE_SELECTOR_LABEL[presetKey];
-  const showFocusArea = presetKey === "HABIT" || presetKey === "STRENGTH_WORKOUT" || presetKey === "CUSTOM";
-
   return (
-    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 700 }}>
+    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 600 }}>
       <input type="hidden" name="id" value={routine.id} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
-      <input type="hidden" name="category" value={category} />
+      <input type="hidden" name="category" value={routine.category} />
       <input type="hidden" name="tags" value={tags} />
       <input type="hidden" name="domain" value={effectiveDomainValue} />
 
-      {/* TYPE SELECTION — compact pills */}
-      <div>
-        <label style={styles.label}>Routine type</label>
-        <div style={styles.pillRow}>
-          {ROUTINE_PRESETS.map((preset) => (
-            <button
-              key={preset.key}
-              type="button"
-              onClick={() => {
-                setPresetKey(preset.key);
-                if (preset.key !== "CUSTOM") {
-                  setKind(preset.kind);
-                  const nextSubtype = preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER";
-                  setSubtype(nextSubtype);
-                  setCategory(preset.categoryHint);
-                  setDomainOverride("");
-                }
-              }}
-              style={{ ...styles.pill, ...(presetKey === preset.key ? styles.pillActive : {}) }}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-        <div style={styles.typeDesc}>{activePreset.description}</div>
-      </div>
-
-      {/* CUSTOM: explicit kind + subtype selectors */}
-      {presetKey === "CUSTOM" && (
-        <div style={styles.twoCol}>
-          <div>
-            <label style={styles.label}>Kind</label>
-            <select
-              style={styles.input as React.CSSProperties}
-              value={kind}
-              onChange={(e) => {
-                const nextKind = e.target.value as RoutineKind;
-                setKind(nextKind);
-                setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
-              }}
-            >
-              {ROUTINE_KIND_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={styles.label}>Subtype</label>
-            <select
-              style={styles.input as React.CSSProperties}
-              value={subtype}
-              onChange={(e) => setSubtype(e.target.value)}
-            >
-              {subtypeOptions.map((opt) => (
-                <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* CONTEXTUAL SUBTYPE (Cardio activity / Guided style / Session sport) */}
-      {subtypeSelectorLabel && (
+      {/* Kind + Subtype */}
+      <div style={styles.twoCol}>
         <div>
-          <label style={styles.label}>{subtypeSelectorLabel}</label>
+          <label style={styles.label}>Kind</label>
+          <select
+            style={styles.input as React.CSSProperties}
+            value={kind}
+            onChange={(e) => {
+              const nextKind = e.target.value as RoutineKind;
+              setKind(nextKind);
+              setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
+              setDomainOverride("");
+            }}
+          >
+            {ROUTINE_KIND_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={styles.label}>Subtype</label>
           <select
             style={styles.input as React.CSSProperties}
             value={subtype}
-            onChange={(e) => setSubtype(e.target.value)}
+            onChange={(e) => {
+              setSubtype(e.target.value);
+              setDomainOverride("");
+            }}
           >
             {subtypeOptions.map((opt) => (
               <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
             ))}
           </select>
         </div>
-      )}
+      </div>
 
-      {/* NAME */}
+      {/* Name */}
       <div>
         <label style={styles.label}>Name</label>
         <input name="name" style={styles.input} defaultValue={routine.name} />
       </div>
 
-      {/* SESSION TEMPLATE — shown right after name for SESSION kind */}
+      {/* Session template */}
       {kind === "SESSION" && (
         <div>
           <label style={styles.label}>
@@ -221,7 +182,7 @@ export default function EditRoutineForm({
         </div>
       )}
 
-      {/* FREQUENCY GOAL */}
+      {/* Frequency goal */}
       <div>
         <label style={styles.label}>
           Frequency goal <span style={styles.optional}>(optional)</span>
@@ -234,26 +195,24 @@ export default function EditRoutineForm({
         />
       </div>
 
-      {/* FOCUS AREA — only for types where override is meaningful */}
-      {showFocusArea && (
-        <div>
-          <label style={styles.label}>Focus Area</label>
-          <select
-            style={styles.input as React.CSSProperties}
-            value={effectiveDomainValue}
-            onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
-          >
-            {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
-              </option>
-            ))}
-          </select>
-          <div style={styles.help}>How this routine is grouped in Training Balance. Auto-set from your routine type.</div>
-        </div>
-      )}
+      {/* Training category */}
+      <div>
+        <label style={styles.label}>Training category</label>
+        <select
+          style={styles.input as React.CSSProperties}
+          value={effectiveDomainValue}
+          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general">)}
+        >
+          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}{opt.value === derivedDomain && !domainOverride ? " (auto)" : ""}
+            </option>
+          ))}
+        </select>
+        <div style={styles.help}>How this routine appears in Training Balance.</div>
+      </div>
 
-      {/* MORE OPTIONS — Tags + advanced metadata */}
+      {/* More options */}
       <details style={styles.moreCard}>
         <summary style={styles.moreSummary}>More options</summary>
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
@@ -322,6 +281,7 @@ const styles = {
     background: "#111827",
     color: "#ffffff",
     boxSizing: "border-box" as const,
+    fontSize: 14,
   },
   btn: {
     padding: "10px 14px",
@@ -339,33 +299,6 @@ const styles = {
     color: "inherit",
     fontWeight: 700 as const,
     background: "rgba(128,128,128,0.12)",
-  },
-  pillRow: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  pill: {
-    padding: "7px 13px",
-    border: "1px solid rgba(128,128,128,0.4)",
-    borderRadius: 20,
-    background: "rgba(128,128,128,0.06)",
-    color: "inherit",
-    fontWeight: 600 as const,
-    fontSize: 13,
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-  },
-  pillActive: {
-    borderColor: "rgba(76,163,255,0.7)",
-    background: "rgba(76,163,255,0.15)",
-    fontWeight: 700 as const,
-  },
-  typeDesc: {
-    marginTop: 8,
-    fontSize: 12,
-    opacity: 0.65,
-    lineHeight: 1.4 as const,
   },
   twoCol: {
     display: "grid",

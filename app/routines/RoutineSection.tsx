@@ -8,15 +8,17 @@ export default function RoutineSection({
   count,
   quickLogHref,
   accentColor,
+  defaultOpen,
   children,
 }: {
   title: string;
   count: number;
   quickLogHref?: string;
   accentColor?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen ?? false);
 
   return (
     <section

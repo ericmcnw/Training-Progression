@@ -1,7 +1,7 @@
 "use client";
 
 import { addDaysYmd, formatUtcDateLabel, todayAppYmd } from "@/lib/dates";
-import { routineKindColor } from "@/lib/routines";
+import { domainColor } from "@/lib/routines";
 import { useEffect, useMemo, useState } from "react";
 import { saveManualEntries } from "./actions";
 
@@ -9,6 +9,7 @@ type Routine = {
   id: string;
   name: string;
   kind: string;
+  domain: string;
   category: string;
   suggestedTimesPerWeek: number;
   plannedDaysPerWeek: number;
@@ -280,7 +281,7 @@ export default function ScheduleBoard({
                               border:
                                 pendingPlacement?.source === "manual" && pendingPlacement.clientId === entry.clientId
                                   ? "1px solid rgba(84,203,130,0.9)"
-                                  : `1px solid ${routineKindColor(routine.kind)}`,
+                                  : `1px solid ${domainColor(routine.domain)}`,
                               borderRadius: 8,
                               padding: 6,
                               background:

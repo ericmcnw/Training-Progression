@@ -505,11 +505,11 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
   const heatWeekLabels: string[] = heatWeekStarts.map((d) => `${d.getMonth() + 1}/${d.getDate()}`);
-  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
-  const domainLabel: Record<RoutineDomain, string> = {
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "habit"];
+  const domainLabel: Partial<Record<RoutineDomain, string>> = {
     strength: "Strength", cardio: "Cardio", mobility: "Mobility",
-    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
-    habit: "Habits", general: "General",
+    sport: "Sport / Sessions", recovery: "Recovery",
+    habit: "Habits",
   };
   const heatData = new Map<RoutineDomain, number[]>();
   const heatLogDetails = new Map<RoutineDomain, DomainWeekLog[][]>();
@@ -520,7 +520,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   const shortDateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
   for (const log of recentLogs) {
     const domain = routineDomainMap.get(log.routineId);
-    if (!domain || domain === "general") continue;
+    if (!domain || !heatData.has(domain)) continue;
     const weekIdx = heatWeekStarts.findIndex((wStart, i) => {
       const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
       return log.performedAt.getTime() >= wStart.getTime() && log.performedAt.getTime() < wEnd;
@@ -539,7 +539,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   }
   const heatMatrixRows: DomainWeekCell[] = domainOrder
     .filter((d) => heatData.get(d)!.some((c) => c > 0) || routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === d && r.isActive))
-    .map((domain) => ({ domain, label: domainLabel[domain], weeks: heatData.get(domain)!, weekLogs: heatLogDetails.get(domain)! }));
+    .map((domain) => ({ domain, label: domainLabel[domain] ?? domain, weeks: heatData.get(domain)!, weekLogs: heatLogDetails.get(domain)! }));
 
   // Routine snapshots
   const routineSnapshots = activeRoutines

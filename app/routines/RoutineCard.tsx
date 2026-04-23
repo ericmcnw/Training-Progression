@@ -8,8 +8,10 @@ import {
   isGuidedKind,
   isWorkoutKind,
   normalizeRoutineKind,
-  routineKindColor,
+  effectiveRoutineDomain,
+  domainColor,
 } from "@/lib/routines";
+import type { computeHabitStats } from "@/lib/habits";
 import { formatRoutineTargetLabel, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import {
   logRoutineCompletion,
@@ -79,15 +81,18 @@ export default function RoutineCard({
   allowLogging,
   frequencySummary,
   goalContributions = [],
+  habitStats,
 }: {
   routine: RoutineWithExercises;
   lastCompletedMap: Map<string, Date | null>;
   allowLogging: boolean;
   frequencySummary: RoutineFrequencySummary;
   goalContributions?: string[];
+  habitStats?: ReturnType<typeof computeHabitStats>;
 }) {
   const kind = normalizeRoutineKind(routine.kind);
-  const kindColor = routineKindColor(kind);
+  const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+  const kindColor = domainColor(domain);
   const definingLabel = getDefiningLabel(routine);
   const exercisePreview = isWorkoutKind(kind)
     ? routine.exercises.map((item) => formatRoutinePreviewExerciseName(item.exercise.name)).join(", ")
@@ -112,10 +117,8 @@ export default function RoutineCard({
     : goalContributions.length > 0
     ? `Goals: ${goalContributions.join(", ")}`
     : null;
-  const kindSummary = isWorkoutKind(kind)
-    ? ""
-    : definingLabel
-    ? `${formatRoutineTypeLabel(kind)} - ${definingLabel}`
+  const kindSummary = !isWorkoutKind(kind) && definingLabel
+    ? `${formatRoutineTypeLabel(kind)} · ${definingLabel}`
     : formatRoutineTypeLabel(kind);
   const frequencyWindowProgress = frequencySummary.hasTarget
     ? `[${frequencySummary.currentCount}/${frequencySummary.targetCount} ${frequencySummary.windowLabel}]`
@@ -172,6 +175,42 @@ export default function RoutineCard({
 
           <div className="routineCardMetaLine">
             <span>Last: <b>{lastCompletedLabel}</b></span>
+            {habitStats !== undefined && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                {habitStats.currentStreak > 0 ? (
+                  <span style={{
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "rgba(251,191,36,0.14)",
+                    border: "1px solid rgba(251,191,36,0.35)",
+                    color: "rgba(251,191,36,1)",
+                    fontWeight: 800,
+                    fontSize: 11,
+                    whiteSpace: "nowrap",
+                  }}>
+                    {habitStats.currentStreak === 1 ? "1 day streak" : `${habitStats.currentStreak} day streak`}
+                  </span>
+                ) : (
+                  <span style={{
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "rgba(251,113,133,0.1)",
+                    border: "1px solid rgba(251,113,133,0.28)",
+                    color: "rgba(251,113,133,0.9)",
+                    fontWeight: 800,
+                    fontSize: 11,
+                    whiteSpace: "nowrap",
+                  }}>
+                    Streak broken
+                  </span>
+                )}
+                {habitStats.missedLast30 > 0 && (
+                  <span style={{ opacity: 0.55, fontSize: 11 }}>
+                    {habitStats.missedLast30} missed / 30d
+                  </span>
+                )}
+              </span>
+            )}
           </div>
 
           <div className="routineCardFrequencyRow">

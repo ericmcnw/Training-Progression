@@ -201,6 +201,16 @@ export default function CoverageGroupedBarChart({
           ))}
         </div>
 
+        {/* Legend row */}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10, paddingInline: 10, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 10 }}>
+          {legend.map((item) => (
+            <span key={item.kind} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, opacity: 0.78 }}>
+              <span style={{ ...dotStyle, background: item.color }} />
+              {kindAbbr(item.kind)} — {item.label}
+            </span>
+          ))}
+        </div>
+
         {/* Category rows */}
         <div style={{ display: "grid", gap: 2, marginTop: 8 }}>
           {categories.map((category) => {

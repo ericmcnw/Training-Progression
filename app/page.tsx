@@ -7,7 +7,7 @@ import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
 import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
-import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, type RoutineDomain } from "@/lib/routines";
+import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 
@@ -86,18 +86,6 @@ function kindAccent(kind: string) {
   return routineKindColor(kind);
 }
 
-function domainColor(domain: RoutineDomain): string {
-  switch (domain) {
-    case "strength":  return "rgba(84,203,130,0.9)";
-    case "cardio":    return "rgba(78,148,255,0.9)";
-    case "mobility":  return "rgba(192,132,252,0.9)";
-    case "sport":     return "rgba(251,146,60,0.9)";
-    case "recovery":  return "rgba(251,113,133,0.9)";
-    case "skill":     return "rgba(251,199,92,0.9)";
-    case "habit":     return "rgba(156,163,175,0.9)";
-    default:          return "rgba(156,163,175,0.7)";
-  }
-}
 
 function TrainingBalance({ rows }: {
   rows: Array<{ domain: RoutineDomain; label: string; sessions: number; maxSessions: number }>;

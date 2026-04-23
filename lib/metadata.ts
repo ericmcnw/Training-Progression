@@ -91,28 +91,39 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
 ];
 
 export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
+  // Cardio variants
   RUN: ["running", "run-walk"],
+  EASY_RUN: ["running", "run-walk"],
+  TEMPO_RUN: ["running", "run-walk", "endurance"],
+  LONG_RUN: ["running", "run-walk", "endurance"],
   WALK: ["walking", "run-walk"],
+  EASY_WALK: ["walking", "run-walk"],
   BIKE: ["biking"],
   SWIM: ["swimming"],
   HIKE: ["hiking"],
   ROW: ["rowing"],
+  // Guided styles
   MOBILITY: ["mobility"],
   STRETCHING: ["mobility"],
   WARMUP: ["mobility"],
   COOLDOWN: ["mobility", "recovery"],
   REHAB: ["rehab"],
   BREATHWORK: ["breathwork", "recovery", "skill-practice"],
+  RECOVERY: ["recovery"],
+  // Workout focuses
+  STRENGTH: ["strength"],
+  HYPERTROPHY: ["hypertrophy"],
+  // Sessions / sports
   CLIMBING: ["climbing", "skill-practice", "strength"],
   SURFING: ["board-sports", "cardio", "core", "grip"],
   SNOWBOARDING: ["board-sports", "cardio", "core"],
   BASKETBALL: ["basketball", "cardio", "core", "skill-practice"],
+  TENNIS: ["cardio", "core", "skill-practice"],
   GOLF: ["golf", "outdoor", "core", "skill-practice"],
   TEAM_SPORT: ["cardio", "core"],
   SKILL_PRACTICE: ["skill-practice", "core"],
+  YOGA_SESSION: ["mobility"],
   HIKE_DAY: ["hiking", "cardio"],
-  STRENGTH: ["strength"],
-  HYPERTROPHY: ["hypertrophy"],
 };
 
 const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[] }> = [

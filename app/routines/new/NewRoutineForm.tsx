@@ -4,9 +4,23 @@ import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "../RoutineFrequencyTargetFields";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoutine } from "../actions";
-import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype, ROUTINE_DOMAIN_OPTIONS, ROUTINE_KIND_OPTIONS, deriveRoutineDomain, type RoutineDomain } from "@/lib/routines";
+import {
+  ROUTINE_SUBTYPE_OPTIONS,
+  formatRoutineSubtype,
+  ROUTINE_DOMAIN_OPTIONS,
+  ROUTINE_KIND_OPTIONS,
+  deriveRoutineDomain,
+  type RoutineDomain,
+} from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
-import { getRoutinePreset, ROUTINE_PRESETS, type RoutinePresetKey } from "@/lib/routine-presets";
+import {
+  DOMAIN_META,
+  ACTIVITY_PRESETS,
+  getActivitiesForDomain,
+  getDomainMeta,
+  type ActivityPreset,
+  type DomainMeta,
+} from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 
 type MetadataGroupOption = {
@@ -16,12 +30,7 @@ type MetadataGroupOption = {
   kind: MetadataGroupKind;
 };
 
-// Presets that show a contextual subtype selector (not Habit/Strength which are fixed)
-const SUBTYPE_SELECTOR_LABEL: Partial<Record<RoutinePresetKey, string>> = {
-  CARDIO_SESSION: "Activity",
-  GUIDED_FLOW: "Style",
-  OPEN_SESSION: "Sport",
-};
+type Step = "domain" | "activity" | "form";
 
 export default function NewRoutineForm({
   metadataGroups,
@@ -35,25 +44,19 @@ export default function NewRoutineForm({
     sessionSubtype: string | null;
   }>;
 }) {
-  const [presetKey, setPresetKey] = useState<RoutinePresetKey>("HABIT");
-  const [tags, setTags] = useState("");
-  const [kind, setKind] = useState<RoutineKind>(getRoutinePreset("HABIT").kind);
-  const [domainOverride, setDomainOverride] = useState<RoutineDomain | "">("");
-  const [category, setCategory] = useState(getRoutinePreset("HABIT").categoryHint);
-  const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
-  const [subtype, setSubtype] = useState<string>(getRoutinePreset("HABIT").subtype ?? subtypeOptions[0] ?? "OTHER");
+  const [step, setStep] = useState<Step>("domain");
+  const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general"> | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<ActivityPreset | null>(null);
 
-  const matchingSessionTemplates = useMemo(
-    () => sessionTemplates.filter((t) => !t.sessionSubtype || t.sessionSubtype === subtype),
-    [sessionTemplates, subtype]
-  );
-  const sessionTemplateOptions = matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates;
-  const [sessionTemplateId, setSessionTemplateId] = useState("");
-  const effectiveSessionTemplateId = sessionTemplateOptions.some((t) => t.id === sessionTemplateId) ? sessionTemplateId : "";
-  const selectedSessionTemplate =
-    matchingSessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
-    sessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
-    null;
+  // Form state — populated from the preset selection
+  const [kind, setKind] = useState<RoutineKind>("COMPLETION");
+  const [subtype, setSubtype] = useState<string>("HABIT");
+  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general"> | "">("");
+
+  const derivedDomain = deriveRoutineDomain(kind, subtype);
+  const effectiveDomain = domainOverride || derivedDomain;
+
+  const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
 
   const metadataGroupIdBySlug = useMemo(
     () => new Map(metadataGroups.map((g) => [g.slug, g.id])),
@@ -79,55 +82,140 @@ export default function NewRoutineForm({
     previousSuggestedRef.current = suggestedMetadataGroupIds;
   }, [suggestedMetadataGroupIds]);
 
-  const activePreset = getRoutinePreset(presetKey);
-  const derivedDomain = deriveRoutineDomain(kind, subtype);
-  const effectiveDomain: RoutineDomain = domainOverride || derivedDomain;
-  const subtypeSelectorLabel = SUBTYPE_SELECTOR_LABEL[presetKey];
-  // Only show Focus Area for types where the user might meaningfully override it
-  const showFocusArea = presetKey === "HABIT" || presetKey === "STRENGTH_WORKOUT" || presetKey === "CUSTOM";
+  const matchingSessionTemplates = useMemo(
+    () => sessionTemplates.filter((t) => !t.sessionSubtype || t.sessionSubtype === subtype),
+    [sessionTemplates, subtype]
+  );
+  const sessionTemplateOptions = matchingSessionTemplates.length > 0 ? matchingSessionTemplates : sessionTemplates;
+  const [sessionTemplateId, setSessionTemplateId] = useState("");
+  const effectiveSessionTemplateId = sessionTemplateOptions.some((t) => t.id === sessionTemplateId) ? sessionTemplateId : "";
+  const selectedSessionTemplate =
+    matchingSessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
+    sessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
+    null;
 
-  return (
-    <form action={createRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 700 }}>
-      <input type="hidden" name="kind" value={kind} />
-      <input type="hidden" name="subtype" value={subtype} />
-      <input type="hidden" name="category" value={category} />
-      <input type="hidden" name="tags" value={tags} />
-      <input type="hidden" name="domain" value={effectiveDomain} />
+  function chooseDomain(domain: Exclude<RoutineDomain, "skill" | "general">) {
+    setSelectedDomain(domain);
+    setSelectedPreset(null);
+    setStep("activity");
+  }
 
-      {/* TYPE SELECTION — compact pills */}
-      <div>
-        <label style={styles.label}>Routine type</label>
-        <div style={styles.pillRow}>
-          {ROUTINE_PRESETS.map((preset) => (
-            <button
-              key={preset.key}
-              type="button"
-              onClick={() => {
-                setPresetKey(preset.key);
-                if (preset.key !== "CUSTOM") {
-                  setKind(preset.kind);
-                  const nextSubtype = preset.subtype ?? ROUTINE_SUBTYPE_OPTIONS[preset.kind][0] ?? "OTHER";
-                  setSubtype(nextSubtype);
-                  setCategory(preset.categoryHint);
-                  setDomainOverride("");
-                }
-              }}
-              style={{ ...styles.pill, ...(presetKey === preset.key ? styles.pillActive : {}) }}
-            >
-              {preset.label}
-            </button>
+  function chooseActivity(preset: ActivityPreset) {
+    setSelectedPreset(preset);
+    setKind(preset.kind);
+    setSubtype(preset.subtype);
+    setDomainOverride(preset.domain);
+    setSelectedMetadataGroupIds([]);
+    setStep("form");
+  }
+
+  function goBack() {
+    if (step === "form") {
+      // Custom path (no domain selected) goes straight back to domain picker
+      setStep(selectedDomain ? "activity" : "domain");
+    } else if (step === "activity") {
+      setSelectedDomain(null);
+      setStep("domain");
+    }
+  }
+
+  const domainMeta = selectedDomain ? getDomainMeta(selectedDomain) : null;
+  const activityList = selectedDomain ? getActivitiesForDomain(selectedDomain) : [];
+
+  // ─── STEP 1: Domain picker ────────────────────────────────────────────────────
+  if (step === "domain") {
+    return (
+      <div style={s.page}>
+        <div style={s.pageHeader}>
+          <div style={s.pageTitle}>What are you training?</div>
+          <div style={s.pageSubtitle}>Pick the area that best fits your routine</div>
+        </div>
+
+        <div style={s.domainGrid}>
+          {DOMAIN_META.map((meta) => (
+            <DomainCard key={meta.domain} meta={meta} onSelect={chooseDomain} />
           ))}
         </div>
-        <div style={styles.typeDesc}>{activePreset.description}</div>
+
+        {/* Custom / advanced escape hatch */}
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedPreset(null);
+            setKind("COMPLETION");
+            setSubtype("HABIT");
+            setDomainOverride("");
+            setStep("form");
+          }}
+          style={s.customLink}
+        >
+          Custom (advanced)
+        </button>
+      </div>
+    );
+  }
+
+  // ─── STEP 2: Activity picker ──────────────────────────────────────────────────
+  if (step === "activity" && selectedDomain && domainMeta) {
+    return (
+      <div style={s.page}>
+        {/* Header with back + domain badge */}
+        <div style={s.stepHeader}>
+          <button type="button" onClick={goBack} style={s.backBtn}>← Back</button>
+          <div style={{ ...s.domainBadge, color: domainMeta.color, background: domainMeta.bgColor, borderColor: domainMeta.borderColor }}>
+            {domainMeta.icon} {domainMeta.label}
+          </div>
+        </div>
+        <div style={s.pageTitle}>Choose an activity</div>
+        <div style={s.pageSubtitle}>{domainMeta.description}</div>
+
+        <div style={s.activityList}>
+          {activityList.map((preset) => (
+            <ActivityCard key={preset.key} preset={preset} domainMeta={domainMeta} onSelect={chooseActivity} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── STEP 3: Form ────────────────────────────────────────────────────────────
+  const activePresetMeta = selectedPreset && domainMeta;
+
+  return (
+    <form action={createRoutine} style={s.form}>
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="subtype" value={subtype} />
+      <input type="hidden" name="domain" value={effectiveDomain} />
+      <input type="hidden" name="category" value={selectedPreset?.label ?? ""} />
+
+      {/* Step header */}
+      <div style={s.stepHeader}>
+        <button type="button" onClick={goBack} style={s.backBtn}>← Back</button>
+        {activePresetMeta && (
+          <div style={{ ...s.domainBadge, color: domainMeta!.color, background: domainMeta!.bgColor, borderColor: domainMeta!.borderColor }}>
+            {domainMeta!.icon} {domainMeta!.label}
+          </div>
+        )}
       </div>
 
-      {/* CUSTOM: explicit kind + subtype selectors */}
-      {presetKey === "CUSTOM" && (
-        <div style={styles.twoCol}>
+      {/* Selected activity summary */}
+      {selectedPreset && (
+        <div style={s.presetSummary}>
+          <div style={s.presetSummaryIcon}>{selectedPreset.icon}</div>
           <div>
-            <label style={styles.label}>Kind</label>
+            <div style={s.presetSummaryLabel}>{selectedPreset.label}</div>
+            <div style={s.presetSummaryDesc}>{selectedPreset.description}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom path: show kind + subtype selectors */}
+      {!selectedPreset && (
+        <div style={s.twoCol}>
+          <div>
+            <label style={s.label}>Kind</label>
             <select
-              style={styles.input as React.CSSProperties}
+              style={s.input as React.CSSProperties}
               value={kind}
               onChange={(e) => {
                 const nextKind = e.target.value as RoutineKind;
@@ -141,9 +229,9 @@ export default function NewRoutineForm({
             </select>
           </div>
           <div>
-            <label style={styles.label}>Subtype</label>
+            <label style={s.label}>Subtype</label>
             <select
-              style={styles.input as React.CSSProperties}
+              style={s.input as React.CSSProperties}
               value={subtype}
               onChange={(e) => setSubtype(e.target.value)}
             >
@@ -155,42 +243,30 @@ export default function NewRoutineForm({
         </div>
       )}
 
-      {/* CONTEXTUAL SUBTYPE (Cardio activity / Guided style / Session sport) */}
-      {subtypeSelectorLabel && (
-        <div>
-          <label style={styles.label}>{subtypeSelectorLabel}</label>
-          <select
-            style={styles.input as React.CSSProperties}
-            value={subtype}
-            onChange={(e) => setSubtype(e.target.value)}
-          >
-            {subtypeOptions.map((opt) => (
-              <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* NAME */}
+      {/* Name */}
       <div>
-        <label style={styles.label}>Name</label>
+        <label style={s.label}>Name</label>
         <input
           name="name"
-          style={styles.input}
-          placeholder="Morning mobility, Lift A, Trail run, Climbing..."
+          style={s.input}
+          placeholder={
+            selectedPreset
+              ? `e.g. ${selectedPreset.label}, Morning ${selectedPreset.label}...`
+              : "Morning mobility, Lift A, Trail run, Climbing..."
+          }
           required
         />
       </div>
 
-      {/* SESSION TEMPLATE — shown right after name for SESSION kind */}
+      {/* Session template — SESSION kind only */}
       {kind === "SESSION" && (
         <div>
-          <label style={styles.label}>
-            Session template <span style={styles.optional}>(optional)</span>
+          <label style={s.label}>
+            Session template <span style={s.optional}>(optional)</span>
           </label>
           <select
             name="sessionTemplateId"
-            style={styles.input as React.CSSProperties}
+            style={s.input as React.CSSProperties}
             value={effectiveSessionTemplateId}
             onChange={(e) => {
               const nextId = e.target.value;
@@ -205,61 +281,58 @@ export default function NewRoutineForm({
             ))}
           </select>
           {selectedSessionTemplate?.description && (
-            <div style={styles.help}>{selectedSessionTemplate.description}</div>
+            <div style={s.help}>{selectedSessionTemplate.description}</div>
           )}
         </div>
       )}
 
-      {/* FREQUENCY GOAL */}
+      {/* Frequency goal */}
       <div>
-        <label style={styles.label}>
-          Frequency goal <span style={styles.optional}>(optional)</span>
+        <label style={s.label}>
+          Frequency goal <span style={s.optional}>(optional)</span>
         </label>
         <RoutineFrequencyTargetFields initialCount={3} initialUnit="WEEK" initialInterval={1} initialEnabled={false} />
       </div>
 
-      {/* FOCUS AREA — only for types where override is meaningful */}
-      {showFocusArea && (
-        <div>
-          <label style={styles.label}>Focus Area</label>
-          <select
-            style={styles.input as React.CSSProperties}
-            value={effectiveDomain}
-            onChange={(e) => setDomainOverride(e.target.value as RoutineDomain)}
-          >
-            {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}{opt.value === derivedDomain ? " (suggested)" : ""}
-              </option>
-            ))}
-          </select>
-          <div style={styles.help}>How this routine is grouped in Training Balance. Auto-set from your routine type.</div>
-        </div>
-      )}
+      {/* Focus Area override */}
+      <div>
+        <label style={s.label}>Training category</label>
+        <select
+          style={s.input as React.CSSProperties}
+          value={effectiveDomain}
+          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general">)}
+        >
+          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}{opt.value === derivedDomain && !domainOverride ? " (auto)" : ""}
+            </option>
+          ))}
+        </select>
+        <div style={s.help}>How this routine appears in Training Balance. Auto-set from your activity selection.</div>
+      </div>
 
-      {/* MORE OPTIONS — Tags + advanced metadata */}
-      <details style={styles.moreCard}>
-        <summary style={styles.moreSummary}>More options</summary>
+      {/* More options */}
+      <details style={s.moreCard}>
+        <summary style={s.moreSummary}>More options</summary>
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
           <div>
-            <label style={styles.label}>
-              Group Tags <span style={styles.optional}>(optional)</span>
+            <label style={s.label}>
+              Group Tags <span style={s.optional}>(optional)</span>
             </label>
             <input
-              style={styles.input}
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
+              name="tags"
+              style={s.input}
               placeholder="pull, climbing, strength..."
             />
-            <div style={styles.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
+            <div style={s.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
           </div>
 
-          <details style={styles.advancedCard}>
-            <summary style={styles.advancedSummary}>Advanced metadata</summary>
+          <details style={s.advancedCard}>
+            <summary style={s.advancedSummary}>Advanced metadata</summary>
             <div style={{ marginTop: 12 }}>
               <MetadataGroupPicker
                 title="Organization & analysis"
-                help="These groups power rollups in Progress. Preselected from your routine type — only adjust if the default grouping is wrong."
+                help="These groups power rollups in Progress. Pre-selected from your activity — only adjust if the default grouping is wrong."
                 groups={metadataGroups}
                 selectedIds={selectedMetadataGroupIds}
                 onSelectionChange={setSelectedMetadataGroupIds}
@@ -272,10 +345,15 @@ export default function NewRoutineForm({
       </details>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="submit" style={styles.btn}>Create Routine</button>
+        <button type="submit" style={s.btn}>Create Routine</button>
         {kind === "WORKOUT" && (
-          <button type="submit" name="postCreate" value="template" style={styles.btn}>
+          <button type="submit" name="postCreate" value="template" style={s.btn}>
             Create + Open Template
+          </button>
+        )}
+        {kind === "GUIDED" && (
+          <button type="submit" name="postCreate" value="steps" style={s.btn}>
+            Create + Open Steps
           </button>
         )}
       </div>
@@ -283,9 +361,236 @@ export default function NewRoutineForm({
   );
 }
 
-const styles = {
-  label: { display: "block", fontWeight: 700 as const, marginBottom: 5, fontSize: 14 },
-  optional: { fontWeight: 400 as const, opacity: 0.6, fontSize: 12 },
+// ─── Domain card component ────────────────────────────────────────────────────
+
+function DomainCard({
+  meta,
+  onSelect,
+}: {
+  meta: DomainMeta;
+  onSelect: (domain: Exclude<RoutineDomain, "skill" | "general">) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(meta.domain)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 8,
+        padding: "16px 14px",
+        border: `1px solid ${hovered ? meta.color : meta.borderColor}`,
+        borderRadius: 16,
+        background: hovered ? meta.bgColor : "rgba(255,255,255,0.02)",
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "border-color 0.15s, background 0.15s",
+        width: "100%",
+      }}
+    >
+      <div style={{ fontSize: 28, lineHeight: 1 }}>{meta.icon}</div>
+      <div style={{ fontWeight: 800, fontSize: 15, color: hovered ? meta.color : "inherit" }}>
+        {meta.label}
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.65, lineHeight: 1.45 }}>{meta.description}</div>
+    </button>
+  );
+}
+
+// ─── Activity card component ──────────────────────────────────────────────────
+
+function ActivityCard({
+  preset,
+  domainMeta,
+  onSelect,
+}: {
+  preset: ActivityPreset;
+  domainMeta: DomainMeta;
+  onSelect: (preset: ActivityPreset) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(preset)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "14px 16px",
+        border: `1px solid ${hovered ? domainMeta.color : "rgba(128,128,128,0.22)"}`,
+        borderRadius: 14,
+        background: hovered ? domainMeta.bgColor : "rgba(255,255,255,0.02)",
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "border-color 0.15s, background 0.15s",
+        width: "100%",
+      }}
+    >
+      <div style={{
+        fontSize: 22,
+        width: 40,
+        height: 40,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(128,128,128,0.08)",
+        borderRadius: 10,
+        flexShrink: 0,
+      }}>
+        {preset.icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: hovered ? domainMeta.color : "inherit" }}>
+          {preset.label}
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.62, marginTop: 2, lineHeight: 1.4 }}>
+          {preset.description}
+        </div>
+      </div>
+      <div style={{ color: "rgba(128,128,128,0.5)", fontSize: 16, flexShrink: 0 }}>›</div>
+    </button>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = {
+  page: {
+    padding: "16px 14px",
+    display: "grid",
+    gap: 18,
+    maxWidth: 600,
+  } as React.CSSProperties,
+
+  form: {
+    padding: "16px 14px",
+    display: "grid",
+    gap: 18,
+    maxWidth: 600,
+  } as React.CSSProperties,
+
+  pageHeader: {
+    display: "grid",
+    gap: 5,
+  } as React.CSSProperties,
+
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: 900,
+    lineHeight: 1.2,
+  } as React.CSSProperties,
+
+  pageSubtitle: {
+    fontSize: 13,
+    opacity: 0.6,
+    lineHeight: 1.4,
+  } as React.CSSProperties,
+
+  domainGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+    gap: 10,
+  } as React.CSSProperties,
+
+  activityList: {
+    display: "grid",
+    gap: 8,
+  } as React.CSSProperties,
+
+  stepHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  } as React.CSSProperties,
+
+  backBtn: {
+    padding: "6px 12px",
+    border: "1px solid rgba(128,128,128,0.35)",
+    borderRadius: 10,
+    background: "rgba(128,128,128,0.07)",
+    color: "inherit",
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  domainBadge: {
+    padding: "4px 12px",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: "solid",
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: 0.2,
+  } as React.CSSProperties,
+
+  presetSummary: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "14px 16px",
+    border: "1px solid rgba(128,128,128,0.25)",
+    borderRadius: 14,
+    background: "rgba(128,128,128,0.05)",
+  } as React.CSSProperties,
+
+  presetSummaryIcon: {
+    fontSize: 26,
+    width: 44,
+    height: 44,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(128,128,128,0.1)",
+    borderRadius: 12,
+    flexShrink: 0,
+  } as React.CSSProperties,
+
+  presetSummaryLabel: {
+    fontWeight: 800,
+    fontSize: 15,
+  } as React.CSSProperties,
+
+  presetSummaryDesc: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 2,
+    lineHeight: 1.4,
+  } as React.CSSProperties,
+
+  customLink: {
+    padding: "8px 0",
+    border: "none",
+    background: "none",
+    color: "rgba(128,128,128,0.65)",
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: "pointer",
+    textDecoration: "underline",
+    textDecorationColor: "rgba(128,128,128,0.35)",
+    textAlign: "left" as const,
+  } as React.CSSProperties,
+
+  label: {
+    display: "block",
+    fontWeight: 700,
+    marginBottom: 5,
+    fontSize: 14,
+  } as React.CSSProperties,
+
+  optional: {
+    fontWeight: 400,
+    opacity: 0.6,
+    fontSize: 12,
+  } as React.CSSProperties,
+
   input: {
     width: "100%",
     padding: 8,
@@ -293,68 +598,58 @@ const styles = {
     borderRadius: 10,
     background: "#111827",
     color: "#ffffff",
-    boxSizing: "border-box" as const,
-  },
+    boxSizing: "border-box",
+    fontSize: 14,
+  } as React.CSSProperties,
+
   btn: {
-    padding: "10px 14px",
-    border: "1px solid rgba(128,128,128,0.8)",
-    borderRadius: 10,
-    background: "rgba(128,128,128,0.12)",
+    padding: "10px 16px",
+    border: "1px solid rgba(34,197,94,0.45)",
+    borderRadius: 12,
+    background: "rgba(34,197,94,0.12)",
     color: "inherit",
-    fontWeight: 700 as const,
-  },
-  pillRow: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  pill: {
-    padding: "7px 13px",
-    borderWidth: 1,
-    borderStyle: "solid" as const,
-    borderColor: "rgba(128,128,128,0.4)",
-    borderRadius: 20,
-    background: "rgba(128,128,128,0.06)",
-    color: "inherit",
-    fontWeight: 600 as const,
-    fontSize: 13,
+    fontWeight: 800,
+    fontSize: 14,
     cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-  },
-  pillActive: {
-    borderColor: "rgba(76,163,255,0.7)",
-    background: "rgba(76,163,255,0.15)",
-    fontWeight: 700 as const,
-  },
-  typeDesc: {
-    marginTop: 8,
-    fontSize: 12,
-    opacity: 0.65,
-    lineHeight: 1.4 as const,
-  },
+  } as React.CSSProperties,
+
   twoCol: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 12,
-  },
+  } as React.CSSProperties,
+
   moreCard: {
     border: "1px solid rgba(128,128,128,0.3)",
     borderRadius: 12,
     padding: "12px 14px",
     background: "rgba(128,128,128,0.04)",
-  },
+  } as React.CSSProperties,
+
   moreSummary: {
     cursor: "pointer",
-    fontWeight: 600 as const,
+    fontWeight: 600,
     fontSize: 13,
     opacity: 0.8,
-  },
+  } as React.CSSProperties,
+
   advancedCard: {
     border: "1px solid rgba(128,128,128,0.25)",
     borderRadius: 10,
     padding: "10px 12px",
     background: "rgba(128,128,128,0.03)",
-  },
-  advancedSummary: { cursor: "pointer", fontWeight: 600 as const, fontSize: 13 },
-  help: { marginTop: 6, opacity: 0.65, fontSize: 12, lineHeight: 1.4 as const },
-};
+  } as React.CSSProperties,
+
+  advancedSummary: {
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 13,
+  } as React.CSSProperties,
+
+  help: {
+    marginTop: 6,
+    opacity: 0.65,
+    fontSize: 12,
+    lineHeight: 1.4,
+  } as React.CSSProperties,
+} as const;

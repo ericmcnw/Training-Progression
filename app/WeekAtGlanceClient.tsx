@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { formatUtcDateLabel } from "@/lib/dates";
-import { formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
+import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 
 type GlanceDay = {
   ymd: string;
@@ -323,26 +323,6 @@ function kindDotColor(kind: string): string {
   }
 }
 
-function domainColor(domain: RoutineDomain): string {
-  switch (domain) {
-    case "strength":
-      return "rgba(84,203,130,0.9)";
-    case "cardio":
-      return "rgba(78,148,255,0.9)";
-    case "mobility":
-      return "rgba(192,132,252,0.9)";
-    case "sport":
-      return "rgba(251,146,60,0.9)";
-    case "recovery":
-      return "rgba(251,113,133,0.9)";
-    case "skill":
-      return "rgba(251,199,92,0.9)";
-    case "habit":
-      return "rgba(156,163,175,0.9)";
-    default:
-      return "rgba(156,163,175,0.7)";
-  }
-}
 
 const headerRow: CSSProperties = {
   display: "grid",
