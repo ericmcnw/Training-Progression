@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
-import { resetStimulusPresetSelection, saveStimulusPresetSelection } from "./actions";
-import { STIMULUS_EMPHASIS_PRESETS, getStimulusOverviewModel } from "@/lib/stimulus-preferences";
 import {
   formatRoutineTypeLabel,
   isCardioKind,
@@ -24,7 +22,7 @@ export default async function ManualLogPage({
   const view = resolvedSearchParams?.view === "history" ? "history" : "profile";
   const showHistory = view === "history";
 
-  const [recentLogs, goalCount, routineCount, stimulusOverview] = await Promise.all([
+  const [recentLogs, goalCount, routineCount] = await Promise.all([
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
       take: 120,
@@ -44,7 +42,6 @@ export default async function ManualLogPage({
     }),
     prisma.goal.count({ where: { isActive: true } }),
     prisma.routine.count({ where: { isDeleted: false, isActive: true } }),
-    getStimulusOverviewModel(),
   ]);
 
   const latestLog = recentLogs[0] ?? null;
@@ -61,7 +58,7 @@ export default async function ManualLogPage({
       <div style={{ display: "grid", gap: 8 }}>
         <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Profile & History</h1>
         <div className="mobilePageSubtitle" style={{ opacity: 0.75, fontSize: 13 }}>
-          Keep log history, training emphases, and future profile preferences in one place without adding setup friction.
+          Log history, settings, and account preferences will live here.
         </div>
       </div>
 
@@ -71,16 +68,13 @@ export default async function ManualLogPage({
           <div className="mobileCard" style={heroCard}>
             <div style={{ display: "grid", gap: 6 }}>
               <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>PROFILE HOME</div>
-              <div style={{ fontSize: 20, fontWeight: 900 }}>Keep training preferences lightweight and the full log archive close.</div>
+              <div style={{ fontSize: 20, fontWeight: 900 }}>Your log archive and profile home.</div>
               <div style={{ fontSize: 13, opacity: 0.76, maxWidth: 620 }}>
-                Use this area as the home for recent review now, then let it grow into profile, account, and preferences later.
+                Settings and account preferences will live here as they are added.
               </div>
             </div>
             <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
-              <Link href="/manual-log" style={primaryLinkBtn}>
-                Profile
-              </Link>
-              <Link href="/manual-log?view=history" style={linkBtn}>
+              <Link href="/manual-log?view=history" style={primaryLinkBtn}>
                 Log History
               </Link>
               <Link href="/progress" style={linkBtn}>
@@ -117,85 +111,6 @@ export default async function ManualLogPage({
           </div>
         </div>
       </section>
-
-      {!showHistory ? (
-        <section className="mobileSectionCard" style={panel}>
-          <div className="mobileSectionHeader" style={panelHeader}>TRAINING EMPHASES</div>
-          <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 14 }}>
-            <div style={{ fontSize: 13, opacity: 0.8, maxWidth: 760 }}>
-              Choose any combination that matches what matters right now. The app uses these selections to interpret load stimulus and stretching stimulus without expecting a perfectly balanced split.
-            </div>
-
-            <form id="stimulusPresetForm" action={saveStimulusPresetSelection} style={{ display: "grid", gap: 12 }}>
-              <div style={presetGrid}>
-                {STIMULUS_EMPHASIS_PRESETS.map((preset) => {
-                  const selected = stimulusOverview.selectedPresetKeys.includes(preset.key);
-                  return (
-                    <label key={preset.key} style={presetCard(selected)}>
-                      <input
-                        type="checkbox"
-                        name="presetKey"
-                        value={preset.key}
-                        defaultChecked={selected}
-                        style={{ width: 16, height: 16, marginTop: 2 }}
-                      />
-                      <div style={{ display: "grid", gap: 5 }}>
-                        <div style={{ fontWeight: 800 }}>{preset.label}</div>
-                        <div style={{ fontSize: 12, opacity: 0.76 }}>{preset.description}</div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </form>
-
-            <div className="mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="submit" form="stimulusPresetForm" style={primaryButton}>
-                Save Emphases
-              </button>
-              <form action={resetStimulusPresetSelection}>
-                <button type="submit" style={secondaryButton}>
-                  Reset to Neutral
-                </button>
-              </form>
-              <Link href="/progress" style={linkBtn}>
-                View Progress Insights
-              </Link>
-            </div>
-
-            <div style={summaryGrid}>
-              {stimulusOverview.effectivePreferences.map((entry) => (
-                <div key={entry.slug} style={summaryCard}>
-                  <div style={summaryLabel}>{entry.label}</div>
-                  <div style={summaryValue}>{entry.priorityWeight.toFixed(2)}x</div>
-                  <div style={summaryMeta}>{entry.isEmphasized ? "Emphasized now" : "Near neutral"}</div>
-                </div>
-              ))}
-            </div>
-
-            {stimulusOverview.inferredSuggestion ? (
-              <div style={suggestionCard}>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.4, opacity: 0.84 }}>PASSIVE SUGGESTION</div>
-                <div style={{ fontSize: 15, fontWeight: 800 }}>{stimulusOverview.inferredSuggestion.presetLabel} looks like a likely fit.</div>
-                <div style={{ fontSize: 13, opacity: 0.76 }}>
-                  {stimulusOverview.inferredSuggestion.reasons.join(" ")}
-                </div>
-              </div>
-            ) : null}
-
-            {stimulusOverview.insights.length > 0 ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.4, opacity: 0.84 }}>CURRENT STIMULUS NOTES</div>
-                {stimulusOverview.insights.map((insight) => (
-                  <div key={insight} style={insightCard}>
-                    {insight}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
 
       <section className="mobileSectionCard" style={panel}>
         <div className="mobileSectionHeader" style={panelHeader}>RECENT ACTIVITY</div>
@@ -339,26 +254,6 @@ const summaryGrid: React.CSSProperties = {
   gap: 12,
 };
 
-const presetGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 12,
-};
-
-function presetCard(selected: boolean): React.CSSProperties {
-  return {
-    border: selected ? "1px solid rgba(84,203,130,0.78)" : "1px solid rgba(128,128,128,0.24)",
-    borderRadius: 14,
-    padding: 14,
-    background: selected ? "rgba(84,203,130,0.12)" : "rgba(128,128,128,0.05)",
-    display: "grid",
-    gridTemplateColumns: "16px minmax(0, 1fr)",
-    gap: 10,
-    alignItems: "start",
-    cursor: "pointer",
-  };
-}
-
 const summaryCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.24)",
   borderRadius: 16,
@@ -392,24 +287,6 @@ const activityCard: React.CSSProperties = {
   background: "rgba(128,128,128,0.06)",
 };
 
-const suggestionCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.24)",
-  borderRadius: 14,
-  padding: 14,
-  background: "linear-gradient(180deg, rgba(142,197,255,0.12), rgba(128,128,128,0.06))",
-  display: "grid",
-  gap: 6,
-};
-
-const insightCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.2)",
-  borderRadius: 12,
-  padding: "10px 12px",
-  background: "rgba(128,128,128,0.05)",
-  fontSize: 13,
-  lineHeight: 1.45,
-};
-
 const historyCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.28)",
   borderRadius: 16,
@@ -435,16 +312,6 @@ const primaryLinkBtn: React.CSSProperties = {
   ...linkBtn,
   background: "rgba(84,203,130,0.18)",
   border: "1px solid rgba(84,203,130,0.75)",
-};
-
-const primaryButton: React.CSSProperties = {
-  ...primaryLinkBtn,
-  cursor: "pointer",
-};
-
-const secondaryButton: React.CSSProperties = {
-  ...linkBtn,
-  cursor: "pointer",
 };
 
 const miniLinkBtn: React.CSSProperties = {

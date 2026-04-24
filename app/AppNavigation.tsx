@@ -11,7 +11,7 @@ const desktopNavItems = [
   { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "History", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [
@@ -157,12 +157,12 @@ export function MobileProfileButton() {
       href="/manual-log"
       className="mobileProfileButton"
       aria-current={active ? "page" : undefined}
-      aria-label="History"
+      aria-label="Profile"
     >
       <span className="mobileProfileButtonIcon" aria-hidden="true">
         <ProfileIcon />
       </span>
-      <span>History</span>
+      <span>Profile</span>
     </Link>
   );
 }
