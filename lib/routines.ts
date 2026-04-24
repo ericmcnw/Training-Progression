@@ -66,15 +66,15 @@ export function formatRoutineTypeLabel(kind: string | null | undefined) {
 export function routineKindColor(kind: string | null | undefined) {
   switch (normalizeRoutineKind(kind)) {
     case "CARDIO":
-      return "rgba(59,130,246,0.85)";
+      return "rgba(96,165,250,0.9)";
     case "WORKOUT":
-      return "rgba(34,197,94,0.85)";
+      return "rgba(74,222,128,0.9)";
     case "GUIDED":
-      return "rgba(168,85,247,0.85)";
+      return "rgba(167,139,250,0.9)";
     case "SESSION":
-      return "rgba(234,179,8,0.85)";
+      return "rgba(251,146,60,0.9)";
     default:
-      return "rgba(244,114,182,0.85)";
+      return "rgba(244,114,182,0.9)";
   }
 }
 

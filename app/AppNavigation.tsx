@@ -11,13 +11,14 @@ const desktopNavItems = [
   { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
-  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/manual-log", label: "History", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
   { href: "/progress", label: "Progress", icon: <ProgressIcon />, match: (pathname: string) => pathname.startsWith("/progress") },
+  { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
   { href: "/body", label: "Body", icon: <BodyIcon />, match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
 ];
@@ -124,6 +125,16 @@ function BodyIcon() {
   );
 }
 
+function GoalsIcon() {
+  return (
+    <MobileNavIcon>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </MobileNavIcon>
+  );
+}
+
 function ScheduleIcon() {
   return (
     <MobileNavIcon>
@@ -146,12 +157,12 @@ export function MobileProfileButton() {
       href="/manual-log"
       className="mobileProfileButton"
       aria-current={active ? "page" : undefined}
-      aria-label="Profile"
+      aria-label="History"
     >
       <span className="mobileProfileButtonIcon" aria-hidden="true">
         <ProfileIcon />
       </span>
-      <span>Profile</span>
+      <span>History</span>
     </Link>
   );
 }

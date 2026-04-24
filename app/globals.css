@@ -517,11 +517,11 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileBottomNavInner{
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    max-width: min(100%, 620px);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 5px;
+    max-width: min(100%, 660px);
     margin: 0 auto;
-    padding: 10px;
+    padding: 8px;
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 24px;
     background: rgba(9,15,27,0.92);
@@ -535,18 +535,18 @@ details[open] > summary[data-collapsible-summary]::before{
     place-items: center;
     justify-items: center;
     align-content: center;
-    min-height: 58px;
-    padding: 9px 6px;
+    min-height: 52px;
+    padding: 7px 3px;
     border: 1px solid rgba(255,255,255,0.04);
-    border-radius: 16px;
-    font-size: 11px;
+    border-radius: 14px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.01em;
     text-align: center;
     color: var(--muted);
     background: rgba(255,255,255,0.03);
     transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
-    gap: 4px;
+    gap: 3px;
   }
 
   .mobileBottomNavLink[aria-current="page"]{
