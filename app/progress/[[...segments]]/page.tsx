@@ -24,7 +24,7 @@ export default async function ProgressPage(props: {
 
   if (segments.length === 1) {
     const section = segments[0];
-    if (!["routines", "exercises", "groups", "cardio"].includes(section)) {
+    if (!["routines", "exercises", "groups", "cardio", "sports"].includes(section)) {
       notFound();
     }
     return <ProgressOverviewContent searchParams={{ ...searchParams, section }} />;

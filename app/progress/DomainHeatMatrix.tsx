@@ -131,21 +131,27 @@ export default function DomainHeatMatrix({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `140px repeat(${numCols}, minmax(48px, 1fr))`,
+          gridTemplateColumns: `140px repeat(${numCols}, minmax(56px, 1fr))`,
           gap: 4,
           minWidth: 0,
         }}
       >
         {/* Header row */}
         <div />
-        {weekLabels.map((label) => (
-          <div
-            key={label}
-            style={{ fontSize: 10, fontWeight: 800, opacity: 0.5, textAlign: "center", paddingBottom: 4 }}
-          >
-            {label}
-          </div>
-        ))}
+        {weekLabels.map((label) => {
+          const dashIdx = label.indexOf("–");
+          const line1 = dashIdx >= 0 ? label.slice(0, dashIdx) : label;
+          const line2 = dashIdx >= 0 ? label.slice(dashIdx + 1) : null;
+          return (
+            <div
+              key={label}
+              style={{ fontSize: 10, fontWeight: 800, opacity: 0.5, textAlign: "center", paddingBottom: 4, lineHeight: 1.4 }}
+            >
+              <div>{line1}</div>
+              {line2 ? <div>{line2}</div> : null}
+            </div>
+          );
+        })}
 
         {/* Domain rows */}
         {rows.map((row) => {

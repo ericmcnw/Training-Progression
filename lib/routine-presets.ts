@@ -45,7 +45,7 @@ export const DOMAIN_META: DomainMeta[] = [
   },
   {
     domain: "mobility",
-    label: "Mobility",
+    label: "Mobility / Rehab",
     description: "Stretching, yoga flows, warmups, rehab, and breathwork",
     icon: "🧘",
     color: "rgba(192,132,252,1)",

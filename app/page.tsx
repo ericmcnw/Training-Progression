@@ -862,7 +862,7 @@ export default async function HomePage() {
   }
   const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
   const domainLabels: Record<RoutineDomain, string> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility / Rehab",
     sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
     habit: "Habits", general: "General",
   };

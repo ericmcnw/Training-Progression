@@ -7,6 +7,7 @@ type Point = {
   value: number;
   detailLines?: string[];
   tooltipLabel?: string;
+  skipped?: boolean; // session exists on the timeline but this exercise wasn't done
 };
 
 function formatValue(value: number, decimals: number, unit: string) {
@@ -15,6 +16,16 @@ function formatValue(value: number, decimals: number, unit: string) {
 
 function formatAxisNumber(value: number, decimals: number) {
   return value.toFixed(decimals);
+}
+
+function formatDurationLocal(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0s";
+  const rounded = Math.round(value);
+  const minutes = Math.floor(rounded / 60);
+  const seconds = rounded % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  if (seconds === 0) return `${minutes}m`;
+  return `${minutes}m ${seconds}s`;
 }
 
 function niceAxisMax(value: number) {
@@ -43,7 +54,7 @@ export default function MetricLineChart({
   targetUnit,
   targetDecimals,
   yAxisTicks,
-  valueFormatter,
+  format,
   omitTotal = false,
 }: {
   title: string;
@@ -59,7 +70,7 @@ export default function MetricLineChart({
   targetUnit?: string;
   targetDecimals?: number;
   yAxisTicks?: number[];
-  valueFormatter?: (value: number) => string;
+  format?: "duration";
   omitTotal?: boolean;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -71,8 +82,9 @@ export default function MetricLineChart({
   }
 
   const metrics = useMemo(() => {
-    if (points.length === 0) return { max: 0, avg: 0, latest: 0, total: 0 };
-    const values = points.map((p) => p.value);
+    const active = points.filter((p) => !p.skipped);
+    if (active.length === 0) return { max: 0, avg: 0, latest: 0, total: 0 };
+    const values = active.map((p) => p.value);
     const total = values.reduce((sum, v) => sum + v, 0);
     const max = Math.max(...values);
     const latest = values[values.length - 1];
@@ -94,7 +106,17 @@ export default function MetricLineChart({
     return { ...p, x, y };
   });
 
-  const linePath = series.map((p) => `${p.x},${p.y}`).join(" ");
+  // Build separate polyline segments so the line breaks at skipped (absent) points
+  const lineSegments: string[][] = [];
+  let currentSeg: string[] = [];
+  for (const p of series) {
+    if (p.skipped) {
+      if (currentSeg.length > 0) { lineSegments.push(currentSeg); currentSeg = []; }
+    } else {
+      currentSeg.push(`${p.x},${p.y}`);
+    }
+  }
+  if (currentSeg.length > 0) lineSegments.push(currentSeg);
 
   const markerCount = Math.min(6, Math.max(2, series.length));
   const markerIndices = new Set<number>();
@@ -103,8 +125,8 @@ export default function MetricLineChart({
     markerIndices.add(idx);
   }
 
-  const fmt = valueFormatter
-    ? valueFormatter
+  const fmt = format === "duration"
+    ? formatDurationLocal
     : (v: number) => formatValue(v, decimals, unit);
 
   const focusedIndex = activeIndex ?? hoverIndex;
@@ -231,40 +253,48 @@ export default function MetricLineChart({
             </>
           )}
 
-          {series.length > 1 && <polyline fill="none" stroke="rgba(51,255,122,0.95)" strokeWidth="2" points={linePath} />}
+          {lineSegments.filter((seg) => seg.length > 1).map((seg, i) => (
+            <polyline key={i} fill="none" stroke="rgba(51,255,122,0.95)" strokeWidth="2" points={seg.join(" ")} />
+          ))}
 
           {series.map((p, idx) => (
             <g key={`${p.label}-${idx}`}>
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={hitRadius}
-                fill="transparent"
-                style={{ cursor: "pointer" }}
-                onPointerEnter={() => {
-                  if (activeIndex === null) setHoverIndex(idx);
-                }}
-                onPointerLeave={() => {
-                  if (activeIndex === null) setHoverIndex(null);
-                }}
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  togglePoint(idx);
-                }}
-              />
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={3.5}
-                fill="rgba(51,255,122,0.95)"
-                style={{ pointerEvents: "none" }}
-              >
-                <title>{`${p.label}: ${fmt(p.value)}`}</title>
-              </circle>
+              {/* Dot + hit target — only for sessions where this exercise was done */}
+              {!p.skipped && (
+                <>
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={hitRadius}
+                    fill="transparent"
+                    style={{ cursor: "pointer" }}
+                    onPointerEnter={() => {
+                      if (activeIndex === null) setHoverIndex(idx);
+                    }}
+                    onPointerLeave={() => {
+                      if (activeIndex === null) setHoverIndex(null);
+                    }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      togglePoint(idx);
+                    }}
+                  />
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={3.5}
+                    fill="rgba(51,255,122,0.95)"
+                    style={{ pointerEvents: "none" }}
+                  >
+                    <title>{`${p.label}: ${fmt(p.value)}`}</title>
+                  </circle>
+                </>
+              )}
 
+              {/* X-axis tick + date label — shown for all points in the timeline */}
               {markerIndices.has(idx) && (
                 <>
                   <line
@@ -272,14 +302,14 @@ export default function MetricLineChart({
                     y1={margin.top + innerH}
                     x2={p.x}
                     y2={margin.top + innerH + 6}
-                    stroke="rgba(255,255,255,0.45)"
+                    stroke={p.skipped ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.45)"}
                   />
                   <text
                     x={p.x}
                     y={margin.top + innerH + 18}
                     textAnchor="middle"
                     fontSize="10"
-                    fill="rgba(255,255,255,0.72)"
+                    fill={p.skipped ? "rgba(255,255,255,0.38)" : "rgba(255,255,255,0.72)"}
                   >
                     {p.label}
                   </text>

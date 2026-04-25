@@ -32,14 +32,6 @@ export default async function GroupsIndexView(props: {
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
   const groups = await getMetadataIndex();
 
-  const sportAndCategoryGroups: ProgressGroupItem[] = groups
-    .filter((group) => group.kind === "CARDIO_ACTIVITY" || group.kind === "ROUTINE_FOCUS")
-    .map((group) => ({
-      slug: group.slug,
-      label: group.label,
-      subtitle: "",
-    }));
-
   const muscleGroups: ProgressGroupItem[] = groups
     .filter((group) => group.kind === "MUSCLE_GROUP")
     .map((group) => ({
@@ -49,7 +41,6 @@ export default async function GroupsIndexView(props: {
     }));
 
   const sections = [
-    { key: "sport-category", title: "Sport / Category Sessions", items: sportAndCategoryGroups },
     { key: "muscles", title: "Muscle Groups", items: muscleGroups },
     { key: "stimulus", title: "Movement / Stimulus Groups", items: STIMULUS_GROUPS },
   ]
@@ -73,8 +64,8 @@ export default async function GroupsIndexView(props: {
   return (
     <ProgressShell
       section="groups"
-      title="Group Progress"
-      subtitle="Browse progress by sport and session categories, muscle groups, and the movement / stimulus groups that now drive the stimulus overview."
+      title="Coverage Groups"
+      subtitle="Browse progress by muscle group and movement pattern — the same categories shown in the Coverage chart."
     >
       <SectionCard title="Find a Group">
         <FilterBar>
@@ -102,9 +93,7 @@ export default async function GroupsIndexView(props: {
                 const lastLabel = lastLog
                   ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastLog.performedAt)}`
                   : null;
-                const href = section.key === "sport-category" && groups.find((g) => g.slug === item.slug)?.kind === "CARDIO_ACTIVITY"
-                  ? `/progress/cardio/${item.slug}?tab=overview&range=4w`
-                  : `/progress/groups/${item.slug}?tab=overview&range=4w`;
+                const href = `/progress/groups/${item.slug}?tab=overview&range=4w`;
                 return (
                   <TargetCard
                     key={item.slug}

@@ -138,22 +138,41 @@ export default async function CardioIndexView(props: {
   const activityColors: Record<string, string> = {
     running: "rgba(78,148,255,0.85)",
     cycling: "rgba(251,199,92,0.85)",
+    biking: "rgba(251,199,92,0.85)",
     swimming: "rgba(56,189,189,0.85)",
-    climbing: "rgba(192,132,252,0.85)",
     hiking: "rgba(84,203,130,0.85)",
     rowing: "rgba(251,146,60,0.85)",
+    walking: "rgba(167,224,255,0.8)",
+    golf: "rgba(52,211,153,0.8)",
+    basketball: "rgba(251,113,133,0.8)",
   };
   const fallbackColors = [
-    "rgba(167,224,255,0.8)", "rgba(251,113,133,0.8)", "rgba(156,163,175,0.8)",
-    "rgba(250,204,21,0.8)", "rgba(52,211,153,0.8)",
+    "rgba(192,132,252,0.85)", "rgba(156,163,175,0.8)", "rgba(250,204,21,0.8)",
   ];
 
-  // Build routineId → activity group label map
+  // Priority: specific sports win over umbrella labels ("Run + Walk", "All Cardio")
+  const CARDIO_PRIORITY = ["hiking", "running", "cycling", "biking", "walking", "swimming", "rowing", "golf", "basketball"];
+
+  function pickCardioActivityGroup(routine: (typeof cardioRoutines)[number]) {
+    const groups = routine.metadataGroups
+      .map((mg) => mg.group)
+      .filter((g) => g.kind === "CARDIO_ACTIVITY");
+    if (groups.length === 0) return null;
+    return [...groups].sort((a, b) => {
+      const ia = CARDIO_PRIORITY.indexOf(a.slug);
+      const ib = CARDIO_PRIORITY.indexOf(b.slug);
+      return (ia === -1 ? CARDIO_PRIORITY.length : ia) - (ib === -1 ? CARDIO_PRIORITY.length : ib);
+    })[0];
+  }
+
+  // Build routineId → activity group maps (label for chart, slug for links)
   const routineActivityGroupMap = new Map<string, string>();
+  const routineCardioGroupSlugMap = new Map<string, string>();
   for (const routine of cardioRoutines) {
-    const activityGroup = routine.metadataGroups.find((mg) => mg.group.kind === "CARDIO_ACTIVITY");
-    if (activityGroup) {
-      routineActivityGroupMap.set(routine.id, activityGroup.group.label);
+    const best = pickCardioActivityGroup(routine);
+    if (best) {
+      routineActivityGroupMap.set(routine.id, best.label);
+      routineCardioGroupSlugMap.set(routine.id, best.slug);
     }
   }
 
@@ -178,15 +197,6 @@ export default async function CardioIndexView(props: {
     return { label: entry.label, color, weeklyValues: filled.map((p) => p.value) };
   });
 
-  // Build routineId → preferred cardio group slug map (for better detail page links)
-  const routineCardioGroupSlugMap = new Map<string, string>();
-  for (const routine of cardioRoutines) {
-    const activityGroup = routine.metadataGroups.find((mg) => mg.group.kind === "CARDIO_ACTIVITY");
-    if (activityGroup) {
-      routineCardioGroupSlugMap.set(routine.id, activityGroup.group.slug);
-    }
-  }
-
   // ── Per-routine breakdown ─────────────────────────────────────────────────────
   const routineBreakdowns = cardioRoutines
     .map((routine) => {
@@ -207,11 +217,6 @@ export default async function CardioIndexView(props: {
     .filter((b) => b.sessions > 0 || !query)
     .filter((b) => !query || b.routine.name.toLowerCase().includes(query))
     .sort((a, b) => b.miles - a.miles || b.sessions - a.sessions);
-
-  // ── Group cards for navigation (no heavy resolveGroupTarget) ─────────────────
-  const filteredGroups = cardioGroups.filter(
-    (g) => !query || g.label.toLowerCase().includes(query) || g.slug.includes(query)
-  );
 
   const hasAnyData = allCardioLogs.length > 0;
 
@@ -296,24 +301,6 @@ export default async function CardioIndexView(props: {
         </SectionCard>
       ) : null}
 
-      {/* ── Activity type rollups (navigation links) ── */}
-      {filteredGroups.length > 0 ? (
-        <SectionCard title="Activity Rollups" subtitle="Drill into aggregated stats per sport — pace, elevation, distance, and trends.">
-          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-            {filteredGroups.map((group) => (
-              <Link
-                key={group.id}
-                href={`/progress/cardio/${group.slug}?tab=overview&range=4w`}
-                scroll={false}
-                style={{ display: "grid", gap: 4, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(78,148,255,0.18)", background: "rgba(78,148,255,0.06)", textDecoration: "none", color: "inherit" }}
-              >
-                <div style={{ fontWeight: 900, fontSize: 14 }}>{group.label}</div>
-                <div style={{ fontSize: 12, opacity: 0.65 }}>Cardio rollup — pace, distance, elevation</div>
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
-      ) : null}
     </ProgressShell>
   );
 }

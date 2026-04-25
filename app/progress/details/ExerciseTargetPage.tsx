@@ -263,7 +263,7 @@ export default async function ExerciseTargetPage(props: {
                   points={isTimeExercise ? workload.totalSeconds : workload.volume}
                   unit={isTimeExercise ? "sec" : "lb"}
                   decimals={0}
-                  valueFormatter={isTimeExercise ? (v) => formatSeconds(v) : undefined}
+                  format={isTimeExercise ? "duration" : undefined}
                   omitTotal={isTimeExercise}
                   targetValue={isTimeExercise ? durationGoalLine?.targetValue : volumeGoalLine?.targetValue}
                   targetLabel={isTimeExercise ? durationGoalLine?.label : volumeGoalLine?.label}

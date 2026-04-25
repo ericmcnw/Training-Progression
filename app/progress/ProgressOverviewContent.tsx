@@ -8,6 +8,7 @@ import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from 
 import CardioIndexView from "./CardioIndexView";
 import ExercisesIndexView from "./ExercisesIndexView";
 import GroupsIndexView from "./GroupsIndexView";
+import SportsIndexView from "./SportsIndexView";
 import { PillNav, ProgressShell, SectionCard, SectionLinkButton } from "./ui";
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
@@ -308,6 +309,7 @@ async function CoverageSection({
         <div className="mobileCoverageHeaderActions" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Link href={coverageHref(coverageLens, coverageRange, !showQuiet, showAll)} scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showQuiet ? "Hide quiet" : `Show quiet (${hiddenQuietCount})`}</Link>
           {hiddenActiveCount > 0 ? <Link href={coverageHref(coverageLens, coverageRange, showQuiet, !showAll)} scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>{showAll ? "Show less" : `Show all active (${hiddenActiveCount} more)`}</Link> : null}
+          <Link href="/progress?section=groups" scroll={false} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 11px", borderRadius: 10, textDecoration: "none", color: "inherit", fontSize: 12, fontWeight: 800, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>Browse groups</Link>
         </div>
       }
     >
@@ -444,13 +446,14 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "exercises") return <ExercisesIndexView searchParams={params} />;
   if (section === "groups") return <GroupsIndexView searchParams={params} />;
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
+  if (section === "sports") return <SportsIndexView searchParams={params} />;
 
   // Fetch all fast data in a single parallel batch.
   const [routines, exercises, groups, recentLogs] = await Promise.all([
     getRoutineIndex(),
     getExerciseIndex(),
     getMetadataIndex(),
-    getRoutineLogs("4w"),
+    getRoutineLogs("8w"),
   ]);
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
   const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
@@ -478,34 +481,50 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
     const fs = frequencyStatusByRoutineId.get(r.id);
     return fs?.status === "on_track" || fs?.status === "ahead";
   }).length;
-  const baselineWeeklyLogs = recentLogs.length / 4;
+  const baselineWeeklyLogs = recentLogs.length / 8;
 
-  // Domain heat matrix
+  // Domain heat matrix — 5 calendar weeks (Sun–Sat), rightmost = current week
   const routineDomainMap = new Map(routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)]));
   const routineNameMap = new Map(routines.map((r) => [r.id, r.name]));
-  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-  const heatWeekStarts: Date[] = Array.from({ length: 4 }, (_, i) => new Date(now.getTime() - (3 - i) * msPerWeek));
-  const heatWeekLabels: string[] = heatWeekStarts.map((d) => `${d.getMonth() + 1}/${d.getDate()}`);
+  const sunOfCurrentWeek = new Date(now);
+  sunOfCurrentWeek.setDate(now.getDate() - now.getDay()); // back to Sunday
+  sunOfCurrentWeek.setHours(0, 0, 0, 0);
+  const heatWeekStarts: Date[] = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(sunOfCurrentWeek);
+    d.setDate(d.getDate() - (4 - i) * 7);
+    return d;
+  });
+  // Each week ends at the next Sunday (exclusive); for the 5th week, that's sunOfCurrentWeek + 7 days
+  const heatWeekEnds: number[] = heatWeekStarts.map((_, i) => {
+    const nextSun = new Date(heatWeekStarts[i]);
+    nextSun.setDate(nextSun.getDate() + 7);
+    return nextSun.getTime();
+  });
+  // Labels: "M/D–M/D" (Sunday – Saturday) displayed as two stacked lines in the matrix
+  const heatWeekLabels: string[] = heatWeekStarts.map((d) => {
+    const sat = new Date(d);
+    sat.setDate(sat.getDate() + 6);
+    return `${d.getMonth() + 1}/${d.getDate()}–${sat.getMonth() + 1}/${sat.getDate()}`;
+  });
   const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "habit"];
   const domainLabel: Partial<Record<RoutineDomain, string>> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility / Rehab",
     sport: "Sport / Sessions", recovery: "Recovery",
     habit: "Habits",
   };
   const heatData = new Map<RoutineDomain, number[]>();
   const heatLogDetails = new Map<RoutineDomain, DomainWeekLog[][]>();
   for (const d of domainOrder) {
-    heatData.set(d, Array(4).fill(0));
-    heatLogDetails.set(d, Array.from({ length: 4 }, () => []));
+    heatData.set(d, Array(5).fill(0));
+    heatLogDetails.set(d, Array.from({ length: 5 }, () => []));
   }
   const shortDateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
   for (const log of recentLogs) {
     const domain = routineDomainMap.get(log.routineId);
     if (!domain || !heatData.has(domain)) continue;
-    const weekIdx = heatWeekStarts.findIndex((wStart, i) => {
-      const wEnd = i < 3 ? heatWeekStarts[i + 1].getTime() : now.getTime() + msPerWeek;
-      return log.performedAt.getTime() >= wStart.getTime() && log.performedAt.getTime() < wEnd;
-    });
+    const weekIdx = heatWeekStarts.findIndex((wStart, i) =>
+      log.performedAt.getTime() >= wStart.getTime() && log.performedAt.getTime() < heatWeekEnds[i]
+    );
     if (weekIdx >= 0) {
       heatData.get(domain)![weekIdx]++;
       const routineName = routineNameMap.get(log.routineId);
@@ -664,7 +683,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
         <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
           {heatMatrixRows.filter((r) => r.weeks.every((c) => c === 0)).map((r) => (
             <span key={r.domain} style={{ fontSize: 11, padding: "4px 9px", borderRadius: 999, border: "1px solid rgba(251,113,133,0.3)", background: "rgba(251,113,133,0.08)", color: "rgba(251,113,133,0.9)", fontWeight: 800 }}>
-              {r.label} — no sessions in 4 weeks
+              {r.label} — no sessions in 5 weeks
             </span>
           ))}
         </div>

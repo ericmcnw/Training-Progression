@@ -112,7 +112,7 @@ export function supportsRoutineSteps(kind: string | null | undefined) {
 export const ROUTINE_DOMAIN_OPTIONS = [
   { value: "strength",  label: "Strength" },
   { value: "cardio",    label: "Cardio" },
-  { value: "mobility",  label: "Mobility" },
+  { value: "mobility",  label: "Mobility / Rehab" },
   { value: "sport",     label: "Sport" },
   { value: "recovery",  label: "Recovery" },
   { value: "habit",     label: "Habit / Health" },
@@ -134,14 +134,14 @@ export function deriveRoutineDomain(
   if (k === "CARDIO") return "cardio";
 
   if (k === "WORKOUT") {
-    if (s === "REHAB") return "recovery";
+    if (s === "REHAB") return "mobility";
     return "strength"; // STRENGTH, HYPERTROPHY, OTHER, and legacy SKILL all → strength
   }
 
   if (k === "GUIDED") {
-    if (s === "REHAB" || s === "BREATHWORK" || s === "COOLDOWN" || s === "RECOVERY") return "recovery";
+    if (s === "BREATHWORK" || s === "COOLDOWN" || s === "RECOVERY") return "recovery";
     if (s === "EXERCISE") return "strength";
-    return "mobility"; // MOBILITY, STRETCHING, WARMUP, OTHER
+    return "mobility"; // MOBILITY, STRETCHING, WARMUP, REHAB, OTHER
   }
 
   if (k === "SESSION") {

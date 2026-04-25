@@ -4,7 +4,7 @@ import { getWeekBoundsSunday } from "@/lib/week";
 
 export type { ProgressRange } from "@/lib/progress";
 
-export type ProgressSection = "overview" | "routines" | "exercises" | "cardio" | "groups";
+export type ProgressSection = "overview" | "routines" | "exercises" | "cardio" | "sports" | "groups";
 export type ProgressTab = "overview" | "completion" | "performance" | "workload";
 
 const defaultProgressTabs: ProgressTab[] = ["overview", "completion", "performance", "workload"];
@@ -28,7 +28,7 @@ export function progressSections() {
     { key: "routines", label: "Routines", href: "/progress/routines" },
     { key: "exercises", label: "Exercises", href: "/progress/exercises" },
     { key: "cardio", label: "Cardio", href: "/progress/cardio" },
-    { key: "groups", label: "Groups", href: "/progress/groups" },
+    { key: "sports", label: "Sports", href: "/progress/sports" },
   ] satisfies Array<{ key: ProgressSection; label: string; href: string }>;
 }
 

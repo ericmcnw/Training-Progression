@@ -4,9 +4,8 @@ import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetCard, Targe
 import { formatAppDate } from "@/lib/dates";
 import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
-import { fillWeeklySeries, getRangeFromSearchParam, incrementWeekMap, normalizeProgressTab, rangeChipLabel, resolveProgressTab, type ProgressTab } from "@/lib/progress-v2";
+import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, resolveProgressTab, startOfYear, type ProgressTab } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
-const fmtDuration = (sec: number) => formatDuration(Math.round(sec));
 import { getRoutineFrequencyStatus, getRoutineTargetWindow } from "@/lib/routine-frequency";
 import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
 import { withSessionMetricConfig } from "@/lib/session-templates";
@@ -80,7 +79,7 @@ export default async function RoutineTargetPage(props: {
       : ["overview", "completion", "performance", "workload"];
   const tab = resolveProgressTab(requestedTab, availableTabs);
 
-  const [completionGoalLine, weeklyDistanceGoalLine, sessionDistanceGoalLine, weeklyElevationGoalLine, sessionElevationGoalLine, durationGoalLine, setsGoalLine, repsGoalLine, volumeGoalLine] = await Promise.all([
+  const [completionGoalLine, weeklyDistanceGoalLine, sessionDistanceGoalLine, weeklyElevationGoalLine, sessionElevationGoalLine, durationGoalLine, setsGoalLine, repsGoalLine, volumeGoalLine, ytdCount, last8RawLogs] = await Promise.all([
     getChartGoalReference({
       candidates: [{ targetType: "ROUTINE", targetId: routine.id }],
       metricType: "SESSIONS",
@@ -126,7 +125,21 @@ export default async function RoutineTargetPage(props: {
       metricType: "VOLUME",
       timeframe: "WEEK",
     }),
+    prisma.routineLog.count({
+      where: { routineId: routine.id, performedAt: { gte: startOfYear(new Date()) } },
+    }),
+    prisma.routineLog.findMany({
+      where: { routineId: routine.id },
+      orderBy: { performedAt: "desc" },
+      take: 8,
+      include: {
+        exercises: {
+          include: { sets: true },
+        },
+      },
+    }),
   ]);
+  const last8Logs = [...last8RawLogs].reverse();
 
   const logs = (await getRoutineLogs(range, { routineIds: [routine.id] })).filter((log) => log.routineId === routine.id);
   const frequencyWindowStart = getRoutineTargetWindow(routine)?.start;
@@ -224,26 +237,65 @@ export default async function RoutineTargetPage(props: {
     };
   }).filter((entry) => entry.points.length > 0);
 
-  // Per-exercise weekly volume charts (workout routines)
-  const routineExerciseVolume = kind === "WORKOUT"
+  // Per-exercise per-session charts (workout routines) — aligned to the shared last-8 timeline.
+  // Every chart uses the same x-axis (all sessions in last8Logs). If an exercise wasn't done
+  // in a particular session, a skipped point is emitted so dates stay aligned across charts.
+  const routineExerciseSessionData = kind === "WORKOUT"
     ? routine.exercises.map((routineExercise) => {
-        const weeklyVolumeMap = new Map<string, number>();
-        const weeklySessionsMap = new Map<string, number>();
-        for (const log of logs) {
-          for (const entry of log.exercises.filter((e) => e.exerciseId === routineExercise.exercise.id)) {
-            const sessionVolume = entry.sets.reduce((sum, set) => sum + (set.reps ?? 0) * (set.weightLb ?? 0), 0);
-            const sessionSets = entry.sets.length;
-            incrementWeekMap(weeklyVolumeMap, log.performedAt, sessionVolume);
-            incrementWeekMap(weeklySessionsMap, log.performedAt, sessionSets);
+        const exercise = routineExercise.exercise;
+        // Fall back to reps if the exercise supports weight but none has been recorded
+        const anyWeightRecorded = last8Logs.some((log) =>
+          log.exercises
+            .filter((e) => e.exerciseId === exercise.id)
+            .some((e) => e.sets.some((s) => (s.weightLb ?? 0) > 0))
+        );
+        const isWeighted = exercise.supportsWeight && anyWeightRecorded;
+        const isTime = !isWeighted && exercise.unit === "TIME";
+
+        const points = last8Logs.map((log) => {
+          const label = formatAppDate(log.performedAt, { month: "short", day: "numeric" });
+          const entry = log.exercises.find((e) => e.exerciseId === exercise.id);
+          if (!entry || entry.sets.length === 0) {
+            return { label, value: 0, skipped: true as const };
           }
-        }
-        const weeklyPoints = fillWeeklySeries(weeklyVolumeMap, range);
-        const usesVolume = routineExercise.exercise.supportsWeight;
-        if (!usesVolume || weeklyPoints.every((p) => p.value === 0)) return null;
+
+          const value = isWeighted
+            ? entry.sets.reduce((sum, set) => sum + (set.reps ?? 0) * (set.weightLb ?? 0), 0)
+            : isTime
+            ? entry.sets.reduce((sum, set) => sum + (set.seconds ?? 0), 0)
+            : entry.sets.reduce((sum, set) => sum + (set.reps ?? 0), 0);
+
+          const detailLines = entry.sets.map((set, idx) => {
+            if (isWeighted) {
+              const w = set.weightLb && set.weightLb > 0 ? `${set.weightLb.toFixed(1)} lb` : null;
+              const r = set.reps && set.reps > 0 ? `${set.reps} reps` : null;
+              return `Set ${idx + 1}: ${[w, r].filter(Boolean).join(" × ") || "—"}`;
+            }
+            if (isTime) return `Set ${idx + 1}: ${formatSecondsShort(set.seconds ?? 0)}`;
+            return `Set ${idx + 1}: ${set.reps ?? 0} reps`;
+          });
+
+          return { label, value, detailLines, skipped: false as const };
+        });
+
+        // Skip exercise if it was never done in any of these sessions
+        if (points.every((p) => p.skipped)) return null;
+        // Skip exercise if all actual values are 0
+        if (points.filter((p) => !p.skipped).every((p) => p.value === 0)) return null;
+
         return {
-          exercise: routineExercise.exercise,
-          points: weeklyPoints,
-          sessionCount: Array.from(weeklySessionsMap.values()).reduce((a, b) => a + b, 0),
+          exercise,
+          points,
+          title: isWeighted
+            ? `${exercise.name}: Volume per Session`
+            : isTime
+            ? `${exercise.name}: Time per Session`
+            : `${exercise.name}: Reps per Session`,
+          yLabel: isWeighted ? "Volume" : isTime ? "Time" : "Reps",
+          unit: isWeighted ? "lb" : "",
+          decimals: 0,
+          format: isTime ? "duration" as const : undefined,
+          omitTotal: isTime,
         };
       }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
     : [];
@@ -252,17 +304,17 @@ export default async function RoutineTargetPage(props: {
     kind === "CARDIO" ? (
       <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
     ) : kind === "WORKOUT" ? (
-      routineExerciseVolume.length > 0 ? (
+      routineExerciseSessionData.length > 0 ? (
         <div style={{ display: "grid", gap: 8 }}>
-          {routineExerciseVolume.slice(0, 4).map((entry) => (
-            <MetricLineChart key={entry.exercise.id} title={`${entry.exercise.name}: Volume per Week`} yLabel="Volume" xLabel="Week" points={entry.points} unit="lb" decimals={0} compact />
+          {routineExerciseSessionData.slice(0, 4).map((entry) => (
+            <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} compact />
           ))}
         </div>
       ) : (
         <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
       )
     ) : (
-      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} valueFormatter={fmtDuration} omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
     );
 
   const performanceContent =
@@ -302,7 +354,7 @@ export default async function RoutineTargetPage(props: {
           }))}
           unit="sec"
           decimals={0}
-          valueFormatter={fmtDuration}
+          format="duration"
           omitTotal
         />
         {sessionPerformanceCharts.map((entry) => (
@@ -326,7 +378,7 @@ export default async function RoutineTargetPage(props: {
         <div style={{ display: "grid", gap: 10 }}>
         <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} valueFormatter={fmtDuration} omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Elevation per Week`} yLabel="Elevation" xLabel="Week" points={cardioWorkload.elevation} unit="ft" decimals={0} targetValue={weeklyElevationGoalLine?.targetValue} targetLabel={weeklyElevationGoalLine?.label} targetUnit={weeklyElevationGoalLine?.unit} targetDecimals={weeklyElevationGoalLine?.decimals} />
       </div>
     ) : kind === "WORKOUT" ? (
@@ -334,14 +386,14 @@ export default async function RoutineTargetPage(props: {
         <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} targetValue={setsGoalLine?.targetValue} targetLabel={setsGoalLine?.label} targetUnit={setsGoalLine?.unit} targetDecimals={setsGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} targetValue={repsGoalLine?.targetValue} targetLabel={repsGoalLine?.label} targetUnit={repsGoalLine?.unit} targetDecimals={repsGoalLine?.decimals} />
         <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
-        {routineExerciseVolume.map((entry) => (
-          <MetricLineChart key={entry.exercise.id} title={`${entry.exercise.name}: Volume per Week`} yLabel="Volume" xLabel="Week" points={entry.points} unit="lb" decimals={0} />
+        {routineExerciseSessionData.map((entry) => (
+          <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} />
         ))}
       </div>
     ) : (
       <div style={{ display: "grid", gap: 10 }}>
         <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} valueFormatter={fmtDuration} omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
         {sessionWorkloadCharts.map((entry) => (
           <MetricLineChart
             key={entry.definition.id}
@@ -383,7 +435,7 @@ export default async function RoutineTargetPage(props: {
             items={[
               { label: "Range", value: rangeChipLabel(range) },
               { label: "Sessions", value: String(summary.sessions) },
-              { label: "YTD sessions", value: String(summary.ytd) },
+              { label: "YTD sessions", value: String(ytdCount) },
               { label: "Target", value: frequencySummary.summaryLabel },
               {
                 label: "Status",

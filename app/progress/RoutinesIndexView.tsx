@@ -4,6 +4,7 @@ import { EmptyState, FilterBar, FilterInput, FilterSelect, FilterSubmitButton, P
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
 import { effectiveRoutineDomain, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { prisma } from "@/lib/prisma";
+import { startOfYear } from "@/lib/progress-v2";
 
 const DORMANT_DAYS = 14; // show as dormant if no log in this many days
 
@@ -23,7 +24,17 @@ export default async function RoutinesIndexView(props: {
   const status = (getParam(searchParams, "status") ?? "active").trim();
   const domainFilter = (getParam(searchParams, "domain") ?? "").trim().toLowerCase();
   const now = new Date();
-  const [routines, logs] = await Promise.all([getRoutineIndex(), getRoutineLogs("4w")]);
+  const ytdStart = startOfYear(now);
+  const [routines, logs, ytdCountsRaw] = await Promise.all([
+    getRoutineIndex(),
+    getRoutineLogs("4w"),
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
+      where: { performedAt: { gte: ytdStart } },
+      _count: { id: true },
+    }),
+  ]);
+  const ytdCountByRoutineId = new Map(ytdCountsRaw.map((r) => [r.routineId, r._count.id]));
   const maxFrequencyWindowDays = getMaxRoutineFrequencyWindowDays(routines);
   const frequencyWindowStart = new Date(now.getTime() - Math.max(1, maxFrequencyWindowDays) * 24 * 60 * 60 * 1000);
   const frequencyLogs =
@@ -200,7 +211,7 @@ export default async function RoutinesIndexView(props: {
                 subtitle={routineSubtitle(routine)}
                 chips={[
                   `${summary.sessions} sessions`,
-                  `${summary.ytd} YTD`,
+                  `${ytdCountByRoutineId.get(routine.id) ?? 0} YTD`,
                   summary.lastSession ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)}` : "No recent activity",
                 ]}
                 borderColor={borderColor}
