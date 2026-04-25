@@ -45,7 +45,7 @@ export function ProgressShell({
       </div>
 
       <NavCluster
-        label={navLabel ?? "Choose Type to Review"}
+        label={navLabel ?? ""}
         hint={navHint}
         items={resolvedNavItems}
       />
@@ -59,6 +59,7 @@ export function TargetHeader({
   section,
   title,
   subtitle,
+  eyebrow,
   basePath,
   tab,
   range,
@@ -68,6 +69,7 @@ export function TargetHeader({
   section: ProgressSection;
   title: string;
   subtitle?: string;
+  eyebrow?: string;
   basePath: string;
   tab: ProgressTab;
   range: ProgressRange;
@@ -78,7 +80,7 @@ export function TargetHeader({
     <div className="mobileProgressPage mobilePageShell" style={styles.container}>
       <div className="mobileSectionCard" style={styles.hero}>
         <div style={styles.heroCopy}>
-          <div style={styles.eyebrow}>Progress Target</div>
+          <div style={styles.eyebrow}>{eyebrow ?? "Progress Target"}</div>
           <h1 className="mobilePageTitle" style={styles.h1}>{title}</h1>
           {subtitle ? <div className="mobilePageSubtitle" style={styles.sub}>{subtitle}</div> : null}
         </div>
@@ -149,6 +151,9 @@ export function TargetCard({
   eyebrow,
   description,
   emphasis = "default",
+  borderColor,
+  background,
+  trendChip,
 }: {
   href: string;
   title: string;
@@ -157,6 +162,9 @@ export function TargetCard({
   eyebrow?: string;
   description?: string;
   emphasis?: "default" | "featured";
+  borderColor?: string;
+  background?: string;
+  trendChip?: { label: string; style?: React.CSSProperties };
 }) {
   const featured = emphasis === "featured";
 
@@ -166,19 +174,26 @@ export function TargetCard({
       style={{
         ...styles.targetCard,
         ...(featured ? styles.targetCardFeatured : {}),
+        ...(borderColor ? { borderColor } : {}),
+        ...(background ? { background } : {}),
       }}
     >
       {eyebrow ? <div style={styles.cardEyebrow}>{eyebrow}</div> : null}
       <div style={styles.cardTitle}>{title}</div>
       {subtitle ? <div style={styles.cardSubtitle}>{subtitle}</div> : null}
       {description ? <div style={styles.cardDescription}>{description}</div> : null}
-      {chips && chips.length > 0 ? (
+      {(chips && chips.length > 0) || trendChip ? (
         <div style={styles.cardChipRow}>
-          {chips.map((chip) => (
+          {chips?.map((chip) => (
             <span key={chip} style={styles.chip}>
               {chip}
             </span>
           ))}
+          {trendChip ? (
+            <span style={{ ...styles.chip, ...trendChip.style }}>
+              {trendChip.label}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </Link>
@@ -188,14 +203,14 @@ export function TargetCard({
 export function StatGrid({
   items,
 }: {
-  items: Array<{ label: string; value: string }>;
+  items: Array<{ label: string; value: string; accent?: string }>;
 }) {
   return (
     <div style={styles.statGrid}>
       {items.map((item) => (
         <div key={item.label} style={styles.statCard}>
           <div style={styles.statLabel}>{item.label}</div>
-          <div style={styles.statValue}>{item.value}</div>
+          <div style={{ ...styles.statValue, ...(item.accent ? { color: item.accent } : {}) }}>{item.value}</div>
         </div>
       ))}
     </div>
@@ -285,10 +300,12 @@ function NavCluster({
 }) {
   return (
     <div style={styles.navCluster}>
-      <div style={styles.navHeader}>
-        <div style={styles.navLabel}>{label}</div>
-        {hint ? <div style={styles.navHint}>{hint}</div> : null}
-      </div>
+      {(label || hint) ? (
+        <div style={styles.navHeader}>
+          {label ? <div style={styles.navLabel}>{label}</div> : null}
+          {hint ? <div style={styles.navHint}>{hint}</div> : null}
+        </div>
+      ) : null}
       <SegmentedNav items={items} />
     </div>
   );

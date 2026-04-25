@@ -178,21 +178,36 @@ export default async function RoutinesIndexView(props: {
       <SectionCard title="All Routines">
         {rows.length === 0 ? <EmptyState message="No routines match the current filters." /> : null}
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-          {rows.map(({ routine, summary, frequencySummary }) => (
-            <TargetCard
-              key={routine.id}
-              href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
-              title={routine.name}
-              subtitle={routineSubtitle(routine)}
-              chips={[
-                `${summary.sessions} sessions`,
-                `${summary.ytd} YTD`,
-                frequencySummary?.summaryLabel ?? `${summary.weeksActive} active weeks`,
-                frequencySummary?.hasTarget ? frequencySummary.detailLabel : `${summary.weeksActive} active weeks`,
-                summary.lastSession ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)}` : "No recent activity",
-              ]}
-            />
-          ))}
+          {rows.map(({ routine, summary, frequencySummary }) => {
+            const isBehind = frequencySummary?.hasTarget && frequencySummary.status === "behind";
+            const isAhead = frequencySummary?.hasTarget && frequencySummary.status === "ahead";
+            const isOnTrack = frequencySummary?.hasTarget && frequencySummary.status === "on_track";
+            const borderColor = isBehind
+              ? "rgba(251,113,133,0.28)"
+              : isAhead || isOnTrack
+              ? "rgba(84,203,130,0.22)"
+              : "rgba(255,255,255,0.12)";
+            const background = isBehind
+              ? "linear-gradient(180deg, rgba(251,113,133,0.07), rgba(255,255,255,0.03))"
+              : isAhead || isOnTrack
+              ? "linear-gradient(180deg, rgba(84,203,130,0.07), rgba(255,255,255,0.03))"
+              : "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))";
+            return (
+              <TargetCard
+                key={routine.id}
+                href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
+                title={routine.name}
+                subtitle={routineSubtitle(routine)}
+                chips={[
+                  `${summary.sessions} sessions`,
+                  `${summary.ytd} YTD`,
+                  summary.lastSession ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)}` : "No recent activity",
+                ]}
+                borderColor={borderColor}
+                background={background}
+              />
+            );
+          })}
         </div>
       </SectionCard>
     </ProgressShell>

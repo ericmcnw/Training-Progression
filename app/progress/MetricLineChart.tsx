@@ -43,6 +43,8 @@ export default function MetricLineChart({
   targetUnit,
   targetDecimals,
   yAxisTicks,
+  valueFormatter,
+  omitTotal = false,
 }: {
   title: string;
   yLabel: string;
@@ -57,6 +59,8 @@ export default function MetricLineChart({
   targetUnit?: string;
   targetDecimals?: number;
   yAxisTicks?: number[];
+  valueFormatter?: (value: number) => string;
+  omitTotal?: boolean;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -99,6 +103,10 @@ export default function MetricLineChart({
     markerIndices.add(idx);
   }
 
+  const fmt = valueFormatter
+    ? valueFormatter
+    : (v: number) => formatValue(v, decimals, unit);
+
   const focusedIndex = activeIndex ?? hoverIndex;
   const hovered = focusedIndex !== null ? points[focusedIndex] : null;
   const hoveredSeriesPoint = focusedIndex !== null ? series[focusedIndex] : null;
@@ -106,7 +114,7 @@ export default function MetricLineChart({
   const hoverLabel = hovered?.tooltipLabel ?? hovered?.label ?? "";
   const hoverValueText =
     hovered && hoveredSeriesPoint
-      ? `${hoverMetricLabel}: ${formatValue(hovered.value, decimals, unit)}`
+      ? `${hoverMetricLabel}: ${fmt(hovered.value)}`
       : "";
   const detailLines = hovered?.detailLines ?? [];
   const hoverTextWidth = Math.max(
@@ -128,6 +136,14 @@ export default function MetricLineChart({
     .filter((value) => value >= 0 && value <= yMax)
     .sort((a, b) => b - a);
 
+  const summaryChips = [
+    { label: "Max", value: fmt(metrics.max) },
+    { label: "Latest", value: fmt(metrics.latest) },
+    { label: "Avg", value: fmt(metrics.avg) },
+    ...(!omitTotal ? [{ label: "Total", value: fmt(metrics.total) }] : []),
+    ...(goalValue !== undefined ? [{ label: "Target", value: formatValue(goalValue, targetDecimals ?? decimals, targetUnit ?? unit) }] : []),
+  ];
+
   return (
     <div
       style={{
@@ -137,14 +153,15 @@ export default function MetricLineChart({
         background: "rgba(128,128,128,0.06)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div style={{ fontWeight: 900 }}>{title}</div>
-        <div style={{ fontSize: 12, opacity: 0.9 }}>
-          Max: {formatValue(metrics.max, decimals, unit)} | Latest: {formatValue(metrics.latest, decimals, unit)} | Avg:{" "}
-          {formatValue(metrics.avg, decimals, unit)} | Total: {formatValue(metrics.total, decimals, unit)}
-          {goalValue !== undefined
-            ? ` | Target: ${formatValue(goalValue, targetDecimals ?? decimals, targetUnit ?? unit)}`
-            : ""}
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ fontWeight: 900, fontSize: 13 }}>{title}</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {summaryChips.map((chip) => (
+            <span key={chip.label} style={{ display: "inline-flex", gap: 4, alignItems: "baseline", padding: "3px 8px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", fontSize: 11, fontWeight: 700 }}>
+              <span style={{ opacity: 0.58, fontWeight: 800, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.5 }}>{chip.label}</span>
+              <span>{chip.value}</span>
+            </span>
+          ))}
         </div>
       </div>
 
@@ -245,7 +262,7 @@ export default function MetricLineChart({
                 fill="rgba(51,255,122,0.95)"
                 style={{ pointerEvents: "none" }}
               >
-                <title>{`${p.label}: ${formatValue(p.value, decimals, unit)}`}</title>
+                <title>{`${p.label}: ${fmt(p.value)}`}</title>
               </circle>
 
               {markerIndices.has(idx) && (

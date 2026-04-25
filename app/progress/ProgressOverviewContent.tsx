@@ -8,7 +8,7 @@ import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from 
 import CardioIndexView from "./CardioIndexView";
 import ExercisesIndexView from "./ExercisesIndexView";
 import GroupsIndexView from "./GroupsIndexView";
-import { PillNav, ProgressShell, SectionCard, SectionLinkButton, TargetCard } from "./ui";
+import { PillNav, ProgressShell, SectionCard, SectionLinkButton } from "./ui";
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { getRecommendationModel, type TrainingRecommendation } from "@/lib/recommendations";
@@ -96,7 +96,7 @@ function QuickStatChip({ label, value, sub, accent }: { label: string; value: st
     <div style={{ display: "grid", gap: 3, padding: "10px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", minWidth: 0 }}>
       <div style={{ fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.55, fontWeight: 900 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 950, lineHeight: 1, color: accent ?? "inherit" }}>{value}</div>
-      <div style={{ fontSize: 11, opacity: 0.65, lineHeight: 1.3 }}>{sub}</div>
+      {sub ? <div style={{ fontSize: 11, opacity: 0.65, lineHeight: 1.3 }}>{sub}</div> : null}
     </div>
   );
 }
@@ -383,63 +383,44 @@ async function DrillDownSection({
     .slice(0, 3);
 
   return (
-    <SectionCard title="Drill Down" subtitle="Use these focused entry points when you already know which layer you want to inspect.">
-      <div className="mobileProgressDrillGrid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
-        <div className="mobileProgressDrillPrimary" style={{ display: "grid", gap: 14 }}>
-          {hasQuery && searchResults.length > 0 ? (
-            <div className="mobileProgressSearchResults" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
-              <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Search results</div>
-              <div className="mobileProgressSearchResultsGrid" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-                {searchResults.map((result) => (
-                  <Link key={`${result.href}-${result.title}`} href={result.href} scroll={false} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "inherit", textDecoration: "none" }}>
-                    <div style={{ fontWeight: 800 }}>{result.title}</div>
-                    <div style={{ fontSize: 12, opacity: 0.72, lineHeight: 1.4 }}>{result.subtitle}</div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : hasQuery ? (
-            <div style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", ...subtleText }}>No progress targets matched that search.</div>
-          ) : null}
-
-          <div className="mobileProgressTargetGrid" style={cardGrid}>
-            <TargetCard href="/progress?section=routines" eyebrow="Overview" title="Routines" subtitle="Consistency, frequency targets, adherence, and recent momentum." description="Best when the question is whether you are doing the plan often enough." />
-            <TargetCard href="/progress?section=exercises" eyebrow="Strength" title="Exercises" subtitle="Top-set trends, reps, volume, and single-movement progression." description="Best when the question is whether one lift or drill is moving." />
-            <TargetCard href="/progress?section=cardio" eyebrow="Endurance" title="Cardio" subtitle="Mileage, pace, duration, elevation, and sport-specific conditioning." description="Best when the question is whether cardio or sport output is building." />
-            <TargetCard href="/progress?section=groups" eyebrow="Evidence" title="Groups" subtitle="Body-area and movement-pattern rollups across routines." description="Best when the question is what has been covered or neglected lately." />
+    <SectionCard title="Quick Access" subtitle="Fast links into the data you check most — active routines, cardio rollups, and group coverage.">
+      {hasQuery && searchResults.length > 0 ? (
+        <div className="mobileProgressSearchResults" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 18, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginBottom: 4 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontWeight: 900, color: "rgba(167,224,255,0.88)" }}>Search results</div>
+          <div className="mobileProgressSearchResultsGrid" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+            {searchResults.map((result) => (
+              <Link key={`${result.href}-${result.title}`} href={result.href} scroll={false} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "inherit", textDecoration: "none" }}>
+                <div style={{ fontWeight: 800 }}>{result.title}</div>
+                <div style={{ fontSize: 12, opacity: 0.72, lineHeight: 1.4 }}>{result.subtitle}</div>
+              </Link>
+            ))}
           </div>
         </div>
+      ) : hasQuery ? (
+        <div style={{ padding: "14px 16px", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", ...subtleText, marginBottom: 4 }}>No progress targets matched that search.</div>
+      ) : null}
 
-        <div className="mobileProgressDrillSidebar" style={{ display: "grid", gap: 12 }}>
+      <div className="mobileProgressDrillGrid" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", alignItems: "start" }}>
+        <SidebarList
+          title="Most Active Routines"
+          subtitle="Fast links into the routines driving most of the recent history."
+          items={recentActive.map(({ routine, summary }) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${summary.sessions} sessions · ${formatShortDate(summary.lastSession)}` }))}
+        />
+        {quickCardioTargets.length > 0 || cardioRoutines.length > 0 ? (
           <SidebarList
-            title="Most Active Routines"
-            subtitle="Fast links into the routines driving most of the recent history."
-            items={recentActive.map(({ routine, summary }) => ({ href: `/progress/routines/${routine.id}?tab=overview&range=4w`, title: routine.name, meta: `${summary.sessions} sessions | ${formatShortDate(summary.lastSession)}` }))}
-          />
-          <SidebarList
-            title="Quick Cardio Targets"
+            title="Quick Cardio"
             subtitle="High-utility rollups for mileage, duration, and elevation."
             items={[
-              ...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions | ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })),
-              ...cardioRoutines.slice(0, 1).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: r.name, meta: `${r.kind} routine` })),
+              ...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions · ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })),
+              ...cardioRoutines.slice(0, 1).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: r.name, meta: "Cardio routine" })),
             ]}
           />
-          <SidebarList
-            title="Useful Group Rollups"
-            subtitle="Shortcuts into broader summaries you are likely to revisit."
-            items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind.replaceAll("_", " ").toLowerCase() }))}
-          />
-          {featuredExercise ? (
-            <TargetCard
-              href={`/progress/exercises/${featuredExercise.exercise.id}?tab=overview&range=4w`}
-              eyebrow="Featured Exercise"
-              title={featuredExercise.exercise.name}
-              subtitle={featuredExercise.exercise.supportsWeight ? `${featuredExercise.topMetric.toFixed(1)} lb top set` : `${featuredExercise.totalReps} reps logged`}
-              description="A fast single-click check when you want the clearest evidence of progression."
-              chips={[`${featuredExercise.sessionCount} sessions`, `${featuredExercise.totalSets} sets`]}
-            />
-          ) : null}
-        </div>
+        ) : null}
+        <SidebarList
+          title="Group Rollups"
+          subtitle="Shortcuts into broader coverage summaries you are likely to revisit."
+          items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind === "CARDIO_ACTIVITY" ? "Cardio activity" : group.kind === "MUSCLE_GROUP" ? "Muscle group" : group.kind === "ROUTINE_FOCUS" ? "Session category" : group.kind.replaceAll("_", " ").toLowerCase() }))}
+        />
       </div>
     </SectionCard>
   );
@@ -635,10 +616,25 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       {/* ── Last 7 Days: fast stats + streamed focus section ── */}
       <SectionCard title="Last 7 Days" subtitle="Scan the high-level state first, then use Focus Now for the clearest next review.">
         <div className="mobileProgressQuickStats" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", marginBottom: 14 }}>
-          <QuickStatChip label="Sessions" value={String(weekLogs.length)} sub={`${trendLabel(weekLogs.length, baselineWeeklyLogs)} vs avg`} accent={weekLogs.length > baselineWeeklyLogs ? "rgba(84,203,130,0.95)" : undefined} />
-          <QuickStatChip label="Active Days" value={String(weekActiveDays)} sub="last 7 days" />
-          <QuickStatChip label="Cardio Miles" value={totalCardioMilesWeek > 0 ? `${totalCardioMilesWeek.toFixed(1)} mi` : "—"} sub="last 7 days" accent={totalCardioMilesWeek > 0 ? "rgba(78,148,255,0.9)" : undefined} />
-          <QuickStatChip label="On Target" value={activeRoutinesWithTarget.length > 0 ? `${onTrackRoutines}/${activeRoutinesWithTarget.length}` : "—"} sub={activeRoutinesWithTarget.length > 0 ? "w/ frequency target" : "no targets set"} accent={activeRoutinesWithTarget.length > 0 && onTrackRoutines >= Math.ceil(activeRoutinesWithTarget.length * 0.6) ? "rgba(84,203,130,0.9)" : activeRoutinesWithTarget.length > 0 ? "rgba(251,199,92,0.9)" : undefined} />
+          <QuickStatChip label="Sessions" value={String(weekLogs.length)} sub={`${trendLabel(weekLogs.length, baselineWeeklyLogs)} · avg ${baselineWeeklyLogs.toFixed(1)}/wk`} accent={weekLogs.length > baselineWeeklyLogs ? "rgba(84,203,130,0.95)" : undefined} />
+          <QuickStatChip label="Active Days" value={`${weekActiveDays}/7`} sub="days trained this week" />
+          <QuickStatChip label="Cardio Miles" value={totalCardioMilesWeek > 0 ? `${totalCardioMilesWeek.toFixed(1)} mi` : "—"} sub={totalCardioMilesWeek > 0 ? "this week" : "no cardio logged"} accent={totalCardioMilesWeek > 0 ? "rgba(78,148,255,0.9)" : undefined} />
+          {(() => {
+            const behindCount = activeRoutinesWithTarget.length - onTrackRoutines;
+            const subLabel = activeRoutinesWithTarget.length === 0
+              ? "no targets set"
+              : behindCount > 0
+              ? `${behindCount} behind schedule`
+              : "all on track";
+            const accent = activeRoutinesWithTarget.length === 0
+              ? undefined
+              : behindCount === 0
+              ? "rgba(84,203,130,0.9)"
+              : behindCount <= Math.floor(activeRoutinesWithTarget.length * 0.4)
+              ? "rgba(251,199,92,0.9)"
+              : "rgba(251,113,133,0.9)";
+            return <QuickStatChip label="On Target" value={activeRoutinesWithTarget.length > 0 ? `${onTrackRoutines}/${activeRoutinesWithTarget.length}` : "—"} sub={subLabel} accent={accent} />;
+          })()}
         </div>
 
         <Suspense

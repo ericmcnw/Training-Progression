@@ -15,14 +15,14 @@ function getParam(params: SearchParams, key: string) {
 }
 
 const STIMULUS_GROUPS: ProgressGroupItem[] = [
-  { slug: "push", label: "Push", subtitle: "Stimulus movement group" },
-  { slug: "pull", label: "Pull", subtitle: "Stimulus movement group" },
-  { slug: "squat", label: "Squat", subtitle: "Stimulus movement group" },
-  { slug: "hinge", label: "Hinge", subtitle: "Stimulus movement group" },
-  { slug: "core", label: "Core", subtitle: "Stimulus movement group" },
-  { slug: "grip", label: "Grip", subtitle: "Stimulus movement group" },
-  { slug: "cardio", label: "Cardio", subtitle: "Stimulus movement group" },
-  { slug: "mobility", label: "Mobility", subtitle: "Support movement group" },
+  { slug: "push", label: "Push", subtitle: "" },
+  { slug: "pull", label: "Pull", subtitle: "" },
+  { slug: "squat", label: "Squat", subtitle: "" },
+  { slug: "hinge", label: "Hinge", subtitle: "" },
+  { slug: "core", label: "Core", subtitle: "" },
+  { slug: "grip", label: "Grip", subtitle: "" },
+  { slug: "cardio", label: "Cardio", subtitle: "" },
+  { slug: "mobility", label: "Mobility", subtitle: "" },
 ];
 
 export default async function GroupsIndexView(props: {
@@ -37,7 +37,7 @@ export default async function GroupsIndexView(props: {
     .map((group) => ({
       slug: group.slug,
       label: group.label,
-      subtitle: group.kind === "CARDIO_ACTIVITY" ? "Sport / activity sessions" : "Session category",
+      subtitle: "",
     }));
 
   const muscleGroups: ProgressGroupItem[] = groups
@@ -45,7 +45,7 @@ export default async function GroupsIndexView(props: {
     .map((group) => ({
       slug: group.slug,
       label: group.label,
-      subtitle: "Muscle group",
+      subtitle: "",
     }));
 
   const sections = [
@@ -98,16 +98,21 @@ export default async function GroupsIndexView(props: {
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
               {section.items.map((item) => {
                 const target = previewsBySlug.get(item.slug);
+                const lastLog = target?.logs.sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())[0];
+                const lastLabel = lastLog
+                  ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastLog.performedAt)}`
+                  : null;
+                const href = section.key === "sport-category" && groups.find((g) => g.slug === item.slug)?.kind === "CARDIO_ACTIVITY"
+                  ? `/progress/cardio/${item.slug}?tab=overview&range=4w`
+                  : `/progress/groups/${item.slug}?tab=overview&range=4w`;
                 return (
                   <TargetCard
                     key={item.slug}
-                    href={`/progress/groups/${item.slug}?tab=overview&range=4w`}
+                    href={href}
                     title={item.label}
-                    subtitle={item.subtitle}
                     chips={[
                       `${target?.logs.length ?? 0} sessions`,
-                      `${target?.routineIds.length ?? 0} routines`,
-                      `${target?.exerciseIds.length ?? 0} exercises`,
+                      ...(lastLabel ? [lastLabel] : ["No recent activity"]),
                     ]}
                   />
                 );

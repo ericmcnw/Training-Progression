@@ -105,17 +105,19 @@ export default function DomainHeatMatrix({
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
   const maxSessions = Math.max(1, ...rows.flatMap((r) => r.weeks));
 
-  function cellFill(count: number, isActive: boolean): string {
-    if (isActive) return "rgba(84,203,130,0.28)";
+  function cellFill(count: number, isActive: boolean, domain: RoutineDomain): string {
+    const base = domainAccent(domain);
+    if (isActive) return base.replace("0.9", "0.28");
     if (count === 0) return "rgba(255,255,255,0.04)";
     const intensity = Math.min(1, count / Math.max(3, maxSessions));
-    return `rgba(84,203,130,${0.12 + intensity * 0.60})`;
+    return base.replace("0.9", String((0.12 + intensity * 0.60).toFixed(2)));
   }
 
-  function cellBorder(count: number, isActive: boolean): string {
-    if (isActive) return "rgba(84,203,130,0.65)";
+  function cellBorder(count: number, isActive: boolean, domain: RoutineDomain): string {
+    const base = domainAccent(domain);
+    if (isActive) return base.replace("0.9", "0.65");
     if (count === 0) return "rgba(255,255,255,0.06)";
-    return `rgba(84,203,130,${0.15 + Math.min(0.5, (count / Math.max(3, maxSessions)) * 0.5)})`;
+    return base.replace("0.9", String((0.15 + Math.min(0.5, (count / Math.max(3, maxSessions)) * 0.5)).toFixed(2)));
   }
 
   if (rows.length === 0) {
@@ -195,8 +197,8 @@ export default function DomainHeatMatrix({
                       style={{
                         height: 36,
                         borderRadius: 8,
-                        background: cellFill(count, isActive),
-                        border: `1px solid ${cellBorder(count, isActive)}`,
+                        background: cellFill(count, isActive, row.domain),
+                        border: `1px solid ${cellBorder(count, isActive, row.domain)}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -205,7 +207,7 @@ export default function DomainHeatMatrix({
                         color: "rgba(255,255,255,0.92)",
                         cursor: "pointer",
                         padding: 0,
-                        boxShadow: isActive ? "0 0 0 2px rgba(84,203,130,0.16)" : "none",
+                        boxShadow: isActive ? `0 0 0 2px ${domainAccent(row.domain).replace("0.9", "0.16")}` : "none",
                         transition: "background 0.1s, border-color 0.1s, box-shadow 0.1s",
                       }}
                       aria-label={`${row.label}: ${count} session${count !== 1 ? "s" : ""} in week of ${weekLabels[wi]} — click to view details`}
@@ -222,8 +224,8 @@ export default function DomainHeatMatrix({
                     style={{
                       height: 36,
                       borderRadius: 8,
-                      background: cellFill(0, false),
-                      border: `1px solid ${cellBorder(0, false)}`,
+                      background: cellFill(0, false, row.domain),
+                      border: `1px solid ${cellBorder(0, false, row.domain)}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import MetricLineChart from "./MetricLineChart";
+import StackedWeeklyBarChart, { type StackedBarSeries } from "./StackedWeeklyBarChart";
 import { getMetadataIndex, getRoutineIndex, getRoutineLogs } from "./data";
 import { EmptyState, ProgressShell, SectionCard } from "./ui";
 import { formatDuration, formatPace } from "@/lib/progress";
@@ -131,6 +132,60 @@ export default async function CardioIndexView(props: {
   }
   const weeklyMilesSeries = fillWeeklySeries(weeklyMilesMap, "12w", now);
   const weeklySessionsSeries = fillWeeklySeries(weeklySessionsMap, "12w", now);
+  const stackedWeekLabels = weeklyMilesSeries.map((p) => p.label);
+
+  // ── Stacked mileage by activity type (CARDIO_ACTIVITY group) ─────────────────
+  const activityColors: Record<string, string> = {
+    running: "rgba(78,148,255,0.85)",
+    cycling: "rgba(251,199,92,0.85)",
+    swimming: "rgba(56,189,189,0.85)",
+    climbing: "rgba(192,132,252,0.85)",
+    hiking: "rgba(84,203,130,0.85)",
+    rowing: "rgba(251,146,60,0.85)",
+  };
+  const fallbackColors = [
+    "rgba(167,224,255,0.8)", "rgba(251,113,133,0.8)", "rgba(156,163,175,0.8)",
+    "rgba(250,204,21,0.8)", "rgba(52,211,153,0.8)",
+  ];
+
+  // Build routineId → activity group label map
+  const routineActivityGroupMap = new Map<string, string>();
+  for (const routine of cardioRoutines) {
+    const activityGroup = routine.metadataGroups.find((mg) => mg.group.kind === "CARDIO_ACTIVITY");
+    if (activityGroup) {
+      routineActivityGroupMap.set(routine.id, activityGroup.group.label);
+    }
+  }
+
+  // Aggregate miles per activity type per week
+  const activityWeeklyMiles = new Map<string, Map<string, number>>();
+  for (const log of allCardioLogs) {
+    const activityLabel = routineActivityGroupMap.get(log.routineId) ?? "Other";
+    if (!activityWeeklyMiles.has(activityLabel)) activityWeeklyMiles.set(activityLabel, new Map());
+    incrementWeekMap(activityWeeklyMiles.get(activityLabel)!, log.performedAt, log.distanceMi ?? 0);
+  }
+
+  // Convert to stacked series aligned to stackedWeekLabels
+  const activitySeriesEntries = Array.from(activityWeeklyMiles.entries())
+    .map(([label, weekMap]) => ({ label, total: Array.from(weekMap.values()).reduce((a, b) => a + b, 0), weekMap }))
+    .filter((e) => e.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const stackedSeries: StackedBarSeries[] = activitySeriesEntries.map((entry, idx) => {
+    const slug = entry.label.toLowerCase();
+    const color = activityColors[slug] ?? fallbackColors[idx % fallbackColors.length];
+    const filled = fillWeeklySeries(entry.weekMap, "12w", now);
+    return { label: entry.label, color, weeklyValues: filled.map((p) => p.value) };
+  });
+
+  // Build routineId → preferred cardio group slug map (for better detail page links)
+  const routineCardioGroupSlugMap = new Map<string, string>();
+  for (const routine of cardioRoutines) {
+    const activityGroup = routine.metadataGroups.find((mg) => mg.group.kind === "CARDIO_ACTIVITY");
+    if (activityGroup) {
+      routineCardioGroupSlugMap.set(routine.id, activityGroup.group.slug);
+    }
+  }
 
   // ── Per-routine breakdown ─────────────────────────────────────────────────────
   const routineBreakdowns = cardioRoutines
@@ -143,7 +198,11 @@ export default async function CardioIndexView(props: {
         .reduce((s, l) => s + (l.distanceMi ?? 0), 0);
       const avgPaceSec = miles > 0 ? durationSec / miles : null;
       const lastSession = logs.length > 0 ? logs[logs.length - 1].performedAt : null;
-      return { routine, sessions: logs.length, miles, durationSec, avgPaceSec, ytdMiles, lastSession };
+      const cardioGroupSlug = routineCardioGroupSlugMap.get(routine.id);
+      const href = cardioGroupSlug
+        ? `/progress/cardio/${cardioGroupSlug}?tab=overview&range=4w`
+        : `/progress/routines/${routine.id}?tab=overview&range=4w`;
+      return { routine, sessions: logs.length, miles, durationSec, avgPaceSec, ytdMiles, lastSession, href };
     })
     .filter((b) => b.sessions > 0 || !query)
     .filter((b) => !query || b.routine.name.toLowerCase().includes(query))
@@ -182,18 +241,28 @@ export default async function CardioIndexView(props: {
         )}
       </SectionCard>
 
-      {/* ── Weekly mileage chart ── */}
+      {/* ── Weekly mileage stacked bar chart ── */}
       {hasAnyData ? (
-        <SectionCard title="Weekly Mileage" subtitle="Miles logged per week across all cardio activities — last 12 weeks.">
+        <SectionCard title="Weekly Mileage" subtitle="Miles per week by activity type — last 12 weeks.">
           <div style={{ display: "grid", gap: 10 }}>
-            <MetricLineChart
-              title="Total Miles per Week"
-              yLabel="Miles"
-              xLabel="Week"
-              points={weeklyMilesSeries}
-              unit="mi"
-              decimals={1}
-            />
+            {stackedSeries.length > 0 ? (
+              <StackedWeeklyBarChart
+                title="Miles per Week by Activity"
+                weekLabels={stackedWeekLabels}
+                series={stackedSeries}
+                unit="mi"
+                decimals={1}
+              />
+            ) : (
+              <MetricLineChart
+                title="Total Miles per Week"
+                yLabel="Miles"
+                xLabel="Week"
+                points={weeklyMilesSeries}
+                unit="mi"
+                decimals={1}
+              />
+            )}
             <MetricLineChart
               title="Sessions per Week"
               yLabel="Sessions"
@@ -210,7 +279,7 @@ export default async function CardioIndexView(props: {
       {routineBreakdowns.length > 0 ? (
         <SectionCard title="By Activity" subtitle="Each cardio routine you've logged, sorted by total distance.">
           <div style={{ display: "grid", gap: 8 }}>
-            {routineBreakdowns.map(({ routine, sessions, miles, durationSec, avgPaceSec, ytdMiles, lastSession }) => (
+            {routineBreakdowns.map(({ routine, sessions, miles, durationSec, avgPaceSec, ytdMiles, lastSession, href }) => (
               <ActivityRow
                 key={routine.id}
                 name={routine.name}
@@ -220,7 +289,7 @@ export default async function CardioIndexView(props: {
                 avgPaceSec={avgPaceSec}
                 ytdMiles={ytdMiles}
                 lastSession={lastSession}
-                href={`/progress/routines/${routine.id}?tab=overview&range=4w`}
+                href={href}
               />
             ))}
           </div>

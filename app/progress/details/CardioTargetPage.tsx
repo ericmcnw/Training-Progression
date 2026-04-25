@@ -4,6 +4,7 @@ import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } fr
 import { getChartGoalReference } from "@/lib/goals";
 import { getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, resolveProgressTab } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
+const fmtDuration = (sec: number) => formatDuration(Math.round(sec));
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,8 @@ export default async function CardioTargetPage(props: {
       <TargetHeader
         section="cardio"
         title={target.group.label}
-        subtitle="Cardio target powered by your cardio groupings."
+        eyebrow="Cardio Activity"
+        subtitle={`Distance, pace, elevation, and session frequency for ${target.group.label.toLowerCase()}.`}
         basePath={`/progress/cardio/${target.group.slug}`}
         tab={tab}
         range={range}
@@ -114,18 +116,21 @@ export default async function CardioTargetPage(props: {
 
         {tab === "overview" ? (
           <>
+            <SectionCard title="Workload Snapshot">
+              {target.logs.length === 0 ? (
+                <EmptyState message="No cardio logs in this range." />
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={performance.distancePoints} unit="mi" decimals={2} targetValue={sessionDistanceGoalLine?.targetValue} targetLabel={sessionDistanceGoalLine?.label} targetUnit={sessionDistanceGoalLine?.unit} targetDecimals={sessionDistanceGoalLine?.decimals} />
+                  <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} compact />
+                </div>
+              )}
+            </SectionCard>
             <SectionCard title="Performance Snapshot">
               {target.logs.length === 0 ? (
                 <EmptyState message="No cardio logs in this range." />
               ) : (
                 <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={performance.pacePoints} unit="sec/mi" decimals={0} targetValue={paceGoalLine?.targetValue} targetLabel={paceGoalLine?.label} targetUnit={paceGoalLine?.unit} targetDecimals={paceGoalLine?.decimals} />
-              )}
-            </SectionCard>
-            <SectionCard title="Workload Snapshot">
-              {target.logs.length === 0 ? (
-                <EmptyState message="No cardio logs in this range." />
-              ) : (
-                <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
               )}
             </SectionCard>
           </>
@@ -159,7 +164,7 @@ export default async function CardioTargetPage(props: {
               <div style={{ display: "grid", gap: 10 }}>
                 <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} targetValue={sessionsGoalLine?.targetValue} targetLabel={sessionsGoalLine?.label} targetUnit={sessionsGoalLine?.unit} targetDecimals={sessionsGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={workload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
-                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={workload.duration} unit="sec" decimals={0} targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={workload.duration} unit="sec" decimals={0} valueFormatter={fmtDuration} omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
                 <MetricLineChart title={`${targetLabel}: Elevation per Week`} yLabel="Elevation" xLabel="Week" points={workload.elevation} unit="ft" decimals={0} targetValue={weeklyElevationGoalLine?.targetValue} targetLabel={weeklyElevationGoalLine?.label} targetUnit={weeklyElevationGoalLine?.unit} targetDecimals={weeklyElevationGoalLine?.decimals} />
               </div>
             )}

@@ -108,6 +108,14 @@ export default async function ExerciseTargetPage(props: {
               .filter((set) => (set.weightLb ?? 0) > 0 && (set.weightLb ?? 0) < topMetric)
               .reduce((sum, set) => sum + (set.reps ?? 0), 0);
 
+        const allSetLines = isTimeExercise
+          ? entry.sets.map((set, index) => `Set ${index + 1}: ${formatSeconds(set.seconds ?? 0)}`)
+          : entry.sets.map((set, index) => {
+              const w = set.weightLb && set.weightLb > 0 ? `${set.weightLb.toFixed(1)} lb` : null;
+              const r = set.reps && set.reps > 0 ? `${set.reps} reps` : null;
+              return `Set ${index + 1}: ${[w, r].filter(Boolean).join(" × ") || "—"}`;
+            });
+
         return {
           performedAt: log.performedAt,
           totalSets,
@@ -124,6 +132,7 @@ export default async function ExerciseTargetPage(props: {
                   ...(lowerWeightReps > 0 ? [`${lowerWeightReps.toFixed(0)} reps below ${topMetric.toFixed(1)} lb`] : []),
                 ],
           setDurationLines: entry.sets.map((set, index) => `Set ${index + 1}: ${formatSeconds(set.seconds ?? 0)}`),
+          allSetLines,
         };
       })
   );
@@ -135,7 +144,7 @@ export default async function ExerciseTargetPage(props: {
       detailLines: isTimeExercise ? row.setDurationLines : row.topWeightRepLines,
     })),
     totalReps: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalReps })),
-    totalVolume: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalVolume })),
+    totalVolume: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalVolume, detailLines: row.allSetLines })),
     totalSets: rows.map((row) => ({ label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }), value: row.totalSets })),
     totalSeconds: rows.map((row) => ({
       label: formatAppDate(row.performedAt, { month: "short", day: "numeric" }),
@@ -194,7 +203,20 @@ export default async function ExerciseTargetPage(props: {
       <TargetHeader
         section="exercises"
         title={exercise.name}
-        subtitle={`Exercise target | ${exercise.unit}${exercise.supportsWeight ? " | Weighted" : ""}`}
+        eyebrow={
+          exercise.supportsWeight
+            ? "Weighted Strength Exercise"
+            : isTimeExercise
+            ? "Time-based Exercise"
+            : "Bodyweight Exercise"
+        }
+        subtitle={
+          exercise.supportsWeight
+            ? "Top set per session, volume per week, and set-level detail."
+            : isTimeExercise
+            ? "Average time per set, total time per week, and set-level breakdown."
+            : "Top reps per session and weekly set volume."
+        }
         basePath={`/progress/exercises/${exercise.id}`}
         tab={tab}
         range={range}
@@ -207,8 +229,12 @@ export default async function ExerciseTargetPage(props: {
             items={[
               { label: "Range", value: rangeChipLabel(range) },
               { label: isTimeExercise ? "Longest set" : "Top set", value: topSetLabel },
-              { label: "Recent trend", value: trend },
-              { label: isTimeExercise ? "Total time" : "Total volume", value: isTimeExercise ? formatSeconds(rows.reduce((sum, row) => sum + row.totalSeconds, 0)) : rows.reduce((sum, row) => sum + row.totalVolume, 0).toFixed(0) },
+              {
+                label: "Recent trend",
+                value: trend,
+                accent: trend === "Trending up" ? "rgba(84,203,130,0.95)" : trend === "Trending down" ? "rgba(251,113,133,0.95)" : undefined,
+              },
+              { label: isTimeExercise ? "Total time" : "Total volume", value: isTimeExercise ? formatSeconds(rows.reduce((sum, row) => sum + row.totalSeconds, 0)) : `${rows.reduce((sum, row) => sum + row.totalVolume, 0).toFixed(0)} lb` },
               { label: "Total sets", value: String(rows.reduce((sum, row) => sum + row.totalSets, 0)) },
               { label: isTimeExercise ? "Avg time / set" : "Total reps", value: isTimeExercise ? formatSeconds(averageTimePerSet) : String(rows.reduce((sum, row) => sum + row.totalReps, 0)) },
             ]}
@@ -226,9 +252,6 @@ export default async function ExerciseTargetPage(props: {
 
         {tab === "overview" ? (
           <>
-            <SectionCard title="Performance Snapshot">
-              {rows.length === 0 ? <EmptyState message="No exercise sessions in this range." /> : overviewPerfChart}
-            </SectionCard>
             <SectionCard title="Workload Snapshot">
               {rows.length === 0 ? (
                 <EmptyState message="No exercise sessions in this range." />
@@ -238,14 +261,19 @@ export default async function ExerciseTargetPage(props: {
                   yLabel={isTimeExercise ? "Time" : "Volume"}
                   xLabel="Week"
                   points={isTimeExercise ? workload.totalSeconds : workload.volume}
-                  unit={isTimeExercise ? "sec" : ""}
+                  unit={isTimeExercise ? "sec" : "lb"}
                   decimals={0}
+                  valueFormatter={isTimeExercise ? (v) => formatSeconds(v) : undefined}
+                  omitTotal={isTimeExercise}
                   targetValue={isTimeExercise ? durationGoalLine?.targetValue : volumeGoalLine?.targetValue}
                   targetLabel={isTimeExercise ? durationGoalLine?.label : volumeGoalLine?.label}
                   targetUnit={isTimeExercise ? durationGoalLine?.unit : volumeGoalLine?.unit}
                   targetDecimals={isTimeExercise ? durationGoalLine?.decimals : volumeGoalLine?.decimals}
                 />
               )}
+            </SectionCard>
+            <SectionCard title="Performance Snapshot">
+              {rows.length === 0 ? <EmptyState message="No exercise sessions in this range." /> : overviewPerfChart}
             </SectionCard>
           </>
         ) : null}

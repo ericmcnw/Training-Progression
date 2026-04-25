@@ -73,20 +73,35 @@ export default async function ExercisesIndexView(props: {
       <SectionCard title="All Exercises">
         {rows.length === 0 ? <EmptyState message="No exercises match the current filters." /> : null}
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-          {rows.map(({ exercise, sessions }) => (
-            <TargetCard
-              key={exercise.id}
-              href={`/progress/exercises/${exercise.id}?tab=overview&range=4w`}
-              title={exercise.name}
-              subtitle={`${exerciseUnitLabel(exercise.unit)}${exercise.supportsWeight ? " | Weighted" : ""}`}
-              chips={[
-                `${sessions.length} sessions`,
-                `${sessions.reduce((sum, session) => sum + session.totalSets, 0)} sets`,
-                `${sessions.reduce((sum, session) => sum + session.totalVolume, 0).toFixed(0)} volume`,
-                trendLabel(sessions.map((session) => session.topMetric)),
-              ]}
-            />
-          ))}
+          {rows.map(({ exercise, sessions }) => {
+            const trend = trendLabel(sessions.map((session) => session.topMetric));
+            const trendAccent = trend === "Trending up"
+              ? { border: "1px solid rgba(84,203,130,0.35)", background: "rgba(84,203,130,0.1)", color: "rgba(84,203,130,0.95)" }
+              : trend === "Trending down"
+              ? { border: "1px solid rgba(251,113,133,0.35)", background: "rgba(251,113,133,0.1)", color: "rgba(251,113,133,0.95)" }
+              : undefined;
+            const totalVolume = sessions.reduce((sum, session) => sum + session.totalVolume, 0);
+            return (
+              <TargetCard
+                key={exercise.id}
+                href={`/progress/exercises/${exercise.id}?tab=overview&range=4w`}
+                title={exercise.name}
+                subtitle={
+                  exercise.supportsWeight
+                    ? "Weighted strength exercise"
+                    : exercise.unit === "TIME"
+                    ? "Time-based exercise"
+                    : "Bodyweight exercise"
+                }
+                chips={[
+                  `${sessions.length} sessions`,
+                  `${sessions.reduce((sum, session) => sum + session.totalSets, 0)} sets`,
+                  ...(exercise.supportsWeight && totalVolume > 0 ? [`${totalVolume.toFixed(0)} lb vol`] : []),
+                ]}
+                trendChip={sessions.length > 1 ? { label: trend, style: trendAccent } : undefined}
+              />
+            );
+          })}
         </div>
       </SectionCard>
     </ProgressShell>
