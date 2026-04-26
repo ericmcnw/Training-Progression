@@ -148,7 +148,7 @@ export function FrequencyGoalRow({
 
   return (
     <div style={{ borderLeft: `3px solid ${accentColor}` }}>
-      <div style={rowBodyStyle}>
+      <div className="goalFreqRowBody" style={rowBodyStyle}>
         {/* Expand trigger — left portion */}
         <button
           type="button"
@@ -182,7 +182,7 @@ export function FrequencyGoalRow({
         </button>
 
         {/* Actions — outside expand button to avoid nested interactive elements */}
-        <div style={rowActionsStyle}>
+        <div className="goalFreqRowActions" style={rowActionsStyle}>
           <form action={toggleAction}>
             {data.routineId ? (
               <input type="hidden" name="routineId" value={data.routineId} />

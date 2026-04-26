@@ -266,7 +266,7 @@ export default async function GoalsPage({
 const gridStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
-  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
 };
 
 const activeFilterRowStyle: React.CSSProperties = {
