@@ -1,5 +1,19 @@
 import Link from "next/link";
 
+export const GOAL_TYPE_ACCENT: Record<string, string> = {
+  FREQUENCY: "rgba(129,140,248,0.65)",
+  PERFORMANCE: "rgba(251,191,36,0.65)",
+  VOLUME: "rgba(34,211,238,0.65)",
+  COMPLETION: "rgba(74,222,128,0.65)",
+};
+
+export const GOAL_TYPE_CHIP_STYLE: Record<string, React.CSSProperties> = {
+  FREQUENCY: { borderColor: "rgba(129,140,248,0.45)", background: "rgba(129,140,248,0.14)", color: "#e0e7ff" },
+  PERFORMANCE: { borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.13)", color: "#fef3c7" },
+  VOLUME: { borderColor: "rgba(34,211,238,0.45)", background: "rgba(34,211,238,0.13)", color: "#cffafe" },
+  COMPLETION: { borderColor: "rgba(74,222,128,0.45)", background: "rgba(74,222,128,0.13)", color: "#dcfce7" },
+};
+
 function splitValueAndUnit(value: string) {
   const match = value.trim().match(/^(.+?)(?:\s+([A-Za-z%/][A-Za-z0-9%/.-]*))?$/);
   if (!match) return { amount: value, unit: "" };
@@ -120,6 +134,82 @@ export function GoalProgressRing({
   );
 }
 
+export function FrequencySlotBar({
+  current,
+  target,
+  status,
+}: {
+  current: number;
+  target: number;
+  status: string;
+}) {
+  const MAX_DOTS = 10;
+  const filled = Math.min(current, target);
+  const isAchieved = status === "Achieved" || (target > 0 && current >= target);
+  const isBehind = status === "Behind";
+  const dotColor = isAchieved
+    ? "rgba(34,197,94,0.95)"
+    : isBehind
+    ? "rgba(248,113,113,0.85)"
+    : "rgba(100,180,255,0.9)";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 96,
+        filter: isAchieved ? "drop-shadow(0 0 8px rgba(34,197,94,0.45))" : undefined,
+      }}
+    >
+      {target <= MAX_DOTS ? (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 128 }}>
+          {Array.from({ length: target }, (_, i) => (
+            <div
+              key={i}
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: i < filled ? dotColor : "rgba(148,163,184,0.18)",
+                border: `1.5px solid ${i < filled ? dotColor : "rgba(148,163,184,0.28)"}`,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            width: 96,
+            height: 10,
+            borderRadius: 999,
+            background: "rgba(148,163,184,0.15)",
+            overflow: "hidden",
+            position: "relative",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              height: "100%",
+              width: `${Math.min(1, target > 0 ? current / target : 0) * 100}%`,
+              background: dotColor,
+              borderRadius: 999,
+            }}
+          />
+        </div>
+      )}
+      <div style={{ fontSize: 14, fontWeight: 900, lineHeight: 1, opacity: 0.9, textAlign: "center", whiteSpace: "nowrap" }}>
+        {current} / {target}
+      </div>
+    </div>
+  );
+}
+
 export function GoalStatusBadge({ label, achieved = false }: { label: string; achieved?: boolean }) {
   return (
     <span
@@ -142,13 +232,16 @@ export function GoalCardShell({
   children,
   href,
   action,
+  goalType,
 }: {
   children: React.ReactNode;
   href?: string;
   action?: React.ReactNode;
+  goalType?: string;
 }) {
+  const accentColor = goalType ? GOAL_TYPE_ACCENT[goalType] : undefined;
   return (
-    <div style={{ ...cardStyle, position: "relative" }}>
+    <div style={{ ...cardStyle, position: "relative", ...(accentColor ? { borderLeft: `3px solid ${accentColor}` } : {}) }}>
       {href ? <Link href={href} aria-label="Open goal" style={stretchedLinkStyle} /> : null}
       {action ? <div style={cardActionStyle}>{action}</div> : null}
       <div style={{ position: "relative", zIndex: 1 }}>{children}</div>

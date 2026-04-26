@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { FilterBar, FilterSelect, ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
-import { todayAppYmd } from "@/lib/dates";
+import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
+import { formatAppDate, todayAppYmd } from "@/lib/dates";
 import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
-import { getGoalFormOptions, getGoalsOverview } from "@/lib/goals";
+import { getGoalFormOptions, getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "./GoalForm";
-import { createGoal, toggleGoalActive, toggleRoutineFrequencyGoal } from "./actions";
+import { createGoal, toggleGoalActive, toggleGroupFrequencyGoal, toggleRoutineFrequencyGoal } from "./actions";
 import { createFrequencyGoal } from "@/app/routines/actions";
-import { GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
+import { GOAL_TYPE_CHIP_STYLE, GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, FrequencySlotBar, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
 import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
+import { FrequencyGoalRow, type FrequencyGoalRowData } from "./FrequencyGoalRow";
+import DeleteGoalButton from "./DeleteGoalButton";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ function buildGoalsHref(params: {
 }) {
   const search = new URLSearchParams();
   if (params.type && params.type !== "all") search.set("type", params.type);
-  if (params.active && params.active !== "all") search.set("active", params.active);
+  if (params.active && params.active !== "active") search.set("active", params.active);
   if (params.mode === "new") search.set("mode", "new");
   if (params.template) search.set("template", params.template);
   if (params.builder && params.builder !== "guided") search.set("builder", params.builder);
@@ -42,7 +44,7 @@ export default async function GoalsPage({
 }) {
   const params = await Promise.resolve(searchParams ?? {});
   const type = getParam(params, "type") ?? "all";
-  const active = getParam(params, "active") ?? "all";
+  const active = getParam(params, "active") ?? "active";
   const mode = getParam(params, "mode") === "new" ? "new" : "list";
   const builderMode = getParam(params, "builder") === "advanced" ? "advanced" : "guided";
   const templateKey = (getParam(params, "template") as GoalTemplateKey | undefined) ?? GOAL_TEMPLATES[0].key;
@@ -52,6 +54,8 @@ export default async function GoalsPage({
     getGoalsOverview({ type, active }),
     mode === "new" ? getGoalFormOptions() : Promise.resolve(null),
   ]);
+  const frequencyGoals = goals.filter((e) => e.goal.goalType === "FREQUENCY");
+  const otherGoals = goals.filter((e) => e.goal.goalType !== "FREQUENCY");
   const typeLabel = type === "all" ? "All" : GOAL_TYPE_LABELS[type as keyof typeof GOAL_TYPE_LABELS] ?? "All";
   const typeNavItems = [
     { value: "all", label: "All" },
@@ -136,105 +140,123 @@ export default async function GoalsPage({
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Filters">
-        <FilterBar>
-          <input type="hidden" name="type" value={type} />
-          <FilterSelect
-            name="active"
-            defaultValue={active}
-            options={[
-              { value: "all", label: "Active + inactive" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ]}
-          />
-          <button type="submit" style={buttonStyle}>
-            Apply
-          </button>
-          <Link href={buildGoalsHref({ type })} style={secondaryButtonStyle}>
-            Reset
-          </Link>
-        </FilterBar>
-      </SectionCard>
-
       <SectionCard title={`${typeLabel} Goals`}>
+        <div style={activeFilterRowStyle}>
+          <span style={activeFilterLabelStyle}>Show:</span>
+          {[
+            { value: "all", label: "All" },
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+          ].map((item) => (
+            <Link
+              key={item.value}
+              href={buildGoalsHref({ type, active: item.value })}
+              style={{
+                ...activeFilterPillStyle,
+                ...(active === item.value ? activeFilterPillActiveStyle : {}),
+              }}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+
         {goals.length === 0 ? (
           <div style={subtleTextStyle}>No goals match the current filters.</div>
         ) : (
-          <div style={gridStyle}>
-            {goals.map((entry) => {
-              const showFrequencyToggle = entry.goal.goalType === "FREQUENCY";
-              const toggleAction = entry.toggleFrequencyGoalHref ? toggleRoutineFrequencyGoal : toggleGoalActive;
-
-              return (
-                <GoalCardShell
-                  key={entry.goal.id}
-                  href={entry.detailHref ?? undefined}
-                  action={
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      {showFrequencyToggle ? (
-                        <form action={toggleAction}>
-                          {entry.toggleFrequencyGoalHref ? <input type="hidden" name="routineId" value={entry.toggleFrequencyGoalHref} /> : null}
-                          <input type="hidden" name="goalId" value={entry.goal.id} />
-                          <input type="hidden" name="enabled" value={entry.isToggleEnabled ? "0" : "1"} />
-                          <input type="hidden" name="returnTo" value={currentGoalsHref} />
-                          <button
-                            type="submit"
-                            style={{
-                              ...smallToggleButtonStyle,
-                              ...(entry.isToggleEnabled ? toggleOnStyle : toggleOffStyle),
-                            }}
-                            aria-pressed={entry.isToggleEnabled}
-                          >
-                            <span style={toggleTextStyle}>{entry.isToggleEnabled ? "Active" : "Inactive"}</span>
-                            <span style={toggleTrackStyle}>
-                              <span
-                                style={{
-                                  ...toggleThumbStyle,
-                                  ...(entry.isToggleEnabled ? toggleThumbOnStyle : toggleThumbOffStyle),
-                                }}
-                              />
-                            </span>
-                          </button>
-                        </form>
-                      ) : null}
-                      {entry.editHref ? (
-                        <Link href={entry.editHref} style={smallActionLinkStyle}>
-                          Edit
-                        </Link>
-                      ) : null}
-                    </div>
-                  }
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    <div style={{ display: "grid", gap: 8, flex: "1 1 260px" }}>
-                      <div>
-                        <div style={{ fontSize: 18, fontWeight: 900 }}>{entry.goal.name}</div>
-                        <GoalMetaLine>{entry.summaryLabel}</GoalMetaLine>
+          <>
+            {/* Frequency goals — stacked row table */}
+            {frequencyGoals.length > 0 ? (
+              <>
+                {otherGoals.length > 0 ? (
+                  <div style={sectionSubheadStyle}>Frequency</div>
+                ) : null}
+                <div style={frequencyTableStyle}>
+                  {frequencyGoals.map((entry, idx) => {
+                    const isGroupFrequency = entry.goal.id.startsWith("group-frequency:");
+                    const toggleAction = isGroupFrequency
+                      ? toggleGroupFrequencyGoal
+                      : entry.toggleFrequencyGoalHref
+                      ? toggleRoutineFrequencyGoal
+                      : toggleGoalActive;
+                    return (
+                      <div key={entry.goal.id}>
+                        <FrequencyGoalRow
+                          data={toFrequencyRowData(entry)}
+                          toggleAction={toggleAction}
+                          currentGoalsHref={currentGoalsHref}
+                        />
+                        {idx < frequencyGoals.length - 1 ? (
+                          <div style={rowDividerStyle} />
+                        ) : null}
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <span style={chipStyle}>{entry.goalTypeLabel}</span>
-                        <span style={chipStyle}>{entry.targetKindLabel}</span>
-                        <span style={chipStyle}>{entry.timeframeLabel}</span>
-                        {!entry.goal.isActive ? <span style={chipStyle}>Inactive</span> : null}
-                      </div>
-                      <GoalMetaLine>
-                        Actual vs goal: {entry.actualDisplay} / {entry.targetDisplay}
-                      </GoalMetaLine>
-                      <GoalMetaLine>
-                        {entry.timeframeWindowLabel} status: <GoalStatusBadge label={entry.timeframeStatusLabel} achieved={entry.isAchieved} />
-                      </GoalMetaLine>
-                    </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
 
-                    <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
-                      <GoalProgressRing current={entry.actualDisplay} target={entry.targetDisplay} fraction={entry.fractionComplete} />
-                      <div style={{ fontSize: 12, opacity: 0.75 }}>{entry.targetLabel}</div>
-                    </div>
-                  </div>
-                </GoalCardShell>
-              );
-            })}
-          </div>
+            {/* Divider between sections */}
+            {frequencyGoals.length > 0 && otherGoals.length > 0 ? (
+              <div style={sectionDividerStyle} />
+            ) : null}
+
+            {/* Non-frequency goals — card grid */}
+            {otherGoals.length > 0 ? (
+              <>
+                {frequencyGoals.length > 0 ? (
+                  <div style={sectionSubheadStyle}>Performance &amp; Other</div>
+                ) : null}
+                <div style={gridStyle}>
+                  {otherGoals.map((entry) => {
+                    const typeChipStyle = { ...chipStyle, ...(GOAL_TYPE_CHIP_STYLE[entry.goal.goalType] ?? {}) };
+                    return (
+                      <GoalCardShell
+                        key={entry.goal.id}
+                        href={entry.detailHref ?? undefined}
+                        goalType={entry.goal.goalType}
+                        action={
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            {entry.editHref ? (
+                              <Link href={entry.editHref} style={smallActionLinkStyle}>
+                                Edit
+                              </Link>
+                            ) : null}
+                            <DeleteGoalButton goalId={entry.goal.id} />
+                          </div>
+                        }
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <div style={{ display: "grid", gap: 8, flex: "1 1 220px" }}>
+                            <div>
+                              <div style={{ fontSize: 18, fontWeight: 900 }}>{entry.goal.name}</div>
+                              <GoalMetaLine>{entry.summaryLabel}</GoalMetaLine>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <span style={typeChipStyle}>{entry.goalTypeLabel}</span>
+                              <span style={chipStyle}>{entry.targetKindLabel}</span>
+                              <span style={chipStyle}>{entry.timeframeLabel}</span>
+                              {!entry.goal.isActive ? <span style={chipStyle}>Inactive</span> : null}
+                            </div>
+                            <GoalMetaLine>
+                              Actual vs goal: {entry.actualDisplay} / {entry.targetDisplay}
+                            </GoalMetaLine>
+                            <GoalMetaLine>
+                              {entry.timeframeWindowLabel} status: <GoalStatusBadge label={entry.timeframeStatusLabel} achieved={entry.isAchieved} />
+                            </GoalMetaLine>
+                          </div>
+                          <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
+                            <GoalProgressRing current={entry.actualDisplay} target={entry.targetDisplay} fraction={entry.fractionComplete} />
+                            <div style={{ fontSize: 12, opacity: 0.75 }}>{entry.targetLabel}</div>
+                          </div>
+                        </div>
+                      </GoalCardShell>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+          </>
         )}
       </SectionCard>
     </ProgressShell>
@@ -247,18 +269,37 @@ const gridStyle: React.CSSProperties = {
   gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid rgba(128,128,128,0.45)",
-  borderRadius: 10,
-  background: "rgba(128,128,128,0.12)",
-  color: "inherit",
-  fontWeight: 800,
+const activeFilterRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  flexWrap: "wrap",
+  marginBottom: 12,
 };
 
-const secondaryButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
+const activeFilterLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  opacity: 0.55,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+};
+
+const activeFilterPillStyle: React.CSSProperties = {
+  padding: "5px 12px",
+  border: "1px solid rgba(128,128,128,0.32)",
+  borderRadius: 999,
+  background: "rgba(128,128,128,0.07)",
+  color: "inherit",
   textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const activeFilterPillActiveStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.55)",
+  background: "rgba(128,128,128,0.2)",
+  fontWeight: 900,
 };
 
 const templateDescriptionStyle: React.CSSProperties = {
@@ -283,63 +324,52 @@ const modeLinkStyle: React.CSSProperties = {
   fontWeight: 800,
 };
 
-const smallToggleButtonStyle: React.CSSProperties = {
-  ...smallActionLinkStyle,
-  cursor: "pointer",
-  minWidth: 108,
-  justifyContent: "space-between",
-  gap: 10,
-  padding: "6px 8px 6px 12px",
+const frequencyTableStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.28)",
+  borderRadius: 14,
+  overflow: "hidden",
 };
 
-const toggleTextStyle: React.CSSProperties = {
+const rowDividerStyle: React.CSSProperties = {
+  height: 1,
+  background: "rgba(128,128,128,0.14)",
+};
+
+const sectionDividerStyle: React.CSSProperties = {
+  height: 1,
+  background: "rgba(128,128,128,0.16)",
+  margin: "16px 0",
+};
+
+const sectionSubheadStyle: React.CSSProperties = {
   fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.4,
+  fontWeight: 800,
+  opacity: 0.45,
   textTransform: "uppercase",
+  letterSpacing: 0.6,
+  marginBottom: 8,
 };
 
-const toggleTrackStyle: React.CSSProperties = {
-  position: "relative",
-  width: 34,
-  height: 20,
-  borderRadius: 999,
-  background: "rgba(10,14,20,0.34)",
-  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
-  flexShrink: 0,
-};
-
-const toggleThumbStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 2,
-  width: 16,
-  height: 16,
-  borderRadius: 999,
-  transition: "transform 140ms ease, background 140ms ease, box-shadow 140ms ease",
-};
-
-const toggleThumbOnStyle: React.CSSProperties = {
-  left: 2,
-  transform: "translateX(14px)",
-  background: "#54cb82",
-  boxShadow: "0 0 12px rgba(84,203,130,0.45)",
-};
-
-const toggleThumbOffStyle: React.CSSProperties = {
-  left: 2,
-  transform: "translateX(0)",
-  background: "rgba(226,232,240,0.95)",
-  boxShadow: "0 0 10px rgba(15,23,42,0.25)",
-};
-
-const toggleOnStyle: React.CSSProperties = {
-  borderColor: "rgba(84,203,130,0.5)",
-  background: "rgba(84,203,130,0.16)",
-  color: "#dff7e8",
-};
-
-const toggleOffStyle: React.CSSProperties = {
-  borderColor: "rgba(248,113,113,0.38)",
-  background: "rgba(248,113,113,0.12)",
-  color: "#ffd4d4",
-};
+function toFrequencyRowData(entry: GoalInsight): FrequencyGoalRowData {
+  const isGroupFrequency = entry.goal.id.startsWith("group-frequency:");
+  return {
+    id: entry.goal.id,
+    name: entry.goal.name,
+    isToggleEnabled: entry.isToggleEnabled ?? false,
+    isGroupFrequency,
+    goalId: entry.goal.id,
+    routineId: entry.toggleFrequencyGoalHref ?? null,
+    actualValue: entry.actualValue,
+    targetValue: entry.targetValue,
+    timeframeStatusLabel: entry.timeframeStatusLabel,
+    timeframeWindowLabel: entry.timeframeWindowLabel,
+    isAchieved: entry.isAchieved,
+    editHref: entry.editHref ?? null,
+    recentItems: entry.recentItems.map((item) => ({
+      id: item.id,
+      routineName: item.routineName,
+      date: formatAppDate(item.performedAt, { month: "short", day: "numeric" }),
+    })),
+    showRoutineNames: isGroupFrequency,
+  };
+}

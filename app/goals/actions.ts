@@ -293,6 +293,35 @@ export async function updateGoal(formData: FormData) {
   redirect(`/goals/${goalId}`);
 }
 
+export async function deleteGoalEntry(input: { goalId: string }) {
+  const goalId = input.goalId?.trim();
+  if (!goalId) throw new Error("Goal id is required.");
+
+  if (goalId.startsWith("group-frequency:")) {
+    const id = goalId.slice("group-frequency:".length);
+    await prisma.frequencyGoal.delete({ where: { id } });
+    revalidateGoals();
+    redirect("/goals");
+  }
+
+  if (goalId.startsWith("routine-frequency:")) {
+    const routineId = goalId.slice("routine-frequency:".length);
+    await prisma.routine.update({
+      where: { id: routineId },
+      data: {
+        targetFrequencyCount: null,
+        targetFrequencyUnit: null,
+        targetFrequencyInterval: null,
+        frequencyGoalEnabled: false,
+      },
+    });
+    revalidateGoals();
+    redirect("/goals");
+  }
+
+  return deleteGoal(input);
+}
+
 export async function deleteGoal(input: { goalId: string }) {
   const goalId = input.goalId?.trim();
   if (!goalId) {
@@ -380,6 +409,23 @@ export async function toggleGoalActive(formData: FormData) {
         data: { frequencyGoalEnabled: nextEnabled },
       });
     }
+  });
+
+  revalidateGoals();
+  redirect(returnTo);
+}
+
+export async function toggleGroupFrequencyGoal(formData: FormData) {
+  const rawGoalId = parseRequiredString(formData, "goalId", "Goal");
+  const goalId = rawGoalId.startsWith("group-frequency:")
+    ? rawGoalId.slice("group-frequency:".length)
+    : rawGoalId;
+  const nextEnabled = String(formData.get("enabled") ?? "") !== "0";
+  const returnTo = String(formData.get("returnTo") ?? "").trim() || "/goals";
+
+  await prisma.frequencyGoal.update({
+    where: { id: goalId },
+    data: { isActive: nextEnabled },
   });
 
   revalidateGoals();

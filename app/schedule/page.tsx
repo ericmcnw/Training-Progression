@@ -313,7 +313,7 @@ export default async function SchedulePage({
                         </div>
                       )}
                       {dayItem.tasks.map((task) => (
-                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={{ ...(task.logged > 0 ? completedTaskRow : taskRow), borderLeftColor: domainColor(task.domain ?? ""), borderLeftWidth: 3 }}>
+                        <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={{ ...(task.logged > 0 ? completedTaskRow : taskRow), border: `2px solid ${domainColor(task.domain ?? "")}` }}>
                           <div style={taskRowTop}>
                             {task.latestLogId ? (
                               <Link
@@ -403,7 +403,7 @@ export default async function SchedulePage({
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
                         <div style={{ display: "grid", gap: 3 }}>
                           {dayItem.tasks.map((task) => (
-                            <div key={task.routineId} style={{ ...(task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow), borderLeft: `2px solid ${domainColor(task.domain ?? "")}` }}>
+                            <div key={task.routineId} style={{ ...(task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow), border: `2px solid ${domainColor(task.domain ?? "")}` }}>
                               {task.latestLogId ? (
                                 <Link
                                   href={`/routines/${task.routineId}/logs/${task.latestLogId}?returnTo=${encodeURIComponent(`/schedule?start=${timelineStart}&month=${selectedMonth}`)}`}

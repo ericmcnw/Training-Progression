@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteGoal } from "./actions";
+import { deleteGoalEntry } from "./actions";
 
 export default function DeleteGoalButton({
   goalId,
@@ -13,7 +13,7 @@ export default function DeleteGoalButton({
 
   function onConfirmDelete() {
     startTransition(async () => {
-      await deleteGoal({ goalId });
+      await deleteGoalEntry({ goalId });
     });
   }
 
@@ -54,14 +54,20 @@ export default function DeleteGoalButton({
 }
 
 const btnStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  border: "1px solid rgba(255,0,0,0.55)",
-  borderRadius: 10,
-  textAlign: "center",
-  textDecoration: "none",
+  position: "relative",
+  zIndex: 2,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "6px 10px",
+  border: "1px solid rgba(248,113,113,0.45)",
+  borderRadius: 999,
+  background: "rgba(248,113,113,0.1)",
   color: "inherit",
-  background: "rgba(128,128,128,0.12)",
-  fontWeight: 700,
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 const overlayStyle: React.CSSProperties = {
