@@ -1241,9 +1241,16 @@ details[open] > summary[data-collapsible-summary]::before{
     padding: 0 10px 0 0 !important;
     flex-wrap: nowrap;
   }
-  /* Status badge is hidden on mobile — dot color already shows status */
+  /* Status badge hidden on mobile — dot color already shows status */
   .goalFreqStatusBadge {
     display: none;
+  }
+  /* Timeframe label moves to the dots row on mobile */
+  .goalFreqTriggerWindow {
+    display: none;
+  }
+  .goalFreqDotsLabel {
+    display: inline !important;
   }
 }
 

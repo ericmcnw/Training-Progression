@@ -52,8 +52,8 @@ function RowDots({
           <div
             key={i}
             style={{
-              width: 13,
-              height: 13,
+              width: 16,
+              height: 16,
               borderRadius: "50%",
               background: i < filled ? dotColor : "rgba(148,163,184,0.18)",
               border: `1.5px solid ${i < filled ? dotColor : "rgba(148,163,184,0.28)"}`,
@@ -80,8 +80,8 @@ function RowDots({
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
       <div
         style={{
-          width: 72,
-          height: 9,
+          width: 88,
+          height: 11,
           borderRadius: 999,
           background: "rgba(148,163,184,0.15)",
           overflow: "hidden",
@@ -156,6 +156,9 @@ export function FrequencyGoalRow({
             target={data.targetValue}
             status={data.timeframeStatusLabel}
           />
+          <span className="goalFreqDotsLabel" style={dotsLabelStyle}>
+            {data.timeframeWindowLabel}
+          </span>
         </div>
 
         {/* Expand trigger — name/subtitle/status/chevron */}
@@ -178,7 +181,7 @@ export function FrequencyGoalRow({
             >
               {data.name}
             </div>
-            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 1, whiteSpace: "nowrap" }}>
+            <div className="goalFreqTriggerWindow" style={{ fontSize: 11, opacity: 0.5, marginTop: 1, whiteSpace: "nowrap" }}>
               {data.timeframeWindowLabel}
             </div>
           </div>
@@ -261,6 +264,15 @@ const dotsWrapStyle: React.CSSProperties = {
   padding: "10px 0 10px 14px",
   display: "flex",
   alignItems: "center",
+  gap: 10,
+};
+
+const dotsLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.5,
+  whiteSpace: "nowrap",
+  display: "none", // hidden on desktop, shown on mobile via CSS
 };
 
 const expandTriggerStyle: React.CSSProperties = {
