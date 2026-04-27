@@ -1220,17 +1220,30 @@ details[open] > summary[data-collapsible-summary]::before{
     font-size: 11px !important;
   }
 
-  /* ── Frequency goal rows: stack actions below trigger on mobile ─────── */
+  /* ── Frequency goal rows: 2-row mobile layout ──────────────────────── */
+  /* Row 1: name + actions on right  |  Row 2: bigger dots below */
   .goalFreqRowBody {
     flex-wrap: wrap;
   }
-  .goalFreqRowActions {
+  .goalFreqDots {
+    order: 3;
     width: 100%;
-    padding-left: 17px;
-    padding-right: 12px;
-    padding-bottom: 10px;
-    padding-top: 0;
-    flex-wrap: wrap;
+    padding: 4px 14px 14px !important;
+    justify-content: flex-start;
+  }
+  .goalFreqExpandTrigger {
+    order: 1;
+    padding-left: 14px !important;
+  }
+  .goalFreqRowActions {
+    order: 2;
+    width: auto;
+    padding: 0 10px 0 0 !important;
+    flex-wrap: nowrap;
+  }
+  /* Status badge is hidden on mobile — dot color already shows status */
+  .goalFreqStatusBadge {
+    display: none;
   }
 }
 

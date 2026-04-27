@@ -47,13 +47,13 @@ function RowDots({
 
   if (target <= MAX_INLINE) {
     return (
-      <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
         {Array.from({ length: target }, (_, i) => (
           <div
             key={i}
             style={{
-              width: 10,
-              height: 10,
+              width: 13,
+              height: 13,
               borderRadius: "50%",
               background: i < filled ? dotColor : "rgba(148,163,184,0.18)",
               border: `1.5px solid ${i < filled ? dotColor : "rgba(148,163,184,0.28)"}`,
@@ -63,7 +63,7 @@ function RowDots({
         ))}
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             opacity: 0.65,
             marginLeft: 4,
@@ -80,8 +80,8 @@ function RowDots({
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
       <div
         style={{
-          width: 56,
-          height: 6,
+          width: 72,
+          height: 9,
           borderRadius: 999,
           background: "rgba(148,163,184,0.15)",
           overflow: "hidden",
@@ -101,7 +101,7 @@ function RowDots({
           }}
         />
       </div>
-      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.65, whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.65, whiteSpace: "nowrap" }}>
         {current}/{target}
       </span>
     </div>
@@ -149,18 +149,23 @@ export function FrequencyGoalRow({
   return (
     <div style={{ borderLeft: `3px solid ${accentColor}` }}>
       <div className="goalFreqRowBody" style={rowBodyStyle}>
-        {/* Expand trigger — left portion */}
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          style={expandTriggerStyle}
-          aria-expanded={open}
-        >
+        {/* Dots — inline on desktop, moves below on mobile via CSS order */}
+        <div className="goalFreqDots" style={dotsWrapStyle}>
           <RowDots
             current={data.actualValue}
             target={data.targetValue}
             status={data.timeframeStatusLabel}
           />
+        </div>
+
+        {/* Expand trigger — name/subtitle/status/chevron */}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="goalFreqExpandTrigger"
+          style={expandTriggerStyle}
+          aria-expanded={open}
+        >
           <div style={{ flex: "1 1 0", minWidth: 0, textAlign: "left" }}>
             <div
               style={{
@@ -177,7 +182,9 @@ export function FrequencyGoalRow({
               {data.timeframeWindowLabel}
             </div>
           </div>
-          <GoalStatusBadge label={data.timeframeStatusLabel} achieved={data.isAchieved} />
+          <span className="goalFreqStatusBadge">
+            <GoalStatusBadge label={data.timeframeStatusLabel} achieved={data.isAchieved} />
+          </span>
           <ChevronIcon open={open} />
         </button>
 
@@ -249,13 +256,20 @@ const rowBodyStyle: React.CSSProperties = {
   gap: 8,
 };
 
+const dotsWrapStyle: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "10px 0 10px 14px",
+  display: "flex",
+  alignItems: "center",
+};
+
 const expandTriggerStyle: React.CSSProperties = {
   flex: "1 1 0",
   minWidth: 0,
   display: "flex",
   alignItems: "center",
   gap: 10,
-  padding: "10px 12px 10px 14px",
+  padding: "10px 12px 10px 0",
   background: "none",
   border: "none",
   color: "inherit",
