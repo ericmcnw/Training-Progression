@@ -129,9 +129,10 @@ export default function DomainHeatMatrix({
   return (
     <div style={{ overflowX: "auto" }}>
       <div
+        className="domainHeatGrid"
         style={{
           display: "grid",
-          gridTemplateColumns: `140px repeat(${numCols}, minmax(56px, 1fr))`,
+          gridTemplateColumns: `var(--heat-label-w, 140px) repeat(${numCols}, minmax(var(--heat-cell-min, 56px), 1fr))`,
           gap: 4,
           minWidth: 0,
         }}
@@ -196,6 +197,7 @@ export default function DomainHeatMatrix({
                   return (
                     <button
                       key={`cell-${row.domain}-${wi}`}
+                      className="domainHeatCell"
                       type="button"
                       onClick={() =>
                         setActiveCell(isActive ? null : { domain: row.domain, weekIdx: wi })
@@ -227,6 +229,7 @@ export default function DomainHeatMatrix({
                 return (
                   <div
                     key={`cell-${row.domain}-${wi}`}
+                    className="domainHeatCell"
                     style={{
                       height: 36,
                       borderRadius: 8,

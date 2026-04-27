@@ -508,8 +508,8 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   });
   const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "habit"];
   const domainLabel: Partial<Record<RoutineDomain, string>> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility / Rehab",
-    sport: "Sport / Sessions", recovery: "Recovery",
+    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
+    sport: "Sport", recovery: "Recovery",
     habit: "Habits",
   };
   const heatData = new Map<RoutineDomain, number[]>();

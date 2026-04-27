@@ -1209,6 +1209,17 @@ details[open] > summary[data-collapsible-summary]::before{
     box-shadow: 0 10px 24px rgba(0,0,0,0.28) !important;
   }
 
+  /* ── Domain heat matrix: tighter columns so 5 weeks fit without scrolling */
+  .domainHeatGrid {
+    --heat-label-w: 96px;
+    --heat-cell-min: 38px;
+    gap: 3px !important;
+  }
+  .domainHeatCell {
+    height: 30px !important;
+    font-size: 11px !important;
+  }
+
   /* ── Frequency goal rows: stack actions below trigger on mobile ─────── */
   .goalFreqRowBody {
     flex-wrap: wrap;
