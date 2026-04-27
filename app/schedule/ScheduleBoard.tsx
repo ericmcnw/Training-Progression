@@ -13,6 +13,8 @@ type Routine = {
   category: string;
   suggestedTimesPerWeek: number;
   plannedDaysPerWeek: number;
+  autoScheduleDaily: boolean;
+  autoScheduleStartYmd: string;
 };
 
 type ManualEntry = {
@@ -20,6 +22,10 @@ type ManualEntry = {
   routineId: string;
   scheduledDate: string;
   sortOrder: number;
+};
+
+type VisibleEntry = ManualEntry & {
+  isAutoScheduled: boolean;
 };
 
 type PendingPlacement =
@@ -93,6 +99,27 @@ export default function ScheduleBoard({
   const start = todayAppYmd();
   const horizonDays = 21;
   const days = Array.from({ length: horizonDays }, (_, i) => addDays(start, i));
+  const autoEntries = useMemo(() => {
+    const manualKeySet = new Set(manual.map((entry) => `${entry.scheduledDate}|${entry.routineId}`));
+    return normalizeManual(
+      routines.flatMap((routine) =>
+        routine.autoScheduleDaily
+          ? days
+              .filter(
+                (date) =>
+                  date >= routine.autoScheduleStartYmd &&
+                  !manualKeySet.has(`${date}|${routine.id}`)
+              )
+              .map((scheduledDate) => ({
+                clientId: `auto-${routine.id}-${scheduledDate}`,
+                routineId: routine.id,
+                scheduledDate,
+                sortOrder: 0,
+              }))
+          : []
+      )
+    );
+  }, [days, manual, routines]);
 
   const manualEntriesJson = useMemo(
     () =>
@@ -231,6 +258,12 @@ export default function ScheduleBoard({
             >
               {days.map((date) => {
                 const manualForDate = manual.filter((entry) => entry.scheduledDate === date).sort((a, b) => a.sortOrder - b.sortOrder);
+                const visibleEntries: VisibleEntry[] = [
+                  ...autoEntries
+                    .filter((entry) => entry.scheduledDate === date)
+                    .map((entry) => ({ ...entry, isAutoScheduled: true })),
+                  ...manualForDate.map((entry) => ({ ...entry, isAutoScheduled: false })),
+                ];
 
                 return (
                   <div
@@ -265,16 +298,20 @@ export default function ScheduleBoard({
                     </div>
 
                     <div style={{ marginTop: 6, display: "grid", gap: 6 }}>
-                      {manualForDate.map((entry) => {
+                      {visibleEntries.map((entry) => {
                         const routine = routineMap.get(entry.routineId);
                         if (!routine) return null;
                         return (
                           <div
                             key={entry.clientId}
-                            draggable
-                            onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ source: "manual", clientId: entry.clientId }))}
+                            draggable={!entry.isAutoScheduled}
+                            onDragStart={(e) => {
+                              if (entry.isAutoScheduled) return;
+                              e.dataTransfer.setData("text/plain", JSON.stringify({ source: "manual", clientId: entry.clientId }));
+                            }}
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (entry.isAutoScheduled) return;
                               setPendingPlacement({ source: "manual", clientId: entry.clientId, label: routine.name });
                             }}
                             style={{
@@ -287,18 +324,24 @@ export default function ScheduleBoard({
                               background:
                                 pendingPlacement?.source === "manual" && pendingPlacement.clientId === entry.clientId
                                   ? "rgba(84,203,130,0.16)"
+                                  : entry.isAutoScheduled
+                                  ? "rgba(84,203,130,0.08)"
                                   : "rgba(128,128,128,0.12)",
-                              cursor: isNarrow ? "pointer" : "grab",
+                              cursor: entry.isAutoScheduled ? "default" : isNarrow ? "pointer" : "grab",
                             }}
                           >
                             <div style={{ fontSize: 12, fontWeight: 800 }}>{routine.name}</div>
-                            <button
-                              type="button"
-                              style={removeBtn}
-                              onClick={() => setManual((prev) => normalizeManual(prev.filter((x) => x.clientId !== entry.clientId)))}
-                            >
-                              Remove
-                            </button>
+                            {entry.isAutoScheduled ? (
+                              <div style={autoBadge}>Auto daily</div>
+                            ) : (
+                              <button
+                                type="button"
+                                style={removeBtn}
+                                onClick={() => setManual((prev) => normalizeManual(prev.filter((x) => x.clientId !== entry.clientId)))}
+                              >
+                                Remove
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -372,4 +415,17 @@ const tapBtn: React.CSSProperties = {
   color: "inherit",
   fontSize: 11,
   fontWeight: 800,
+};
+
+const autoBadge: React.CSSProperties = {
+  marginTop: 6,
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 6px",
+  border: "1px solid rgba(84,203,130,0.55)",
+  borderRadius: 999,
+  background: "rgba(84,203,130,0.10)",
+  fontSize: 10,
+  fontWeight: 800,
+  opacity: 0.9,
 };

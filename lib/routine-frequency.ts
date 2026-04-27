@@ -226,3 +226,18 @@ export function suggestedTimesPerWeekForRoutineTarget(target: RoutineFrequencyTa
   if (normalized.unit === "WEEK" && normalized.interval === 1) return normalized.count;
   return null;
 }
+
+export function shouldAutoScheduleRoutineDaily(target: RoutineFrequencyTargetShape) {
+  const normalized = normalizeRoutineFrequencyTarget(target);
+  return normalized.hasTarget && normalized.unit === "WEEK" && normalized.interval === 1 && normalized.count === 7;
+}
+
+export function isRoutineAutoScheduledDailyOnDay(
+  target: RoutineFrequencyTargetShape,
+  dayYmd: string,
+  autoScheduleStartYmd?: string | null
+) {
+  if (!shouldAutoScheduleRoutineDaily(target)) return false;
+  if (!autoScheduleStartYmd) return true;
+  return dayYmd >= autoScheduleStartYmd;
+}

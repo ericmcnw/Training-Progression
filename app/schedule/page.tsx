@@ -2,6 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
+import {
+  isRoutineAutoScheduledDailyOnDay,
+  shouldAutoScheduleRoutineDaily,
+  suggestedTimesPerWeekForRoutineTarget,
+} from "@/lib/routine-frequency";
 import ScheduleBoard from "./ScheduleBoard";
 import { quickAddManualEntry, removeManualEntry } from "./actions";
 
@@ -86,11 +91,23 @@ export default async function SchedulePage({
   const timelineStart = isYmd(requestedStart) ? requestedStart! : today;
   const selectedMonth = isMonthParam(getParam(params?.month)) ? getParam(params?.month)! : monthFromYmd(today);
 
-  const [routines, manualRaw, logRange] = await prisma.$transaction([
+  const [routines, manualRaw, logRange, routineFrequencyGoals] = await prisma.$transaction([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ isActive: "desc" }, { kind: "asc" }, { category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, kind: true, subtype: true, domain: true, category: true, timesPerWeek: true },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        subtype: true,
+        domain: true,
+        category: true,
+        timesPerWeek: true,
+        targetFrequencyCount: true,
+        targetFrequencyUnit: true,
+        targetFrequencyInterval: true,
+        frequencyGoalEnabled: true,
+      },
     }),
     prisma.$queryRawUnsafe<Array<{ id: string; routineId: string; scheduledDate: string; sortOrder: number }>>(
       'SELECT "id","routineId","scheduledDate","sortOrder" FROM "ScheduleManualEntry" ORDER BY "scheduledDate" ASC, "sortOrder" ASC'
@@ -98,6 +115,19 @@ export default async function SchedulePage({
     prisma.routineLog.aggregate({
       _min: { performedAt: true },
       _max: { performedAt: true },
+    }),
+    prisma.goal.findMany({
+      where: {
+        isActive: true,
+        goalType: "FREQUENCY",
+        targetType: "ROUTINE",
+        metricType: "SESSIONS",
+      },
+      select: {
+        targetId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -111,11 +141,22 @@ export default async function SchedulePage({
   const next7Days = Array.from({ length: 7 }, (_, i) => {
     return addDays(today, i);
   });
+  const autoDailyRoutineStartById = new Map<string, string>();
+  for (const goal of routineFrequencyGoals) {
+    if (!autoDailyRoutineStartById.has(goal.targetId)) {
+      autoDailyRoutineStartById.set(goal.targetId, toAppYmd(goal.createdAt));
+    }
+  }
   const routinePlannedDaysMap = new Map<string, number>();
   for (const day of next7Days) {
     const ids = new Set<string>();
     for (const manual of manualEntries) {
       if (manual.scheduledDate === day) ids.add(manual.routineId);
+    }
+    for (const routine of routines) {
+      if (isRoutineAutoScheduledDailyOnDay(routine, day, autoDailyRoutineStartById.get(routine.id) ?? null)) {
+        ids.add(routine.id);
+      }
     }
     for (const id of ids) {
       routinePlannedDaysMap.set(id, (routinePlannedDaysMap.get(id) ?? 0) + 1);
@@ -124,8 +165,10 @@ export default async function SchedulePage({
   const routinesWithPlanned = routines.map((routine) => ({
     ...routine,
     domain: effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype),
-    suggestedTimesPerWeek: routine.timesPerWeek ?? 0,
+    suggestedTimesPerWeek: suggestedTimesPerWeekForRoutineTarget(routine) ?? routine.timesPerWeek ?? 0,
     plannedDaysPerWeek: routinePlannedDaysMap.get(routine.id) ?? 0,
+    autoScheduleDaily: shouldAutoScheduleRoutineDaily(routine),
+    autoScheduleStartYmd: autoDailyRoutineStartById.get(routine.id) ?? today,
   }));
 
   const timelineDays = buildAgendaDays(timelineStart, 7);
@@ -191,6 +234,11 @@ export default async function SchedulePage({
 
       for (const manual of manualItems) {
         plannedCounts.set(manual.routineId, (plannedCounts.get(manual.routineId) ?? 0) + 1);
+      }
+      for (const routine of routinesWithPlanned) {
+        if (isRoutineAutoScheduledDailyOnDay(routine, day, routine.autoScheduleStartYmd)) {
+          plannedCounts.set(routine.id, Math.max(1, plannedCounts.get(routine.id) ?? 0));
+        }
       }
 
       const isPastOrToday = day <= today;

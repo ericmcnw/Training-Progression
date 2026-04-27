@@ -8,6 +8,7 @@ import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
+import { isRoutineAutoScheduledDailyOnDay, shouldAutoScheduleRoutineDaily } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 
@@ -424,6 +425,7 @@ export default async function HomePage() {
     weeklyLogs,
     latestLogs,
     activeGoals,
+    routineFrequencyGoals,
     planEntriesRaw,
     manualEntriesRaw,
     sparkLogs,
@@ -439,9 +441,13 @@ export default async function HomePage() {
         subtype: string | null;
         domain: string;
         kind: string;
+        targetFrequencyCount: number | null;
+        targetFrequencyUnit: "DAY" | "WEEK" | "MONTH" | null;
+        targetFrequencyInterval: number | null;
+        frequencyGoalEnabled: boolean;
       }>
     >(
-      'SELECT "id","name","category","subtype","domain","kind" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
+      'SELECT "id","name","category","subtype","domain","kind","targetFrequencyCount","targetFrequencyUnit","targetFrequencyInterval","frequencyGoalEnabled" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
     ),
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
@@ -477,6 +483,16 @@ export default async function HomePage() {
       orderBy: { createdAt: "desc" },
       take: 6,
       select: { id: true, name: true, targetValue: true, createdAt: true },
+    }),
+    prisma.goal.findMany({
+      where: {
+        isActive: true,
+        goalType: "FREQUENCY",
+        targetType: "ROUTINE",
+        metricType: "SESSIONS",
+      },
+      orderBy: { createdAt: "asc" },
+      select: { targetId: true, createdAt: true },
     }),
     prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
       'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
@@ -526,6 +542,12 @@ export default async function HomePage() {
   ]);
 
   const routineMap = new Map(routines.map((routine) => [routine.id, routine]));
+  const autoDailyRoutineStartById = new Map<string, string>();
+  for (const goal of routineFrequencyGoals) {
+    if (!autoDailyRoutineStartById.has(goal.targetId)) {
+      autoDailyRoutineStartById.set(goal.targetId, toAppYmd(goal.createdAt));
+    }
+  }
 
   const weeklyMap = new Map(
     weeklyLogs.map((row) => [
@@ -579,6 +601,26 @@ export default async function HomePage() {
       }
       dayPlanMap.set(item.routineId, {
         routineId: item.routineId,
+        routineName: routine.name,
+        category: routine.category,
+        kind: routine.kind,
+        planned: 1,
+        logged: 0,
+      });
+    }
+
+    for (const routine of routines) {
+      if (!shouldAutoScheduleRoutineDaily(routine)) continue;
+      if (!isRoutineAutoScheduledDailyOnDay(routine, day, autoDailyRoutineStartById.get(routine.id) ?? today)) {
+        continue;
+      }
+      const existing = dayPlanMap.get(routine.id);
+      if (existing) {
+        existing.planned = Math.max(1, existing.planned);
+        continue;
+      }
+      dayPlanMap.set(routine.id, {
+        routineId: routine.id,
         routineName: routine.name,
         category: routine.category,
         kind: routine.kind,
