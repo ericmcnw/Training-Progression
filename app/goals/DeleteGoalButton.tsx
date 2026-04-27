@@ -19,8 +19,22 @@ export default function DeleteGoalButton({
 
   return (
     <>
-      <button type="button" onClick={() => setIsConfirmOpen(true)} disabled={isPending} style={btnStyle}>
-        {isPending ? "Deleting..." : "Delete"}
+      <button
+        type="button"
+        onClick={() => setIsConfirmOpen(true)}
+        disabled={isPending}
+        style={btnStyle}
+        aria-label="Delete goal"
+      >
+        {isPending ? (
+          <svg width={13} height={13} viewBox="0 0 13 13" fill="none" style={{ opacity: 0.5 }}>
+            <circle cx={6.5} cy={6.5} r={5} stroke="currentColor" strokeWidth={1.5} strokeDasharray="8 8" />
+          </svg>
+        ) : (
+          <svg width={13} height={13} viewBox="0 0 13 13" fill="none">
+            <path d="M2 3.5h9M5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M5 5.5v4M8 5.5v4M2.8 3.5l.6 7a.5.5 0 0 0 .5.5h5.2a.5.5 0 0 0 .5-.5l.6-7" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </button>
 
       {isConfirmOpen && (
@@ -59,15 +73,15 @@ const btnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "6px 10px",
-  border: "1px solid rgba(248,113,113,0.45)",
-  borderRadius: 999,
-  background: "rgba(248,113,113,0.1)",
-  color: "inherit",
-  textDecoration: "none",
-  fontSize: 12,
-  fontWeight: 800,
+  width: 28,
+  height: 28,
+  padding: 0,
+  border: "1px solid rgba(248,113,113,0.38)",
+  borderRadius: 8,
+  background: "rgba(248,113,113,0.08)",
+  color: "rgba(248,113,113,0.85)",
   cursor: "pointer",
+  flexShrink: 0,
 };
 
 const overlayStyle: React.CSSProperties = {

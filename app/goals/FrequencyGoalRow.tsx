@@ -199,7 +199,7 @@ export function FrequencyGoalRow({
               aria-pressed={data.isToggleEnabled}
             >
               <span style={toggleLabelStyle}>
-                {data.isToggleEnabled ? "Active" : "Inactive"}
+                {data.isToggleEnabled ? "On" : "Off"}
               </span>
               <span style={toggleTrackStyle}>
                 <span
@@ -325,10 +325,10 @@ const sessionRoutineStyle: React.CSSProperties = {
 const smallToggleStyle: React.CSSProperties = {
   ...smallActionLinkStyle,
   cursor: "pointer",
-  minWidth: 100,
+  minWidth: 0,
   justifyContent: "space-between",
-  gap: 8,
-  padding: "5px 7px 5px 10px",
+  gap: 6,
+  padding: "5px 7px 5px 9px",
 };
 
 const toggleLabelStyle: React.CSSProperties = {
