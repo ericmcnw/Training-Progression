@@ -1241,6 +1241,49 @@ details[open] > summary[data-collapsible-summary]::before{
     padding: 0 10px 0 0 !important;
     flex-wrap: nowrap;
   }
+  /* ── Non-frequency goals: 2-column compact grid ────────────────────── */
+  .goalsNonFreqGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .goalCardShell {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+  /* Stack ring on top, text below */
+  .goalCardBody {
+    flex-direction: column-reverse !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  .goalCardTextBlock {
+    flex: unset !important;
+    min-width: unset !important;
+    width: 100%;
+    gap: 5px !important;
+  }
+  .goalCardName {
+    font-size: 13px !important;
+  }
+  /* Scale ring down: 104px → ~76px, collapse extra space with negative margin */
+  .goalCardRingWrap {
+    width: 100%;
+    display: flex !important;
+    justify-content: center;
+    margin-bottom: -27px;
+  }
+  .goalCardRingWrap > div {
+    transform: scale(0.73);
+    transform-origin: top center;
+  }
+  /* Hide verbose lines that don't fit */
+  .goalCardMetaLine {
+    display: none;
+  }
+  .goalCardTargetLabel {
+    display: none;
+  }
+
   /* Status badge hidden on mobile — dot color already shows status */
   .goalFreqStatusBadge {
     display: none;

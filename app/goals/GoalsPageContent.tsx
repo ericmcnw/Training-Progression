@@ -207,7 +207,7 @@ export default async function GoalsPage({
                 {frequencyGoals.length > 0 ? (
                   <div style={sectionSubheadStyle}>Performance &amp; Other</div>
                 ) : null}
-                <div style={gridStyle}>
+                <div className="goalsNonFreqGrid" style={gridStyle}>
                   {otherGoals.map((entry) => {
                     const typeChipStyle = { ...chipStyle, ...(GOAL_TYPE_CHIP_STYLE[entry.goal.goalType] ?? {}) };
                     return (
@@ -215,6 +215,7 @@ export default async function GoalsPage({
                         key={entry.goal.id}
                         href={entry.detailHref ?? undefined}
                         goalType={entry.goal.goalType}
+                        className="goalCardShell"
                         action={
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             {entry.editHref ? (
@@ -226,10 +227,10 @@ export default async function GoalsPage({
                           </div>
                         }
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                          <div style={{ display: "grid", gap: 8, flex: "1 1 220px" }}>
+                        <div className="goalCardBody" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <div className="goalCardTextBlock" style={{ display: "grid", gap: 8, flex: "1 1 220px" }}>
                             <div>
-                              <div style={{ fontSize: 18, fontWeight: 900 }}>{entry.goal.name}</div>
+                              <div className="goalCardName" style={{ fontSize: 18, fontWeight: 900 }}>{entry.goal.name}</div>
                               <GoalMetaLine>{entry.summaryLabel}</GoalMetaLine>
                             </div>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -238,16 +239,20 @@ export default async function GoalsPage({
                               <span style={chipStyle}>{entry.timeframeLabel}</span>
                               {!entry.goal.isActive ? <span style={chipStyle}>Inactive</span> : null}
                             </div>
-                            <GoalMetaLine>
-                              Actual vs goal: {entry.actualDisplay} / {entry.targetDisplay}
-                            </GoalMetaLine>
-                            <GoalMetaLine>
-                              {entry.timeframeWindowLabel} status: <GoalStatusBadge label={entry.timeframeStatusLabel} achieved={entry.isAchieved} />
-                            </GoalMetaLine>
+                            <div className="goalCardMetaLine">
+                              <GoalMetaLine>
+                                Actual vs goal: {entry.actualDisplay} / {entry.targetDisplay}
+                              </GoalMetaLine>
+                            </div>
+                            <div className="goalCardMetaLine">
+                              <GoalMetaLine>
+                                {entry.timeframeWindowLabel} status: <GoalStatusBadge label={entry.timeframeStatusLabel} achieved={entry.isAchieved} />
+                              </GoalMetaLine>
+                            </div>
                           </div>
-                          <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
+                          <div className="goalCardRingWrap" style={{ display: "grid", justifyItems: "center", gap: 8 }}>
                             <GoalProgressRing current={entry.actualDisplay} target={entry.targetDisplay} fraction={entry.fractionComplete} />
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>{entry.targetLabel}</div>
+                            <div className="goalCardTargetLabel" style={{ fontSize: 12, opacity: 0.75 }}>{entry.targetLabel}</div>
                           </div>
                         </div>
                       </GoalCardShell>

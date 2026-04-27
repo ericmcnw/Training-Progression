@@ -233,15 +233,17 @@ export function GoalCardShell({
   href,
   action,
   goalType,
+  className,
 }: {
   children: React.ReactNode;
   href?: string;
   action?: React.ReactNode;
   goalType?: string;
+  className?: string;
 }) {
   const accentColor = goalType ? GOAL_TYPE_ACCENT[goalType] : undefined;
   return (
-    <div style={{ ...cardStyle, position: "relative", ...(accentColor ? { borderLeft: `3px solid ${accentColor}` } : {}) }}>
+    <div className={className} style={{ ...cardStyle, position: "relative", ...(accentColor ? { borderLeft: `3px solid ${accentColor}` } : {}) }}>
       {href ? <Link href={href} aria-label="Open goal" style={stretchedLinkStyle} /> : null}
       {action ? <div style={cardActionStyle}>{action}</div> : null}
       <div style={{ position: "relative", zIndex: 1 }}>{children}</div>
