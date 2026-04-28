@@ -7,7 +7,6 @@ import GoalForm, { type GoalFormInitial } from "./GoalForm";
 import { createGoal, toggleGoalActive, toggleGroupFrequencyGoal, toggleRoutineFrequencyGoal } from "./actions";
 import { createFrequencyGoal } from "@/app/routines/actions";
 import { GOAL_TYPE_CHIP_STYLE, GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, FrequencySlotBar, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
-import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
 import { FrequencyGoalRow, type FrequencyGoalRowData } from "./FrequencyGoalRow";
 import DeleteGoalButton from "./DeleteGoalButton";
 
@@ -24,15 +23,11 @@ function buildGoalsHref(params: {
   type?: string;
   active?: string;
   mode?: "list" | "new";
-  template?: string;
-  builder?: "guided" | "advanced";
 }) {
   const search = new URLSearchParams();
   if (params.type && params.type !== "all") search.set("type", params.type);
   if (params.active && params.active !== "active") search.set("active", params.active);
   if (params.mode === "new") search.set("mode", "new");
-  if (params.template) search.set("template", params.template);
-  if (params.builder && params.builder !== "guided") search.set("builder", params.builder);
   const query = search.toString();
   return query ? `/goals?${query}` : "/goals";
 }
@@ -46,9 +41,6 @@ export default async function GoalsPage({
   const type = getParam(params, "type") ?? "all";
   const active = getParam(params, "active") ?? "active";
   const mode = getParam(params, "mode") === "new" ? "new" : "list";
-  const builderMode = getParam(params, "builder") === "advanced" ? "advanced" : "guided";
-  const templateKey = (getParam(params, "template") as GoalTemplateKey | undefined) ?? GOAL_TEMPLATES[0].key;
-  const template = getGoalTemplate(templateKey);
   const currentGoalsHref = buildGoalsHref({ type, active });
   const [goals, options] = await Promise.all([
     getGoalsOverview({ type, active }),
@@ -69,31 +61,20 @@ export default async function GoalsPage({
     active: type === item.value || (item.value === "all" && type === "all"),
   }));
 
-  const targetId =
-    template.targetType === "ROUTINE"
-      ? options?.routines[0]?.id ?? ""
-      : template.targetType === "EXERCISE"
-      ? options?.exercises[0]?.id ?? ""
-      : template.targetType === "CARDIO"
-      ? options?.cardioTargets[0]?.id ?? ""
-      : template.targetType === "SESSION_TEMPLATE"
-      ? options?.sessionTemplates[0]?.id ?? ""
-      : options?.groups[0]?.id ?? "";
-
   const initial: GoalFormInitial = {
     name: "",
-    goalType: template.goalType,
-    targetType: template.targetType,
-    targetId,
-    metricType: template.metricType,
-    timeframe: template.timeframe,
-    targetValue: template.targetValue,
+    goalType: "FREQUENCY",
+    targetType: "ROUTINE",
+    targetId: options?.routines[0]?.id ?? "",
+    metricType: "SESSIONS",
+    timeframe: "WEEK",
+    targetValue: 3,
     startDate: todayAppYmd(),
     endDate: "",
     isActive: true,
     notes: "",
-    benchmarkDistanceMi: template.benchmarkDistanceMi ? String(template.benchmarkDistanceMi) : "3.11",
-    benchmarkLabel: template.benchmarkLabel ?? "5K",
+    benchmarkDistanceMi: "3.11",
+    benchmarkLabel: "5K",
     sessionMetricDefinitionId: "",
     sessionMetricTarget: "",
   };
@@ -109,34 +90,20 @@ export default async function GoalsPage({
       navItems={typeNavItems}
       actions={
         <SectionLinkButton
-          href={
-            mode === "new"
-              ? buildGoalsHref({ type, active })
-              : buildGoalsHref({ type, active, mode: "new", template: template.key })
-          }
+          href={mode === "new" ? buildGoalsHref({ type, active }) : buildGoalsHref({ type, active, mode: "new" })}
           label={mode === "new" ? "Back to Goals" : "New Goal"}
         />
       }
     >
       {mode === "new" && options ? (
-        <SectionCard title={builderMode === "advanced" ? "Advanced Goal Setup" : "Create Goal"}>
+        <SectionCard title="Create Goal">
           <GoalForm
             action={createGoal}
             groupFrequencyAction={createFrequencyGoal}
             options={options}
             submitLabel="Save Goal"
             initial={initial}
-            mode={builderMode}
-            initialTemplateKey={template.key}
           />
-          {builderMode === "guided" ? (
-            <div style={modeRowStyle}>
-              <div style={templateDescriptionStyle}>Need full control over goal type, target type, metric, and timeframe?</div>
-              <Link href={buildGoalsHref({ type, active, mode: "new", template: template.key, builder: "advanced" })} style={modeLinkStyle}>
-                Open advanced goal builder
-              </Link>
-            </div>
-          ) : null}
         </SectionCard>
       ) : null}
 
@@ -305,28 +272,6 @@ const activeFilterPillActiveStyle: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.55)",
   background: "rgba(128,128,128,0.2)",
   fontWeight: 900,
-};
-
-const templateDescriptionStyle: React.CSSProperties = {
-  fontSize: 13,
-  opacity: 0.76,
-};
-
-const modeRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  flexWrap: "wrap",
-};
-
-const modeLinkStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid rgba(128,128,128,0.4)",
-  borderRadius: 10,
-  textDecoration: "none",
-  color: "inherit",
-  fontWeight: 800,
 };
 
 const frequencyTableStyle: React.CSSProperties = {

@@ -8,6 +8,8 @@ import {
   suggestedTimesPerWeekForRoutineTarget,
 } from "@/lib/routine-frequency";
 import ScheduleBoard from "./ScheduleBoard";
+import HabitsBlock, { type HabitTaskData } from "./HabitsBlock";
+import CalendarDayHabits, { type CalendarHabitItem } from "./CalendarDayHabits";
 import { quickAddManualEntry, removeManualEntry } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -206,6 +208,7 @@ export default async function SchedulePage({
     [...routines, ...inactiveReferencedRoutines].map((routine) => [routine.id, fallbackRoutineLabel(routine.name)])
   );
   const routineDomainMap = new Map(routines.map((r) => [r.id, effectiveRoutineDomain(r.domain, r.kind, r.subtype)]));
+  const routineIsHabitMap = new Map(routinesWithPlanned.map((r) => [r.id, r.autoScheduleDaily]));
 
   const loggedMap = new Map<string, number>();
   const latestLogIdByDay = new Map<string, string>();
@@ -263,6 +266,7 @@ export default async function SchedulePage({
             remaining: Math.max(0, planned - logged),
             removableManualEntryId: removableManualEntry?.id ?? null,
             latestLogId: latestLogIdByDay.get(`${day}|${routineId}`) ?? null,
+            isHabit: routineIsHabitMap.get(routineId) ?? false,
           };
         })
         .sort((a, b) => a.routineName.localeCompare(b.routineName));
@@ -349,6 +353,9 @@ export default async function SchedulePage({
             <div style={{ padding: 12, display: "grid", gap: 6 }}>
               {agenda.map((dayItem) => {
                 const isToday = dayItem.day === today;
+                const habitTasks: HabitTaskData[] = dayItem.tasks.filter((t) => t.isHabit);
+                const scheduledTasks = dayItem.tasks.filter((t) => !t.isHabit);
+                const defaultHabitsExpanded = habitTasks.length <= 3;
                 return (
                   <div key={dayItem.day} className="mobileScheduleDayRow" style={isToday ? todayDayRow : dayRow}>
                     <div className="mobileScheduleDayLabel" style={dayLabelBlock}>
@@ -360,7 +367,7 @@ export default async function SchedulePage({
                           {dayItem.isPastOrToday ? "No activity" : "Nothing planned"}
                         </div>
                       )}
-                      {dayItem.tasks.map((task) => (
+                      {scheduledTasks.map((task) => (
                         <div key={task.routineId} className={task.logged > 0 ? "mobileScheduleTaskItem mobileScheduleTaskDone" : "mobileScheduleTaskItem"} style={{ ...(task.logged > 0 ? completedTaskRow : taskRow), border: `2px solid ${domainColor(task.domain ?? "")}` }}>
                           <div style={taskRowTop}>
                             {task.latestLogId ? (
@@ -394,6 +401,16 @@ export default async function SchedulePage({
                           </div>
                         </div>
                       ))}
+                      {habitTasks.length > 0 && (
+                        <HabitsBlock
+                          tasks={habitTasks}
+                          defaultExpanded={defaultHabitsExpanded}
+                          isToday={isToday}
+                          removeAction={removeManualEntry}
+                          timelineStart={timelineStart}
+                          selectedMonth={selectedMonth}
+                        />
+                      )}
                     </div>
                     <form action={quickAddManualEntry} className="mobileScheduleQuickAdd" style={quickAddForm}>
                       <input type="hidden" name="scheduledDate" value={dayItem.day} />
@@ -445,12 +462,16 @@ export default async function SchedulePage({
                   {weekdays.map((weekday) => (
                     <div key={weekday} style={calendarWeekday}>{weekday}</div>
                   ))}
-                  {monthCalendarCells.map((dayItem, index) =>
-                    dayItem ? (
+                  {monthCalendarCells.map((dayItem, index) => {
+                    if (!dayItem) return <div key={`empty-${index}`} style={calendarFiller} />;
+                    const calHabitTasks = dayItem.tasks.filter((t) => t.isHabit);
+                    const calScheduledTasks = dayItem.tasks.filter((t) => !t.isHabit);
+                    const calHabitItems: CalendarHabitItem[] = calHabitTasks.map((t) => ({ routineName: t.routineName, logged: t.logged > 0 }));
+                    return (
                       <div key={dayItem.day} style={calendarDay}>
                         <div style={dayNumberChip(dayItem.day === today)}>{Number(dayItem.day.slice(8, 10))}</div>
                         <div style={{ display: "grid", gap: 3 }}>
-                          {dayItem.tasks.map((task) => (
+                          {calScheduledTasks.map((task) => (
                             <div key={task.routineId} style={{ ...(task.logged > 0 ? completedCalendarTaskRow : calendarTaskRow), border: `2px solid ${domainColor(task.domain ?? "")}` }}>
                               {task.latestLogId ? (
                                 <Link
@@ -464,12 +485,13 @@ export default async function SchedulePage({
                               )}
                             </div>
                           ))}
+                          {calHabitItems.length > 0 && (
+                            <CalendarDayHabits tasks={calHabitItems} />
+                          )}
                         </div>
                       </div>
-                    ) : (
-                      <div key={`empty-${index}`} style={calendarFiller} />
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             </div>

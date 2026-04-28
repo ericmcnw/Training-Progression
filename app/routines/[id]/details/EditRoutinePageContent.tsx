@@ -14,7 +14,8 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
 
   if (!id) return <div style={{ padding: 20 }}>Missing routine id.</div>;
 
-  const routine = await prisma.routine.findUnique({
+  const [routine, frequencyGoal] = await Promise.all([
+    prisma.routine.findUnique({
     where: { id },
     select: {
       id: true,
@@ -58,7 +59,12 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
         },
       },
     },
-  });
+  }),
+    prisma.goal.findFirst({
+      where: { goalType: "FREQUENCY", targetType: "ROUTINE", metricType: "SESSIONS", targetId: id },
+      select: { id: true },
+    }),
+  ]);
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
 
   const derivedExerciseMetadataGroupIds = Array.from(
@@ -132,6 +138,13 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
           metadataGroups={metadataGroups}
           sessionTemplates={sessionTemplates}
         />
+        {frequencyGoal ? (
+          <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(128,128,128,0.2)" }}>
+            <Link href={`/goals/${frequencyGoal.id}`} style={styles.goalLink}>
+              View frequency goal →
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -202,4 +215,12 @@ const styles = {
   },
 
   help: { marginTop: 10, opacity: 0.7, fontSize: 12 },
+
+  goalLink: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "inherit",
+    textDecoration: "none",
+    opacity: 0.72,
+  },
 };

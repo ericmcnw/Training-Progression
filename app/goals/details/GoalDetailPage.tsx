@@ -83,8 +83,6 @@ export default async function GoalDetailPage(props: {
               options={options}
               submitLabel="Update Goal"
               initial={initial}
-              mode="advanced"
-              initialTemplateKey="GROUP_ROUTINE_FREQUENCY"
             />
           </SectionCard>
         </ProgressShell>
@@ -124,7 +122,7 @@ export default async function GoalDetailPage(props: {
         actions={<SectionLinkButton href={`/goals/${goal.id}`} label="Back to Goal" />}
       >
         <SectionCard title="Edit Goal">
-          <GoalForm action={updateGoal} options={options} submitLabel="Update Goal" initial={initial} mode="advanced" />
+          <GoalForm action={updateGoal} options={options} submitLabel="Update Goal" initial={initial} />
         </SectionCard>
       </ProgressShell>
     );

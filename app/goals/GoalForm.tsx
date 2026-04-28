@@ -3,9 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   GOAL_METRIC_LABELS,
-  GOAL_TARGET_TYPE_LABELS,
-  GOAL_TIMEFRAME_LABELS,
-  GOAL_TYPE_LABELS,
   type GoalMetricTypeValue,
   type GoalTargetTypeValue,
   type GoalTimeframeValue,
@@ -13,8 +10,9 @@ import {
   getAllowedMetricTypes,
 } from "@/lib/goals-config";
 import type { GoalFormOptions } from "@/lib/goals";
-import { GOAL_TEMPLATES, getGoalTemplate, type GoalTemplateKey } from "@/lib/goal-templates";
 import { formInputStyle } from "./ui";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 export type GoalFormInitial = {
   id?: string;
@@ -42,60 +40,148 @@ export type GoalFormInitial = {
   };
 };
 
+// ─── Config ─────────────────────────────────────────────────────────────────
+
+const GOAL_TYPE_ORDER: GoalTypeValue[] = ["FREQUENCY", "VOLUME", "PERFORMANCE", "COMPLETION"];
+
+const TYPE_ICON: Record<GoalTypeValue, string> = {
+  FREQUENCY:   "↻",
+  VOLUME:      "∑",
+  PERFORMANCE: "◆",
+  COMPLETION:  "✓",
+};
+
+const TYPE_LABEL: Record<GoalTypeValue, string> = {
+  FREQUENCY:   "Frequency",
+  VOLUME:      "Volume",
+  PERFORMANCE: "Performance",
+  COMPLETION:  "Completion",
+};
+
+const TYPE_TAGLINE: Record<GoalTypeValue, string> = {
+  FREQUENCY:   "How often you show up",
+  VOLUME:      "Total output over time",
+  PERFORMANCE: "A personal best or benchmark",
+  COMPLETION:  "Finish something",
+};
+
+const TYPE_ACCENT: Record<GoalTypeValue, { color: string; bg: string; border: string }> = {
+  FREQUENCY:   { color: "rgb(129,140,248)", bg: "rgba(129,140,248,0.13)", border: "rgba(129,140,248,0.5)" },
+  VOLUME:      { color: "rgb(34,211,238)",  bg: "rgba(34,211,238,0.12)",  border: "rgba(34,211,238,0.5)"  },
+  PERFORMANCE: { color: "rgb(251,191,36)",  bg: "rgba(251,191,36,0.12)",  border: "rgba(251,191,36,0.5)"  },
+  COMPLETION:  { color: "rgb(74,222,128)",  bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.5)"  },
+};
+
+type ScopeOption = { value: string; label: string; hint: string };
+
+const SCOPES: Record<GoalTypeValue, ScopeOption[]> = {
+  FREQUENCY: [
+    { value: "routine",     label: "Routine",      hint: "Track one routine — e.g. Push Day, Climbing" },
+    { value: "sessionType", label: "Session type", hint: "Count logs by sport or activity type" },
+    { value: "group",       label: "Group",        hint: "Mix of routines counted together" },
+  ],
+  VOLUME: [
+    { value: "routine",  label: "Routine",  hint: "Total output from a single routine" },
+    { value: "exercise", label: "Exercise", hint: "Reps, sets, or volume on a lift" },
+    { value: "cardio",   label: "Cardio",   hint: "Distance, elevation, or duration" },
+    { value: "group",    label: "Group",    hint: "Combined workload across a training group" },
+  ],
+  PERFORMANCE: [
+    { value: "exercise", label: "Lift / movement",  hint: "Best weight or best-set duration for a lift" },
+    { value: "cardio",   label: "Cardio benchmark", hint: "Pace, distance, or elevation milestone" },
+    { value: "grade",    label: "Grade / metric",   hint: "Climbing grade, session score, or sport metric" },
+  ],
+  COMPLETION: [
+    { value: "routine", label: "Routine", hint: "Complete a routine N times" },
+    { value: "cardio",  label: "Cardio",  hint: "Log cardio sessions" },
+    { value: "group",   label: "Group",   hint: "Complete any session in a group" },
+  ],
+};
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function scopeToTargetType(goalType: GoalTypeValue, scope: string): GoalTargetTypeValue {
+  if (goalType === "FREQUENCY") {
+    if (scope === "sessionType") return "SESSION_TEMPLATE";
+    return "ROUTINE";
+  }
+  if (goalType === "VOLUME") {
+    if (scope === "exercise") return "EXERCISE";
+    if (scope === "cardio")   return "CARDIO";
+    if (scope === "group")    return "GROUP";
+    return "ROUTINE";
+  }
+  if (goalType === "PERFORMANCE") {
+    if (scope === "exercise") return "EXERCISE";
+    if (scope === "cardio")   return "CARDIO";
+    return "ROUTINE"; // grade — overridden if template selected
+  }
+  // COMPLETION
+  if (scope === "cardio") return "CARDIO";
+  if (scope === "group")  return "GROUP";
+  return "ROUTINE";
+}
+
+function deriveInitialScope(initial: GoalFormInitial): string {
+  const isGroupFreq = !!initial.groupFrequency || !!initial.groupFrequencyGoalId;
+  const { goalType, targetType } = initial;
+  if (goalType === "FREQUENCY") {
+    if (isGroupFreq) return "group";
+    if (targetType === "SESSION_TEMPLATE") return "sessionType";
+    return "routine";
+  }
+  if (goalType === "VOLUME") {
+    if (targetType === "EXERCISE") return "exercise";
+    if (targetType === "CARDIO")   return "cardio";
+    if (targetType === "GROUP")    return "group";
+    return "routine";
+  }
+  if (goalType === "PERFORMANCE") {
+    if (targetType === "EXERCISE") return "exercise";
+    if (targetType === "CARDIO")   return "cardio";
+    return "grade";
+  }
+  if (targetType === "CARDIO") return "cardio";
+  if (targetType === "GROUP")  return "group";
+  return "routine";
+}
+
+function defaultScopeForType(type: GoalTypeValue): string {
+  return SCOPES[type][0].value;
+}
+
+function defaultMetricForScope(goalType: GoalTypeValue, scope: string): GoalMetricTypeValue {
+  if (goalType === "FREQUENCY") return "SESSIONS";
+  if (goalType === "COMPLETION") return "COMPLETED";
+  if (goalType === "PERFORMANCE") {
+    if (scope === "exercise") return "MAX_WEIGHT";
+    if (scope === "cardio")   return "PACE";
+    return "SESSION_METRIC";
+  }
+  if (scope === "exercise") return "VOLUME";
+  return "DISTANCE";
+}
+
 function splitSeconds(value: number) {
   const total = Math.max(0, Math.round(value));
-  return {
-    minutes: String(Math.floor(total / 60)),
-    seconds: String(total % 60),
+  return { minutes: String(Math.floor(total / 60)), seconds: String(total % 60) };
+}
+
+function numericMeta(m: GoalMetricTypeValue): { label: string; step: string; placeholder: string } {
+  const map: Partial<Record<GoalMetricTypeValue, { label: string; step: string; placeholder: string }>> = {
+    DISTANCE:       { label: "Target distance (miles)",   step: "0.1",  placeholder: "20"   },
+    ELEVATION_GAIN: { label: "Target elevation (ft)",     step: "1",    placeholder: "2500" },
+    MAX_WEIGHT:     { label: "Target weight (lb)",        step: "2.5",  placeholder: "225"  },
+    VOLUME:         { label: "Target volume (lb)",        step: "100",  placeholder: "5000" },
+    REPS:           { label: "Target reps",               step: "1",    placeholder: "100"  },
+    SETS:           { label: "Target sets",               step: "1",    placeholder: "20"   },
+    SESSIONS:       { label: "Sessions per period",       step: "1",    placeholder: "3"    },
+    COMPLETED:      { label: "Target completions",        step: "1",    placeholder: "1"    },
   };
+  return map[m] ?? { label: "Target value", step: "1", placeholder: "1" };
 }
 
-function metricInputMeta(metricType: GoalMetricTypeValue) {
-  if (metricType === "DISTANCE") return { label: "Target miles", step: "0.1" };
-  if (metricType === "ELEVATION_GAIN") return { label: "Target elevation gain (ft)", step: "1" };
-  if (metricType === "MAX_WEIGHT") return { label: "Target weight (lb)", step: "0.5" };
-  if (metricType === "VOLUME") return { label: "Target volume (lb)", step: "1" };
-  if (metricType === "REPS") return { label: "Target reps", step: "1" };
-  if (metricType === "SETS") return { label: "Target sets", step: "1" };
-  if (metricType === "SESSIONS") return { label: "Target sessions", step: "1" };
-  if (metricType === "COMPLETED") return { label: "Target completions", step: "1" };
-  return { label: "Target value", step: "1" };
-}
-
-function templateForCurrentConfig(params: {
-  goalType: GoalTypeValue;
-  targetType: GoalTargetTypeValue;
-  metricType: GoalMetricTypeValue;
-  timeframe: GoalTimeframeValue;
-}) {
-  return (
-    GOAL_TEMPLATES.find(
-      (template) =>
-        template.goalType === params.goalType &&
-        template.targetType === params.targetType &&
-        template.metricType === params.metricType &&
-        template.timeframe === params.timeframe
-    )?.key ?? GOAL_TEMPLATES[0].key
-  );
-}
-
-function targetFieldLabel(targetType: GoalTargetTypeValue) {
-  if (targetType === "ROUTINE") return "Routine / session";
-  if (targetType === "SESSION_TEMPLATE") return "Session type";
-  if (targetType === "EXERCISE") return "Exercise";
-  if (targetType === "CARDIO") return "Cardio target";
-  return "Group";
-}
-
-function resolveSessionMetricOptions(
-  options: GoalFormOptions,
-  targetType: GoalTargetTypeValue,
-  targetId: string
-) {
-  if (targetType === "ROUTINE") return options.sessionMetricsByRoutineId[targetId] ?? [];
-  if (targetType === "SESSION_TEMPLATE") return options.sessionMetricsByTemplateId[targetId] ?? [];
-  return [];
-}
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export default function GoalForm({
   action,
@@ -103,164 +189,257 @@ export default function GoalForm({
   options,
   submitLabel,
   initial,
-  mode = "advanced",
-  initialTemplateKey,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   groupFrequencyAction?: (formData: FormData) => void | Promise<void>;
   options: GoalFormOptions;
   submitLabel: string;
   initial: GoalFormInitial;
-  mode?: "guided" | "advanced";
-  initialTemplateKey?: GoalTemplateKey;
 }) {
-  const [goalType, setGoalType] = useState<GoalTypeValue>(initial.goalType);
-  const [targetType, setTargetType] = useState<GoalTargetTypeValue>(initial.targetType);
+  const [goalType, setGoalType]     = useState<GoalTypeValue>(initial.goalType);
+  const [scope, setScope]           = useState<string>(() => deriveInitialScope(initial));
   const [metricType, setMetricType] = useState<GoalMetricTypeValue>(initial.metricType);
-  const [timeframe, setTimeframe] = useState<GoalTimeframeValue>(initial.timeframe);
-  const [targetId, setTargetId] = useState(initial.targetId);
-  const [rawTargetValue, setRawTargetValue] = useState(String(initial.targetValue || ""));
-  const [durationParts, setDurationParts] = useState(splitSeconds(initial.targetValue || 0));
+  const [timeframe, setTimeframe]   = useState<GoalTimeframeValue>(initial.timeframe);
+  const [targetId, setTargetId]     = useState(initial.targetId);
+
+  const [rawTargetValue, setRawTargetValue]     = useState(String(initial.targetValue || ""));
+  const [durationParts, setDurationParts]       = useState(splitSeconds(initial.targetValue || 0));
   const [benchmarkDistanceMi, setBenchmarkDistanceMi] = useState(initial.benchmarkDistanceMi);
-  const [benchmarkLabel, setBenchmarkLabel] = useState(initial.benchmarkLabel);
+  const [benchmarkLabel, setBenchmarkLabel]     = useState(initial.benchmarkLabel);
   const [sessionMetricDefinitionId, setSessionMetricDefinitionId] = useState(initial.sessionMetricDefinitionId);
   const [sessionMetricTarget, setSessionMetricTarget] = useState(initial.sessionMetricTarget);
-  const [templateKey, setTemplateKey] = useState<GoalTemplateKey>(
-    initialTemplateKey ??
-      templateForCurrentConfig({
-        goalType: initial.goalType,
-        targetType: initial.targetType,
-        metricType: initial.metricType,
-        timeframe: initial.timeframe,
-      })
-  );
-  const [gfTargetCount, setGfTargetCount] = useState(String(initial.groupFrequency?.targetCount ?? 3));
+
+  const [gfTargetCount, setGfTargetCount]   = useState(String(initial.groupFrequency?.targetCount ?? 3));
   const [gfTargetInterval, setGfTargetInterval] = useState(String(initial.groupFrequency?.targetInterval ?? 1));
-  const [gfTargetUnit, setGfTargetUnit] = useState(initial.groupFrequency?.targetUnit ?? "WEEK");
+  const [gfTargetUnit, setGfTargetUnit]     = useState<"DAY" | "WEEK" | "MONTH">(initial.groupFrequency?.targetUnit ?? "WEEK");
 
-  const isGroupFrequency = templateKey === "GROUP_ROUTINE_FREQUENCY";
+  // Whether the grade-scope target is a SESSION_TEMPLATE (vs ROUTINE)
+  const [gradeTargetIsTemplate, setGradeTargetIsTemplate] = useState(
+    initial.goalType === "PERFORMANCE" && initial.targetType === "SESSION_TEMPLATE"
+  );
 
-  const allowedMetrics = useMemo(() => getAllowedMetricTypes(goalType, targetType), [goalType, targetType]);
+  const isEditMode       = !!initial.id;
+  const isGroupFrequency = goalType === "FREQUENCY" && scope === "group";
+  const isGradeScope     = goalType === "PERFORMANCE" && scope === "grade";
 
-  const activeTargetOptions = useMemo(() => {
-    if (targetType === "ROUTINE") return options.routines;
-    if (targetType === "EXERCISE") return options.exercises;
-    if (targetType === "CARDIO") return options.cardioTargets;
-    if (targetType === "SESSION_TEMPLATE") return options.sessionTemplates;
+  // Combined targets for grade scope (routines + session templates with session metrics)
+  const gradeTargets = useMemo(() => [
+    ...options.routines
+      .filter(r => (options.sessionMetricsByRoutineId[r.id] ?? []).length > 0)
+      .map(r => ({ id: r.id, label: r.label, subtitle: r.subtitle, isTemplate: false as const })),
+    ...options.sessionTemplates
+      .filter(t => (options.sessionMetricsByTemplateId[t.id] ?? []).length > 0)
+      .map(t => ({ id: t.id, label: t.label, subtitle: undefined as string | undefined, isTemplate: true as const })),
+  ], [options]);
+
+  // Hide grade scope pill if no grade targets exist
+  const visibleScopes = useMemo(() => {
+    if (goalType !== "PERFORMANCE") return SCOPES[goalType];
+    return SCOPES[goalType].filter(s => s.value !== "grade" || gradeTargets.length > 0);
+  }, [goalType, gradeTargets.length]);
+
+  // Derive effective target type
+  const effectiveTargetType: GoalTargetTypeValue = isGradeScope
+    ? (gradeTargetIsTemplate ? "SESSION_TEMPLATE" : "ROUTINE")
+    : scopeToTargetType(goalType, scope);
+
+  // Standard target options
+  const targetOptions = useMemo(() => {
+    if (isGradeScope)                                    return [] as typeof options.routines;
+    if (effectiveTargetType === "ROUTINE")               return options.routines;
+    if (effectiveTargetType === "EXERCISE")              return options.exercises;
+    if (effectiveTargetType === "CARDIO")                return options.cardioTargets;
+    if (effectiveTargetType === "SESSION_TEMPLATE")      return options.sessionTemplates;
     return options.groups;
-  }, [options, targetType]);
+  }, [isGradeScope, effectiveTargetType, options]);
 
-  const effectiveTargetId = activeTargetOptions.some((option) => option.id === targetId)
-    ? targetId
-    : (activeTargetOptions[0]?.id ?? "");
+  // Effective targetId (falls back to first in pool)
+  const effectiveTargetId = useMemo(() => {
+    const pool = isGradeScope ? gradeTargets : targetOptions;
+    return pool.some(t => t.id === targetId) ? targetId : (pool[0]?.id ?? "");
+  }, [isGradeScope, gradeTargets, targetOptions, targetId]);
 
+  // Session metric options for effective target
   const sessionMetricOptions = useMemo(() => {
-    if (targetType === "ROUTINE") return options.sessionMetricsByRoutineId[effectiveTargetId] ?? [];
-    if (targetType === "SESSION_TEMPLATE") return options.sessionMetricsByTemplateId[effectiveTargetId] ?? [];
-    return [];
-  }, [effectiveTargetId, options.sessionMetricsByRoutineId, options.sessionMetricsByTemplateId, targetType]);
+    if (effectiveTargetType === "ROUTINE")          return options.sessionMetricsByRoutineId[effectiveTargetId] ?? [];
+    if (effectiveTargetType === "SESSION_TEMPLATE") return options.sessionMetricsByTemplateId[effectiveTargetId] ?? [];
+    return [] as GoalFormOptions["sessionMetricsByRoutineId"][string];
+  }, [effectiveTargetId, effectiveTargetType, options]);
 
-  const filteredAllowedMetrics = useMemo(() => {
-    if (sessionMetricOptions.length > 0) return allowedMetrics;
-    return allowedMetrics.filter((value) => value !== "SESSION_METRIC");
-  }, [allowedMetrics, sessionMetricOptions.length]);
+  // Filtered metric list (hide SESSION_METRIC when no metrics available)
+  const allowedMetrics  = useMemo(() => getAllowedMetricTypes(goalType, effectiveTargetType), [goalType, effectiveTargetType]);
+  const filteredMetrics = useMemo(
+    () => sessionMetricOptions.length > 0 ? allowedMetrics : allowedMetrics.filter(m => m !== "SESSION_METRIC"),
+    [allowedMetrics, sessionMetricOptions.length]
+  );
+  const effectiveMetricType: GoalMetricTypeValue = filteredMetrics.includes(metricType)
+    ? metricType : (filteredMetrics[0] ?? "SESSIONS");
 
-  const effectiveMetricType = filteredAllowedMetrics.includes(metricType)
-    ? metricType
-    : (filteredAllowedMetrics[0] ?? "SESSIONS");
+  // Resolve session metric definition
+  const validSessionMetricId = sessionMetricOptions.some(o => o.id === sessionMetricDefinitionId)
+    ? sessionMetricDefinitionId
+    : (sessionMetricOptions.find(o => o.metricKey === "highest_send_grade" && o.gradeSystem === "BOULDER_V")?.id
+       ?? sessionMetricOptions[0]?.id ?? "");
+  const selectedSessionMetric = sessionMetricOptions.find(o => o.id === validSessionMetricId) ?? null;
 
+  // Canonical target value (converts mm:ss to seconds when needed)
   const canonicalTargetValue = useMemo(() => {
     if (effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION" || effectiveMetricType === "PACE") {
-      const minutes = Number(durationParts.minutes || "0");
-      const seconds = Number(durationParts.seconds || "0");
-      const total = minutes * 60 + seconds;
+      const mins = Number(durationParts.minutes || "0");
+      const secs = Number(durationParts.seconds || "0");
+      const total = mins * 60 + secs;
       return Number.isFinite(total) ? String(total) : "";
     }
     return rawTargetValue;
   }, [durationParts, effectiveMetricType, rawTargetValue]);
 
-  const metricMeta = metricInputMeta(effectiveMetricType);
-  const selectedTarget = activeTargetOptions.find((option) => option.id === effectiveTargetId);
-  const currentSessionMetricIsValid = sessionMetricOptions.some((option) => option.id === sessionMetricDefinitionId);
-  const preferredBoulderingMetricId =
-    (targetType === "ROUTINE" || targetType === "SESSION_TEMPLATE") && selectedTarget?.sessionTemplateKey?.includes("bouldering")
-      ? (sessionMetricOptions.find(
-          (option) => option.metricKey === "highest_send_grade" && option.gradeSystem === "BOULDER_V"
-        )?.id ?? "")
-      : "";
-  const effectiveSessionMetricDefinitionId = currentSessionMetricIsValid
-    ? sessionMetricDefinitionId
-    : (preferredBoulderingMetricId || sessionMetricOptions[0]?.id || "");
-  const selectedSessionMetric = sessionMetricOptions.find((option) => option.id === effectiveSessionMetricDefinitionId) ?? null;
-  const shouldAutoShiftGradeGoals = !initial.id;
-
-  function maybePromoteGradeGoal(metricOption?: GoalFormOptions["sessionTemplates"][number] | GoalFormOptions["routines"][number] | GoalFormOptions["sessionMetricsByRoutineId"][string][number] | null) {
-    if (!shouldAutoShiftGradeGoals) return;
-    if (!metricOption || !("gradeSystem" in metricOption) || !metricOption.gradeSystem) return;
-    if (goalType === "VOLUME" && timeframe === "WEEK") {
-      setGoalType("PERFORMANCE");
-      setTimeframe("ONE_TIME");
-    }
+  // Auto-promote grade goals to PERFORMANCE / ONE_TIME on new creates
+  function maybePromoteGradeGoal(gradeSystem?: string | null) {
+    if (isEditMode || !gradeSystem) return;
+    setGoalType("PERFORMANCE");
+    setTimeframe("ONE_TIME");
+    setScope("grade");
   }
 
-  function applyTemplate(nextTemplateKey: GoalTemplateKey) {
-    const template = getGoalTemplate(nextTemplateKey);
-    setTemplateKey(nextTemplateKey);
-    setGoalType(template.goalType);
-    setTargetType(template.targetType);
-    setMetricType(template.metricType);
-    setTimeframe(template.timeframe);
-    setRawTargetValue(String(template.targetValue));
-    setDurationParts(splitSeconds(template.targetValue));
-    setBenchmarkDistanceMi(template.benchmarkDistanceMi ? String(template.benchmarkDistanceMi) : "");
-    setBenchmarkLabel(template.benchmarkLabel ?? "");
+  function handleGoalTypeChange(next: GoalTypeValue) {
+    if (next === goalType) return;
+    const nextScope = defaultScopeForType(next);
+    setGoalType(next);
+    setScope(nextScope);
+    setMetricType(defaultMetricForScope(next, nextScope));
+    setTimeframe(next === "PERFORMANCE" ? "ONE_TIME" : "WEEK");
+    setTargetId("");
     setSessionMetricDefinitionId("");
-    setSessionMetricTarget("");
   }
+
+  function handleScopeChange(next: string) {
+    if (next === scope) return;
+    setScope(next);
+    setMetricType(defaultMetricForScope(goalType, next));
+    setTimeframe(goalType === "PERFORMANCE" ? "ONE_TIME" : "WEEK");
+    setTargetId("");
+    setSessionMetricDefinitionId("");
+  }
+
+  // Derived display helpers
+  const accent         = TYPE_ACCENT[goalType];
+  const isDuration     = effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION";
+  const isPace         = effectiveMetricType === "PACE";
+  const isSessionMetric = effectiveMetricType === "SESSION_METRIC" && !isGradeScope;
+
+  const perfMetricPills: Array<[GoalMetricTypeValue, string]> =
+    scope === "exercise" ? [["MAX_WEIGHT", "Top weight"], ["MAX_DURATION", "Best time"]] :
+    scope === "cardio"   ? [["PACE", "Pace"], ["DISTANCE", "Distance"], ["ELEVATION_GAIN", "Elevation"]] :
+    [];
+
+  const timeframeOpts: Array<[GoalTimeframeValue, string]> =
+    goalType === "PERFORMANCE" ? [["ONE_TIME", "One-time"]] :
+    goalType === "COMPLETION"  ? [["ONE_TIME", "One-time"], ["WEEK", "Weekly"], ["MONTH", "Monthly"], ["DAY", "Daily"]] :
+    [["DAY", "Daily"], ["WEEK", "Weekly"], ["MONTH", "Monthly"]];
+
+  const numMeta = numericMeta(effectiveMetricType);
+
+  const targetTypeLabel =
+    effectiveTargetType === "EXERCISE"        ? "Exercise" :
+    effectiveTargetType === "CARDIO"          ? "Cardio target" :
+    effectiveTargetType === "SESSION_TEMPLATE"? "Session type" :
+    effectiveTargetType === "GROUP"           ? "Group" : "Routine";
+
+  const formAction = isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action;
 
   return (
-    <form action={isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action} style={{ display: "grid", gap: 16 }}>
-      {isGroupFrequency && initial.groupFrequencyGoalId ? <input type="hidden" name="id" value={initial.groupFrequencyGoalId} /> : null}
-      {!isGroupFrequency && initial.id ? <input type="hidden" name="goalId" value={initial.id} /> : null}
-      {!isGroupFrequency && <input type="hidden" name="targetValue" value={canonicalTargetValue} />}
-      {!isGroupFrequency && <input type="hidden" name="sessionMetricDefinitionId" value={effectiveSessionMetricDefinitionId} />}
+    <form action={formAction} style={{ display: "grid", gap: 22 }}>
+      {/* ── Hidden submission fields ─────────────────────────────── */}
+      {isGroupFrequency && initial.groupFrequencyGoalId
+        ? <input type="hidden" name="id" value={initial.groupFrequencyGoalId} />
+        : null}
+      {!isGroupFrequency && initial.id
+        ? <input type="hidden" name="goalId" value={initial.id} />
+        : null}
+      {!isGroupFrequency && <>
+        <input type="hidden" name="goalType"   value={goalType} />
+        <input type="hidden" name="targetType" value={effectiveTargetType} />
+        <input type="hidden" name="metricType" value={effectiveMetricType} />
+        <input type="hidden" name="timeframe"  value={timeframe} />
+        <input type="hidden" name="targetValue" value={canonicalTargetValue} />
+        <input type="hidden" name="sessionMetricDefinitionId" value={validSessionMetricId} />
+      </>}
 
-      {mode === "guided" ? (
-        <section style={sectionStyle}>
-          <div style={sectionTitleStyle}>Goal Shape</div>
-          <div style={templateGridStyle}>
-            {GOAL_TEMPLATES.map((template) => (
+      {/* ── Step 1: Goal type ────────────────────────────────────── */}
+      <div>
+        <div style={stepLabelStyle}>Goal type</div>
+        <div style={typeGridStyle}>
+          {GOAL_TYPE_ORDER.map(type => {
+            const acc = TYPE_ACCENT[type];
+            const isActive = goalType === type;
+            return (
               <button
-                key={template.key}
+                key={type}
                 type="button"
-                onClick={() => applyTemplate(template.key)}
+                onClick={() => handleGoalTypeChange(type)}
                 style={{
-                  ...templateCardStyle,
-                  ...(templateKey === template.key ? templateCardActiveStyle : null),
+                  ...typeCardStyle,
+                  borderColor: isActive ? acc.border : "rgba(128,128,128,0.22)",
+                  background:  isActive ? acc.bg     : "rgba(128,128,128,0.04)",
                 }}
               >
-                <div style={{ fontWeight: 900 }}>{template.label}</div>
-                <div style={hintStyle}>{template.description}</div>
+                <div style={{ fontSize: 22, lineHeight: 1, color: isActive ? acc.color : "inherit", opacity: isActive ? 1 : 0.45 }}>
+                  {TYPE_ICON[type]}
+                </div>
+                <div style={{ fontWeight: 900, fontSize: 13, marginTop: 7 }}>{TYPE_LABEL[type]}</div>
+                <div style={typeTaglineStyle}>{TYPE_TAGLINE[type]}</div>
               </button>
-            ))}
-          </div>
-          <div style={hintStyle}>
-            Pick the closest goal shape. It sets the default goal type, target type, metric, and timeframe for you.
-          </div>
-        </section>
-      ) : null}
+            );
+          })}
+        </div>
+      </div>
 
+      {/* ── Step 2: Scope ────────────────────────────────────────── */}
+      <div>
+        <div style={stepLabelStyle}>Scope</div>
+        <div style={pillRowStyle}>
+          {visibleScopes.map(s => {
+            const isActive = scope === s.value;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => handleScopeChange(s.value)}
+                style={{
+                  ...scopePillStyle,
+                  borderColor: isActive ? accent.border : "rgba(128,128,128,0.28)",
+                  background:  isActive ? accent.bg     : "transparent",
+                  fontWeight:  isActive ? 900 : 700,
+                  color:       isActive ? accent.color  : "inherit",
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ ...hintStyle, marginTop: 7 }}>
+          {visibleScopes.find(s => s.value === scope)?.hint}
+        </div>
+      </div>
+
+      {/* ── Step 3a: Group frequency (special path) ──────────────── */}
       {isGroupFrequency ? (
         <>
-          <section style={sectionStyle}>
-            <div style={sectionTitleStyle}>Goal Details</div>
-            <div style={gridStyle}>
+          <div style={detailCardStyle}>
+            <div style={fieldGridStyle}>
               <label style={fieldStyle}>
-                <span>Goal name</span>
-                <input name="name" defaultValue={initial.name} style={formInputStyle} placeholder="Push Days, Climbing Sessions..." required />
+                <span style={fieldLabelStyle}>Goal name</span>
+                <input
+                  name="name"
+                  defaultValue={initial.name}
+                  style={formInputStyle}
+                  placeholder="Push Days, Climbing Sessions..."
+                  required
+                />
               </label>
               <div style={fieldStyle}>
-                <span>Target frequency</span>
+                <span style={fieldLabelStyle}>Target frequency</span>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <input
                     name="targetCount"
@@ -268,8 +447,8 @@ export default function GoalForm({
                     min="1"
                     step="1"
                     value={gfTargetCount}
-                    onChange={(e) => setGfTargetCount(e.target.value)}
-                    style={{ ...formInputStyle, width: 72 }}
+                    onChange={e => setGfTargetCount(e.target.value)}
+                    style={{ ...formInputStyle, width: 76 }}
                     inputMode="numeric"
                   />
                   <span style={hintStyle}>times per</span>
@@ -279,15 +458,15 @@ export default function GoalForm({
                     min="1"
                     step="1"
                     value={gfTargetInterval}
-                    onChange={(e) => setGfTargetInterval(e.target.value)}
-                    style={{ ...formInputStyle, width: 72 }}
+                    onChange={e => setGfTargetInterval(e.target.value)}
+                    style={{ ...formInputStyle, width: 76 }}
                     inputMode="numeric"
                   />
                   <select
                     name="targetUnit"
                     value={gfTargetUnit}
-                    onChange={(e) => setGfTargetUnit(e.target.value as "DAY" | "WEEK" | "MONTH")}
-                    style={{ ...formInputStyle, width: 110 }}
+                    onChange={e => setGfTargetUnit(e.target.value as "DAY" | "WEEK" | "MONTH")}
+                    style={{ ...formInputStyle, width: 112 }}
                   >
                     <option value="DAY">day</option>
                     <option value="WEEK">week</option>
@@ -296,366 +475,498 @@ export default function GoalForm({
                 </div>
               </div>
             </div>
-          </section>
-          <section style={sectionStyle}>
-            <div style={sectionTitleStyle}>Included Routines</div>
-            <div style={hintStyle}>Sessions from any checked routine count toward this goal.</div>
+          </div>
+
+          <div style={detailCardStyle}>
+            <div style={stepLabelStyle}>Included routines</div>
+            <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked routine count toward this goal.</div>
             <div style={routineChecklistStyle}>
-              {options.routines.map((r) => (
+              {options.routines.map(r => (
                 <label key={r.id} style={checkboxRowStyle}>
-                  <input type="checkbox" name="routineIds" value={r.id} defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false} />
+                  <input
+                    type="checkbox"
+                    name="routineIds"
+                    value={r.id}
+                    defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
+                  />
                   <span style={{ fontSize: 13 }}>
                     {r.label}
-                    {r.subtitle ? <span style={{ ...hintStyle, marginLeft: 6 }}>{r.subtitle}</span> : null}
+                    {r.subtitle ? <span style={hintStyle}> — {r.subtitle}</span> : null}
                   </span>
                 </label>
               ))}
             </div>
-          </section>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" style={submitStyle}>{submitLabel}</button>
           </div>
         </>
       ) : (
-      <>
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>{mode === "guided" ? "Goal Details" : "Basics"}</div>
-        <div style={gridStyle}>
-          <label style={fieldStyle}>
-            <span>Goal name</span>
-            <input
-              name="name"
-              defaultValue={initial.name}
-              style={formInputStyle}
-              placeholder={mode === "guided" ? "Weekly running target" : "Bench 225 by summer"}
-            />
-          </label>
-          <label style={fieldStyle}>
-            <span>{targetFieldLabel(targetType)}</span>
-            <select
-              name="targetId"
-              value={effectiveTargetId}
-              onChange={(event) => {
-                const nextTargetId = event.target.value;
-                setTargetId(nextTargetId);
-                if (effectiveMetricType !== "SESSION_METRIC") return;
-                const nextMetricOptions = resolveSessionMetricOptions(options, targetType, nextTargetId);
-                const nextTarget = activeTargetOptions.find((option) => option.id === nextTargetId);
-                const nextPreferredBoulderingMetricId =
-                  (targetType === "ROUTINE" || targetType === "SESSION_TEMPLATE") && nextTarget?.sessionTemplateKey?.includes("bouldering")
-                    ? (nextMetricOptions.find(
-                        (option) => option.metricKey === "highest_send_grade" && option.gradeSystem === "BOULDER_V"
-                      )?.id ?? "")
-                    : "";
-                const nextMetricOption =
-                  nextMetricOptions.find((option) => option.id === sessionMetricDefinitionId) ??
-                  nextMetricOptions.find((option) => option.id === nextPreferredBoulderingMetricId) ??
-                  nextMetricOptions[0] ??
-                  null;
-                maybePromoteGradeGoal(nextMetricOption);
-              }}
-              style={formInputStyle}
-            >
-              {activeTargetOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {selectedTarget?.subtitle ? <span style={hintStyle}>{selectedTarget.subtitle}</span> : null}
-          </label>
-          {effectiveMetricType === "SESSION_METRIC" ? (
-            <>
-              <label style={fieldStyle}>
-                <span>Session metric</span>
-                <select
-                  value={effectiveSessionMetricDefinitionId}
-                  onChange={(event) => {
-                    const nextMetricId = event.target.value;
-                    setSessionMetricDefinitionId(nextMetricId);
-                    maybePromoteGradeGoal(sessionMetricOptions.find((option) => option.id === nextMetricId) ?? null);
-                  }}
-                  style={formInputStyle}
-                >
-                  {sessionMetricOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={fieldStyle}>
-                <span>Metric target</span>
-                <input
-                  name="sessionMetricTarget"
-                  value={sessionMetricTarget}
-                  onChange={(event) => setSessionMetricTarget(event.target.value)}
-                  style={formInputStyle}
-                  placeholder={
-                    selectedSessionMetric?.gradeSystem === "BOULDER_V"
-                      ? "V4, V5, V6"
-                      : selectedSessionMetric?.gradeSystem === "YOSEMITE"
-                      ? "5.10d, 5.11a"
-                      : "5, 1200"
-                  }
-                />
-              </label>
-            </>
-          ) : null}
-          {effectiveMetricType === "DURATION" || effectiveMetricType === "MAX_DURATION" || effectiveMetricType === "PACE" ? (
-            <>
-              <label style={fieldStyle}>
-                <span>{effectiveMetricType === "PACE" ? "Target time minutes" : "Target minutes"}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={durationParts.minutes}
-                  onChange={(event) => setDurationParts((current) => ({ ...current, minutes: event.target.value }))}
-                  style={formInputStyle}
-                />
-              </label>
-              <label style={fieldStyle}>
-                <span>{effectiveMetricType === "PACE" ? "Target time seconds" : "Target seconds"}</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  step="1"
-                  value={durationParts.seconds}
-                  onChange={(event) => setDurationParts((current) => ({ ...current, seconds: event.target.value }))}
-                  style={formInputStyle}
-                />
-              </label>
-            </>
-          ) : effectiveMetricType !== "SESSION_METRIC" ? (
+        /* ── Step 3b: Standard detail fields ───────────────────── */
+        <div style={detailCardStyle}>
+          <div style={fieldGridStyle}>
+            {/* Goal name — always shown */}
             <label style={fieldStyle}>
-              <span>{metricMeta.label}</span>
+              <span style={fieldLabelStyle}>Goal name</span>
               <input
-                type="number"
-                min="0"
-                step={metricMeta.step}
-                value={rawTargetValue}
-                onChange={(event) => setRawTargetValue(event.target.value)}
+                name="name"
+                defaultValue={initial.name}
                 style={formInputStyle}
+                placeholder="Name this goal..."
+                required
               />
             </label>
-          ) : null}
-          {effectiveMetricType === "PACE" ? (
-            <>
-              <label style={fieldStyle}>
-                <span>Benchmark distance (mi)</span>
-                <input
-                  name="benchmarkDistanceMi"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={benchmarkDistanceMi}
-                  onChange={(event) => setBenchmarkDistanceMi(event.target.value)}
-                  style={formInputStyle}
-                />
-              </label>
-              <label style={fieldStyle}>
-                <span>Benchmark label</span>
-                <input
-                  name="benchmarkLabel"
-                  value={benchmarkLabel}
-                  onChange={(event) => setBenchmarkLabel(event.target.value)}
-                  style={formInputStyle}
-                  placeholder="5K"
-                />
-              </label>
-            </>
-          ) : null}
-          <label style={fieldStyle}>
-            <span>Start date</span>
-            <input name="startDate" type="date" defaultValue={initial.startDate} style={formInputStyle} />
-          </label>
-        </div>
-      </section>
 
-      <details style={advancedSectionStyle} open={mode === "advanced"}>
-        <summary data-collapsible-summary style={advancedSummaryStyle}>
-          Advanced goal settings
-        </summary>
-        <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
-          <section style={sectionStyle}>
-            <div style={sectionTitleStyle}>Definition</div>
-            <div style={gridStyle}>
+            {/* Grade scope: combined routine + session template picker */}
+            {isGradeScope ? (
+              <>
+                {gradeTargets.length > 0 ? (
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>Routine or session type</span>
+                    <select
+                      name="targetId"
+                      value={effectiveTargetId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setTargetId(id);
+                        const item = gradeTargets.find(t => t.id === id);
+                        if (item) {
+                          setGradeTargetIsTemplate(item.isTemplate);
+                          const metricOpts = item.isTemplate
+                            ? (options.sessionMetricsByTemplateId[id] ?? [])
+                            : (options.sessionMetricsByRoutineId[id] ?? []);
+                          const preferred = metricOpts.find(o => o.metricKey === "highest_send_grade" && o.gradeSystem === "BOULDER_V");
+                          maybePromoteGradeGoal(preferred?.gradeSystem ?? null);
+                        }
+                      }}
+                      style={formInputStyle}
+                    >
+                      {gradeTargets.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}{t.isTemplate ? " (session type)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <div style={emptyStateStyle}>No session metric targets found. Add metrics to a routine or session type first.</div>
+                )}
+
+                {sessionMetricOptions.length > 0 ? (
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>Session metric</span>
+                    <select
+                      value={validSessionMetricId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setSessionMetricDefinitionId(id);
+                        const opt = sessionMetricOptions.find(o => o.id === id);
+                        maybePromoteGradeGoal(opt?.gradeSystem ?? null);
+                      }}
+                      style={formInputStyle}
+                    >
+                      {sessionMetricOptions.map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                <label style={fieldStyle}>
+                  <span style={fieldLabelStyle}>
+                    {selectedSessionMetric?.gradeSystem ? "Target grade" : "Metric target"}
+                  </span>
+                  <input
+                    name="sessionMetricTarget"
+                    value={sessionMetricTarget}
+                    onChange={e => setSessionMetricTarget(e.target.value)}
+                    style={formInputStyle}
+                    placeholder={
+                      selectedSessionMetric?.gradeSystem === "BOULDER_V" ? "e.g. V4, V5, V6" :
+                      selectedSessionMetric?.gradeSystem === "YOSEMITE"  ? "e.g. 5.10d, 5.11a" :
+                      "Target value"
+                    }
+                  />
+                </label>
+
+                {selectedSessionMetric?.gradeSystem ? (
+                  <div style={gradeBadgeStyle}>
+                    Grade goals are automatically tracked as one-time performance goals.
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              /* Standard target picker */
               <label style={fieldStyle}>
-                <span>Goal type</span>
-                <select name="goalType" value={goalType} onChange={(event) => setGoalType(event.target.value as GoalTypeValue)} style={formInputStyle}>
-                  {Object.entries(GOAL_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={fieldStyle}>
-                <span>Target type</span>
+                <span style={fieldLabelStyle}>{targetTypeLabel}</span>
                 <select
-                  name="targetType"
-                  value={targetType}
-                  onChange={(event) => {
-                    setTargetType(event.target.value as GoalTargetTypeValue);
-                    setTargetId("");
-                    setSessionMetricDefinitionId("");
-                  }}
-                  style={formInputStyle}
-                >
-                  {Object.entries(GOAL_TARGET_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={fieldStyle}>
-                <span>Metric</span>
-                <select
-                  name="metricType"
-                  value={effectiveMetricType}
-                  onChange={(event) => {
-                    const nextMetricType = event.target.value as GoalMetricTypeValue;
-                    setMetricType(nextMetricType);
-                    if (nextMetricType === "SESSION_METRIC") {
-                      maybePromoteGradeGoal(selectedSessionMetric);
+                  name="targetId"
+                  value={effectiveTargetId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setTargetId(id);
+                    if (effectiveMetricType === "SESSION_METRIC") {
+                      const metricOpts = effectiveTargetType === "ROUTINE"
+                        ? (options.sessionMetricsByRoutineId[id] ?? [])
+                        : (options.sessionMetricsByTemplateId[id] ?? []);
+                      const preferred = metricOpts.find(o => o.metricKey === "highest_send_grade" && o.gradeSystem === "BOULDER_V");
+                      maybePromoteGradeGoal(preferred?.gradeSystem ?? null);
                     }
                   }}
                   style={formInputStyle}
                 >
-                  {filteredAllowedMetrics.map((value) => (
-                    <option key={value} value={value}>
-                      {GOAL_METRIC_LABELS[value]}
-                    </option>
+                  {targetOptions.map(t => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>
+                {targetOptions.find(t => t.id === effectiveTargetId)?.subtitle ? (
+                  <span style={hintStyle}>{targetOptions.find(t => t.id === effectiveTargetId)?.subtitle}</span>
+                ) : null}
               </label>
-              <label style={fieldStyle}>
-                <span>Timeframe</span>
-                <select name="timeframe" value={timeframe} onChange={(event) => setTimeframe(event.target.value as GoalTimeframeValue)} style={formInputStyle}>
-                  {Object.entries(GOAL_TIMEFRAME_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </section>
+            )}
 
-          <section style={sectionStyle}>
-            <div style={sectionTitleStyle}>Dates & Status</div>
-            <div style={gridStyle}>
-              <label style={fieldStyle}>
-                <span>End date</span>
-                <input name="endDate" type="date" defaultValue={initial.endDate} style={formInputStyle} />
-              </label>
-              <label style={{ ...fieldStyle, justifyContent: "center" }}>
-                <span>Active</span>
-                <input name="isActive" type="checkbox" defaultChecked={initial.isActive} style={{ width: 18, height: 18 }} />
-              </label>
+            {/* SESSION_METRIC in non-grade VOLUME scope */}
+            {isSessionMetric ? (
+              <>
+                <label style={fieldStyle}>
+                  <span style={fieldLabelStyle}>Session metric</span>
+                  <select
+                    value={validSessionMetricId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      setSessionMetricDefinitionId(id);
+                      const opt = sessionMetricOptions.find(o => o.id === id);
+                      maybePromoteGradeGoal(opt?.gradeSystem ?? null);
+                    }}
+                    style={formInputStyle}
+                  >
+                    {sessionMetricOptions.map(o => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={fieldStyle}>
+                  <span style={fieldLabelStyle}>Metric target</span>
+                  <input
+                    name="sessionMetricTarget"
+                    value={sessionMetricTarget}
+                    onChange={e => setSessionMetricTarget(e.target.value)}
+                    style={formInputStyle}
+                    placeholder={
+                      selectedSessionMetric?.gradeSystem === "BOULDER_V" ? "V4, V5, V6" :
+                      selectedSessionMetric?.gradeSystem === "YOSEMITE"  ? "5.10d, 5.11a" :
+                      "5, 1200"
+                    }
+                  />
+                </label>
+              </>
+            ) : null}
+          </div>
+
+          {/* Metric selector — pills for PERFORMANCE, dropdown for VOLUME */}
+          {perfMetricPills.length > 0 ? (
+            <div style={{ marginTop: 16 }}>
+              <div style={fieldLabelStyle}>Metric</div>
+              <div style={{ ...pillRowStyle, marginTop: 7 }}>
+                {perfMetricPills.map(([m, label]) => {
+                  const isActive = effectiveMetricType === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMetricType(m)}
+                      style={{
+                        ...scopePillStyle,
+                        borderColor: isActive ? accent.border : "rgba(128,128,128,0.28)",
+                        background:  isActive ? accent.bg     : "transparent",
+                        fontWeight:  isActive ? 900 : 700,
+                        color:       isActive ? accent.color  : "inherit",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <label style={fieldStyle}>
-              <span>Notes</span>
-              <textarea name="notes" defaultValue={initial.notes} rows={4} style={{ ...formInputStyle, resize: "vertical" }} />
+          ) : goalType === "VOLUME" && filteredMetrics.length > 1 ? (
+            <label style={{ ...fieldStyle, marginTop: 16 }}>
+              <span style={fieldLabelStyle}>Metric</span>
+              <select
+                value={effectiveMetricType}
+                onChange={e => setMetricType(e.target.value as GoalMetricTypeValue)}
+                style={formInputStyle}
+              >
+                {filteredMetrics.map(m => (
+                  <option key={m} value={m}>{GOAL_METRIC_LABELS[m]}</option>
+                ))}
+              </select>
             </label>
-          </section>
+          ) : null}
+
+          {/* Timeframe — pills (hidden for grade scope since it's always one-time) */}
+          {!isGradeScope ? (
+            <div style={{ marginTop: 16 }}>
+              <div style={fieldLabelStyle}>Timeframe</div>
+              <div style={{ ...pillRowStyle, marginTop: 7 }}>
+                {timeframeOpts.map(([val, label]) => {
+                  const isActive = timeframe === val;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setTimeframe(val)}
+                      style={{
+                        ...scopePillStyle,
+                        borderColor: isActive ? accent.border : "rgba(128,128,128,0.28)",
+                        background:  isActive ? accent.bg     : "transparent",
+                        fontWeight:  isActive ? 900 : 700,
+                        color:       isActive ? accent.color  : "inherit",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Target value input */}
+          {!isGradeScope && !isSessionMetric ? (
+            <div style={{ marginTop: 16 }}>
+              {isDuration || isPace ? (
+                <div style={fieldGridStyle}>
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>{isPace ? "Target pace — minutes" : "Target — minutes"}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={durationParts.minutes}
+                      onChange={e => setDurationParts(p => ({ ...p, minutes: e.target.value }))}
+                      style={formInputStyle}
+                      placeholder="25"
+                    />
+                  </label>
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>Seconds</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      value={durationParts.seconds}
+                      onChange={e => setDurationParts(p => ({ ...p, seconds: e.target.value }))}
+                      style={formInputStyle}
+                      placeholder="00"
+                    />
+                  </label>
+                  {isPace ? (
+                    <>
+                      <label style={fieldStyle}>
+                        <span style={fieldLabelStyle}>Benchmark distance (mi)</span>
+                        <input
+                          name="benchmarkDistanceMi"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={benchmarkDistanceMi}
+                          onChange={e => setBenchmarkDistanceMi(e.target.value)}
+                          style={formInputStyle}
+                          placeholder="3.11"
+                        />
+                      </label>
+                      <label style={fieldStyle}>
+                        <span style={fieldLabelStyle}>Benchmark label</span>
+                        <input
+                          name="benchmarkLabel"
+                          value={benchmarkLabel}
+                          onChange={e => setBenchmarkLabel(e.target.value)}
+                          style={formInputStyle}
+                          placeholder="5K"
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                </div>
+              ) : (
+                <label style={fieldStyle}>
+                  <span style={fieldLabelStyle}>{numMeta.label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step={numMeta.step}
+                    value={rawTargetValue}
+                    onChange={e => setRawTargetValue(e.target.value)}
+                    style={formInputStyle}
+                    placeholder={numMeta.placeholder}
+                  />
+                </label>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* ── Optional settings ────────────────────────────────────── */}
+      <details style={optionalStyle}>
+        <summary style={optionalSummaryStyle}>Optional settings</summary>
+        <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+          <div style={fieldGridStyle}>
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>Start date</span>
+              <input name="startDate" type="date" defaultValue={initial.startDate} style={formInputStyle} />
+            </label>
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>End date</span>
+              <input name="endDate" type="date" defaultValue={initial.endDate} style={formInputStyle} />
+            </label>
+          </div>
+          <label style={fieldStyle}>
+            <span style={fieldLabelStyle}>Notes</span>
+            <textarea
+              name="notes"
+              defaultValue={initial.notes}
+              rows={3}
+              style={{ ...formInputStyle, resize: "vertical" }}
+            />
+          </label>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+            <input name="isActive" type="checkbox" defaultChecked={initial.isActive} style={{ width: 16, height: 16 }} />
+            <span style={fieldLabelStyle}>Active</span>
+          </label>
         </div>
       </details>
 
+      {/* ── Submit ───────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button type="submit" style={submitStyle}>
-          {submitLabel}
-        </button>
+        <button type="submit" style={submitStyle}>{submitLabel}</button>
       </div>
-      </>
-      )}
     </form>
   );
 }
 
-const sectionStyle: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.28)",
-  borderRadius: 16,
-  padding: 14,
-  background: "rgba(128,128,128,0.05)",
+// ─── Styles ─────────────────────────────────────────────────────────────────
+
+const stepLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: 0.8,
+  opacity: 0.5,
+  marginBottom: 8,
+};
+
+const typeGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: 12,
+  gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+  gap: 8,
 };
 
-const sectionTitleStyle: React.CSSProperties = {
-  fontWeight: 900,
-  fontSize: 14,
-};
-
-const advancedSectionStyle: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.28)",
-  borderRadius: 16,
-  padding: 14,
-  background: "rgba(128,128,128,0.04)",
-};
-
-const advancedSummaryStyle: React.CSSProperties = {
+const typeCardStyle: React.CSSProperties = {
+  padding: "14px 10px",
+  border: "1px solid",
+  borderRadius: 14,
+  textAlign: "left",
   cursor: "pointer",
-  fontWeight: 900,
-  fontSize: 14,
+  color: "inherit",
 };
 
-const gridStyle: React.CSSProperties = {
+const typeTaglineStyle: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.62,
+  marginTop: 4,
+  lineHeight: 1.35,
+};
+
+const pillRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const scopePillStyle: React.CSSProperties = {
+  padding: "7px 16px",
+  border: "1px solid",
+  borderRadius: 999,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const hintStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.62,
+  lineHeight: 1.4,
+};
+
+const detailCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.2)",
+  borderRadius: 14,
+  padding: "16px",
+  background: "rgba(128,128,128,0.04)",
+  display: "grid",
+  gap: 0,
+};
+
+const fieldGridStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
   gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
 };
 
-const templateGridStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-};
-
 const fieldStyle: React.CSSProperties = {
   display: "grid",
-  gap: 6,
-  fontSize: 13,
+  gap: 5,
 };
 
-const hintStyle: React.CSSProperties = {
+const fieldLabelStyle: React.CSSProperties = {
   fontSize: 12,
+  fontWeight: 700,
   opacity: 0.72,
 };
 
-const templateCardStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: 12,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(128,128,128,0.35)",
-  borderRadius: 12,
-  background: "rgba(128,128,128,0.05)",
-  color: "inherit",
+const gradeBadgeStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "rgb(251,191,36)",
+  background: "rgba(251,191,36,0.1)",
+  border: "1px solid rgba(251,191,36,0.28)",
+  borderRadius: 8,
+  padding: "7px 10px",
 };
 
-const templateCardActiveStyle: React.CSSProperties = {
-  borderColor: "rgba(34,197,94,0.45)",
-  background: "rgba(34,197,94,0.12)",
+const emptyStateStyle: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.68,
+  padding: "6px 0",
+};
+
+const optionalStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.18)",
+  borderRadius: 12,
+  padding: "12px 14px",
+};
+
+const optionalSummaryStyle: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+  opacity: 0.62,
 };
 
 const submitStyle: React.CSSProperties = {
-  padding: "10px 14px",
+  padding: "11px 24px",
   border: "1px solid rgba(34,197,94,0.5)",
   borderRadius: 12,
   background: "rgba(34,197,94,0.12)",
   color: "inherit",
-  fontWeight: 800,
+  fontWeight: 900,
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const routineChecklistStyle: React.CSSProperties = {
   display: "grid",
   gap: 6,
   padding: "8px 10px",
-  border: "1px solid rgba(128,128,128,0.3)",
+  border: "1px solid rgba(128,128,128,0.22)",
   borderRadius: 8,
   background: "rgba(128,128,128,0.04)",
   maxHeight: 240,

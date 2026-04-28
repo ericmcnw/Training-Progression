@@ -728,6 +728,22 @@ details[open] > summary[data-collapsible-summary]::before{
     font-size: 12px;
   }
 
+  .scheduleHabitsHeader {
+    padding: 1px 4px !important;
+    gap: 4px !important;
+    line-height: 1 !important;
+  }
+
+  .scheduleHabitsExpList {
+    padding: 1px 4px 2px !important;
+    gap: 1px !important;
+  }
+
+  .scheduleHabitsExpRow {
+    padding: 1px 3px !important;
+    line-height: 1 !important;
+  }
+
   .mobileScheduleQuickAdd{
     min-width: 0 !important;
     width: 100%;
