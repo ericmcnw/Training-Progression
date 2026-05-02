@@ -592,6 +592,7 @@ const starterExercises = [
   { name: "Goblet Cossack Squat", unit: "REPS", supportsWeight: true, metadata: ["quads", "glutes", "legs", "lower-body", "squat"] },
   { name: "Goku Squat", unit: "REPS", supportsWeight: true, metadata: ["quads", "glutes", "legs", "lower-body", "squat"] },
   { name: "Leg Press", unit: "REPS", supportsWeight: true, metadata: ["quads", "glutes", "legs", "lower-body", "squat"] },
+  { name: "Single-Leg Leg Press", unit: "REPS", supportsWeight: true, isUnilateral: true, metadata: ["quads", "glutes", "legs", "lower-body", "squat"] },
   { name: "Hamstring Curl", unit: "REPS", supportsWeight: true, metadata: ["hamstrings", "legs", "lower-body"] },
   { name: "Nordic Curl", unit: "REPS", supportsWeight: false, metadata: ["hamstrings", "legs", "lower-body"] },
   { name: "Yoga Ball Hamstring Curl", unit: "REPS", supportsWeight: false, metadata: ["hamstrings", "legs", "lower-body"] },
