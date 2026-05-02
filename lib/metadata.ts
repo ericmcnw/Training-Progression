@@ -139,7 +139,7 @@ const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[
   { pattern: /\b(hamstring curl|leg curl|nordic curl)\b/i, slugs: ["hinge", "hamstrings", "legs", "lower-body"] },
   { pattern: /\b(leg extension)\b/i, slugs: ["squat", "quads", "legs", "lower-body"] },
   { pattern: /\b(side[\s-]?lying leg lift|side[\s-]?lying leg raise|side[\s-]?lying hip abduction|hip abduction)\b/i, slugs: ["glutes", "abductors", "legs", "lower-body"] },
-  { pattern: /\b(hip adduction)\b/i, slugs: ["adductors", "legs", "lower-body"] },
+  { pattern: /\b(hip adduction|adductor squeeze|ball adductor squeeze)\b/i, slugs: ["adductors", "legs", "lower-body"] },
   { pattern: /\b(calf raise)\b/i, slugs: ["squat", "calves", "legs", "lower-body"] },
   { pattern: /\b(spanish squat)\b/i, slugs: ["squat", "legs", "lower-body", "quads", "rehab"] },
   { pattern: /\b(triceps|pressdown|skull crusher|extension)\b/i, slugs: ["push", "triceps"] },

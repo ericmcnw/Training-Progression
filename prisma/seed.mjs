@@ -599,6 +599,8 @@ const starterExercises = [
   { name: "Single-Leg Bridge", unit: "REPS", supportsWeight: true, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge"] },
   { name: "Hip Abduction", unit: "REPS", supportsWeight: true, metadata: ["glutes", "abductors", "legs", "lower-body"] },
   { name: "Hip Adduction", unit: "REPS", supportsWeight: true, metadata: ["adductors", "legs", "lower-body"] },
+  { name: "Ball Adductor Squeeze", unit: "REPS", supportsWeight: false, metadata: ["adductors", "legs", "lower-body", "rehab"] },
+  { name: "Ball Adductor Squeeze Hold", unit: "TIME", supportsWeight: false, metadata: ["adductors", "legs", "lower-body", "isometric", "rehab"] },
   { name: "Neural Glide", unit: "TIME", supportsWeight: false, metadata: ["mobility"] },
   { name: "Couch Stretch", unit: "TIME", supportsWeight: false, metadata: ["quads", "hip-flexors", "mobility"] },
   { name: "Forward Fold", unit: "TIME", supportsWeight: false, metadata: ["hamstrings", "hinge", "mobility", "recovery"] },

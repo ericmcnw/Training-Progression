@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { logSession } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
-import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import {
@@ -31,7 +30,6 @@ export default function SessionLogForm({
   preferredClimbingGrades,
   routineName,
   activePainZones = [],
-  bodyZones = [],
 }: {
   routineId: string;
   routineName: string;
@@ -40,7 +38,6 @@ export default function SessionLogForm({
   definitions: SessionMetricDefinitionWithConfig[];
   preferredClimbingGrades: string[];
   activePainZones?: PainCheckZone[];
-  bodyZones?: PainCheckZone[];
 }) {
   // If the template already has a "Session Notes" textarea metric, hide the generic notes section
   const templateHasNotes = definitions.some((d) => d.config?.input === "textarea" && d.valueType === "TEXT");
@@ -53,23 +50,6 @@ export default function SessionLogForm({
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
-  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
-
-  if (sportTagLogId) {
-    return (
-      <SportZoneTagger
-        zones={bodyZones}
-        routineLogId={sportTagLogId}
-        label={routineName}
-        onDone={() => {
-          const logId = sportTagLogId;
-          setSportTagLogId(null);
-          if (activePainZones.length > 0) setPainCheckLogId(logId);
-          else window.location.href = "/routines";
-        }}
-      />
-    );
-  }
 
   if (painCheckLogId) {
     return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
@@ -125,11 +105,7 @@ export default function SessionLogForm({
         preferredClimbingGrades: isClimbingTemplateKey(templateKey) ? selectedClimbingGrades : undefined,
       });
       if (logId && activePainZones.length > 0) {
-        setSportTagLogId(logId);
-        return;
-      }
-      if (logId && bodyZones.length > 0) {
-        setSportTagLogId(logId);
+        setPainCheckLogId(logId);
         return;
       }
       window.location.href = "/routines";

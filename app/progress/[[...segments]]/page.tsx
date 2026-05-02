@@ -4,6 +4,7 @@ import ExerciseTargetPage from "../details/ExerciseTargetPage";
 import GroupTargetPage from "../details/GroupTargetPage";
 import RoutineTargetPage from "../details/RoutineTargetPage";
 import ProgressOverviewContent from "../ProgressOverviewContent";
+import InjuriesIndexView from "../InjuriesIndexView";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,9 @@ export default async function ProgressPage(props: {
 
   if (segments.length === 1) {
     const section = segments[0];
+    if (section === "injuries") {
+      return <InjuriesIndexView />;
+    }
     if (!["routines", "exercises", "groups", "cardio", "sports"].includes(section)) {
       notFound();
     }

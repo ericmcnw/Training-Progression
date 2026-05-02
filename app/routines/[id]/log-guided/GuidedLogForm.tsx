@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import PostSessionPainCheck from "@/app/components/pain-log/PostSessionPainCheck";
-import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import { logGuided } from "../../actions";
 import GuidedEntryScreen from "./GuidedEntryScreen";
 import GuidedPlayer from "./GuidedPlayer";
@@ -46,14 +45,12 @@ export default function GuidedLogForm({
   steps,
   availableExercises: _availableExercises,
   activePainZones = [],
-  bodyZones = [],
 }: {
   routineId: string;
   routineName?: string;
   steps: Step[];
   availableExercises: ExerciseOption[];
   activePainZones?: PainCheckZone[];
-  bodyZones?: PainCheckZone[];
 }) {
   const [screen, setScreen] = useState<Screen>("entry");
   const [autoPlay, setAutoPlay] = useState(true);
@@ -64,10 +61,8 @@ export default function GuidedLogForm({
   const [completedDurationSec, setCompletedDurationSec] = useState(0);
   const [reviewMode, setReviewMode] = useState<"review" | "log-after">("log-after");
 
-  // Post-save pain check / sport tag
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
-  const [sportTagLogId, setSportTagLogId] = useState<string | null>(null);
 
   const templateSteps = useMemo(
     () =>
@@ -159,10 +154,6 @@ export default function GuidedLogForm({
         performedAtLocal: performedAtLocal || undefined,
         steps: stepsPayload,
       });
-      if (createdLogId && bodyZones.length > 0) {
-        setSportTagLogId(createdLogId);
-        return;
-      }
       if (createdLogId && activePainZones.length > 0) {
         setPainCheckLogId(createdLogId);
         return;
@@ -175,7 +166,6 @@ export default function GuidedLogForm({
     }
   }
 
-  // Pain check screen
   if (painCheckLogId) {
     return (
       <PostSessionPainCheck
@@ -183,23 +173,6 @@ export default function GuidedLogForm({
         routineLogId={painCheckLogId}
         onDone={() => {
           window.location.href = "/routines";
-        }}
-      />
-    );
-  }
-
-  // Sport zone tagger
-  if (sportTagLogId) {
-    return (
-      <SportZoneTagger
-        zones={bodyZones}
-        routineLogId={sportTagLogId}
-        label="Guided session"
-        onDone={() => {
-          const logId = sportTagLogId;
-          setSportTagLogId(null);
-          if (activePainZones.length > 0) setPainCheckLogId(logId);
-          else window.location.href = "/routines";
         }}
       />
     );

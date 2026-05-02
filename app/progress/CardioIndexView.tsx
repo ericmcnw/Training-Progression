@@ -125,30 +125,27 @@ export default async function CardioIndexView(props: {
 
   // ── Weekly series (12 weeks) ──────────────────────────────────────────────────
   const weeklyMilesMap = new Map<string, number>();
-  const weeklySessionsMap = new Map<string, number>();
+  const weeklyMinutesMap = new Map<string, number>();
   for (const log of allCardioLogs) {
     incrementWeekMap(weeklyMilesMap, log.performedAt, log.distanceMi ?? 0);
-    incrementWeekMap(weeklySessionsMap, log.performedAt, 1);
+    incrementWeekMap(weeklyMinutesMap, log.performedAt, (log.durationSec ?? 0) / 60);
   }
   const weeklyMilesSeries = fillWeeklySeries(weeklyMilesMap, "12w", now);
-  const weeklySessionsSeries = fillWeeklySeries(weeklySessionsMap, "12w", now);
   const stackedWeekLabels = weeklyMilesSeries.map((p) => p.label);
 
   // ── Stacked mileage by activity type (CARDIO_ACTIVITY group) ─────────────────
   const activityColors: Record<string, string> = {
-    running: "rgba(78,148,255,0.85)",
-    cycling: "rgba(251,199,92,0.85)",
-    biking: "rgba(251,199,92,0.85)",
-    swimming: "rgba(56,189,189,0.85)",
-    hiking: "rgba(84,203,130,0.85)",
-    rowing: "rgba(251,146,60,0.85)",
-    walking: "rgba(167,224,255,0.8)",
-    golf: "rgba(52,211,153,0.8)",
-    basketball: "rgba(251,113,133,0.8)",
+    running:    "#3AAFE8",
+    cycling:    "#F5C842",
+    biking:     "#F5C842",
+    swimming:   "#1DC9BC",
+    hiking:     "#3ECC72",
+    rowing:     "#F07030",
+    walking:    "#88BFEE",
+    golf:       "#28D4A0",
+    basketball: "#F03D6A",
   };
-  const fallbackColors = [
-    "rgba(192,132,252,0.85)", "rgba(156,163,175,0.8)", "rgba(250,204,21,0.8)",
-  ];
+  const fallbackColors = ["#B04EF5", "#F04DB0", "#F5A420"];
 
   // Priority: specific sports win over umbrella labels ("Run + Walk", "All Cardio")
   const CARDIO_PRIORITY = ["hiking", "running", "cycling", "biking", "walking", "swimming", "rowing", "golf", "basketball"];
@@ -176,13 +173,30 @@ export default async function CardioIndexView(props: {
     }
   }
 
-  // Aggregate miles per activity type per week
+  // Aggregate miles, minutes, and sessions per activity type per week
   const activityWeeklyMiles = new Map<string, Map<string, number>>();
+  const activityWeeklyMinutes = new Map<string, Map<string, number>>();
+  const activityWeeklySessions = new Map<string, Map<string, number>>();
   for (const log of allCardioLogs) {
     const activityLabel = routineActivityGroupMap.get(log.routineId) ?? "Other";
     if (!activityWeeklyMiles.has(activityLabel)) activityWeeklyMiles.set(activityLabel, new Map());
+    if (!activityWeeklyMinutes.has(activityLabel)) activityWeeklyMinutes.set(activityLabel, new Map());
+    if (!activityWeeklySessions.has(activityLabel)) activityWeeklySessions.set(activityLabel, new Map());
     incrementWeekMap(activityWeeklyMiles.get(activityLabel)!, log.performedAt, log.distanceMi ?? 0);
+    incrementWeekMap(activityWeeklyMinutes.get(activityLabel)!, log.performedAt, (log.durationSec ?? 0) / 60);
+    incrementWeekMap(activityWeeklySessions.get(activityLabel)!, log.performedAt, 1);
   }
+
+  const stackedSessionsSeries: StackedBarSeries[] = Array.from(activityWeeklySessions.entries())
+    .map(([label, weekMap]) => ({ label, total: Array.from(weekMap.values()).reduce((a, b) => a + b, 0), weekMap }))
+    .filter((e) => e.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .map((entry, idx) => {
+      const slug = entry.label.toLowerCase();
+      const color = activityColors[slug] ?? fallbackColors[idx % fallbackColors.length];
+      const filled = fillWeeklySeries(entry.weekMap, "12w", now);
+      return { label: entry.label, color, weeklyValues: filled.map((p) => p.value) };
+    });
 
   // Convert to stacked series aligned to stackedWeekLabels
   const activitySeriesEntries = Array.from(activityWeeklyMiles.entries())
@@ -194,7 +208,13 @@ export default async function CardioIndexView(props: {
     const slug = entry.label.toLowerCase();
     const color = activityColors[slug] ?? fallbackColors[idx % fallbackColors.length];
     const filled = fillWeeklySeries(entry.weekMap, "12w", now);
-    return { label: entry.label, color, weeklyValues: filled.map((p) => p.value) };
+    const minutesFilled = fillWeeklySeries(activityWeeklyMinutes.get(entry.label) ?? new Map(), "12w", now);
+    return {
+      label: entry.label,
+      color,
+      weeklyValues: filled.map((p) => p.value),
+      weeklyMinutes: minutesFilled.map((p) => p.value),
+    };
   });
 
   // ── Per-routine breakdown ─────────────────────────────────────────────────────
@@ -268,14 +288,16 @@ export default async function CardioIndexView(props: {
                 decimals={1}
               />
             )}
-            <MetricLineChart
-              title="Sessions per Week"
-              yLabel="Sessions"
-              xLabel="Week"
-              points={weeklySessionsSeries}
-              decimals={0}
-              compact
-            />
+            {stackedSessionsSeries.length > 0 && (
+              <StackedWeeklyBarChart
+                title="Sessions per Week by Activity"
+                weekLabels={stackedWeekLabels}
+                series={stackedSessionsSeries}
+                unit=""
+                decimals={0}
+                compact
+              />
+            )}
           </div>
         </SectionCard>
       ) : null}

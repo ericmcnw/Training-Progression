@@ -25,7 +25,7 @@ import GuidedLogForm from "../log-guided/GuidedLogForm";
 import SessionLogForm from "../log-session/SessionLogForm";
 import LogWorkoutForm from "./ui";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
-import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning } from "@/lib/injury-warnings";
+import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning, getRoutinePainCheckZones } from "@/lib/injury-warnings";
 
 export const dynamic = "force-dynamic";
 
@@ -346,23 +346,10 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
   });
 
   const sessionDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
-  const [activePainZones, bodyZones] = await Promise.all([
-    prisma.injuryZone
-      .findMany({
-        where: { injury: { status: { in: ["ACTIVE", "FLARED"] } } },
-        distinct: ["zoneId"],
-        orderBy: { zone: { sortOrder: "asc" } },
-        select: { zone: { select: { slug: true, label: true } } },
-      })
-      .then((rows) => rows.map((entry) => entry.zone)),
-    prisma.bodyZone.findMany({
-      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-      select: { slug: true, label: true },
-    }),
-  ]);
-  const [routineInjuryWarning, exerciseInjuryWarnings] = await Promise.all([
+  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings] = await Promise.all([
+    getRoutinePainCheckZones(routineId),
     getRoutineInjuryLoadWarning(routineId),
-    isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((exercise) => exercise.id)) : Promise.resolve(new Map<string, string>()),
+    isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((e) => e.id)) : Promise.resolve(new Map<string, string>()),
   ]);
   const availableExercisesForLog = availableExercises.map((exercise) => ({
     ...exercise,
@@ -403,7 +390,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               activePainZones={activePainZones}
             />
           ) : isCardioKind(kind) ? (
-            <LogRunForm routineId={routineId} routineName={routine.name} activePainZones={activePainZones} bodyZones={bodyZones} />
+            <LogRunForm routineId={routineId} routineName={routine.name} activePainZones={activePainZones} />
           ) : isGuidedKind(kind) ? (
             <GuidedLogForm
               routineId={routineId}
@@ -423,7 +410,6 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
                 sortOrder: step.sortOrder,
               }))}
               activePainZones={activePainZones}
-              bodyZones={bodyZones}
             />
           ) : isSessionKind(kind) ? (
             <SessionLogForm
@@ -434,7 +420,6 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               definitions={sessionDefinitions}
               preferredClimbingGrades={preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
               activePainZones={activePainZones}
-              bodyZones={bodyZones}
             />
           ) : (
             <CompletionLogForm routineId={routineId} />

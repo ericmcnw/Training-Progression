@@ -9,6 +9,7 @@ import CardioIndexView from "./CardioIndexView";
 import ExercisesIndexView from "./ExercisesIndexView";
 import GroupsIndexView from "./GroupsIndexView";
 import SportsIndexView from "./SportsIndexView";
+import InjuriesIndexView from "./InjuriesIndexView";
 import { PillNav, ProgressShell, SectionCard, SectionLinkButton } from "./ui";
 import RoutinesIndexView from "./RoutinesIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
@@ -428,6 +429,48 @@ async function DrillDownSection({
   );
 }
 
+// ─── Async server component: Active injury alert (streams in) ─────────────────
+
+async function ActiveInjuryBanner() {
+  const injuries = await prisma.activeInjury.findMany({
+    where: { status: { in: ["ACTIVE", "FLARED"] } },
+    orderBy: [{ status: "asc" }, { startedAt: "desc" }],
+    include: { zones: { include: { zone: { select: { label: true } } }, take: 3 } },
+    take: 5,
+  });
+  if (injuries.length === 0) return null;
+
+  return (
+    <div style={{ padding: "12px 14px", borderRadius: 16, border: "1px solid rgba(248,113,113,0.28)", background: "rgba(248,113,113,0.07)", display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", color: "#FCA5A5", opacity: 0.9 }}>
+            Active Injuries
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 999, border: "1px solid rgba(248,113,113,0.4)", background: "rgba(248,113,113,0.15)", color: "#FCA5A5" }}>
+            {injuries.length}
+          </span>
+        </div>
+        <Link href="/progress/injuries" style={{ fontSize: 12, fontWeight: 800, color: "rgba(252,165,165,0.9)", textDecoration: "none", padding: "4px 8px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.25)", background: "rgba(248,113,113,0.08)" }}>
+          Pain trends →
+        </Link>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {injuries.map((inj) => (
+          <Link key={inj.id} href={`/injuries/${inj.id}`} style={{ display: "grid", gap: 2, padding: "7px 10px", borderRadius: 10, border: "1px solid rgba(248,113,113,0.22)", background: "rgba(248,113,113,0.06)", textDecoration: "none", color: "inherit", minWidth: 0 }}>
+            <span style={{ fontWeight: 900, fontSize: 13 }}>{inj.name}</span>
+            <span style={{ fontSize: 11, opacity: 0.6 }}>
+              {inj.zones.slice(0, 2).map((z) => z.zone.label).join(", ")}
+              {inj.zones.length > 2 ? ` +${inj.zones.length - 2}` : ""}
+              {" · "}{"●".repeat(inj.severity)}{"○".repeat(Math.max(0, 5 - inj.severity))}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page component ──────────────────────────────────────────────────────
 
 export default async function ProgressOverviewPage({ searchParams }: { searchParams?: Promise<SearchParams> | SearchParams }) {
@@ -447,6 +490,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "groups") return <GroupsIndexView searchParams={params} />;
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
   if (section === "sports") return <SportsIndexView searchParams={params} />;
+  if (section === "injuries") return <InjuriesIndexView />;
 
   // Fetch all fast data in a single parallel batch.
   const [routines, exercises, groups, recentLogs] = await Promise.all([
@@ -688,6 +732,11 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
           ))}
         </div>
       </SectionCard>
+
+      {/* ── Active injury alert: streams in independently ── */}
+      <Suspense fallback={null}>
+        <ActiveInjuryBanner />
+      </Suspense>
 
       {/* ── Coverage: streams in independently ── */}
       <Suspense
