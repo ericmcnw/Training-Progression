@@ -321,7 +321,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
 
   const initialBlocks = routine.exercises.map((exercise) => {
     const previousExercise = lastWorkoutExerciseMap.get(exercise.exerciseId);
-    const previousRows =
+    const lastRows =
       previousExercise?.sets
         .filter((set) => set.reps !== null || set.seconds !== null || set.weightLb !== null)
         .map((set) => ({
@@ -330,18 +330,15 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
           seconds: set.seconds !== null ? String(set.seconds) : undefined,
           weightLb: set.weightLb !== null ? String(set.weightLb) : undefined,
         })) ?? [];
+    const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
 
     return {
       exerciseId: exercise.exerciseId,
       name: exercise.exercise.name,
       unit: exercise.exercise.unit,
       supportsWeight: exercise.exercise.supportsWeight,
-      rows:
-        previousRows.length > 0
-          ? previousRows
-          : Array.from({ length: Math.max(1, exercise.defaultSets ?? 3) }, (_, index) => ({
-              setNumber: index + 1,
-            })),
+      rows: Array.from({ length: defaultSetCount }, (_, index) => ({ setNumber: index + 1 })),
+      lastRows: lastRows.length > 0 ? lastRows : undefined,
     };
   });
 
@@ -382,10 +379,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               availableExercises={availableExercisesForLog}
               smartDefaultLabel={
                 lastWorkoutLog?.performedAt
-                  ? `Prefilled from your last workout on ${new Intl.DateTimeFormat("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    }).format(lastWorkoutLog.performedAt)}.`
+                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(lastWorkoutLog.performedAt)
                   : null
               }
               activePainZones={activePainZones}

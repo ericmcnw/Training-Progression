@@ -31,7 +31,11 @@ export default function LogWorkoutForm({
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
   if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
+    return (
+      <div className="painCheckEnter">
+        <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />
+      </div>
+    );
   }
 
   return (

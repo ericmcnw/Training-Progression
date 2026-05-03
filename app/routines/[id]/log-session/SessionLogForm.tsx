@@ -159,7 +159,11 @@ export default function SessionLogForm({
   }
 
   if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
+    return (
+      <div className="painCheckEnter">
+        <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />
+      </div>
+    );
   }
 
   async function onSave() {

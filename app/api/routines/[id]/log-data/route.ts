@@ -80,7 +80,7 @@ export async function GET(
 
     const initialBlocks = routine.exercises.map((exercise) => {
       const prev = lastWorkoutExerciseMap.get(exercise.exerciseId);
-      const previousRows =
+      const lastRows =
         prev?.sets
           .filter((s) => s.reps !== null || s.seconds !== null || s.weightLb !== null)
           .map((s) => ({
@@ -89,26 +89,20 @@ export async function GET(
             seconds: s.seconds !== null ? String(s.seconds) : undefined,
             weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
           })) ?? [];
+      const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
 
       return {
         exerciseId: exercise.exerciseId,
         name: exercise.exercise.name,
         unit: exercise.exercise.unit,
         supportsWeight: exercise.exercise.supportsWeight,
-        rows:
-          previousRows.length > 0
-            ? previousRows
-            : Array.from({ length: Math.max(1, exercise.defaultSets ?? 3) }, (_, i) => ({
-                setNumber: i + 1,
-              })),
+        rows: Array.from({ length: defaultSetCount }, (_, i) => ({ setNumber: i + 1 })),
+        lastRows: lastRows.length > 0 ? lastRows : undefined,
       };
     });
 
     const smartDefaultLabel = lastWorkoutLog?.performedAt
-      ? `Prefilled from your last workout on ${new Intl.DateTimeFormat("en-US", {
-          month: "short",
-          day: "numeric",
-        }).format(lastWorkoutLog.performedAt)}.`
+      ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(lastWorkoutLog.performedAt)
       : null;
 
     return NextResponse.json({

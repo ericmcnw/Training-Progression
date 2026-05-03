@@ -36,6 +36,7 @@ export type WorkoutBlock = {
   unit: "REPS" | "TIME";
   supportsWeight: boolean;
   rows: SetRow[];
+  lastRows?: SetRow[];
 };
 
 type SavePayload = {
@@ -122,6 +123,7 @@ export default function WorkoutExerciseEditor({
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
   const [activeBlockIdx, setActiveBlockIdx] = useState(0);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
+  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -135,7 +137,12 @@ export default function WorkoutExerciseEditor({
     if (!draft || draft.kind !== "WORKOUT") return;
 
     draftStartedAtRef.current = draft.startedAt;
-    setBlocks(draft.blocks);
+    setBlocks(
+      draft.blocks.map((draftBlock) => {
+        const initial = initialBlocks.find((b) => b.exerciseId === draftBlock.exerciseId);
+        return initial?.lastRows ? { ...draftBlock, lastRows: initial.lastRows } : draftBlock;
+      })
+    );
     setNotes(draft.notes);
     setPerformedAtLocal(draft.performedAtLocal);
     isDirtyRef.current = true;
@@ -169,6 +176,11 @@ export default function WorkoutExerciseEditor({
   const safeActiveIdx = Math.min(activeBlockIdx, Math.max(0, blocks.length - 1));
   const activeBlock = blocks[safeActiveIdx] ?? null;
 
+  const lastRowsMap = useMemo(
+    () => new Map((activeBlock?.lastRows ?? []).map((r) => [r.setNumber, r])),
+    [activeBlock]
+  );
+
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
     return exerciseOptions.filter((exercise) => {
@@ -185,6 +197,25 @@ export default function WorkoutExerciseEditor({
 
   function markDirty() {
     isDirtyRef.current = true;
+  }
+
+  function advanceFocus(rowIdx: number, field: "weightLb" | "reps" | "seconds") {
+    if (!activeBlock) return;
+    const nextKey =
+      field === "weightLb"
+        ? `${rowIdx}-${activeBlock.unit === "REPS" ? "reps" : "seconds"}`
+        : `${rowIdx + 1}-${activeBlock.supportsWeight ? "weightLb" : activeBlock.unit === "REPS" ? "reps" : "seconds"}`;
+    inputRefs.current.get(nextKey)?.focus();
+  }
+
+  function copyLastSession(exerciseId: string) {
+    markDirty();
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.exerciseId !== exerciseId || !block.lastRows?.length) return block;
+        return { ...block, rows: block.lastRows.map((r, i) => ({ ...r, setNumber: i + 1 })) };
+      })
+    );
   }
 
   function addExercise(exerciseId: string) {
@@ -453,19 +484,26 @@ export default function WorkoutExerciseEditor({
                   {exerciseUnitLabel(activeBlock.unit)}{activeBlock.supportsWeight ? " · Weighted" : ""}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => removeExercise(activeBlock.exerciseId)}
-                style={styles.removeBtn}
-              >
-                Remove
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                {activeBlock.lastRows?.length ? (
+                  <button
+                    type="button"
+                    onClick={() => copyLastSession(activeBlock.exerciseId)}
+                    style={styles.copyLastBtn}
+                    title="Fill with last session values"
+                  >
+                    ↩ {smartDefaultLabel ?? "Last"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => removeExercise(activeBlock.exerciseId)}
+                  style={styles.removeBtn}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
-
-            {/* Prefill hint */}
-            {smartDefaultLabel && !draftBanner && (
-              <div style={styles.prefillHint}>{smartDefaultLabel}</div>
-            )}
 
             {/* Column headers */}
             <div
@@ -500,31 +538,40 @@ export default function WorkoutExerciseEditor({
 
                   {activeBlock.supportsWeight && (
                     <input
+                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-weightLb`, el); else inputRefs.current.delete(`${rowIdx}-weightLb`); }}
+                      className="ghostInput"
                       style={styles.bigInput}
                       value={row.weightLb ?? ""}
                       inputMode="decimal"
-                      placeholder="—"
+                      placeholder={lastRowsMap.get(row.setNumber)?.weightLb ?? "—"}
                       onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "weightLb", e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "weightLb"); } }}
                     />
                   )}
 
                   {activeBlock.unit === "REPS" && (
                     <input
+                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-reps`, el); else inputRefs.current.delete(`${rowIdx}-reps`); }}
+                      className="ghostInput"
                       style={styles.bigInput}
                       value={row.reps ?? ""}
                       inputMode="numeric"
-                      placeholder="—"
+                      placeholder={lastRowsMap.get(row.setNumber)?.reps ?? "—"}
                       onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "reps", e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "reps"); } }}
                     />
                   )}
 
                   {activeBlock.unit === "TIME" && (
                     <input
+                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-seconds`, el); else inputRefs.current.delete(`${rowIdx}-seconds`); }}
+                      className="ghostInput"
                       style={styles.bigInput}
                       value={row.seconds ?? ""}
                       inputMode="numeric"
-                      placeholder="—"
+                      placeholder={lastRowsMap.get(row.setNumber)?.seconds ?? "—"}
                       onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "seconds", e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "seconds"); } }}
                     />
                   )}
 
@@ -904,6 +951,19 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+  } as React.CSSProperties,
+
+  copyLastBtn: {
+    padding: "6px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(115,220,152,0.4)",
+    background: "rgba(115,220,152,0.08)",
+    color: "inherit",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+    flexShrink: 0,
+    whiteSpace: "nowrap",
   } as React.CSSProperties,
 
   removeBtn: {
