@@ -497,7 +497,13 @@ export default async function RoutineTargetPage(props: {
                   key={entry.exercise.id}
                   href={`/progress/exercises/${entry.exercise.id}?tab=overview&range=${range}`}
                   title={entry.exercise.name}
-                  subtitle="Exercise target"
+                  subtitle={
+                    entry.exercise.supportsWeight
+                      ? "Weighted strength exercise"
+                      : entry.exercise.unit === "TIME"
+                      ? "Time-based exercise"
+                      : "Bodyweight exercise"
+                  }
                 />
               ))}
             </div>

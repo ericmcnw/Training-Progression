@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { logSession } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import {
@@ -21,6 +22,15 @@ import {
   parseSessionMetricNumber,
   type SessionMetricDefinitionWithConfig,
 } from "@/lib/session-templates";
+
+// Zones pre-selected for climbing sessions: fingers/hands, forearms, lats (upper-back), traps
+const CLIMBING_AUTO_ZONES = [
+  { slug: "hands", label: "Fingers / Hands" },
+  { slug: "forearm", label: "Forearms" },
+  { slug: "upper-back", label: "Lats / Upper Back" },
+  { slug: "trapezius", label: "Traps" },
+];
+const CLIMBING_AUTO_ZONE_SLUGS = CLIMBING_AUTO_ZONES.map((z) => z.slug);
 
 export default function SessionLogForm({
   routineId,
@@ -49,7 +59,30 @@ export default function SessionLogForm({
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+
+  const isClimbing = isClimbingTemplateKey(templateKey);
+
+  // Zone tagger step (climbing only) — shown after save, before pain check
+  if (zoneTagLogId) {
+    return (
+      <SportZoneTagger
+        zones={CLIMBING_AUTO_ZONES}
+        routineLogId={zoneTagLogId}
+        label={routineName}
+        preSelectedSlugs={CLIMBING_AUTO_ZONE_SLUGS}
+        onDone={() => {
+          if (activePainZones.length > 0) {
+            setPainCheckLogId(zoneTagLogId);
+            setZoneTagLogId(null);
+          } else {
+            window.location.href = "/routines";
+          }
+        }}
+      />
+    );
+  }
 
   if (painCheckLogId) {
     return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
@@ -102,8 +135,12 @@ export default function SessionLogForm({
         notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: structuredValues,
-        preferredClimbingGrades: isClimbingTemplateKey(templateKey) ? selectedClimbingGrades : undefined,
+        preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
       });
+      if (logId && isClimbing) {
+        setZoneTagLogId(logId);
+        return;
+      }
       if (logId && activePainZones.length > 0) {
         setPainCheckLogId(logId);
         return;

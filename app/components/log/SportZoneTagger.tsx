@@ -12,13 +12,15 @@ export default function SportZoneTagger({
   routineLogId,
   label,
   onDone,
+  preSelectedSlugs = [],
 }: {
   zones: ZoneOption[];
   routineLogId: string;
   label: string;
   onDone: () => void;
+  preSelectedSlugs?: string[];
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(preSelectedSlugs);
   const [intensity, setIntensity] = useState("");
   const [pending, startTransition] = useTransition();
   const mapZones: ZoneState[] = zones.map((zone) => ({

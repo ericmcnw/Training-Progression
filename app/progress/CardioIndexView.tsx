@@ -13,6 +13,12 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function hasCardioActivityGroup(routine: Awaited<ReturnType<typeof getRoutineIndex>>[number]) {
+  return routine.metadataGroups.some(
+    (entry) => entry.group.kind === "CARDIO_ACTIVITY" && entry.group.slug !== "climbing"
+  );
+}
+
 function StatChip({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
   return (
     <div style={{ display: "grid", gap: 3, padding: "10px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", minWidth: 0 }}>
@@ -85,7 +91,9 @@ export default async function CardioIndexView(props: {
 
   const [routines, groups] = await Promise.all([getRoutineIndex(), getMetadataIndex()]);
 
-  const cardioRoutines = routines.filter((r) => r.kind === "CARDIO" && r.isActive);
+  const cardioRoutines = routines.filter(
+    (r) => r.isActive && (r.kind === "CARDIO" || hasCardioActivityGroup(r))
+  );
   const cardioGroups = groups.filter((g) => g.kind === "CARDIO_ACTIVITY");
 
   // Fetch all-time cardio logs once — used for every stat (totals, chart, per-routine)

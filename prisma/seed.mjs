@@ -435,10 +435,11 @@ const sessionTemplates = [
     metadataSlugs: basketballPickupTemplateMetadata,
     metrics: [
       { key: "court_name", label: "Court / Place", valueType: "TEXT", sortOrder: 10, showInGoals: false },
-      { key: "games_played", label: "Games Played", valueType: "INTEGER", sortOrder: 20, unit: "games", showInProgress: true, showInGoals: true },
-      { key: "wins", label: "Wins", valueType: "INTEGER", sortOrder: 30, unit: "wins", showInProgress: true, showInGoals: true },
-      { key: "points_scored", label: "Points Scored", valueType: "INTEGER", sortOrder: 40, unit: "pts", showInProgress: true, showInGoals: true },
-      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 50, showInGoals: false, config: { input: "textarea" } },
+      { key: "distance_mi", label: "Distance Traveled", valueType: "DECIMAL", sortOrder: 20, unit: "mi", showInProgress: true, showInGoals: true },
+      { key: "games_played", label: "Games Played", valueType: "INTEGER", sortOrder: 30, unit: "games", showInProgress: true, showInGoals: true },
+      { key: "wins", label: "Wins", valueType: "INTEGER", sortOrder: 40, unit: "wins", showInProgress: true, showInGoals: true },
+      { key: "points_scored", label: "Points Scored", valueType: "INTEGER", sortOrder: 50, unit: "pts", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 60, showInGoals: false, config: { input: "textarea" } },
     ],
   },
   {
@@ -450,11 +451,12 @@ const sessionTemplates = [
     metadataSlugs: basketballShootingTemplateMetadata,
     metrics: [
       { key: "court_name", label: "Court / Place", valueType: "TEXT", sortOrder: 10, showInGoals: false },
-      { key: "shots_made", label: "Shots Made", valueType: "INTEGER", sortOrder: 20, unit: "shots", showInProgress: true, showInGoals: true },
-      { key: "shots_attempted", label: "Shots Attempted", valueType: "INTEGER", sortOrder: 30, unit: "shots", showInProgress: true, showInGoals: true },
-      { key: "three_pt_made", label: "3PT Made", valueType: "INTEGER", sortOrder: 40, unit: "threes", showInProgress: true, showInGoals: true },
-      { key: "free_throws_made", label: "Free Throws Made", valueType: "INTEGER", sortOrder: 50, unit: "fts", showInProgress: true, showInGoals: true },
-      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 60, showInGoals: false, config: { input: "textarea" } },
+      { key: "distance_mi", label: "Distance Traveled", valueType: "DECIMAL", sortOrder: 20, unit: "mi", showInProgress: true, showInGoals: true },
+      { key: "shots_made", label: "Shots Made", valueType: "INTEGER", sortOrder: 30, unit: "shots", showInProgress: true, showInGoals: true },
+      { key: "shots_attempted", label: "Shots Attempted", valueType: "INTEGER", sortOrder: 40, unit: "shots", showInProgress: true, showInGoals: true },
+      { key: "three_pt_made", label: "3PT Made", valueType: "INTEGER", sortOrder: 50, unit: "threes", showInProgress: true, showInGoals: true },
+      { key: "free_throws_made", label: "Free Throws Made", valueType: "INTEGER", sortOrder: 60, unit: "fts", showInProgress: true, showInGoals: true },
+      { key: "template_notes", label: "Session Notes", valueType: "TEXT", sortOrder: 70, showInGoals: false, config: { input: "textarea" } },
     ],
   },
   {

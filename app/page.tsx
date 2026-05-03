@@ -4,6 +4,7 @@ import { getRecommendationModel } from "@/lib/recommendations";
 import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
 import WeekAtGlanceClient from "./WeekAtGlanceClient";
 import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
+import DashboardInjuries from "@/app/components/dashboard/DashboardInjuries";
 import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
@@ -850,7 +851,27 @@ export default async function HomePage() {
     for (const log of logs) {
       logCountByRoutine.set(log.routineId, (logCountByRoutine.get(log.routineId) ?? 0) + 1);
     }
-    const planned = Array.from(buildPlanForDay(ymd).values())
+    const dayPlan = buildPlanForDay(ymd);
+    // For past/today days, ensure any logged routine appears even if not in the plan
+    // (mirrors schedule page behavior — handles retroactive logs and recently-created goals)
+    if (ymd <= today) {
+      for (const [routineId, count] of logCountByRoutine.entries()) {
+        if (!dayPlan.has(routineId)) {
+          const routine = routineMap.get(routineId);
+          if (routine) {
+            dayPlan.set(routineId, {
+              routineId,
+              routineName: routine.name,
+              category: routine.category,
+              kind: routine.kind,
+              planned: count,
+              logged: count,
+            });
+          }
+        }
+      }
+    }
+    const planned = Array.from(dayPlan.values())
       .map((item) => {
         const routine = routineMap.get(item.routineId);
         return {
@@ -1083,8 +1104,9 @@ export default async function HomePage() {
         </section>
 
         {/* ── Column 1: BODY MAP ── */}
-        <div style={{ gridColumn: 1 }}>
+        <div style={{ gridColumn: 1, display: "grid", gap: 16 }}>
           <DashboardBodyMap />
+          <DashboardInjuries />
         </div>
 
         {/* ── Column 2: WEEKLY MOMENTUM ── */}

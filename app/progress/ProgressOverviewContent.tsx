@@ -68,6 +68,12 @@ function formatShortDate(date: Date | null) {
   return `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date)}`;
 }
 
+function hasCardioActivityGroup(routine: Awaited<ReturnType<typeof getRoutineIndex>>[number]) {
+  return routine.metadataGroups.some(
+    (entry) => entry.group.kind === "CARDIO_ACTIVITY" && entry.group.slug !== "climbing"
+  );
+}
+
 function trendLabel(current: number, baseline: number) {
   const safeBaseline = Math.max(0.1, baseline);
   const ratio = current / safeBaseline;
@@ -662,7 +668,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   ];
 
   const featuredGroups = groups.filter((g) => g.appliesToRoutine || g.appliesToExercise).slice(0, 4);
-  const cardioRoutines = routines.filter((r) => r.kind === "CARDIO");
+  const cardioRoutines = routines.filter((r) => r.isActive && (r.kind === "CARDIO" || hasCardioActivityGroup(r)));
 
   return (
     <ProgressShell

@@ -156,7 +156,14 @@ export default async function GroupTargetPage(props: {
       <TargetHeader
         section="groups"
         title={target.group.label}
-        subtitle={`Group rollup | ${target.group.kind.replaceAll("_", " ")}`}
+        subtitle={
+          target.group.kind === "MUSCLE_GROUP" ? "Muscle group rollup"
+          : target.group.kind === "MOVEMENT_PATTERN" ? "Movement pattern rollup"
+          : target.group.kind === "CARDIO_ACTIVITY" ? "Cardio activity rollup"
+          : target.group.kind === "ROUTINE_FOCUS" ? "Session category rollup"
+          : target.group.kind === "TRAINING_GROUP" ? "Training group rollup"
+          : "Group rollup"
+        }
         basePath={`/progress/groups/${target.group.slug}`}
         tab={tab}
         range={range}

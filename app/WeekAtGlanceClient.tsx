@@ -195,7 +195,7 @@ export default function WeekAtGlanceClient({
                       <div
                         key={log.id}
                         title={log.routineName}
-                        style={{ width: 7, height: 7, borderRadius: 999, background: kindDotColor(log.kind), opacity: 0.72, flexShrink: 0 }}
+                        style={{ width: 7, height: 7, borderRadius: 999, background: domainColor(log.domain), opacity: 0.72, flexShrink: 0 }}
                       />
                     ))
                   ) : (
@@ -208,7 +208,7 @@ export default function WeekAtGlanceClient({
                             width: 7,
                             height: 7,
                             borderRadius: 999,
-                            background: kindDotColor(item.kind),
+                            background: domainColor(item.domain),
                             opacity: item.logged > index ? 1 : 0.42,
                             border: item.logged > index ? "0" : "1px solid rgba(255,255,255,0.18)",
                             flexShrink: 0,

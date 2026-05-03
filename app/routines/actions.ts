@@ -377,6 +377,7 @@ async function sanitizeSessionMetricValues(params: {
 
   const sanitizedValues: Array<{
     metricDefinitionId: string;
+    metricKey: string;
     numberValue: number | null;
     textValue: string | null;
     booleanValue: boolean | null;
@@ -398,6 +399,7 @@ async function sanitizeSessionMetricValues(params: {
       if (!Number.isFinite(input.numberValue)) throw new Error("Session metric number value is invalid.");
       sanitizedValues.push({
         metricDefinitionId: definition.id,
+        metricKey: definition.key,
         numberValue: definition.valueType === "INTEGER" ? Math.round(input.numberValue ?? 0) : input.numberValue ?? null,
         textValue: null,
         booleanValue: null,
@@ -408,6 +410,7 @@ async function sanitizeSessionMetricValues(params: {
     if (definition.valueType === "BOOLEAN") {
       sanitizedValues.push({
         metricDefinitionId: definition.id,
+        metricKey: definition.key,
         numberValue: null,
         textValue: null,
         booleanValue: Boolean(input.booleanValue),
@@ -422,6 +425,7 @@ async function sanitizeSessionMetricValues(params: {
 
     sanitizedValues.push({
       metricDefinitionId: definition.id,
+      metricKey: definition.key,
       numberValue: null,
       textValue: input.textValue,
       booleanValue: null,
@@ -459,6 +463,7 @@ async function sanitizeSessionMetricValues(params: {
     if (definition.key === "highest_flash_grade" && highestFlashGrade) {
       sanitizedByDefinitionId.set(definition.id, {
         metricDefinitionId: definition.id,
+        metricKey: definition.key,
         numberValue: null,
         textValue: highestFlashGrade,
         booleanValue: null,
@@ -467,6 +472,7 @@ async function sanitizeSessionMetricValues(params: {
     if (definition.key === "highest_send_grade" && highestSendGrade) {
       sanitizedByDefinitionId.set(definition.id, {
         metricDefinitionId: definition.id,
+        metricKey: definition.key,
         numberValue: null,
         textValue: highestSendGrade,
         booleanValue: null,
@@ -475,6 +481,16 @@ async function sanitizeSessionMetricValues(params: {
   }
 
   return Array.from(sanitizedByDefinitionId.values());
+}
+
+function sessionDistanceMiFromValues(
+  values: Array<{
+    metricKey: string;
+    numberValue: number | null;
+  }>
+) {
+  const distanceValue = values.find((value) => value.metricKey === "distance_mi")?.numberValue;
+  return Number.isFinite(distanceValue) ? distanceValue : null;
 }
 
 function sanitizePreferredClimbingGrades(grades?: string[]) {
@@ -1695,6 +1711,12 @@ export async function logSession(params: {
       routineId: params.routineId,
       values: params.sessionMetricValues,
     });
+    await tx.routineLog.update({
+      where: { id: log.id },
+      data: {
+        distanceMi: sessionDistanceMiFromValues(sessionMetricValues),
+      },
+    });
     if (sessionMetricValues.length > 0) {
       await tx.sessionLogMetricValue.createMany({
         data: sessionMetricValues.map((value) => ({
@@ -2010,6 +2032,12 @@ export async function updateSessionLog(params: {
     const sessionMetricValues = await sanitizeSessionMetricValues({
       routineId: params.routineId,
       values: params.sessionMetricValues,
+    });
+    await tx.routineLog.update({
+      where: { id: params.logId },
+      data: {
+        distanceMi: sessionDistanceMiFromValues(sessionMetricValues),
+      },
     });
     if (sessionMetricValues.length > 0) {
       await tx.sessionLogMetricValue.createMany({

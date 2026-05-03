@@ -214,6 +214,7 @@ export default function MetricLineChart({
           {tickValues.map((tick, index) => {
             const tickY = margin.top + (1 - (tick <= 0 ? 0 : tick / yMax)) * innerH;
             const isBaseline = tick === 0;
+            const isMax = tick === yMax;
             return (
               <g key={`${tick}-${index}`}>
                 <line
@@ -221,15 +222,16 @@ export default function MetricLineChart({
                   y1={tickY}
                   x2={margin.left + innerW}
                   y2={tickY}
-                  stroke={isBaseline ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.18)"}
-                  strokeDasharray={isBaseline ? undefined : "4 4"}
+                  stroke={isBaseline ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.09)"}
+                  strokeDasharray={isBaseline ? undefined : "3 6"}
                 />
                 <text
                   x={margin.left - 8}
                   y={tickY + 4}
                   textAnchor="end"
-                  fontSize="11"
-                  fill={isBaseline ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.85)"}
+                  fontSize="10"
+                  fill={isBaseline ? "rgba(255,255,255,0.35)" : isMax ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.55)"}
+                  fontWeight={isMax ? "700" : "400"}
                 >
                   {formatAxisNumber(tick, decimals)}
                 </text>

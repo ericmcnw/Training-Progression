@@ -151,6 +151,32 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         </Link>
       </div>
 
+      {/* Pain stats + quick log — first action above the fold */}
+      {injury.status !== "RESOLVED" && (
+        <section style={panel}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+            <div style={sectionTitle}>Log pain</div>
+            {(recentPainLevel !== null || avgPainLevel !== null) && (
+              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                {recentPainLevel !== null && (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={statLabel}>Most recent</div>
+                    <div style={{ ...statValue, color: painColor(recentPainLevel) }}>{recentPainLevel}/10</div>
+                  </div>
+                )}
+                {avgPainLevel !== null && (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={statLabel}>Avg ({painLogs.length} logs)</div>
+                    <div style={{ ...statValue, color: painColor(avgPainLevel) }}>{avgPainLevel}/10</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <QuickInjuryPainLog zones={painZones} />
+        </section>
+      )}
+
       {/* Body map + status */}
       <section style={panel}>
         <BodyMap
@@ -161,27 +187,6 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         {injury.notes ? <div style={muted}>{injury.notes}</div> : null}
         <InjuryStatusButtons id={injury.id} />
       </section>
-
-      {/* Pain stats + quick log */}
-      {injury.status !== "RESOLVED" && (
-        <section style={panel}>
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-            {recentPainLevel !== null && (
-              <div>
-                <div style={statLabel}>Most recent</div>
-                <div style={{ ...statValue, color: painColor(recentPainLevel) }}>{recentPainLevel}/10</div>
-              </div>
-            )}
-            {avgPainLevel !== null && (
-              <div>
-                <div style={statLabel}>Avg pain ({painLogs.length} logs)</div>
-                <div style={{ ...statValue, color: painColor(avgPainLevel) }}>{avgPainLevel}/10</div>
-              </div>
-            )}
-          </div>
-          <QuickInjuryPainLog zones={painZones} />
-        </section>
-      )}
 
       {/* Pain history */}
       <section style={panel}>
