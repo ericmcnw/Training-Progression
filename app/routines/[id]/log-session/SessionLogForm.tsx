@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { logSession } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import SportZoneTagger from "@/app/components/log/SportZoneTagger";
@@ -11,8 +11,6 @@ import {
   FormActions,
   FormSection,
   FormStack,
-  OptionalDateSection,
-  helperTextStyle,
   inputStyle,
   textareaStyle,
 } from "../log/form-ui";
@@ -22,8 +20,16 @@ import {
   parseSessionMetricNumber,
   type SessionMetricDefinitionWithConfig,
 } from "@/lib/session-templates";
+import {
+  type SessionDraft,
+  clearDraftFromStorage,
+  draftAgeLabel,
+  draftIsRecent,
+  loadDraftFromStorage,
+  saveDraftToStorage,
+} from "@/lib/log-draft";
+import { useLogDraft } from "@/app/contexts/LogDraftContext";
 
-// Zones pre-selected for climbing sessions: fingers/hands, forearms, lats (upper-back), traps
 const CLIMBING_AUTO_ZONES = [
   { slug: "hands", label: "Fingers / Hands" },
   { slug: "forearm", label: "Forearms" },
@@ -40,6 +46,8 @@ export default function SessionLogForm({
   preferredClimbingGrades,
   routineName,
   activePainZones = [],
+  onComplete,
+  onBack,
 }: {
   routineId: string;
   routineName: string;
@@ -48,9 +56,14 @@ export default function SessionLogForm({
   definitions: SessionMetricDefinitionWithConfig[];
   preferredClimbingGrades: string[];
   activePainZones?: PainCheckZone[];
+  onComplete?: () => void;
+  onBack?: () => void;
 }) {
-  // If the template already has a "Session Notes" textarea metric, hide the generic notes section
+  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+
   const templateHasNotes = definitions.some((d) => d.config?.input === "textarea" && d.valueType === "TEXT");
+  const isClimbing = isClimbingTemplateKey(templateKey);
 
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
@@ -62,9 +75,70 @@ export default function SessionLogForm({
   const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
 
-  const isClimbing = isClimbingTemplateKey(templateKey);
+  // Draft state
+  const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
+  const isDirtyRef = useRef(false);
+  const draftStartedAtRef = useRef(new Date().toISOString());
 
-  // Zone tagger step (climbing only) — shown after save, before pain check
+  // Restore draft on mount
+  useEffect(() => {
+    const draft = loadDraftFromStorage(routineId);
+    if (!draft || draft.kind !== "SESSION") return;
+
+    draftStartedAtRef.current = draft.startedAt;
+    setDurationMin(draft.durationMin);
+    setLocation(draft.location);
+    setSessionMetricValues(draft.sessionMetricValues);
+    setSelectedClimbingGrades(draft.selectedClimbingGrades);
+    setNotes(draft.notes);
+    setPerformedAtLocal(draft.performedAtLocal);
+    isDirtyRef.current = true;
+    setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
+    contextSaveDraft(draft);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save draft on any state change
+  useEffect(() => {
+    if (!isDirtyRef.current) return;
+    const draft: SessionDraft = {
+      kind: "SESSION",
+      routineId,
+      routineName,
+      startedAt: draftStartedAtRef.current,
+      durationMin,
+      location,
+      sessionMetricValues,
+      selectedClimbingGrades,
+      notes,
+      performedAtLocal,
+    };
+    const timer = setTimeout(() => {
+      saveDraftToStorage(draft);
+      contextSaveDraft(draft);
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationMin, location, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal]);
+
+  function markDirty() {
+    isDirtyRef.current = true;
+  }
+
+  function handleStartFresh() {
+    clearDraftFromStorage(routineId);
+    contextClearDraft(routineId);
+    setDurationMin("");
+    setLocation("");
+    setSessionMetricValues({});
+    setSelectedClimbingGrades(preferredClimbingGrades);
+    setNotes("");
+    setPerformedAtLocal("");
+    isDirtyRef.current = false;
+    draftStartedAtRef.current = new Date().toISOString();
+    setDraftBanner(null);
+  }
+
   if (zoneTagLogId) {
     return (
       <SportZoneTagger
@@ -77,7 +151,7 @@ export default function SessionLogForm({
             setPainCheckLogId(zoneTagLogId);
             setZoneTagLogId(null);
           } else {
-            window.location.href = "/routines";
+            finish();
           }
         }}
       />
@@ -85,7 +159,7 @@ export default function SessionLogForm({
   }
 
   if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
   }
 
   async function onSave() {
@@ -137,6 +211,8 @@ export default function SessionLogForm({
         sessionMetricValues: structuredValues,
         preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
       });
+      clearDraftFromStorage(routineId);
+      contextClearDraft(routineId);
       if (logId && isClimbing) {
         setZoneTagLogId(logId);
         return;
@@ -145,7 +221,7 @@ export default function SessionLogForm({
         setPainCheckLogId(logId);
         return;
       }
-      window.location.href = "/routines";
+      finish();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save session.");
     } finally {
@@ -153,20 +229,61 @@ export default function SessionLogForm({
     }
   }
 
+  const hasVisibleMetrics = definitions.filter(
+    (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
+  ).length > 0;
+
   return (
     <FormStack maxWidth={640}>
-      <FormSection title="Session details" description="Use the same review-friendly structure as the other routine logs, then fill in only the fields that matter for this session type.">
+
+      {/* Draft banners */}
+      {draftBanner === "recent" && (
+        <div style={draftBannerGreen}>
+          <span>In-progress session restored · {draftAgeLabel({ startedAt: draftStartedAtRef.current } as SessionDraft)}</span>
+          <button type="button" onClick={handleStartFresh} style={draftBannerBtnStyle}>Start fresh</button>
+        </div>
+      )}
+      {draftBanner === "older" && (
+        <div style={draftBannerAmber}>
+          <span>Unfinished session from {draftAgeLabel({ startedAt: draftStartedAtRef.current } as SessionDraft)} — continuing from draft</span>
+          <button type="button" onClick={handleStartFresh} style={draftBannerBtnStyle}>Start fresh</button>
+        </div>
+      )}
+
+      <FormSection title="Overview">
         <Field label="Duration (minutes, optional)">
-          <input style={inputStyle} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
+          <input
+            style={inputStyle}
+            value={durationMin}
+            onChange={(e) => { markDirty(); setDurationMin(e.target.value); }}
+            inputMode="decimal"
+            placeholder="e.g. 90"
+          />
         </Field>
 
         <Field label="Location (optional)">
-          <input style={inputStyle} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Gym, beach, bouldering wall..." />
+          <input
+            style={inputStyle}
+            value={location}
+            onChange={(e) => { markDirty(); setLocation(e.target.value); }}
+            placeholder="Gym, crag, trail…"
+          />
         </Field>
 
-        {templateName ? <div style={helperTextStyle}>Template: {templateName}</div> : null}
+        <Field label="Performed at (leave blank for now)">
+          <input
+            type="datetime-local"
+            style={inputStyle}
+            value={performedAtLocal}
+            onChange={(e) => { markDirty(); setPerformedAtLocal(e.target.value); }}
+          />
+        </Field>
+
+        {templateName ? (
+          <div style={{ fontSize: 12, opacity: 0.65 }}>Template: {templateName}</div>
+        ) : null}
         {!templateKey && definitions.length === 0 ? (
-          <div style={{ ...helperTextStyle, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
+          <div style={{ fontSize: 12, opacity: 0.65, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
             No template configured — only duration and notes will be saved.{" "}
             <a href={`/routines/${routineId}/edit`} style={{ color: "inherit", opacity: 0.9 }}>
               Add a template
@@ -176,60 +293,100 @@ export default function SessionLogForm({
         ) : null}
       </FormSection>
 
-      {isClimbingTemplateKey(templateKey) ? (
-        <FormSection title="Climbing details" description="Preferred grades stay grouped with the rest of the session metrics for easier mobile editing.">
+      {isClimbing ? (
+        <FormSection title="Climbing">
           <ClimbingGradeRowsEditor
-            templateKey={templateKey}
+            templateKey={templateKey!}
             definitions={definitions}
             values={sessionMetricValues}
             selectedGrades={selectedClimbingGrades}
-            onValuesChange={(metricDefinitionId, value) =>
+            onValuesChange={(metricDefinitionId, value) => {
+              markDirty();
               setSessionMetricValues((current) => ({
                 ...current,
-                [metricDefinitionId]: {
-                  ...current[metricDefinitionId],
-                  ...value,
-                },
-              }))
-            }
-            onSelectedGradesChange={setSelectedClimbingGrades}
+                [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
+              }));
+            }}
+            onSelectedGradesChange={(grades) => { markDirty(); setSelectedClimbingGrades(grades); }}
           />
         </FormSection>
       ) : null}
 
-      <FormSection title="Session metrics" description="Structured metrics stay here so every session-type routine follows the same scan pattern.">
-        <SessionMetricFields
-          definitions={definitions}
-          values={sessionMetricValues}
-          onChange={(metricDefinitionId, value) =>
-            setSessionMetricValues((current) => ({
-              ...current,
-              [metricDefinitionId]: {
-                ...current[metricDefinitionId],
-                ...value,
-              },
-            }))
-          }
-        />
-      </FormSection>
+      {hasVisibleMetrics ? (
+        <FormSection title="Metrics">
+          <SessionMetricFields
+            definitions={definitions}
+            values={sessionMetricValues}
+            onChange={(metricDefinitionId, value) => {
+              markDirty();
+              setSessionMetricValues((current) => ({
+                ...current,
+                [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
+              }));
+            }}
+          />
+        </FormSection>
+      ) : null}
 
       {!templateHasNotes && (
         <FormSection title="Notes">
           <Field label="Session notes (optional)">
-            <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
+            <textarea
+              style={textareaStyle}
+              value={notes}
+              onChange={(e) => { markDirty(); setNotes(e.target.value); }}
+            />
           </Field>
         </FormSection>
       )}
 
-      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
-
       <FormActions
         primaryLabel="Save Session"
-        primaryPendingLabel="Saving..."
+        primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
         backHref="/routines"
+        onBack={onBack}
       />
     </FormStack>
   );
 }
+
+const draftBannerGreen: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "10px 14px",
+  borderRadius: 12,
+  border: "1px solid rgba(84,203,130,0.4)",
+  background: "rgba(84,203,130,0.08)",
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const draftBannerAmber: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "10px 14px",
+  borderRadius: 12,
+  border: "1px solid rgba(251,191,36,0.4)",
+  background: "rgba(251,191,36,0.07)",
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const draftBannerBtnStyle: React.CSSProperties = {
+  padding: "5px 12px",
+  borderRadius: 8,
+  border: "1px solid rgba(128,128,128,0.45)",
+  background: "rgba(128,128,128,0.12)",
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 12,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};

@@ -93,21 +93,25 @@ export function FormActions({
   saving,
   onPrimary,
   backHref,
+  onBack,
 }: {
   primaryLabel: string;
   primaryPendingLabel: string;
   saving: boolean;
   onPrimary: () => void;
   backHref: string;
+  onBack?: () => void;
 }) {
   return (
     <div className="mobileStickyActions mobileActionRow" style={actionsStyle}>
       <button onClick={onPrimary} disabled={saving} style={primaryButtonStyle}>
         {saving ? primaryPendingLabel : primaryLabel}
       </button>
-      <Link href={backHref} style={secondaryButtonStyle}>
-        Back
-      </Link>
+      {onBack ? (
+        <button type="button" onClick={onBack} style={secondaryButtonStyle}>Back</button>
+      ) : (
+        <Link href={backHref} style={secondaryButtonStyle}>Back</Link>
+      )}
     </div>
   );
 }

@@ -1,0 +1,103 @@
+import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
+import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
+
+const DRAFT_KEY_PREFIX = "log-draft:";
+const DRAFT_INDEX_KEY = "log-draft-index";
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type WorkoutDraft = {
+  kind: "WORKOUT";
+  routineId: string;
+  routineName: string;
+  startedAt: string;
+  notes: string;
+  performedAtLocal: string;
+  blocks: WorkoutBlock[];
+};
+
+export type SessionDraft = {
+  kind: "SESSION";
+  routineId: string;
+  routineName: string;
+  startedAt: string;
+  notes: string;
+  performedAtLocal: string;
+  durationMin: string;
+  location: string;
+  sessionMetricValues: Record<string, SessionMetricDraftValue>;
+  selectedClimbingGrades: string[];
+};
+
+export type LogDraft = WorkoutDraft | SessionDraft;
+
+function draftKey(routineId: string) {
+  return `${DRAFT_KEY_PREFIX}${routineId}`;
+}
+
+export function loadDraftFromStorage(routineId: string): LogDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(draftKey(routineId));
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as LogDraft;
+    // Auto-expire drafts older than 7 days
+    if (Date.now() - new Date(draft.startedAt).getTime() > DRAFT_MAX_AGE_MS) {
+      clearDraftFromStorage(routineId);
+      return null;
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+export function loadAllDraftsFromStorage(): LogDraft[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
+    return index
+      .map((id) => loadDraftFromStorage(id))
+      .filter((d): d is LogDraft => d !== null);
+  } catch {
+    return [];
+  }
+}
+
+export function saveDraftToStorage(draft: LogDraft): void {
+  if (typeof window === "undefined") return;
+  try {
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
+    if (!index.includes(draft.routineId)) {
+      localStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify([...index, draft.routineId]));
+    }
+    localStorage.setItem(draftKey(draft.routineId), JSON.stringify(draft));
+  } catch {
+    // Ignore quota / private-mode errors
+  }
+}
+
+export function clearDraftFromStorage(routineId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(draftKey(routineId));
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
+    localStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify(index.filter((id) => id !== routineId)));
+  } catch {
+    // Ignore errors
+  }
+}
+
+export function draftAgeLabel(draft: LogDraft): string {
+  const ms = Date.now() - new Date(draft.startedAt).getTime();
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(ms / 86400000);
+  return `${days}d ago`;
+}
+
+export function draftIsRecent(draft: LogDraft): boolean {
+  return Date.now() - new Date(draft.startedAt).getTime() < 3 * 60 * 60 * 1000;
+}

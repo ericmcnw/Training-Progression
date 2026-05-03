@@ -10,26 +10,35 @@ import WorkoutExerciseEditor, {
 
 export default function LogWorkoutForm({
   routineId,
+  routineName,
   initialBlocks,
   availableExercises,
   smartDefaultLabel,
   activePainZones = [],
+  onComplete,
+  onBack,
 }: {
   routineId: string;
+  routineName: string;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
   smartDefaultLabel?: string | null;
   activePainZones?: PainCheckZone[];
+  onComplete?: () => void;
+  onBack?: () => void;
 }) {
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
   if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
   }
 
   return (
     <WorkoutExerciseEditor
       routineId={routineId}
+      routineName={routineName}
+      draftEnabled
       initialNotes=""
       initialPerformedAt=""
       initialBlocks={initialBlocks}
@@ -38,6 +47,7 @@ export default function LogWorkoutForm({
       saveLabel="Save Workout"
       savingLabel="Saving..."
       backHref="/routines"
+      onBack={onBack}
       createExerciseOption={createWorkoutExerciseOption}
       onSave={async (payload) => {
         const logId = await logWorkout({
@@ -50,7 +60,7 @@ export default function LogWorkoutForm({
           setPainCheckLogId(logId);
           return;
         }
-        window.location.href = "/routines";
+        finish();
       }}
     />
   );

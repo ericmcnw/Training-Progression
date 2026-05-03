@@ -1,8 +1,17 @@
 "use client";
 
 import { compareExerciseNames, condensedExerciseName, exerciseMatchesQuery, exerciseUnitFieldLabel, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
+import {
+  type WorkoutDraft,
+  clearDraftFromStorage,
+  draftAgeLabel,
+  draftIsRecent,
+  loadDraftFromStorage,
+  saveDraftToStorage,
+} from "@/lib/log-draft";
+import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Field, inputStyle, textareaStyle } from "./form-ui";
 
 export type ExerciseOption = {
@@ -62,6 +71,7 @@ function setGridColumns(block: WorkoutBlock): string {
 
 export default function WorkoutExerciseEditor({
   routineId,
+  routineName,
   initialNotes,
   initialPerformedAt,
   initialBlocks,
@@ -69,7 +79,9 @@ export default function WorkoutExerciseEditor({
   saveLabel,
   savingLabel,
   backHref,
+  onBack,
   smartDefaultLabel,
+  draftEnabled = false,
   addExerciseTitle = "Add Exercise To This Routine",
   addExerciseHelp = "Saving here updates the routine template too. Remove a block to remove it from the routine.",
   createExerciseHelp = "Creating here saves the exercise for future workouts and adds it to this routine now.",
@@ -78,6 +90,7 @@ export default function WorkoutExerciseEditor({
   onSave,
 }: {
   routineId: string;
+  routineName?: string;
   initialNotes: string;
   initialPerformedAt: string;
   initialBlocks: WorkoutBlock[];
@@ -85,7 +98,9 @@ export default function WorkoutExerciseEditor({
   saveLabel: string;
   savingLabel: string;
   backHref: string;
+  onBack?: () => void;
   smartDefaultLabel?: string | null;
+  draftEnabled?: boolean;
   addExerciseTitle?: string;
   addExerciseHelp?: string;
   createExerciseHelp?: string;
@@ -93,6 +108,8 @@ export default function WorkoutExerciseEditor({
   createExerciseOption: CreateExerciseOptionFn;
   onSave: (payload: SavePayload) => Promise<void>;
 }) {
+  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt);
   const [saving, setSaving] = useState(false);
@@ -105,6 +122,49 @@ export default function WorkoutExerciseEditor({
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
   const [activeBlockIdx, setActiveBlockIdx] = useState(0);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
+
+  // Draft state
+  const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
+  const isDirtyRef = useRef(false);
+  const draftStartedAtRef = useRef(new Date().toISOString());
+
+  // Restore draft on mount
+  useEffect(() => {
+    if (!draftEnabled) return;
+    const draft = loadDraftFromStorage(routineId);
+    if (!draft || draft.kind !== "WORKOUT") return;
+
+    draftStartedAtRef.current = draft.startedAt;
+    setBlocks(draft.blocks);
+    setNotes(draft.notes);
+    setPerformedAtLocal(draft.performedAtLocal);
+    isDirtyRef.current = true;
+    setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
+
+    // Sync into context (for Phase 2 tray)
+    contextSaveDraft(draft);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save draft whenever form state changes
+  useEffect(() => {
+    if (!draftEnabled || !isDirtyRef.current) return;
+    const draft: WorkoutDraft = {
+      kind: "WORKOUT",
+      routineId,
+      routineName: routineName ?? "",
+      startedAt: draftStartedAtRef.current,
+      notes,
+      performedAtLocal,
+      blocks,
+    };
+    const timer = setTimeout(() => {
+      saveDraftToStorage(draft);
+      contextSaveDraft(draft);
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, notes, performedAtLocal]);
 
   const safeActiveIdx = Math.min(activeBlockIdx, Math.max(0, blocks.length - 1));
   const activeBlock = blocks[safeActiveIdx] ?? null;
@@ -123,7 +183,12 @@ export default function WorkoutExerciseEditor({
     return exerciseOptions.some((exercise) => condensedExerciseName(exercise.name) === normalizedQuery);
   }, [exerciseOptions, exerciseQuery]);
 
+  function markDirty() {
+    isDirtyRef.current = true;
+  }
+
   function addExercise(exerciseId: string) {
+    markDirty();
     const exercise = exerciseOptions.find((item) => item.id === exerciseId);
     if (!exercise) return;
     setActiveBlockIdx(blocks.length);
@@ -143,10 +208,12 @@ export default function WorkoutExerciseEditor({
   }
 
   function removeExercise(exerciseId: string) {
+    markDirty();
     setBlocks((prev) => prev.filter((block) => block.exerciseId !== exerciseId));
   }
 
   function addRow(exerciseId: string) {
+    markDirty();
     setBlocks((prev) =>
       prev.map((block) => {
         if (block.exerciseId !== exerciseId) return block;
@@ -156,6 +223,7 @@ export default function WorkoutExerciseEditor({
   }
 
   function removeRow(exerciseId: string, setNumber: number) {
+    markDirty();
     setBlocks((prev) =>
       prev.map((block) => {
         if (block.exerciseId !== exerciseId) return block;
@@ -167,7 +235,25 @@ export default function WorkoutExerciseEditor({
     );
   }
 
+  function clearRow(exerciseId: string, setNumber: number) {
+    markDirty();
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.exerciseId !== exerciseId) return block;
+        return {
+          ...block,
+          rows: block.rows.map((row) =>
+            row.setNumber === setNumber
+              ? { setNumber: row.setNumber }
+              : row
+          ),
+        };
+      })
+    );
+  }
+
   function updateCell(exerciseId: string, setNumber: number, key: keyof SetRow, value: string) {
+    markDirty();
     setBlocks((prev) =>
       prev.map((block) => {
         if (block.exerciseId !== exerciseId) return block;
@@ -180,6 +266,7 @@ export default function WorkoutExerciseEditor({
   }
 
   function copyPrevSet(exerciseId: string, setNumber: number) {
+    markDirty();
     setBlocks((prev) =>
       prev.map((block) => {
         if (block.exerciseId !== exerciseId) return block;
@@ -196,6 +283,17 @@ export default function WorkoutExerciseEditor({
         };
       })
     );
+  }
+
+  function handleStartFresh() {
+    clearDraftFromStorage(routineId);
+    contextClearDraft(routineId);
+    setBlocks(initialBlocks);
+    setNotes(initialNotes);
+    setPerformedAtLocal(initialPerformedAt);
+    isDirtyRef.current = false;
+    draftStartedAtRef.current = new Date().toISOString();
+    setDraftBanner(null);
   }
 
   function toNumOrNull(value?: string) {
@@ -221,12 +319,17 @@ export default function WorkoutExerciseEditor({
           })),
         })),
       });
+      // Clear draft on successful save
+      if (draftEnabled) {
+        clearDraftFromStorage(routineId);
+        contextClearDraft(routineId);
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  function handleCreateExercise() {
+  async function handleCreateExercise() {
     const name = normalizeExerciseName(exerciseQuery);
     if (!name) {
       setExerciseError("Enter an exercise name.");
@@ -245,6 +348,7 @@ export default function WorkoutExerciseEditor({
           if (prev.some((exercise) => exercise.id === created.id)) return prev;
           return [...prev, created].sort((a, b) => compareExerciseNames(a.name, b.name));
         });
+        markDirty();
         setActiveBlockIdx(blocks.length);
         setBlocks((prev) => [
           ...prev,
@@ -265,7 +369,6 @@ export default function WorkoutExerciseEditor({
     });
   }
 
-  // Session detail summary label
   const sessionSummary = [
     performedAtLocal
       ? new Date(performedAtLocal).toLocaleDateString(undefined, { month: "short", day: "numeric" })
@@ -275,8 +378,33 @@ export default function WorkoutExerciseEditor({
     .filter(Boolean)
     .join(" · ");
 
+  // Count logged sets per block (has at least one non-empty value)
+  function countLoggedSets(block: WorkoutBlock): number {
+    return block.rows.filter(
+      (r) => (r.reps ?? r.seconds ?? r.weightLb ?? "").toString().trim() !== ""
+    ).length;
+  }
+
   return (
     <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth: 880, minWidth: 0 }}>
+
+      {/* Draft banner */}
+      {draftBanner === "recent" && (
+        <div style={styles.draftBannerGreen}>
+          <span>In-progress session restored · {draftAgeLabel({ startedAt: draftStartedAtRef.current } as WorkoutDraft)}</span>
+          <button type="button" onClick={handleStartFresh} style={styles.draftBannerBtn}>
+            Start fresh
+          </button>
+        </div>
+      )}
+      {draftBanner === "older" && (
+        <div style={styles.draftBannerAmber}>
+          <span>Unfinished session from {draftAgeLabel({ startedAt: draftStartedAtRef.current } as WorkoutDraft)} — continuing from draft</span>
+          <button type="button" onClick={handleStartFresh} style={styles.draftBannerBtn}>
+            Start fresh
+          </button>
+        </div>
+      )}
 
       {/* Exercise blocks card */}
       <div className="mobileCard" style={styles.blocksCard}>
@@ -284,16 +412,25 @@ export default function WorkoutExerciseEditor({
         {/* Tab bar */}
         {blocks.length > 0 && (
           <div style={styles.tabBar}>
-            {blocks.map((block, idx) => (
-              <button
-                key={block.exerciseId}
-                type="button"
-                onClick={() => setActiveBlockIdx(idx)}
-                style={safeActiveIdx === idx ? styles.tabActive : styles.tab}
-              >
-                {block.name.length > 20 ? block.name.slice(0, 18) + "…" : block.name}
-              </button>
-            ))}
+            {blocks.map((block, idx) => {
+              const loggedSets = countLoggedSets(block);
+              const label = block.name.length > 18 ? block.name.slice(0, 16) + "…" : block.name;
+              return (
+                <button
+                  key={block.exerciseId}
+                  type="button"
+                  onClick={() => setActiveBlockIdx(idx)}
+                  style={safeActiveIdx === idx ? styles.tabActive : styles.tab}
+                >
+                  {label}
+                  {loggedSets > 0 && (
+                    <span style={safeActiveIdx === idx ? styles.tabBadgeActive : styles.tabBadge}>
+                      {loggedSets}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -314,7 +451,6 @@ export default function WorkoutExerciseEditor({
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{activeBlock.name}</div>
                 <div style={{ fontSize: 12, opacity: 0.68, marginTop: 3 }}>
                   {exerciseUnitLabel(activeBlock.unit)}{activeBlock.supportsWeight ? " · Weighted" : ""}
-                  {" · Leave rows blank to keep without logging."}
                 </div>
               </div>
               <button
@@ -325,6 +461,11 @@ export default function WorkoutExerciseEditor({
                 Remove
               </button>
             </div>
+
+            {/* Prefill hint */}
+            {smartDefaultLabel && !draftBanner && (
+              <div style={styles.prefillHint}>{smartDefaultLabel}</div>
+            )}
 
             {/* Column headers */}
             <div
@@ -393,15 +534,23 @@ export default function WorkoutExerciseEditor({
                         type="button"
                         onClick={() => copyPrevSet(activeBlock.exerciseId, row.setNumber)}
                         style={styles.iconBtn}
-                        title="Copy previous set"
+                        title="Copy set above"
                       >
                         ↑
                       </button>
                     )}
                     <button
                       type="button"
-                      onClick={() => removeRow(activeBlock.exerciseId, row.setNumber)}
+                      onClick={() => clearRow(activeBlock.exerciseId, row.setNumber)}
                       style={styles.iconBtn}
+                      title="Clear this row"
+                    >
+                      ⌫
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(activeBlock.exerciseId, row.setNumber)}
+                      style={styles.iconBtnDanger}
                       title="Remove set"
                     >
                       ✕
@@ -513,25 +662,22 @@ export default function WorkoutExerciseEditor({
       {/* Session details — collapsible */}
       <details style={styles.detailsSection}>
         <summary style={styles.detailsSummary}>
-          Session details{sessionSummary ? ` · ${sessionSummary}` : ""}
+          Log details{sessionSummary ? ` · ${sessionSummary}` : ""}
         </summary>
         <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-          {smartDefaultLabel && (
-            <div style={styles.smartDefaultNote}>{smartDefaultLabel}</div>
-          )}
-          <Field label="Performed at">
+          <Field label="Performed at (leave blank for now)">
             <input
               type="datetime-local"
               style={inputStyle}
               value={performedAtLocal}
-              onChange={(e) => setPerformedAtLocal(e.target.value)}
+              onChange={(e) => { markDirty(); setPerformedAtLocal(e.target.value); }}
             />
           </Field>
           <Field label="Notes (optional)">
             <textarea
               style={{ ...textareaStyle, minHeight: 80 }}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => { markDirty(); setNotes(e.target.value); }}
             />
           </Field>
         </div>
@@ -555,15 +701,66 @@ export default function WorkoutExerciseEditor({
         >
           {saving ? savingLabel : saveLabel}
         </button>
-        <Link href={backHref} style={styles.backBtn}>
-          Back
-        </Link>
+        {onBack ? (
+          <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
+        ) : (
+          <Link href={backHref} style={styles.backBtn}>Back</Link>
+        )}
       </div>
     </div>
   );
 }
 
 const styles = {
+  draftBannerGreen: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(84,203,130,0.4)",
+    background: "rgba(84,203,130,0.08)",
+    fontSize: 13,
+    fontWeight: 700,
+  } as React.CSSProperties,
+
+  draftBannerAmber: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(251,191,36,0.4)",
+    background: "rgba(251,191,36,0.07)",
+    fontSize: 13,
+    fontWeight: 700,
+  } as React.CSSProperties,
+
+  draftBannerBtn: {
+    padding: "5px 12px",
+    borderRadius: 8,
+    border: "1px solid rgba(128,128,128,0.45)",
+    background: "rgba(128,128,128,0.12)",
+    color: "inherit",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  } as React.CSSProperties,
+
+  prefillHint: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 10,
+    padding: "6px 10px",
+    borderRadius: 8,
+    border: "1px solid rgba(84,203,130,0.28)",
+    background: "rgba(84,203,130,0.06)",
+  } as React.CSSProperties,
+
   blocksCard: {
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: 16,
@@ -583,7 +780,10 @@ const styles = {
   } as React.CSSProperties,
 
   tab: {
-    padding: "6px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
     borderRadius: 20,
     border: "1px solid rgba(128,128,128,0.35)",
     background: "rgba(128,128,128,0.1)",
@@ -596,7 +796,10 @@ const styles = {
   } as React.CSSProperties,
 
   tabActive: {
-    padding: "6px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
     borderRadius: 20,
     border: "1px solid rgba(115,220,152,0.55)",
     background: "rgba(115,220,152,0.18)",
@@ -606,6 +809,32 @@ const styles = {
     color: "inherit",
     cursor: "pointer",
     flexShrink: 0,
+  } as React.CSSProperties,
+
+  tabBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    background: "rgba(128,128,128,0.3)",
+    fontSize: 11,
+    fontWeight: 900,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 4px",
+  } as React.CSSProperties,
+
+  tabBadgeActive: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    background: "rgba(115,220,152,0.35)",
+    fontSize: 11,
+    fontWeight: 900,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 4px",
   } as React.CSSProperties,
 
   blockHeader: {
@@ -651,6 +880,22 @@ const styles = {
     borderRadius: 8,
     border: "1px solid rgba(128,128,128,0.35)",
     background: "rgba(128,128,128,0.1)",
+    color: "inherit",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  } as React.CSSProperties,
+
+  iconBtnDanger: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1px solid rgba(220,38,38,0.3)",
+    background: "rgba(220,38,38,0.06)",
     color: "inherit",
     fontWeight: 700,
     fontSize: 14,
@@ -745,15 +990,6 @@ const styles = {
     fontWeight: 800,
     fontSize: 13,
     userSelect: "none",
-  } as React.CSSProperties,
-
-  smartDefaultNote: {
-    border: "1px solid rgba(84,203,130,0.35)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    background: "rgba(84,203,130,0.08)",
-    fontSize: 12,
-    opacity: 0.86,
   } as React.CSSProperties,
 
   stickyBar: {

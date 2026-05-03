@@ -179,8 +179,33 @@ details[open] > summary[data-collapsible-summary]::before{
   display: none;
 }
 
+.activeTray{
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 38;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  max-width: 340px;
+}
+
 .mobileProfileButton{
   display: none;
+}
+
+.logDrawerBackdrop{
+  display: none;
+}
+
+.logDrawerSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .appMain{
@@ -485,6 +510,19 @@ details[open] > summary[data-collapsible-summary]::before{
     display: block;
     padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
     pointer-events: none;
+  }
+
+  .activeTray{
+    left: 0;
+    right: 0;
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+    border-top: 1px solid rgba(255,255,255,0.09);
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: none;
+    max-width: none;
   }
 
   .mobileProfileButton{
@@ -1335,5 +1373,30 @@ details[open] > summary[data-collapsible-summary]::before{
   /* Priority cell: drop the right border divider in 2-col mode */
   .mobileHeroPriority{
     border-right: none !important;
+  }
+}
+
+/* ── Desktop: drawer as centered modal ──────────────────────────────── */
+@media (min-width: 721px) {
+  .logDrawerBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(5px);
+  }
+
+  .logDrawerSheet {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(880px, 96vw);
+    height: min(90vh, 920px);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 28px 80px rgba(0,0,0,0.65);
+    background: var(--panel);
   }
 }

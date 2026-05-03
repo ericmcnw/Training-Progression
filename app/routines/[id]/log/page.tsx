@@ -377,6 +377,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
           {isWorkoutKind(kind) ? (
             <LogWorkoutForm
               routineId={routineId}
+              routineName={routine.name}
               initialBlocks={initialBlocks}
               availableExercises={availableExercisesForLog}
               smartDefaultLabel={

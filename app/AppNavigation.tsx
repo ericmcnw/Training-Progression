@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useLogDraft } from "@/app/contexts/LogDraftContext";
 
 const desktopNavItems = [
   { href: "/", label: "Dashboard", match: (pathname: string) => pathname === "/" },
@@ -25,15 +26,25 @@ const mobileNavItems = [
 
 export default function AppNavigation() {
   const pathname = usePathname();
+  const { allDrafts } = useLogDraft();
+  const draftCount = allDrafts.length;
 
   return (
     <nav className="appNav" aria-label="Primary">
       {desktopNavItems.map((item) => {
         const active = item.match(pathname);
+        const showBadge = item.href === "/routines" && draftCount > 0;
 
         return (
-          <Link key={item.href} className="navLink" href={item.href} aria-current={active ? "page" : undefined}>
+          <Link
+            key={item.href}
+            className="navLink"
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            style={{ position: "relative" }}
+          >
             {item.label}
+            {showBadge && <span style={draftBadgeStyle}>{draftCount}</span>}
           </Link>
         );
       })}
@@ -43,12 +54,15 @@ export default function AppNavigation() {
 
 export function MobileBottomNavigation() {
   const pathname = usePathname();
+  const { allDrafts } = useLogDraft();
+  const draftCount = allDrafts.length;
 
   return (
     <nav className="mobileBottomNav" aria-label="Mobile primary">
       <div className="mobileBottomNavInner">
       {mobileNavItems.map((item) => {
           const active = item.match(pathname);
+          const showBadge = item.href === "/routines" && draftCount > 0;
 
           return (
             <Link
@@ -58,8 +72,11 @@ export function MobileBottomNavigation() {
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
             >
-              <span className="mobileBottomNavIcon" aria-hidden="true">
+              <span className="mobileBottomNavIcon" aria-hidden="true" style={{ position: "relative" }}>
                 {item.icon}
+                {showBadge && (
+                  <span style={draftBadgeStyle}>{draftCount}</span>
+                )}
               </span>
               <span className="mobileBottomNavText">{item.label}</span>
             </Link>
@@ -175,3 +192,22 @@ function ProfileIcon() {
     </svg>
   );
 }
+
+const draftBadgeStyle: React.CSSProperties = {
+  position: "absolute",
+  top: -5,
+  right: -5,
+  minWidth: 16,
+  height: 16,
+  padding: "0 3px",
+  background: "#fbbf24",
+  borderRadius: 99,
+  fontSize: 9,
+  fontWeight: 900,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#000",
+  lineHeight: 1,
+  pointerEvents: "none",
+};
