@@ -186,30 +186,33 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
         }
       })()
     : [];
-  const lastWorkoutLog = isWorkoutKind(kind)
-    ? await prisma.routineLog.findFirst({
-        where: { routineId, exercises: { some: {} } },
-        orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
-        select: {
-          performedAt: true,
-          exercises: {
-            orderBy: { createdAt: "asc" },
+  const exerciseIds = isWorkoutKind(kind) ? routine.exercises.map((e) => e.exerciseId) : [];
+  const lastExerciseEntries = exerciseIds.length > 0
+    ? await Promise.all(
+        exerciseIds.map((eid) =>
+          prisma.sessionExercise.findFirst({
+            where: {
+              exerciseId: eid,
+              sets: { some: { OR: [{ reps: { not: null } }, { seconds: { not: null } }, { weightLb: { not: null } }] } },
+            },
+            orderBy: { routineLog: { performedAt: "desc" } },
             select: {
               exerciseId: true,
+              routineLog: { select: { performedAt: true } },
               sets: {
                 orderBy: { setNumber: "asc" },
-                select: {
-                  setNumber: true,
-                  reps: true,
-                  seconds: true,
-                  weightLb: true,
-                },
+                select: { setNumber: true, reps: true, seconds: true, weightLb: true },
               },
             },
-          },
-        },
-      })
-    : null;
+          })
+        )
+      )
+    : [];
+  const lastExerciseMap = new Map(
+    lastExerciseEntries
+      .filter((e): e is NonNullable<typeof e> => e !== null)
+      .map((e) => [e.exerciseId, e])
+  );
 
   const recentLogs: RoutineLogSummary[] = isWorkoutKind(kind)
     ? (
@@ -315,22 +318,21 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
         })
       ).map((log) => ({ ...log, type: "COMPLETION" as const }));
 
-  const lastWorkoutExerciseMap = new Map(
-    (lastWorkoutLog?.exercises ?? []).map((exercise) => [exercise.exerciseId, exercise])
-  );
-
   const initialBlocks = routine.exercises.map((exercise) => {
-    const previousExercise = lastWorkoutExerciseMap.get(exercise.exerciseId);
+    const prev = lastExerciseMap.get(exercise.exerciseId);
     const lastRows =
-      previousExercise?.sets
-        .filter((set) => set.reps !== null || set.seconds !== null || set.weightLb !== null)
-        .map((set) => ({
-          setNumber: set.setNumber,
-          reps: set.reps !== null ? String(set.reps) : undefined,
-          seconds: set.seconds !== null ? String(set.seconds) : undefined,
-          weightLb: set.weightLb !== null ? String(set.weightLb) : undefined,
+      prev?.sets
+        .filter((s) => s.reps !== null || s.seconds !== null || s.weightLb !== null)
+        .map((s) => ({
+          setNumber: s.setNumber,
+          reps: s.reps !== null ? String(s.reps) : undefined,
+          seconds: s.seconds !== null ? String(s.seconds) : undefined,
+          weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
         })) ?? [];
     const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
+    const lastDate = prev?.routineLog?.performedAt
+      ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(prev.routineLog.performedAt)
+      : undefined;
 
     return {
       exerciseId: exercise.exerciseId,
@@ -339,6 +341,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
       supportsWeight: exercise.exercise.supportsWeight,
       rows: Array.from({ length: defaultSetCount }, (_, index) => ({ setNumber: index + 1 })),
       lastRows: lastRows.length > 0 ? lastRows : undefined,
+      lastDate,
     };
   });
 
@@ -377,11 +380,6 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               routineName={routine.name}
               initialBlocks={initialBlocks}
               availableExercises={availableExercisesForLog}
-              smartDefaultLabel={
-                lastWorkoutLog?.performedAt
-                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(lastWorkoutLog.performedAt)
-                  : null
-              }
               activePainZones={activePainZones}
             />
           ) : isCardioKind(kind) ? (

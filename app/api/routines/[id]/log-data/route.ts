@@ -52,34 +52,39 @@ export async function GET(
   const kind = normalizeRoutineKind(routine.kind);
 
   if (isWorkoutKind(kind)) {
-    const [availableExercises, lastWorkoutLog, activePainZones] = await Promise.all([
+    const exerciseIds = routine.exercises.map((e) => e.exerciseId);
+    const [availableExercises, lastExerciseEntries, activePainZones] = await Promise.all([
       fetchAvailableExercises(),
-      prisma.routineLog.findFirst({
-        where: { routineId, exercises: { some: {} } },
-        orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
-        select: {
-          performedAt: true,
-          exercises: {
-            orderBy: { createdAt: "asc" },
+      Promise.all(
+        exerciseIds.map((eid) =>
+          prisma.sessionExercise.findFirst({
+            where: {
+              exerciseId: eid,
+              sets: { some: { OR: [{ reps: { not: null } }, { seconds: { not: null } }, { weightLb: { not: null } }] } },
+            },
+            orderBy: { routineLog: { performedAt: "desc" } },
             select: {
               exerciseId: true,
+              routineLog: { select: { performedAt: true } },
               sets: {
                 orderBy: { setNumber: "asc" },
                 select: { setNumber: true, reps: true, seconds: true, weightLb: true },
               },
             },
-          },
-        },
-      }),
+          })
+        )
+      ),
       getRoutinePainCheckZones(routineId),
     ]);
 
-    const lastWorkoutExerciseMap = new Map(
-      (lastWorkoutLog?.exercises ?? []).map((e) => [e.exerciseId, e])
+    const lastExerciseMap = new Map(
+      lastExerciseEntries
+        .filter((e): e is NonNullable<typeof e> => e !== null)
+        .map((e) => [e.exerciseId, e])
     );
 
     const initialBlocks = routine.exercises.map((exercise) => {
-      const prev = lastWorkoutExerciseMap.get(exercise.exerciseId);
+      const prev = lastExerciseMap.get(exercise.exerciseId);
       const lastRows =
         prev?.sets
           .filter((s) => s.reps !== null || s.seconds !== null || s.weightLb !== null)
@@ -90,6 +95,9 @@ export async function GET(
             weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
           })) ?? [];
       const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
+      const lastDate = prev?.routineLog?.performedAt
+        ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(prev.routineLog.performedAt)
+        : undefined;
 
       return {
         exerciseId: exercise.exerciseId,
@@ -98,12 +106,9 @@ export async function GET(
         supportsWeight: exercise.exercise.supportsWeight,
         rows: Array.from({ length: defaultSetCount }, (_, i) => ({ setNumber: i + 1 })),
         lastRows: lastRows.length > 0 ? lastRows : undefined,
+        lastDate,
       };
     });
-
-    const smartDefaultLabel = lastWorkoutLog?.performedAt
-      ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(lastWorkoutLog.performedAt)
-      : null;
 
     return NextResponse.json({
       kind: "WORKOUT",
@@ -111,7 +116,6 @@ export async function GET(
       routineName: routine.name,
       initialBlocks,
       availableExercises,
-      smartDefaultLabel,
       activePainZones,
     });
   }

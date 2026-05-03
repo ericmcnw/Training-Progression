@@ -37,6 +37,7 @@ export type WorkoutBlock = {
   supportsWeight: boolean;
   rows: SetRow[];
   lastRows?: SetRow[];
+  lastDate?: string;
 };
 
 type SavePayload = {
@@ -81,7 +82,6 @@ export default function WorkoutExerciseEditor({
   savingLabel,
   backHref,
   onBack,
-  smartDefaultLabel,
   draftEnabled = false,
   addExerciseTitle = "Add Exercise To This Routine",
   addExerciseHelp = "Saving here updates the routine template too. Remove a block to remove it from the routine.",
@@ -100,7 +100,6 @@ export default function WorkoutExerciseEditor({
   savingLabel: string;
   backHref: string;
   onBack?: () => void;
-  smartDefaultLabel?: string | null;
   draftEnabled?: boolean;
   addExerciseTitle?: string;
   addExerciseHelp?: string;
@@ -121,7 +120,7 @@ export default function WorkoutExerciseEditor({
   const [exerciseError, setExerciseError] = useState("");
   const [exerciseOptions, setExerciseOptions] = useState(availableExercises);
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
-  const [activeBlockIdx, setActiveBlockIdx] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(initialBlocks[0]?.exerciseId ?? null);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -137,18 +136,18 @@ export default function WorkoutExerciseEditor({
     if (!draft || draft.kind !== "WORKOUT") return;
 
     draftStartedAtRef.current = draft.startedAt;
-    setBlocks(
-      draft.blocks.map((draftBlock) => {
-        const initial = initialBlocks.find((b) => b.exerciseId === draftBlock.exerciseId);
-        return initial?.lastRows ? { ...draftBlock, lastRows: initial.lastRows } : draftBlock;
-      })
-    );
+    const restored = draft.blocks.map((draftBlock) => {
+      const initial = initialBlocks.find((b) => b.exerciseId === draftBlock.exerciseId);
+      return initial?.lastRows
+        ? { ...draftBlock, lastRows: initial.lastRows, lastDate: initial.lastDate }
+        : draftBlock;
+    });
+    setBlocks(restored);
+    setExpandedId(restored[0]?.exerciseId ?? null);
     setNotes(draft.notes);
     setPerformedAtLocal(draft.performedAtLocal);
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
-
-    // Sync into context (for Phase 2 tray)
     contextSaveDraft(draft);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -173,14 +172,6 @@ export default function WorkoutExerciseEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, notes, performedAtLocal]);
 
-  const safeActiveIdx = Math.min(activeBlockIdx, Math.max(0, blocks.length - 1));
-  const activeBlock = blocks[safeActiveIdx] ?? null;
-
-  const lastRowsMap = useMemo(
-    () => new Map((activeBlock?.lastRows ?? []).map((r) => [r.setNumber, r])),
-    [activeBlock]
-  );
-
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
     return exerciseOptions.filter((exercise) => {
@@ -199,12 +190,11 @@ export default function WorkoutExerciseEditor({
     isDirtyRef.current = true;
   }
 
-  function advanceFocus(rowIdx: number, field: "weightLb" | "reps" | "seconds") {
-    if (!activeBlock) return;
+  function advanceFocus(block: WorkoutBlock, rowIdx: number, field: "weightLb" | "reps" | "seconds") {
     const nextKey =
       field === "weightLb"
-        ? `${rowIdx}-${activeBlock.unit === "REPS" ? "reps" : "seconds"}`
-        : `${rowIdx + 1}-${activeBlock.supportsWeight ? "weightLb" : activeBlock.unit === "REPS" ? "reps" : "seconds"}`;
+        ? `${rowIdx}-${block.unit === "REPS" ? "reps" : "seconds"}`
+        : `${rowIdx + 1}-${block.supportsWeight ? "weightLb" : block.unit === "REPS" ? "reps" : "seconds"}`;
     inputRefs.current.get(nextKey)?.focus();
   }
 
@@ -218,11 +208,28 @@ export default function WorkoutExerciseEditor({
     );
   }
 
+  function acceptGhostRow(exerciseId: string, setNumber: number, ghost: SetRow) {
+    markDirty();
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.exerciseId !== exerciseId) return block;
+        return {
+          ...block,
+          rows: block.rows.map((row) =>
+            row.setNumber === setNumber
+              ? { ...row, reps: ghost.reps, seconds: ghost.seconds, weightLb: ghost.weightLb }
+              : row
+          ),
+        };
+      })
+    );
+  }
+
   function addExercise(exerciseId: string) {
     markDirty();
     const exercise = exerciseOptions.find((item) => item.id === exerciseId);
     if (!exercise) return;
-    setActiveBlockIdx(blocks.length);
+    setExpandedId(exercise.id);
     setBlocks((prev) => [
       ...prev,
       {
@@ -240,7 +247,11 @@ export default function WorkoutExerciseEditor({
 
   function removeExercise(exerciseId: string) {
     markDirty();
-    setBlocks((prev) => prev.filter((block) => block.exerciseId !== exerciseId));
+    setBlocks((prev) => {
+      const next = prev.filter((block) => block.exerciseId !== exerciseId);
+      if (expandedId === exerciseId) setExpandedId(next[0]?.exerciseId ?? null);
+      return next;
+    });
   }
 
   function addRow(exerciseId: string) {
@@ -274,9 +285,7 @@ export default function WorkoutExerciseEditor({
         return {
           ...block,
           rows: block.rows.map((row) =>
-            row.setNumber === setNumber
-              ? { setNumber: row.setNumber }
-              : row
+            row.setNumber === setNumber ? { setNumber: row.setNumber } : row
           ),
         };
       })
@@ -320,11 +329,23 @@ export default function WorkoutExerciseEditor({
     clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
     setBlocks(initialBlocks);
+    setExpandedId(initialBlocks[0]?.exerciseId ?? null);
     setNotes(initialNotes);
     setPerformedAtLocal(initialPerformedAt);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
     setDraftBanner(null);
+  }
+
+  function handleCancel() {
+    const hasData = blocks.some((b) =>
+      b.rows.some((r) => r.reps || r.seconds || r.weightLb)
+    );
+    if (hasData && !window.confirm("Discard this session? All entered sets will be lost.")) return;
+    clearDraftFromStorage(routineId);
+    contextClearDraft(routineId);
+    if (onBack) onBack();
+    else window.location.href = "/routines";
   }
 
   function toNumOrNull(value?: string) {
@@ -350,7 +371,6 @@ export default function WorkoutExerciseEditor({
           })),
         })),
       });
-      // Clear draft on successful save
       if (draftEnabled) {
         clearDraftFromStorage(routineId);
         contextClearDraft(routineId);
@@ -380,7 +400,7 @@ export default function WorkoutExerciseEditor({
           return [...prev, created].sort((a, b) => compareExerciseNames(a.name, b.name));
         });
         markDirty();
-        setActiveBlockIdx(blocks.length);
+        setExpandedId(created.id);
         setBlocks((prev) => [
           ...prev,
           {
@@ -409,7 +429,6 @@ export default function WorkoutExerciseEditor({
     .filter(Boolean)
     .join(" · ");
 
-  // Count logged sets per block (has at least one non-empty value)
   function countLoggedSets(block: WorkoutBlock): number {
     return block.rows.filter(
       (r) => (r.reps ?? r.seconds ?? r.weightLb ?? "").toString().trim() !== ""
@@ -417,7 +436,7 @@ export default function WorkoutExerciseEditor({
   }
 
   return (
-    <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth: 880, minWidth: 0 }}>
+    <div className="mobileListStack" style={{ display: "grid", gap: 12, width: "100%", maxWidth: 880, minWidth: 0 }}>
 
       {/* Draft banner */}
       {draftBanner === "recent" && (
@@ -437,186 +456,204 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
-      {/* Exercise blocks card */}
-      <div className="mobileCard" style={styles.blocksCard}>
-
-        {/* Tab bar */}
-        {blocks.length > 0 && (
-          <div style={styles.tabBar}>
-            {blocks.map((block, idx) => {
-              const loggedSets = countLoggedSets(block);
-              const label = block.name.length > 18 ? block.name.slice(0, 16) + "…" : block.name;
-              return (
-                <button
-                  key={block.exerciseId}
-                  type="button"
-                  onClick={() => setActiveBlockIdx(idx)}
-                  style={safeActiveIdx === idx ? styles.tabActive : styles.tab}
-                >
-                  {label}
-                  {loggedSets > 0 && (
-                    <span style={safeActiveIdx === idx ? styles.tabBadgeActive : styles.tabBadge}>
-                      {loggedSets}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty state */}
+      {/* Exercise accordion */}
+      <div style={{ display: "grid", gap: 6 }}>
         {blocks.length === 0 && (
-          <div style={{ fontSize: 13, opacity: 0.72, padding: "4px 0 8px" }}>
+          <div style={{ fontSize: 13, opacity: 0.72, padding: "8px 4px" }}>
             {emptyStateHelp || "No exercises yet — add one below."}
           </div>
         )}
 
-        {/* Active block */}
-        {activeBlock && (
-          <div style={{ marginTop: blocks.length > 0 ? 14 : 0 }}>
+        {blocks.map((block) => {
+          const isExpanded = expandedId === block.exerciseId;
+          const loggedSets = countLoggedSets(block);
+          const blockLastRowsMap = new Map((block.lastRows ?? []).map((r) => [r.setNumber, r]));
 
-            {/* Block header */}
-            <div style={styles.blockHeader}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>{activeBlock.name}</div>
-                <div style={{ fontSize: 12, opacity: 0.68, marginTop: 3 }}>
-                  {exerciseUnitLabel(activeBlock.unit)}{activeBlock.supportsWeight ? " · Weighted" : ""}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                {activeBlock.lastRows?.length ? (
-                  <button
-                    type="button"
-                    onClick={() => copyLastSession(activeBlock.exerciseId)}
-                    style={styles.copyLastBtn}
-                    title="Fill with last session values"
-                  >
-                    ↩ {smartDefaultLabel ?? "Last"}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => removeExercise(activeBlock.exerciseId)}
-                  style={styles.removeBtn}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
+          return (
+            <div key={block.exerciseId} style={isExpanded ? styles.blockCardExpanded : styles.blockCard}>
 
-            {/* Column headers */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: setGridColumns(activeBlock),
-                gap: 6,
-                alignItems: "center",
-                marginBottom: 6,
-                padding: "0 2px",
-              }}
-            >
-              <div style={styles.colLabel}>#</div>
-              {activeBlock.supportsWeight && <div style={styles.colLabel}>Weight lb</div>}
-              <div style={styles.colLabel}>{exerciseUnitFieldLabel(activeBlock.unit)}</div>
-              <div />
-            </div>
-
-            {/* Set rows */}
-            <div style={{ display: "grid", gap: 6 }}>
-              {activeBlock.rows.map((row, rowIdx) => (
-                <div
-                  key={row.setNumber}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: setGridColumns(activeBlock),
-                    gap: 6,
-                    alignItems: "center",
-                  }}
-                >
-                  <div style={styles.setNum}>{row.setNumber}</div>
-
-                  {activeBlock.supportsWeight && (
-                    <input
-                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-weightLb`, el); else inputRefs.current.delete(`${rowIdx}-weightLb`); }}
-                      className="ghostInput"
-                      style={styles.bigInput}
-                      value={row.weightLb ?? ""}
-                      inputMode="decimal"
-                      placeholder={lastRowsMap.get(row.setNumber)?.weightLb ?? "—"}
-                      onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "weightLb", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "weightLb"); } }}
-                    />
-                  )}
-
-                  {activeBlock.unit === "REPS" && (
-                    <input
-                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-reps`, el); else inputRefs.current.delete(`${rowIdx}-reps`); }}
-                      className="ghostInput"
-                      style={styles.bigInput}
-                      value={row.reps ?? ""}
-                      inputMode="numeric"
-                      placeholder={lastRowsMap.get(row.setNumber)?.reps ?? "—"}
-                      onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "reps", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "reps"); } }}
-                    />
-                  )}
-
-                  {activeBlock.unit === "TIME" && (
-                    <input
-                      ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-seconds`, el); else inputRefs.current.delete(`${rowIdx}-seconds`); }}
-                      className="ghostInput"
-                      style={styles.bigInput}
-                      value={row.seconds ?? ""}
-                      inputMode="numeric"
-                      placeholder={lastRowsMap.get(row.setNumber)?.seconds ?? "—"}
-                      onChange={(e) => updateCell(activeBlock.exerciseId, row.setNumber, "seconds", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(rowIdx, "seconds"); } }}
-                    />
-                  )}
-
-                  <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                    {rowIdx > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => copyPrevSet(activeBlock.exerciseId, row.setNumber)}
-                        style={styles.iconBtn}
-                        title="Copy set above"
-                      >
-                        ↑
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => clearRow(activeBlock.exerciseId, row.setNumber)}
-                      style={styles.iconBtn}
-                      title="Clear this row"
-                    >
-                      ⌫
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(activeBlock.exerciseId, row.setNumber)}
-                      style={styles.iconBtnDanger}
-                      title="Remove set"
-                    >
-                      ✕
-                    </button>
+              {/* Accordion header */}
+              <button
+                type="button"
+                onClick={() => setExpandedId(isExpanded ? null : block.exerciseId)}
+                style={styles.blockCardHeader}
+              >
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <div style={{ fontWeight: 900, fontSize: 15 }}>{block.name}</div>
+                  <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
+                    {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
+                    {loggedSets > 0
+                      ? ` · ${loggedSets}/${block.rows.length} sets`
+                      : ` · ${block.rows.length} sets`}
                   </div>
                 </div>
-              ))}
-            </div>
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  width={14}
+                  height={14}
+                  style={{
+                    flexShrink: 0,
+                    opacity: 0.55,
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 180ms ease",
+                  }}
+                >
+                  <path d="M2 5l6 6 6-6" />
+                </svg>
+              </button>
 
-            {/* Add set */}
-            <button
-              type="button"
-              onClick={() => addRow(activeBlock.exerciseId)}
-              style={styles.addSetBtn}
-            >
-              + Add Set
-            </button>
-          </div>
-        )}
+              {/* Expanded content */}
+              {isExpanded && (
+                <div style={{ padding: "0 14px 14px" }}>
+
+                  {/* Block action row */}
+                  <div style={styles.blockActionRow}>
+                    {block.lastRows?.length ? (
+                      <button
+                        type="button"
+                        onClick={() => copyLastSession(block.exerciseId)}
+                        style={styles.copyLastBtn}
+                        title="Fill all sets from last session"
+                      >
+                        ↩ {block.lastDate ?? "Last"}
+                      </button>
+                    ) : null}
+                    <div style={{ flex: 1 }} />
+                    <button
+                      type="button"
+                      onClick={() => removeExercise(block.exerciseId)}
+                      style={styles.removeBtn}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {/* Column headers */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: setGridColumns(block),
+                      gap: 6,
+                      alignItems: "center",
+                      marginBottom: 6,
+                      padding: "0 2px",
+                    }}
+                  >
+                    <div style={styles.colLabel}>#</div>
+                    {block.supportsWeight && <div style={styles.colLabel}>Weight lb</div>}
+                    <div style={styles.colLabel}>{exerciseUnitFieldLabel(block.unit)}</div>
+                    <div />
+                  </div>
+
+                  {/* Set rows */}
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {block.rows.map((row, rowIdx) => {
+                      const ghostRow = blockLastRowsMap.get(row.setNumber);
+                      const rowIsEmpty = !row.reps && !row.seconds && !row.weightLb;
+                      return (
+                        <div
+                          key={row.setNumber}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: setGridColumns(block),
+                            gap: 6,
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={styles.setNum}>{row.setNumber}</div>
+
+                          {block.supportsWeight && (
+                            <input
+                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-weightLb`, el); else inputRefs.current.delete(`${rowIdx}-weightLb`); }}
+                              className="ghostInput"
+                              style={styles.bigInput}
+                              value={row.weightLb ?? ""}
+                              inputMode="decimal"
+                              placeholder={ghostRow?.weightLb ?? "—"}
+                              onChange={(e) => updateCell(block.exerciseId, row.setNumber, "weightLb", e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "weightLb"); } }}
+                            />
+                          )}
+
+                          {block.unit === "REPS" && (
+                            <input
+                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-reps`, el); else inputRefs.current.delete(`${rowIdx}-reps`); }}
+                              className="ghostInput"
+                              style={styles.bigInput}
+                              value={row.reps ?? ""}
+                              inputMode="numeric"
+                              placeholder={ghostRow?.reps ?? "—"}
+                              onChange={(e) => updateCell(block.exerciseId, row.setNumber, "reps", e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "reps"); } }}
+                            />
+                          )}
+
+                          {block.unit === "TIME" && (
+                            <input
+                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-seconds`, el); else inputRefs.current.delete(`${rowIdx}-seconds`); }}
+                              className="ghostInput"
+                              style={styles.bigInput}
+                              value={row.seconds ?? ""}
+                              inputMode="numeric"
+                              placeholder={ghostRow?.seconds ?? "—"}
+                              onChange={(e) => updateCell(block.exerciseId, row.setNumber, "seconds", e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "seconds"); } }}
+                            />
+                          )}
+
+                          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                            {ghostRow && rowIsEmpty ? (
+                              <button
+                                type="button"
+                                onClick={() => acceptGhostRow(block.exerciseId, row.setNumber, ghostRow)}
+                                style={styles.iconBtnAccept}
+                                title="Accept last session values"
+                              >
+                                ↓
+                              </button>
+                            ) : rowIdx > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => copyPrevSet(block.exerciseId, row.setNumber)}
+                                style={styles.iconBtn}
+                                title="Copy set above"
+                              >
+                                ↑
+                              </button>
+                            ) : (
+                              <div style={{ width: 32 }} />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { if (rowIsEmpty) removeRow(block.exerciseId, row.setNumber); else clearRow(block.exerciseId, row.setNumber); }}
+                              style={rowIsEmpty ? styles.iconBtnDanger : styles.iconBtn}
+                              title={rowIsEmpty ? "Remove set" : "Clear this row"}
+                            >
+                              {rowIsEmpty ? "✕" : "⌫"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Add set */}
+                  <button
+                    type="button"
+                    onClick={() => addRow(block.exerciseId)}
+                    style={styles.addSetBtn}
+                  >
+                    + Add Set
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Add exercise panel */}
@@ -740,6 +777,11 @@ export default function WorkoutExerciseEditor({
           {showAddPanel ? "Close" : "+ Exercise"}
         </button>
         <div style={{ flex: 1 }} />
+        {draftEnabled && (
+          <button type="button" onClick={handleCancel} style={styles.cancelBtn}>
+            Cancel
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSave}
@@ -798,98 +840,40 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
 
-  prefillHint: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginBottom: 10,
-    padding: "6px 10px",
-    borderRadius: 8,
-    border: "1px solid rgba(84,203,130,0.28)",
-    background: "rgba(84,203,130,0.06)",
+  blockCard: {
+    borderRadius: 12,
+    border: "1px solid rgba(128,128,128,0.28)",
+    background: "rgba(128,128,128,0.05)",
+    overflow: "hidden",
   } as React.CSSProperties,
 
-  blocksCard: {
-    border: "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 16,
-    padding: 14,
-    background: "rgba(128,128,128,0.06)",
-    minWidth: 0,
+  blockCardExpanded: {
+    borderRadius: 12,
+    border: "1px solid rgba(115,220,152,0.38)",
+    background: "rgba(128,128,128,0.05)",
+    overflow: "hidden",
   } as React.CSSProperties,
 
-  tabBar: {
+  blockCardHeader: {
     display: "flex",
-    gap: 6,
-    overflowX: "auto",
-    overflowY: "visible",
-    paddingBottom: 6,
-    marginBottom: -2,
+    alignItems: "center",
+    gap: 10,
     width: "100%",
-  } as React.CSSProperties,
-
-  tab: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 12px",
-    borderRadius: 20,
-    border: "1px solid rgba(128,128,128,0.35)",
-    background: "rgba(128,128,128,0.1)",
-    fontWeight: 700,
-    fontSize: 13,
-    whiteSpace: "nowrap",
+    padding: "12px 14px",
+    background: "none",
+    border: "none",
     color: "inherit",
     cursor: "pointer",
-    flexShrink: 0,
+    minHeight: 0,
   } as React.CSSProperties,
 
-  tabActive: {
+  blockActionRow: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    padding: "6px 12px",
-    borderRadius: 20,
-    border: "1px solid rgba(115,220,152,0.55)",
-    background: "rgba(115,220,152,0.18)",
-    fontWeight: 800,
-    fontSize: 13,
-    whiteSpace: "nowrap",
-    color: "inherit",
-    cursor: "pointer",
-    flexShrink: 0,
-  } as React.CSSProperties,
-
-  tabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    background: "rgba(128,128,128,0.3)",
-    fontSize: 11,
-    fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 4px",
-  } as React.CSSProperties,
-
-  tabBadgeActive: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    background: "rgba(115,220,152,0.35)",
-    fontSize: 11,
-    fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 4px",
-  } as React.CSSProperties,
-
-  blockHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 12,
+    gap: 8,
+    paddingBottom: 10,
+    borderBottom: "1px solid rgba(128,128,128,0.18)",
+    marginBottom: 10,
   } as React.CSSProperties,
 
   colLabel: {
@@ -929,6 +913,22 @@ const styles = {
     background: "rgba(128,128,128,0.1)",
     color: "inherit",
     fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  } as React.CSSProperties,
+
+  iconBtnAccept: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1px solid rgba(115,220,152,0.45)",
+    background: "rgba(115,220,152,0.1)",
+    color: "rgba(115,220,152,0.9)",
+    fontWeight: 900,
     fontSize: 14,
     cursor: "pointer",
     display: "flex",
@@ -1075,6 +1075,16 @@ const styles = {
     borderRadius: 12,
     border: "1px solid rgba(128,128,128,0.5)",
     background: "rgba(128,128,128,0.22)",
+    color: "inherit",
+    fontWeight: 800,
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  cancelBtn: {
+    padding: "10px 16px",
+    borderRadius: 12,
+    border: "1px solid rgba(220,38,38,0.45)",
+    background: "rgba(220,38,38,0.08)",
     color: "inherit",
     fontWeight: 800,
     cursor: "pointer",

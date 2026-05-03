@@ -164,14 +164,6 @@ export default async function QuickWorkoutLogPage() {
           routineId={selectedRoutine.id}
           availableExercises={availableExercises}
           initialBlocks={initialBlocks}
-          smartDefaultLabel={
-            lastWorkoutLog?.performedAt
-              ? `Prefilled from your last quick workout on ${new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                }).format(lastWorkoutLog.performedAt)}.`
-              : null
-          }
         />
       </div>
     </div>

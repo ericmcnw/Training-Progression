@@ -14,7 +14,6 @@ type WorkoutLogData = {
   routineName: string;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
-  smartDefaultLabel: string | null;
   activePainZones: PainCheckZone[];
 };
 
@@ -94,7 +93,6 @@ export default function LogDrawer() {
                 routineName={logData.routineName}
                 initialBlocks={logData.initialBlocks}
                 availableExercises={logData.availableExercises}
-                smartDefaultLabel={logData.smartDefaultLabel}
                 activePainZones={logData.activePainZones}
                 onComplete={handleComplete}
                 onBack={closeDrawer}

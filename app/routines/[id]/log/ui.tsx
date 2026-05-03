@@ -13,7 +13,6 @@ export default function LogWorkoutForm({
   routineName,
   initialBlocks,
   availableExercises,
-  smartDefaultLabel,
   activePainZones = [],
   onComplete,
   onBack,
@@ -22,7 +21,6 @@ export default function LogWorkoutForm({
   routineName: string;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
-  smartDefaultLabel?: string | null;
   activePainZones?: PainCheckZone[];
   onComplete?: () => void;
   onBack?: () => void;
@@ -47,9 +45,8 @@ export default function LogWorkoutForm({
       initialPerformedAt=""
       initialBlocks={initialBlocks}
       availableExercises={availableExercises}
-      smartDefaultLabel={smartDefaultLabel}
       saveLabel="Save Workout"
-      savingLabel="Saving..."
+      savingLabel="Saving…"
       backHref="/routines"
       onBack={onBack}
       createExerciseOption={createWorkoutExerciseOption}
