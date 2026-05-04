@@ -114,7 +114,7 @@ function AttemptRow({
           </span>
         )}
         {attempt.notes && (
-          <span style={{ fontSize: 11, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+          <span style={{ fontSize: 11, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {attempt.notes}
           </span>
         )}
@@ -508,8 +508,8 @@ const gradeChipsScrollStyle: React.CSSProperties = {
   display: "flex",
   gap: 6,
   overflowX: "auto",
+  overflowY: "hidden",
   paddingBottom: 4,
-  WebkitOverflowScrolling: "touch",
 };
 
 function gradeChipStyle(active: boolean): React.CSSProperties {
@@ -529,24 +529,26 @@ function gradeChipStyle(active: boolean): React.CSSProperties {
 }
 
 const outcomeRowStyle: React.CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
   gap: 8,
 };
 
 function outcomeBtnStyle(color: string, bg: string): React.CSSProperties {
   return {
-    flex: 1,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     gap: 4,
-    padding: "14px 8px",
+    padding: "16px 8px",
     borderRadius: 12,
     border: `1px solid ${color.replace("0.9", "0.35")}`,
     background: bg,
     color: "inherit",
     cursor: "pointer",
     fontSize: 12,
+    minWidth: 0,
+    overflow: "hidden",
   };
 }
 
@@ -606,7 +608,7 @@ const expandTextareaStyle: React.CSSProperties = {
 
 const quickTableStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(60px, 1fr) 68px 68px 68px 36px",
+  gridTemplateColumns: "1fr 54px 54px 54px 32px",
   gap: 6,
   alignItems: "center",
 };
