@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { nanoid } from "nanoid";
 import {
   climbOutcomeLabel,
@@ -16,6 +16,18 @@ import {
 import { climbingGradeOptions } from "@/lib/session-templates";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
 import type { SessionMetricDraftValue } from "./SessionMetricFields";
+
+type AttemptHistoryItem = {
+  id: string;
+  outcome: ClimbOutcome;
+  movesCompleted: number | null;
+  totalMoves: number | null;
+  notes: string | null;
+  routineLog: { performedAt: string };
+};
+
+const dateLabel = (iso: string) =>
+  new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(iso));
 
 // ─── Quick Mode grade row ─────────────────────────────────────────────────────
 
@@ -81,6 +93,7 @@ function AttemptRow({
   onUpdate,
   onRemove,
   savedProblems,
+  onUpdateProblemNotes,
 }: {
   attempt: ClimbAttemptDraft;
   gradeSystem: ClimbGradeSystem;
@@ -89,12 +102,39 @@ function AttemptRow({
   onUpdate: (patch: Partial<ClimbAttemptDraft>) => void;
   onRemove: () => void;
   savedProblems: ClimbProblemBasic[];
+  onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
   const color = climbOutcomeColor(attempt.outcome);
   const bg = climbOutcomeBg(attempt.outcome);
   const label = climbOutcomeLabel(attempt.outcome, gradeSystem);
   const linkedProblem = savedProblems.find((p) => p.id === attempt.problemId);
   const gradeProblems = savedProblems.filter((p) => p.grade === attempt.grade);
+
+  const [history, setHistory] = useState<AttemptHistoryItem[] | null>(null);
+  const [localBeta, setLocalBeta] = useState(linkedProblem?.notes ?? "");
+
+  useEffect(() => {
+    setLocalBeta(linkedProblem?.notes ?? "");
+  }, [linkedProblem?.id, linkedProblem?.notes]);
+
+  useEffect(() => {
+    if (!expanded || !attempt.problemId) { setHistory(null); return; }
+    fetch(`/api/climb-problems/${attempt.problemId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setHistory(data?.attempts ?? []))
+      .catch(() => setHistory([]));
+  }, [expanded, attempt.problemId]);
+
+  const saveBeta = () => {
+    if (!attempt.problemId) return;
+    const trimmed = localBeta.trim() || null;
+    fetch(`/api/climb-problems/${attempt.problemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: trimmed }),
+    });
+    onUpdateProblemNotes?.(attempt.problemId, trimmed);
+  };
 
   return (
     <div style={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
@@ -173,10 +213,57 @@ function AttemptRow({
                 onChange={(e) => onUpdate({ newProblemName: e.target.value || null, problemId: null })}
               />
             )}
-            {linkedProblem?.notes && (
+            {attempt.problemId && (
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={expandLabelStyle}>Beta notes (saved to problem)</div>
+                <textarea
+                  style={{ ...expandTextareaStyle, borderColor: "rgba(167,139,250,0.4)" }}
+                  placeholder="Persistent beta for this climb…"
+                  value={localBeta}
+                  rows={2}
+                  onChange={(e) => setLocalBeta(e.target.value)}
+                  onBlur={saveBeta}
+                />
+              </div>
+            )}
+            {!attempt.problemId && linkedProblem?.notes && (
               <div style={{ fontSize: 11, opacity: 0.65, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
                 Beta: {linkedProblem.notes}
               </div>
+            )}
+            {history && history.length > 0 && (
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={expandLabelStyle}>Previous attempts ({history.length})</div>
+                <div style={{ display: "grid", gap: 4 }}>
+                  {history.map((h) => {
+                    const hColor = climbOutcomeColor(h.outcome);
+                    const hBg = climbOutcomeBg(h.outcome);
+                    return (
+                      <div key={h.id} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: hColor, padding: "2px 7px", borderRadius: 999, background: hBg, flexShrink: 0 }}>
+                          {climbOutcomeLabel(h.outcome, gradeSystem)}
+                        </span>
+                        <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
+                          {dateLabel(h.routineLog.performedAt)}
+                        </span>
+                        {h.movesCompleted != null && (
+                          <span style={{ fontSize: 11, opacity: 0.5, flexShrink: 0 }}>
+                            {h.movesCompleted}{h.totalMoves != null ? `/${h.totalMoves}` : ""} mvs
+                          </span>
+                        )}
+                        {h.notes && (
+                          <span style={{ fontSize: 11, opacity: 0.6, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {h.notes}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {history !== null && history.length === 0 && attempt.problemId && (
+              <div style={{ fontSize: 11, opacity: 0.45 }}>No previous attempts logged.</div>
             )}
           </div>
 
@@ -235,6 +322,7 @@ export default function ClimbSessionLogger({
   onQuickAttemptedChange,
   onSelectedGradesChange,
   onMarkDirty,
+  onUpdateProblemNotes,
 }: {
   templateKey: string;
   climbMode: "quick" | "per-climb";
@@ -250,6 +338,7 @@ export default function ClimbSessionLogger({
   onQuickAttemptedChange: (grade: string, value: string) => void;
   onSelectedGradesChange: (grades: string[]) => void;
   onMarkDirty: () => void;
+  onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
   const gradeSystem = gradeSystemForTemplateKey(templateKey);
   const allGrades = climbingGradeOptions(templateKey);
@@ -459,6 +548,7 @@ export default function ClimbSessionLogger({
                   onUpdate={(patch) => updateAttempt(attempt.localId, patch)}
                   onRemove={() => removeAttempt(attempt.localId)}
                   savedProblems={savedProblems}
+                  onUpdateProblemNotes={onUpdateProblemNotes}
                 />
               ))}
             </div>

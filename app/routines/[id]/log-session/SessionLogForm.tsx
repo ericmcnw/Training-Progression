@@ -460,6 +460,9 @@ export default function SessionLogForm({
             }}
             onSelectedGradesChange={(grades) => { markDirty(); setSelectedClimbingGrades(grades); }}
             onMarkDirty={markDirty}
+            onUpdateProblemNotes={(id, notes) => {
+              setSavedProblems((prev) => prev.map((p) => p.id === id ? { ...p, notes } : p));
+            }}
           />
         </FormSection>
       ) : null}

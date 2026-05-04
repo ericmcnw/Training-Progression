@@ -1761,6 +1761,7 @@ export async function logSession(params: {
         grade: attempt.grade,
         gradeSystem: attempt.gradeSystem,
         locationId: resolvedClimbLocationId ?? null,
+        notes: attempt.notes?.trim() || null,
       },
       select: { id: true },
     })).id;

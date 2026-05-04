@@ -5,6 +5,8 @@ import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel }
 import { prisma } from "@/lib/prisma";
 import { isCardioKind, isCompletionKind, isGuidedKind, isSessionKind, isWorkoutKind } from "@/lib/routines";
 import type { RoutineKind } from "@/generated/prisma";
+import { climbOutcomeColor, climbOutcomeBg, climbOutcomeLabel } from "@/lib/climb-types";
+import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +38,11 @@ function inferLogKind(log: {
   exercises: Array<{ id: string }>;
   guidedSteps: Array<{ id: string }>;
   sessionMetricValues: Array<{ id: string }>;
+  climbAttempts: Array<{ id: string }>;
 }, routineKind: string): RoutineKind {
   if (log.distanceMi !== null) return "CARDIO";
   if (log.exercises.length > 0) return "WORKOUT";
-  if (log.location || log.sessionMetricValues.length > 0) return "SESSION";
+  if (log.climbAttempts.length > 0 || log.location || log.sessionMetricValues.length > 0) return "SESSION";
   if (log.durationSec !== null && log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
   if (log.durationSec !== null && isSessionKind(routineKind)) return "SESSION";
   if (log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
@@ -83,6 +86,19 @@ export default async function RoutineLogDetailPage(props: {
       },
       sessionMetricValues: {
         select: { id: true },
+      },
+      climbAttempts: {
+        orderBy: { attemptOrder: "asc" },
+        select: {
+          id: true,
+          grade: true,
+          gradeSystem: true,
+          outcome: true,
+          movesCompleted: true,
+          totalMoves: true,
+          notes: true,
+          problem: { select: { id: true, name: true } },
+        },
       },
       guidedSteps: {
         orderBy: { sortOrder: "asc" },
@@ -170,10 +186,26 @@ export default async function RoutineLogDetailPage(props: {
                 <div style={statLabel}>Duration</div>
                 <div style={statValue}>{formatSeconds(log.durationSec)}</div>
               </div>
-              <div style={statCard}>
-                <div style={statLabel}>Location</div>
-                <div style={statValue}>{log.location || "Not set"}</div>
-              </div>
+              {log.location && (
+                <div style={statCard}>
+                  <div style={statLabel}>Location</div>
+                  <div style={statValue}>{log.location}</div>
+                </div>
+              )}
+              {log.climbAttempts.length > 0 && (
+                <>
+                  <div style={statCard}>
+                    <div style={statLabel}>Climbs</div>
+                    <div style={statValue}>{log.climbAttempts.length}</div>
+                  </div>
+                  <div style={statCard}>
+                    <div style={statLabel}>Sends</div>
+                    <div style={{ ...statValue, color: "rgba(74,222,128,0.9)" }}>
+                      {log.climbAttempts.filter((a) => a.outcome === "FLASH" || a.outcome === "ONSIGHT" || a.outcome === "SEND" || a.outcome === "REDPOINT").length}
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
           {isWorkoutKind(logKind) && (
@@ -253,6 +285,43 @@ export default async function RoutineLogDetailPage(props: {
                   <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>{formatMetricValue(metric.value, metric.unit)}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {log.climbAttempts.length > 0 && (
+        <section style={panel}>
+          <div style={panelHeader}>CLIMBS</div>
+          <div style={contentPad}>
+            <div style={{ display: "grid", gap: 6 }}>
+              {log.climbAttempts.map((attempt) => {
+                const outcome = attempt.outcome as ClimbOutcome;
+                const system = attempt.gradeSystem as ClimbGradeSystem;
+                const color = climbOutcomeColor(outcome);
+                const bg = climbOutcomeBg(outcome);
+                return (
+                  <div key={attempt.id} style={{ ...itemCard, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ fontWeight: 900, fontSize: 13, padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", flexShrink: 0 }}>
+                      {attempt.grade}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color, padding: "2px 8px", borderRadius: 999, background: bg, flexShrink: 0 }}>
+                      {climbOutcomeLabel(outcome, system)}
+                    </span>
+                    {attempt.problem && (
+                      <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.8 }}>{attempt.problem.name}</span>
+                    )}
+                    {attempt.movesCompleted != null && (
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>
+                        {attempt.movesCompleted}{attempt.totalMoves != null ? `/${attempt.totalMoves}` : ""} moves
+                      </span>
+                    )}
+                    {attempt.notes && (
+                      <span style={{ fontSize: 12, opacity: 0.65, width: "100%", marginTop: 2 }}>{attempt.notes}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

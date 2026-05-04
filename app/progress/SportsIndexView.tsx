@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMetadataIndex, resolveGroupTarget } from "./data";
 import { EmptyState, ProgressShell, SectionCard } from "./ui";
 import { formatDuration, formatPace } from "@/lib/progress";
+import ClimbingProgressView from "./ClimbingProgressView";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -51,6 +52,8 @@ export default async function SportsIndexView(props: {
       title="Sports"
       subtitle="Per-sport performance — pace, elevation, distance trends, and session history."
     >
+      <ClimbingProgressView />
+
       <SectionCard title="Cardio Activities" subtitle="Sport-specific rollups: pace trends, distance, elevation, and weekly charts.">
         {filteredCardio.length === 0 ? (
           <EmptyState message="No cardio activities found." />
