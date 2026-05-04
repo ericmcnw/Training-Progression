@@ -10,6 +10,7 @@ import type { WorkoutBlock, ExerciseOption } from "@/app/routines/[id]/log/Worko
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
 import type { GuidedStepKind } from "@/generated/prisma";
+import type { ClimbLocationBasic } from "@/lib/climb-types";
 
 type WorkoutLogData = {
   kind: "WORKOUT";
@@ -29,6 +30,7 @@ type SessionLogData = {
   definitions: SessionMetricDefinitionWithConfig[];
   preferredClimbingGrades: string[];
   activePainZones: PainCheckZone[];
+  savedClimbLocations?: ClimbLocationBasic[];
 };
 
 type CardioLogData = {
@@ -145,6 +147,7 @@ export default function LogDrawer() {
                 definitions={logData.definitions}
                 preferredClimbingGrades={logData.preferredClimbingGrades}
                 activePainZones={logData.activePainZones}
+                savedClimbLocations={logData.savedClimbLocations ?? []}
                 onComplete={handleComplete}
                 onBack={closeDrawer}
               />

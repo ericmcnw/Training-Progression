@@ -1,5 +1,6 @@
 import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
+import type { ClimbAttemptDraft } from "@/lib/climb-types";
 
 const DRAFT_KEY_PREFIX = "log-draft:";
 const DRAFT_INDEX_KEY = "log-draft-index";
@@ -26,6 +27,11 @@ export type SessionDraft = {
   location: string;
   sessionMetricValues: Record<string, SessionMetricDraftValue>;
   selectedClimbingGrades: string[];
+  climbMode?: "quick" | "per-climb";
+  climbAttempts?: ClimbAttemptDraft[];
+  climbLocationId?: string | null;
+  newClimbLocationName?: string;
+  newClimbLocationType?: "GYM" | "CRAG";
 };
 
 export type LogDraft = WorkoutDraft | SessionDraft;

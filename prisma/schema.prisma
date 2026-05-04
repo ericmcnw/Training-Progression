@@ -121,6 +121,25 @@ enum PainContext {
   GENERAL
 }
 
+enum ClimbOutcome {
+  FLASH
+  ONSIGHT
+  SEND
+  REDPOINT
+  FELL
+  PROJECT
+}
+
+enum ClimbLocationType {
+  GYM
+  CRAG
+}
+
+enum ClimbGradeSystem {
+  BOULDER_V
+  YOSEMITE
+}
+
 enum InjuryStatus {
   ACTIVE
   RECOVERING
@@ -242,6 +261,35 @@ model ScheduleManualEntry {
   @@index([routineId])
 }
 
+model ClimbLocation {
+  id        String            @id @default(cuid())
+  name      String
+  type      ClimbLocationType
+  createdAt DateTime          @default(now())
+
+  routineLogs RoutineLog[]
+
+  @@index([type, name])
+}
+
+model ClimbAttempt {
+  id             String           @id @default(cuid())
+  sessionLogId   String
+  grade          String
+  gradeSystem    ClimbGradeSystem
+  outcome        ClimbOutcome
+  movesCompleted Int?
+  totalMoves     Int?
+  notes          String?
+  attemptOrder   Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  sessionLog RoutineLog @relation(fields: [sessionLogId], references: [id], onDelete: Cascade)
+
+  @@index([sessionLogId, attemptOrder])
+  @@index([gradeSystem, grade])
+}
+
 model RoutineLog {
   id              String   @id @default(cuid())
   routineId       String
@@ -252,8 +300,10 @@ model RoutineLog {
   distanceMi      Float?
   elevationGainFt Int?
   location        String?
+  climbLocationId String?
 
-  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)
 
   exercises           SessionExercise[]
   guidedSteps         GuidedStepLog[]
@@ -262,10 +312,12 @@ model RoutineLog {
   stimuli             RoutineLogStimulus[]
   zoneActivities      ZoneActivity[]
   painLogs            PainLog[]
+  climbAttempts       ClimbAttempt[]
 
   createdAt DateTime @default(now())
 
   @@index([routineId, performedAt])
+  @@index([climbLocationId])
 }
 
 model BodyZone {

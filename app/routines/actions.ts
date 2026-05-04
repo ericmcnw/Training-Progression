@@ -1676,6 +1676,15 @@ export async function logGuided(params: {
   return log.id;
 }
 
+export async function getClimbLocations(): Promise<
+  Array<{ id: string; name: string; type: string }>
+> {
+  return prisma.climbLocation.findMany({
+    select: { id: true, name: true, type: true },
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+  });
+}
+
 export async function logSession(params: {
   routineId: string;
   durationSec?: number | null;
@@ -1685,10 +1694,42 @@ export async function logSession(params: {
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
   preferredClimbingGrades?: string[];
+  climbAttempts?: Array<{
+    grade: string;
+    gradeSystem: "BOULDER_V" | "YOSEMITE";
+    outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
+    movesCompleted?: number;
+    totalMoves?: number;
+    notes?: string;
+    attemptOrder: number;
+  }>;
+  climbLocationId?: string;
+  newClimbLocationName?: string;
+  newClimbLocationType?: "GYM" | "CRAG";
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
     throw new Error("Duration must be > 0.");
+  }
+
+  // Resolve or create ClimbLocation before transaction
+  let resolvedClimbLocationId: string | null = params.climbLocationId?.trim() || null;
+  if (!resolvedClimbLocationId && params.newClimbLocationName?.trim()) {
+    const name = params.newClimbLocationName.trim();
+    const type = params.newClimbLocationType ?? "GYM";
+    const existing = await prisma.climbLocation.findFirst({
+      where: { name: { equals: name, mode: "insensitive" }, type },
+      select: { id: true },
+    });
+    if (existing) {
+      resolvedClimbLocationId = existing.id;
+    } else {
+      const created = await prisma.climbLocation.create({
+        data: { name, type },
+        select: { id: true },
+      });
+      resolvedClimbLocationId = created.id;
+    }
   }
 
   const logId = await prisma.$transaction(async (tx) => {
@@ -1699,6 +1740,7 @@ export async function logSession(params: {
         durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
+        climbLocationId: resolvedClimbLocationId,
       },
       select: { id: true },
     });
@@ -1716,9 +1758,7 @@ export async function logSession(params: {
     });
     await tx.routineLog.update({
       where: { id: log.id },
-      data: {
-        distanceMi: sessionDistanceMiFromValues(sessionMetricValues),
-      },
+      data: { distanceMi: sessionDistanceMiFromValues(sessionMetricValues) },
     });
     if (sessionMetricValues.length > 0) {
       await tx.sessionLogMetricValue.createMany({
@@ -1731,6 +1771,23 @@ export async function logSession(params: {
         })),
       });
     }
+
+    // Save individual climb attempts
+    if (params.climbAttempts && params.climbAttempts.length > 0) {
+      await tx.climbAttempt.createMany({
+        data: params.climbAttempts.map((attempt) => ({
+          sessionLogId: log.id,
+          grade: attempt.grade,
+          gradeSystem: attempt.gradeSystem,
+          outcome: attempt.outcome,
+          movesCompleted: attempt.movesCompleted ?? null,
+          totalMoves: attempt.totalMoves ?? null,
+          notes: attempt.notes?.trim() || null,
+          attemptOrder: attempt.attemptOrder,
+        })),
+      });
+    }
+
     return log.id;
   });
   if (logId) {

@@ -8,7 +8,7 @@ import {
   withDerivedExerciseLibraryKind,
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
-import { withSessionMetricConfig } from "@/lib/session-templates";
+import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
 import { getRoutinePainCheckZones } from "@/lib/injury-warnings";
 import type { Prisma } from "@/generated/prisma";
 
@@ -139,7 +139,7 @@ export async function GET(
   }
 
   if (isSessionKind(kind)) {
-    const activePainZones = await getRoutinePainCheckZones(routineId);
+    const templateKey = routine.sessionDetails?.template?.key ?? null;
     const definitions =
       routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
 
@@ -147,15 +147,26 @@ export async function GET(
       routine.sessionDetails?.templateConfig
     );
 
+    const [activePainZones, savedClimbLocations] = await Promise.all([
+      getRoutinePainCheckZones(routineId),
+      isClimbingTemplateKey(templateKey)
+        ? prisma.climbLocation.findMany({
+            select: { id: true, name: true, type: true },
+            orderBy: [{ type: "asc" }, { name: "asc" }],
+          })
+        : Promise.resolve([]),
+    ]);
+
     return NextResponse.json({
       kind: "SESSION",
       routineId,
       routineName: routine.name,
-      templateKey: routine.sessionDetails?.template?.key ?? null,
+      templateKey,
       templateName: routine.sessionDetails?.template?.name ?? null,
       definitions,
       preferredClimbingGrades,
       activePainZones,
+      savedClimbLocations,
     });
   }
 

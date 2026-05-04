@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { logSession } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import SportZoneTagger from "@/app/components/log/SportZoneTagger";
-import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
+import ClimbSessionLogger from "./ClimbSessionLogger";
+import ClimbLocationPicker from "./ClimbLocationPicker";
 import {
   DateTimeField,
   Field,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
+import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType } from "@/lib/climb-types";
 
 const CLIMBING_AUTO_ZONES = [
   { slug: "hands", label: "Fingers / Hands" },
@@ -42,14 +44,81 @@ const CLIMBING_AUTO_ZONES = [
 ];
 const CLIMBING_AUTO_ZONE_SLUGS = CLIMBING_AUTO_ZONES.map((z) => z.slug);
 
+// Synthesize SessionMetricValueInput from per-climb attempts (backward compat for progress queries)
+function synthesizeClimbingMetrics(
+  attempts: ClimbAttemptDraft[],
+  definitions: SessionMetricDefinitionWithConfig[]
+): Array<{ metricDefinitionId: string; numberValue?: number }> {
+  const gradeCounts = new Map<string, { flash: number; done: number }>();
+  for (const attempt of attempts) {
+    const current = gradeCounts.get(attempt.grade) ?? { flash: 0, done: 0 };
+    if (attempt.outcome === "FLASH" || attempt.outcome === "ONSIGHT") current.flash++;
+    else if (attempt.outcome === "SEND" || attempt.outcome === "REDPOINT") current.done++;
+    gradeCounts.set(attempt.grade, current);
+  }
+
+  const result: Array<{ metricDefinitionId: string; numberValue?: number }> = [];
+  for (const def of definitions) {
+    const config = def.config;
+    if (!config?.gradeBucket || !config?.climbingColumn) continue;
+    const grade = config.gradeBucket as string;
+    const column = config.climbingColumn as string;
+    const counts = gradeCounts.get(grade);
+    if (!counts) continue;
+    const value = column === "FLASHED" ? counts.flash : counts.done;
+    if (value > 0) result.push({ metricDefinitionId: def.id, numberValue: value });
+  }
+  return result;
+}
+
+// Synthesize ClimbAttempt list from quick-mode grade counts
+function synthesizeAttemptsFromQuickValues(
+  values: Record<string, SessionMetricDraftValue>,
+  quickAttemptedValues: Record<string, string>,
+  definitions: SessionMetricDefinitionWithConfig[]
+): ClimbAttemptDraft[] {
+  const attempts: ClimbAttemptDraft[] = [];
+  const gradeRows = new Map<string, { flashDefId: string | null; sendDefId: string | null; gradeSystem: string }>();
+
+  for (const def of definitions) {
+    const config = def.config;
+    if (!config?.gradeBucket || !config?.climbingColumn) continue;
+    const grade = config.gradeBucket as string;
+    const current = gradeRows.get(grade) ?? { flashDefId: null, sendDefId: null, gradeSystem: config.gradeSystem ?? "BOULDER_V" };
+    if (config.climbingColumn === "FLASHED") current.flashDefId = def.id;
+    else current.sendDefId = def.id;
+    gradeRows.set(grade, current);
+  }
+
+  let order = 0;
+  for (const [grade, row] of gradeRows) {
+    const gradeSystem = (row.gradeSystem === "YOSEMITE" ? "YOSEMITE" : "BOULDER_V") as "BOULDER_V" | "YOSEMITE";
+    const flashCount = parseInt(values[row.flashDefId ?? ""]?.numberValue ?? "0") || 0;
+    const sendCount = parseInt(values[row.sendDefId ?? ""]?.numberValue ?? "0") || 0;
+    const fellCount = parseInt(quickAttemptedValues[grade] ?? "0") || 0;
+
+    for (let i = 0; i < flashCount; i++) {
+      attempts.push({ localId: `qs-flash-${grade}-${i}`, grade, gradeSystem, outcome: gradeSystem === "BOULDER_V" ? "FLASH" : "ONSIGHT", attemptOrder: order++ });
+    }
+    for (let i = 0; i < sendCount; i++) {
+      attempts.push({ localId: `qs-send-${grade}-${i}`, grade, gradeSystem, outcome: "SEND", attemptOrder: order++ });
+    }
+    for (let i = 0; i < fellCount; i++) {
+      attempts.push({ localId: `qs-fell-${grade}-${i}`, grade, gradeSystem, outcome: "FELL", attemptOrder: order++ });
+    }
+  }
+  return attempts;
+}
+
 export default function SessionLogForm({
   routineId,
+  routineName,
   templateKey,
   templateName,
   definitions,
   preferredClimbingGrades,
-  routineName,
   activePainZones = [],
+  savedClimbLocations = [],
   onComplete,
   onBack,
 }: {
@@ -60,6 +129,7 @@ export default function SessionLogForm({
   definitions: SessionMetricDefinitionWithConfig[];
   preferredClimbingGrades: string[];
   activePainZones?: PainCheckZone[];
+  savedClimbLocations?: ClimbLocationBasic[];
   onComplete?: () => void;
   onBack?: () => void;
 }) {
@@ -70,13 +140,13 @@ export default function SessionLogForm({
   const isClimbing = isClimbingTemplateKey(templateKey);
   const hasLocationMetric = templateHasPrimaryLocationMetric(definitions);
 
-  // Split out template_notes so it renders in the Notes section rather than Metrics
   const templateNotesDefinition = definitions.find((d) => d.key === "template_notes");
   const mainDefinitions = definitions.filter((d) => d.key !== "template_notes");
   const hasVisibleMetrics = mainDefinitions.filter(
     (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
   ).length > 0;
 
+  // ── Form state ──────────────────────────────────────────────────────────────
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
@@ -87,6 +157,13 @@ export default function SessionLogForm({
   const [saving, setSaving] = useState(false);
   const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+
+  // Climbing-specific state
+  const [climbMode, setClimbMode] = useState<"quick" | "per-climb">("per-climb");
+  const [climbAttempts, setClimbAttempts] = useState<ClimbAttemptDraft[]>([]);
+  const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
+  const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
+  const [newClimbLocation, setNewClimbLocation] = useState<{ name: string; type: ClimbLocationType } | null>(null);
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -105,13 +182,22 @@ export default function SessionLogForm({
     setSelectedClimbingGrades(draft.selectedClimbingGrades);
     setNotes(draft.notes);
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
+    if (draft.climbMode) setClimbMode(draft.climbMode);
+    if (draft.climbAttempts) setClimbAttempts(draft.climbAttempts);
+    if (draft.climbLocationId !== undefined) setClimbLocationId(draft.climbLocationId ?? null);
+    if (draft.newClimbLocationName) {
+      setNewClimbLocation({
+        name: draft.newClimbLocationName,
+        type: draft.newClimbLocationType ?? "GYM",
+      });
+    }
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
     contextSaveDraft(draft);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-save draft on any state change
+  // Auto-save draft on state change
   useEffect(() => {
     if (!isDirtyRef.current) return;
     const draft: SessionDraft = {
@@ -125,6 +211,11 @@ export default function SessionLogForm({
       selectedClimbingGrades,
       notes,
       performedAtLocal,
+      climbMode,
+      climbAttempts,
+      climbLocationId,
+      newClimbLocationName: newClimbLocation?.name,
+      newClimbLocationType: newClimbLocation?.type,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -132,7 +223,8 @@ export default function SessionLogForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durationMin, location, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal]);
+  }, [durationMin, location, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
+      climbMode, climbAttempts, climbLocationId, newClimbLocation]);
 
   function markDirty() {
     isDirtyRef.current = true;
@@ -148,6 +240,11 @@ export default function SessionLogForm({
     setSelectedClimbingGrades(preferredClimbingGrades);
     setNotes("");
     setPerformedAtLocal(localDateTimeNow());
+    setClimbMode("per-climb");
+    setClimbAttempts([]);
+    setQuickAttemptedValues({});
+    setClimbLocationId(null);
+    setNewClimbLocation(null);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
     setDraftBanner(null);
@@ -190,34 +287,46 @@ export default function SessionLogForm({
     }
     const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
 
-    const structuredValues: Array<{
+    // Build metric values
+    let sessionMetricValuesToSend: Array<{
       metricDefinitionId: string;
       numberValue?: number;
       textValue?: string;
       booleanValue?: boolean;
     }> = [];
-    for (const definition of definitions) {
-      const draft = sessionMetricValues[definition.id] ?? {};
-      if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
-        const numberValue = parseSessionMetricNumber(draft.numberValue ?? "", definition.valueType);
-        if (definition.isRequired && numberValue === null) throw new Error(`${definition.label} is required.`);
-        if (numberValue !== null) {
-          structuredValues.push({ metricDefinitionId: definition.id, numberValue });
+
+    if (isClimbing) {
+      // For climbing: synthesize grade count metrics from whichever mode is active
+      const activeAttempts =
+        climbMode === "per-climb"
+          ? climbAttempts
+          : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions);
+      sessionMetricValuesToSend = synthesizeClimbingMetrics(activeAttempts, definitions);
+    } else {
+      for (const definition of definitions) {
+        const draft = sessionMetricValues[definition.id] ?? {};
+        if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
+          const numberValue = parseSessionMetricNumber(draft.numberValue ?? "", definition.valueType);
+          if (definition.isRequired && numberValue === null) throw new Error(`${definition.label} is required.`);
+          if (numberValue !== null) sessionMetricValuesToSend.push({ metricDefinitionId: definition.id, numberValue });
+          continue;
         }
-        continue;
-      }
-      if (definition.valueType === "BOOLEAN") {
-        if (draft.booleanValue) {
-          structuredValues.push({ metricDefinitionId: definition.id, booleanValue: true });
+        if (definition.valueType === "BOOLEAN") {
+          if (draft.booleanValue) sessionMetricValuesToSend.push({ metricDefinitionId: definition.id, booleanValue: true });
+          continue;
         }
-        continue;
-      }
-      const textValue = normalizeSessionMetricText(draft.textValue ?? "");
-      if (definition.isRequired && !textValue) throw new Error(`${definition.label} is required.`);
-      if (textValue) {
-        structuredValues.push({ metricDefinitionId: definition.id, textValue });
+        const textValue = normalizeSessionMetricText(draft.textValue ?? "");
+        if (definition.isRequired && !textValue) throw new Error(`${definition.label} is required.`);
+        if (textValue) sessionMetricValuesToSend.push({ metricDefinitionId: definition.id, textValue });
       }
     }
+
+    // Build climb attempts for API
+    const activeClimbAttempts = isClimbing
+      ? climbMode === "per-climb"
+        ? climbAttempts.map((a, i) => ({ ...a, attemptOrder: i }))
+        : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions)
+      : undefined;
 
     setSaving(true);
     try {
@@ -225,11 +334,15 @@ export default function SessionLogForm({
       const logId = await logSession({
         routineId,
         durationSec,
-        location,
+        location: isClimbing ? undefined : location,
         notes: effortPrefix ? `${effortPrefix}${notes}`.trim() : notes,
         performedAtLocal: performedAtLocal || undefined,
-        sessionMetricValues: structuredValues,
+        sessionMetricValues: sessionMetricValuesToSend,
         preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
+        climbAttempts: activeClimbAttempts,
+        climbLocationId: climbLocationId ?? undefined,
+        newClimbLocationName: newClimbLocation?.name?.trim() || undefined,
+        newClimbLocationType: newClimbLocation?.type,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
@@ -250,12 +363,10 @@ export default function SessionLogForm({
     }
   }
 
-  // Section title for non-climbing metrics
   const detailsSectionTitle = templateName ?? "Details";
 
   return (
     <FormStack maxWidth={640}>
-
       {/* Draft banners */}
       {draftBanner === "recent" && (
         <div style={draftBannerGreen}>
@@ -281,7 +392,17 @@ export default function SessionLogForm({
           />
         </Field>
 
-        {!hasLocationMetric && (
+        {isClimbing ? (
+          <Field label="Location (optional)">
+            <ClimbLocationPicker
+              savedLocations={savedClimbLocations}
+              selectedId={climbLocationId}
+              onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
+              newLocation={newClimbLocation}
+              onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
+            />
+          </Field>
+        ) : !hasLocationMetric ? (
           <Field label="Location (optional)">
             <input
               style={inputStyle}
@@ -290,7 +411,7 @@ export default function SessionLogForm({
               placeholder="Gym, crag, trail…"
             />
           </Field>
-        )}
+        ) : null}
 
         <DateTimeField
           value={performedAtLocal}
@@ -300,35 +421,40 @@ export default function SessionLogForm({
         {!templateKey && definitions.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.65, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
             No template configured — only duration and notes will be saved.{" "}
-            <a href={`/routines/${routineId}/edit`} style={{ color: "inherit", opacity: 0.9 }}>
-              Add a template
-            </a>{" "}
+            <a href={`/routines/${routineId}/edit`} style={{ color: "inherit", opacity: 0.9 }}>Add a template</a>{" "}
             to track structured metrics for this session type.
           </div>
         ) : null}
       </FormSection>
 
+      {/* Climbing section */}
       {isClimbing ? (
         <FormSection title="Climbing">
-          <ClimbingGradeRowsEditor
+          <ClimbSessionLogger
             templateKey={templateKey!}
+            climbMode={climbMode}
+            onModeChange={(mode) => { markDirty(); setClimbMode(mode); }}
+            attempts={climbAttempts}
+            onAttemptsChange={(a) => { setClimbAttempts(a); }}
             definitions={definitions}
-            values={sessionMetricValues}
+            quickValues={sessionMetricValues}
+            quickAttemptedValues={quickAttemptedValues}
             selectedGrades={selectedClimbingGrades}
-            onValuesChange={(metricDefinitionId, value) => {
-              markDirty();
-              setSessionMetricValues((current) => ({
-                ...current,
-                [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
-              }));
+            onQuickValuesChange={(id, val) => {
+              setSessionMetricValues((current) => ({ ...current, [id]: { ...current[id], ...val } }));
+            }}
+            onQuickAttemptedChange={(grade, val) => {
+              setQuickAttemptedValues((current) => ({ ...current, [grade]: val }));
             }}
             onSelectedGradesChange={(grades) => { markDirty(); setSelectedClimbingGrades(grades); }}
+            onMarkDirty={markDirty}
           />
         </FormSection>
       ) : null}
 
-      {hasVisibleMetrics ? (
-        <FormSection title={isClimbing ? "Metrics" : detailsSectionTitle}>
+      {/* Non-climbing metrics section */}
+      {!isClimbing && hasVisibleMetrics ? (
+        <FormSection title={detailsSectionTitle}>
           <SessionMetricFields
             definitions={mainDefinitions}
             values={sessionMetricValues}
@@ -386,7 +512,7 @@ export default function SessionLogForm({
       )}
 
       <FormActions
-        primaryLabel="Save Session"
+        primaryLabel={isClimbing ? "Save Session" : "Save Session"}
         primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
@@ -398,63 +524,35 @@ export default function SessionLogForm({
 }
 
 const draftBannerGreen: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "10px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(84,203,130,0.4)",
-  background: "rgba(84,203,130,0.08)",
-  fontSize: 13,
-  fontWeight: 700,
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+  padding: "10px 14px", borderRadius: 12,
+  border: "1px solid rgba(84,203,130,0.4)", background: "rgba(84,203,130,0.08)",
+  fontSize: 13, fontWeight: 700,
 };
 
 const draftBannerAmber: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "10px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(251,191,36,0.4)",
-  background: "rgba(251,191,36,0.07)",
-  fontSize: 13,
-  fontWeight: 700,
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+  padding: "10px 14px", borderRadius: 12,
+  border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)",
+  fontSize: 13, fontWeight: 700,
 };
 
 const draftBannerBtnStyle: React.CSSProperties = {
-  padding: "5px 12px",
-  borderRadius: 8,
-  border: "1px solid rgba(128,128,128,0.45)",
-  background: "rgba(128,128,128,0.12)",
-  color: "inherit",
-  fontWeight: 800,
-  fontSize: 12,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
+  padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.45)",
+  background: "rgba(128,128,128,0.12)", color: "inherit", fontWeight: 800, fontSize: 12,
+  cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
 };
 
-const effortRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-};
+const effortRowStyle: React.CSSProperties = { display: "flex", gap: 8 };
 
 function effortBtnStyle(active: boolean): React.CSSProperties {
   return {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
+    flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
     padding: "10px 6px",
     border: active ? "1px solid rgba(167,139,250,0.6)" : "1px solid rgba(128,128,128,0.35)",
     borderRadius: 12,
     background: active ? "rgba(167,139,250,0.15)" : "rgba(128,128,128,0.06)",
-    color: "inherit",
-    cursor: "pointer",
-    transition: "border-color 120ms, background 120ms",
+    color: "inherit", cursor: "pointer", transition: "border-color 120ms, background 120ms",
   };
 }
 
