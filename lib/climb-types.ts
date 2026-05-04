@@ -10,6 +10,14 @@ export type ClimbLocationBasic = {
   type: ClimbLocationType;
 };
 
+export type ClimbProblemBasic = {
+  id: string;
+  name: string;
+  grade: string;
+  gradeSystem: ClimbGradeSystem;
+  notes: string | null;
+};
+
 export type ClimbAttemptInput = {
   grade: string;
   gradeSystem: ClimbGradeSystem;
@@ -18,6 +26,8 @@ export type ClimbAttemptInput = {
   totalMoves?: number;
   notes?: string;
   attemptOrder: number;
+  problemId?: string | null;
+  newProblemName?: string | null;
 };
 
 export type ClimbAttemptDraft = ClimbAttemptInput & {

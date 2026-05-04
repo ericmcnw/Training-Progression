@@ -34,7 +34,7 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType } from "@/lib/climb-types";
+import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic } from "@/lib/climb-types";
 
 const CLIMBING_AUTO_ZONES = [
   { slug: "hands", label: "Fingers / Hands" },
@@ -164,6 +164,7 @@ export default function SessionLogForm({
   const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
   const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
   const [newClimbLocation, setNewClimbLocation] = useState<{ name: string; type: ClimbLocationType } | null>(null);
+  const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -196,6 +197,15 @@ export default function SessionLogForm({
     contextSaveDraft(draft);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch saved problems when a known location is selected
+  useEffect(() => {
+    if (!climbLocationId) { setSavedProblems([]); return; }
+    fetch(`/api/climb-problems?locationId=${climbLocationId}`)
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => setSavedProblems(data))
+      .catch(() => setSavedProblems([]));
+  }, [climbLocationId]);
 
   // Auto-save draft on state change
   useEffect(() => {
@@ -245,6 +255,7 @@ export default function SessionLogForm({
     setQuickAttemptedValues({});
     setClimbLocationId(null);
     setNewClimbLocation(null);
+    setSavedProblems([]);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
     setDraftBanner(null);
@@ -440,6 +451,7 @@ export default function SessionLogForm({
             quickValues={sessionMetricValues}
             quickAttemptedValues={quickAttemptedValues}
             selectedGrades={selectedClimbingGrades}
+            savedProblems={savedProblems}
             onQuickValuesChange={(id, val) => {
               setSessionMetricValues((current) => ({ ...current, [id]: { ...current[id], ...val } }));
             }}

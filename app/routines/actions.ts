@@ -1702,6 +1702,8 @@ export async function logSession(params: {
     totalMoves?: number;
     notes?: string;
     attemptOrder: number;
+    problemId?: string | null;
+    newProblemName?: string | null;
   }>;
   climbLocationId?: string;
   newClimbLocationName?: string;
@@ -1730,6 +1732,40 @@ export async function logSession(params: {
       });
       resolvedClimbLocationId = created.id;
     }
+  }
+
+  // Resolve or create ClimbProblems for attempts that name a new problem
+  const resolvedAttempts = params.climbAttempts ? [...params.climbAttempts] : [];
+  const newProblemKey = (name: string, grade: string) => `${name.toLowerCase().trim()}::${grade}`;
+  const problemNameToId = new Map<string, string>();
+  for (const attempt of resolvedAttempts) {
+    if (attempt.problemId || !attempt.newProblemName?.trim()) continue;
+    const name = attempt.newProblemName.trim();
+    const key = newProblemKey(name, attempt.grade);
+    if (problemNameToId.has(key)) {
+      attempt.problemId = problemNameToId.get(key)!;
+      continue;
+    }
+    const existing = await prisma.climbProblem.findFirst({
+      where: {
+        name: { equals: name, mode: "insensitive" },
+        grade: attempt.grade,
+        gradeSystem: attempt.gradeSystem,
+        locationId: resolvedClimbLocationId ?? null,
+      },
+      select: { id: true },
+    });
+    const problemId = existing?.id ?? (await prisma.climbProblem.create({
+      data: {
+        name,
+        grade: attempt.grade,
+        gradeSystem: attempt.gradeSystem,
+        locationId: resolvedClimbLocationId ?? null,
+      },
+      select: { id: true },
+    })).id;
+    problemNameToId.set(key, problemId);
+    attempt.problemId = problemId;
   }
 
   const logId = await prisma.$transaction(async (tx) => {
@@ -1773,10 +1809,11 @@ export async function logSession(params: {
     }
 
     // Save individual climb attempts
-    if (params.climbAttempts && params.climbAttempts.length > 0) {
+    if (resolvedAttempts.length > 0) {
       await tx.climbAttempt.createMany({
-        data: params.climbAttempts.map((attempt) => ({
+        data: resolvedAttempts.map((attempt) => ({
           sessionLogId: log.id,
+          problemId: attempt.problemId ?? null,
           grade: attempt.grade,
           gradeSystem: attempt.gradeSystem,
           outcome: attempt.outcome,

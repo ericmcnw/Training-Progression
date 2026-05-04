@@ -11,6 +11,7 @@ import {
   type ClimbAttemptDraft,
   type ClimbOutcome,
   type ClimbGradeSystem,
+  type ClimbProblemBasic,
 } from "@/lib/climb-types";
 import { climbingGradeOptions } from "@/lib/session-templates";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
@@ -79,6 +80,7 @@ function AttemptRow({
   onToggleExpand,
   onUpdate,
   onRemove,
+  savedProblems,
 }: {
   attempt: ClimbAttemptDraft;
   gradeSystem: ClimbGradeSystem;
@@ -86,10 +88,13 @@ function AttemptRow({
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<ClimbAttemptDraft>) => void;
   onRemove: () => void;
+  savedProblems: ClimbProblemBasic[];
 }) {
   const color = climbOutcomeColor(attempt.outcome);
   const bg = climbOutcomeBg(attempt.outcome);
   const label = climbOutcomeLabel(attempt.outcome, gradeSystem);
+  const linkedProblem = savedProblems.find((p) => p.id === attempt.problemId);
+  const gradeProblems = savedProblems.filter((p) => p.grade === attempt.grade);
 
   return (
     <div style={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
@@ -108,12 +113,17 @@ function AttemptRow({
         <span style={{ fontSize: 12, fontWeight: 800, color, padding: "2px 8px", borderRadius: 999, background: bg, flexShrink: 0 }}>
           {label}
         </span>
-        {attempt.movesCompleted != null && (
-          <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
-            {attempt.movesCompleted}{attempt.totalMoves != null ? `/${attempt.totalMoves}` : ""} moves
+        {(linkedProblem || attempt.newProblemName) && (
+          <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+            {linkedProblem?.name ?? attempt.newProblemName}
           </span>
         )}
-        {attempt.notes && (
+        {!linkedProblem && !attempt.newProblemName && attempt.movesCompleted != null && (
+          <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
+            {attempt.movesCompleted}{attempt.totalMoves != null ? `/${attempt.totalMoves}` : ""} mvs
+          </span>
+        )}
+        {!linkedProblem && !attempt.newProblemName && !attempt.movesCompleted && attempt.notes && (
           <span style={{ fontSize: 11, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {attempt.notes}
           </span>
@@ -131,12 +141,51 @@ function AttemptRow({
 
       {expanded && (
         <div style={{ padding: "10px 12px", display: "grid", gap: 10, borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Name this climb */}
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={expandLabelStyle}>Problem name (optional — saved for future visits)</div>
+            {gradeProblems.length > 0 ? (
+              <select
+                style={expandSelectStyle}
+                value={attempt.problemId ?? (attempt.newProblemName ? "__new__" : "")}
+                onChange={(e) => {
+                  if (e.target.value === "") {
+                    onUpdate({ problemId: null, newProblemName: null });
+                  } else if (e.target.value === "__new__") {
+                    onUpdate({ problemId: null, newProblemName: attempt.newProblemName ?? "" });
+                  } else {
+                    onUpdate({ problemId: e.target.value, newProblemName: null });
+                  }
+                }}
+              >
+                <option value="">No name</option>
+                {gradeProblems.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                <option value="__new__">+ New name…</option>
+              </select>
+            ) : null}
+            {(gradeProblems.length === 0 || attempt.problemId === null && attempt.newProblemName !== null && attempt.newProblemName !== undefined || (gradeProblems.length > 0 && !attempt.problemId && attempt.newProblemName !== null && attempt.newProblemName !== undefined)) && (
+              <input
+                style={expandInputStyle}
+                placeholder="e.g. The Scoop, Pinch Crimp Right..."
+                value={attempt.newProblemName ?? ""}
+                onChange={(e) => onUpdate({ newProblemName: e.target.value || null, problemId: null })}
+              />
+            )}
+            {linkedProblem?.notes && (
+              <div style={{ fontSize: 11, opacity: 0.65, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                Beta: {linkedProblem.notes}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <div style={{ display: "grid", gap: 4, flex: 1 }}>
-              <div style={expandLabelStyle}>Moves completed (optional)</div>
+              <div style={expandLabelStyle}>Moves (optional)</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <input
-                  style={{ ...expandInputStyle, width: 72, textAlign: "center" }}
+                  style={{ ...expandInputStyle, width: 60, textAlign: "center" }}
                   inputMode="numeric"
                   placeholder="—"
                   value={attempt.movesCompleted ?? ""}
@@ -144,7 +193,7 @@ function AttemptRow({
                 />
                 <span style={{ opacity: 0.4 }}>/</span>
                 <input
-                  style={{ ...expandInputStyle, width: 72, textAlign: "center" }}
+                  style={{ ...expandInputStyle, width: 60, textAlign: "center" }}
                   inputMode="numeric"
                   placeholder="total"
                   value={attempt.totalMoves ?? ""}
@@ -181,6 +230,7 @@ export default function ClimbSessionLogger({
   quickValues,
   quickAttemptedValues,
   selectedGrades,
+  savedProblems = [],
   onQuickValuesChange,
   onQuickAttemptedChange,
   onSelectedGradesChange,
@@ -195,6 +245,7 @@ export default function ClimbSessionLogger({
   quickValues: Record<string, SessionMetricDraftValue>;
   quickAttemptedValues: Record<string, string>;
   selectedGrades: string[];
+  savedProblems?: ClimbProblemBasic[];
   onQuickValuesChange: (id: string, value: SessionMetricDraftValue) => void;
   onQuickAttemptedChange: (grade: string, value: string) => void;
   onSelectedGradesChange: (grades: string[]) => void;
@@ -206,20 +257,23 @@ export default function ClimbSessionLogger({
 
   // Per-climb mode local UI state
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ── Per-climb: add attempt ──────────────────────────────────────────────────
-  function addAttempt(grade: string, outcome: ClimbOutcome) {
+  function addAttempt(grade: string, outcome: ClimbOutcome, problemId?: string | null) {
     const draft: ClimbAttemptDraft = {
       localId: nanoid(),
       grade,
       gradeSystem,
       outcome,
       attemptOrder: attempts.length,
+      problemId: problemId ?? null,
     };
     onAttemptsChange([draft, ...attempts]);
     onMarkDirty();
     setSelectedGrade(null);
+    setSelectedProblemId(null);
   }
 
   function updateAttempt(localId: string, patch: Partial<ClimbAttemptDraft>) {
@@ -300,6 +354,37 @@ export default function ClimbSessionLogger({
       {/* ─── Per Climb mode ─────────────────────────────────────────────────── */}
       {climbMode === "per-climb" && (
         <div style={{ display: "grid", gap: 12 }}>
+          {/* Saved problems at this location */}
+          {savedProblems.length > 0 && (
+            <div>
+              <div style={sectionLabelStyle}>Known problems at this location</div>
+              <div style={gradeChipsScrollStyle}>
+                {savedProblems.map((problem) => {
+                  const isSelected = selectedProblemId === problem.id;
+                  return (
+                    <button
+                      key={problem.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedProblemId(null);
+                          setSelectedGrade(null);
+                        } else {
+                          setSelectedProblemId(problem.id);
+                          setSelectedGrade(problem.grade);
+                        }
+                      }}
+                      style={problemChipStyle(isSelected)}
+                    >
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>{problem.grade}</span>
+                      <span>{problem.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Grade chip row */}
           <div>
             <div style={sectionLabelStyle}>Grade</div>
@@ -308,8 +393,12 @@ export default function ClimbSessionLogger({
                 <button
                   key={grade}
                   type="button"
-                  onClick={() => setSelectedGrade(selectedGrade === grade ? null : grade)}
-                  style={gradeChipStyle(selectedGrade === grade)}
+                  onClick={() => {
+                    const next = selectedGrade === grade ? null : grade;
+                    setSelectedGrade(next);
+                    if (next !== selectedGrade) setSelectedProblemId(null);
+                  }}
+                  style={gradeChipStyle(selectedGrade === grade && !selectedProblemId)}
                 >
                   {grade}
                 </button>
@@ -321,8 +410,15 @@ export default function ClimbSessionLogger({
           {selectedGrade && (
             <div style={{ display: "grid", gap: 8 }}>
               <div style={sectionLabelStyle}>
-                {selectedGrade} — tap outcome to log
+                {selectedProblemId
+                  ? `${savedProblems.find((p) => p.id === selectedProblemId)?.name ?? selectedGrade} — tap outcome to log`
+                  : `${selectedGrade} — tap outcome to log`}
               </div>
+              {selectedProblemId && savedProblems.find((p) => p.id === selectedProblemId)?.notes && (
+                <div style={{ fontSize: 11, opacity: 0.65, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                  Beta: {savedProblems.find((p) => p.id === selectedProblemId)!.notes}
+                </div>
+              )}
               <div style={outcomeRowStyle}>
                 {outcomes.map((outcome) => {
                   const color = climbOutcomeColor(outcome);
@@ -331,7 +427,7 @@ export default function ClimbSessionLogger({
                     <button
                       key={outcome}
                       type="button"
-                      onClick={() => addAttempt(selectedGrade, outcome)}
+                      onClick={() => addAttempt(selectedGrade, outcome, selectedProblemId)}
                       style={outcomeBtnStyle(color, bg)}
                     >
                       <span style={{ fontSize: 18 }}>{outcomeEmoji(outcome)}</span>
@@ -362,6 +458,7 @@ export default function ClimbSessionLogger({
                   }
                   onUpdate={(patch) => updateAttempt(attempt.localId, patch)}
                   onRemove={() => removeAttempt(attempt.localId)}
+                  savedProblems={savedProblems}
                 />
               ))}
             </div>
@@ -528,6 +625,24 @@ function gradeChipStyle(active: boolean): React.CSSProperties {
   };
 }
 
+function problemChipStyle(active: boolean): React.CSSProperties {
+  return {
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 1,
+    padding: "6px 12px",
+    borderRadius: 10,
+    border: active ? "1px solid rgba(167,139,250,0.6)" : "1px solid rgba(128,128,128,0.4)",
+    background: active ? "rgba(167,139,250,0.18)" : "rgba(128,128,128,0.07)",
+    color: active ? "rgba(167,139,250,1)" : "inherit",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+  };
+}
+
 const outcomeRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
@@ -583,6 +698,17 @@ const expandLabelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
   opacity: 0.65,
+};
+
+const expandSelectStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  border: "1px solid rgba(128,128,128,0.5)",
+  borderRadius: 8,
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: 13,
+  cursor: "pointer",
 };
 
 const expandInputStyle: React.CSSProperties = {

@@ -268,13 +268,32 @@ model ClimbLocation {
   createdAt DateTime          @default(now())
 
   routineLogs RoutineLog[]
+  problems    ClimbProblem[]
 
   @@index([type, name])
+}
+
+model ClimbProblem {
+  id          String           @id @default(cuid())
+  name        String
+  grade       String
+  gradeSystem ClimbGradeSystem
+  notes       String?
+  locationId  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  location ClimbLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  attempts ClimbAttempt[]
+
+  @@index([locationId, grade])
+  @@index([name])
 }
 
 model ClimbAttempt {
   id             String           @id @default(cuid())
   sessionLogId   String
+  problemId      String?
   grade          String
   gradeSystem    ClimbGradeSystem
   outcome        ClimbOutcome
@@ -284,10 +303,12 @@ model ClimbAttempt {
   attemptOrder   Int              @default(0)
   createdAt      DateTime         @default(now())
 
-  sessionLog RoutineLog @relation(fields: [sessionLogId], references: [id], onDelete: Cascade)
+  sessionLog RoutineLog    @relation(fields: [sessionLogId], references: [id], onDelete: Cascade)
+  problem    ClimbProblem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
 
   @@index([sessionLogId, attemptOrder])
   @@index([gradeSystem, grade])
+  @@index([problemId])
 }
 
 model RoutineLog {
