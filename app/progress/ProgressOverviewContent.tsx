@@ -12,6 +12,7 @@ import SportsIndexView from "./SportsIndexView";
 import InjuriesIndexView from "./InjuriesIndexView";
 import { PillNav, ProgressShell, SectionCard, SectionLinkButton } from "./ui";
 import RoutinesIndexView from "./RoutinesIndexView";
+import TrainingLogIndexView from "./TrainingLogIndexView";
 import { exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
 import { getRecommendationModel, type TrainingRecommendation } from "@/lib/recommendations";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
@@ -497,6 +498,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   if (section === "cardio") return <CardioIndexView searchParams={params} />;
   if (section === "sports") return <SportsIndexView searchParams={params} />;
   if (section === "injuries") return <InjuriesIndexView />;
+  if (section === "logs") return <TrainingLogIndexView searchParams={params} />;
 
   // Fetch all fast data in a single parallel batch.
   const [routines, exercises, groups, recentLogs] = await Promise.all([

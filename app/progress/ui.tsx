@@ -420,11 +420,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   navHint: { fontSize: 12, opacity: 0.72 },
   segmentedNav: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 6,
     minWidth: 0,
-    overflow: "hidden",
   },
   segment: {
     padding: "9px 10px",
@@ -439,6 +438,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 800,
     overflow: "hidden",
+    flexShrink: 0,
     whiteSpace: "nowrap",
     textOverflow: "ellipsis",
   },
