@@ -7,17 +7,20 @@ import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import ClimbingGradeRowsEditor from "./ClimbingGradeRowsEditor";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import {
+  DateTimeField,
   Field,
   FormActions,
   FormSection,
   FormStack,
   inputStyle,
+  localDateTimeNow,
   textareaStyle,
 } from "../log/form-ui";
 import {
   isClimbingTemplateKey,
   normalizeSessionMetricText,
   parseSessionMetricNumber,
+  templateHasPrimaryLocationMetric,
   type SessionMetricDefinitionWithConfig,
 } from "@/lib/session-templates";
 import {
@@ -29,6 +32,7 @@ import {
   saveDraftToStorage,
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
+import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 
 const CLIMBING_AUTO_ZONES = [
   { slug: "hands", label: "Fingers / Hands" },
@@ -60,17 +64,26 @@ export default function SessionLogForm({
   onBack?: () => void;
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+  const drawer = useOptionalLogDrawer();
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
-  const templateHasNotes = definitions.some((d) => d.config?.input === "textarea" && d.valueType === "TEXT");
   const isClimbing = isClimbingTemplateKey(templateKey);
+  const hasLocationMetric = templateHasPrimaryLocationMetric(definitions);
+
+  // Split out template_notes so it renders in the Notes section rather than Metrics
+  const templateNotesDefinition = definitions.find((d) => d.key === "template_notes");
+  const mainDefinitions = definitions.filter((d) => d.key !== "template_notes");
+  const hasVisibleMetrics = mainDefinitions.filter(
+    (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
+  ).length > 0;
 
   const [durationMin, setDurationMin] = useState("");
   const [location, setLocation] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
   const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
-  const [performedAtLocal, setPerformedAtLocal] = useState("");
+  const [performedAtLocal, setPerformedAtLocal] = useState(localDateTimeNow);
+  const [effortRating, setEffortRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
@@ -91,7 +104,7 @@ export default function SessionLogForm({
     setSessionMetricValues(draft.sessionMetricValues);
     setSelectedClimbingGrades(draft.selectedClimbingGrades);
     setNotes(draft.notes);
-    setPerformedAtLocal(draft.performedAtLocal);
+    setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
     contextSaveDraft(draft);
@@ -123,6 +136,7 @@ export default function SessionLogForm({
 
   function markDirty() {
     isDirtyRef.current = true;
+    drawer?.markDirty();
   }
 
   function handleStartFresh() {
@@ -133,10 +147,11 @@ export default function SessionLogForm({
     setSessionMetricValues({});
     setSelectedClimbingGrades(preferredClimbingGrades);
     setNotes("");
-    setPerformedAtLocal("");
+    setPerformedAtLocal(localDateTimeNow());
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
     setDraftBanner(null);
+    drawer?.clearDirty();
   }
 
   if (zoneTagLogId) {
@@ -206,17 +221,19 @@ export default function SessionLogForm({
 
     setSaving(true);
     try {
+      const effortPrefix = !isClimbing && effortRating !== null ? `Effort: ${effortRating}/5\n` : "";
       const logId = await logSession({
         routineId,
         durationSec,
         location,
-        notes,
+        notes: effortPrefix ? `${effortPrefix}${notes}`.trim() : notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: structuredValues,
         preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
+      drawer?.clearDirty();
       if (logId && isClimbing) {
         setZoneTagLogId(logId);
         return;
@@ -233,9 +250,8 @@ export default function SessionLogForm({
     }
   }
 
-  const hasVisibleMetrics = definitions.filter(
-    (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
-  ).length > 0;
+  // Section title for non-climbing metrics
+  const detailsSectionTitle = templateName ?? "Details";
 
   return (
     <FormStack maxWidth={640}>
@@ -265,27 +281,22 @@ export default function SessionLogForm({
           />
         </Field>
 
-        <Field label="Location (optional)">
-          <input
-            style={inputStyle}
-            value={location}
-            onChange={(e) => { markDirty(); setLocation(e.target.value); }}
-            placeholder="Gym, crag, trail…"
-          />
-        </Field>
+        {!hasLocationMetric && (
+          <Field label="Location (optional)">
+            <input
+              style={inputStyle}
+              value={location}
+              onChange={(e) => { markDirty(); setLocation(e.target.value); }}
+              placeholder="Gym, crag, trail…"
+            />
+          </Field>
+        )}
 
-        <Field label="Performed at (leave blank for now)">
-          <input
-            type="datetime-local"
-            style={inputStyle}
-            value={performedAtLocal}
-            onChange={(e) => { markDirty(); setPerformedAtLocal(e.target.value); }}
-          />
-        </Field>
+        <DateTimeField
+          value={performedAtLocal}
+          onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+        />
 
-        {templateName ? (
-          <div style={{ fontSize: 12, opacity: 0.65 }}>Template: {templateName}</div>
-        ) : null}
         {!templateKey && definitions.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.65, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
             No template configured — only duration and notes will be saved.{" "}
@@ -317,9 +328,9 @@ export default function SessionLogForm({
       ) : null}
 
       {hasVisibleMetrics ? (
-        <FormSection title="Metrics">
+        <FormSection title={isClimbing ? "Metrics" : detailsSectionTitle}>
           <SessionMetricFields
-            definitions={definitions}
+            definitions={mainDefinitions}
             values={sessionMetricValues}
             onChange={(metricDefinitionId, value) => {
               markDirty();
@@ -332,8 +343,20 @@ export default function SessionLogForm({
         </FormSection>
       ) : null}
 
-      {!templateHasNotes && (
-        <FormSection title="Notes">
+      <FormSection title="Notes">
+        {templateNotesDefinition ? (
+          <SessionMetricFields
+            definitions={[templateNotesDefinition]}
+            values={sessionMetricValues}
+            onChange={(metricDefinitionId, value) => {
+              markDirty();
+              setSessionMetricValues((current) => ({
+                ...current,
+                [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
+              }));
+            }}
+          />
+        ) : (
           <Field label="Session notes (optional)">
             <textarea
               style={textareaStyle}
@@ -341,6 +364,24 @@ export default function SessionLogForm({
               onChange={(e) => { markDirty(); setNotes(e.target.value); }}
             />
           </Field>
+        )}
+      </FormSection>
+
+      {!isClimbing && (
+        <FormSection title="How did it feel?">
+          <div style={effortRowStyle}>
+            {[1, 2, 3, 4, 5].map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setEffortRating(effortRating === level ? null : level)}
+                style={effortBtnStyle(effortRating === level)}
+              >
+                <span style={{ fontSize: 20 }}>{effortEmoji(level)}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.75 }}>{level}</span>
+              </button>
+            ))}
+          </div>
         </FormSection>
       )}
 
@@ -394,3 +435,33 @@ const draftBannerBtnStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
   flexShrink: 0,
 };
+
+const effortRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+};
+
+function effortBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 4,
+    padding: "10px 6px",
+    border: active ? "1px solid rgba(167,139,250,0.6)" : "1px solid rgba(128,128,128,0.35)",
+    borderRadius: 12,
+    background: active ? "rgba(167,139,250,0.15)" : "rgba(128,128,128,0.06)",
+    color: "inherit",
+    cursor: "pointer",
+    transition: "border-color 120ms, background 120ms",
+  };
+}
+
+function effortEmoji(level: number) {
+  if (level === 1) return "😴";
+  if (level === 2) return "🙂";
+  if (level === 3) return "💪";
+  if (level === 4) return "🔥";
+  return "⚡";
+}

@@ -10,9 +10,10 @@ import {
   saveDraftToStorage,
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
+import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Field, inputStyle, textareaStyle } from "./form-ui";
+import { DateTimeField, Field, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
 
 export type ExerciseOption = {
   id: string;
@@ -109,9 +110,10 @@ export default function WorkoutExerciseEditor({
   onSave: (payload: SavePayload) => Promise<void>;
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+  const drawer = useOptionalLogDrawer();
 
   const [notes, setNotes] = useState(initialNotes);
-  const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt);
+  const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt || localDateTimeNow);
   const [saving, setSaving] = useState(false);
   const [creatingExercise, startCreateExercise] = useTransition();
   const [exerciseQuery, setExerciseQuery] = useState("");
@@ -145,7 +147,7 @@ export default function WorkoutExerciseEditor({
     setBlocks(restored);
     setExpandedId(restored[0]?.exerciseId ?? null);
     setNotes(draft.notes);
-    setPerformedAtLocal(draft.performedAtLocal);
+    setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
     contextSaveDraft(draft);
@@ -188,6 +190,7 @@ export default function WorkoutExerciseEditor({
 
   function markDirty() {
     isDirtyRef.current = true;
+    drawer?.markDirty();
   }
 
   function advanceFocus(block: WorkoutBlock, rowIdx: number, field: "weightLb" | "reps" | "seconds") {
@@ -554,6 +557,7 @@ export default function WorkoutExerciseEditor({
                     {block.rows.map((row, rowIdx) => {
                       const ghostRow = blockLastRowsMap.get(row.setNumber);
                       const rowIsEmpty = !row.reps && !row.seconds && !row.weightLb;
+                      const primaryFilled = block.unit === "REPS" ? !!row.reps : !!row.seconds;
                       return (
                         <div
                           key={row.setNumber}
@@ -562,6 +566,10 @@ export default function WorkoutExerciseEditor({
                             gridTemplateColumns: setGridColumns(block),
                             gap: 6,
                             alignItems: "center",
+                            borderRadius: 10,
+                            padding: primaryFilled ? "2px 4px" : undefined,
+                            border: primaryFilled ? "1px solid rgba(74,222,128,0.28)" : undefined,
+                            background: primaryFilled ? "rgba(74,222,128,0.05)" : undefined,
                           }}
                         >
                           <div style={styles.setNum}>{row.setNumber}</div>
@@ -749,14 +757,10 @@ export default function WorkoutExerciseEditor({
           Log details{sessionSummary ? ` · ${sessionSummary}` : ""}
         </summary>
         <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-          <Field label="Performed at (leave blank for now)">
-            <input
-              type="datetime-local"
-              style={inputStyle}
-              value={performedAtLocal}
-              onChange={(e) => { markDirty(); setPerformedAtLocal(e.target.value); }}
-            />
-          </Field>
+          <DateTimeField
+            value={performedAtLocal}
+            onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+          />
           <Field label="Notes (optional)">
             <textarea
               style={{ ...textareaStyle, minHeight: 80 }}

@@ -5,29 +5,38 @@ import { useMemo, useState } from "react";
 import { logRun } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import {
+  DateTimeField,
   Field,
   FormActions,
   FormSection,
   FormStack,
-  OptionalDateSection,
+  inputStyle,
+  localDateTimeNow,
   textareaStyle,
 } from "../log/form-ui";
+import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 
 export default function LogRunForm({
   routineId,
-  routineName,
+  routineName: _routineName,
   activePainZones = [],
+  onComplete,
+  onBack,
 }: {
   routineId: string;
   routineName: string;
   activePainZones?: PainCheckZone[];
+  onComplete?: () => void;
+  onBack?: () => void;
 }) {
+  const drawer = useOptionalLogDrawer();
   const [distanceMi, setDistanceMi] = useState("");
   const [elevationGainFt, setElevationGainFt] = useState("");
   const [minutes, setMinutes] = useState("");
   const [seconds, setSeconds] = useState("");
+  const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
-  const [performedAtLocal, setPerformedAtLocal] = useState("");
+  const [performedAtLocal, setPerformedAtLocal] = useState(localDateTimeNow);
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
 
@@ -43,8 +52,14 @@ export default function LogRunForm({
     return `${paceMins}:${String(paceSecs).padStart(2, "0")} /mi`;
   }, [distanceMi, minutes, seconds]);
 
+  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+
   if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={() => { window.location.href = "/routines"; }} />;
+    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
+  }
+
+  function markDirty() {
+    drawer?.markDirty();
   }
 
   async function onSave() {
@@ -78,14 +93,16 @@ export default function LogRunForm({
         distanceMi: distance,
         durationSec,
         elevationGainFt: elevation,
+        location: location.trim() || undefined,
         notes,
         performedAtLocal: performedAtLocal || undefined,
       });
+      drawer?.clearDirty();
       if (logId && activePainZones.length > 0) {
         setPainCheckLogId(logId);
         return;
       }
-      window.location.href = "/routines";
+      finish();
     } finally {
       setSaving(false);
     }
@@ -93,19 +110,17 @@ export default function LogRunForm({
 
   return (
     <FormStack maxWidth={560}>
-      <FormSection title="Cardio details">
-        {/* Distance */}
+      <FormSection title="Cardio">
         <Field label="Distance (miles)">
           <input
             style={bigInputStyle}
             value={distanceMi}
-            onChange={(e) => setDistanceMi(e.target.value)}
+            onChange={(e) => { markDirty(); setDistanceMi(e.target.value); }}
             inputMode="decimal"
             placeholder="0.00"
           />
         </Field>
 
-        {/* Duration row */}
         <div>
           <div style={fieldLabelStyle}>Duration</div>
           <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginTop: 6 }}>
@@ -114,7 +129,7 @@ export default function LogRunForm({
               <input
                 style={bigInputStyle}
                 value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
+                onChange={(e) => { markDirty(); setMinutes(e.target.value); }}
                 inputMode="numeric"
                 placeholder="0"
               />
@@ -125,7 +140,7 @@ export default function LogRunForm({
               <input
                 style={bigInputStyle}
                 value={seconds}
-                onChange={(e) => setSeconds(e.target.value)}
+                onChange={(e) => { markDirty(); setSeconds(e.target.value); }}
                 inputMode="numeric"
                 placeholder="00"
               />
@@ -133,7 +148,6 @@ export default function LogRunForm({
           </div>
         </div>
 
-        {/* Live pace */}
         {pace && (
           <div style={paceBadgeStyle}>
             <span style={{ opacity: 0.65, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>PACE</span>
@@ -145,25 +159,37 @@ export default function LogRunForm({
           <input
             style={bigInputStyle}
             value={elevationGainFt}
-            onChange={(e) => setElevationGainFt(e.target.value)}
+            onChange={(e) => { markDirty(); setElevationGainFt(e.target.value); }}
             inputMode="numeric"
             placeholder="0"
           />
         </Field>
+
+        <Field label="Route / Location (optional)">
+          <input
+            style={inputStyle}
+            value={location}
+            onChange={(e) => { markDirty(); setLocation(e.target.value); }}
+            placeholder="Trail name, park, route…"
+          />
+        </Field>
+
+        <DateTimeField
+          value={performedAtLocal}
+          onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+        />
       </FormSection>
 
       <FormSection title="Notes">
-        <Field label="Session notes (optional)" hint="Use this for feel, route, weather, or anything you want to review later.">
+        <Field label="Session notes (optional)" hint="Feel, weather, conditions, or anything to review later.">
           <textarea
             style={textareaStyle}
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="How did cardio feel?"
+            onChange={(e) => { markDirty(); setNotes(e.target.value); }}
+            placeholder="How did it go?"
           />
         </Field>
       </FormSection>
-
-      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 
       <FormActions
         primaryLabel="Save Cardio"
@@ -171,6 +197,7 @@ export default function LogRunForm({
         saving={saving}
         onPrimary={onSave}
         backHref="/routines"
+        onBack={onBack}
       />
     </FormStack>
   );
@@ -211,4 +238,3 @@ const paceBadgeStyle: React.CSSProperties = {
   borderRadius: 12,
   background: "rgba(115,220,152,0.07)",
 };
-

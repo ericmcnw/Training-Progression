@@ -64,6 +64,43 @@ export function FieldGrid({
   return <div className="mobileFormGrid" style={{ display: "grid", gap: 12, gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))` }}>{children}</div>;
 }
 
+export function localDateTimeNow(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+export function DateTimeField({
+  value,
+  onChange,
+  label = "Date & Time",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+}) {
+  return (
+    <Field label={label}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="datetime-local"
+          style={{ ...inputStyle, flex: 1 }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => onChange(localDateTimeNow())}
+          style={nowButtonStyle}
+          title="Reset to current time"
+        >
+          Now
+        </button>
+      </div>
+    </Field>
+  );
+}
+
 export function OptionalDateSection({
   value,
   onChange,
@@ -171,6 +208,19 @@ const hintStyle: React.CSSProperties = {
 };
 
 export const helperTextStyle: React.CSSProperties = hintStyle;
+
+const nowButtonStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  border: "1px solid rgba(128,128,128,0.5)",
+  borderRadius: 12,
+  background: "rgba(128,128,128,0.1)",
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 12,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
 
 const detailsStyle: React.CSSProperties = {
   border: `1px solid ${borderColor}`,

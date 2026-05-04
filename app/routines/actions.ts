@@ -1568,6 +1568,7 @@ export async function logCardio(params: {
   distanceMi: number;
   durationSec: number;
   elevationGainFt?: number | null;
+  location?: string;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
@@ -1598,6 +1599,7 @@ export async function logCardio(params: {
           ? Math.round(params.elevationGainFt)
           : null,
       notes: params.notes?.trim() || null,
+      location: params.location?.trim() || null,
     },
     select: { id: true },
   });
@@ -1620,6 +1622,7 @@ export async function logRun(params: {
   distanceMi: number;
   durationSec: number;
   elevationGainFt?: number | null;
+  location?: string;
   notes?: string;
   performedAtLocal?: string;
 }) {

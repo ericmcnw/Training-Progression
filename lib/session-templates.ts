@@ -128,6 +128,18 @@ export function climbingGradeRowDefinitions(definitions: SessionMetricDefinition
   });
 }
 
+const PRIMARY_LOCATION_METRIC_KEYS = new Set([
+  "break_name",
+  "trail_name",
+  "court_name",
+  "course_name",
+  "mountain_name",
+]);
+
+export function templateHasPrimaryLocationMetric(definitions: SessionMetricDefinitionWithConfig[]): boolean {
+  return definitions.some((d) => PRIMARY_LOCATION_METRIC_KEYS.has(d.key));
+}
+
 export function sessionMetricInputMode(valueType: SessionMetricValueType) {
   if (valueType === "INTEGER") return "numeric";
   if (valueType === "DECIMAL") return "decimal";

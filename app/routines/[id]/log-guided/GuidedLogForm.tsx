@@ -45,12 +45,16 @@ export default function GuidedLogForm({
   steps,
   availableExercises: _availableExercises,
   activePainZones = [],
+  onComplete,
+  onBack,
 }: {
   routineId: string;
   routineName?: string;
   steps: Step[];
   availableExercises: ExerciseOption[];
   activePainZones?: PainCheckZone[];
+  onComplete?: () => void;
+  onBack?: () => void;
 }) {
   const [screen, setScreen] = useState<Screen>("entry");
   const [autoPlay, setAutoPlay] = useState(true);
@@ -63,6 +67,7 @@ export default function GuidedLogForm({
 
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
   const templateSteps = useMemo(
     () =>
@@ -158,7 +163,7 @@ export default function GuidedLogForm({
         setPainCheckLogId(createdLogId);
         return;
       }
-      window.location.href = "/routines";
+      finish();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save guided session.");
     } finally {
@@ -171,9 +176,7 @@ export default function GuidedLogForm({
       <PostSessionPainCheck
         zones={activePainZones}
         routineLogId={painCheckLogId}
-        onDone={() => {
-          window.location.href = "/routines";
-        }}
+        onDone={finish}
       />
     );
   }
@@ -190,6 +193,7 @@ export default function GuidedLogForm({
         onGuideMe={startPlayer}
         onLogAfter={startLogAfter}
         backHref="/routines"
+        onBack={onBack}
       />
     );
   }

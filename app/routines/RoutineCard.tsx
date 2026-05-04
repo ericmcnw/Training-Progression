@@ -11,6 +11,7 @@ import {
   effectiveRoutineDomain,
   domainColor,
 } from "@/lib/routines";
+import DrawerLogButton from "./DrawerLogButton";
 import type { computeHabitStats } from "@/lib/habits";
 import { formatRoutineTargetLabel, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import {
@@ -145,9 +146,7 @@ export default function RoutineCard({
                     </button>
                   </form>
                 ) : (
-                  <Link href={loggingHref(routine)} className="routineCardPrimaryAction">
-                    Log
-                  </Link>
+                  <DrawerLogButton routineId={routine.id} />
                 )}
                 {isCompletionKind(kind) ? (
                   <form action={undoLastAction}>

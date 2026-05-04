@@ -12,6 +12,7 @@ export default function GuidedEntryScreen({
   onGuideMe,
   onLogAfter,
   backHref,
+  onBack,
 }: {
   routineName: string;
   steps: GuidedTemplateStep[];
@@ -20,6 +21,7 @@ export default function GuidedEntryScreen({
   onGuideMe: () => void;
   onLogAfter: () => void;
   backHref: string;
+  onBack?: () => void;
 }) {
   const estimatedSec = totalGuidedTemplateDuration(steps);
   const count = steps.length;
@@ -28,9 +30,11 @@ export default function GuidedEntryScreen({
     <div style={{ display: "grid", gap: 28, maxWidth: 480, margin: "0 auto", padding: "4px 2px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Link href={backHref} style={backBtnStyle}>
-          ← Back
-        </Link>
+        {onBack ? (
+          <button type="button" onClick={onBack} style={backBtnStyle}>← Back</button>
+        ) : (
+          <Link href={backHref} style={backBtnStyle}>← Back</Link>
+        )}
         <div>
           <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>{routineName}</div>
           <div style={{ fontSize: 13, opacity: 0.62, marginTop: 3 }}>

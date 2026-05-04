@@ -1,6 +1,7 @@
+import { routineAccessWhere } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeRoutineKind, isWorkoutKind, isSessionKind } from "@/lib/routines";
+import { normalizeRoutineKind, isWorkoutKind, isSessionKind, isCardioKind, isGuidedKind } from "@/lib/routines";
 import {
   exerciseLibraryWhereForKinds,
   isMissingExerciseLibraryKindError,
@@ -17,9 +18,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: routineId } = await params;
+  const where = await routineAccessWhere(routineId);
 
   const routine = await prisma.routine.findUnique({
-    where: { id: routineId },
+    where,
     select: {
       id: true,
       name: true,
@@ -30,6 +32,22 @@ export async function GET(
           exerciseId: true,
           defaultSets: true,
           exercise: { select: { name: true, unit: true, supportsWeight: true } },
+        },
+      },
+      guidedSteps: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          exerciseId: true,
+          durationSec: true,
+          restSec: true,
+          repeatCount: true,
+          repCount: true,
+          setCount: true,
+          sortOrder: true,
+          exercise: { select: { name: true } },
         },
       },
       sessionDetails: {
@@ -137,6 +155,40 @@ export async function GET(
       templateName: routine.sessionDetails?.template?.name ?? null,
       definitions,
       preferredClimbingGrades,
+      activePainZones,
+    });
+  }
+
+  if (isCardioKind(kind)) {
+    const activePainZones = await getRoutinePainCheckZones(routineId);
+    return NextResponse.json({
+      kind: "CARDIO",
+      routineId,
+      routineName: routine.name,
+      activePainZones,
+    });
+  }
+
+  if (isGuidedKind(kind)) {
+    const activePainZones = await getRoutinePainCheckZones(routineId);
+    const steps = routine.guidedSteps.map((step) => ({
+      id: step.id,
+      kind: step.kind,
+      title: step.title,
+      exerciseId: step.exerciseId,
+      exerciseName: step.exercise?.name ?? null,
+      durationSec: step.durationSec,
+      restSec: step.restSec,
+      repeatCount: step.repeatCount,
+      repCount: step.repCount,
+      setCount: step.setCount,
+      sortOrder: step.sortOrder,
+    }));
+    return NextResponse.json({
+      kind: "GUIDED",
+      routineId,
+      routineName: routine.name,
+      steps,
       activePainZones,
     });
   }

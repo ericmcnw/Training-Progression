@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { STIMULUS_CATEGORY_SEEDS, getRecentStimulusSummary } from "@/lib/stimulus";
 
@@ -158,6 +159,7 @@ async function readStimulusPresetCookie() {
 }
 
 export async function ensureAppProfile() {
+  const session = await getAppSession();
   const profileDelegate = (prisma as typeof prisma & {
     appProfile?: {
       upsert: typeof prisma.$extends extends never
@@ -181,9 +183,9 @@ export async function ensureAppProfile() {
 
   try {
     return await profileDelegate.upsert({
-      where: { key: "default" },
+      where: { key: session.profileKey },
       update: {},
-      create: { key: "default" },
+      create: { key: session.profileKey },
       include: {
         stimulusPreferences: true,
       },

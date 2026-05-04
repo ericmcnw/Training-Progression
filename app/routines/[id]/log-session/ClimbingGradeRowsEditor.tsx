@@ -30,6 +30,16 @@ export default function ClimbingGradeRowsEditor({
   );
   const visibleRows = gradeRows.filter((row) => selectedGrades.includes(row.grade));
 
+  const climbingSummary = useMemo(() => {
+    let totalSends = 0;
+    let totalFlashes = 0;
+    for (const row of visibleRows) {
+      totalSends += Number(values[row.doneDefinition?.id ?? ""]?.numberValue ?? 0) || 0;
+      totalFlashes += Number(values[row.flashedDefinition?.id ?? ""]?.numberValue ?? 0) || 0;
+    }
+    return { totalSends, totalFlashes };
+  }, [values, visibleRows]);
+
   if (gradeRows.length === 0) return null;
 
   return (
@@ -62,21 +72,39 @@ export default function ClimbingGradeRowsEditor({
       {visibleRows.length === 0 ? (
         <div style={helpStyle}>No grades selected yet.</div>
       ) : (
-        <div style={tableStyle}>
-          <div style={tableHeaderStyle}>Grade</div>
-          <div style={tableHeaderStyle}>Done</div>
-          <div style={tableHeaderStyle}>Flashed</div>
-          <div style={tableHeaderStyle}>Remove</div>
-          {visibleRows.map((row) => (
-            <GradeRow
-              key={row.grade}
-              row={row}
-              values={values}
-              onValuesChange={onValuesChange}
-              onRemove={() => onSelectedGradesChange(selectedGrades.filter((grade) => grade !== row.grade))}
-            />
-          ))}
-        </div>
+        <>
+          <div style={tableStyle}>
+            <div style={tableHeaderStyle}>Grade</div>
+            <div style={tableHeaderStyle}>Done</div>
+            <div style={tableHeaderStyle}>Flashed</div>
+            <div style={tableHeaderStyle}>Remove</div>
+            {visibleRows.map((row) => (
+              <GradeRow
+                key={row.grade}
+                row={row}
+                values={values}
+                onValuesChange={onValuesChange}
+                onRemove={() => onSelectedGradesChange(selectedGrades.filter((grade) => grade !== row.grade))}
+              />
+            ))}
+          </div>
+          {(climbingSummary.totalSends > 0 || climbingSummary.totalFlashes > 0) && (
+            <div style={summaryBarStyle}>
+              <span style={summaryChipStyle}>
+                <span style={{ opacity: 0.65, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>SENDS</span>
+                <span style={{ fontSize: 18, fontWeight: 900 }}>{climbingSummary.totalSends}</span>
+              </span>
+              <span style={summaryChipStyle}>
+                <span style={{ opacity: 0.65, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>FLASHED</span>
+                <span style={{ fontSize: 18, fontWeight: 900 }}>{climbingSummary.totalFlashes}</span>
+              </span>
+              <span style={summaryChipStyle}>
+                <span style={{ opacity: 0.65, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
+                <span style={{ fontSize: 18, fontWeight: 900 }}>{climbingSummary.totalSends + climbingSummary.totalFlashes}</span>
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -194,4 +222,22 @@ const removeButtonStyle: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 20,
   lineHeight: 1,
+};
+
+const summaryBarStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  paddingTop: 4,
+};
+
+const summaryChipStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 1,
+  flex: 1,
+  padding: "8px 10px",
+  border: "1px solid rgba(34,197,94,0.25)",
+  borderRadius: 10,
+  background: "rgba(34,197,94,0.06)",
 };

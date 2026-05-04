@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import LogWorkoutForm from "@/app/routines/[id]/log/ui";
 import SessionLogForm from "@/app/routines/[id]/log-session/SessionLogForm";
+import LogRunForm from "@/app/routines/[id]/log-cardio/ui";
+import GuidedLogForm from "@/app/routines/[id]/log-guided/GuidedLogForm";
 import type { WorkoutBlock, ExerciseOption } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
+import type { GuidedStepKind } from "@/generated/prisma";
 
 type WorkoutLogData = {
   kind: "WORKOUT";
@@ -28,10 +31,39 @@ type SessionLogData = {
   activePainZones: PainCheckZone[];
 };
 
-type LogData = WorkoutLogData | SessionLogData;
+type CardioLogData = {
+  kind: "CARDIO";
+  routineId: string;
+  routineName: string;
+  activePainZones: PainCheckZone[];
+};
+
+type GuidedStep = {
+  id: string;
+  kind: GuidedStepKind;
+  title: string;
+  exerciseId: string | null;
+  exerciseName: string | null;
+  durationSec: number | null;
+  restSec: number | null;
+  repeatCount: number;
+  repCount?: number | null;
+  setCount?: number | null;
+  sortOrder: number;
+};
+
+type GuidedLogData = {
+  kind: "GUIDED";
+  routineId: string;
+  routineName: string;
+  steps: GuidedStep[];
+  activePainZones: PainCheckZone[];
+};
+
+type LogData = WorkoutLogData | SessionLogData | CardioLogData | GuidedLogData;
 
 export default function LogDrawer() {
-  const { isOpen, activeRoutineId, closeDrawer } = useLogDrawer();
+  const { isOpen, activeRoutineId, closeDrawer, isDirty, clearDirty } = useLogDrawer();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logData, setLogData] = useState<LogData | null>(null);
@@ -65,16 +97,22 @@ export default function LogDrawer() {
 
   function handleComplete() {
     if (activeRoutineId) cache.current.delete(activeRoutineId);
+    clearDirty();
+    closeDrawer();
+  }
+
+  function handleCloseAttempt() {
+    if (isDirty && !confirm("Close without saving your changes?")) return;
     closeDrawer();
   }
 
   return (
     <>
-      <div className="logDrawerBackdrop" onClick={closeDrawer} />
+      <div className="logDrawerBackdrop" onClick={handleCloseAttempt} />
       <div className="logDrawerSheet">
         <div style={drawerHeaderStyle}>
           <span style={drawerTitleStyle}>{logData?.routineName ?? " "}</span>
-          <button type="button" onClick={closeDrawer} style={minimizeBtnStyle} aria-label="Minimize log">
+          <button type="button" onClick={handleCloseAttempt} style={minimizeBtnStyle} aria-label="Minimize log">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" width={16} height={16}>
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -106,6 +144,26 @@ export default function LogDrawer() {
                 templateName={logData.templateName}
                 definitions={logData.definitions}
                 preferredClimbingGrades={logData.preferredClimbingGrades}
+                activePainZones={logData.activePainZones}
+                onComplete={handleComplete}
+                onBack={closeDrawer}
+              />
+            ) : logData.kind === "CARDIO" ? (
+              <LogRunForm
+                key={logData.routineId}
+                routineId={logData.routineId}
+                routineName={logData.routineName}
+                activePainZones={logData.activePainZones}
+                onComplete={handleComplete}
+                onBack={closeDrawer}
+              />
+            ) : logData.kind === "GUIDED" ? (
+              <GuidedLogForm
+                key={logData.routineId}
+                routineId={logData.routineId}
+                routineName={logData.routineName}
+                steps={logData.steps}
+                availableExercises={[]}
                 activePainZones={logData.activePainZones}
                 onComplete={handleComplete}
                 onBack={closeDrawer}
