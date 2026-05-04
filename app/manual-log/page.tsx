@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
+import { APP_TIME_ZONE, formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import {
+  domainColor,
+  effectiveRoutineDomain,
+  formatRoutineSubtype,
   formatRoutineTypeLabel,
   isCardioKind,
   isCompletionKind,
@@ -13,19 +16,35 @@ import DeleteLogButton from "./DeleteLogButton";
 
 export const dynamic = "force-dynamic";
 
+const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "recovery", "habit"] as const;
+type Domain = (typeof DOMAIN_ORDER)[number];
+
+const DOMAIN_LABELS: Record<Domain, string> = {
+  strength: "Strength",
+  cardio: "Cardio",
+  mobility: "Mobility",
+  sport: "Sport",
+  recovery: "Recovery",
+  habit: "Habit",
+};
+
 export default async function ManualLogPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ view?: string }>;
+  searchParams?: Promise<{ view?: string; domain?: string }>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const view = resolvedSearchParams?.view === "history" ? "history" : "profile";
   const showHistory = view === "history";
+  const rawDomain = (resolvedSearchParams?.domain ?? "").toLowerCase();
+  const filterDomain: Domain | "" = (DOMAIN_ORDER as readonly string[]).includes(rawDomain)
+    ? (rawDomain as Domain)
+    : "";
 
   const [recentLogs, goalCount, routineCount] = await Promise.all([
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
-      take: 120,
+      take: 500,
       select: {
         id: true,
         routineId: true,
@@ -36,7 +55,16 @@ export default async function ManualLogPage({
         elevationGainFt: true,
         durationSec: true,
         location: true,
-        routine: { select: { id: true, name: true, category: true, kind: true } },
+        routine: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            kind: true,
+            domain: true,
+            subtype: true,
+          },
+        },
         exercises: { select: { id: true, sets: { select: { id: true } } } },
       },
     }),
@@ -44,30 +72,96 @@ export default async function ManualLogPage({
     prisma.routine.count({ where: { isDeleted: false, isActive: true } }),
   ]);
 
-  const latestLog = recentLogs[0] ?? null;
-  const byDate = new Map<string, typeof recentLogs>();
-  for (const log of recentLogs) {
+  // Enrich logs with effective domain
+  const enrichedLogs = recentLogs.map((log) => ({
+    ...log,
+    domain: effectiveRoutineDomain(
+      log.routine.domain,
+      log.routine.kind,
+      log.routine.subtype
+    ) as Domain,
+  }));
+
+  // ── Stats ────────────────────────────────────────────────────────────────────
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const weekSessions = enrichedLogs.filter((l) => l.performedAt >= weekAgo).length;
+  const monthSessions = enrichedLogs.filter((l) => l.performedAt >= monthStart).length;
+
+  // ── Calendar (current month in app timezone) ─────────────────────────────────
+  const todayYmd = toAppYmd(now);
+  const [calYear, calMonthNum] = todayYmd.split("-").slice(0, 2).map(Number);
+  const calMonthIdx = calMonthNum - 1;
+  const daysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate();
+  const todayDay = parseInt(todayYmd.split("-")[2], 10);
+  const firstOfMonthUTC = new Date(
+    `${calYear}-${String(calMonthNum).padStart(2, "0")}-01T12:00:00Z`
+  );
+  const firstDayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+  }).format(firstOfMonthUTC);
+  const dayMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  const firstDayOfWeek = dayMap[firstDayLabel] ?? 0;
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    month: "long",
+    year: "numeric",
+  }).format(now);
+
+  // Map day-of-month → domain colors
+  const calDayDomains = new Map<number, Domain[]>();
+  for (const log of enrichedLogs) {
+    const ymd = toAppYmd(log.performedAt);
+    const [ly, lm, ld] = ymd.split("-").map(Number);
+    if (ly === calYear && lm === calMonthNum) {
+      if (!calDayDomains.has(ld)) calDayDomains.set(ld, []);
+      calDayDomains.get(ld)!.push(log.domain);
+    }
+  }
+
+  // ── History feed (filtered) ──────────────────────────────────────────────────
+  const latestLog = enrichedLogs[0] ?? null;
+  const historyLogs = filterDomain
+    ? enrichedLogs.filter((l) => l.domain === filterDomain)
+    : enrichedLogs;
+
+  const byDate = new Map<string, typeof historyLogs>();
+  for (const log of historyLogs) {
     const dateKey = toAppYmd(log.performedAt);
     if (!byDate.has(dateKey)) byDate.set(dateKey, []);
     byDate.get(dateKey)!.push(log);
   }
   const orderedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
 
+  const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
   return (
-    <div className="mobileManualLogPage mobilePageShell" style={{ maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 }}>
+    <div
+      className="mobileManualLogPage mobilePageShell"
+      style={{ maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 }}
+    >
       <div style={{ display: "grid", gap: 8 }}>
-        <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Profile & History</h1>
+        <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>
+          Profile & History
+        </h1>
         <div className="mobilePageSubtitle" style={{ opacity: 0.75, fontSize: 13 }}>
           Log history, settings, and account preferences will live here.
         </div>
       </div>
 
+      {/* ── Overview ── */}
       <section className="mobileSectionCard" style={panel}>
         <div className="mobileSectionHeader" style={panelHeader}>OVERVIEW</div>
         <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 14 }}>
           <div className="mobileCard" style={heroCard}>
             <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>PROFILE HOME</div>
+              <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>
+                PROFILE HOME
+              </div>
               <div style={{ fontSize: 20, fontWeight: 900 }}>Your log archive and profile home.</div>
               <div style={{ fontSize: 13, opacity: 0.76, maxWidth: 620 }}>
                 Settings and account preferences will live here as they are added.
@@ -77,31 +171,39 @@ export default async function ManualLogPage({
               <Link href="/manual-log?view=history" style={primaryLinkBtn}>
                 Log History
               </Link>
-              <Link href="/progress" style={linkBtn}>
-                Progress
-              </Link>
-              <Link href="/routines" style={linkBtn}>
-                Routines
-              </Link>
-              <Link href="/goals" style={linkBtn}>
-                Goals
-              </Link>
-              <Link href="/reports/weekly" style={linkBtn}>
-                Weekly Report
-              </Link>
+              <Link href="/progress" style={linkBtn}>Progress</Link>
+              <Link href="/routines" style={linkBtn}>Routines</Link>
+              <Link href="/goals" style={linkBtn}>Goals</Link>
+              <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>
             </div>
           </div>
 
           <div style={summaryGrid}>
             <div style={summaryCard}>
               <div style={summaryLabel}>Latest Log</div>
-              <div style={summaryValue}>{latestLog ? formatAppDate(latestLog.performedAt, { month: "short", day: "numeric" }) : "-"}</div>
-              <div style={summaryMeta}>{latestLog ? latestLog.routine.name : "No logs yet"}</div>
+              <div style={summaryValue}>
+                {latestLog
+                  ? formatAppDate(latestLog.performedAt, { month: "short", day: "numeric" })
+                  : "-"}
+              </div>
+              <div style={summaryMeta}>
+                {latestLog ? latestLog.routine.name : "No logs yet"}
+              </div>
+            </div>
+            <div style={summaryCard}>
+              <div style={summaryLabel}>This Week</div>
+              <div style={summaryValue}>{weekSessions}</div>
+              <div style={summaryMeta}>sessions</div>
+            </div>
+            <div style={summaryCard}>
+              <div style={summaryLabel}>This Month</div>
+              <div style={summaryValue}>{monthSessions}</div>
+              <div style={summaryMeta}>sessions</div>
             </div>
             <div style={summaryCard}>
               <div style={summaryLabel}>Active Goals</div>
               <div style={summaryValue}>{goalCount}</div>
-              <div style={summaryMeta}>Current training targets</div>
+              <div style={summaryMeta}>Current targets</div>
             </div>
             <div style={summaryCard}>
               <div style={summaryLabel}>Active Routines</div>
@@ -112,98 +214,312 @@ export default async function ManualLogPage({
         </div>
       </section>
 
-      <section className="mobileSectionCard" style={panel}>
-        <div className="mobileSectionHeader" style={panelHeader}>RECENT ACTIVITY</div>
-        <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 10 }}>
-          {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
-          {recentLogs.slice(0, 5).map((log) => {
-            const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-            const routineKind = String(log.routine.kind);
-            const typeLabel = formatRoutineTypeLabel(routineKind);
-            const categoryLabel = (log.routine.category || "General").trim() || "General";
-            return (
-              <div key={log.id} className="mobileCard" style={activityCard}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800 }}>{log.routine.name}</div>
-                  <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
-                    {categoryLabel} | {typeLabel} | {formatAppDateTime(log.performedAt, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                  </div>
-                  {isCardioKind(routineKind) && (
-                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
-                      {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s{log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}
-                    </div>
-                  )}
-                  {isWorkoutKind(routineKind) && <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>Sets logged: {exerciseSetCount}</div>}
-                  {isGuidedKind(routineKind) && <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>Duration: {Math.round((log.durationSec ?? 0) / 60)} min</div>}
-                  {isSessionKind(routineKind) && <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>Duration: {Math.round((log.durationSec ?? 0) / 60)} min</div>}
-                  {isCompletionKind(routineKind) && log.completionCount ? (
-                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>Count: {log.completionCount}</div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-          <Link href="/manual-log?view=history" style={linkBtn}>
-            Open Full Log History
-          </Link>
-        </div>
-      </section>
-
-      {showHistory ? (
+      {/* ── Recent Activity (profile view only) ── */}
+      {!showHistory && (
         <section className="mobileSectionCard" style={panel}>
-          <div className="mobileSectionHeader" style={{ ...panelHeader, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div className="mobileSectionHeader" style={panelHeader}>RECENT ACTIVITY</div>
+          <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 10 }}>
+            {enrichedLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
+            {enrichedLogs.slice(0, 5).map((log) => (
+              <ActivityCard key={log.id} log={log} />
+            ))}
+            <Link href="/manual-log?view=history" style={linkBtn}>
+              Open Full Log History
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {/* ── Full History ── */}
+      {showHistory && (
+        <section className="mobileSectionCard" style={panel}>
+          <div
+            className="mobileSectionHeader"
+            style={{
+              ...panelHeader,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
             <span>LOG HISTORY</span>
             <Link href="/manual-log" style={miniLinkBtn}>
               Back to Profile
             </Link>
           </div>
-          <div className="mobileSectionBody" style={{ padding: 12, display: "grid", gap: 14 }}>
-            {recentLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
+
+          <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 16 }}>
+            {/* Calendar */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.6, opacity: 0.6 }}>
+                {monthLabel.toUpperCase()}
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 2,
+                  textAlign: "center",
+                }}
+              >
+                {DAY_HEADERS.map((h) => (
+                  <div
+                    key={h}
+                    style={{ fontSize: 10, fontWeight: 900, opacity: 0.4, paddingBottom: 4 }}
+                  >
+                    {h}
+                  </div>
+                ))}
+                {Array.from({ length: firstDayOfWeek }, (_, i) => (
+                  <div key={`blank-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }, (_, i) => {
+                  const day = i + 1;
+                  const domains = calDayDomains.get(day) ?? [];
+                  const isToday = day === todayDay;
+                  const hasSessions = domains.length > 0;
+                  return (
+                    <div
+                      key={day}
+                      style={{
+                        padding: "5px 2px 4px",
+                        borderRadius: 8,
+                        background: isToday
+                          ? "rgba(255,255,255,0.08)"
+                          : hasSessions
+                          ? "rgba(255,255,255,0.03)"
+                          : "transparent",
+                        border: isToday
+                          ? "1px solid rgba(255,255,255,0.18)"
+                          : "1px solid transparent",
+                        display: "grid",
+                        gap: 2,
+                        alignItems: "center",
+                        justifyItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: isToday ? 900 : 700,
+                          opacity: isToday ? 1 : hasSessions ? 0.9 : 0.3,
+                        }}
+                      >
+                        {day}
+                      </div>
+                      {hasSessions && (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 2,
+                            flexWrap: "wrap",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {domains.slice(0, 4).map((d, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                width: 5,
+                                height: 5,
+                                borderRadius: "50%",
+                                background: domainColor(d),
+                              }}
+                            />
+                          ))}
+                          {domains.length > 4 && (
+                            <div
+                              style={{
+                                width: 5,
+                                height: 5,
+                                borderRadius: "50%",
+                                background: "rgba(255,255,255,0.3)",
+                              }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Calendar legend */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {DOMAIN_ORDER.map((d) => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: domainColor(d),
+                      }}
+                    />
+                    <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>
+                      {DOMAIN_LABELS[d]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Domain filter */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(
+                [
+                  ["", "All"],
+                  ...DOMAIN_ORDER.map((d) => [d, DOMAIN_LABELS[d]]),
+                ] as [Domain | "", string][]
+              ).map(([d, label]) => {
+                const active = filterDomain === d;
+                return (
+                  <Link
+                    key={d || "all"}
+                    href={
+                      d
+                        ? `/manual-log?view=history&domain=${d}`
+                        : "/manual-log?view=history"
+                    }
+                    scroll={false}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textDecoration: "none",
+                      color: "inherit",
+                      background: active
+                        ? d
+                          ? domainColor(d).replace("0.9)", "0.18)")
+                          : "rgba(255,255,255,0.12)"
+                        : "rgba(255,255,255,0.05)",
+                      border: active
+                        ? `1px solid ${
+                            d
+                              ? domainColor(d).replace("0.9)", "0.35)")
+                              : "rgba(255,255,255,0.28)"
+                          }`
+                        : "1px solid rgba(128,128,128,0.28)",
+                    }}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Feed */}
+            {enrichedLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
+            {historyLogs.length === 0 && enrichedLogs.length > 0 && (
+              <div style={{ opacity: 0.72, fontSize: 13 }}>
+                No {filterDomain ? DOMAIN_LABELS[filterDomain] : ""} sessions in the last 500 logs.
+              </div>
+            )}
             {orderedDates.map((dateKey) => {
-              const logs = byDate.get(dateKey) ?? [];
+              const dayLogs = byDate.get(dateKey) ?? [];
               return (
                 <div key={dateKey} style={{ display: "grid", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.4, opacity: 0.9 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 900,
+                      letterSpacing: 0.6,
+                      opacity: 0.55,
+                      textTransform: "uppercase",
+                    }}
+                  >
                     {formatAppDate(`${dateKey}T12:00:00.000Z`, {
                       weekday: "long",
                       month: "long",
                       day: "numeric",
                       year: "numeric",
-                    }).toUpperCase()} ({logs.length})
+                    })}
+                    {" "}
+                    ({dayLogs.length})
                   </div>
-                  {logs.map((log) => {
-                    const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+                  {dayLogs.map((log) => {
+                    const exerciseSetCount = log.exercises.reduce(
+                      (sum, ex) => sum + ex.sets.length,
+                      0
+                    );
                     const routineKind = String(log.routine.kind);
                     const typeLabel = formatRoutineTypeLabel(routineKind);
-                    const categoryLabel = (log.routine.category || "General").trim() || "General";
-                    const historyReturnTo = "/manual-log?view=history";
+                    const categoryLabel =
+                      (log.routine.category || "General").trim() || "General";
+                    const historyReturnTo = filterDomain
+                      ? `/manual-log?view=history&domain=${filterDomain}`
+                      : "/manual-log?view=history";
                     const editHref = `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(historyReturnTo)}`;
+                    const color = domainColor(log.domain);
 
                     return (
-                      <div key={log.id} className="mobileManualLogHistoryCard mobileCard" style={historyCard}>
-                        <div style={{ fontSize: 13 }}>
+                      <div
+                        key={log.id}
+                        className="mobileManualLogHistoryCard mobileCard"
+                        style={{
+                          ...historyCard,
+                          borderLeft: `3px solid ${color.replace("0.9)", "0.6)")}`,
+                          paddingLeft: 12,
+                        }}
+                      >
+                        <div style={{ fontSize: 13, flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 800 }}>
-                            {log.routine.name} | {categoryLabel} | {typeLabel}
+                            {log.routine.name}
                           </div>
-                          <div style={{ opacity: 0.8, marginTop: 2 }}>
-                            {formatAppDateTime(log.performedAt, { hour: "numeric", minute: "2-digit" })}
+                          <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
+                            {categoryLabel} · {typeLabel} ·{" "}
+                            {formatAppDateTime(log.performedAt, {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
                           </div>
                           {isCardioKind(routineKind) && (
-                            <div style={{ opacity: 0.8, marginTop: 2 }}>
-                              {(log.distanceMi ?? 0).toFixed(2)} mi | {Math.floor((log.durationSec ?? 0) / 60)}m {(log.durationSec ?? 0) % 60}s{log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}
+                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
+                              {(log.distanceMi ?? 0).toFixed(2)} mi
+                              {log.durationSec
+                                ? ` · ${Math.floor(log.durationSec / 60)}m ${log.durationSec % 60}s`
+                                : ""}
+                              {log.elevationGainFt ? ` · ${log.elevationGainFt} ft` : ""}
                             </div>
                           )}
-                          {isWorkoutKind(routineKind) && <div style={{ opacity: 0.8, marginTop: 2 }}>Sets: {exerciseSetCount}</div>}
-                          {isGuidedKind(routineKind) && <div style={{ opacity: 0.8, marginTop: 2 }}>Duration: {Math.round((log.durationSec ?? 0) / 60)} min</div>}
-                          {isSessionKind(routineKind) && <div style={{ opacity: 0.8, marginTop: 2 }}>Duration: {Math.round((log.durationSec ?? 0) / 60)} min</div>}
-                          {isCompletionKind(routineKind) && log.completionCount ? <div style={{ opacity: 0.8, marginTop: 2 }}>Count: {log.completionCount}</div> : null}
-                          {log.notes ? <div style={{ opacity: 0.75, marginTop: 2 }}>{log.notes}</div> : null}
+                          {isWorkoutKind(routineKind) && (
+                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
+                              {exerciseSetCount} sets
+                              {log.exercises.length > 0
+                                ? ` · ${log.exercises.length} exercises`
+                                : ""}
+                            </div>
+                          )}
+                          {isGuidedKind(routineKind) && log.durationSec ? (
+                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
+                              {Math.round(log.durationSec / 60)} min
+                              {log.routine.subtype
+                                ? ` · ${formatRoutineSubtype(log.routine.subtype)}`
+                                : ""}
+                            </div>
+                          ) : null}
+                          {isSessionKind(routineKind) && log.durationSec ? (
+                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
+                              {Math.round(log.durationSec / 60)} min
+                            </div>
+                          ) : null}
+                          {isCompletionKind(routineKind) && log.completionCount ? (
+                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
+                              Count: {log.completionCount}
+                            </div>
+                          ) : null}
+                          {log.notes ? (
+                            <div style={{ opacity: 0.65, marginTop: 4, fontSize: 12 }}>
+                              {log.notes}
+                            </div>
+                          ) : null}
                         </div>
 
-                        <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
-                          <Link href={editHref} style={miniLinkBtn}>
-                            Edit
-                          </Link>
+                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexShrink: 0 }}>
+                          <Link href={editHref} style={miniLinkBtn}>Edit</Link>
                           <DeleteLogButton logId={log.id} />
                         </div>
                       </div>
@@ -214,6 +530,77 @@ export default async function ManualLogPage({
             })}
           </div>
         </section>
+      )}
+    </div>
+  );
+}
+
+function ActivityCard({
+  log,
+}: {
+  log: {
+    id: string;
+    performedAt: Date;
+    distanceMi: number | null;
+    durationSec: number | null;
+    completionCount: number | null;
+    domain: Domain;
+    routine: { name: string; kind: string | null; category: string; subtype: string | null };
+    exercises: { id: string; sets: { id: string }[] }[];
+  };
+}) {
+  const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+  const routineKind = String(log.routine.kind);
+  const typeLabel = formatRoutineTypeLabel(routineKind);
+  const categoryLabel = (log.routine.category || "General").trim() || "General";
+  const color = domainColor(log.domain);
+
+  return (
+    <div
+      className="mobileCard"
+      style={{
+        ...activityCard,
+        borderLeft: `3px solid ${color.replace("0.9)", "0.6)")}`,
+        paddingLeft: 12,
+      }}
+    >
+      <div style={{ fontWeight: 800 }}>{log.routine.name}</div>
+      <div style={{ marginTop: 3, fontSize: 12, opacity: 0.72 }}>
+        {categoryLabel} · {typeLabel} ·{" "}
+        {formatAppDateTime(log.performedAt, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+      </div>
+      {isCardioKind(routineKind) && (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {(log.distanceMi ?? 0).toFixed(2)} mi
+          {log.durationSec
+            ? ` · ${Math.floor(log.durationSec / 60)}m ${log.durationSec % 60}s`
+            : ""}
+        </div>
+      )}
+      {isWorkoutKind(routineKind) && (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {exerciseSetCount} sets · {log.exercises.length} exercises
+        </div>
+      )}
+      {isGuidedKind(routineKind) && log.durationSec ? (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {Math.round(log.durationSec / 60)} min
+        </div>
+      ) : null}
+      {isSessionKind(routineKind) && log.durationSec ? (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {Math.round(log.durationSec / 60)} min
+        </div>
+      ) : null}
+      {isCompletionKind(routineKind) && log.completionCount ? (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          Count: {log.completionCount}
+        </div>
       ) : null}
     </div>
   );
@@ -250,7 +637,7 @@ const heroActionRow: React.CSSProperties = {
 
 const summaryGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
   gap: 12,
 };
 
@@ -299,6 +686,8 @@ const historyCard: React.CSSProperties = {
 };
 
 const linkBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
   padding: "8px 12px",
   border: "1px solid rgba(128,128,128,0.8)",
   borderRadius: 10,
@@ -306,6 +695,7 @@ const linkBtn: React.CSSProperties = {
   color: "inherit",
   fontWeight: 800,
   background: "rgba(128,128,128,0.12)",
+  fontSize: 13,
 };
 
 const primaryLinkBtn: React.CSSProperties = {
@@ -315,6 +705,8 @@ const primaryLinkBtn: React.CSSProperties = {
 };
 
 const miniLinkBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
   padding: "8px 10px",
   border: "1px solid rgba(128,128,128,0.7)",
   borderRadius: 10,
@@ -322,4 +714,5 @@ const miniLinkBtn: React.CSSProperties = {
   color: "inherit",
   background: "rgba(128,128,128,0.12)",
   fontWeight: 800,
+  fontSize: 13,
 };

@@ -28,7 +28,7 @@ export default async function ProgressPage(props: {
     if (section === "injuries") {
       return <InjuriesIndexView />;
     }
-    if (!["routines", "exercises", "groups", "cardio", "sports", "logs"].includes(section)) {
+    if (!["routines", "exercises", "groups", "cardio", "sports"].includes(section)) {
       notFound();
     }
     return <ProgressOverviewContent searchParams={{ ...searchParams, section }} />;
