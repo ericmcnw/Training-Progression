@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npx prisma:*)",
-      "Bash(ls app/goals/[[...segments]]/)"
+      "Bash(ls app/goals/[[...segments]]/)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\)\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
