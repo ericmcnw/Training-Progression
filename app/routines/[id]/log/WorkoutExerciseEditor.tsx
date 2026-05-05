@@ -135,6 +135,7 @@ export default function WorkoutExerciseEditor({
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
   const isDirtyRef = useRef(false);
   const draftStartedAtRef = useRef(new Date().toISOString());
+  const isDrawerLog = Boolean(onBack);
 
   // Restore draft on mount
   useEffect(() => {
@@ -478,6 +479,23 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
+      <div style={styles.utilityRow}>
+        <button
+          type="button"
+          onClick={() => setShowAddPanel((v) => !v)}
+          style={showAddPanel ? styles.addExerciseBtnActive : styles.addExerciseBtn}
+        >
+          {showAddPanel ? "Close Exercise Picker" : "+ Exercise"}
+        </button>
+        {!isDrawerLog ? (
+          onBack ? (
+            <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
+          ) : (
+            <Link href={backHref} style={styles.backBtn}>Back</Link>
+          )
+        ) : null}
+      </div>
+
       {/* Exercise accordion */}
       <div style={{ display: "grid", gap: 6 }}>
         {blocks.length === 0 && (
@@ -799,13 +817,6 @@ export default function WorkoutExerciseEditor({
 
       {/* Sticky action bar */}
       <div className="mobileStickyActions" style={styles.stickyBar}>
-        <button
-          type="button"
-          onClick={() => setShowAddPanel((v) => !v)}
-          style={showAddPanel ? styles.addExerciseBtnActive : styles.addExerciseBtn}
-        >
-          {showAddPanel ? "Close" : "+ Exercise"}
-        </button>
         <div style={{ flex: 1 }} />
         {draftEnabled && (
           <button type="button" onClick={handleCancel} style={styles.cancelBtn}>
@@ -820,11 +831,13 @@ export default function WorkoutExerciseEditor({
         >
           {saving ? savingLabel : saveLabel}
         </button>
-        {onBack ? (
-          <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
-        ) : (
-          <Link href={backHref} style={styles.backBtn}>Back</Link>
-        )}
+        {!isDrawerLog ? (
+          onBack ? (
+            <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
+          ) : (
+            <Link href={backHref} style={styles.backBtn}>Back</Link>
+          )
+        ) : null}
       </div>
     </div>
   );
@@ -868,6 +881,14 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "nowrap",
     flexShrink: 0,
+  } as React.CSSProperties,
+
+  utilityRow: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
   } as React.CSSProperties,
 
   blockCard: {
@@ -1084,14 +1105,14 @@ const styles = {
 
   stickyBar: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     alignItems: "center",
     flexWrap: "wrap",
-    padding: "10px 0",
+    padding: "8px 0",
   } as React.CSSProperties,
 
   addExerciseBtn: {
-    padding: "10px 16px",
+    padding: "8px 12px",
     borderRadius: 12,
     border: "1px solid rgba(128,128,128,0.5)",
     background: "rgba(128,128,128,0.1)",
@@ -1101,7 +1122,7 @@ const styles = {
   } as React.CSSProperties,
 
   addExerciseBtnActive: {
-    padding: "10px 16px",
+    padding: "8px 12px",
     borderRadius: 12,
     border: "1px solid rgba(128,128,128,0.5)",
     background: "rgba(128,128,128,0.22)",
@@ -1111,7 +1132,7 @@ const styles = {
   } as React.CSSProperties,
 
   cancelBtn: {
-    padding: "10px 16px",
+    padding: "9px 12px",
     borderRadius: 12,
     border: "1px solid rgba(220,38,38,0.45)",
     background: "rgba(220,38,38,0.08)",
@@ -1121,7 +1142,7 @@ const styles = {
   } as React.CSSProperties,
 
   saveBtn: {
-    padding: "10px 22px",
+    padding: "9px 16px",
     borderRadius: 12,
     border: "1px solid rgba(115,220,152,0.6)",
     background: "rgba(115,220,152,0.16)",
@@ -1132,7 +1153,7 @@ const styles = {
   } as React.CSSProperties,
 
   backBtn: {
-    padding: "10px 16px",
+    padding: "8px 12px",
     borderRadius: 12,
     border: "1px solid rgba(128,128,128,0.5)",
     background: "rgba(128,128,128,0.08)",
