@@ -63,9 +63,26 @@ type GuidedLogData = {
 };
 
 type LogData = WorkoutLogData | SessionLogData | CardioLogData | GuidedLogData;
+type WorkoutDrawerState = { expandedId: string | null };
+type GuidedDrawerState = {
+  screen: "entry" | "player" | "review";
+  autoPlay: boolean;
+  currentSegmentIndex: number;
+  completedDurationSec: number;
+  skippedStepIds: string[];
+  reviewMode: "review" | "log-after";
+};
 
 export default function LogDrawer() {
-  const { isOpen, activeRoutineId, closeDrawer, isDirty, clearDirty } = useLogDrawer();
+  const {
+    isOpen,
+    activeRoutineId,
+    closeDrawer,
+    clearDirty,
+    getDrawerState,
+    setDrawerState,
+    clearDrawerState,
+  } = useLogDrawer();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logData, setLogData] = useState<LogData | null>(null);
@@ -98,13 +115,15 @@ export default function LogDrawer() {
   if (!isOpen || !activeRoutineId) return null;
 
   function handleComplete() {
-    if (activeRoutineId) cache.current.delete(activeRoutineId);
+    if (activeRoutineId) {
+      cache.current.delete(activeRoutineId);
+      clearDrawerState(activeRoutineId);
+    }
     clearDirty();
     closeDrawer();
   }
 
   function handleCloseAttempt() {
-    if (isDirty && !confirm("Close without saving your changes?")) return;
     closeDrawer();
   }
 
@@ -134,6 +153,10 @@ export default function LogDrawer() {
                 initialBlocks={logData.initialBlocks}
                 availableExercises={logData.availableExercises}
                 activePainZones={logData.activePainZones}
+                initialExpandedId={getDrawerState<WorkoutDrawerState>(logData.routineId)?.expandedId ?? null}
+                onExpandedIdChange={(expandedId) => {
+                  setDrawerState<WorkoutDrawerState>(logData.routineId, { expandedId });
+                }}
                 onComplete={handleComplete}
                 onBack={closeDrawer}
               />
@@ -168,6 +191,10 @@ export default function LogDrawer() {
                 steps={logData.steps}
                 availableExercises={[]}
                 activePainZones={logData.activePainZones}
+                initialDrawerState={getDrawerState<GuidedDrawerState>(logData.routineId)}
+                onDrawerStateChange={(state) => {
+                  setDrawerState<GuidedDrawerState>(logData.routineId, state);
+                }}
                 onComplete={handleComplete}
                 onBack={closeDrawer}
               />

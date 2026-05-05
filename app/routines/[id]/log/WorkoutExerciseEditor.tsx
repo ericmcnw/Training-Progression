@@ -79,6 +79,8 @@ export default function WorkoutExerciseEditor({
   initialPerformedAt,
   initialBlocks,
   availableExercises,
+  initialExpandedId,
+  onExpandedIdChange,
   saveLabel,
   savingLabel,
   backHref,
@@ -97,6 +99,8 @@ export default function WorkoutExerciseEditor({
   initialPerformedAt: string;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
+  initialExpandedId?: string | null;
+  onExpandedIdChange?: (expandedId: string | null) => void;
   saveLabel: string;
   savingLabel: string;
   backHref: string;
@@ -122,7 +126,7 @@ export default function WorkoutExerciseEditor({
   const [exerciseError, setExerciseError] = useState("");
   const [exerciseOptions, setExerciseOptions] = useState(availableExercises);
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
-  const [expandedId, setExpandedId] = useState<string | null>(initialBlocks[0]?.exerciseId ?? null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -145,7 +149,7 @@ export default function WorkoutExerciseEditor({
         : draftBlock;
     });
     setBlocks(restored);
-    setExpandedId(restored[0]?.exerciseId ?? null);
+    setExpandedId((current) => current ?? restored[0]?.exerciseId ?? null);
     setNotes(draft.notes);
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     isDirtyRef.current = true;
@@ -173,6 +177,10 @@ export default function WorkoutExerciseEditor({
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, notes, performedAtLocal]);
+
+  useEffect(() => {
+    onExpandedIdChange?.(expandedId);
+  }, [expandedId, onExpandedIdChange]);
 
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
@@ -332,9 +340,9 @@ export default function WorkoutExerciseEditor({
     clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
     setBlocks(initialBlocks);
-    setExpandedId(initialBlocks[0]?.exerciseId ?? null);
     setNotes(initialNotes);
     setPerformedAtLocal(initialPerformedAt);
+    setExpandedId(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
     setDraftBanner(null);

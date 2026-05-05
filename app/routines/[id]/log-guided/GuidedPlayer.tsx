@@ -9,21 +9,33 @@ type PlayerStep = GuidedTemplateStep;
 export default function GuidedPlayer({
   steps,
   autoPlay,
+  initialCurrentSegmentIndex = 0,
+  initialSkippedStepIds,
+  initialCompletedDurationSec = 0,
+  onStateChange,
   onDone,
   onBack,
 }: {
   steps: PlayerStep[];
   autoPlay: boolean;
+  initialCurrentSegmentIndex?: number;
+  initialSkippedStepIds?: string[];
+  initialCompletedDurationSec?: number;
+  onStateChange?: (state: {
+    currentSegmentIndex: number;
+    skippedStepIds: string[];
+    completedDurationSec: number;
+  }) => void;
   onDone: (result: { skippedStepIds: Set<string>; completedDurationSec: number }) => void;
   onBack: () => void;
 }) {
   const allSegments = useMemo(() => buildGuidedRunnerSegments(steps), [steps]);
 
-  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set());
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set(initialSkippedStepIds ?? []));
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(initialCurrentSegmentIndex);
   const [isRunning, setIsRunning] = useState(false);
   const [remainingSec, setRemainingSec] = useState(0);
-  const [completedDurationSec, setCompletedDurationSec] = useState(0);
+  const [completedDurationSec, setCompletedDurationSec] = useState(initialCompletedDurationSec);
 
   const effectiveSegments = useMemo(
     () => allSegments.filter((s) => !skippedStepIds.has(s.guidedStepId)),
@@ -71,6 +83,14 @@ export default function GuidedPlayer({
     }, 1000);
     return () => clearTimeout(timeout);
   }, [isRunning, autoPlay, remainingSec, currentSegment, currentSegmentIndex, effectiveSegments]);
+
+  useEffect(() => {
+    onStateChange?.({
+      currentSegmentIndex,
+      skippedStepIds: Array.from(skippedStepIds),
+      completedDurationSec,
+    });
+  }, [completedDurationSec, currentSegmentIndex, onStateChange, skippedStepIds]);
 
   function goToNext() {
     if (!currentSegment) return;

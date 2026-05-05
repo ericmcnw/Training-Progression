@@ -14,6 +14,8 @@ export default function LogWorkoutForm({
   initialBlocks,
   availableExercises,
   activePainZones = [],
+  initialExpandedId,
+  onExpandedIdChange,
   onComplete,
   onBack,
 }: {
@@ -22,6 +24,8 @@ export default function LogWorkoutForm({
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
   activePainZones?: PainCheckZone[];
+  initialExpandedId?: string | null;
+  onExpandedIdChange?: (expandedId: string | null) => void;
   onComplete?: () => void;
   onBack?: () => void;
 }) {
@@ -45,6 +49,8 @@ export default function LogWorkoutForm({
       initialPerformedAt=""
       initialBlocks={initialBlocks}
       availableExercises={availableExercises}
+      initialExpandedId={initialExpandedId}
+      onExpandedIdChange={onExpandedIdChange}
       saveLabel="Save Workout"
       savingLabel="Saving…"
       backHref="/routines"

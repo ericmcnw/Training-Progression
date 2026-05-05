@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import PostSessionPainCheck from "@/app/components/pain-log/PostSessionPainCheck";
@@ -33,6 +33,14 @@ type ExerciseOption = {
 };
 
 type Screen = "entry" | "player" | "review";
+type GuidedDrawerState = {
+  screen: Screen;
+  autoPlay: boolean;
+  currentSegmentIndex: number;
+  completedDurationSec: number;
+  skippedStepIds: string[];
+  reviewMode: "review" | "log-after";
+};
 
 function toLocalInputValue(date: Date) {
   const pad = (v: number) => String(v).padStart(2, "0");
@@ -45,6 +53,8 @@ export default function GuidedLogForm({
   steps,
   availableExercises: _availableExercises,
   activePainZones = [],
+  initialDrawerState,
+  onDrawerStateChange,
   onComplete,
   onBack,
 }: {
@@ -53,17 +63,20 @@ export default function GuidedLogForm({
   steps: Step[];
   availableExercises: ExerciseOption[];
   activePainZones?: PainCheckZone[];
+  initialDrawerState?: GuidedDrawerState | null;
+  onDrawerStateChange?: (state: GuidedDrawerState) => void;
   onComplete?: () => void;
   onBack?: () => void;
 }) {
-  const [screen, setScreen] = useState<Screen>("entry");
-  const [autoPlay, setAutoPlay] = useState(true);
+  const [screen, setScreen] = useState<Screen>(initialDrawerState?.screen ?? "entry");
+  const [autoPlay, setAutoPlay] = useState(initialDrawerState?.autoPlay ?? true);
   const [sessionStartedAt, setSessionStartedAt] = useState<Date | null>(null);
 
   // Data flowing from player → review
-  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set());
-  const [completedDurationSec, setCompletedDurationSec] = useState(0);
-  const [reviewMode, setReviewMode] = useState<"review" | "log-after">("log-after");
+  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set(initialDrawerState?.skippedStepIds ?? []));
+  const [completedDurationSec, setCompletedDurationSec] = useState(initialDrawerState?.completedDurationSec ?? 0);
+  const [reviewMode, setReviewMode] = useState<"review" | "log-after">(initialDrawerState?.reviewMode ?? "log-after");
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(initialDrawerState?.currentSegmentIndex ?? 0);
 
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
@@ -86,6 +99,17 @@ export default function GuidedLogForm({
       })),
     [steps]
   );
+
+  useEffect(() => {
+    onDrawerStateChange?.({
+      screen,
+      autoPlay,
+      currentSegmentIndex,
+      completedDurationSec,
+      skippedStepIds: Array.from(skippedStepIds),
+      reviewMode,
+    });
+  }, [autoPlay, completedDurationSec, currentSegmentIndex, onDrawerStateChange, reviewMode, screen, skippedStepIds]);
 
   function startPlayer() {
     setSessionStartedAt(new Date());
@@ -203,6 +227,14 @@ export default function GuidedLogForm({
       <GuidedPlayer
         steps={templateSteps}
         autoPlay={autoPlay}
+        initialCurrentSegmentIndex={currentSegmentIndex}
+        initialSkippedStepIds={Array.from(skippedStepIds)}
+        initialCompletedDurationSec={completedDurationSec}
+        onStateChange={({ currentSegmentIndex, skippedStepIds, completedDurationSec }) => {
+          setCurrentSegmentIndex(currentSegmentIndex);
+          setSkippedStepIds(new Set(skippedStepIds));
+          setCompletedDurationSec(completedDurationSec);
+        }}
         onDone={onPlayerDone}
         onBack={() => setScreen("entry")}
       />
