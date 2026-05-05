@@ -129,6 +129,7 @@ export default function WorkoutExerciseEditor({
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -181,6 +182,16 @@ export default function WorkoutExerciseEditor({
   useEffect(() => {
     onExpandedIdChange?.(expandedId);
   }, [expandedId, onExpandedIdChange]);
+
+  useEffect(() => {
+    if (!expandedId) return;
+    const target = blockRefs.current.get(expandedId);
+    if (!target) return;
+    const frame = window.requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedId]);
 
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
@@ -481,7 +492,14 @@ export default function WorkoutExerciseEditor({
           const blockLastRowsMap = new Map((block.lastRows ?? []).map((r) => [r.setNumber, r]));
 
           return (
-            <div key={block.exerciseId} style={isExpanded ? styles.blockCardExpanded : styles.blockCard}>
+            <div
+              key={block.exerciseId}
+              ref={(node) => {
+                if (node) blockRefs.current.set(block.exerciseId, node);
+                else blockRefs.current.delete(block.exerciseId);
+              }}
+              style={isExpanded ? styles.blockCardExpanded : styles.blockCard}
+            >
 
               {/* Accordion header */}
               <button
