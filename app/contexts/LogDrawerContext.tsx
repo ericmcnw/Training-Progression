@@ -4,6 +4,15 @@ import { createContext, useCallback, useContext, useState } from "react";
 
 type DrawerUiState = Record<string, unknown>;
 
+function shallowEqualDrawerState(left: DrawerUiState | undefined, right: DrawerUiState) {
+  if (left === right) return true;
+  if (!left) return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.is(left[key], right[key]));
+}
+
 type LogDrawerContextValue = {
   activeRoutineId: string | null;
   isOpen: boolean;
@@ -44,7 +53,10 @@ export function LogDrawerProvider({ children }: { children: React.ReactNode }) {
   );
   const setDrawerState = useCallback(
     <T extends DrawerUiState>(routineId: string, state: T) => {
-      setDrawerStates((current) => ({ ...current, [routineId]: state }));
+      setDrawerStates((current) => {
+        if (shallowEqualDrawerState(current[routineId], state)) return current;
+        return { ...current, [routineId]: state };
+      });
     },
     []
   );
