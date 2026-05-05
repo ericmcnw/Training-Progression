@@ -4,6 +4,7 @@ import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineM
 import { ROUTINE_KIND_LABEL, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
 import { prisma } from "@/lib/prisma";
 import { getRoutineLogs, type RoutineLogWithRelations } from "./data";
+import { isSportGroup, sportGroupTargetHref } from "./sports";
 
 export type CoverageLens = "muscles" | "patterns" | "sports";
 export type CoverageRange = "week" | "2w" | "4w" | "12w" | "ytd";
@@ -59,7 +60,6 @@ export type CoverageOverviewModel = {
 };
 
 const COVERAGE_KIND_ORDER: RoutineKind[] = ["WORKOUT", "CARDIO", "GUIDED", "SESSION", "COMPLETION"];
-const EXCLUDED_SPORT_SLUGS = new Set(["run-walk"]);
 const COVERAGE_CATEGORY_ORDER: Record<CoverageLens, string[]> = {
   muscles: [
     "chest",
@@ -106,9 +106,6 @@ const COVERAGE_CATEGORY_ORDER: Record<CoverageLens, string[]> = {
     "cardio",
   ],
 };
-
-// TRAINING_GROUP slugs that should appear in the sports lens (alongside CARDIO_ACTIVITY groups)
-const SPORTS_TRAINING_GROUP_SLUGS = new Set(["climbing", "board-sports"]);
 
 function createEmptyKindCountRecord() {
   return {
@@ -164,8 +161,7 @@ function lensKind(lens: CoverageLens): MetadataGroupKind {
 
 function shouldShowGroupInLens(group: GroupRow, lens: CoverageLens) {
   if (lens === "sports") {
-    if (EXCLUDED_SPORT_SLUGS.has(group.slug)) return false;
-    return group.kind === "CARDIO_ACTIVITY" || SPORTS_TRAINING_GROUP_SLUGS.has(group.slug);
+    return isSportGroup(group);
   }
   if (group.kind !== lensKind(lens)) return false;
   return true;
@@ -352,9 +348,7 @@ function relevantPartsForLog(params: {
 }
 
 function categoryHref(group: GroupRow) {
-  return group.kind === "CARDIO_ACTIVITY"
-    ? `/progress/cardio/${group.slug}?tab=overview&range=4w`
-    : `/progress/groups/${group.slug}?tab=overview&range=4w`;
+  return sportGroupTargetHref(group);
 }
 
 function coverageCategorySort(lens: CoverageLens, left: CoverageCategoryRow, right: CoverageCategoryRow) {

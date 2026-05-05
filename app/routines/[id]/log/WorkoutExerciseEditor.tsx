@@ -11,7 +11,6 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DateTimeField, Field, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
 
@@ -135,7 +134,6 @@ export default function WorkoutExerciseEditor({
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
   const isDirtyRef = useRef(false);
   const draftStartedAtRef = useRef(new Date().toISOString());
-  const isDrawerLog = Boolean(onBack);
 
   // Restore draft on mount
   useEffect(() => {
@@ -368,7 +366,7 @@ export default function WorkoutExerciseEditor({
     clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
     if (onBack) onBack();
-    else window.location.href = "/routines";
+    else window.location.href = backHref;
   }
 
   function toNumOrNull(value?: string) {
@@ -479,22 +477,10 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
-      <div style={styles.utilityRow}>
-        <button
-          type="button"
-          onClick={() => setShowAddPanel((v) => !v)}
-          style={showAddPanel ? styles.addExerciseBtnActive : styles.addExerciseBtn}
-        >
-          {showAddPanel ? "Close Exercise Picker" : "+ Exercise"}
-        </button>
-        {!isDrawerLog ? (
-          onBack ? (
-            <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
-          ) : (
-            <Link href={backHref} style={styles.backBtn}>Back</Link>
-          )
-        ) : null}
-      </div>
+      <DateTimeField
+        value={performedAtLocal}
+        onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+      />
 
       {/* Exercise accordion */}
       <div style={{ display: "grid", gap: 6 }}>
@@ -796,7 +782,7 @@ export default function WorkoutExerciseEditor({
       )}
 
       {/* Session details — collapsible */}
-      <details style={styles.detailsSection}>
+      {false && <details style={{ ...styles.detailsSection, display: "none" }}>
         <summary style={styles.detailsSummary}>
           Log details{sessionSummary ? ` · ${sessionSummary}` : ""}
         </summary>
@@ -813,11 +799,25 @@ export default function WorkoutExerciseEditor({
             />
           </Field>
         </div>
-      </details>
+      </details>}
 
-      {/* Sticky action bar */}
-      <div className="mobileStickyActions" style={styles.stickyBar}>
-        <div style={{ flex: 1 }} />
+      <Field label={`Notes (optional)${sessionSummary ? ` Â· ${sessionSummary}` : ""}`}>
+        <textarea
+          style={{ ...textareaStyle, minHeight: 80 }}
+          value={notes}
+          onChange={(e) => { markDirty(); setNotes(e.target.value); }}
+        />
+      </Field>
+
+      {/* Action bar */}
+      <div className="mobileActionRow" style={styles.stickyBar}>
+        <button
+          type="button"
+          onClick={() => setShowAddPanel((v) => !v)}
+          style={showAddPanel ? styles.addExerciseBtnActive : styles.addExerciseBtn}
+        >
+          {showAddPanel ? "Close Exercise Picker" : "+ Exercise"}
+        </button>
         {draftEnabled && (
           <button type="button" onClick={handleCancel} style={styles.cancelBtn}>
             Cancel
@@ -831,13 +831,6 @@ export default function WorkoutExerciseEditor({
         >
           {saving ? savingLabel : saveLabel}
         </button>
-        {!isDrawerLog ? (
-          onBack ? (
-            <button type="button" onClick={onBack} style={styles.backBtn}>Back</button>
-          ) : (
-            <Link href={backHref} style={styles.backBtn}>Back</Link>
-          )
-        ) : null}
       </div>
     </div>
   );
