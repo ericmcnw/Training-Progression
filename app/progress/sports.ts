@@ -1,5 +1,17 @@
 import type { MetadataGroupKind } from "@/generated/prisma";
 
+export type VirtualSportCategory = {
+  slug: string;
+  label: string;
+  subtype: string;
+  eyebrow: string;
+};
+
+export const VIRTUAL_SPORT_CATEGORIES: VirtualSportCategory[] = [
+  { slug: "surfing", label: "Surfing", subtype: "SURFING", eyebrow: "Board sport" },
+  { slug: "snowboarding", label: "Snowboarding", subtype: "SNOWBOARDING", eyebrow: "Board sport" },
+];
+
 const EXCLUDED_SPORT_SLUGS = new Set(["cardio", "run-walk"]);
 const SPORTS_TRAINING_GROUP_SLUGS = new Set(["climbing", "board-sports"]);
 
@@ -8,10 +20,20 @@ export function isSportGroup(input: { kind: MetadataGroupKind; slug: string }) {
   return input.kind === "CARDIO_ACTIVITY" || SPORTS_TRAINING_GROUP_SLUGS.has(input.slug);
 }
 
-export function sportGroupTargetHref(input: { kind: MetadataGroupKind; slug: string }) {
-  return input.kind === "CARDIO_ACTIVITY"
-    ? `/progress/cardio/${input.slug}?tab=overview&range=4w`
-    : `/progress/groups/${input.slug}?tab=overview&range=4w`;
+export function isVirtualSportSlug(slug: string) {
+  return VIRTUAL_SPORT_CATEGORIES.some((item) => item.slug === slug);
+}
+
+export function getVirtualSportCategory(slug: string) {
+  return VIRTUAL_SPORT_CATEGORIES.find((item) => item.slug === slug) ?? null;
+}
+
+export function sportTargetHref(slug: string) {
+  return `/progress/sports/${slug}?tab=overview&range=4w`;
+}
+
+export function sportGroupTargetHref(input: { slug: string }) {
+  return sportTargetHref(input.slug);
 }
 
 export function sportGroupKindLabel(input: { kind: MetadataGroupKind; slug: string }) {

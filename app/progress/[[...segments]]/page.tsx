@@ -3,6 +3,7 @@ import CardioTargetPage from "../details/CardioTargetPage";
 import ExerciseTargetPage from "../details/ExerciseTargetPage";
 import GroupTargetPage from "../details/GroupTargetPage";
 import RoutineTargetPage from "../details/RoutineTargetPage";
+import SportsTargetPage from "../details/SportsTargetPage";
 import ProgressOverviewContent from "../ProgressOverviewContent";
 import InjuriesIndexView from "../InjuriesIndexView";
 
@@ -47,6 +48,9 @@ export default async function ProgressPage(props: {
     }
     if (section === "cardio") {
       return <CardioTargetPage params={{ slug: targetId }} searchParams={searchParams} />;
+    }
+    if (section === "sports") {
+      return <SportsTargetPage params={{ slug: targetId }} searchParams={searchParams} />;
     }
   }
 

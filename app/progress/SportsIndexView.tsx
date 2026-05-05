@@ -1,8 +1,9 @@
 import Link from "next/link";
 import ClimbingProgressView from "./ClimbingProgressView";
-import { getMetadataIndex, resolveGroupTarget } from "./data";
+import { getMetadataIndex, getRoutineIndex, getRoutineLogs, resolveGroupTarget } from "./data";
 import { EmptyState, ProgressShell, SectionCard } from "./ui";
-import { isSportGroup, sportGroupKindLabel, sportGroupTargetHref } from "./sports";
+import { isSportGroup, sportGroupKindLabel, sportGroupTargetHref, sportTargetHref } from "./sports";
+import { formatRoutineSubtype } from "@/lib/routines";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -17,18 +18,44 @@ export default async function SportsIndexView(props: {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
 
-  const groups = await getMetadataIndex();
-  const sportGroups = groups.filter((group) => isSportGroup(group));
-  const sportTargets = await Promise.all(
+  const [groups, routines, logs] = await Promise.all([
+    getMetadataIndex(),
+    getRoutineIndex(),
+    getRoutineLogs("4w"),
+  ]);
+  const sportGroups = groups.filter((group) => isSportGroup(group) && group.slug !== "board-sports");
+  const groupedTargets = await Promise.all(
     sportGroups.map(async (group) => ({
-      group,
-      target: await resolveGroupTarget(group.slug, "4w"),
+      id: group.id,
+      slug: group.slug,
+      label: group.label,
+      eyebrow: sportGroupKindLabel(group),
+      href: sportGroupTargetHref(group),
+      logs: (await resolveGroupTarget(group.slug, "4w"))?.logs ?? [],
     }))
   );
+  const boardSportTargets = [
+    { subtype: "SURFING", slug: "surfing", label: "Surfing" },
+    { subtype: "SNOWBOARDING", slug: "snowboarding", label: "Snowboarding" },
+  ].map((item) => {
+    const routineIds = new Set(
+      routines
+        .filter((routine) => routine.isActive && routine.kind === "SESSION" && routine.subtype === item.subtype)
+        .map((routine) => routine.id)
+    );
+    return {
+      id: item.slug,
+      slug: item.slug,
+      label: item.label,
+      eyebrow: "Board sport",
+      href: sportTargetHref(item.slug),
+      logs: logs.filter((log) => routineIds.has(log.routineId)),
+    };
+  });
 
-  const filteredSports = sportTargets
-    .filter(({ group }) => !query || group.label.toLowerCase().includes(query) || group.slug.includes(query))
-    .sort((a, b) => (b.target?.logs.length ?? 0) - (a.target?.logs.length ?? 0) || a.group.label.localeCompare(b.group.label));
+  const filteredSports = [...groupedTargets, ...boardSportTargets]
+    .filter((entry) => !query || entry.label.toLowerCase().includes(query) || entry.slug.includes(query))
+    .sort((a, b) => b.logs.length - a.logs.length || a.label.localeCompare(b.label));
 
   return (
     <ProgressShell
@@ -46,21 +73,23 @@ export default async function SportsIndexView(props: {
           <EmptyState message="No sport categories match the current search." />
         ) : (
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-            {filteredSports.map(({ group, target }) => {
-              const logs = target?.logs ?? [];
-              const sessions = logs.length;
-              const activeRoutines = new Set(logs.map((log) => log.routineId)).size;
-              const lastLog = logs.length > 0
-                ? logs.reduce((a, b) => (a.performedAt > b.performedAt ? a : b))
+            {filteredSports.map((entry) => {
+              const entryLogs = entry.logs;
+              const sessions = entryLogs.length;
+              const activeRoutines = new Set(entryLogs.map((log) => log.routineId)).size;
+              const lastLog = entryLogs.length > 0
+                ? entryLogs.reduce((a, b) => (a.performedAt > b.performedAt ? a : b))
                 : null;
               const lastLabel = lastLog
                 ? `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastLog.performedAt)}`
                 : "No recent activity";
+              const subtypes = Array.from(new Set(entryLogs.map((log) => log.routine.subtype).filter((value): value is string => Boolean(value))));
+              const subtypeLabel = subtypes.length === 1 ? formatRoutineSubtype(subtypes[0]) : null;
 
               return (
                 <Link
-                  key={group.id}
-                  href={sportGroupTargetHref(group)}
+                  key={entry.id}
+                  href={entry.href}
                   scroll={false}
                   style={{
                     display: "grid",
@@ -77,9 +106,10 @@ export default async function SportsIndexView(props: {
                   }}
                 >
                   <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.68, fontWeight: 900 }}>
-                    {sportGroupKindLabel(group)}
+                    {entry.eyebrow}
                   </div>
-                  <div style={{ fontWeight: 900, fontSize: 16 }}>{group.label}</div>
+                  <div style={{ fontWeight: 900, fontSize: 16 }}>{entry.label}</div>
+                  {subtypeLabel ? <div style={{ fontSize: 12, lineHeight: 1.4, opacity: 0.7 }}>Recent subtype: {subtypeLabel}</div> : null}
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {[
                       `${sessions} session${sessions !== 1 ? "s" : ""} (4w)`,

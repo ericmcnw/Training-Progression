@@ -448,7 +448,7 @@ export default function WorkoutExerciseEditor({
     notes.trim() ? "has notes" : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" - ");
 
   function countLoggedSets(block: WorkoutBlock): number {
     return block.rows.filter(
@@ -781,27 +781,8 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
-      {/* Session details — collapsible */}
-      {false && <details style={{ ...styles.detailsSection, display: "none" }}>
-        <summary style={styles.detailsSummary}>
-          Log details{sessionSummary ? ` · ${sessionSummary}` : ""}
-        </summary>
-        <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-          <DateTimeField
-            value={performedAtLocal}
-            onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
-          />
-          <Field label="Notes (optional)">
-            <textarea
-              style={{ ...textareaStyle, minHeight: 80 }}
-              value={notes}
-              onChange={(e) => { markDirty(); setNotes(e.target.value); }}
-            />
-          </Field>
-        </div>
-      </details>}
 
-      <Field label={`Notes (optional)${sessionSummary ? ` Â· ${sessionSummary}` : ""}`}>
+      <Field label={`Notes (optional)${sessionSummary ? ` - ${sessionSummary}` : ""}`}>
         <textarea
           style={{ ...textareaStyle, minHeight: 80 }}
           value={notes}

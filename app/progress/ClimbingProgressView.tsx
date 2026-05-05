@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { climbOutcomeColor, climbOutcomeBg, climbOutcomeLabel } from "@/lib/climb-types";
+import { climbOutcomeColor, climbOutcomeLabel } from "@/lib/climb-types";
 import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 import { SectionCard, EmptyState, StatGrid } from "./ui";
 
@@ -7,19 +7,90 @@ function gradeSort(grade: string, system: ClimbGradeSystem): number {
   if (system === "BOULDER_V") {
     return parseInt(grade.replace(/^V/, ""), 10) ?? 0;
   }
-  const m = grade.match(/^5\.(\d+)([abcd]?)$/i);
-  if (!m) return 0;
-  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[m[2].toLowerCase()] ?? 0;
-  return parseInt(m[1], 10) * 4 + sub;
+  const match = grade.match(/^5\.(\d+)([abcd]?)$/i);
+  if (!match) return 0;
+  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[match[2].toLowerCase()] ?? 0;
+  return parseInt(match[1], 10) * 4 + sub;
 }
 
 const ORDERED_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "FELL", "PROJECT"];
+
+type AttemptRow = {
+  id: string;
+  grade: string;
+  gradeSystem: ClimbGradeSystem;
+  outcome: ClimbOutcome;
+  sessionLogId: string;
+  sessionLog: {
+    performedAt: Date;
+    climbLocation: {
+      id: string;
+      name: string;
+      type: "GYM" | "CRAG";
+    } | null;
+    routine: {
+      name: string;
+      sessionDetails: {
+        template: {
+          key: string;
+        } | null;
+      } | null;
+    };
+  };
+};
+
+type PyramidRow = {
+  grade: string;
+  system: ClimbGradeSystem;
+  counts: Partial<Record<ClimbOutcome, number>>;
+  total: number;
+};
+
+function buildPyramidRows(attempts: AttemptRow[]) {
+  const pyramidMap = new Map<string, PyramidRow>();
+
+  for (const attempt of attempts) {
+    const key = `${attempt.gradeSystem}::${attempt.grade}`;
+    const existing = pyramidMap.get(key) ?? {
+      grade: attempt.grade,
+      system: attempt.gradeSystem,
+      counts: {},
+      total: 0,
+    };
+    existing.counts[attempt.outcome] = (existing.counts[attempt.outcome] ?? 0) + 1;
+    existing.total++;
+    pyramidMap.set(key, existing);
+  }
+
+  const boulderRows = Array.from(pyramidMap.values())
+    .filter((row) => row.system === "BOULDER_V")
+    .sort((a, b) => gradeSort(a.grade, "BOULDER_V") - gradeSort(b.grade, "BOULDER_V"));
+  const yosemiteRows = Array.from(pyramidMap.values())
+    .filter((row) => row.system === "YOSEMITE")
+    .sort((a, b) => gradeSort(a.grade, "YOSEMITE") - gradeSort(b.grade, "YOSEMITE"));
+
+  return { boulderRows, yosemiteRows, allRows: [...boulderRows, ...yosemiteRows] };
+}
+
+function hardest(rows: PyramidRow[], filter: Set<ClimbOutcome>) {
+  const eligible = rows.filter((row) => ORDERED_OUTCOMES.some((outcome) => filter.has(outcome) && (row.counts[outcome] ?? 0) > 0));
+  return eligible.length > 0 ? eligible[eligible.length - 1].grade : null;
+}
+
+function venueForAttempt(attempt: AttemptRow) {
+  const templateKey = attempt.sessionLog.routine.sessionDetails?.template?.key ?? "";
+  if (templateKey.startsWith("indoor-")) return "GYM" as const;
+  if (templateKey.startsWith("outdoor-")) return "CRAG" as const;
+  if (attempt.sessionLog.climbLocation?.type === "GYM") return "GYM" as const;
+  if (attempt.sessionLog.climbLocation?.type === "CRAG") return "CRAG" as const;
+  return "UNKNOWN" as const;
+}
 
 export default async function ClimbingProgressView() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 28);
 
-  const attempts = await prisma.climbAttempt.findMany({
+  const attempts: AttemptRow[] = await prisma.climbAttempt.findMany({
     where: { sessionLog: { performedAt: { gte: cutoff } } },
     select: {
       id: true,
@@ -30,7 +101,21 @@ export default async function ClimbingProgressView() {
       sessionLog: {
         select: {
           performedAt: true,
-          climbLocation: { select: { id: true, name: true } },
+          climbLocation: { select: { id: true, name: true, type: true } },
+          routine: {
+            select: {
+              name: true,
+              sessionDetails: {
+                select: {
+                  template: {
+                    select: {
+                      key: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -45,62 +130,52 @@ export default async function ClimbingProgressView() {
     );
   }
 
-  const sessionIds = new Set(attempts.map((a) => a.sessionLogId));
+  const sessionIds = new Set(attempts.map((attempt) => attempt.sessionLogId));
   const totalSessions = sessionIds.size;
   const totalAttempts = attempts.length;
-
-  const lastPerformedAt = attempts[0]?.sessionLog.performedAt;
+  const lastPerformedAt = attempts[0]?.sessionLog.performedAt ?? null;
   const lastLabel = lastPerformedAt
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastPerformedAt)
     : null;
 
-  // Grade pyramid data: grade → outcome → count, per gradeSystem
-  type PyramidRow = { grade: string; system: ClimbGradeSystem; counts: Partial<Record<ClimbOutcome, number>>; total: number };
-  const pyramidMap = new Map<string, PyramidRow>();
-  for (const a of attempts) {
-    const key = `${a.gradeSystem}::${a.grade}`;
-    const existing = pyramidMap.get(key) ?? { grade: a.grade, system: a.gradeSystem, counts: {}, total: 0 };
-    existing.counts[a.outcome] = (existing.counts[a.outcome] ?? 0) + 1;
-    existing.total++;
-    pyramidMap.set(key, existing);
-  }
+  const overallRows = buildPyramidRows(attempts);
+  const indoorAttempts = attempts.filter((attempt) => venueForAttempt(attempt) === "GYM");
+  const outdoorAttempts = attempts.filter((attempt) => venueForAttempt(attempt) === "CRAG");
+  const unclassifiedAttempts = attempts.filter((attempt) => venueForAttempt(attempt) === "UNKNOWN");
+  const indoorRows = buildPyramidRows(indoorAttempts);
+  const outdoorRows = buildPyramidRows(outdoorAttempts);
 
-  // Sort by grade ascending per system
-  const boulderRows = Array.from(pyramidMap.values())
-    .filter((r) => r.system === "BOULDER_V")
-    .sort((a, b) => gradeSort(a.grade, "BOULDER_V") - gradeSort(b.grade, "BOULDER_V"));
-  const yosemiteRows = Array.from(pyramidMap.values())
-    .filter((r) => r.system === "YOSEMITE")
-    .sort((a, b) => gradeSort(a.grade, "YOSEMITE") - gradeSort(b.grade, "YOSEMITE"));
-
-  // Hardest flash/send
   const flashOutcomes = new Set<ClimbOutcome>(["FLASH", "ONSIGHT"]);
   const sendOutcomes = new Set<ClimbOutcome>(["SEND", "REDPOINT", "FLASH", "ONSIGHT"]);
+  const hardestBoulderFlash = hardest(overallRows.boulderRows, flashOutcomes);
+  const hardestBoulderSend = hardest(overallRows.boulderRows, sendOutcomes);
+  const hardestYosemiteFlash = hardest(overallRows.yosemiteRows, flashOutcomes);
+  const hardestYosemiteSend = hardest(overallRows.yosemiteRows, sendOutcomes);
 
-  function hardest(rows: PyramidRow[], filter: Set<ClimbOutcome>): string | null {
-    const eligible = rows.filter((r) => ORDERED_OUTCOMES.some((o) => filter.has(o) && (r.counts[o] ?? 0) > 0));
-    if (eligible.length === 0) return null;
-    return eligible[eligible.length - 1].grade;
-  }
-
-  const hardestBoulderFlash = hardest(boulderRows, flashOutcomes);
-  const hardestBoulderSend = hardest(boulderRows, sendOutcomes);
-  const hardestYosemiteFlash = hardest(yosemiteRows, flashOutcomes);
-  const hardestYosemiteSend = hardest(yosemiteRows, sendOutcomes);
-
-  // Location breakdown
   const locationCounts = new Map<string, { name: string; sessions: Set<string> }>();
-  for (const a of attempts) {
-    if (!a.sessionLog.climbLocation) continue;
-    const loc = a.sessionLog.climbLocation;
-    const existing = locationCounts.get(loc.id) ?? { name: loc.name, sessions: new Set() };
-    existing.sessions.add(a.sessionLogId);
-    locationCounts.set(loc.id, existing);
+  for (const attempt of attempts) {
+    if (!attempt.sessionLog.climbLocation) continue;
+    const location = attempt.sessionLog.climbLocation;
+    const existing = locationCounts.get(location.id) ?? { name: location.name, sessions: new Set<string>() };
+    existing.sessions.add(attempt.sessionLogId);
+    locationCounts.set(location.id, existing);
   }
   const locations = Array.from(locationCounts.values()).sort((a, b) => b.sessions.size - a.sessions.size);
 
-  const allRows = [...boulderRows, ...yosemiteRows];
-  const maxTotal = Math.max(...allRows.map((r) => r.total), 1);
+  const venueSections = [
+    {
+      label: "Indoor",
+      rows: indoorRows,
+      maxTotal: Math.max(...indoorRows.allRows.map((row) => row.total), 1),
+      sessions: new Set(indoorAttempts.map((attempt) => attempt.sessionLogId)).size,
+    },
+    {
+      label: "Outdoor",
+      rows: outdoorRows,
+      maxTotal: Math.max(...outdoorRows.allRows.map((row) => row.total), 1),
+      sessions: new Set(outdoorAttempts.map((attempt) => attempt.sessionLogId)).size,
+    },
+  ].filter((section) => section.rows.allRows.length > 0);
 
   const statsItems = [
     { label: "Sessions (4w)", value: String(totalSessions) },
@@ -113,49 +188,70 @@ export default async function ClimbingProgressView() {
   ];
 
   return (
-    <SectionCard
-      title="Climbing"
-      subtitle="Grade pyramid and attempt breakdown — last 4 weeks."
-    >
+    <SectionCard title="Climbing" subtitle="Indoor and outdoor grade pyramids with attempt breakdown for the last 4 weeks.">
       <div style={{ display: "grid", gap: 16, padding: "0 2px" }}>
         <StatGrid items={statsItems} />
 
-        {allRows.length > 0 && (
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={pyramidLabelStyle}>Grade pyramid</div>
-            {[
-              { label: "Bouldering (V)", rows: boulderRows },
-              { label: "Sport / Trad", rows: yosemiteRows },
-            ]
-              .filter(({ rows }) => rows.length > 0)
-              .map(({ label, rows }) => (
-                <div key={label} style={{ display: "grid", gap: 4 }}>
-                  {boulderRows.length > 0 && yosemiteRows.length > 0 && (
-                    <div style={subLabelStyle}>{label}</div>
-                  )}
-                  {[...rows].reverse().map((row) => (
-                    <GradePyramidRow key={row.grade} row={row} maxTotal={maxTotal} />
-                  ))}
+        {venueSections.length > 0 ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={pyramidLabelStyle}>Grade pyramids</div>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+              {venueSections.map((section) => (
+                <div
+                  key={section.label}
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    padding: 12,
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.03)",
+                  }}
+                >
+                  <div style={subLabelStyle}>
+                    {section.label} {section.sessions > 0 ? `(${section.sessions} session${section.sessions !== 1 ? "s" : ""})` : ""}
+                  </div>
+                  {[
+                    { label: "Bouldering (V)", rows: section.rows.boulderRows },
+                    { label: "Sport / Trad", rows: section.rows.yosemiteRows },
+                  ]
+                    .filter((item) => item.rows.length > 0)
+                    .map((item) => (
+                      <div key={`${section.label}-${item.label}`} style={{ display: "grid", gap: 4 }}>
+                        {section.rows.boulderRows.length > 0 && section.rows.yosemiteRows.length > 0 ? (
+                          <div style={subLabelStyle}>{item.label}</div>
+                        ) : null}
+                        {[...item.rows].reverse().map((row) => (
+                          <GradePyramidRow key={`${section.label}-${item.label}-${row.grade}`} row={row} maxTotal={section.maxTotal} />
+                        ))}
+                      </div>
+                    ))}
                 </div>
               ))}
+            </div>
+            {unclassifiedAttempts.length > 0 ? (
+              <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.68 }}>
+                {unclassifiedAttempts.length} attempt{unclassifiedAttempts.length !== 1 ? "s were" : " was"} logged without an indoor/outdoor location, so they are not included in the split pyramids.
+              </div>
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {locations.length > 0 && (
+        {locations.length > 0 ? (
           <div style={{ display: "grid", gap: 6 }}>
             <div style={pyramidLabelStyle}>Locations</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {locations.map((loc) => (
-                <span key={loc.name} style={locationChipStyle}>
-                  {loc.name}
+              {locations.map((location) => (
+                <span key={location.name} style={locationChipStyle}>
+                  {location.name}
                   <span style={{ opacity: 0.6, fontSize: 10, fontWeight: 700 }}>
-                    {" "}{loc.sessions.size}×
+                    {" "}{location.sessions.size}x
                   </span>
                 </span>
               ))}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </SectionCard>
   );
@@ -168,12 +264,11 @@ function GradePyramidRow({
   row: { grade: string; system: ClimbGradeSystem; counts: Partial<Record<ClimbOutcome, number>>; total: number };
   maxTotal: number;
 }) {
-  const barMaxPct = 72; // leave room for grade label on mobile
+  const barMaxPct = 72;
   const totalPct = (row.total / maxTotal) * barMaxPct;
-
   const segments: Array<{ outcome: ClimbOutcome; count: number }> = ORDERED_OUTCOMES
-    .map((o) => ({ outcome: o, count: row.counts[o] ?? 0 }))
-    .filter((s) => s.count > 0);
+    .map((outcome) => ({ outcome, count: row.counts[outcome] ?? 0 }))
+    .filter((segment) => segment.count > 0);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", gap: 6, alignItems: "center" }}>
@@ -211,7 +306,7 @@ const pyramidLabelStyle: React.CSSProperties = {
 const subLabelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  opacity: 0.45,
+  opacity: 0.58,
   marginTop: 4,
 };
 
