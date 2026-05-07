@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
+import { setCompletionForDay } from "./routines/actions";
 
 type GlanceDay = {
   ymd: string;
@@ -261,22 +264,30 @@ export default function WeekAtGlanceClient({
             {selectedDay.planned.length === 0 ? (
               <div style={{ fontSize: 12, opacity: 0.62 }}>No routines planned. Logged sessions are listed below.</div>
             ) : null}
-            {selectedDay.planned.map((item) => (
-              <div key={item.routineId} style={item.logged > 0 ? completedDetailRow : detailRow}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <div style={{ width: 9, height: 9, borderRadius: 999, background: domainColor(item.domain), flexShrink: 0 }} />
-                  <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.routineName}</div>
-                </div>
-                <div style={detailActions}>
-                  <div style={{ fontSize: 11, opacity: 0.7 }}>
-                    {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizeRoutineKind(item.kind))}
+            {selectedDay.planned.map((item) => {
+              const normalizedKind = normalizeRoutineKind(item.kind);
+              const isCompletion = normalizedKind === "COMPLETION";
+              return (
+                <div key={item.routineId} style={item.logged > 0 ? completedDetailRow : detailRow}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <div style={{ width: 9, height: 9, borderRadius: 999, background: domainColor(item.domain), flexShrink: 0 }} />
+                    <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.routineName}</div>
                   </div>
-                  <Link href={`/routines/${item.routineId}/log`} style={rowLogButton}>
-                    Log
-                  </Link>
+                  <div style={detailActions}>
+                    <div style={{ fontSize: 11, opacity: 0.7 }}>
+                      {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizedKind)}
+                    </div>
+                    {isCompletion ? (
+                      <CompletionCheckbox routineId={item.routineId} ymd={selectedDay.ymd} done={item.logged > 0} />
+                    ) : (
+                      <Link href={`/routines/${item.routineId}/log`} style={rowLogButton}>
+                        Log
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {selectedDay.logs.filter((log) => !selectedDay.planned.some((item) => item.routineId === log.routineId)).map((log) => (
               <div key={log.id} style={unplannedDetailRow}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -290,6 +301,73 @@ export default function WeekAtGlanceClient({
         )}
       </div>
     </div>
+  );
+}
+
+function CompletionCheckbox({
+  routineId,
+  ymd,
+  done,
+}: {
+  routineId: string;
+  ymd: string;
+  done: boolean;
+}) {
+  const router = useRouter();
+  const [optimistic, setOptimistic] = useState(done);
+  const targetRef = useRef(done);
+  const inFlightRef = useRef(false);
+  const serverDoneRef = useRef(done);
+
+  useEffect(() => {
+    serverDoneRef.current = done;
+    if (!inFlightRef.current) {
+      targetRef.current = done;
+      setOptimistic(done);
+    }
+  }, [done, ymd, routineId]);
+
+  async function flush() {
+    if (inFlightRef.current) return;
+    while (targetRef.current !== serverDoneRef.current) {
+      const desired = targetRef.current;
+      inFlightRef.current = true;
+      try {
+        await setCompletionForDay(routineId, ymd, desired);
+        serverDoneRef.current = desired;
+      } catch (err) {
+        console.error("Failed to update completion", err);
+        targetRef.current = serverDoneRef.current;
+        setOptimistic(serverDoneRef.current);
+        inFlightRef.current = false;
+        return;
+      }
+      inFlightRef.current = false;
+    }
+    router.refresh();
+  }
+
+  function toggle() {
+    const next = !targetRef.current;
+    targetRef.current = next;
+    flushSync(() => setOptimistic(next));
+    void flush();
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={optimistic}
+      aria-label={optimistic ? "Mark not done" : "Mark done"}
+      style={{
+        ...checkboxButton,
+        borderColor: optimistic ? "rgba(84,203,130,0.6)" : "rgba(255,255,255,0.22)",
+        background: optimistic ? "rgba(84,203,130,0.18)" : "rgba(255,255,255,0.04)",
+      }}
+    >
+      {optimistic ? "✓" : ""}
+    </button>
   );
 }
 
@@ -444,6 +522,23 @@ const rowLogButton: CSSProperties = {
   ...logButton,
   padding: "5px 9px",
   fontSize: 11,
+};
+
+const checkboxButton: CSSProperties = {
+  width: 26,
+  height: 26,
+  borderRadius: 7,
+  border: "1px solid rgba(255,255,255,0.22)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(84,203,130,0.98)",
+  fontSize: 14,
+  fontWeight: 900,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  padding: 0,
+  lineHeight: 1,
 };
 
 const completedDetailRow: CSSProperties = {

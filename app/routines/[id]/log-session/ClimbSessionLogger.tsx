@@ -78,7 +78,7 @@ function QuickGradeRow({
         value={attemptedValue}
         onChange={(e) => onAttemptedChange(grade, e.target.value)}
       />
-      <button type="button" onClick={onRemove} style={removeButtonStyle}>×</button>
+      <button type="button" onClick={onRemove} style={quickRemoveButtonStyle}>×</button>
     </>
   );
 }
@@ -137,20 +137,21 @@ function AttemptRow({
   };
 
   return (
-    <div style={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+    <div style={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden", minWidth: 0 }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
+          gap: 6,
+          padding: "10px 10px",
           background: "rgba(255,255,255,0.03)",
           cursor: "pointer",
+          minWidth: 0,
         }}
         onClick={onToggleExpand}
       >
         <span style={{ ...gradePillStyle }}>{attempt.grade}</span>
-        <span style={{ fontSize: 12, fontWeight: 800, color, padding: "2px 8px", borderRadius: 999, background: bg, flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color, padding: "2px 7px", borderRadius: 999, background: bg, flexShrink: 0, whiteSpace: "nowrap" }}>
           {label}
         </span>
         {(linkedProblem || attempt.newProblemName) && (
@@ -421,7 +422,7 @@ export default function ClimbSessionLogger({
   const sendLabel = "Send";
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
       {/* Mode toggle */}
       <div style={modeToggleStyle}>
         <button
@@ -584,27 +585,29 @@ export default function ClimbSessionLogger({
           </div>
 
           {gradeRows.length > 0 ? (
-            <div style={quickTableStyle}>
-              <div style={quickHeaderStyle}>Grade</div>
-              <div style={quickHeaderStyle}>{flashLabel}</div>
-              <div style={quickHeaderStyle}>{sendLabel}</div>
-              <div style={quickHeaderStyle}>Fell</div>
-              <div />
-              {gradeRows.map((row) => (
-                <QuickGradeRow
-                  key={row.grade}
-                  grade={row.grade}
-                  flashValue={quickValues[row.flashDefId ?? ""]?.numberValue ?? ""}
-                  sendValue={quickValues[row.sendDefId ?? ""]?.numberValue ?? ""}
-                  attemptedValue={quickAttemptedValues[row.grade] ?? ""}
-                  flashDefId={row.flashDefId}
-                  sendDefId={row.sendDefId}
-                  onFlashChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
-                  onSendChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
-                  onAttemptedChange={(grade, val) => { onQuickAttemptedChange(grade, val); onMarkDirty(); }}
-                  onRemove={() => { onSelectedGradesChange(selectedGrades.filter((g) => g !== row.grade)); onMarkDirty(); }}
-                />
-              ))}
+            <div style={quickTableScrollStyle}>
+              <div style={quickTableStyle}>
+                <div style={quickHeaderStyle}>Grade</div>
+                <div style={quickHeaderStyle}>{flashLabel}</div>
+                <div style={quickHeaderStyle}>{sendLabel}</div>
+                <div style={quickHeaderStyle}>Fell</div>
+                <div />
+                {gradeRows.map((row) => (
+                  <QuickGradeRow
+                    key={row.grade}
+                    grade={row.grade}
+                    flashValue={quickValues[row.flashDefId ?? ""]?.numberValue ?? ""}
+                    sendValue={quickValues[row.sendDefId ?? ""]?.numberValue ?? ""}
+                    attemptedValue={quickAttemptedValues[row.grade] ?? ""}
+                    flashDefId={row.flashDefId}
+                    sendDefId={row.sendDefId}
+                    onFlashChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
+                    onSendChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
+                    onAttemptedChange={(grade, val) => { onQuickAttemptedChange(grade, val); onMarkDirty(); }}
+                    onRemove={() => { onSelectedGradesChange(selectedGrades.filter((g) => g !== row.grade)); onMarkDirty(); }}
+                  />
+                ))}
+              </div>
             </div>
           ) : (
             <div style={{ fontSize: 12, opacity: 0.5, padding: "12px 0" }}>
@@ -745,7 +748,7 @@ function outcomeBtnStyle(color: string, bg: string): React.CSSProperties {
     flexDirection: "column",
     alignItems: "center",
     gap: 4,
-    padding: "16px 8px",
+    padding: "14px 6px",
     borderRadius: 12,
     border: `1px solid ${color.replace("0.9", "0.35")}`,
     background: bg,
@@ -754,6 +757,7 @@ function outcomeBtnStyle(color: string, bg: string): React.CSSProperties {
     fontSize: 12,
     minWidth: 0,
     overflow: "hidden",
+    textAlign: "center" as const,
   };
 }
 
@@ -822,11 +826,18 @@ const expandTextareaStyle: React.CSSProperties = {
   fontFamily: "inherit",
 };
 
+const quickTableScrollStyle: React.CSSProperties = {
+  width: "100%",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+};
+
 const quickTableStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr 54px 54px 54px 32px",
-  gap: 6,
+  gridTemplateColumns: "minmax(28px, 1fr) minmax(40px, 56px) minmax(40px, 56px) minmax(40px, 56px) 28px",
+  gap: 4,
   alignItems: "center",
+  minWidth: 0,
 };
 
 const quickHeaderStyle: React.CSSProperties = {
@@ -834,16 +845,22 @@ const quickHeaderStyle: React.CSSProperties = {
   fontWeight: 800,
   opacity: 0.6,
   textAlign: "center" as const,
+  minWidth: 0,
 };
 
 const quickCellLabelStyle: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 13,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 const quickInputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "8px 4px",
+  minWidth: 0,
+  padding: "8px 2px",
   border: "1px solid rgba(128,128,128,0.5)",
   borderRadius: 8,
   background: "#111827",
@@ -851,6 +868,25 @@ const quickInputStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
   textAlign: "center" as const,
+  boxSizing: "border-box",
+};
+
+const quickRemoveButtonStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.05)",
+  color: "rgba(255,255,255,0.55)",
+  fontWeight: 900,
+  fontSize: 16,
+  lineHeight: 1,
+  cursor: "pointer",
+  flexShrink: 0,
+  padding: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const addGradeSelectStyle: React.CSSProperties = {

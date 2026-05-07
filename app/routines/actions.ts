@@ -5,7 +5,7 @@ import { inferExerciseMetadataSlugs, parseTagNames, ROUTINE_METADATA_SELECTABLE_
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
-import { parseAppDateTimeLocal } from "@/lib/dates";
+import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { prisma } from "@/lib/prisma";
 import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
@@ -1313,6 +1313,43 @@ export async function logRoutineCompletion(routineId: string) {
 export async function logCompletionWithDate(routineId: string, formData: FormData) {
   const performedAtLocal = String(formData.get("performedAtLocal") || "").trim();
   await createCompletionLog({ routineId, performedAtLocal: performedAtLocal || undefined });
+}
+
+export async function setCompletionForDay(routineId: string, ymd: string, done: boolean) {
+  if (!routineId) throw new Error("Missing routine id.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) throw new Error("Invalid date.");
+  await ensureRoutineKind(routineId, "COMPLETION");
+
+  if (done) {
+    const log = await prisma.routineLog.create({
+      data: {
+        routineId,
+        performedAt: parseAppDateTimeLocal(`${ymd}T12:00`),
+      },
+      select: { id: true },
+    });
+    await recalculateRoutineLogStimulus(log.id);
+    await createExerciseZoneActivitiesForLog(prisma, log.id);
+  } else {
+    const { start, end } = getAppDayRange(ymd);
+    const latest = await prisma.routineLog.findFirst({
+      where: {
+        routineId,
+        performedAt: { gte: start, lt: end },
+        exercises: { none: {} },
+        guidedSteps: { none: {} },
+        metrics: { none: {} },
+        distanceMi: null,
+        durationSec: null,
+        location: null,
+      },
+      orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (latest) await prisma.routineLog.delete({ where: { id: latest.id } });
+  }
+
+  revalidateRoutineSurfaces(routineId);
 }
 
 export async function removeLastRoutineCompletion(routineId: string) {
