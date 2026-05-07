@@ -15,7 +15,14 @@ export function FormStack({
   children: React.ReactNode;
   maxWidth?: number;
 }) {
-  return <div className="mobileListStack" style={{ display: "grid", gap: 16, width: "100%", maxWidth }}>{children}</div>;
+  return (
+    <div
+      className="mobileListStack"
+      style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, width: "100%", maxWidth, minWidth: 0 }}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function FormSection({
@@ -31,7 +38,7 @@ export function FormSection({
     <section className="mobileCard" style={sectionStyle}>
       {title ? <div style={sectionTitleStyle}>{title}</div> : null}
       {description ? <div style={sectionDescriptionStyle}>{description}</div> : null}
-      <div style={{ display: "grid", gap: 12 }}>{children}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, minWidth: 0 }}>{children}</div>
     </section>
   );
 }
@@ -182,6 +189,7 @@ const sectionStyle: React.CSSProperties = {
   borderRadius: 16,
   padding: 16,
   background: surfaceColor,
+  minWidth: 0,
 };
 
 const sectionTitleStyle: React.CSSProperties = {

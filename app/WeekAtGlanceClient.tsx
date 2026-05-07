@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
-import { flushSync } from "react-dom";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 import { setCompletionForDay } from "./routines/actions";
@@ -314,7 +313,7 @@ const CompletionCheckbox = memo(function CompletionCheckbox({
   done: boolean;
 }) {
   const router = useRouter();
-  const [optimistic, setOptimistic] = useState(done);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const targetRef = useRef(done);
   const inFlightRef = useRef(false);
   const serverDoneRef = useRef(done);
@@ -322,9 +321,9 @@ const CompletionCheckbox = memo(function CompletionCheckbox({
 
   useEffect(() => {
     serverDoneRef.current = done;
-    if (!inFlightRef.current) {
+    if (!inFlightRef.current && inputRef.current && inputRef.current.checked !== done) {
+      inputRef.current.checked = done;
       targetRef.current = done;
-      setOptimistic(done);
     }
   }, [done, ymd, routineId]);
 
@@ -345,7 +344,7 @@ const CompletionCheckbox = memo(function CompletionCheckbox({
       } catch (err) {
         console.error("Failed to update completion", err);
         targetRef.current = serverDoneRef.current;
-        setOptimistic(serverDoneRef.current);
+        if (inputRef.current) inputRef.current.checked = serverDoneRef.current;
         inFlightRef.current = false;
         return;
       }
@@ -355,22 +354,21 @@ const CompletionCheckbox = memo(function CompletionCheckbox({
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
       router.refresh();
-    }, 350);
+    }, 400);
   }
 
   function onChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const next = event.target.checked;
-    targetRef.current = next;
-    flushSync(() => setOptimistic(next));
+    targetRef.current = event.target.checked;
     void flush();
   }
 
   return (
     <input
+      ref={inputRef}
       type="checkbox"
-      checked={optimistic}
+      defaultChecked={done}
       onChange={onChange}
-      aria-label={optimistic ? "Mark not done" : "Mark done"}
+      aria-label="Toggle done"
       style={completionCheckboxStyle}
     />
   );
@@ -536,6 +534,8 @@ const completionCheckboxStyle: CSSProperties = {
   flexShrink: 0,
   cursor: "pointer",
   accentColor: "rgba(84,203,130,0.95)",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
 };
 
 const completedDetailRow: CSSProperties = {

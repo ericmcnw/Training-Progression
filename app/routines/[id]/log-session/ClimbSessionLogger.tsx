@@ -172,10 +172,10 @@ function AttemptRow({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          style={removeButtonStyle}
+          style={attemptRemoveButtonStyle}
           aria-label="Remove attempt"
         >×</button>
-        <span style={{ fontSize: 16, opacity: 0.4, flexShrink: 0, transition: "transform 120ms", transform: expanded ? "rotate(180deg)" : "none" }}>
+        <span style={{ fontSize: 14, opacity: 0.4, flexShrink: 0, transition: "transform 120ms", transform: expanded ? "rotate(180deg)" : "none" }}>
           ▾
         </span>
       </div>
@@ -443,7 +443,7 @@ export default function ClimbSessionLogger({
 
       {/* ─── Per Climb mode ─────────────────────────────────────────────────── */}
       {climbMode === "per-climb" && (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, minWidth: 0 }}>
           {/* Saved problems at this location */}
           {savedProblems.length > 0 && (
             <div>
@@ -498,7 +498,7 @@ export default function ClimbSessionLogger({
 
           {/* Outcome buttons — only shown when grade is selected */}
           {selectedGrade && (
-            <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, minWidth: 0 }}>
               <div style={sectionLabelStyle}>
                 {selectedProblemId
                   ? `${savedProblems.find((p) => p.id === selectedProblemId)?.name ?? selectedGrade} — tap outcome to log`
@@ -533,7 +533,7 @@ export default function ClimbSessionLogger({
 
           {/* Attempt list */}
           {attempts.length > 0 && (
-            <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 6, minWidth: 0 }}>
               <div style={sectionLabelStyle}>
                 This session · {attempts.length} climb{attempts.length !== 1 ? "s" : ""}
               </div>
@@ -788,6 +788,13 @@ const removeButtonStyle: React.CSSProperties = {
   justifyContent: "center",
 };
 
+const attemptRemoveButtonStyle: React.CSSProperties = {
+  ...removeButtonStyle,
+  width: 26,
+  height: 26,
+  fontSize: 16,
+};
+
 const expandLabelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
@@ -806,6 +813,9 @@ const expandSelectStyle: React.CSSProperties = {
 };
 
 const expandInputStyle: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   padding: "8px 10px",
   border: "1px solid rgba(128,128,128,0.5)",
   borderRadius: 8,

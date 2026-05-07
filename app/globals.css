@@ -688,6 +688,20 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileCard{
     border-radius: 16px !important;
     padding: 14px !important;
+    min-width: 0 !important;
+  }
+
+  .mobileSectionBody{
+    min-width: 0 !important;
+  }
+
+  @media (max-width: 380px){
+    .mobileCard{
+      padding: 10px !important;
+    }
+    .mobileSectionBody{
+      padding: 10px !important;
+    }
   }
 
   .mobileFormGrid{
