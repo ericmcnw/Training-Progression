@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
@@ -304,7 +304,7 @@ export default function WeekAtGlanceClient({
   );
 }
 
-function CompletionCheckbox({
+const CompletionCheckbox = memo(function CompletionCheckbox({
   routineId,
   ymd,
   done,
@@ -318,6 +318,7 @@ function CompletionCheckbox({
   const targetRef = useRef(done);
   const inFlightRef = useRef(false);
   const serverDoneRef = useRef(done);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     serverDoneRef.current = done;
@@ -326,6 +327,12 @@ function CompletionCheckbox({
       setOptimistic(done);
     }
   }, [done, ymd, routineId]);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
 
   async function flush() {
     if (inFlightRef.current) return;
@@ -344,32 +351,30 @@ function CompletionCheckbox({
       }
       inFlightRef.current = false;
     }
-    router.refresh();
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      router.refresh();
+    }, 350);
   }
 
-  function toggle() {
-    const next = !targetRef.current;
+  function onChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const next = event.target.checked;
     targetRef.current = next;
     flushSync(() => setOptimistic(next));
     void flush();
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-pressed={optimistic}
+    <input
+      type="checkbox"
+      checked={optimistic}
+      onChange={onChange}
       aria-label={optimistic ? "Mark not done" : "Mark done"}
-      style={{
-        ...checkboxButton,
-        borderColor: optimistic ? "rgba(84,203,130,0.6)" : "rgba(255,255,255,0.22)",
-        background: optimistic ? "rgba(84,203,130,0.18)" : "rgba(255,255,255,0.04)",
-      }}
-    >
-      {optimistic ? "✓" : ""}
-    </button>
+      style={completionCheckboxStyle}
+    />
   );
-}
+});
 
 function formatRange(startYmd: string, endYmd: string) {
   const start = formatUtcDateLabel(startYmd, { month: "short", day: "numeric" });
@@ -524,21 +529,13 @@ const rowLogButton: CSSProperties = {
   fontSize: 11,
 };
 
-const checkboxButton: CSSProperties = {
+const completionCheckboxStyle: CSSProperties = {
   width: 26,
   height: 26,
-  borderRadius: 7,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(255,255,255,0.04)",
-  color: "rgba(84,203,130,0.98)",
-  fontSize: 14,
-  fontWeight: 900,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
+  margin: 0,
   flexShrink: 0,
-  padding: 0,
-  lineHeight: 1,
+  cursor: "pointer",
+  accentColor: "rgba(84,203,130,0.95)",
 };
 
 const completedDetailRow: CSSProperties = {
