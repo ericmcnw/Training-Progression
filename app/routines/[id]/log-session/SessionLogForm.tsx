@@ -24,6 +24,7 @@ import {
   templateHasPrimaryLocationMetric,
   type SessionMetricDefinitionWithConfig,
 } from "@/lib/session-templates";
+import { climbingDisciplineLabel, climbingDisciplineForTemplateKey } from "@/lib/climb-types";
 import {
   type SessionDraft,
   clearDraftFromStorage,
@@ -34,7 +35,7 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic } from "@/lib/climb-types";
+import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, ClimbOutcome } from "@/lib/climb-types";
 
 const CLIMBING_AUTO_ZONES = [
   { slug: "hands", label: "Fingers / Hands" },
@@ -75,10 +76,14 @@ function synthesizeClimbingMetrics(
 function synthesizeAttemptsFromQuickValues(
   values: Record<string, SessionMetricDraftValue>,
   quickAttemptedValues: Record<string, string>,
-  definitions: SessionMetricDefinitionWithConfig[]
+  definitions: SessionMetricDefinitionWithConfig[],
+  templateKey: string | null
 ): ClimbAttemptDraft[] {
   const attempts: ClimbAttemptDraft[] = [];
   const gradeRows = new Map<string, { flashDefId: string | null; sendDefId: string | null; gradeSystem: string }>();
+  const discipline = climbingDisciplineForTemplateKey(templateKey);
+  const flashOutcome: ClimbOutcome = discipline === "BOULDER" ? "FLASH" : "ONSIGHT";
+  const sendOutcome: ClimbOutcome = discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
 
   for (const def of definitions) {
     const config = def.config;
@@ -98,10 +103,10 @@ function synthesizeAttemptsFromQuickValues(
     const fellCount = parseInt(quickAttemptedValues[grade] ?? "0") || 0;
 
     for (let i = 0; i < flashCount; i++) {
-      attempts.push({ localId: `qs-flash-${grade}-${i}`, grade, gradeSystem, outcome: gradeSystem === "BOULDER_V" ? "FLASH" : "ONSIGHT", attemptOrder: order++ });
+      attempts.push({ localId: `qs-flash-${grade}-${i}`, grade, gradeSystem, outcome: flashOutcome, attemptOrder: order++ });
     }
     for (let i = 0; i < sendCount; i++) {
-      attempts.push({ localId: `qs-send-${grade}-${i}`, grade, gradeSystem, outcome: "SEND", attemptOrder: order++ });
+      attempts.push({ localId: `qs-send-${grade}-${i}`, grade, gradeSystem, outcome: sendOutcome, attemptOrder: order++ });
     }
     for (let i = 0; i < fellCount; i++) {
       attempts.push({ localId: `qs-fell-${grade}-${i}`, grade, gradeSystem, outcome: "FELL", attemptOrder: order++ });
@@ -139,6 +144,19 @@ export default function SessionLogForm({
 
   const isClimbing = isClimbingTemplateKey(templateKey);
   const hasLocationMetric = templateHasPrimaryLocationMetric(definitions);
+  const isOutdoorClimbing = isClimbing && (templateKey ?? "").startsWith("outdoor-");
+  const climbVenueLabel = isOutdoorClimbing ? "Crag" : "Gym";
+  const climbLocationLabel = "Location";
+  const climbLocationPlaceholder = isOutdoorClimbing
+    ? "e.g. Red Rock Canyon, Joshua Tree NP…"
+    : "e.g. Denver CO, Boulder, San Francisco…";
+  const climbDisciplineLabel = isClimbing
+    ? climbingDisciplineLabel(climbingDisciplineForTemplateKey(templateKey))
+    : null;
+  const climbVenueIsIndoor = isClimbing && !isOutdoorClimbing;
+  const climbSectionTitle = isClimbing
+    ? `${climbVenueIsIndoor ? "Indoor" : "Outdoor"} ${climbDisciplineLabel}`
+    : null;
 
   const templateNotesDefinition = definitions.find((d) => d.key === "template_notes");
   const mainDefinitions = definitions.filter((d) => d.key !== "template_notes");
@@ -311,7 +329,7 @@ export default function SessionLogForm({
       const activeAttempts =
         climbMode === "per-climb"
           ? climbAttempts
-          : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions);
+          : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions, templateKey);
       sessionMetricValuesToSend = synthesizeClimbingMetrics(activeAttempts, definitions);
     } else {
       for (const definition of definitions) {
@@ -336,7 +354,7 @@ export default function SessionLogForm({
     const activeClimbAttempts = isClimbing
       ? climbMode === "per-climb"
         ? climbAttempts.map((a, i) => ({ ...a, attemptOrder: i }))
-        : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions)
+        : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions, templateKey)
       : undefined;
 
     setSaving(true);
@@ -345,7 +363,7 @@ export default function SessionLogForm({
       const logId = await logSession({
         routineId,
         durationSec,
-        location: isClimbing ? undefined : location,
+        location: location.trim() || undefined,
         notes: effortPrefix ? `${effortPrefix}${notes}`.trim() : notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: sessionMetricValuesToSend,
@@ -404,15 +422,25 @@ export default function SessionLogForm({
         </Field>
 
         {isClimbing ? (
-          <Field label="Location (optional)">
-            <ClimbLocationPicker
-              savedLocations={savedClimbLocations}
-              selectedId={climbLocationId}
-              onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
-              newLocation={newClimbLocation}
-              onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
-            />
-          </Field>
+          <>
+            <Field label={`${climbLocationLabel} (optional)`} hint={isOutdoorClimbing ? "Broader area or region you climbed in." : "City or region — helpful when you climb at multiple gyms."}>
+              <input
+                style={inputStyle}
+                value={location}
+                onChange={(e) => { markDirty(); setLocation(e.target.value); }}
+                placeholder={climbLocationPlaceholder}
+              />
+            </Field>
+            <Field label={`${climbVenueLabel} (optional)`}>
+              <ClimbLocationPicker
+                savedLocations={savedClimbLocations}
+                selectedId={climbLocationId}
+                onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
+                newLocation={newClimbLocation}
+                onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
+              />
+            </Field>
+          </>
         ) : !hasLocationMetric ? (
           <Field label="Location (optional)">
             <input
@@ -440,7 +468,7 @@ export default function SessionLogForm({
 
       {/* Climbing section */}
       {isClimbing ? (
-        <FormSection title="Climbing">
+        <FormSection title={climbSectionTitle ?? "Climbing"}>
           <ClimbSessionLogger
             templateKey={templateKey!}
             climbMode={climbMode}

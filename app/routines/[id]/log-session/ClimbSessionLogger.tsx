@@ -4,14 +4,16 @@ import React, { useState, useEffect } from "react";
 import { nanoid } from "nanoid";
 import {
   climbOutcomeLabel,
-  climbOutcomesForSystem,
+  climbOutcomesForDiscipline,
   climbOutcomeColor,
   climbOutcomeBg,
+  climbingDisciplineForTemplateKey,
+  climbNounForDiscipline,
   gradeSystemForTemplateKey,
   type ClimbAttemptDraft,
   type ClimbOutcome,
-  type ClimbGradeSystem,
   type ClimbProblemBasic,
+  type ClimbingDiscipline,
 } from "@/lib/climb-types";
 import { climbingGradeOptions } from "@/lib/session-templates";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
@@ -28,6 +30,10 @@ type AttemptHistoryItem = {
 
 const dateLabel = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(iso));
+
+function isOutdoorTemplate(templateKey: string | null | undefined): boolean {
+  return (templateKey ?? "").startsWith("outdoor-");
+}
 
 // ─── Quick Mode grade row ─────────────────────────────────────────────────────
 
@@ -87,7 +93,7 @@ function QuickGradeRow({
 
 function AttemptRow({
   attempt,
-  gradeSystem,
+  discipline,
   expanded,
   onToggleExpand,
   onUpdate,
@@ -96,7 +102,7 @@ function AttemptRow({
   onUpdateProblemNotes,
 }: {
   attempt: ClimbAttemptDraft;
-  gradeSystem: ClimbGradeSystem;
+  discipline: ClimbingDiscipline;
   expanded: boolean;
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<ClimbAttemptDraft>) => void;
@@ -106,7 +112,7 @@ function AttemptRow({
 }) {
   const color = climbOutcomeColor(attempt.outcome);
   const bg = climbOutcomeBg(attempt.outcome);
-  const label = climbOutcomeLabel(attempt.outcome, gradeSystem);
+  const label = climbOutcomeLabel(attempt.outcome, discipline);
   const linkedProblem = savedProblems.find((p) => p.id === attempt.problemId);
   const gradeProblems = savedProblems.filter((p) => p.grade === attempt.grade);
 
@@ -159,12 +165,17 @@ function AttemptRow({
             {linkedProblem?.name ?? attempt.newProblemName}
           </span>
         )}
-        {!linkedProblem && !attempt.newProblemName && attempt.movesCompleted != null && (
+        {attempt.area && (
+          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55, padding: "2px 6px", borderRadius: 6, background: "rgba(255,255,255,0.05)", flexShrink: 0, whiteSpace: "nowrap" }}>
+            {attempt.area}
+          </span>
+        )}
+        {!linkedProblem && !attempt.newProblemName && !attempt.area && attempt.movesCompleted != null && (
           <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
             {attempt.movesCompleted}{attempt.totalMoves != null ? `/${attempt.totalMoves}` : ""} mvs
           </span>
         )}
-        {!linkedProblem && !attempt.newProblemName && !attempt.movesCompleted && attempt.notes && (
+        {!linkedProblem && !attempt.newProblemName && !attempt.area && !attempt.movesCompleted && attempt.notes && (
           <span style={{ fontSize: 11, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {attempt.notes}
           </span>
@@ -184,7 +195,7 @@ function AttemptRow({
         <div style={{ padding: "10px 12px", display: "grid", gap: 10, borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
           {/* Name this climb */}
           <div style={{ display: "grid", gap: 4 }}>
-            <div style={expandLabelStyle}>Problem name (optional — saved for future visits)</div>
+            <div style={expandLabelStyle}>{climbNounForDiscipline(discipline)} name (optional — saved for future visits)</div>
             {gradeProblems.length > 0 ? (
               <select
                 style={expandSelectStyle}
@@ -209,7 +220,7 @@ function AttemptRow({
             {(gradeProblems.length === 0 || attempt.problemId === null && attempt.newProblemName !== null && attempt.newProblemName !== undefined || (gradeProblems.length > 0 && !attempt.problemId && attempt.newProblemName !== null && attempt.newProblemName !== undefined)) && (
               <input
                 style={expandInputStyle}
-                placeholder="e.g. The Scoop, Pinch Crimp Right..."
+                placeholder={discipline === "BOULDER" ? "e.g. The Scoop, Pinch Crimp Right..." : "e.g. Crimson Cruiser, The Diagonal..."}
                 value={attempt.newProblemName ?? ""}
                 onChange={(e) => onUpdate({ newProblemName: e.target.value || null, problemId: null })}
               />
@@ -242,7 +253,7 @@ function AttemptRow({
                     return (
                       <div key={h.id} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                         <span style={{ fontSize: 11, fontWeight: 800, color: hColor, padding: "2px 7px", borderRadius: 999, background: hBg, flexShrink: 0 }}>
-                          {climbOutcomeLabel(h.outcome, gradeSystem)}
+                          {climbOutcomeLabel(h.outcome, discipline)}
                         </span>
                         <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
                           {dateLabel(h.routineLog.performedAt)}
@@ -268,6 +279,16 @@ function AttemptRow({
             )}
           </div>
 
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={expandLabelStyle}>Area / Wall (optional)</div>
+            <input
+              style={expandInputStyle}
+              placeholder="e.g. Cave Wall, Sector 3, Hidden Valley"
+              value={attempt.area ?? ""}
+              onChange={(e) => onUpdate({ area: e.target.value || null })}
+            />
+          </div>
+
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <div style={{ display: "grid", gap: 4, flex: 1 }}>
               <div style={expandLabelStyle}>Moves (optional)</div>
@@ -291,13 +312,17 @@ function AttemptRow({
             </div>
           </div>
           <div style={{ display: "grid", gap: 4 }}>
-            <div style={expandLabelStyle}>Notes / beta (optional)</div>
+            <div style={expandLabelStyle}>Beta notes & video link (optional)</div>
             <textarea
               style={expandTextareaStyle}
-              placeholder="e.g. left-hand sidepull on the crux, drop knee..."
+              placeholder={
+                discipline === "BOULDER"
+                  ? "Beta: left-hand sidepull at the crux, drop knee. Paste a video URL here too if you have one."
+                  : "Beta: clip stance at bolt 4, knee scum at the crux. Paste a video URL here too if you have one."
+              }
               value={attempt.notes ?? ""}
               onChange={(e) => onUpdate({ notes: e.target.value })}
-              rows={2}
+              rows={3}
             />
           </div>
         </div>
@@ -342,28 +367,85 @@ export default function ClimbSessionLogger({
   onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
   const gradeSystem = gradeSystemForTemplateKey(templateKey);
+  const discipline = climbingDisciplineForTemplateKey(templateKey);
   const allGrades = climbingGradeOptions(templateKey);
-  const outcomes = climbOutcomesForSystem(gradeSystem);
+  const outcomes = climbOutcomesForDiscipline(discipline);
+  const noun = climbNounForDiscipline(discipline);
+  const nounPlural = noun === "Problem" ? "problems" : "routes";
 
   // Per-climb mode local UI state
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [activeName, setActiveName] = useState("");
+  const [activeArea, setActiveArea] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const activeProblem = selectedProblemId
+    ? savedProblems.find((p) => p.id === selectedProblemId) ?? null
+    : null;
+  const activeProblemName = activeProblem?.name ?? activeName.trim();
+  const activeAttemptCount = (() => {
+    if (selectedProblemId) {
+      return attempts.filter((a) => a.problemId === selectedProblemId).length;
+    }
+    if (activeName.trim() && selectedGrade) {
+      const trimmed = activeName.trim().toLowerCase();
+      return attempts.filter(
+        (a) =>
+          !a.problemId &&
+          a.grade === selectedGrade &&
+          (a.newProblemName ?? "").trim().toLowerCase() === trimmed
+      ).length;
+    }
+    return 0;
+  })();
+
   // ── Per-climb: add attempt ──────────────────────────────────────────────────
-  function addAttempt(grade: string, outcome: ClimbOutcome, problemId?: string | null) {
+  function addAttempt(outcome: ClimbOutcome) {
+    if (!selectedGrade) return;
     const draft: ClimbAttemptDraft = {
       localId: nanoid(),
-      grade,
+      grade: selectedGrade,
       gradeSystem,
       outcome,
       attemptOrder: attempts.length,
-      problemId: problemId ?? null,
+      problemId: selectedProblemId ?? null,
+      newProblemName:
+        !selectedProblemId && activeName.trim() ? activeName.trim() : null,
+      area: activeArea.trim() || null,
     };
     onAttemptsChange([draft, ...attempts]);
     onMarkDirty();
+    // Keep grade/name/area/problemId selected so the user can rapidly add more
+    // attempts to the same climb (e.g. Project → Fell → Fell → Send).
+  }
+
+  function clearActiveClimb() {
     setSelectedGrade(null);
     setSelectedProblemId(null);
+    setActiveName("");
+    setActiveArea("");
+  }
+
+  function selectSavedProblem(problem: ClimbProblemBasic) {
+    if (selectedProblemId === problem.id) {
+      clearActiveClimb();
+      return;
+    }
+    setSelectedProblemId(problem.id);
+    setSelectedGrade(problem.grade);
+    setActiveName(problem.name);
+  }
+
+  function selectGrade(grade: string) {
+    if (selectedGrade === grade && !selectedProblemId) {
+      clearActiveClimb();
+      return;
+    }
+    setSelectedGrade(grade);
+    setSelectedProblemId(null);
+    setActiveName("");
+    // keep activeArea — likely climbing in the same area across multiple climbs
   }
 
   function updateAttempt(localId: string, patch: Partial<ClimbAttemptDraft>) {
@@ -418,8 +500,9 @@ export default function ClimbSessionLogger({
     return { flashes, sends, fells, projects: 0, total: flashes + sends + fells };
   })();
 
-  const flashLabel = gradeSystem === "BOULDER_V" ? "Flash" : "Onsight";
-  const sendLabel = "Send";
+  const flashLabel = discipline === "BOULDER" ? "Flash" : "Onsight";
+  const sendLabel = discipline === "SPORT_LEAD" ? "Redpoint" : "Send";
+  const fellLabel = discipline === "BOULDER" ? "Fell" : "Hang";
 
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
@@ -447,7 +530,7 @@ export default function ClimbSessionLogger({
           {/* Saved problems at this location */}
           {savedProblems.length > 0 && (
             <div>
-              <div style={sectionLabelStyle}>Known problems at this location</div>
+              <div style={sectionLabelStyle}>Known {nounPlural} at this location</div>
               <div style={gradeChipsScrollStyle}>
                 {savedProblems.map((problem) => {
                   const isSelected = selectedProblemId === problem.id;
@@ -455,15 +538,7 @@ export default function ClimbSessionLogger({
                     <button
                       key={problem.id}
                       type="button"
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedProblemId(null);
-                          setSelectedGrade(null);
-                        } else {
-                          setSelectedProblemId(problem.id);
-                          setSelectedGrade(problem.grade);
-                        }
-                      }}
+                      onClick={() => selectSavedProblem(problem)}
                       style={problemChipStyle(isSelected)}
                     >
                       <span style={{ fontSize: 10, opacity: 0.7 }}>{problem.grade}</span>
@@ -483,11 +558,7 @@ export default function ClimbSessionLogger({
                 <button
                   key={grade}
                   type="button"
-                  onClick={() => {
-                    const next = selectedGrade === grade ? null : grade;
-                    setSelectedGrade(next);
-                    if (next !== selectedGrade) setSelectedProblemId(null);
-                  }}
+                  onClick={() => selectGrade(grade)}
                   style={gradeChipStyle(selectedGrade === grade && !selectedProblemId)}
                 >
                   {grade}
@@ -496,19 +567,54 @@ export default function ClimbSessionLogger({
             </div>
           </div>
 
-          {/* Outcome buttons — only shown when grade is selected */}
+          {/* Active climb panel — name, area, outcome buttons */}
           {selectedGrade && (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, minWidth: 0 }}>
-              <div style={sectionLabelStyle}>
-                {selectedProblemId
-                  ? `${savedProblems.find((p) => p.id === selectedProblemId)?.name ?? selectedGrade} — tap outcome to log`
-                  : `${selectedGrade} — tap outcome to log`}
+            <div style={activeClimbPanelStyle}>
+              <div style={activeClimbHeaderStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                  <span style={activeClimbGradePillStyle}>{selectedGrade}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.65, letterSpacing: 0.3 }}>
+                    {selectedProblemId
+                      ? `${activeProblemName} · ${activeAttemptCount} attempt${activeAttemptCount !== 1 ? "s" : ""}`
+                      : activeName.trim()
+                        ? `${activeName.trim()} · ${activeAttemptCount} attempt${activeAttemptCount !== 1 ? "s" : ""}`
+                        : "Tap an outcome to log a quick climb"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearActiveClimb}
+                  style={activeClimbDoneBtnStyle}
+                  aria-label="Clear active climb"
+                >
+                  Done
+                </button>
               </div>
-              {selectedProblemId && savedProblems.find((p) => p.id === selectedProblemId)?.notes && (
-                <div style={{ fontSize: 11, opacity: 0.65, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
-                  Beta: {savedProblems.find((p) => p.id === selectedProblemId)!.notes}
+
+              {!selectedProblemId && (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <input
+                    style={activeInputStyle}
+                    placeholder={`${noun} name (optional, e.g. ${discipline === "BOULDER" ? "The Scoop" : "Crimson Cruiser"})`}
+                    value={activeName}
+                    onChange={(e) => { setActiveName(e.target.value); onMarkDirty(); }}
+                  />
                 </div>
               )}
+
+              <input
+                style={activeInputStyle}
+                placeholder={isOutdoorTemplate(templateKey) ? "Area (optional, e.g. Hidden Valley)" : "Area / Wall (optional, e.g. Cave Wall)"}
+                value={activeArea}
+                onChange={(e) => { setActiveArea(e.target.value); onMarkDirty(); }}
+              />
+
+              {activeProblem?.notes && (
+                <div style={{ fontSize: 11, opacity: 0.7, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                  Beta: {activeProblem.notes}
+                </div>
+              )}
+
               <div style={outcomeRowStyle}>
                 {outcomes.map((outcome) => {
                   const color = climbOutcomeColor(outcome);
@@ -517,16 +623,20 @@ export default function ClimbSessionLogger({
                     <button
                       key={outcome}
                       type="button"
-                      onClick={() => addAttempt(selectedGrade, outcome, selectedProblemId)}
+                      onClick={() => addAttempt(outcome)}
                       style={outcomeBtnStyle(color, bg)}
                     >
                       <span style={{ fontSize: 18 }}>{outcomeEmoji(outcome)}</span>
                       <span style={{ fontSize: 12, fontWeight: 800 }}>
-                        {climbOutcomeLabel(outcome, gradeSystem)}
+                        {climbOutcomeLabel(outcome, discipline)}
                       </span>
                     </button>
                   );
                 })}
+              </div>
+
+              <div style={{ fontSize: 11, opacity: 0.55, textAlign: "center" }}>
+                Tap any outcome to log it. Keep tapping to add more attempts on the same climb.
               </div>
             </div>
           )}
@@ -535,13 +645,13 @@ export default function ClimbSessionLogger({
           {attempts.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 6, minWidth: 0 }}>
               <div style={sectionLabelStyle}>
-                This session · {attempts.length} climb{attempts.length !== 1 ? "s" : ""}
+                This session · {attempts.length} {attempts.length !== 1 ? nounPlural : noun.toLowerCase()}
               </div>
               {attempts.map((attempt) => (
                 <AttemptRow
                   key={attempt.localId}
                   attempt={attempt}
-                  gradeSystem={gradeSystem}
+                  discipline={discipline}
                   expanded={expandedId === attempt.localId}
                   onToggleExpand={() =>
                     setExpandedId(expandedId === attempt.localId ? null : attempt.localId)
@@ -557,7 +667,7 @@ export default function ClimbSessionLogger({
 
           {attempts.length === 0 && (
             <div style={{ fontSize: 12, opacity: 0.5, textAlign: "center", padding: "16px 0" }}>
-              Tap a grade, then tap the outcome to start logging.
+              Tap a grade, then tap the outcome to log a {noun.toLowerCase()}.
             </div>
           )}
         </div>
@@ -590,7 +700,7 @@ export default function ClimbSessionLogger({
                 <div style={quickHeaderStyle}>Grade</div>
                 <div style={quickHeaderStyle}>{flashLabel}</div>
                 <div style={quickHeaderStyle}>{sendLabel}</div>
-                <div style={quickHeaderStyle}>Fell</div>
+                <div style={quickHeaderStyle}>{fellLabel}</div>
                 <div />
                 {gradeRows.map((row) => (
                   <QuickGradeRow
@@ -623,20 +733,20 @@ export default function ClimbSessionLogger({
           {summary.flashes > 0 && (
             <span style={summaryChipStyle(climbOutcomeColor("FLASH"), climbOutcomeBg("FLASH"))}>
               <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>
-                {gradeSystem === "BOULDER_V" ? "FLASH" : "ONSIGHT"}
+                {flashLabel.toUpperCase()}
               </span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.flashes}</span>
             </span>
           )}
           {summary.sends > 0 && (
             <span style={summaryChipStyle(climbOutcomeColor("SEND"), climbOutcomeBg("SEND"))}>
-              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>SEND</span>
+              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>{sendLabel.toUpperCase()}</span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.sends}</span>
             </span>
           )}
           {summary.fells > 0 && (
             <span style={summaryChipStyle(climbOutcomeColor("FELL"), climbOutcomeBg("FELL"))}>
-              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>FELL</span>
+              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>{fellLabel.toUpperCase()}</span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.fells}</span>
             </span>
           )}
@@ -685,6 +795,58 @@ function modeToggleBtnStyle(active: boolean): React.CSSProperties {
     cursor: "pointer",
   };
 }
+
+const activeClimbPanelStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(120,190,255,0.35)",
+  background: "rgba(120,190,255,0.06)",
+  minWidth: 0,
+};
+
+const activeClimbHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+};
+
+const activeClimbGradePillStyle: React.CSSProperties = {
+  fontWeight: 900,
+  fontSize: 13,
+  padding: "3px 10px",
+  borderRadius: 8,
+  background: "rgba(120,190,255,0.18)",
+  border: "1px solid rgba(120,190,255,0.35)",
+  color: "rgba(120,190,255,1)",
+  flexShrink: 0,
+};
+
+const activeClimbDoneBtnStyle: React.CSSProperties = {
+  padding: "5px 12px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.05)",
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 12,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const activeInputStyle: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "9px 11px",
+  border: "1px solid rgba(128,128,128,0.5)",
+  borderRadius: 10,
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: 14,
+};
 
 const sectionLabelStyle: React.CSSProperties = {
   fontSize: 12,

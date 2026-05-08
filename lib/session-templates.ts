@@ -5,6 +5,7 @@ export const SESSION_TEMPLATE_KEYS = [
   "indoor-rope-climbing",
   "indoor-sport-climbing",
   "outdoor-bouldering",
+  "outdoor-top-rope",
   "outdoor-sport-climbing",
   "outdoor-trad-climbing",
   "hiking",
@@ -89,12 +90,26 @@ export function sessionMetricUsesGradeInput(definition: Pick<SessionMetricDefini
 }
 
 export function isClimbingTemplateKey(templateKey: string | null | undefined) {
-  return templateKey === "indoor-bouldering" || templateKey === "indoor-rope-climbing" || templateKey === "indoor-sport-climbing" || templateKey === "outdoor-bouldering" || templateKey === "outdoor-sport-climbing" || templateKey === "outdoor-trad-climbing";
+  return (
+    templateKey === "indoor-bouldering" ||
+    templateKey === "indoor-rope-climbing" ||
+    templateKey === "indoor-sport-climbing" ||
+    templateKey === "outdoor-bouldering" ||
+    templateKey === "outdoor-top-rope" ||
+    templateKey === "outdoor-sport-climbing" ||
+    templateKey === "outdoor-trad-climbing"
+  );
 }
 
 export function climbingGradeOptions(templateKey: string | null | undefined) {
   if (templateKey === "indoor-bouldering" || templateKey === "outdoor-bouldering") return [...BOULDER_GRADE_OPTIONS];
-  if (templateKey === "indoor-rope-climbing" || templateKey === "indoor-sport-climbing" || templateKey === "outdoor-sport-climbing" || templateKey === "outdoor-trad-climbing") {
+  if (
+    templateKey === "indoor-rope-climbing" ||
+    templateKey === "indoor-sport-climbing" ||
+    templateKey === "outdoor-top-rope" ||
+    templateKey === "outdoor-sport-climbing" ||
+    templateKey === "outdoor-trad-climbing"
+  ) {
     return [...YOSEMITE_GRADE_OPTIONS];
   }
   return [];

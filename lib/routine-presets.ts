@@ -11,6 +11,10 @@ export type ActivityPreset = {
   kind: RoutineKind;
   subtype: string;
   icon: string;
+  /** When set, the new-routine form auto-selects this session template. */
+  sessionTemplateKey?: string;
+  /** Optional default name shown in the name input on the form. */
+  defaultName?: string;
 };
 
 // Domain display metadata for the picker grid
@@ -252,13 +256,70 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     icon: "🎾",
   },
   {
-    key: "CLIMBING",
-    label: "Climbing",
-    description: "Bouldering, sport, or trad climbing session",
+    key: "INDOOR_BOULDERING",
+    label: "Indoor Bouldering",
+    description: "Gym bouldering — V-grades, problems, walls and zones",
     domain: "sport",
     kind: "SESSION",
     subtype: "CLIMBING",
     icon: "🧗",
+    sessionTemplateKey: "indoor-bouldering",
+    defaultName: "Indoor Bouldering",
+  },
+  {
+    key: "OUTDOOR_BOULDERING",
+    label: "Outdoor Bouldering",
+    description: "Outdoor bouldering — V-grades, problems, crags and spots",
+    domain: "sport",
+    kind: "SESSION",
+    subtype: "CLIMBING",
+    icon: "🪨",
+    sessionTemplateKey: "outdoor-bouldering",
+    defaultName: "Outdoor Bouldering",
+  },
+  {
+    key: "INDOOR_TOP_ROPE",
+    label: "Indoor Top Rope",
+    description: "Gym top rope — YDS routes, onsights, flashes, clean sends",
+    domain: "sport",
+    kind: "SESSION",
+    subtype: "CLIMBING",
+    icon: "🧗‍♀️",
+    sessionTemplateKey: "indoor-rope-climbing",
+    defaultName: "Indoor Top Rope",
+  },
+  {
+    key: "INDOOR_SPORT_LEAD",
+    label: "Indoor Sport / Lead",
+    description: "Gym lead — YDS routes, onsights, flashes, redpoints",
+    domain: "sport",
+    kind: "SESSION",
+    subtype: "CLIMBING",
+    icon: "🧗‍♂️",
+    sessionTemplateKey: "indoor-sport-climbing",
+    defaultName: "Indoor Sport / Lead",
+  },
+  {
+    key: "OUTDOOR_TOP_ROPE",
+    label: "Outdoor Top Rope",
+    description: "Outdoor top rope — YDS routes, onsights, flashes, clean sends",
+    domain: "sport",
+    kind: "SESSION",
+    subtype: "CLIMBING",
+    icon: "⛰️",
+    sessionTemplateKey: "outdoor-top-rope",
+    defaultName: "Outdoor Top Rope",
+  },
+  {
+    key: "OUTDOOR_SPORT_LEAD",
+    label: "Outdoor Sport / Lead",
+    description: "Outdoor lead — YDS routes, onsights, flashes, redpoints",
+    domain: "sport",
+    kind: "SESSION",
+    subtype: "CLIMBING",
+    icon: "🪢",
+    sessionTemplateKey: "outdoor-sport-climbing",
+    defaultName: "Outdoor Sport / Lead",
   },
   {
     key: "SURFING",
@@ -449,7 +510,7 @@ export function inferRoutinePreset(
   }
   if (k === "SESSION") {
     if (s === "TENNIS") return "TENNIS";
-    if (s === "CLIMBING") return "CLIMBING";
+    if (s === "CLIMBING") return "INDOOR_BOULDERING";
     if (s === "SURFING") return "SURFING";
     if (s === "SNOWBOARDING") return "SNOWBOARDING";
     if (s === "BASKETBALL") return "BASKETBALL";
