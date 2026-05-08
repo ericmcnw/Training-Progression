@@ -5,23 +5,26 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 
+// Phase 2 nav: 6 top-level tabs — Home / Log / Plan / Activities / Body / Profile.
+// "Log" combines current Routines management + quick log entry. The /log path
+// embeds /routines today; /routines URLs continue to work for direct access.
+// "Plan" combines /schedule and /goals; both legacy URLs continue to work.
+// "Activities" replaces the old /progress sports + cardio split.
 const desktopNavItems = [
-  { href: "/", label: "Dashboard", match: (pathname: string) => pathname === "/" },
-  { href: "/routines", label: "Routines", match: (pathname: string) => pathname.startsWith("/routines") },
-  { href: "/progress", label: "Progress", match: (pathname: string) => pathname.startsWith("/progress") },
+  { href: "/", label: "Home", match: (pathname: string) => pathname === "/" },
+  { href: "/log", label: "Log", match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
+  { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") || pathname.startsWith("/progress") },
   { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
-  { href: "/goals", label: "Goals", match: (pathname: string) => pathname.startsWith("/goals") },
-  { href: "/schedule", label: "Schedule", match: (pathname: string) => pathname.startsWith("/schedule") },
   { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
 ];
 
 const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
-  { href: "/routines", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/routines") },
-  { href: "/progress", label: "Progress", icon: <ProgressIcon />, match: (pathname: string) => pathname.startsWith("/progress") },
-  { href: "/goals", label: "Goals", icon: <GoalsIcon />, match: (pathname: string) => pathname.startsWith("/goals") },
+  { href: "/log", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
+  { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/activities", label: "Activities", icon: <ActivitiesIcon />, match: (pathname: string) => pathname.startsWith("/activities") || pathname.startsWith("/progress") },
   { href: "/body", label: "Body", icon: <BodyIcon />, match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
-  { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/schedule") },
 ];
 
 export default function AppNavigation() {
@@ -33,7 +36,7 @@ export default function AppNavigation() {
     <nav className="appNav" aria-label="Primary">
       {desktopNavItems.map((item) => {
         const active = item.match(pathname);
-        const showBadge = item.href === "/routines" && draftCount > 0;
+        const showBadge = item.href === "/log" && draftCount > 0;
 
         return (
           <Link
@@ -62,7 +65,7 @@ export function MobileBottomNavigation() {
       <div className="mobileBottomNavInner">
       {mobileNavItems.map((item) => {
           const active = item.match(pathname);
-          const showBadge = item.href === "/routines" && draftCount > 0;
+          const showBadge = item.href === "/log" && draftCount > 0;
 
           return (
             <Link
@@ -126,6 +129,17 @@ function ProgressIcon() {
       <path d="M10.5 16V9.5" />
       <path d="M14.5 16V6.5" />
       <path d="M18.5 16V11" />
+    </MobileNavIcon>
+  );
+}
+
+function ActivitiesIcon() {
+  // A compass / target glyph — evokes "where do I want to train today"
+  return (
+    <MobileNavIcon>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m9 15 2-6 6-2-2 6Z" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
     </MobileNavIcon>
   );
 }
