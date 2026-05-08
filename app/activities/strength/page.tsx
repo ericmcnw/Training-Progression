@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { effectiveRoutineDomain } from "@/lib/routines";
 import { formatAppDate } from "@/lib/dates";
-import { getActivityGoals } from "@/lib/activity-goals";
+import { getStrengthGoals } from "@/lib/activity-goals";
+import { startOfWeekMonday } from "@/lib/week";
 import { loadStrengthWorld } from "@/app/progress/details/strength-world-loader";
 import { buildStrengthPulse } from "@/app/progress/details/sport-pulse";
 import { applyGoalsToPulseSlots } from "@/app/progress/details/pulse-goal-slots";
@@ -15,87 +14,15 @@ export const dynamic = "force-dynamic";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function formatNumber(n: number) {
   if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
   if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
   return n.toLocaleString("en-US");
 }
 
-// ── Strength goals helper ────────────────────────────────────────────────────
-//
-// "Strength" isn't a metadata group — it's a domain derived from kind+subtype.
-// So getActivityGoals(slug) won't work directly. Instead, we look up:
-//   - Goals with targetType=ROUTINE where the routine's effective domain is strength
-//   - Goals with targetType=EXERCISE where the exercise was actually performed in
-//     a strength session (covers the user's "185 RDL" / "50 lb Dip" style goals)
-async function getStrengthGoals() {
-  const allActiveGoals = await prisma.goal.findMany({ where: { isActive: true } });
-
-  const routineIds = Array.from(new Set(allActiveGoals.filter((g) => g.targetType === "ROUTINE").map((g) => g.targetId)));
-  const exerciseIds = Array.from(new Set(allActiveGoals.filter((g) => g.targetType === "EXERCISE").map((g) => g.targetId)));
-
-  const [routineRows, exerciseSessionRows] = await Promise.all([
-    routineIds.length > 0
-      ? prisma.routine.findMany({
-          where: { id: { in: routineIds } },
-          select: { id: true, kind: true, subtype: true, domain: true },
-        })
-      : Promise.resolve([]),
-    exerciseIds.length > 0
-      ? prisma.sessionExercise.findMany({
-          where: {
-            exerciseId: { in: exerciseIds },
-            routineLog: {
-              routine: { kind: "WORKOUT" },
-            },
-          },
-          select: {
-            exerciseId: true,
-            routineLog: { select: { routine: { select: { kind: true, subtype: true, domain: true } } } },
-          },
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const strengthRoutineIds = new Set(
-    routineRows
-      .filter((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength")
-      .map((r) => r.id)
-  );
-
-  const strengthExerciseIds = new Set<string>();
-  for (const row of exerciseSessionRows) {
-    if (effectiveRoutineDomain(row.routineLog.routine.domain, row.routineLog.routine.kind, row.routineLog.routine.subtype) === "strength") {
-      strengthExerciseIds.add(row.exerciseId);
-    }
-  }
-
-  // Reuse getActivityGoals' insight-building path by deferring to it via a
-  // synthetic slug — but since strength has no slug, we need to call it
-  // differently. Simplest path: build the same shape from getGoalsOverview.
-  const { getGoalsOverview } = await import("@/lib/goals");
-  const insights = await getGoalsOverview({ active: "active" });
-  return insights.filter((insight) => {
-    const goal = insight.goal;
-    if (goal.targetType === "ROUTINE") return strengthRoutineIds.has(goal.targetId);
-    if (goal.targetType === "EXERCISE") return strengthExerciseIds.has(goal.targetId);
-    return false;
-  });
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function StrengthWorldPage() {
-  void getActivityGoals; // keep import side-effect-free across files; goals fetched below
   const [strength, strengthGoals] = await Promise.all([
     loadStrengthWorld(),
     getStrengthGoals(),
@@ -127,7 +54,7 @@ export default async function StrengthWorldPage() {
 
   // ── Pulse aggregates ──────────────────────────────────────────────────────
   const now = new Date();
-  const thisWeekStart = startOfWeek(now);
+  const thisWeekStart = startOfWeekMonday(now);
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const sessionsThisWeek = strength.sessionDates.filter((d) => d >= thisWeekStart).length;

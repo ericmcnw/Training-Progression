@@ -15,6 +15,7 @@ import ActivityGoalsSection from "./ActivityGoalsSection";
 import ActivityPulseStrip, { type PulseSlot } from "./ActivityPulseStrip";
 import { applyGoalsToPulseSlots } from "./pulse-goal-slots";
 import { getActivityGoals } from "@/lib/activity-goals";
+import { daysAgoMidnight, startOfWeekMonday } from "@/lib/week";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,27 +85,11 @@ function hardestGrade(rows: PyramidRow[], filter: Set<ClimbOutcome>) {
   return eligible.length > 0 ? eligible[eligible.length - 1].grade : null;
 }
 
-function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function daysAgo(now: Date, days: number): Date {
-  const d = new Date(now);
-  d.setDate(d.getDate() - days);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function weeklyStreak(sessionDates: Date[], now: Date): { current: number; longest: number } {
   if (sessionDates.length === 0) return { current: 0, longest: 0 };
   const weekKeys = new Set<string>();
   for (const d of sessionDates) {
-    weekKeys.add(startOfWeek(d).toISOString().slice(0, 10));
+    weekKeys.add(startOfWeekMonday(d).toISOString().slice(0, 10));
   }
   const sortedWeeks = [...weekKeys].sort();
 
@@ -125,7 +110,7 @@ function weeklyStreak(sessionDates: Date[], now: Date): { current: number; longe
 
   // current streak: walk back from this week
   let current = 0;
-  let cursor = startOfWeek(now);
+  let cursor = startOfWeekMonday(now);
   while (weekKeys.has(cursor.toISOString().slice(0, 10))) {
     current += 1;
     cursor = new Date(cursor.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -527,10 +512,10 @@ export default async function ClimbingWorldPage() {
   const recentSessions = allRecentSessions.slice(0, 6);
 
   // ── Pulse-strip aggregates ─────────────────────────────────────────────────
-  const thisWeekStart = startOfWeek(now);
+  const thisWeekStart = startOfWeekMonday(now);
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = daysAgo(now, 30);
-  const sixtyDaysAgo = daysAgo(now, 60);
+  const thirtyDaysAgo = daysAgoMidnight(now, 30);
+  const sixtyDaysAgo = daysAgoMidnight(now, 60);
 
   const attemptsThisWeek = attempts.filter((a) => a.sessionLog.performedAt >= thisWeekStart);
   const attemptsLastWeek = attempts.filter((a) => a.sessionLog.performedAt >= lastWeekStart && a.sessionLog.performedAt < thisWeekStart);

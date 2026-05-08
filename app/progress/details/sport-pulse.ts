@@ -1,3 +1,4 @@
+import { daysAgoMidnight, startOfWeekMonday } from "@/lib/week";
 import type { PulseSlot } from "./ActivityPulseStrip";
 
 // Minimum log shape any pulse builder needs. Bigger log shapes (with eg.
@@ -10,24 +11,6 @@ export type PulseLogInput = {
   elevationGainFt?: number | null;
   location?: string | null;
 };
-
-// ── Time helpers ─────────────────────────────────────────────────────────────
-
-function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function daysAgo(now: Date, days: number): Date {
-  const d = new Date(now);
-  d.setDate(d.getDate() - days);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function trendArrow(curr: number, prev: number, opts?: { lowerIsBetter?: boolean }) {
   const lowerIsBetter = opts?.lowerIsBetter ?? false;
@@ -44,7 +27,7 @@ function trendArrow(curr: number, prev: number, opts?: { lowerIsBetter?: boolean
 function weeklyStreak(sessions: PulseLogInput[], now: Date): { current: number; longest: number } {
   if (sessions.length === 0) return { current: 0, longest: 0 };
   const weekKeys = new Set<string>();
-  for (const s of sessions) weekKeys.add(startOfWeek(s.performedAt).toISOString().slice(0, 10));
+  for (const s of sessions) weekKeys.add(startOfWeekMonday(s.performedAt).toISOString().slice(0, 10));
   const sorted = [...weekKeys].sort();
 
   let longest = 1;
@@ -62,7 +45,7 @@ function weeklyStreak(sessions: PulseLogInput[], now: Date): { current: number; 
   }
 
   let current = 0;
-  let cursor = startOfWeek(now);
+  let cursor = startOfWeekMonday(now);
   while (weekKeys.has(cursor.toISOString().slice(0, 10))) {
     current += 1;
     cursor = new Date(cursor.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -110,10 +93,10 @@ const ACCENT_TEAL = "rgba(45,212,191,0.9)";
  * a meaningful pace).
  */
 export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlot[] {
-  const thisWeekStart = startOfWeek(now);
+  const thisWeekStart = startOfWeekMonday(now);
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = daysAgo(now, 30);
-  const sixtyDaysAgo = daysAgo(now, 60);
+  const thirtyDaysAgo = daysAgoMidnight(now, 30);
+  const sixtyDaysAgo = daysAgoMidnight(now, 60);
 
   const thisWeek = sessions.filter((s) => s.performedAt >= thisWeekStart);
   const lastWeek = sessions.filter((s) => s.performedAt >= lastWeekStart && s.performedAt < thisWeekStart);
@@ -307,7 +290,7 @@ export function buildStrengthPulse(input: StrengthPulseInput, now: Date): PulseS
  * are session-shaped, not distance-shaped.
  */
 export function buildBoardSportPulse(sessions: PulseLogInput[], now: Date): PulseSlot[] {
-  const thisWeekStart = startOfWeek(now);
+  const thisWeekStart = startOfWeekMonday(now);
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const thisWeek = sessions.filter((s) => s.performedAt >= thisWeekStart);

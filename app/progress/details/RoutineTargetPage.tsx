@@ -26,7 +26,7 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function startOfWeek(date: Date): Date {
+function startOfWeekMonday(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -494,7 +494,7 @@ export default async function RoutineTargetPage(props: {
     routineGoals = fetchedGoals;
 
     const now = new Date();
-    const thisWeekStart = startOfWeek(now);
+    const thisWeekStart = startOfWeekMonday(now);
     const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

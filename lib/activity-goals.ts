@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
+import { effectiveRoutineDomain } from "@/lib/routines";
 
 /**
  * Active goals targeting a given activity slug — for use on activity-world
@@ -89,6 +90,92 @@ function intersectsActivity(memberships: Set<string> | undefined, activityGroupI
   }
   return false;
 }
+
+/**
+ * Active goals for the strength domain. Strength has no metadata-group slug
+ * (it's a domain derived from kind+subtype), so getActivityGoals can't be
+ * used. This filter includes:
+ *   - ROUTINE-target goals where the routine's effective domain is strength
+ *   - EXERCISE-target goals where the exercise was performed in any strength
+ *     session (covers per-exercise PR goals like "185 RDL")
+ *   - Group-frequency goals where every linked routine is a strength routine
+ *     (so a "lift 3x/wk" group goal across Push/Pull/Legs surfaces here)
+ */
+export const getStrengthGoals = cache(async function getStrengthGoals(): Promise<GoalInsight[]> {
+  const allInsights = await getGoalsOverview({ active: "active" });
+
+  const routineTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "ROUTINE").map((e) => e.goal.targetId));
+  const exerciseTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "EXERCISE").map((e) => e.goal.targetId));
+  const groupFreqIds = allInsights
+    .filter((e) => e.goal.id.startsWith("group-frequency:"))
+    .map((e) => e.goal.id.replace("group-frequency:", ""));
+
+  const [routineRows, exerciseSessionRows, freqGoalLinks] = await Promise.all([
+    routineTargetIds.length > 0
+      ? prisma.routine.findMany({
+          where: { id: { in: routineTargetIds } },
+          select: { id: true, kind: true, subtype: true, domain: true },
+        })
+      : Promise.resolve([]),
+    exerciseTargetIds.length > 0
+      ? prisma.sessionExercise.findMany({
+          where: {
+            exerciseId: { in: exerciseTargetIds },
+            routineLog: { routine: { kind: "WORKOUT" } },
+          },
+          select: {
+            exerciseId: true,
+            routineLog: { select: { routine: { select: { kind: true, subtype: true, domain: true } } } },
+          },
+        })
+      : Promise.resolve([]),
+    groupFreqIds.length > 0
+      ? prisma.frequencyGoalRoutine.findMany({
+          where: { goalId: { in: groupFreqIds } },
+          select: {
+            goalId: true,
+            routine: { select: { kind: true, subtype: true, domain: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const strengthRoutineIds = new Set(
+    routineRows.filter((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength").map((r) => r.id)
+  );
+
+  const strengthExerciseIds = new Set<string>();
+  for (const row of exerciseSessionRows) {
+    if (effectiveRoutineDomain(row.routineLog.routine.domain, row.routineLog.routine.kind, row.routineLog.routine.subtype) === "strength") {
+      strengthExerciseIds.add(row.exerciseId);
+    }
+  }
+
+  // A group-frequency goal counts as strength when every linked routine is a
+  // strength routine. This is the strict definition — a mixed-domain group
+  // goal would surface elsewhere too if we relaxed it.
+  const groupFreqRoutinesByGoal = new Map<string, Array<{ kind: string; subtype: string | null; domain: string }>>();
+  for (const link of freqGoalLinks) {
+    const list = groupFreqRoutinesByGoal.get(link.goalId) ?? [];
+    list.push(link.routine);
+    groupFreqRoutinesByGoal.set(link.goalId, list);
+  }
+  const strengthGroupFreqIds = new Set<string>();
+  for (const [goalId, routines] of groupFreqRoutinesByGoal) {
+    if (routines.length === 0) continue;
+    if (routines.every((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength")) {
+      strengthGroupFreqIds.add(`group-frequency:${goalId}`);
+    }
+  }
+
+  return allInsights.filter((insight) => {
+    const goal = insight.goal;
+    if (goal.id.startsWith("group-frequency:")) return strengthGroupFreqIds.has(goal.id);
+    if (goal.targetType === "ROUTINE") return strengthRoutineIds.has(goal.targetId);
+    if (goal.targetType === "EXERCISE") return strengthExerciseIds.has(goal.targetId);
+    return false;
+  });
+});
 
 async function fetchGroupMembership(
   ids: string[],
