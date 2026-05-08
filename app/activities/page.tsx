@@ -55,14 +55,15 @@ export default async function ActivitiesPage(props: {
   const showAll = getParam(searchParams, "show") === "all";
 
   const now = new Date();
-  const [groups, routines, logs] = await Promise.all([
-    getMetadataIndex(),
-    getRoutineIndex(),
-    getRoutineLogs("4w"),
-  ]);
+  // Kick off all three independent queries immediately. We don't await them
+  // sequentially — `routines` is needed first to compute the endurance routine
+  // ids for the 12w chart fetch, but groups/logs can resolve in parallel with
+  // that work, so we await routines first and then a Promise.all for the rest.
+  const groupsPromise = getMetadataIndex();
+  const routinesPromise = getRoutineIndex();
+  const logs4wPromise = getRoutineLogs("4w");
 
-  // Index metadata by slug for fast routine→slug resolution.
-  const groupBySlug = new Map(groups.map((group) => [group.slug, group]));
+  const routines = await routinesPromise;
 
   // For each routine, collect every CARDIO_ACTIVITY metadata slug it touches.
   // Routines are tagged via the metadataGroups relation; we treat any slug in
@@ -83,6 +84,19 @@ export default async function ActivitiesPage(props: {
     }
     if (slugs.size > 0) routineSlugs.set(routine.id, slugs);
   }
+
+  // Now we know which routines are endurance — kick off the 12w chart fetch
+  // in parallel with awaiting groups + 4w logs (which are still in flight).
+  const enduranceSlugsPreview = new Set(activitiesByFamily("endurance").map((e) => e.slug));
+  const enduranceRoutineIdsPreview = Array.from(routineSlugs.entries())
+    .filter(([, slugs]) => [...slugs].some((s) => enduranceSlugsPreview.has(s)))
+    .map(([routineId]) => routineId);
+  const logs12wPromise = enduranceRoutineIdsPreview.length > 0
+    ? getRoutineLogs("12w", { routineIds: enduranceRoutineIdsPreview })
+    : Promise.resolve([] as Awaited<ReturnType<typeof getRoutineLogs>>);
+
+  const [groups, logs] = await Promise.all([groupsPromise, logs4wPromise]);
+  const groupBySlug = new Map(groups.map((group) => [group.slug, group]));
 
   // Aggregate per-activity stats from the last 4 weeks of logs.
   const statsBySlug = new Map<string, ActivityStats>();
@@ -136,14 +150,11 @@ export default async function ActivitiesPage(props: {
   }).length;
 
   // ── Endurance chart data (12w stacked bar by activity type) ──────────────────
-  const enduranceSlugs = new Set(activitiesByFamily("endurance").map((e) => e.slug));
-  const enduranceRoutineIds = Array.from(routineSlugs.entries())
-    .filter(([, slugs]) => [...slugs].some((s) => enduranceSlugs.has(s)))
-    .map(([routineId]) => routineId);
-
-  const enduranceLogs12w = enduranceRoutineIds.length > 0
-    ? await getRoutineLogs("12w", { routineIds: enduranceRoutineIds })
-    : [];
+  // Promise was kicked off above immediately after we knew the routine ids,
+  // so this just awaits whatever already finished while groups + logs4w resolved.
+  const enduranceSlugs = enduranceSlugsPreview;
+  const enduranceRoutineIds = enduranceRoutineIdsPreview;
+  const enduranceLogs12w = await logs12wPromise;
 
   const enduranceActivityColors: Record<string, string> = {
     running:    "#3AAFE8",
