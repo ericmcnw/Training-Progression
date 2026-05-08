@@ -52,11 +52,29 @@ function statusTrendFor(goal: GoalInsight) {
 }
 
 function goalToPulseSlot(goal: GoalInsight, role: PulseSlotRole): PulseSlot {
+  // Performance-shaped goals on a short timeframe (week / day) read poorly when
+  // the user hasn't recorded a contributing log this period — eg. a "send V7"
+  // goal scoped to WEEK shows "V0/V7" if you didn't climb this week, which
+  // looks like progress went backwards. For these cases we prefer "—/V7" plus
+  // a sub line nudging the user that the window matters here.
+  const isPerformanceLike =
+    goal.goal.metricType === "SESSION_METRIC" || goal.goal.metricType === "MAX_WEIGHT";
+  const isShortTimeframe = goal.goal.timeframe === "WEEK" || goal.goal.timeframe === "DAY";
+  const showZeroAsBlank = isPerformanceLike && isShortTimeframe && goal.actualValue <= 0;
+
+  const value = showZeroAsBlank
+    ? `—/${goal.targetDisplay}`
+    : `${goal.actualDisplay}/${goal.targetDisplay}`;
+
+  const sub = showZeroAsBlank
+    ? `Nothing logged in ${goal.timeframeWindowLabel.toLowerCase()}`
+    : `${goal.metricLabel} · ${goal.timeframeWindowLabel}`;
+
   return {
     role,
     label: goal.goal.name,
-    value: `${goal.actualDisplay}/${goal.targetDisplay}`,
-    sub: `${goal.metricLabel} · ${goal.timeframeWindowLabel}`,
+    value,
+    sub,
     trend: statusTrendFor(goal),
     accent: GOAL_ACCENT,
     goal: {

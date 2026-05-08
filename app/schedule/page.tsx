@@ -381,7 +381,7 @@ export default async function SchedulePage({
                                 {task.routineName}
                               </Link>
                             ) : (
-                              <span style={{ fontWeight: 800 }}>{task.routineName}</span>
+                              <span style={{ fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{task.routineName}</span>
                             )}
                             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
                               {isToday && (
@@ -598,12 +598,21 @@ const taskRowTop: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   flexWrap: "wrap",
+  minWidth: 0,
 };
 
 const taskLink: React.CSSProperties = {
   fontWeight: 800,
   color: "inherit",
   textDecoration: "none",
+  // Long routine names ("Outdoor Bouldering", etc.) used to push task rows
+  // wider than the viewport on narrow phones — clamp + ellipsize so the
+  // surrounding controls (Log button, ✕) stay on screen.
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  flex: 1,
 };
 
 const input: React.CSSProperties = {

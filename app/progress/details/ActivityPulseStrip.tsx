@@ -67,10 +67,32 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
     transition: "border-color 120ms ease",
   };
 
+  const trendChip = trend ? (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        fontSize: 10,
+        fontWeight: 800,
+        padding: "2px 7px",
+        borderRadius: 999,
+        border: `1px solid ${trendBorder}`,
+        background: trendBg,
+        color: trendColor,
+        letterSpacing: 0.3,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ fontSize: 11, lineHeight: 1 }}>{trend.arrow}</span>
+      {trend.delta}{trend.suffix ?? ""}
+    </span>
+  ) : null;
+
   const inner = (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
           {goal ? (
             <span
               style={{
@@ -82,36 +104,21 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
                 color: accent,
                 letterSpacing: 0.6,
                 lineHeight: 1,
+                flexShrink: 0,
               }}
             >
               GOAL
             </span>
           ) : null}
-          <span style={{ fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.6, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.6, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
             {label}
           </span>
         </div>
-        {trend ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              fontSize: 10,
-              fontWeight: 800,
-              padding: "2px 7px",
-              borderRadius: 999,
-              border: `1px solid ${trendBorder}`,
-              background: trendBg,
-              color: trendColor,
-              letterSpacing: 0.3,
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span style={{ fontSize: 11, lineHeight: 1 }}>{trend.arrow}</span>
-            {trend.delta}{trend.suffix ?? ""}
-          </span>
-        ) : null}
+        {/* In goal mode, the trend (Behind / On track / Ahead / Done) status drops
+            to the bottom row alongside the progress bar — a goal name + GOAL badge
+            already crowds the top row, and the progress bar carries the
+            "how am I doing" signal more visually anyway. */}
+        {!goal && trendChip}
       </div>
       <div
         style={{
@@ -126,26 +133,28 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
       </div>
       {sub ? <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>{sub}</div> : null}
       {goal ? (
-        <div
-          style={{
-            height: 5,
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.06)",
-            overflow: "hidden",
-            marginTop: 4,
-          }}
-        >
+        <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
           <div
             style={{
-              height: "100%",
-              width: `${Math.max(0, Math.min(1, goal.fractionComplete)) * 100}%`,
-              background: goal.isAchieved
-                ? "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(34,197,94,0.95))"
-                : `linear-gradient(90deg, ${accent.replace("0.9)", "0.5)")}, ${accent.replace("0.9)", "0.95)")})`,
+              height: 5,
               borderRadius: 999,
-              transition: "width 200ms ease",
+              background: "rgba(255,255,255,0.06)",
+              overflow: "hidden",
             }}
-          />
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.max(0, Math.min(1, goal.fractionComplete)) * 100}%`,
+                background: goal.isAchieved
+                  ? "linear-gradient(90deg, rgba(74,222,128,0.85), rgba(34,197,94,0.95))"
+                  : `linear-gradient(90deg, ${accent.replace("0.9)", "0.5)")}, ${accent.replace("0.9)", "0.95)")})`,
+                borderRadius: 999,
+                transition: "width 200ms ease",
+              }}
+            />
+          </div>
+          {trendChip ? <div style={{ alignSelf: "start" }}>{trendChip}</div> : null}
         </div>
       ) : null}
     </>
