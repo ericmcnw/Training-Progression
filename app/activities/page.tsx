@@ -12,6 +12,7 @@ import {
 } from "@/lib/activity-families";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { fillWeeklySeries, incrementWeekMap } from "@/lib/progress-v2";
+import { formatHoursMinutes } from "@/lib/progress";
 import { ActivitiesEmpty, ActivitiesShell, ActivityCard, ActivityCardGrid, FamilySection } from "./ui";
 
 export const dynamic = "force-dynamic";
@@ -275,8 +276,7 @@ export default async function ActivitiesPage(props: {
                     if (stats.totalDistanceMi > 0) {
                       chips.push(`${formatNumber(stats.totalDistanceMi)} mi 4w`);
                     } else if (stats.totalDurationSec > 0) {
-                      const minutes = Math.round(stats.totalDurationSec / 60);
-                      chips.push(`${minutes} min 4w`);
+                      chips.push(`${formatHoursMinutes(stats.totalDurationSec)} 4w`);
                     }
                     if (stats.activeRoutines > 0) {
                       chips.push(`${stats.activeRoutines} routine${stats.activeRoutines === 1 ? "" : "s"}`);

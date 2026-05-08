@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { APP_TIME_ZONE, formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
+import { formatHoursMinutes } from "@/lib/progress";
 import {
   domainColor,
   effectiveRoutineDomain,
@@ -476,7 +477,7 @@ export default async function ManualLogPage({
                             <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
                               {(log.distanceMi ?? 0).toFixed(2)} mi
                               {log.durationSec
-                                ? ` · ${Math.floor(log.durationSec / 60)}m ${log.durationSec % 60}s`
+                                ? ` · ${formatHoursMinutes(log.durationSec)}`
                                 : ""}
                               {log.elevationGainFt ? ` · ${log.elevationGainFt} ft` : ""}
                             </div>
@@ -491,7 +492,7 @@ export default async function ManualLogPage({
                           )}
                           {isGuidedKind(routineKind) && log.durationSec ? (
                             <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {Math.round(log.durationSec / 60)} min
+                              {formatHoursMinutes(log.durationSec)}
                               {log.routine.subtype
                                 ? ` · ${formatRoutineSubtype(log.routine.subtype)}`
                                 : ""}
@@ -499,7 +500,7 @@ export default async function ManualLogPage({
                           ) : null}
                           {isSessionKind(routineKind) && log.durationSec ? (
                             <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {Math.round(log.durationSec / 60)} min
+                              {formatHoursMinutes(log.durationSec)}
                             </div>
                           ) : null}
                           {isCompletionKind(routineKind) && log.completionCount ? (
@@ -573,7 +574,7 @@ function ActivityCard({
         <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
           {(log.distanceMi ?? 0).toFixed(2)} mi
           {log.durationSec
-            ? ` · ${Math.floor(log.durationSec / 60)}m ${log.durationSec % 60}s`
+            ? ` · ${formatHoursMinutes(log.durationSec)}`
             : ""}
         </div>
       )}
@@ -584,12 +585,12 @@ function ActivityCard({
       )}
       {isGuidedKind(routineKind) && log.durationSec ? (
         <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
-          {Math.round(log.durationSec / 60)} min
+          {formatHoursMinutes(log.durationSec)}
         </div>
       ) : null}
       {isSessionKind(routineKind) && log.durationSec ? (
         <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
-          {Math.round(log.durationSec / 60)} min
+          {formatHoursMinutes(log.durationSec)}
         </div>
       ) : null}
       {isCompletionKind(routineKind) && log.completionCount ? (

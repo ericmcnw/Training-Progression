@@ -56,11 +56,15 @@ function weeklyStreak(sessions: PulseLogInput[], now: Date): { current: number; 
 // ── Formatters ───────────────────────────────────────────────────────────────
 
 function formatHours(sec: number) {
+  // Compact h/m display — "1h 30m" / "4h" / "45m" / "0h" — preferred over the
+  // decimal-hour form (1.5h) for human readability on activity world cards.
   if (sec <= 0) return "0h";
-  const hours = sec / 3600;
-  if (hours >= 100) return `${Math.round(hours)}h`;
-  if (hours >= 10) return `${hours.toFixed(0)}h`;
-  return `${hours.toFixed(1)}h`;
+  const totalMin = Math.floor(sec / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function formatPace(secPerMile: number) {

@@ -3,6 +3,7 @@ import type React from "react";
 import type { Prisma } from "@/generated/prisma";
 import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
+import { formatHoursMinutes } from "@/lib/progress";
 import {
   exerciseLibraryWhereForKinds,
   guidedPreferredLibraryKinds,
@@ -434,11 +435,11 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
                   {log.type === "WORKOUT"
                     ? `Sets: ${log.setCount}`
                     : log.type === "CARDIO"
-                    ? `${(log.distanceMi ?? 0).toFixed(2)} mi | ${Math.floor((log.durationSec ?? 0) / 60)}m ${(log.durationSec ?? 0) % 60}s${log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}`
+                    ? `${(log.distanceMi ?? 0).toFixed(2)} mi | ${formatHoursMinutes(log.durationSec ?? 0)}${log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}`
                     : log.type === "GUIDED"
                     ? `${log.durationSec ? formatGuidedSeconds(log.durationSec) : "No duration"} | ${log.guidedStepCount} saved items`
                     : log.type === "SESSION"
-                    ? `${log.durationSec ? `${Math.round(log.durationSec / 60)} min` : "No duration"}${log.location ? ` | ${log.location}` : ""}`
+                    ? `${log.durationSec ? formatHoursMinutes(log.durationSec) : "No duration"}${log.location ? ` | ${log.location}` : ""}`
                     : log.completionCount
                     ? `Count: ${log.completionCount}`
                     : "Simple completion log"}

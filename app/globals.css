@@ -577,11 +577,14 @@ details[open] > summary[data-collapsible-summary]::before{
 
   .mobileBottomNavInner{
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 5px;
-    max-width: min(100%, 660px);
+    /* 5 items in mobileNavItems (Home/Log/Plan/Activities/Body). The previous
+       6-column setting left an empty slot and squished each tab on narrow
+       phones, breaking the longest label ("Activities"). */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    max-width: min(100%, 580px);
     margin: 0 auto;
-    padding: 8px;
+    padding: 7px;
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 24px;
     background: rgba(9,15,27,0.92);
@@ -745,6 +748,16 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileHomePage,
   .mobileSchedulePage{
     padding: 0 !important;
+  }
+
+  /* Tighter mobile schedule header. The 26px H1 sized for desktop felt
+     cramped on narrow phones; bringing it down lets the action buttons sit
+     comfortably below without the row jumping into a tall vertical stack. */
+  .mobileSchedulePage h1{
+    font-size: 20px !important;
+  }
+  .mobileSchedulePage section{
+    border-radius: 10px !important;
   }
 
   .mobileHomeSummaryGrid,

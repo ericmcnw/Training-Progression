@@ -156,6 +156,31 @@ export function formatDuration(totalSec: number) {
   return `${m}m ${String(s).padStart(2, "0")}s`;
 }
 
+/**
+ * Compact "hours and minutes" formatter for activity display surfaces.
+ * Skips seconds (most session-level views don't need them) and uses hours
+ * once a session crosses an hour, so a 90-minute run reads as "1h 30m"
+ * instead of "90 min".
+ *
+ *   0           -> "—"
+ *   45 sec      -> "<1m"
+ *   30 min      -> "30m"
+ *   60 min      -> "1h"
+ *   90 min      -> "1h 30m"
+ *   240 min     -> "4h"
+ *   3h 7m 22s   -> "3h 7m"
+ */
+export function formatHoursMinutes(totalSec: number | null | undefined): string {
+  if (totalSec == null || !Number.isFinite(totalSec) || totalSec <= 0) return "—";
+  const sec = Math.floor(totalSec);
+  if (sec < 60) return "<1m";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 export function formatPace(secPerMi: number | null) {
   if (!secPerMi || !Number.isFinite(secPerMi) || secPerMi <= 0) return "-";
   const m = Math.floor(secPerMi / 60);
