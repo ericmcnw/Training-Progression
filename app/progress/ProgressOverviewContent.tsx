@@ -179,7 +179,7 @@ function SidebarList({
 // ─── Async server component: Focus / Recommendations (streams in) ─────────────
 
 type RoutineSnapshotItem = {
-  routine: { id: string; name: string; kind: string; category: string; timesPerWeek: number | null };
+  routine: { id: string; name: string; kind: string; timesPerWeek: number | null };
   summary: { sessions: number; weeksActive: number; lastSession: Date | null };
   gap: number;
   progressRatio: number;
@@ -236,7 +236,7 @@ async function FocusSection({
         status: frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.status === "behind" ? "Behind" : "Stable",
         title: attentionRoutine.routine.name,
         summary: frequencyStatusByRoutineId.get(attentionRoutine.routine.id)?.detailLabel ?? `${attentionRoutine.summary.sessions} sessions in the last 4 weeks across ${attentionRoutine.summary.weeksActive} active weeks.`,
-        evidence: [formatShortDate(attentionRoutine.summary.lastSession), `${attentionRoutine.routine.kind} | ${attentionRoutine.routine.category}`],
+        evidence: [formatShortDate(attentionRoutine.summary.lastSession), attentionRoutine.routine.kind],
         href: `/progress/routines/${attentionRoutine.routine.id}?tab=overview&range=4w`,
         ctaLabel: "Open routine view",
       }
@@ -420,7 +420,7 @@ async function DrillDownSection({
             title="Quick Cardio"
             subtitle="High-utility rollups for mileage, duration, and elevation."
             items={[
-              ...quickCardioTargets.map(({ group, target }) => ({ href: `/progress/cardio/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions · ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })),
+              ...quickCardioTargets.map(({ group, target }) => ({ href: `/activities/${group.slug}?tab=overview&range=4w`, title: group.label, meta: `${target?.logs.length ?? 0} sessions · ${(target?.logs.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0) ?? 0).toFixed(1)} mi` })),
               ...cardioRoutines.slice(0, 1).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: r.name, meta: "Cardio routine" })),
             ]}
           />
@@ -428,7 +428,7 @@ async function DrillDownSection({
         <SidebarList
           title="Group Rollups"
           subtitle="Shortcuts into broader coverage summaries you are likely to revisit."
-          items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind === "CARDIO_ACTIVITY" ? "Cardio activity" : group.kind === "MUSCLE_GROUP" ? "Muscle group" : group.kind === "ROUTINE_FOCUS" ? "Session category" : group.kind.replaceAll("_", " ").toLowerCase() }))}
+          items={featuredGroups.map((group) => ({ href: group.kind === "CARDIO_ACTIVITY" ? `/activities/${group.slug}?tab=overview&range=4w` : `/progress/groups/${group.slug}?tab=overview&range=4w`, title: group.label, meta: group.kind === "CARDIO_ACTIVITY" ? "Cardio activity" : group.kind === "MUSCLE_GROUP" ? "Muscle group" : group.kind === "ROUTINE_FOCUS" ? "Session category" : group.kind.replaceAll("_", " ").toLowerCase() }))}
         />
       </div>
     </SectionCard>
@@ -556,11 +556,10 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
     sat.setDate(sat.getDate() + 6);
     return `${d.getMonth() + 1}/${d.getDate()}–${sat.getMonth() + 1}/${sat.getDate()}`;
   });
-  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "habit"];
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport"];
   const domainLabel: Partial<Record<RoutineDomain, string>> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility",
-    sport: "Sport", recovery: "Recovery",
-    habit: "Habits",
+    strength: "Strength", cardio: "Endurance", mobility: "Mobility",
+    sport: "Sport",
   };
   const heatData = new Map<RoutineDomain, number[]>();
   const heatLogDetails = new Map<RoutineDomain, DomainWeekLog[][]>();
@@ -640,9 +639,9 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
   // Search
   const searchResults = query
     ? [
-        ...routines.filter((r) => r.name.toLowerCase().includes(query) || r.category.toLowerCase().includes(query)).slice(0, 4).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: `Routine: ${r.name}`, subtitle: `${r.kind.toLowerCase()} routine in ${r.category.toLowerCase()}` })),
+        ...routines.filter((r) => r.name.toLowerCase().includes(query)).slice(0, 4).map((r) => ({ href: `/progress/routines/${r.id}?tab=overview&range=4w`, title: `Routine: ${r.name}`, subtitle: `${r.kind.toLowerCase()} routine` })),
         ...exercises.filter((e) => exerciseMatchesQuery(e.name, query)).slice(0, 4).map((e) => ({ href: `/progress/exercises/${e.id}?tab=overview&range=4w`, title: `Exercise: ${e.name}`, subtitle: `${exerciseUnitLabel(e.unit)}${e.supportsWeight ? ", weighted" : ""} progress view` })),
-        ...groups.filter((g) => g.label.toLowerCase().includes(query) || g.slug.includes(query)).slice(0, 6).map((g) => ({ href: g.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`, title: `${g.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${g.label}`, subtitle: g.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${g.kind.replaceAll("_", " ").toLowerCase()} coverage rollup` })),
+        ...groups.filter((g) => g.label.toLowerCase().includes(query) || g.slug.includes(query)).slice(0, 6).map((g) => ({ href: g.kind === "CARDIO_ACTIVITY" ? `/activities/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`, title: `${g.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${g.label}`, subtitle: g.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${g.kind.replaceAll("_", " ").toLowerCase()} coverage rollup` })),
       ].slice(0, 10)
     : [];
 
@@ -650,8 +649,8 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
     ...routines.slice(0, 40).map((r) => ({
       href: `/progress/routines/${r.id}?tab=overview&range=4w`,
       title: `Routine: ${r.name}`,
-      subtitle: `${r.kind.toLowerCase()} routine in ${r.category.toLowerCase()}`,
-      keywords: [r.name, r.category, r.kind],
+      subtitle: `${r.kind.toLowerCase()} routine`,
+      keywords: [r.name, r.kind],
     })),
     ...exercises.slice(0, 40).map((e) => ({
       href: `/progress/exercises/${e.id}?tab=overview&range=4w`,
@@ -660,7 +659,7 @@ export default async function ProgressOverviewPage({ searchParams }: { searchPar
       keywords: [e.name, e.unit, e.supportsWeight ? "weighted" : "bodyweight"],
     })),
     ...groups.slice(0, 40).map((g) => ({
-      href: g.kind === "CARDIO_ACTIVITY" ? `/progress/cardio/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`,
+      href: g.kind === "CARDIO_ACTIVITY" ? `/activities/${g.slug}?tab=overview&range=4w` : `/progress/groups/${g.slug}?tab=overview&range=4w`,
       title: `${g.kind === "CARDIO_ACTIVITY" ? "Sport" : "Coverage group"}: ${g.label}`,
       subtitle: g.kind === "CARDIO_ACTIVITY" ? "Sport-specific cardio coverage" : `${g.kind.replaceAll("_", " ").toLowerCase()} coverage rollup`,
       keywords: [g.label, g.slug, g.kind.replaceAll("_", " ")],

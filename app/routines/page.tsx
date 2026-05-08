@@ -5,7 +5,7 @@ import NewRoutinePageContent from "./NewRoutinePageContent";
 import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
 import { formatRoutineTypeLabel, normalizeRoutineKind, effectiveRoutineDomain, domainColor, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
-import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses } from "@/lib/routine-frequency";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { computeHabitStats } from "@/lib/habits";
 import RoutineCard from "./RoutineCard";
@@ -78,7 +78,7 @@ export default async function RoutinesPage(props: {
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
-  const [routines, goalRoutines, routineFrequencyGoals] = await Promise.all([
+  const [rawRoutines, goalRoutines, routineFrequencyGoals] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
@@ -102,6 +102,9 @@ export default async function RoutinesPage(props: {
         tagAssignments: {
           select: { tag: { select: { name: true } } },
         },
+        frequencyGoalRoutines: {
+          include: { goal: true },
+        },
       },
     }),
     // Fetch all active goal memberships so each card knows which goals it contributes to
@@ -122,6 +125,10 @@ export default async function RoutinesPage(props: {
       },
     }),
   ]);
+
+  // Flatten frequencyGoalRoutines into the legacy target shape for downstream
+  // helpers (getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, etc.).
+  const routines = rawRoutines.map(routineWithFrequencyTarget);
 
   // Build routineId → goal name list
   const goalContributionsByRoutineId = new Map<string, string[]>();
@@ -164,9 +171,13 @@ export default async function RoutinesPage(props: {
     now,
   });
 
-  // Habit streak computation — fetch 90 days of logs for habit-domain routines
+  // Habit streak computation. Phase 1: "habit" was dropped from RoutineDomain, so
+  // the habit lens detects habit-shaped routines as kind=COMPLETION with HABIT/HEALTH/OTHER
+  // subtypes (the same set that previously derived to domain=habit). Phase 4 will
+  // formalize habits-as-lens to "any routine with a FrequencyGoal".
+  const HABIT_COMPLETION_SUBTYPES = new Set(["HABIT", "HEALTH", "OTHER"]);
   const habitRoutineIds = routines
-    .filter((r) => r.isActive && effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit")
+    .filter((r) => r.isActive && r.kind === "COMPLETION" && HABIT_COMPLETION_SUBTYPES.has(String(r.subtype ?? "").toUpperCase()))
     .map((r) => r.id);
   const habitLogs = habitRoutineIds.length > 0
     ? await prisma.routineLog.findMany({

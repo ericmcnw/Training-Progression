@@ -4,6 +4,7 @@ import { addDaysYmd, diffYmdDays, formatUtcDateLabel, getAppDayRange, toAppYmd, 
 import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import {
   isRoutineAutoScheduledDailyOnDay,
+  routineWithFrequencyTarget,
   shouldAutoScheduleRoutineDaily,
   suggestedTimesPerWeekForRoutineTarget,
 } from "@/lib/routine-frequency";
@@ -93,22 +94,20 @@ export default async function SchedulePage({
   const timelineStart = isYmd(requestedStart) ? requestedStart! : today;
   const selectedMonth = isMonthParam(getParam(params?.month)) ? getParam(params?.month)! : monthFromYmd(today);
 
-  const [routines, manualRaw, logRange, routineFrequencyGoals] = await prisma.$transaction([
+  const [rawRoutines, manualRaw, logRange, routineFrequencyGoals] = await prisma.$transaction([
     prisma.routine.findMany({
       where: { isDeleted: false },
-      orderBy: [{ isActive: "desc" }, { kind: "asc" }, { category: "asc" }, { name: "asc" }],
+      orderBy: [{ isActive: "desc" }, { kind: "asc" }, { domain: "asc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
         kind: true,
         subtype: true,
         domain: true,
-        category: true,
         timesPerWeek: true,
-        targetFrequencyCount: true,
-        targetFrequencyUnit: true,
-        targetFrequencyInterval: true,
-        frequencyGoalEnabled: true,
+        frequencyGoalRoutines: {
+          include: { goal: true },
+        },
       },
     }),
     prisma.$queryRawUnsafe<Array<{ id: string; routineId: string; scheduledDate: string; sortOrder: number }>>(
@@ -132,6 +131,10 @@ export default async function SchedulePage({
       orderBy: { createdAt: "asc" },
     }),
   ]);
+
+  // Flatten frequencyGoalRoutines into the legacy target shape so downstream
+  // helpers (shouldAutoScheduleRoutineDaily, etc.) work without changes.
+  const routines = rawRoutines.map(routineWithFrequencyTarget);
 
   const manualEntries = manualRaw.map((entry) => ({
     id: entry.id,

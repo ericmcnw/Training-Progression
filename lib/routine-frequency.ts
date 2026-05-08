@@ -1,11 +1,67 @@
 import type { RoutineFrequencyUnit } from "@/generated/prisma";
 
+// Frequency target shape — the canonical structure callers consume.
+//
+// As of Phase 1 of the activity-world restructure, this shape is no longer
+// stored as columns on Routine. The source of truth is the FrequencyGoal model
+// (with FrequencyGoalRoutine join). The shape is preserved for backward
+// compatibility with the dozens of callers downstream — use the helpers below
+// to construct it from a FrequencyGoal.
 export type RoutineFrequencyTargetShape = {
   targetFrequencyCount: number | null;
   targetFrequencyUnit: RoutineFrequencyUnit | null;
   targetFrequencyInterval: number | null;
   frequencyGoalEnabled?: boolean | null;
 };
+
+// Subset of FrequencyGoal needed to construct a target shape.
+export type FrequencyGoalSource = {
+  targetCount: number;
+  targetUnit: RoutineFrequencyUnit;
+  targetInterval: number;
+  isActive: boolean;
+};
+
+// A "no target" shape — what callers see for a routine without a FrequencyGoal.
+export const NULL_FREQUENCY_TARGET: RoutineFrequencyTargetShape = {
+  targetFrequencyCount: null,
+  targetFrequencyUnit: null,
+  targetFrequencyInterval: null,
+  frequencyGoalEnabled: false,
+};
+
+// Convert a single FrequencyGoal into the legacy shape callers consume.
+export function frequencyTargetFromGoal(goal: FrequencyGoalSource | null | undefined): RoutineFrequencyTargetShape {
+  if (!goal) return NULL_FREQUENCY_TARGET;
+  return {
+    targetFrequencyCount: goal.targetCount,
+    targetFrequencyUnit: goal.targetUnit,
+    targetFrequencyInterval: goal.targetInterval,
+    frequencyGoalEnabled: goal.isActive,
+  };
+}
+
+// A routine can be linked to multiple FrequencyGoals; the routine's "primary"
+// target is the first ACTIVE goal linked to it. Inactive goals are ignored.
+// Callers should include `frequencyGoalRoutines: { include: { goal: true } }`
+// in their Prisma selects when they need the target.
+export function routineFrequencyTarget(
+  routine: { frequencyGoalRoutines?: Array<{ goal: FrequencyGoalSource | null }> } | null | undefined
+): RoutineFrequencyTargetShape {
+  if (!routine?.frequencyGoalRoutines) return NULL_FREQUENCY_TARGET;
+  const active = routine.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal;
+  return frequencyTargetFromGoal(active ?? null);
+}
+
+// Extends a routine with the legacy frequency target shape, derived from any
+// FrequencyGoal links present. Use this when downstream callers expect the
+// flat shape (e.g., inline form previews, frequency status calculators).
+export function routineWithFrequencyTarget<T extends { frequencyGoalRoutines?: Array<{ goal: FrequencyGoalSource | null }> }>(routine: T): T & RoutineFrequencyTargetShape {
+  return {
+    ...routine,
+    ...routineFrequencyTarget(routine),
+  };
+}
 
 export type RoutineFrequencyWindow = {
   start: Date;

@@ -9,7 +9,7 @@ import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
-import { isRoutineAutoScheduledDailyOnDay, shouldAutoScheduleRoutineDaily } from "@/lib/routine-frequency";
+import { isRoutineAutoScheduledDailyOnDay, routineWithFrequencyTarget, shouldAutoScheduleRoutineDaily } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 
@@ -210,16 +210,16 @@ function WeeklyMomentumSection({
 
         <div style={mileageBand}>
           <div>
-            <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Cardio Mileage</div>
-            <div style={sectionSub}>Combined miles from all cardio routines this week.</div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Endurance Mileage</div>
+            <div style={sectionSub}>Combined miles from all endurance routines this week.</div>
           </div>
           <div className="mobileHomeMileageValue" style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
           <details style={cardioDetails}>
             <summary data-collapsible-summary style={cardioSummary}>
-              Show cardio routine breakdown
+              Show endurance routine breakdown
             </summary>
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-              {cardioTypeGroups.length === 0 && <div style={emptyState}>No cardio logged this week.</div>}
+              {cardioTypeGroups.length === 0 && <div style={emptyState}>No endurance logged this week.</div>}
               {cardioTypeGroups.map((group) => (
                 <div key={group.type} style={cardioGroupCard}>
                   <div className="mobileHomeCardioRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -434,22 +434,20 @@ export default async function HomePage() {
     recommendationModel,
     groupFrequencyGoals,
   ] = await Promise.all([
-    prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        name: string;
-        category: string;
-        subtype: string | null;
-        domain: string;
-        kind: string;
-        targetFrequencyCount: number | null;
-        targetFrequencyUnit: "DAY" | "WEEK" | "MONTH" | null;
-        targetFrequencyInterval: number | null;
-        frequencyGoalEnabled: boolean;
-      }>
-    >(
-      'SELECT "id","name","category","subtype","domain","kind","targetFrequencyCount","targetFrequencyUnit","targetFrequencyInterval","frequencyGoalEnabled" FROM "Routine" WHERE "isDeleted" = false AND "isActive" = true ORDER BY "kind" ASC, "category" ASC, "name" ASC'
-    ),
+    prisma.routine.findMany({
+      where: { isDeleted: false, isActive: true },
+      orderBy: [{ kind: "asc" }, { domain: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        subtype: true,
+        domain: true,
+        kind: true,
+        frequencyGoalRoutines: {
+          include: { goal: true },
+        },
+      },
+    }),
     prisma.routineLog.findMany({
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
       take: 8,
@@ -460,7 +458,7 @@ export default async function HomePage() {
         elevationGainFt: true,
         durationSec: true,
         exercises: { select: { id: true, sets: { select: { id: true } } } },
-        routine: { select: { id: true, name: true, category: true, kind: true } },
+        routine: { select: { id: true, name: true, kind: true } },
       },
     }),
     prisma.routineLog.groupBy({
@@ -542,7 +540,10 @@ export default async function HomePage() {
     }),
   ]);
 
-  const routineMap = new Map(routines.map((routine) => [routine.id, routine]));
+  // Each routine carries its frequency-goal links (Phase 1: source of truth).
+  // Flatten to the legacy target shape so habit/auto-schedule helpers work.
+  const routinesWithTargets = routines.map(routineWithFrequencyTarget);
+  const routineMap = new Map(routinesWithTargets.map((routine) => [routine.id, routine]));
   const autoDailyRoutineStartById = new Map<string, string>();
   for (const goal of routineFrequencyGoals) {
     if (!autoDailyRoutineStartById.has(goal.targetId)) {
@@ -582,7 +583,7 @@ export default async function HomePage() {
   function buildPlanForDay(day: string) {
     const dayPlanMap = new Map<
       string,
-      { routineId: string; routineName: string; category: string; kind: string; planned: number; logged: number }
+      { routineId: string; routineName: string; kind: string; planned: number; logged: number }
     >();
 
     const manualForDay = manualToday.filter((entry) => entry.scheduledDate === day);
@@ -603,14 +604,13 @@ export default async function HomePage() {
       dayPlanMap.set(item.routineId, {
         routineId: item.routineId,
         routineName: routine.name,
-        category: routine.category,
         kind: routine.kind,
         planned: 1,
         logged: 0,
       });
     }
 
-    for (const routine of routines) {
+    for (const routine of routinesWithTargets) {
       if (!shouldAutoScheduleRoutineDaily(routine)) continue;
       if (!isRoutineAutoScheduledDailyOnDay(routine, day, autoDailyRoutineStartById.get(routine.id) ?? today)) {
         continue;
@@ -623,7 +623,6 @@ export default async function HomePage() {
       dayPlanMap.set(routine.id, {
         routineId: routine.id,
         routineName: routine.name,
-        category: routine.category,
         kind: routine.kind,
         planned: 1,
         logged: 0,
@@ -662,7 +661,6 @@ export default async function HomePage() {
       todayPlanMap.set(routineId, {
         routineId,
         routineName: routine.name,
-        category: routine.category,
         kind: routine.kind,
         planned: 0,
         logged: count,
@@ -677,13 +675,12 @@ export default async function HomePage() {
     (a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName)
   );
 
-  const weeklyCards = routines
+  const weeklyCards = routinesWithTargets
     .map((routine) => {
       const week = weeklyMap.get(routine.id) ?? { count: 0, miles: 0, lastAt: null };
       return {
         id: routine.id,
         name: routine.name,
-        category: routine.category,
         kind: routine.kind,
         count: week.count,
         miles: week.miles,
@@ -692,7 +689,7 @@ export default async function HomePage() {
     })
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  const weeklyCardioBreakdown = routines
+  const weeklyCardioBreakdown = routinesWithTargets
     .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
     .map((routine) => ({
       id: routine.id,
@@ -862,7 +859,6 @@ export default async function HomePage() {
             dayPlan.set(routineId, {
               routineId,
               routineName: routine.name,
-              category: routine.category,
               kind: routine.kind,
               planned: count,
               logged: count,
@@ -923,9 +919,9 @@ export default async function HomePage() {
     const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
     domainSessionMap.set(domain, (domainSessionMap.get(domain) ?? 0) + 1);
   }
-  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "recovery", "skill", "habit"];
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "skill", "habit"];
   const domainLabels: Record<RoutineDomain, string> = {
-    strength: "Strength", cardio: "Cardio", mobility: "Mobility / Rehab",
+    strength: "Strength", cardio: "Endurance", mobility: "Mobility / Rehab",
     sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
     habit: "Habits", general: "General",
   };
@@ -938,7 +934,7 @@ export default async function HomePage() {
     }))
     .filter((row) => {
       // Always show domains with sessions; also show domains that have active routines
-      const hasRoutine = routines.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === row.domain);
+      const hasRoutine = routinesWithTargets.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === row.domain);
       return row.sessions > 0 || hasRoutine;
     });
   const maxDomainSessions = Math.max(1, ...trainingBalanceRows.map((r) => r.sessions));
@@ -954,7 +950,6 @@ export default async function HomePage() {
     return {
       id: log.id,
       name: log.routine.name,
-      category: log.routine.category,
       kind: log.routine.kind,
       stamp: formatLogTime(log.performedAt),
       detail: isRun
@@ -1007,7 +1002,7 @@ export default async function HomePage() {
           {todayNextAction ? (
             <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{todayNextAction.routineName}</div>
-              <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{todayNextAction.category} · {formatRoutineTypeLabel(todayNextAction.kind)}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatRoutineTypeLabel(todayNextAction.kind)}</div>
               <Link href={loggingHref(todayNextAction)} style={heroCTALink}>Log Now →</Link>
             </div>
           ) : (
@@ -1064,7 +1059,7 @@ export default async function HomePage() {
                   <div style={focusCardInfo}>
                     <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
                     <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
-                      {item.category} | {formatRoutineTypeLabel(item.kind)}
+                      {formatRoutineTypeLabel(item.kind)}
                     </div>
                     <div style={focusMetaLine}>
                       Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
@@ -1314,7 +1309,7 @@ export default async function HomePage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 800 }}>{item.name}</div>
                   <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
-                    {item.category} | {item.detail}
+                    {item.detail}
                   </div>
                 </div>
                 <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>

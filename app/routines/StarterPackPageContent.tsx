@@ -92,7 +92,7 @@ export default function StarterPackPageContent() {
                 <div key={`${routine.name}-${routine.kind}`} style={styles.previewCard}>
                   <div style={{ fontWeight: 900 }}>{routine.name}</div>
                   <div style={styles.previewMeta}>
-                    {routine.category} | {routine.kind} | {routine.subtype}
+                    {routine.kind} | {routine.subtype}
                     {routine.timesPerWeek ? ` | target ${routine.timesPerWeek}x / week` : ""}
                   </div>
                 </div>

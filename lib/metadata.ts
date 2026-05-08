@@ -71,16 +71,54 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "anti-rotation", label: "Anti-Rotation", kind: "MOVEMENT_PATTERN", appliesToExercise: true, appliesToRoutine: false, parentSlugs: ["core", "isometric"] },
   { slug: "anti-lateral-flexion", label: "Anti-Lateral Flexion", kind: "MOVEMENT_PATTERN", appliesToExercise: true, appliesToRoutine: false, parentSlugs: ["core", "isometric"] },
 
+  // CARDIO_ACTIVITY: an "activity type" tagging system. Despite the name, it covers all
+  // identifiable activities, not just heart-rate-driven cardio (e.g., golf, basketball).
+  // Hierarchy: cardio (root) → run-walk → running/walking → variants. Each level can be tagged.
   { slug: "cardio", label: "All Cardio", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true },
   { slug: "run-walk", label: "Run + Walk", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "running", label: "Running", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["run-walk", "cardio"] },
+  { slug: "trail-running", label: "Trail Running", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio", "outdoor"] },
+  { slug: "road-running", label: "Road Running", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio"] },
+  { slug: "easy-run", label: "Easy Run", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio"] },
+  { slug: "tempo-run", label: "Tempo Run", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio", "endurance"] },
+  { slug: "long-run", label: "Long Run", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio", "endurance"] },
   { slug: "walking", label: "Walking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["run-walk", "cardio"] },
+  { slug: "easy-walk", label: "Easy Walk", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["walking", "run-walk", "cardio"] },
   { slug: "biking", label: "Biking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "road-cycling", label: "Road Cycling", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["biking", "cardio"] },
+  { slug: "mountain-biking", label: "Mountain Biking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["biking", "cardio", "outdoor"] },
+  { slug: "gravel-cycling", label: "Gravel Cycling", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["biking", "cardio", "outdoor"] },
   { slug: "swimming", label: "Swimming", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
-  { slug: "hiking", label: "Hiking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "pool-swimming", label: "Pool Swimming", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["swimming", "cardio"] },
+  { slug: "open-water-swimming", label: "Open Water Swimming", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["swimming", "cardio", "outdoor"] },
+  { slug: "hiking", label: "Hiking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "outdoor"] },
   { slug: "rowing", label: "Rowing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "basketball", label: "Basketball", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "tennis", label: "Tennis", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "golf", label: "Golf", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "surfing", label: "Surfing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
+  { slug: "snowboarding", label: "Snowboarding", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
+  { slug: "skiing", label: "Skiing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
+  { slug: "skateboarding", label: "Skateboarding", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio"] },
+
+  // Specialty training tags — structural workout types that overlay an activity.
+  // E.g. a "Trail intervals" routine could be tagged: trail-running + intervals.
+  // These are separate from the activity-type tags above; both can apply.
+  { slug: "intervals", label: "Intervals", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "hill-repeats", label: "Hill Repeats", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "endurance"] },
+  { slug: "sprint-workout", label: "Sprint Workout", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "fartlek", label: "Fartlek", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["running", "run-walk", "cardio"] },
+  { slug: "tempo-effort", label: "Tempo Effort", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "endurance"] },
+  { slug: "recovery-effort", label: "Recovery Effort", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+
+  // Climbing-specific specialty training — methodology overlays for climbing sessions.
+  { slug: "climbing-endurance", label: "Climbing Endurance (ARC)", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-4x4s", label: "Climbing 4x4s", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-pyramid", label: "Climbing Pyramid", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-link-ups", label: "Link-ups / Laps", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-projecting", label: "Projecting", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-power", label: "Power / Limit Bouldering", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
+  { slug: "climbing-power-endurance", label: "Power Endurance", kind: "TRAINING_GROUP", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["climbing"] },
 
   { slug: "strength", label: "Strength", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
   { slug: "hypertrophy", label: "Hypertrophy", kind: "ROUTINE_FOCUS", appliesToExercise: false, appliesToRoutine: true },
@@ -90,17 +128,22 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "recovery", label: "Recovery", kind: "ROUTINE_FOCUS", appliesToExercise: true, appliesToRoutine: true },
 ];
 
+// Subtype → metadata defaults. Used to auto-assign metadata when a routine is created
+// with a particular subtype. As of Phase 1 of the restructure, cardio activity types
+// (running, biking, etc.) are first-class metadata tags — the subtype is being demoted
+// in favor of metadata. Style sub-tags (easy-run, tempo-run, long-run, easy-walk) are
+// also metadata so they're discoverable and filterable.
 export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
-  // Cardio variants
+  // Cardio variants — primary activity tag plus style/parent rollups
   RUN: ["running", "run-walk"],
-  EASY_RUN: ["running", "run-walk"],
-  TEMPO_RUN: ["running", "run-walk", "endurance"],
-  LONG_RUN: ["running", "run-walk", "endurance"],
+  EASY_RUN: ["easy-run", "running", "run-walk"],
+  TEMPO_RUN: ["tempo-run", "running", "run-walk", "endurance"],
+  LONG_RUN: ["long-run", "running", "run-walk", "endurance"],
   WALK: ["walking", "run-walk"],
-  EASY_WALK: ["walking", "run-walk"],
+  EASY_WALK: ["easy-walk", "walking", "run-walk"],
   BIKE: ["biking"],
   SWIM: ["swimming"],
-  HIKE: ["hiking"],
+  HIKE: ["hiking", "outdoor"],
   ROW: ["rowing"],
   // Guided styles
   MOBILITY: ["mobility"],
@@ -113,17 +156,17 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   // Workout focuses
   STRENGTH: ["strength"],
   HYPERTROPHY: ["hypertrophy"],
-  // Sessions / sports
+  // Sessions / sports — sport activities now have first-class CARDIO_ACTIVITY tags
   CLIMBING: ["climbing", "skill-practice", "strength"],
-  SURFING: ["board-sports", "cardio", "core", "grip"],
-  SNOWBOARDING: ["board-sports", "cardio", "core"],
+  SURFING: ["surfing", "board-sports", "cardio", "core", "grip", "outdoor"],
+  SNOWBOARDING: ["snowboarding", "board-sports", "cardio", "core", "outdoor"],
   BASKETBALL: ["basketball", "cardio", "core", "skill-practice"],
-  TENNIS: ["cardio", "core", "skill-practice"],
+  TENNIS: ["tennis", "cardio", "core", "skill-practice"],
   GOLF: ["golf", "outdoor", "core", "skill-practice"],
   TEAM_SPORT: ["cardio", "core"],
   SKILL_PRACTICE: ["skill-practice", "core"],
   YOGA_SESSION: ["mobility"],
-  HIKE_DAY: ["hiking", "cardio"],
+  HIKE_DAY: ["hiking", "cardio", "outdoor"],
 };
 
 const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[] }> = [

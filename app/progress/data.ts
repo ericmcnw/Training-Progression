@@ -4,15 +4,19 @@ import { isMissingExerciseLibraryKindError, withDerivedExerciseLibraryKind } fro
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
 import { aggregateExerciseSessionRow, countGoalMetWeeks, descendantGroupIds, fillWeeklySeries, hasSessionLikeKinds, hasWorkoutKinds, incrementWeekMap, isCardioOnlyKinds, lastOrNull, performedAtWhere, weeksWithActivity, ytdSessions, type ProgressRange, type SeriesPoint } from "@/lib/progress-v2";
-import { isMissingRoutineFrequencyColumnsError, withNullRoutineFrequencyTargets } from "@/lib/routine-query-compat";
+import { routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { formatRoutineSubtype, normalizeRoutineKind } from "@/lib/routines";
 
 export type RoutineLogWithRelations = Awaited<ReturnType<typeof getRoutineLogs>>[number];
 
+// Canonical routine select. The legacy per-routine frequency columns are gone
+// (Phase 1 cleanup) — frequency target data now comes from the FrequencyGoal
+// model via the frequencyGoalRoutines relation. Use routineWithFrequencyTarget()
+// from lib/routine-frequency.ts to flatten the goal data into the legacy
+// RoutineFrequencyTargetShape that downstream consumers expect.
 const routineScalarSelect = {
   id: true,
   name: true,
-  category: true,
   subtype: true,
   domain: true,
   kind: true,
@@ -23,12 +27,15 @@ const routineScalarSelect = {
   updatedAt: true,
 } as const;
 
+const frequencyGoalInclude = {
+  frequencyGoalRoutines: {
+    include: { goal: true },
+  },
+} as const;
+
 const routineScalarSelectWithFrequency = {
   ...routineScalarSelect,
-  targetFrequencyCount: true,
-  targetFrequencyUnit: true,
-  targetFrequencyInterval: true,
-  frequencyGoalEnabled: true,
+  ...frequencyGoalInclude,
 } as const;
 
 const routineRelationSelectBase = {
@@ -54,129 +61,89 @@ const routineRelationSelectBase = {
 
 const routineRelationSelectWithFrequency = {
   ...routineRelationSelectBase,
-  targetFrequencyCount: true,
-  targetFrequencyUnit: true,
-  targetFrequencyInterval: true,
-  frequencyGoalEnabled: true,
+  ...frequencyGoalInclude,
 } as const;
 
 export const getRoutineIndex = cache(async function getRoutineIndex() {
-  try {
-    return await prisma.routine.findMany({
-      where: { isDeleted: false },
-      orderBy: [{ isActive: "desc" }, { category: "asc" }, { name: "asc" }],
-      select: {
-        ...routineScalarSelectWithFrequency,
-        exercises: {
-          include: {
-            exercise: {
-              include: {
-                metadataGroups: {
-                  include: { group: true },
-                },
+  const routines = await prisma.routine.findMany({
+    where: { isDeleted: false },
+    orderBy: [{ isActive: "desc" }, { domain: "asc" }, { name: "asc" }],
+    select: {
+      ...routineScalarSelectWithFrequency,
+      exercises: {
+        include: {
+          exercise: {
+            include: {
+              metadataGroups: {
+                include: { group: true },
               },
             },
           },
         },
-        metadataGroups: {
-          include: { group: true },
-        },
       },
-    });
-  } catch (error) {
-    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
-    const routines = await prisma.routine.findMany({
-      where: { isDeleted: false },
-      orderBy: [{ isActive: "desc" }, { category: "asc" }, { name: "asc" }],
-      select: {
-        ...routineScalarSelect,
-        exercises: {
-          include: {
-            exercise: {
-              include: {
-                metadataGroups: {
-                  include: { group: true },
-                },
-              },
-            },
-          },
-        },
-        metadataGroups: {
-          include: { group: true },
-        },
+      metadataGroups: {
+        include: { group: true },
       },
-    });
-    return routines.map((routine) => withNullRoutineFrequencyTargets(routine));
-  }
+    },
+  });
+  return routines.map(routineWithFrequencyTarget);
 });
 
 export const getExerciseIndex = cache(async function getExerciseIndex() {
   try {
-    try {
-      return await prisma.exercise.findMany({
-        orderBy: [{ name: "asc" }],
-        include: {
-          metadataGroups: {
-            include: { group: true },
-          },
-          routines: {
-            include: {
-              routine: {
-                select: routineScalarSelectWithFrequency,
-              },
+    const exercises = await prisma.exercise.findMany({
+      orderBy: [{ name: "asc" }],
+      include: {
+        metadataGroups: {
+          include: { group: true },
+        },
+        routines: {
+          include: {
+            routine: {
+              select: routineScalarSelectWithFrequency,
             },
           },
         },
-      });
-    } catch (error) {
-      if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
-      const exercises = await prisma.exercise.findMany({
-        orderBy: [{ name: "asc" }],
-        include: {
-          metadataGroups: {
-            include: { group: true },
-          },
-          routines: {
-            include: {
-              routine: {
-                select: routineScalarSelect,
-              },
+      },
+    });
+    return exercises.map((exercise) => ({
+      ...exercise,
+      routines: exercise.routines.map((entry) => ({
+        ...entry,
+        routine: routineWithFrequencyTarget(entry.routine),
+      })),
+    }));
+  } catch (error) {
+    if (!isMissingExerciseLibraryKindError(error)) throw error;
+    const exercises = await prisma.exercise.findMany({
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        supportsWeight: true,
+        createdAt: true,
+        updatedAt: true,
+        metadataGroups: {
+          include: { group: true },
+        },
+        routines: {
+          include: {
+            routine: {
+              select: routineScalarSelectWithFrequency,
             },
           },
         },
-      });
-      return exercises.map((exercise) => ({
+      },
+    });
+    return withDerivedExerciseLibraryKind(
+      exercises.map((exercise) => ({
         ...exercise,
         routines: exercise.routines.map((entry) => ({
           ...entry,
-          routine: withNullRoutineFrequencyTargets(entry.routine),
+          routine: routineWithFrequencyTarget(entry.routine),
         })),
-      }));
-    }
-  } catch (error) {
-    if (!isMissingExerciseLibraryKindError(error)) throw error;
-    return withDerivedExerciseLibraryKind(
-      await prisma.exercise.findMany({
-        orderBy: [{ name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          unit: true,
-          supportsWeight: true,
-          createdAt: true,
-          updatedAt: true,
-          metadataGroups: {
-            include: { group: true },
-          },
-          routines: {
-            include: {
-              routine: {
-                select: routineScalarSelect,
-              },
-            },
-          },
-        },
-      })
+      }))
     );
   }
 });
@@ -270,34 +237,20 @@ export const getRoutineLogs = cache(async function getRoutineLogs(range: Progres
     },
   } as const;
 
-  try {
-    return await prisma.routineLog.findMany({
-      where,
-      orderBy: [{ performedAt: "asc" }],
-      include: {
-        routine: {
-          select: routineRelationSelectWithFrequency,
-        },
-        ...sharedInclude,
+  const logs = await prisma.routineLog.findMany({
+    where,
+    orderBy: [{ performedAt: "asc" }],
+    include: {
+      routine: {
+        select: routineRelationSelectWithFrequency,
       },
-    });
-  } catch (error) {
-    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
-    const logs = await prisma.routineLog.findMany({
-      where,
-      orderBy: [{ performedAt: "asc" }],
-      include: {
-        routine: {
-          select: routineRelationSelectBase,
-        },
-        ...sharedInclude,
-      },
-    });
-    return logs.map((log) => ({
-      ...log,
-      routine: withNullRoutineFrequencyTargets(log.routine),
-    }));
-  }
+      ...sharedInclude,
+    },
+  });
+  return logs.map((log) => ({
+    ...log,
+    routine: routineWithFrequencyTarget(log.routine),
+  }));
 });
 
 export function summarizeRoutineLogs(logs: RoutineLogWithRelations[], timesPerWeek: number | null) {
@@ -675,8 +628,14 @@ export async function resolveGroupTarget(slug: string, range: ProgressRange) {
   };
 }
 
-export function routineSubtitle(routine: { category: string; kind: string; subtype: string | null; isActive: boolean }) {
-  return `${routine.category} | ${normalizeRoutineKind(routine.kind)}${routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}${routine.isActive ? "" : " | Archived"}`;
+// Subtitle for a routine card / list row. Formerly led with `category`; now leads
+// with the kind/subtype since category was dropped in Phase 1. Domain rendering
+// is left to callers that already render a colored domain badge.
+export function routineSubtitle(routine: { kind: string; subtype: string | null; isActive: boolean }) {
+  const parts: string[] = [normalizeRoutineKind(routine.kind)];
+  if (routine.subtype) parts.push(formatRoutineSubtype(routine.subtype));
+  if (!routine.isActive) parts.push("Archived");
+  return parts.join(" | ");
 }
 
 export function humanLogTimestamp(date: Date) {

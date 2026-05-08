@@ -64,7 +64,7 @@ export default async function RoutineLogDetailPage(props: {
 
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
-    select: { id: true, name: true, category: true, kind: true },
+    select: { id: true, name: true, kind: true },
   });
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
 
@@ -130,7 +130,7 @@ export default async function RoutineLogDetailPage(props: {
         <div>
           <h1 style={title}>{routine.name} Log</h1>
           <div style={subText}>
-            {routine.category} | {formatAppDateTime(log.performedAt)}
+            {formatAppDateTime(log.performedAt)}
           </div>
         </div>
         <div style={actionRow}>

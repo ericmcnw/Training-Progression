@@ -29,7 +29,9 @@ export function getVirtualSportCategory(slug: string) {
 }
 
 export function sportTargetHref(slug: string) {
-  return `/progress/sports/${slug}?tab=overview&range=4w`;
+  // Phase 2: sport target pages live under /activities/[slug] now.
+  // /progress/sports/[slug] still works via redirect for old bookmarks.
+  return `/activities/${slug}?tab=overview&range=4w`;
 }
 
 export function sportGroupTargetHref(input: { slug: string }) {

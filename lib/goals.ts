@@ -124,10 +124,15 @@ type GoalChartCandidate = {
   targetId: string;
 };
 
+// Synthetic "routine-frequency" goal row — represents a routine's primary
+// FrequencyGoal (1:1 routine→goal, identified by `fg_<routineId>` ids).
+// Phase 1: sourced from FrequencyGoal joined with the linked routine, not from
+// the dropped per-routine columns. The legacy field names (targetFrequency*,
+// frequencyGoalEnabled) are preserved so downstream helpers like
+// normalizeRoutineFrequencyTarget keep working unchanged.
 type RoutineFrequencyGoalRow = {
   id: string;
   name: string;
-  category: string;
   kind: string;
   subtype: string | null;
   isActive: boolean;
@@ -327,7 +332,7 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
   if (goal.targetType === "ROUTINE") {
     const routine = await prisma.routine.findUnique({
       where: { id: goal.targetId },
-      select: { id: true, name: true, kind: true, subtype: true, category: true },
+      select: { id: true, name: true, kind: true, subtype: true },
     });
     return {
       label: routine?.name ?? "Unknown routine",
@@ -861,11 +866,17 @@ async function buildGoalInsightCore(
 async function buildGoalInsight(goal: Goal) {
   const parsedGoal = toGoalWithConfig(goal);
   const descriptor = await getTargetDescriptor(parsedGoal);
+  // Phase 1: the routine's per-routine frequency toggle now lives on its
+  // primary FrequencyGoal (id = `fg_<routineId>`). Read its isActive and
+  // surface as frequencyGoalEnabled in the legacy shape.
   const linkedRoutine = isRoutineFrequencyGoalLike(parsedGoal)
-    ? await prisma.routine.findUnique({
-        where: { id: parsedGoal.targetId },
-        select: { id: true, frequencyGoalEnabled: true },
-      })
+    ? await (async () => {
+        const fg = await prisma.frequencyGoal.findUnique({
+          where: { id: `fg_${parsedGoal.targetId}` },
+          select: { isActive: true },
+        });
+        return { id: parsedGoal.targetId, frequencyGoalEnabled: fg?.isActive ?? false };
+      })()
     : null;
   return buildGoalInsightCore(parsedGoal, descriptor, linkedRoutine);
 }
@@ -886,11 +897,11 @@ async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> 
   const exerciseTargetIds = Array.from(new Set(goals.filter((g) => g.targetType === "EXERCISE").map((g) => g.targetId)));
   const templateTargetIds = Array.from(new Set(goals.filter((g) => g.targetType === "SESSION_TEMPLATE").map((g) => g.targetId)));
 
-  const [routines, exercises, templates] = await Promise.all([
+  const [rawRoutines, exercises, templates, routinePrimaryGoals] = await Promise.all([
     routineTargetIds.length > 0
       ? prisma.routine.findMany({
           where: { id: { in: routineTargetIds } },
-          select: { id: true, name: true, kind: true, subtype: true, category: true, frequencyGoalEnabled: true },
+          select: { id: true, name: true, kind: true, subtype: true },
         })
       : Promise.resolve([]),
     exerciseTargetIds.length > 0
@@ -905,8 +916,23 @@ async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> 
           select: { id: true, name: true },
         })
       : Promise.resolve([]),
+    routineTargetIds.length > 0
+      ? prisma.frequencyGoal.findMany({
+          where: { id: { in: routineTargetIds.map((rid) => `fg_${rid}`) } },
+          select: { id: true, isActive: true },
+        })
+      : Promise.resolve([]),
   ]);
 
+  // Build a lookup of each routine's primary FrequencyGoal isActive flag — the
+  // post-Phase-1 replacement for the dropped Routine.frequencyGoalEnabled column.
+  const primaryGoalActiveByRoutineId = new Map(
+    routinePrimaryGoals.map((g) => [g.id.replace(/^fg_/, ""), g.isActive])
+  );
+  const routines = rawRoutines.map((r) => ({
+    ...r,
+    frequencyGoalEnabled: primaryGoalActiveByRoutineId.get(r.id) ?? false,
+  }));
   const routineMap = new Map(routines.map((r) => [r.id, r]));
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
   const templateMap = new Map(templates.map((t) => [t.id, t]));
@@ -1216,11 +1242,10 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
   const [routines, exercises, groups, sessionTemplates] = await Promise.all([
     prisma.routine.findMany({
       where: { isDeleted: false },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+      orderBy: [{ domain: "asc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
-        category: true,
         kind: true,
         subtype: true,
         sessionDetails: {
@@ -1289,7 +1314,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
     routines: routines.map((routine) => ({
       id: routine.id,
       label: routine.name,
-      subtitle: `${routine.category} | ${routine.kind}${routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}`,
+      subtitle: `${routine.kind}${routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}`,
       routineKind: routine.kind,
       sessionTemplateId: routine.sessionDetails?.templateId ?? null,
       sessionTemplateKey: routine.sessionDetails?.template?.key ?? null,
@@ -1331,27 +1356,36 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
       where,
       orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
     }),
+    // Phase 1: per-routine frequency targets are now FrequencyGoal records with
+    // ids like `fg_<routineId>`. Pull those, join the routine, and shape into
+    // the legacy RoutineFrequencyGoalRow form that downstream insight builders
+    // already understand.
     includeRoutineFrequencyGoals
-      ? prisma.routine.findMany({
+      ? prisma.frequencyGoal.findMany({
           where: {
-            isDeleted: false,
-            targetFrequencyCount: { gt: 0 },
-            targetFrequencyUnit: { not: null },
-            targetFrequencyInterval: { gt: 0 },
+            id: { startsWith: "fg_" },
+            ...(filters.active === "active"
+              ? { isActive: true }
+              : filters.active === "inactive"
+              ? { isActive: false }
+              : {}),
           },
-          select: {
-            id: true,
-            name: true,
-            category: true,
-            kind: true,
-            subtype: true,
-            isActive: true,
-            frequencyGoalEnabled: true,
-            createdAt: true,
-            updatedAt: true,
-            targetFrequencyCount: true,
-            targetFrequencyUnit: true,
-            targetFrequencyInterval: true,
+          include: {
+            routines: {
+              include: {
+                routine: {
+                  select: {
+                    id: true,
+                    name: true,
+                    kind: true,
+                    subtype: true,
+                    isActive: true,
+                    isDeleted: true,
+                    createdAt: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
         })
@@ -1381,9 +1415,32 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
         })
       : Promise.resolve([]),
   ]);
+  // Adapt FrequencyGoal+routine pairs (Phase 1 source of truth) into the legacy
+  // RoutineFrequencyGoalRow shape so the existing insight builder can consume them
+  // without changes.
+  const routineFrequencyRows: RoutineFrequencyGoalRow[] = routineFrequencyGoals
+    .flatMap((fg) => {
+      const link = fg.routines[0];
+      if (!link?.routine || link.routine.isDeleted) return [];
+      return [
+        {
+          id: link.routine.id,
+          name: link.routine.name,
+          kind: link.routine.kind,
+          subtype: link.routine.subtype,
+          isActive: link.routine.isActive,
+          frequencyGoalEnabled: fg.isActive,
+          createdAt: link.routine.createdAt,
+          updatedAt: fg.updatedAt,
+          targetFrequencyCount: fg.targetCount,
+          targetFrequencyUnit: fg.targetUnit,
+          targetFrequencyInterval: fg.targetInterval,
+        },
+      ];
+    });
   const [manualInsights, routineInsights, groupFrequencyInsights] = await Promise.all([
     batchBuildGoalInsights(goals),
-    batchBuildRoutineFrequencyGoalInsights(routineFrequencyGoals),
+    batchBuildRoutineFrequencyGoalInsights(routineFrequencyRows),
     batchBuildGroupFrequencyGoalInsights(groupFrequencyGoals),
   ]);
   const manualRoutineFrequencyTargetIds = new Set(

@@ -12,6 +12,8 @@ import {
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
 import {
+  formatRoutineSubtype,
+  formatRoutineTypeLabel,
   isCardioKind,
   isGuidedKind,
   isSessionKind,
@@ -71,8 +73,8 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
     select: {
       id: true,
       name: true,
-      category: true,
       kind: true,
+      subtype: true,
       exercises: {
         orderBy: { sortOrder: "asc" },
         select: {
@@ -363,7 +365,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
           <h1 className="mobilePageTitle" style={styles.h1}>
             {routine.name} - Log {isWorkoutKind(kind) ? "Workout" : isCardioKind(kind) ? "Cardio" : isGuidedKind(kind) ? "Guided Routine" : isSessionKind(kind) ? "Session" : "Completion"}
           </h1>
-          <div className="mobilePageSubtitle" style={styles.sub}>{routine.category}</div>
+          <div className="mobilePageSubtitle" style={styles.sub}>{formatRoutineTypeLabel(routine.kind)}{routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}</div>
         </div>
         <Link href="/routines" style={styles.linkBtn}>
           Back

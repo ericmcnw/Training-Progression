@@ -23,13 +23,17 @@ export function normalizeProgressTab(value?: string | null): ProgressTab {
 }
 
 export function progressSections() {
+  // Phase 2: Endurance / Sports now live under the Activities tab; Injuries
+  // moved into the Body tab. The /progress/* paths still work (the dashboard
+  // analytical drill-down stays intact) but the entries here point to the new
+  // canonical locations.
   return [
     { key: "overview", label: "Overview", href: "/progress" },
     { key: "routines", label: "Routines", href: "/progress/routines" },
     { key: "exercises", label: "Exercises", href: "/progress/exercises" },
-    { key: "cardio", label: "Cardio", href: "/progress/cardio" },
-    { key: "sports", label: "Sports", href: "/progress/sports" },
-    { key: "injuries", label: "Injuries", href: "/progress/injuries" },
+    { key: "cardio", label: "Endurance", href: "/activities?family=endurance" },
+    { key: "sports", label: "Sports", href: "/activities?family=sports" },
+    { key: "injuries", label: "Injuries", href: "/body" },
   ] satisfies Array<{ key: ProgressSection; label: string; href: string }>;
 }
 

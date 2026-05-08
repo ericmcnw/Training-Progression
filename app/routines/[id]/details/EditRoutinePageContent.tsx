@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { inferExerciseMetadataSlugs, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
+import { routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { deleteRoutine, toggleArchiveRoutine } from "../../actions";
 import EditRoutineForm from "../edit/EditRoutineForm";
 
@@ -14,58 +15,57 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
 
   if (!id) return <div style={{ padding: 20 }}>Missing routine id.</div>;
 
-  const [routine, frequencyGoal] = await Promise.all([
+  const [rawRoutine, frequencyGoal] = await Promise.all([
     prisma.routine.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      subtype: true,
-      domain: true,
-      kind: true,
-      isActive: true,
-      frequencyGoalEnabled: true,
-      targetFrequencyCount: true,
-      targetFrequencyUnit: true,
-      targetFrequencyInterval: true,
-      sessionDetails: {
-        select: { templateId: true },
-      },
-      metadataGroups: {
-        select: {
-          groupId: true,
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        subtype: true,
+        domain: true,
+        kind: true,
+        isActive: true,
+        frequencyGoalRoutines: {
+          include: { goal: true },
         },
-      },
-      exercises: {
-        select: {
-          exercise: {
-            select: {
-              name: true,
-              metadataGroups: {
-                select: {
-                  groupId: true,
+        sessionDetails: {
+          select: { templateId: true },
+        },
+        metadataGroups: {
+          select: {
+            groupId: true,
+          },
+        },
+        exercises: {
+          select: {
+            exercise: {
+              select: {
+                name: true,
+                metadataGroups: {
+                  select: {
+                    groupId: true,
+                  },
                 },
               },
             },
           },
         },
-      },
-      tagAssignments: {
-        select: {
-          tag: {
-            select: { name: true },
+        tagAssignments: {
+          select: {
+            tag: {
+              select: { name: true },
+            },
           },
         },
       },
-    },
-  }),
+    }),
     prisma.goal.findFirst({
       where: { goalType: "FREQUENCY", targetType: "ROUTINE", metricType: "SESSIONS", targetId: id },
       select: { id: true },
     }),
   ]);
-  if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+  if (!rawRoutine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+  const routine = routineWithFrequencyTarget(rawRoutine);
 
   const derivedExerciseMetadataGroupIds = Array.from(
     new Set(
@@ -117,11 +117,10 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
           routine={{
             id: routine.id,
             name: routine.name,
-            category: routine.category || "General",
             subtype: routine.subtype,
             domain: routine.domain,
             kind: routine.kind,
-            frequencyGoalEnabled: routine.frequencyGoalEnabled,
+            frequencyGoalEnabled: routine.frequencyGoalEnabled ?? false,
             targetFrequencyCount: routine.targetFrequencyCount,
             targetFrequencyUnit: routine.targetFrequencyUnit,
             targetFrequencyInterval: routine.targetFrequencyInterval,

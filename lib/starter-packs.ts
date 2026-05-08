@@ -28,7 +28,7 @@ export const STARTER_PACKS: StarterPackDefinition[] = [
   },
   {
     key: "CARDIO",
-    label: "Cardio Base",
+    label: "Endurance Base",
     description: "Set up recurring endurance sessions and one easier recovery slot.",
     bestFor: "Running, walking, biking, and general conditioning.",
   },

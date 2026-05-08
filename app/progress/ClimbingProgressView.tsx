@@ -13,6 +13,10 @@ function gradeSort(grade: string, system: ClimbGradeSystem): number {
   return parseInt(match[1], 10) * 4 + sub;
 }
 
+// Outcomes shown in the pyramid bars, in stacking order. Falls are intentionally
+// excluded — the pyramid celebrates clean climbs, not attempts. Projects are
+// kept so you can see what you're working without it counting as a send.
+const PYRAMID_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "PROJECT"];
 const ORDERED_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "FELL", "PROJECT"];
 
 type AttemptRow = {
@@ -50,6 +54,9 @@ function buildPyramidRows(attempts: AttemptRow[]) {
   const pyramidMap = new Map<string, PyramidRow>();
 
   for (const attempt of attempts) {
+    // Falls don't get pyramid bars — the pyramid is what you sent, not what you
+    // tried. Counts are still incremented for non-fall outcomes (sends + projects).
+    if (attempt.outcome === "FELL") continue;
     const key = `${attempt.gradeSystem}::${attempt.grade}`;
     const existing = pyramidMap.get(key) ?? {
       grade: attempt.grade,
@@ -266,7 +273,7 @@ function GradePyramidRow({
 }) {
   const barMaxPct = 72;
   const totalPct = (row.total / maxTotal) * barMaxPct;
-  const segments: Array<{ outcome: ClimbOutcome; count: number }> = ORDERED_OUTCOMES
+  const segments: Array<{ outcome: ClimbOutcome; count: number }> = PYRAMID_OUTCOMES
     .map((outcome) => ({ outcome, count: row.counts[outcome] ?? 0 }))
     .filter((segment) => segment.count > 0);
 

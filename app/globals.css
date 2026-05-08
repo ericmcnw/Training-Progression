@@ -215,6 +215,28 @@ details[open] > summary[data-collapsible-summary]::before{
   overflow-x: clip;
 }
 
+/* Activities — interactive card states. */
+.activityCard{
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.activityCard:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.22) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+}
+.activityCard:focus-visible{
+  outline: 2px solid rgba(51,255,122,0.6);
+  outline-offset: 2px;
+}
+
+/* Activities — sectioned landing layout helpers. */
+.activityFamilyChip{
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.activityFamilyChip:hover{
+  border-color: rgba(255,255,255,0.32) !important;
+}
+
 .mobileOnlyHomeSection{
   display: none;
 }

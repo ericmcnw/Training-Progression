@@ -13,7 +13,7 @@ import {
 } from "@/lib/routines";
 import DrawerLogButton from "./DrawerLogButton";
 import type { computeHabitStats } from "@/lib/habits";
-import { formatRoutineTargetLabel, type RoutineFrequencySummary } from "@/lib/routine-frequency";
+import { formatRoutineTargetLabel, type RoutineFrequencySummary, type RoutineFrequencyTargetShape } from "@/lib/routine-frequency";
 import {
   logRoutineCompletion,
   logCompletionWithDate,
@@ -22,6 +22,11 @@ import {
 } from "./actions";
 import DeleteRoutineButton from "./DeleteRoutineButton";
 
+// Phase 1: the routine's frequency target now lives on its primary
+// FrequencyGoal (surfaced via the frequencyGoalRoutines relation). Callers must
+// pre-flatten via routineWithFrequencyTarget() so the legacy shape fields
+// (targetFrequencyCount/Unit/Interval, frequencyGoalEnabled) are present here
+// without a runtime lookup.
 export type RoutineWithExercises = Prisma.RoutineGetPayload<{
   include: {
     exercises: {
@@ -35,8 +40,11 @@ export type RoutineWithExercises = Prisma.RoutineGetPayload<{
     tagAssignments: {
       select: { tag: { select: { name: true } } };
     };
+    frequencyGoalRoutines: {
+      include: { goal: true };
+    };
   };
-}>;
+}> & RoutineFrequencyTargetShape;
 
 function loggingHref(routine: Pick<RoutineWithExercises, "id" | "kind">) {
   return `/routines/${routine.id}/log`;

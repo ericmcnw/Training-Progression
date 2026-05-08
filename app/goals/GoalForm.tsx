@@ -83,17 +83,17 @@ const SCOPES: Record<GoalTypeValue, ScopeOption[]> = {
   VOLUME: [
     { value: "routine",  label: "Routine",  hint: "Total output from a single routine" },
     { value: "exercise", label: "Exercise", hint: "Reps, sets, or volume on a lift" },
-    { value: "cardio",   label: "Cardio",   hint: "Distance, elevation, or duration" },
+    { value: "cardio",   label: "Endurance", hint: "Distance, elevation, or duration" },
     { value: "group",    label: "Group",    hint: "Combined workload across a training group" },
   ],
   PERFORMANCE: [
     { value: "exercise", label: "Lift / movement",  hint: "Best weight or best-set duration for a lift" },
-    { value: "cardio",   label: "Cardio benchmark", hint: "Pace, distance, or elevation milestone" },
+    { value: "cardio",   label: "Endurance benchmark", hint: "Pace, distance, or elevation milestone" },
     { value: "grade",    label: "Grade / metric",   hint: "Climbing grade, session score, or sport metric" },
   ],
   COMPLETION: [
     { value: "routine", label: "Routine", hint: "Complete a routine N times" },
-    { value: "cardio",  label: "Cardio",  hint: "Log cardio sessions" },
+    { value: "cardio",  label: "Endurance",  hint: "Log endurance sessions" },
     { value: "group",   label: "Group",   hint: "Complete any session in a group" },
   ],
 };

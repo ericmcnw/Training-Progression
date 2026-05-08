@@ -95,11 +95,12 @@ function parsePerformedAt(performedAtLocal?: string | null) {
   return parseAppDateTimeLocal(raw);
 }
 
-function parseCategory(formData: FormData) {
-  const category = String(formData.get("category") || "").trim();
-  return category || "General";
-}
-
+// Frequency target parsing — Phase 1 cleanup.
+// The legacy per-routine target columns are gone; the canonical target is now a
+// FrequencyGoal row linked via FrequencyGoalRoutine. This parser still produces
+// the legacy shape for compatibility with downstream helpers like
+// suggestedTimesPerWeekForRoutineTarget(); the actual write happens in
+// syncRoutineFrequencyGoal() below.
 function parseRoutineFrequencyTarget(formData: FormData) {
   const enabled = String(formData.get("frequencyTargetEnabled") || "").trim() === "1";
   if (!enabled) {
@@ -140,6 +141,63 @@ function parseRoutineFrequencyTarget(formData: FormData) {
     targetFrequencyUnit,
     targetFrequencyInterval: Math.floor(targetFrequencyInterval),
   } as const;
+}
+
+// Persist a routine's "primary" frequency target as a FrequencyGoal record.
+// Convention: a routine's primary goal has the deterministic id `fg_<routineId>`
+// so the upsert is straightforward and 1-to-1 routine→goal lookup is trivial.
+// Multi-routine goals (set up through the Goals UI) live alongside this with
+// non-deterministic ids and are unaffected.
+async function syncRoutineFrequencyGoal(
+  routineId: string,
+  routineName: string,
+  target: {
+    frequencyGoalEnabled: boolean;
+    targetFrequencyCount: number | null;
+    targetFrequencyUnit: RoutineFrequencyUnit | null;
+    targetFrequencyInterval: number | null;
+  }
+) {
+  const goalId = `fg_${routineId}`;
+  const valid =
+    target.frequencyGoalEnabled &&
+    target.targetFrequencyCount != null &&
+    target.targetFrequencyCount > 0 &&
+    target.targetFrequencyUnit != null &&
+    target.targetFrequencyInterval != null &&
+    target.targetFrequencyInterval > 0;
+
+  if (!valid) {
+    // Clear the routine's primary goal if it exists. Cascade will clean up the
+    // FrequencyGoalRoutine join row.
+    await prisma.frequencyGoal.deleteMany({ where: { id: goalId } });
+    return;
+  }
+
+  await prisma.frequencyGoal.upsert({
+    where: { id: goalId },
+    update: {
+      name: `${routineName} frequency goal`,
+      targetCount: target.targetFrequencyCount!,
+      targetInterval: target.targetFrequencyInterval!,
+      targetUnit: target.targetFrequencyUnit!,
+      isActive: true,
+    },
+    create: {
+      id: goalId,
+      name: `${routineName} frequency goal`,
+      targetCount: target.targetFrequencyCount!,
+      targetInterval: target.targetFrequencyInterval!,
+      targetUnit: target.targetFrequencyUnit!,
+      isActive: true,
+    },
+  });
+  // Ensure the join exists. Composite PK makes this idempotent.
+  await prisma.frequencyGoalRoutine.upsert({
+    where: { goalId_routineId: { goalId, routineId } },
+    update: {},
+    create: { goalId, routineId },
+  });
 }
 
 async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "routine" | "exercise") {
@@ -923,7 +981,6 @@ function revalidateRoutineSurfaces(routineId?: string) {
 
 export async function createRoutine(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
-  const category = parseCategory(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
@@ -938,14 +995,9 @@ export async function createRoutine(formData: FormData) {
   const created = await prisma.routine.create({
     data: {
       name,
-      category,
       domain,
       kind,
       subtype,
-      frequencyGoalEnabled: frequencyTarget.frequencyGoalEnabled,
-      targetFrequencyCount: frequencyTarget.targetFrequencyCount,
-      targetFrequencyUnit: frequencyTarget.targetFrequencyUnit,
-      targetFrequencyInterval: frequencyTarget.targetFrequencyInterval,
       timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
       isActive: true,
       isDeleted: false,
@@ -954,6 +1006,7 @@ export async function createRoutine(formData: FormData) {
     select: { id: true },
   });
 
+  await syncRoutineFrequencyGoal(created.id, name, frequencyTarget);
   await syncRoutineTypeDetails(created.id, kind, sessionTemplateId);
   await syncRoutineClassificationMetadata({
     routineId: created.id,
@@ -994,20 +1047,25 @@ export async function createStarterPack(formData: FormData) {
     const created = await prisma.routine.create({
       data: {
         name: routine.name,
-        category: routine.category,
         domain: "general",
-      kind: routine.kind,
-      subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
-      targetFrequencyCount: routine.timesPerWeek,
-      targetFrequencyUnit: routine.timesPerWeek ? "WEEK" : null,
-      targetFrequencyInterval: routine.timesPerWeek ? 1 : null,
-      timesPerWeek: routine.timesPerWeek,
-      isActive: true,
-      isDeleted: false,
-      deletedAt: null,
+        kind: routine.kind,
+        subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
+        timesPerWeek: routine.timesPerWeek,
+        isActive: true,
+        isDeleted: false,
+        deletedAt: null,
       },
       select: { id: true },
     });
+
+    if (routine.timesPerWeek && routine.timesPerWeek > 0) {
+      await syncRoutineFrequencyGoal(created.id, routine.name, {
+        frequencyGoalEnabled: true,
+        targetFrequencyCount: routine.timesPerWeek,
+        targetFrequencyUnit: "WEEK",
+        targetFrequencyInterval: 1,
+      });
+    }
 
     await syncRoutineTypeDetails(
       created.id,
@@ -1028,7 +1086,6 @@ export async function createStarterPack(formData: FormData) {
 export async function updateRoutine(formData: FormData) {
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
-  const category = parseCategory(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
@@ -1043,14 +1100,7 @@ export async function updateRoutine(formData: FormData) {
 
   const existing = await prisma.routine.findUnique({
     where: { id },
-    select: {
-      isDeleted: true,
-      kind: true,
-      frequencyGoalEnabled: true,
-      targetFrequencyCount: true,
-      targetFrequencyUnit: true,
-      targetFrequencyInterval: true,
-    },
+    select: { isDeleted: true, kind: true },
   });
   if (!existing) throw new Error("Routine not found.");
   if (existing.isDeleted) {
@@ -1059,14 +1109,6 @@ export async function updateRoutine(formData: FormData) {
   }
 
   const currentKind = normalizeRoutineKind(existing.kind);
-  const nextFrequencyTarget = frequencyTarget.frequencyGoalEnabled
-    ? frequencyTarget
-    : {
-        frequencyGoalEnabled: false,
-        targetFrequencyCount: existing.targetFrequencyCount,
-        targetFrequencyUnit: existing.targetFrequencyUnit,
-        targetFrequencyInterval: existing.targetFrequencyInterval,
-      };
 
   await prisma.$transaction(async (tx) => {
     await convertRoutineStructureTx(tx, {
@@ -1079,18 +1121,15 @@ export async function updateRoutine(formData: FormData) {
       where: { id },
       data: {
         name,
-        category,
         domain,
         kind,
         subtype,
-        frequencyGoalEnabled: nextFrequencyTarget.frequencyGoalEnabled,
-        targetFrequencyCount: nextFrequencyTarget.targetFrequencyCount,
-        targetFrequencyUnit: nextFrequencyTarget.targetFrequencyUnit,
-        targetFrequencyInterval: nextFrequencyTarget.targetFrequencyInterval,
-        timesPerWeek: suggestedTimesPerWeekForRoutineTarget(nextFrequencyTarget),
+        timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
       },
     });
   });
+
+  await syncRoutineFrequencyGoal(id, name, frequencyTarget);
   await syncRoutineTypeDetails(id, kind, sessionTemplateId);
   await syncRoutineClassificationMetadata({
     routineId: id,
@@ -1115,7 +1154,7 @@ export async function updateRoutineFrequencyTarget(formData: FormData) {
 
   const existing = await prisma.routine.findUnique({
     where: { id: routineId },
-    select: { id: true, isDeleted: true },
+    select: { id: true, name: true, isDeleted: true },
   });
   if (!existing) throw new Error("Routine not found.");
   if (existing.isDeleted) {
@@ -1124,14 +1163,15 @@ export async function updateRoutineFrequencyTarget(formData: FormData) {
   }
 
   if (intent === "clear") {
+    await syncRoutineFrequencyGoal(routineId, existing.name, {
+      frequencyGoalEnabled: false,
+      targetFrequencyCount: null,
+      targetFrequencyUnit: null,
+      targetFrequencyInterval: null,
+    });
     await prisma.routine.update({
       where: { id: routineId },
-      data: {
-        targetFrequencyCount: null,
-        targetFrequencyUnit: null,
-        targetFrequencyInterval: null,
-        timesPerWeek: null,
-      },
+      data: { timesPerWeek: null },
     });
     revalidateRoutineSurfaces(routineId);
     return;
@@ -1156,17 +1196,16 @@ export async function updateRoutineFrequencyTarget(formData: FormData) {
   }
 
   const frequencyTarget = {
+    frequencyGoalEnabled: true,
     targetFrequencyCount: Math.floor(targetFrequencyCount),
     targetFrequencyUnit,
     targetFrequencyInterval: Math.floor(targetFrequencyInterval),
   } as const;
 
+  await syncRoutineFrequencyGoal(routineId, existing.name, frequencyTarget);
   await prisma.routine.update({
     where: { id: routineId },
-    data: {
-      ...frequencyTarget,
-      timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
-    },
+    data: { timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget) },
   });
 
   revalidateRoutineSurfaces(routineId);
@@ -1735,6 +1774,7 @@ export async function logSession(params: {
     grade: string;
     gradeSystem: "BOULDER_V" | "YOSEMITE";
     outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
+    area?: string | null;
     movesCompleted?: number;
     totalMoves?: number;
     notes?: string;
@@ -1855,6 +1895,7 @@ export async function logSession(params: {
           grade: attempt.grade,
           gradeSystem: attempt.gradeSystem,
           outcome: attempt.outcome,
+          area: attempt.area?.trim() || null,
           movesCompleted: attempt.movesCompleted ?? null,
           totalMoves: attempt.totalMoves ?? null,
           notes: attempt.notes?.trim() || null,

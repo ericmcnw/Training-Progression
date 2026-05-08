@@ -39,6 +39,7 @@ export default function NewRoutineForm({
   metadataGroups: MetadataGroupOption[];
   sessionTemplates: Array<{
     id: string;
+    key: string;
     name: string;
     description: string | null;
     sessionSubtype: string | null;
@@ -106,6 +107,10 @@ export default function NewRoutineForm({
     setSubtype(preset.subtype);
     setDomainOverride(preset.domain);
     setSelectedMetadataGroupIds([]);
+    if (preset.sessionTemplateKey) {
+      const matched = sessionTemplates.find((t) => t.key === preset.sessionTemplateKey);
+      if (matched) setSessionTemplateId(matched.id);
+    }
     setStep("form");
   }
 
@@ -249,6 +254,7 @@ export default function NewRoutineForm({
         <input
           name="name"
           style={s.input}
+          defaultValue={selectedPreset?.defaultName ?? ""}
           placeholder={
             selectedPreset
               ? `e.g. ${selectedPreset.label}, Morning ${selectedPreset.label}...`

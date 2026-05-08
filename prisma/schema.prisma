@@ -150,19 +150,39 @@ enum InjuryStatus {
 // ZoneFreshness is derived in application code:
 // FRESH, WORKED_TODAY, RECENTLY_WORKED, RECOVERING, INJURED
 
+// Routine: a reusable training template a user logs against.
+//
+// Typing dimensions (read these together — they answer different questions):
+//
+//   kind    : the LOGGING SHAPE — what data this routine captures when logged.
+//             COMPLETION (check-off), WORKOUT (sets+reps+weight), CARDIO
+//             (distance/duration/elevation), GUIDED (step-by-step), SESSION
+//             (sport-shaped, custom metrics, optional ClimbAttempt etc.).
+//
+//   subtype : a STYLE/VARIANT label within a kind (e.g., LONG_RUN vs RUN).
+//             First-class metadata tags now carry the activity-type meaning
+//             (running/biking/etc.); subtype is becoming a secondary label.
+//
+//   domain  : the DASHBOARD CLASSIFICATION — which training balance bar this
+//             routine contributes to. UI options: strength, cardio, mobility,
+//             sport, recovery. Derived from kind+subtype unless overridden.
+//
+// SESSION vs CARDIO — when the data shape is similar (both can have distance
+// and duration), the rule is: SESSION is sport-shaped (climbing, surfing,
+// basketball — has an identity beyond the metrics) and CARDIO is endurance-
+// shaped (pace and distance are the point — running, biking, swimming).
+//
+// Habit tracking is NOT a domain — it's a behavior modifier. Any routine
+// becomes a habit by attaching a FrequencyGoal. The Habits view is a lens
+// over routines with FrequencyGoals, regardless of kind or domain.
 model Routine {
-  id                      String                @id @default(cuid())
-  name                    String
-  category                String                @default("General")
-  subtype                 String?
-  domain                  String                @default("general")
-  kind                    RoutineKind           @default(COMPLETION)
-  timesPerWeek            Int?
-  targetFrequencyCount    Int?
-  targetFrequencyUnit     RoutineFrequencyUnit?
-  targetFrequencyInterval Int?
-  frequencyGoalEnabled    Boolean               @default(true)
-  isActive                Boolean               @default(true)
+  id           String      @id @default(cuid())
+  name         String
+  subtype      String?
+  domain       String      @default("general")
+  kind         RoutineKind @default(COMPLETION)
+  timesPerWeek Int?
+  isActive     Boolean     @default(true)
 
   // soft delete (hide from UI, keep logs for progress)
   isDeleted Boolean   @default(false)
@@ -184,9 +204,7 @@ model Routine {
 
   @@index([isActive])
   @@index([isDeleted])
-  @@index([category])
   @@index([kind, subtype])
-  @@index([targetFrequencyUnit, targetFrequencyInterval])
 }
 
 model SessionTemplate {
@@ -297,6 +315,7 @@ model ClimbAttempt {
   grade          String
   gradeSystem    ClimbGradeSystem
   outcome        ClimbOutcome
+  area           String?
   movesCompleted Int?
   totalMoves     Int?
   notes          String?

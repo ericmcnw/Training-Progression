@@ -77,49 +77,11 @@ function isStoredRoutineFrequencyGoalLike(input: {
   );
 }
 
-function getRoutineFrequencyGoalUpdate(input: {
-  goalType: string;
-  targetType: string;
-  metricType: string;
-  timeframe: string;
-  targetId: string;
-  targetValue: number;
-  isActive: boolean;
-}) {
-  if (!isRoutineFrequencyGoalInput(input)) return null;
-
-  const targetFrequencyUnit =
-    input.timeframe === "DAY" ? "DAY" : input.timeframe === "MONTH" ? "MONTH" : "WEEK";
-
-  return {
-    routineId: input.targetId,
-    data: {
-      targetFrequencyCount: Math.max(1, Math.floor(input.targetValue)),
-      targetFrequencyUnit,
-      targetFrequencyInterval: 1,
-      frequencyGoalEnabled: input.isActive,
-    },
-  } as const;
-}
-
-async function clearRoutineFrequencyGoal(tx: PrismaTx, routineId: string) {
-  await tx.routine.update({
-    where: { id: routineId },
-    data: {
-      targetFrequencyCount: null,
-      targetFrequencyUnit: null,
-      targetFrequencyInterval: null,
-      frequencyGoalEnabled: false,
-    },
-  });
-}
-
-async function syncRoutineFrequencyGoalUpdate(tx: PrismaTx, update: NonNullable<ReturnType<typeof getRoutineFrequencyGoalUpdate>>) {
-  await tx.routine.update({
-    where: { id: update.routineId },
-    data: update.data,
-  });
-}
+// Phase 1 cleanup: the legacy per-routine frequency columns have been dropped.
+// The Goal model is the single source of truth for routine-frequency goals; we
+// no longer mirror the data into Routine columns. The routine-mirror helpers
+// that used to live here (getRoutineFrequencyGoalUpdate, clearRoutineFrequencyGoal,
+// syncRoutineFrequencyGoalUpdate) are removed — their callers are now no-ops.
 
 async function getSessionMetricDefinitionForForm(formData: FormData, targetType: string, targetId: string) {
   const definitionId = String(formData.get("sessionMetricDefinitionId") ?? "").trim();
@@ -245,15 +207,9 @@ function revalidateGoals() {
 
 export async function createGoal(formData: FormData) {
   const input = await parseGoalInput(formData);
-  const routineFrequencyUpdate = getRoutineFrequencyGoalUpdate(input);
-  const goal = await prisma.$transaction(async (tx) => {
-    if (routineFrequencyUpdate) {
-      await syncRoutineFrequencyGoalUpdate(tx, routineFrequencyUpdate);
-    }
-    return tx.goal.create({
-      data: input,
-      select: { id: true },
-    });
+  const goal = await prisma.goal.create({
+    data: input,
+    select: { id: true },
   });
   revalidateGoals();
   redirect(`/goals/${goal.id}`);
@@ -274,20 +230,9 @@ export async function updateGoal(formData: FormData) {
   });
   if (!existingGoal) throw new Error("Goal not found.");
 
-  const nextRoutineFrequencyUpdate = getRoutineFrequencyGoalUpdate(input);
-  const previousRoutineId = isStoredRoutineFrequencyGoalLike(existingGoal) ? existingGoal.targetId : null;
-
-  await prisma.$transaction(async (tx) => {
-    if (previousRoutineId && previousRoutineId !== nextRoutineFrequencyUpdate?.routineId) {
-      await clearRoutineFrequencyGoal(tx, previousRoutineId);
-    }
-    if (nextRoutineFrequencyUpdate) {
-      await syncRoutineFrequencyGoalUpdate(tx, nextRoutineFrequencyUpdate);
-    }
-    await tx.goal.update({
-      where: { id: goalId },
-      data: input,
-    });
+  await prisma.goal.update({
+    where: { id: goalId },
+    data: input,
   });
   revalidateGoals();
   redirect(`/goals/${goalId}`);
@@ -305,16 +250,10 @@ export async function deleteGoalEntry(input: { goalId: string }) {
   }
 
   if (goalId.startsWith("routine-frequency:")) {
+    // Synthetic id from lib/goals.ts pointing at a routine's "primary" goal.
+    // After Phase 1, that's a real FrequencyGoal row with id `fg_<routineId>`.
     const routineId = goalId.slice("routine-frequency:".length);
-    await prisma.routine.update({
-      where: { id: routineId },
-      data: {
-        targetFrequencyCount: null,
-        targetFrequencyUnit: null,
-        targetFrequencyInterval: null,
-        frequencyGoalEnabled: false,
-      },
-    });
+    await prisma.frequencyGoal.deleteMany({ where: { id: `fg_${routineId}` } });
     revalidateGoals();
     redirect("/goals");
   }
@@ -342,12 +281,7 @@ export async function deleteGoal(input: { goalId: string }) {
     throw new Error("Goal not found.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    if (isStoredRoutineFrequencyGoalLike(goal)) {
-      await clearRoutineFrequencyGoal(tx, goal.targetId);
-    }
-    await tx.goal.delete({ where: { id: goalId } });
-  });
+  await prisma.goal.delete({ where: { id: goalId } });
   revalidateGoals();
   redirect("/goals");
 }
@@ -362,12 +296,13 @@ export async function toggleRoutineFrequencyGoal(formData: FormData) {
     !goalId.startsWith("routine-frequency:") &&
     !goalId.startsWith("group-frequency:");
 
+  // Phase 1: routine-mirror columns are gone. The routine's primary FrequencyGoal
+  // is `fg_<routineId>`; toggling that goal's isActive is the canonical action.
   await prisma.$transaction(async (tx) => {
-    await tx.routine.update({
-      where: { id: routineId },
-      data: { frequencyGoalEnabled: nextEnabled },
+    await tx.frequencyGoal.updateMany({
+      where: { id: `fg_${routineId}` },
+      data: { isActive: nextEnabled },
     });
-
     if (shouldSyncGoalRecord) {
       await tx.goal.update({
         where: { id: goalId },
@@ -402,11 +337,11 @@ export async function toggleGoalActive(formData: FormData) {
       where: { id: goalId },
       data: { isActive: nextEnabled },
     });
-
     if (isStoredRoutineFrequencyGoalLike(goal)) {
-      await tx.routine.update({
-        where: { id: goal.targetId },
-        data: { frequencyGoalEnabled: nextEnabled },
+      // Mirror to the primary FrequencyGoal so habit tracking stays in sync.
+      await tx.frequencyGoal.updateMany({
+        where: { id: `fg_${goal.targetId}` },
+        data: { isActive: nextEnabled },
       });
     }
   });

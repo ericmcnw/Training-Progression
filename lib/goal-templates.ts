@@ -84,8 +84,8 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
   },
   {
     key: "CARDIO_DISTANCE",
-    label: "Cardio weekly distance",
-    description: "Build total weekly distance for running, walking, biking, or similar cardio.",
+    label: "Endurance weekly distance",
+    description: "Build total weekly distance for running, walking, biking, or similar endurance work.",
     goalType: "VOLUME",
     targetType: "CARDIO",
     metricType: "DISTANCE",
@@ -94,7 +94,7 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
   },
   {
     key: "CARDIO_ELEVATION",
-    label: "Cardio elevation gain",
+    label: "Endurance elevation gain",
     description: "Build weekly climbing, hiking, trail running, or uphill elevation gain.",
     goalType: "VOLUME",
     targetType: "CARDIO",
@@ -104,7 +104,7 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
   },
   {
     key: "CARDIO_PACE",
-    label: "Cardio pace benchmark",
+    label: "Endurance pace benchmark",
     description: "Target a pace benchmark like a 5K or mile effort.",
     goalType: "PERFORMANCE",
     targetType: "CARDIO",

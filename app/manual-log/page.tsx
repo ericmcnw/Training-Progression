@@ -16,15 +16,14 @@ import DeleteLogButton from "./DeleteLogButton";
 
 export const dynamic = "force-dynamic";
 
-const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "recovery", "habit"] as const;
+const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "habit"] as const;
 type Domain = (typeof DOMAIN_ORDER)[number];
 
 const DOMAIN_LABELS: Record<Domain, string> = {
   strength: "Strength",
-  cardio: "Cardio",
+  cardio: "Endurance",
   mobility: "Mobility",
   sport: "Sport",
-  recovery: "Recovery",
   habit: "Habit",
 };
 
@@ -59,7 +58,6 @@ export default async function ManualLogPage({
           select: {
             id: true,
             name: true,
-            category: true,
             kind: true,
             domain: true,
             subtype: true,
@@ -447,8 +445,6 @@ export default async function ManualLogPage({
                     );
                     const routineKind = String(log.routine.kind);
                     const typeLabel = formatRoutineTypeLabel(routineKind);
-                    const categoryLabel =
-                      (log.routine.category || "General").trim() || "General";
                     const historyReturnTo = filterDomain
                       ? `/manual-log?view=history&domain=${filterDomain}`
                       : "/manual-log?view=history";
@@ -470,7 +466,7 @@ export default async function ManualLogPage({
                             {log.routine.name}
                           </div>
                           <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
-                            {categoryLabel} · {typeLabel} ·{" "}
+                            {typeLabel} ·{" "}
                             {formatAppDateTime(log.performedAt, {
                               hour: "numeric",
                               minute: "2-digit",
@@ -545,14 +541,13 @@ function ActivityCard({
     durationSec: number | null;
     completionCount: number | null;
     domain: Domain;
-    routine: { name: string; kind: string | null; category: string; subtype: string | null };
+    routine: { name: string; kind: string | null; subtype: string | null };
     exercises: { id: string; sets: { id: string }[] }[];
   };
 }) {
   const exerciseSetCount = log.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const routineKind = String(log.routine.kind);
   const typeLabel = formatRoutineTypeLabel(routineKind);
-  const categoryLabel = (log.routine.category || "General").trim() || "General";
   const color = domainColor(log.domain);
 
   return (
@@ -566,7 +561,7 @@ function ActivityCard({
     >
       <div style={{ fontWeight: 800 }}>{log.routine.name}</div>
       <div style={{ marginTop: 3, fontSize: 12, opacity: 0.72 }}>
-        {categoryLabel} · {typeLabel} ·{" "}
+        {typeLabel} ·{" "}
         {formatAppDateTime(log.performedAt, {
           month: "short",
           day: "numeric",

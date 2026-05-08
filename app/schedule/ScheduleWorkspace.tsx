@@ -242,7 +242,7 @@ export default function ScheduleWorkspace({
                 style={{ border: "1px solid rgba(128,128,128,0.45)", borderRadius: 10, padding: 9, background: "rgba(128,128,128,0.07)", cursor: "grab" }}
               >
                 <div style={{ fontWeight: 800, fontSize: 13 }}>{routine.name}</div>
-                <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>{routine.category} | {routine.kind}</div>
+                <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>{routine.kind}</div>
               </div>
             ))}
           </div>

@@ -2,8 +2,7 @@ import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 import { toAppYmd } from "@/lib/dates";
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
-import { isMissingRoutineFrequencyColumnsError, withNullRoutineFrequencyTargets } from "@/lib/routine-query-compat";
-import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, type RoutineFrequencySummary } from "@/lib/routine-frequency";
+import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, routineWithFrequencyTarget, type RoutineFrequencySummary } from "@/lib/routine-frequency";
 import { getStimulusOverviewModel } from "@/lib/stimulus-preferences";
 
 export const RECENT_WINDOW_DAYS = 7;
@@ -280,8 +279,10 @@ function lensKind(lens: Lens): MetadataGroupKind {
 }
 
 function categoryHref(group: GroupRow) {
+  // CARDIO_ACTIVITY groups have detail pages at /activities/[slug] (Phase 2).
+  // TRAINING_GROUP / MUSCLE_GROUP / etc. still live under /progress/groups/[slug].
   return group.kind === "CARDIO_ACTIVITY"
-    ? `/progress/cardio/${group.slug}?tab=overview&range=4w`
+    ? `/activities/${group.slug}?tab=overview&range=4w`
     : `/progress/groups/${group.slug}?tab=overview&range=4w`;
 }
 
@@ -591,28 +592,13 @@ function createRecommendation(params: Omit<TrainingRecommendation, "suggestedRou
   } satisfies TrainingRecommendation;
 }
 
+// Phase 1: legacy per-routine frequency columns dropped; frequency targets now
+// come from the FrequencyGoal model via the frequencyGoalRoutines relation.
+// routineWithFrequencyTarget() flattens that into the legacy shape consumers
+// already expect.
 const routineScalarSelect = {
   id: true,
   name: true,
-  category: true,
-  subtype: true,
-  domain: true,
-  kind: true,
-  timesPerWeek: true,
-  targetFrequencyCount: true,
-  targetFrequencyUnit: true,
-  targetFrequencyInterval: true,
-  frequencyGoalEnabled: true,
-  isActive: true,
-  isDeleted: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
-
-const routineScalarSelectWithoutFrequency = {
-  id: true,
-  name: true,
-  category: true,
   subtype: true,
   domain: true,
   kind: true,
@@ -621,28 +607,13 @@ const routineScalarSelectWithoutFrequency = {
   isDeleted: true,
   createdAt: true,
   updatedAt: true,
+  frequencyGoalRoutines: {
+    include: { goal: true },
+  },
 } as const;
 
 const routineRelationSelect = {
   ...routineScalarSelect,
-  metadataGroups: {
-    include: { group: { select: { id: true, slug: true, label: true, kind: true } } },
-  },
-  sessionDetails: {
-    include: {
-      template: {
-        include: {
-          metadataGroups: {
-            include: { group: { select: { id: true, slug: true, label: true, kind: true } } },
-          },
-        },
-      },
-    },
-  },
-} as const;
-
-const routineRelationSelectWithoutFrequency = {
-  ...routineScalarSelectWithoutFrequency,
   metadataGroups: {
     include: { group: { select: { id: true, slug: true, label: true, kind: true } } },
   },
@@ -715,28 +686,15 @@ async function loadRecommendationInputs() {
     },
   } as const;
 
-  let routines;
-  try {
-    routines = await prisma.routine.findMany({
-      where: { isDeleted: false, isActive: true },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: {
-        ...routineScalarSelect,
-        ...routineSelectShared,
-      },
-    });
-  } catch (error) {
-    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
-    const legacyRoutines = await prisma.routine.findMany({
-      where: { isDeleted: false, isActive: true },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: {
-        ...routineScalarSelectWithoutFrequency,
-        ...routineSelectShared,
-      },
-    });
-    routines = legacyRoutines.map((routine) => withNullRoutineFrequencyTargets(routine));
-  }
+  const rawRoutines = await prisma.routine.findMany({
+    where: { isDeleted: false, isActive: true },
+    orderBy: [{ domain: "asc" }, { name: "asc" }],
+    select: {
+      ...routineScalarSelect,
+      ...routineSelectShared,
+    },
+  });
+  const routines = rawRoutines.map(routineWithFrequencyTarget);
 
   const maxTargetWindowDays = Math.max(getMaxRoutineFrequencyWindowDays(routines), BASELINE_WINDOW_DAYS, MAINTENANCE_WINDOW_DAYS);
   const logSince = getWindowStart(maxTargetWindowDays);
@@ -772,45 +730,25 @@ async function loadRecommendationInputs() {
     },
   } as const;
 
-  let logs;
-  try {
-    logs = await prisma.routineLog.findMany({
-      where: {
-        performedAt: { gte: logSince },
-        routine: {
-          isDeleted: false,
-        },
+  const rawLogs = await prisma.routineLog.findMany({
+    where: {
+      performedAt: { gte: logSince },
+      routine: {
+        isDeleted: false,
       },
-      orderBy: [{ performedAt: "desc" }],
-      include: {
-        routine: {
-          select: routineRelationSelect,
-        },
-        ...logIncludeShared,
+    },
+    orderBy: [{ performedAt: "desc" }],
+    include: {
+      routine: {
+        select: routineRelationSelect,
       },
-    });
-  } catch (error) {
-    if (!isMissingRoutineFrequencyColumnsError(error)) throw error;
-    const legacyLogs = await prisma.routineLog.findMany({
-      where: {
-        performedAt: { gte: logSince },
-        routine: {
-          isDeleted: false,
-        },
-      },
-      orderBy: [{ performedAt: "desc" }],
-      include: {
-        routine: {
-          select: routineRelationSelectWithoutFrequency,
-        },
-        ...logIncludeShared,
-      },
-    });
-    logs = legacyLogs.map((log) => ({
-      ...log,
-      routine: withNullRoutineFrequencyTargets(log.routine),
-    }));
-  }
+      ...logIncludeShared,
+    },
+  });
+  const logs = rawLogs.map((log) => ({
+    ...log,
+    routine: routineWithFrequencyTarget(log.routine),
+  }));
 
   const [stimulusOverview, groups] = await Promise.all([stimulusOverviewPromise, groupsPromise]);
   return { stimulusOverview, groups, routines, logs };

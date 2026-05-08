@@ -16,7 +16,7 @@ export default function NewRoutinePage() {
   });
   const sessionTemplatesPromise = prisma.sessionTemplate.findMany({
     where: { isSystem: true },
-    select: { id: true, name: true, description: true, sessionSubtype: true },
+    select: { id: true, key: true, name: true, description: true, sessionSubtype: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
@@ -33,7 +33,7 @@ async function NewRoutinePageInner({
   sessionTemplatesPromise,
 }: {
   metadataGroupsPromise: Promise<Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>>;
-  sessionTemplatesPromise: Promise<Array<{ id: string; name: string; description: string | null; sessionSubtype: string | null }>>;
+  sessionTemplatesPromise: Promise<Array<{ id: string; key: string; name: string; description: string | null; sessionSubtype: string | null }>>;
 }) {
   const [metadataGroups, sessionTemplates] = await Promise.all([metadataGroupsPromise, sessionTemplatesPromise]);
 

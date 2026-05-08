@@ -238,7 +238,7 @@ export default async function CardioIndexView(props: {
       const lastSession = logs.length > 0 ? logs[logs.length - 1].performedAt : null;
       const cardioGroupSlug = routineCardioGroupSlugMap.get(routine.id);
       const href = cardioGroupSlug
-        ? `/progress/cardio/${cardioGroupSlug}?tab=overview&range=4w`
+        ? `/activities/${cardioGroupSlug}?tab=overview&range=4w`
         : `/progress/routines/${routine.id}?tab=overview&range=4w`;
       return { routine, sessions: logs.length, miles, durationSec, avgPaceSec, ytdMiles, lastSession, href };
     })

@@ -28,7 +28,6 @@ export default function EditRoutineForm({
   routine: {
     id: string;
     name: string;
-    category: string;
     subtype: string | null;
     domain: string;
     kind: RoutineKind;
@@ -113,7 +112,6 @@ export default function EditRoutineForm({
       <input type="hidden" name="id" value={routine.id} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
-      <input type="hidden" name="category" value={routine.category} />
       <input type="hidden" name="tags" value={tags} />
       <input type="hidden" name="domain" value={effectiveDomainValue} />
 

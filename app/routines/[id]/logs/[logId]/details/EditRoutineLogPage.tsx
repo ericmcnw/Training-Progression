@@ -75,7 +75,6 @@ export default async function EditRoutineLogPage(props: {
       select: {
         id: true,
         name: true,
-        category: true,
         kind: true,
         exercises: {
           orderBy: { sortOrder: "asc" },
@@ -294,7 +293,7 @@ export default async function EditRoutineLogPage(props: {
       <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>
         {routine.name} - Edit {isWorkoutKind(logKind) ? "Workout" : isCardioKind(logKind) ? "Cardio" : isGuidedKind(logKind) ? "Guided" : isSessionKind(logKind) ? "Session" : "Completion"} Log
       </h1>
-      <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.category}</div>
+      <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{routine.name}</div>
       <div style={{ marginTop: 16, border: "1px solid rgba(128,128,128,0.35)", borderRadius: 12, overflow: "hidden" }}>
         <div style={{ padding: "10px 14px", background: "rgba(128,128,128,0.14)", borderBottom: "1px solid rgba(128,128,128,0.25)", fontWeight: 900 }}>
           {isWorkoutKind(logKind) ? "WORKOUT LOG" : isCardioKind(logKind) ? "CARDIO LOG" : isGuidedKind(logKind) ? "GUIDED LOG" : isSessionKind(logKind) ? "SESSION LOG" : "COMPLETION LOG"}

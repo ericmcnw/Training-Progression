@@ -6,7 +6,7 @@ import { getChartGoalReference } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, resolveProgressTab, startOfYear, type ProgressTab } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
-import { getRoutineFrequencyStatus, getRoutineTargetWindow } from "@/lib/routine-frequency";
+import { getRoutineFrequencyStatus, getRoutineTargetWindow, routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
 import { withSessionMetricConfig } from "@/lib/session-templates";
 
@@ -40,7 +40,7 @@ export default async function RoutineTargetPage(props: {
   const range = getRangeFromSearchParam(getParam(searchParams, "range"));
   const routineId = params.routineId;
 
-  const routine = await prisma.routine.findUnique({
+  const rawRoutine = await prisma.routine.findUnique({
     where: { id: routineId },
     include: {
       exercises: {
@@ -66,10 +66,14 @@ export default async function RoutineTargetPage(props: {
           },
         },
       },
+      frequencyGoalRoutines: {
+        include: { goal: true },
+      },
     },
   });
 
-  if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+  if (!rawRoutine) return <div style={{ padding: 20 }}>Routine not found.</div>;
+  const routine = routineWithFrequencyTarget(rawRoutine);
   const kind = routine.kind;
   const availableTabs: ProgressTab[] =
     kind === "COMPLETION"

@@ -25,7 +25,6 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
         id: true,
         name: true,
         kind: true,
-        category: true,
         guidedSteps: {
           orderBy: { sortOrder: "asc" },
           select: {
@@ -86,7 +85,6 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
           </div>
           <h1 style={{ fontSize: 30, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={metaPill}>{routine.category}</span>
             <span style={metaPill}>{formatRoutineTypeLabel(routine.kind)}</span>
             <span style={metaPill}>{routine.guidedSteps.length} items</span>
           </div>

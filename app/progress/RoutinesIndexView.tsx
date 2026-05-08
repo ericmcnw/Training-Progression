@@ -58,7 +58,7 @@ export default async function RoutinesIndexView(props: {
       return { routine, summary, frequencySummary };
     })
     .filter(({ routine }) => {
-      if (query && !routine.name.toLowerCase().includes(query) && !routine.category.toLowerCase().includes(query)) return false;
+      if (query && !routine.name.toLowerCase().includes(query)) return false;
       if (kind !== "ALL" && routine.kind !== kind) return false;
       if (status === "active" && !routine.isActive) return false;
       if (status === "archived" && routine.isActive) return false;
@@ -71,9 +71,9 @@ export default async function RoutinesIndexView(props: {
       a.routine.name.localeCompare(b.routine.name)
     );
 
-  // Needs Attention: active routines that have a real frequency target (new
-  // targetFrequencyCount system, not the legacy timesPerWeek field) and are
-  // either behind or haven't been logged in DORMANT_DAYS days.
+  // Needs Attention: active routines that have a real frequency target
+  // (sourced from the FrequencyGoal model) and are either behind or haven't
+  // been logged in DORMANT_DAYS days.
   const needsAttention = routines
     .filter((r) => r.isActive && frequencyStatusByRoutineId.get(r.id)?.hasTarget === true)
     .map((routine) => {
@@ -160,7 +160,7 @@ export default async function RoutinesIndexView(props: {
         <FilterBar>
           <input type="hidden" name="section" value="routines" />
           {domainFilter ? <input type="hidden" name="domain" value={domainFilter} /> : null}
-          <FilterInput name="q" defaultValue={query} placeholder="Search routine or category" />
+          <FilterInput name="q" defaultValue={query} placeholder="Search routines" />
           <FilterSelect
             name="kind"
             defaultValue={kind.toLowerCase()}
@@ -168,7 +168,7 @@ export default async function RoutinesIndexView(props: {
               { value: "all", label: "All types" },
               { value: "completion", label: "Completion" },
               { value: "workout", label: "Workout" },
-              { value: "cardio", label: "Cardio" },
+              { value: "cardio", label: "Endurance" },
               { value: "guided", label: "Guided" },
               { value: "session", label: "Session" },
             ]}

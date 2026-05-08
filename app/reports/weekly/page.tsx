@@ -55,7 +55,7 @@ export default async function WeeklyReportPage({
     orderBy: [{ performedAt: "asc" }],
     include: {
       routine: {
-        select: { id: true, name: true, category: true, subtype: true, kind: true },
+        select: { id: true, name: true, subtype: true, kind: true },
       },
       exercises: {
         include: {

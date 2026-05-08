@@ -10,7 +10,6 @@ type Routine = {
   name: string;
   kind: string;
   domain: string;
-  category: string;
   suggestedTimesPerWeek: number;
   plannedDaysPerWeek: number;
   autoScheduleDaily: boolean;
@@ -87,12 +86,15 @@ export default function ScheduleBoard({
   }, []);
 
   const routineMap = useMemo(() => new Map(routines.map((routine) => [routine.id, routine])), [routines]);
+  // Group routines by training domain (was: category, dropped in Phase 1).
+  // Domain is the canonical training-classification axis now.
   const routinesByCategory = useMemo(() => {
     const groups = new Map<string, Routine[]>();
     for (const routine of routines) {
-      const category = routine.category?.trim() || "General";
-      if (!groups.has(category)) groups.set(category, []);
-      groups.get(category)!.push(routine);
+      const key = (routine.domain?.trim() || "general").toLowerCase();
+      const label = key.charAt(0).toUpperCase() + key.slice(1);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(routine);
     }
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [routines]);

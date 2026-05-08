@@ -23,7 +23,6 @@ async function ensureQuickWorkoutRoutine() {
     select: {
       id: true,
       name: true,
-      category: true,
     },
   });
 
@@ -32,7 +31,6 @@ async function ensureQuickWorkoutRoutine() {
   return prisma.routine.create({
     data: {
       name: "Quick Workout Log",
-      category: "Quick Log",
       domain: QUICK_WORKOUT_DOMAIN,
       kind: "WORKOUT",
       subtype: "OTHER",
@@ -42,7 +40,6 @@ async function ensureQuickWorkoutRoutine() {
     select: {
       id: true,
       name: true,
-      category: true,
     },
   });
 }

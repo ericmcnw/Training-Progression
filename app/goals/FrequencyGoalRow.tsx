@@ -35,7 +35,7 @@ function RowDots({
   target: number;
   status: string;
 }) {
-  const MAX_INLINE = 7;
+  const MAX_INLINE = 5;
   const filled = Math.min(current, target);
   const isAchieved = status === "Achieved" || (target > 0 && current >= target);
   const isBehind = status === "Behind";
@@ -261,10 +261,13 @@ const rowBodyStyle: React.CSSProperties = {
 
 const dotsWrapStyle: React.CSSProperties = {
   flexShrink: 0,
+  flexGrow: 0,
+  width: 156,
   padding: "10px 0 10px 14px",
   display: "flex",
   alignItems: "center",
   gap: 10,
+  overflow: "hidden",
 };
 
 const dotsLabelStyle: React.CSSProperties = {
