@@ -2,13 +2,19 @@ import MetricLineChart from "../MetricLineChart";
 import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, getRoutineLogs, routineSubtitle, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetCard, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
-import { getChartGoalReference } from "@/lib/goals";
+import { getChartGoalReference, getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, getRangeFromSearchParam, normalizeProgressTab, rangeChipLabel, resolveProgressTab, startOfYear, type ProgressTab } from "@/lib/progress-v2";
 import { formatDuration, formatPace } from "@/lib/progress";
 import { getRoutineFrequencyStatus, getRoutineTargetWindow, routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { aggregateSessionMetricHistory, sessionMetricPerformanceSeries } from "@/lib/session-metrics";
 import { withSessionMetricConfig } from "@/lib/session-templates";
+import ActivityPulseStrip from "./ActivityPulseStrip";
+import ActivityGoalsSection from "./ActivityGoalsSection";
+import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
+import { buildStrengthPulse } from "./sport-pulse";
+import { applyGoalsToPulseSlots } from "./pulse-goal-slots";
+import { buildWeeklyGrid } from "./activity-coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +24,50 @@ type SearchParams = Record<string, string | string[] | undefined>;
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Filters all active goals down to those that point at this routine: per-routine
+ * goals (frequency or otherwise), exercise PRs on the routine's exercises, and
+ * group-frequency goals whose linked routines include this one.
+ */
+async function getRoutineRelevantGoals(routineId: string, exerciseIds: string[]): Promise<GoalInsight[]> {
+  const allInsights = await getGoalsOverview({ active: "active" });
+
+  // Group-frequency goals carry a goal id like "group-frequency:<freqGoalId>".
+  // Their routine list lives on FrequencyGoalRoutine — fetch it once.
+  const groupFreqGoalIds = allInsights
+    .filter((insight) => insight.goal.id.startsWith("group-frequency:"))
+    .map((insight) => insight.goal.id.replace("group-frequency:", ""));
+  const includedGroupFreqGoals = new Set<string>();
+  if (groupFreqGoalIds.length > 0) {
+    const links = await prisma.frequencyGoalRoutine.findMany({
+      where: { goalId: { in: groupFreqGoalIds }, routineId },
+      select: { goalId: true },
+    });
+    for (const link of links) includedGroupFreqGoals.add(`group-frequency:${link.goalId}`);
+  }
+
+  const exerciseIdSet = new Set(exerciseIds);
+
+  return allInsights.filter((insight) => {
+    const goal = insight.goal;
+    if (goal.id.startsWith("group-frequency:")) {
+      return includedGroupFreqGoals.has(goal.id);
+    }
+    if (goal.targetType === "ROUTINE" && goal.targetId === routineId) return true;
+    if (goal.targetType === "EXERCISE" && exerciseIdSet.has(goal.targetId)) return true;
+    return false;
+  });
 }
 
 function formatSecondsShort(value: number) {
@@ -412,6 +462,137 @@ export default async function RoutineTargetPage(props: {
       </div>
     );
 
+  // ── Pulse strip + goals + heatmap (WORKOUT only) ──────────────────────────
+  // For strength routines, prepend the same hero treatment used by the activity
+  // worlds so per-routine progress feels as concrete as per-activity progress.
+  let strengthPulseSlots: ReturnType<typeof buildStrengthPulse> | null = null;
+  let routineHeatmapWeeks: ReturnType<typeof buildWeeklyGrid> = [];
+  let routineGoals: GoalInsight[] = [];
+
+  if (kind === "WORKOUT") {
+    const routineExerciseIds = routine.exercises.map((re) => re.exercise.id);
+
+    // All-time per-routine session data, with sets — for streak, PR detection,
+    // weekly bucketing. Slim select; range-filtered `logs` covers the charts.
+    const [allTimeLogs, fetchedGoals] = await Promise.all([
+      prisma.routineLog.findMany({
+        where: { routineId: routine.id },
+        orderBy: { performedAt: "desc" },
+        select: {
+          id: true,
+          performedAt: true,
+          exercises: {
+            select: {
+              exercise: { select: { name: true } },
+              sets: { select: { weightLb: true, reps: true } },
+            },
+          },
+        },
+      }),
+      getRoutineRelevantGoals(routine.id, routineExerciseIds),
+    ]);
+    routineGoals = fetchedGoals;
+
+    const now = new Date();
+    const thisWeekStart = startOfWeek(now);
+    const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    let thisWeekSets = 0;
+    let lastWeekSets = 0;
+    let thisWeekSessions = 0;
+
+    let allTimePRSet: { exerciseName: string; weight: number; reps: number } | null = null;
+    let recentPRSet: { exerciseName: string; weight: number; reps: number; date: Date } | null = null;
+    // Per-exercise running max in chronological order to detect PRs over time.
+    const exerciseChronoLogs = new Map<string, Array<{ date: Date; topWeight: number; topReps: number }>>();
+
+    const sessionsAsc = [...allTimeLogs].reverse(); // chronological
+
+    for (const log of sessionsAsc) {
+      let logSets = 0;
+      let logTopSet: { exerciseName: string; weight: number; reps: number } | null = null;
+      for (const ex of log.exercises) {
+        let exTopWeight = 0;
+        let exTopReps = 0;
+        for (const set of ex.sets) {
+          const w = set.weightLb ?? 0;
+          const r = set.reps ?? 0;
+          if (w <= 0 && r <= 0) continue;
+          logSets += 1;
+          if (w > exTopWeight) {
+            exTopWeight = w;
+            exTopReps = r;
+          }
+          if (w > 0 && (!logTopSet || w > logTopSet.weight)) {
+            logTopSet = { exerciseName: ex.exercise.name, weight: w, reps: r };
+          }
+        }
+        if (exTopWeight > 0) {
+          const list = exerciseChronoLogs.get(ex.exercise.name) ?? [];
+          list.push({ date: log.performedAt, topWeight: exTopWeight, topReps: exTopReps });
+          exerciseChronoLogs.set(ex.exercise.name, list);
+        }
+      }
+
+      if (log.performedAt >= thisWeekStart) {
+        thisWeekSets += logSets;
+        thisWeekSessions += 1;
+      } else if (log.performedAt >= lastWeekStart) {
+        lastWeekSets += logSets;
+      }
+
+      if (logTopSet && (!allTimePRSet || logTopSet.weight > allTimePRSet.weight)) {
+        allTimePRSet = logTopSet;
+      }
+    }
+
+    // Recent PR detection — find the most recent session in last 30d where any
+    // exercise's top weight exceeded all prior records for that exercise.
+    for (const [exerciseName, history] of exerciseChronoLogs) {
+      let priorMax = 0;
+      for (const point of history) {
+        if (point.date >= thirtyDaysAgo && point.topWeight > priorMax) {
+          if (!recentPRSet || point.date > recentPRSet.date) {
+            recentPRSet = {
+              exerciseName,
+              weight: point.topWeight,
+              reps: point.topReps,
+              date: point.date,
+            };
+          }
+        }
+        priorMax = Math.max(priorMax, point.topWeight);
+      }
+    }
+
+    const sessionDates = sessionsAsc.map((log) => log.performedAt);
+    const defaultSlots = buildStrengthPulse(
+      {
+        sessionDates,
+        thisWeekSets,
+        lastWeekSets,
+        thisWeekSessions,
+        recentPR: recentPRSet,
+        allTimePR: allTimePRSet,
+      },
+      now
+    );
+    strengthPulseSlots = applyGoalsToPulseSlots(defaultSlots, routineGoals);
+
+    routineHeatmapWeeks = buildWeeklyGrid(
+      allTimeLogs.map((log) => ({
+        id: log.id,
+        routineId: routine.id,
+        performedAt: log.performedAt,
+        routineName: routine.name,
+      })),
+      [],
+      now
+    );
+  }
+
   return (
     <>
       <TargetHeader
@@ -434,6 +615,32 @@ export default async function RoutineTargetPage(props: {
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+        {kind === "WORKOUT" && strengthPulseSlots ? (
+          <ActivityPulseStrip slots={strengthPulseSlots} />
+        ) : null}
+
+        {kind === "WORKOUT" ? (
+          <ActivityGoalsSection
+            goals={routineGoals}
+            activitySlug={`routine-${routine.id}`}
+            activityLabel={routine.name}
+          />
+        ) : null}
+
+        {kind === "WORKOUT" && routineHeatmapWeeks.length > 1 ? (
+          <SectionCard
+            title="Activity Coverage"
+            subtitle={`Sessions of "${routine.name}" over the last 52 weeks. Tap any week to see details.`}
+          >
+            <ActivityCoverageHeatmap
+              weeks={routineHeatmapWeeks}
+              sessionLabel="Session"
+              sessionRowLabel="Sessions"
+              hideTrainingRow
+            />
+          </SectionCard>
+        ) : null}
+
         <SectionCard title="Overview Snapshot">
           <StatGrid
             items={[
