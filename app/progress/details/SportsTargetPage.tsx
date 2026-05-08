@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import MetricLineChart from "../MetricLineChart";
 import ClimbingWorldPage from "./ClimbingWorldPage";
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
+import ActivityGoalsSection from "./ActivityGoalsSection";
 import { loadActivityCoverage } from "./activity-coverage-loader";
+import { getActivityGoals } from "@/lib/activity-goals";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
@@ -203,7 +205,14 @@ export default async function SportsTargetPage(props: {
 
   // ── Activity coverage (all-time) — climbing has its own world page ────────
   const isClimbing = params.slug === "climbing";
-  const coverage = isClimbing ? null : await loadActivityCoverage(params.slug, virtualSport);
+  // Virtual sports (surfing/snowboarding) don't have a metadata group at their
+  // own slug — they roll up under board-sports. Use that for goal lookup so
+  // group-targeted goals attached to either flavor still surface.
+  const goalLookupSlug = virtualSport ? "board-sports" : params.slug;
+  const [coverage, sportGoals] = await Promise.all([
+    isClimbing ? Promise.resolve(null) : loadActivityCoverage(params.slug, virtualSport),
+    isClimbing ? Promise.resolve([]) : getActivityGoals(goalLookupSlug),
+  ]);
 
   return (
     <>
@@ -241,6 +250,14 @@ export default async function SportsTargetPage(props: {
         )}
 
         {params.slug === "climbing" ? <ClimbingWorldPage /> : null}
+
+        {!isClimbing ? (
+          <ActivityGoalsSection
+            goals={sportGoals}
+            activitySlug={goalLookupSlug}
+            activityLabel={title}
+          />
+        ) : null}
 
         {coverage && coverage.weeks.length > 1 ? (
           <SectionCard

@@ -11,6 +11,8 @@ import {
 } from "@/lib/climb-types";
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
 import { buildWeeklyGrid, type SessionEventInput } from "./activity-coverage";
+import ActivityGoalsSection from "./ActivityGoalsSection";
+import { getActivityGoals } from "@/lib/activity-goals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,9 @@ type PyramidRow = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const ORDERED_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "FELL", "PROJECT"];
+// Outcomes shown in the pyramid bars. Falls are excluded — the pyramid is a
+// snapshot of what you sent, not what you tried.
+const PYRAMID_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "PROJECT"];
 
 function gradeSort(grade: string, system: ClimbGradeSystem): number {
   if (system === "BOULDER_V") return parseInt(grade.replace(/^V/, ""), 10) || 0;
@@ -53,6 +58,7 @@ function gradeSort(grade: string, system: ClimbGradeSystem): number {
 function buildPyramidRows(attempts: AttemptRow[]) {
   const map = new Map<string, PyramidRow>();
   for (const a of attempts) {
+    if (a.outcome === "FELL") continue;
     const key = `${a.gradeSystem}::${a.grade}`;
     const row = map.get(key) ?? { grade: a.grade, system: a.gradeSystem, counts: {}, total: 0 };
     row.counts[a.outcome] = (row.counts[a.outcome] ?? 0) + 1;
@@ -380,7 +386,7 @@ function PyramidBar({
 }) {
   const BAR_MAX_PCT = 78;
   const barPct = (row.total / maxTotal) * BAR_MAX_PCT;
-  const segments = ORDERED_OUTCOMES.map((o) => ({ outcome: o, count: row.counts[o] ?? 0 })).filter((s) => s.count > 0);
+  const segments = PYRAMID_OUTCOMES.map((o) => ({ outcome: o, count: row.counts[o] ?? 0 })).filter((s) => s.count > 0);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 28px", gap: 6, alignItems: "center" }}>
@@ -407,8 +413,8 @@ function PyramidBar({
 function OutcomeLegend({ system }: { system: ClimbGradeSystem }) {
   const items =
     system === "BOULDER_V"
-      ? [{ outcome: "FLASH" as ClimbOutcome, label: "Flash" }, { outcome: "SEND" as ClimbOutcome, label: "Send" }, { outcome: "PROJECT" as ClimbOutcome, label: "Project" }, { outcome: "FELL" as ClimbOutcome, label: "Fell" }]
-      : [{ outcome: "ONSIGHT" as ClimbOutcome, label: "Onsight" }, { outcome: "SEND" as ClimbOutcome, label: "Send" }, { outcome: "PROJECT" as ClimbOutcome, label: "Project" }, { outcome: "FELL" as ClimbOutcome, label: "Fell" }];
+      ? [{ outcome: "FLASH" as ClimbOutcome, label: "Flash" }, { outcome: "SEND" as ClimbOutcome, label: "Send" }, { outcome: "PROJECT" as ClimbOutcome, label: "Project" }]
+      : [{ outcome: "ONSIGHT" as ClimbOutcome, label: "Onsight" }, { outcome: "SEND" as ClimbOutcome, label: "Send" }, { outcome: "PROJECT" as ClimbOutcome, label: "Project" }];
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {items.map((item) => (
@@ -441,7 +447,7 @@ function VenueBar({ name, sessions, max }: { name: string; sessions: number; max
 export default async function ClimbingWorldPage() {
   const now = new Date();
 
-  const [attempts, rawTrainingLogs] = await Promise.all([
+  const [attempts, rawTrainingLogs, climbingGoals] = await Promise.all([
     prisma.climbAttempt.findMany({
       orderBy: { sessionLog: { performedAt: "desc" } },
       select: {
@@ -488,6 +494,7 @@ export default async function ClimbingWorldPage() {
         },
       },
     }),
+    getActivityGoals("climbing"),
   ]);
 
   if (attempts.length === 0) {
@@ -705,6 +712,13 @@ export default async function ClimbingWorldPage() {
           accent="rgba(74,222,128,0.9)"
         />
       </div>
+
+      {/* ── Active climbing goals — slot reserved between pulse and timeline ── */}
+      <ActivityGoalsSection
+        goals={climbingGoals}
+        activitySlug="climbing"
+        activityLabel="Climbing"
+      />
 
       {/* ── Recent session timeline (glanceable horizontal strip) ── */}
       {timelineSessions.length > 0 && (
