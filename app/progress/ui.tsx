@@ -65,6 +65,8 @@ export function TargetHeader({
   range,
   availableTabs,
   actions,
+  hideTabs,
+  hideRange,
 }: {
   section: ProgressSection;
   title: string;
@@ -75,6 +77,8 @@ export function TargetHeader({
   range: ProgressRange;
   availableTabs?: ProgressTab[];
   actions?: React.ReactNode;
+  hideTabs?: boolean;
+  hideRange?: boolean;
 }) {
   return (
     <div className="mobileProgressPage mobilePageShell" style={styles.container}>
@@ -87,24 +91,20 @@ export function TargetHeader({
         {actions ? <div className="mobileActionRow" style={styles.heroActions}>{actions}</div> : null}
       </div>
 
-      <div className="mobileListStack" style={styles.navStack}>
-        <NavCluster
-          label="Area"
-          hint="Switch between routines, exercises, cardio, and group rollups."
-          items={progressSections().map((item) => ({ ...item, active: item.key === section }))}
-        />
-        <div style={styles.navGrid}>
-          <NavCluster
-            label="View"
-            hint={progressTabDescription(tab)}
-            items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))}
-          />
-          <NavCluster
-            label="Window"
-            hint={`Current window: ${rangeChipLabel(range)}.`}
-            items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))}
-          />
-        </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 4 }}>
+        <CompactSegmentedNav items={progressSections().map((item) => ({ ...item, active: item.key === section }))} />
+        {!hideTabs && (
+          <>
+            <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+            <CompactSegmentedNav items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))} />
+          </>
+        )}
+        {!hideRange && (
+          <>
+            <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+            <CompactSegmentedNav items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))} />
+          </>
+        )}
       </div>
     </div>
   );
@@ -289,6 +289,37 @@ export function FilterSubmitButton({ label = "Apply" }: { label?: string }) {
   );
 }
 
+function CompactSegmentedNav({ items }: { items: Array<{ href: string; label: string; active?: boolean }> }) {
+  return (
+    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+      {items.map((item) => (
+        <Link
+          key={`${item.href}-${item.label}`}
+          href={item.href}
+          scroll={false}
+          prefetch={true}
+          style={{
+            padding: "4px 9px",
+            borderRadius: 8,
+            border: "1px solid",
+            borderColor: item.active ? "rgba(120,190,255,0.4)" : "rgba(255,255,255,0.08)",
+            textDecoration: "none",
+            color: "inherit",
+            background: item.active
+              ? "rgba(120,190,255,0.18)"
+              : "rgba(255,255,255,0.03)",
+            fontSize: 11,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function NavCluster({
   label,
   hint,
@@ -340,7 +371,7 @@ const border = "1px solid rgba(255,255,255,0.12)";
 const cardBackground = "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 1120, margin: "0 auto", padding: "4px 0 20px", display: "grid", gap: 18 },
+  container: { maxWidth: "none", padding: "4px 0 20px", display: "grid", gap: 18 },
   content: { marginTop: 2, display: "grid", gap: 16 },
   progressTopBar: {
     display: "flex",

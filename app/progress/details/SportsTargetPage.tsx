@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import MetricLineChart from "../MetricLineChart";
-import ClimbingProgressView from "../ClimbingProgressView";
+import ClimbingWorldPage from "./ClimbingWorldPage";
+import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
+import { loadActivityCoverage } from "./activity-coverage-loader";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
@@ -8,29 +11,12 @@ import { formatDuration, formatPace } from "@/lib/progress";
 import { fillWeeklySeries, getRangeFromSearchParam, incrementWeekMap, normalizeProgressTab, rangeChipLabel, resolveProgressTab, type ProgressRange } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
 import { getVirtualSportCategory, isSportGroup, isVirtualSportSlug } from "../sports";
-import { prisma } from "@/lib/prisma";
-import { climbOutcomeBg, climbOutcomeLabel } from "@/lib/climb-types";
-import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 
 export const dynamic = "force-dynamic";
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
 type SportLogs = Awaited<ReturnType<typeof getRoutineLogs>>;
-
-type ClimbSessionDetail = {
-  id: string;
-  performedAt: Date;
-  routineName: string;
-  templateKey: string | null;
-  locationName: string | null;
-  locationType: "GYM" | "CRAG" | null;
-  attempts: Array<{
-    grade: string;
-    gradeSystem: ClimbGradeSystem;
-    outcome: ClimbOutcome;
-  }>;
-};
 
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
@@ -148,189 +134,6 @@ function buildTopSpots(logs: SportLogs) {
   ).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-async function getClimbingSessionDetails(logIds: string[]) {
-  if (logIds.length === 0) return [];
-  return prisma.routineLog.findMany({
-    where: { id: { in: logIds } },
-    orderBy: { performedAt: "desc" },
-    select: {
-      id: true,
-      performedAt: true,
-      routine: {
-        select: {
-          name: true,
-          sessionDetails: {
-            select: {
-              template: {
-                select: {
-                  key: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      climbLocation: {
-        select: {
-          name: true,
-          type: true,
-        },
-      },
-      climbAttempts: {
-        orderBy: { attemptOrder: "asc" },
-        select: {
-          grade: true,
-          gradeSystem: true,
-          outcome: true,
-        },
-      },
-    },
-  }).then((rows) =>
-    rows.map((row) => ({
-      id: row.id,
-      performedAt: row.performedAt,
-      routineName: row.routine.name,
-      templateKey: row.routine.sessionDetails?.template?.key ?? null,
-      locationName: row.climbLocation?.name ?? null,
-      locationType: row.climbLocation?.type ?? null,
-      attempts: row.climbAttempts,
-    }))
-  );
-}
-
-function climbingVenueLabel(session: ClimbSessionDetail) {
-  const templateKey = session.templateKey ?? "";
-  if (templateKey.startsWith("indoor-")) return "Indoor";
-  if (templateKey.startsWith("outdoor-")) return "Outdoor";
-  if (session.locationType === "GYM") return "Indoor";
-  if (session.locationType === "CRAG") return "Outdoor";
-  return "Unknown";
-}
-
-function ClimbingOverview({
-  sessions,
-}: {
-  sessions: ClimbSessionDetail[];
-}) {
-  const allAttempts = sessions.flatMap((session) => session.attempts);
-  const indoorSessions = sessions.filter((session) => climbingVenueLabel(session) === "Indoor");
-  const outdoorSessions = sessions.filter((session) => climbingVenueLabel(session) === "Outdoor");
-  const sends = allAttempts.filter((attempt) => attempt.outcome === "SEND" || attempt.outcome === "REDPOINT").length;
-  const flashes = allAttempts.filter((attempt) => attempt.outcome === "FLASH" || attempt.outcome === "ONSIGHT").length;
-  const projects = allAttempts.filter((attempt) => attempt.outcome === "PROJECT").length;
-  const falls = allAttempts.filter((attempt) => attempt.outcome === "FELL").length;
-  const locationCounts = Array.from(
-    sessions.reduce((map, session) => {
-      if (!session.locationName) return map;
-      map.set(session.locationName, (map.get(session.locationName) ?? 0) + 1);
-      return map;
-    }, new Map<string, number>())
-  ).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-
-  return (
-    <>
-      <SectionCard title="Climbing Snapshot">
-        <StatGrid
-          items={[
-            { label: "Indoor sessions", value: String(indoorSessions.length) },
-            { label: "Outdoor sessions", value: String(outdoorSessions.length) },
-            { label: "Attempts", value: String(allAttempts.length) },
-            { label: "Flashes / Onsights", value: String(flashes), accent: "rgba(251,191,36,0.9)" },
-            { label: "Sends", value: String(sends), accent: "rgba(74,222,128,0.9)" },
-            { label: "Projects", value: String(projects), accent: "rgba(167,139,250,0.9)" },
-            { label: "Falls", value: String(falls), accent: "rgba(248,113,113,0.9)" },
-          ]}
-        />
-      </SectionCard>
-
-      <ClimbingProgressView />
-
-      <SectionCard title="Recent Climbing Sessions" subtitle="Latest climbing logs with venue, routine, and outcome mix.">
-        {sessions.length === 0 ? (
-          <EmptyState message="No climbing sessions in this range yet." />
-        ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {sessions.slice(0, 8).map((session) => {
-              const sendCount = session.attempts.filter((attempt) => attempt.outcome === "SEND" || attempt.outcome === "REDPOINT").length;
-              const flashCount = session.attempts.filter((attempt) => attempt.outcome === "FLASH" || attempt.outcome === "ONSIGHT").length;
-              const projectCount = session.attempts.filter((attempt) => attempt.outcome === "PROJECT").length;
-              return (
-                <div
-                  key={session.id}
-                  style={{
-                    display: "grid",
-                    gap: 6,
-                    padding: "12px 14px",
-                    borderRadius: 14,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.03)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 900 }}>{session.routineName}</div>
-                    <div style={{ fontSize: 12, opacity: 0.72 }}>{formatAppDate(session.performedAt, { month: "short", day: "numeric" })}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {[climbingVenueLabel(session), session.locationName, `${session.attempts.length} attempts`, flashCount > 0 ? `${flashCount} flash/onsight` : null, sendCount > 0 ? `${sendCount} send` : null, projectCount > 0 ? `${projectCount} project` : null]
-                      .filter((value): value is string => Boolean(value))
-                      .map((chip) => (
-                        <span key={chip} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", fontWeight: 700 }}>
-                          {chip}
-                        </span>
-                      ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {Array.from(
-                      session.attempts.reduce((map, attempt) => {
-                        const key = `${attempt.gradeSystem}-${attempt.grade}-${attempt.outcome}`;
-                        const current = map.get(key) ?? { attempt, count: 0 };
-                        current.count += 1;
-                        map.set(key, current);
-                        return map;
-                      }, new Map<string, { attempt: ClimbSessionDetail["attempts"][number]; count: number }>())
-                    )
-                      .slice(0, 6)
-                      .map(([key, value]) => (
-                        <span
-                          key={key}
-                          style={{
-                            fontSize: 11,
-                            padding: "3px 8px",
-                            borderRadius: 999,
-                            background: climbOutcomeBg(value.attempt.outcome),
-                            border: "1px solid rgba(255,255,255,0.09)",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {value.attempt.grade} {climbOutcomeLabel(value.attempt.outcome, value.attempt.gradeSystem)}
-                          {value.count > 1 ? ` x${value.count}` : ""}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </SectionCard>
-
-      <SectionCard title="Top Venues" subtitle="Where your recent climbing sessions were logged.">
-        {locationCounts.length === 0 ? (
-          <EmptyState message="No climb locations attached to these sessions yet." />
-        ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {locationCounts.slice(0, 8).map(([name, count]) => (
-              <span key={name} style={{ fontSize: 12, fontWeight: 800, padding: "6px 10px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
-                {name} {count}x
-              </span>
-            ))}
-          </div>
-        )}
-      </SectionCard>
-    </>
-  );
-}
-
 function isBoardSportSlug(slug: string) {
   return slug === "surfing" || slug === "snowboarding";
 }
@@ -397,7 +200,10 @@ export default async function SportsTargetPage(props: {
   const lastSessionLabel = summary.lastSession
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(summary.lastSession)
     : "No activity";
-  const climbingSessions = params.slug === "climbing" ? await getClimbingSessionDetails(logs.map((log) => log.id)) : [];
+
+  // ── Activity coverage (all-time) — climbing has its own world page ────────
+  const isClimbing = params.slug === "climbing";
+  const coverage = isClimbing ? null : await loadActivityCoverage(params.slug, virtualSport);
 
   return (
     <>
@@ -406,33 +212,155 @@ export default async function SportsTargetPage(props: {
         title={title}
         eyebrow={eyebrow}
         subtitle={subtitle}
-        basePath={`/progress/sports/${params.slug}`}
+        basePath={`/activities/${params.slug}`}
         tab={tab}
         range={range}
-        actions={<SectionLinkButton href="/progress/sports" label="Back to Sports" />}
+        hideTabs={params.slug === "climbing"}
+        hideRange={params.slug === "climbing"}
+        actions={<SectionLinkButton href="/activities" label="All Activities" />}
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
-        <SectionCard title="Overview Snapshot">
-          <StatGrid
-            items={[
-              { label: "Range", value: rangeChipLabel(range) },
-              { label: "Sessions", value: String(summary.sessions) },
-              { label: "YTD sessions", value: String(summary.ytd) },
-              { label: "Routines", value: String(routineCount) },
-              { label: "Last session", value: lastSessionLabel },
-              { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
-              ...(hasDistance ? [{ label: "Total distance", value: `${summary.totalDistance.toFixed(1)} mi` }] : []),
-              ...(hasDistance ? [{ label: "Avg pace", value: formatPace(summary.totalDistance > 0 ? summary.totalDurationSec / summary.totalDistance : null) }] : []),
-              ...(hasElevation ? [{ label: "Elevation gain", value: `${summary.totalElevationGainFt.toFixed(0)} ft` }] : []),
-            ]}
-          />
-          {subtypeLabel ? <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.72 }}>Session subtype: {subtypeLabel}</div> : null}
-        </SectionCard>
+        {params.slug !== "climbing" && (
+          <SectionCard title="Overview Snapshot">
+            <StatGrid
+              items={[
+                { label: "Range", value: rangeChipLabel(range) },
+                { label: "Sessions", value: String(summary.sessions) },
+                { label: "YTD sessions", value: String(summary.ytd) },
+                { label: "Routines", value: String(routineCount) },
+                { label: "Last session", value: lastSessionLabel },
+                { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
+                ...(hasDistance ? [{ label: "Total distance", value: `${summary.totalDistance.toFixed(1)} mi` }] : []),
+                ...(hasDistance ? [{ label: "Avg pace", value: formatPace(summary.totalDistance > 0 ? summary.totalDurationSec / summary.totalDistance : null) }] : []),
+                ...(hasElevation ? [{ label: "Elevation gain", value: `${summary.totalElevationGainFt.toFixed(0)} ft` }] : []),
+              ]}
+            />
+            {subtypeLabel ? <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.72 }}>Session subtype: {subtypeLabel}</div> : null}
+          </SectionCard>
+        )}
 
-        {params.slug === "climbing" && tab === "overview" ? <ClimbingOverview sessions={climbingSessions} /> : null}
+        {params.slug === "climbing" ? <ClimbingWorldPage /> : null}
 
-        {tab === "overview" ? (
+        {coverage && coverage.weeks.length > 1 ? (
+          <SectionCard
+            title="Activity Coverage"
+            subtitle={`${title} sessions and supporting training — last 52 weeks. Tap any week to see what happened.`}
+          >
+            <ActivityCoverageHeatmap
+              weeks={coverage.weeks}
+              sessionLabel={`${title} session`}
+              trainingLabel="Training"
+              sessionRowLabel={title}
+              trainingRowLabel="Training"
+            />
+          </SectionCard>
+        ) : null}
+
+        {coverage && coverage.trainingRoutines.length > 0 ? (
+          <SectionCard
+            title="Supporting Training"
+            subtitle={`Strength, conditioning, and habit work tagged to ${title.toLowerCase()}.`}
+            actions={
+              <Link
+                href="/manual-log"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  opacity: 0.75,
+                  textDecoration: "none",
+                  color: "inherit",
+                  padding: "4px 9px",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.04)",
+                }}
+              >
+                View log
+              </Link>
+            }
+          >
+            <div style={{ display: "grid", gap: 18 }}>
+              <div style={{ display: "grid", gap: 8 }}>
+                {coverage.trainingRoutines.map((r) => {
+                  const widthPct = Math.round((r.sessions / coverage.trainingMax) * 100);
+                  return (
+                    <div key={r.routineId} style={{ display: "grid", gap: 5 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.9 }}>{r.name}</span>
+                        <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                          <span style={{ fontSize: 11, opacity: 0.5 }}>last {formatAppDate(r.lastDate, { month: "short", day: "numeric" })}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.55 }}>{r.sessions}×</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${widthPct}%`,
+                            borderRadius: 999,
+                            background: "rgba(168,85,247,0.75)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {coverage.recentTrainingLogs.length > 0 ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.45, textTransform: "uppercase", letterSpacing: 0.5 }}>Recent</div>
+                  {coverage.recentTrainingLogs.map((log) => (
+                    <Link
+                      key={log.id}
+                      href={`/routines/${log.routineId}/logs/${log.id}/details`}
+                      style={{
+                        display: "grid",
+                        gap: 6,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        border: "1px solid rgba(168,85,247,0.15)",
+                        background: "rgba(168,85,247,0.04)",
+                        color: "inherit",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontWeight: 900, fontSize: 13 }}>{log.routineName}</span>
+                        <span style={{ fontSize: 11, opacity: 0.55 }}>{formatAppDate(log.performedAt, { month: "short", day: "numeric" })}</span>
+                      </div>
+                      {log.exerciseNames.length > 0 ? (
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                          {log.exerciseNames.slice(0, 6).map((name) => (
+                            <span
+                              key={name}
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 7px",
+                                borderRadius: 999,
+                                background: "rgba(168,85,247,0.12)",
+                                border: "1px solid rgba(168,85,247,0.2)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {name}
+                            </span>
+                          ))}
+                          {log.totalSets > 0 ? (
+                            <span style={{ fontSize: 11, opacity: 0.5, alignSelf: "center" }}>{log.totalSets} sets</span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {tab === "overview" && params.slug !== "climbing" ? (
           <>
             <SectionCard title="Completion / Consistency">
               {logs.length === 0 ? (
@@ -538,13 +466,13 @@ export default async function SportsTargetPage(props: {
           </>
         ) : null}
 
-        {tab === "completion" ? (
+        {tab === "completion" && params.slug !== "climbing" ? (
           <SectionCard title="Completion">
             {logs.length === 0 ? <EmptyState message="No sport sessions in this range yet." /> : <MetricLineChart title={`${title}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={workload.sessions} decimals={0} />}
           </SectionCard>
         ) : null}
 
-        {tab === "performance" ? (
+        {tab === "performance" && params.slug !== "climbing" ? (
           <SectionCard title="Performance">
             {logs.length === 0 ? (
               <EmptyState message="No sport sessions in this range yet." />
@@ -559,7 +487,7 @@ export default async function SportsTargetPage(props: {
           </SectionCard>
         ) : null}
 
-        {tab === "workload" ? (
+        {tab === "workload" && params.slug !== "climbing" ? (
           <SectionCard title="Workload">
             {logs.length === 0 ? (
               <EmptyState message="No sport sessions in this range yet." />
