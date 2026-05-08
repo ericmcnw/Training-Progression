@@ -12,6 +12,7 @@ import {
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
 import { buildWeeklyGrid, type SessionEventInput } from "./activity-coverage";
 import ActivityGoalsSection from "./ActivityGoalsSection";
+import { PulseCard } from "./ActivityPulseStrip";
 import { getActivityGoals } from "@/lib/activity-goals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -139,87 +140,6 @@ function trendArrow(curr: number, prev: number): { arrow: string; tone: "up" | "
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
-
-function PulseCard({
-  label,
-  value,
-  sub,
-  trend,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  trend?: { arrow: string; tone: "up" | "down" | "flat"; delta: string; suffix?: string };
-  accent: string;
-}) {
-  // accent is "rgba(r,g,b,0.9)" — derive subtler variants for the surface.
-  const accentSoft = accent.replace("0.9)", "0.10)");
-  const accentBorder = accent.replace("0.9)", "0.28)");
-  const accentGlow = accent.replace("0.9)", "0.05)");
-  const trendColor =
-    trend?.tone === "up" ? "rgba(74,222,128,0.95)" : trend?.tone === "down" ? "rgba(251,113,133,0.95)" : "rgba(255,255,255,0.55)";
-  const trendBg =
-    trend?.tone === "up" ? "rgba(74,222,128,0.10)" : trend?.tone === "down" ? "rgba(251,113,133,0.10)" : "rgba(255,255,255,0.04)";
-  const trendBorder =
-    trend?.tone === "up" ? "rgba(74,222,128,0.28)" : trend?.tone === "down" ? "rgba(251,113,133,0.28)" : "rgba(255,255,255,0.10)";
-
-  return (
-    <div
-      style={{
-        flex: "1 1 160px",
-        minWidth: 0,
-        display: "grid",
-        gap: 6,
-        padding: "16px 18px",
-        borderRadius: 18,
-        border: `1px solid ${accentBorder}`,
-        background: `radial-gradient(circle at top left, ${accentSoft}, transparent 55%), linear-gradient(180deg, ${accentGlow}, rgba(255,255,255,0.02))`,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.6, fontWeight: 900 }}>
-          {label}
-        </span>
-        {trend ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              fontSize: 10,
-              fontWeight: 800,
-              padding: "2px 7px",
-              borderRadius: 999,
-              border: `1px solid ${trendBorder}`,
-              background: trendBg,
-              color: trendColor,
-              letterSpacing: 0.3,
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span style={{ fontSize: 11, lineHeight: 1 }}>{trend.arrow}</span>
-            {trend.delta}{trend.suffix ?? ""}
-          </span>
-        ) : null}
-      </div>
-      <div
-        style={{
-          fontSize: 36,
-          fontWeight: 950,
-          lineHeight: 1,
-          color: accent,
-          letterSpacing: -0.5,
-        }}
-      >
-        {value}
-      </div>
-      {sub ? <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>{sub}</div> : null}
-    </div>
-  );
-}
 
 type TimelineSession = {
   id: string;

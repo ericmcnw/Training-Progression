@@ -4,8 +4,11 @@ import MetricLineChart from "../MetricLineChart";
 import ClimbingWorldPage from "./ClimbingWorldPage";
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
 import ActivityGoalsSection from "./ActivityGoalsSection";
+import ActivityPulseStrip from "./ActivityPulseStrip";
 import { loadActivityCoverage } from "./activity-coverage-loader";
+import { buildBoardSportPulse, buildCardioPulse } from "./sport-pulse";
 import { getActivityGoals } from "@/lib/activity-goals";
+import { getActivityEntry } from "@/lib/activity-families";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
@@ -214,6 +217,21 @@ export default async function SportsTargetPage(props: {
     isClimbing ? Promise.resolve([]) : getActivityGoals(goalLookupSlug),
   ]);
 
+  // ── Pulse slots — family-aware momentum strip for non-climbing sports ──────
+  // Endurance activities get the cardio pulse (miles / pace / longest / streak).
+  // Virtual board sports get the board-sport pulse (sessions / spot / time / streak).
+  // Other sport types (basketball, tennis, golf) skip the pulse strip until
+  // we have logs to design around.
+  const activityEntry = getActivityEntry(params.slug);
+  const pulseSlots =
+    !isClimbing && coverage
+      ? activityEntry?.family === "endurance"
+        ? buildCardioPulse(coverage.allTimeSportLogs, new Date())
+        : virtualSport
+        ? buildBoardSportPulse(coverage.allTimeSportLogs, new Date())
+        : []
+      : [];
+
   return (
     <>
       <TargetHeader
@@ -250,6 +268,8 @@ export default async function SportsTargetPage(props: {
         )}
 
         {params.slug === "climbing" ? <ClimbingWorldPage /> : null}
+
+        {pulseSlots.length > 0 ? <ActivityPulseStrip slots={pulseSlots} /> : null}
 
         {!isClimbing ? (
           <ActivityGoalsSection

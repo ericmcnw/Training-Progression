@@ -4,6 +4,16 @@ import { getRoutineIndex, getRoutineLogs, resolveGroupTarget } from "../data";
 import type { VirtualSportCategory } from "../sports";
 import { buildWeeklyGrid, type HeatmapWeek, type SessionEventInput, type TrainingEventInput } from "./activity-coverage";
 
+/** Slim per-session shape consumable by pulse builders without dragging the
+ *  full RoutineLogWithRelations include into the pulse code. */
+export type ActivityPulseLog = {
+  performedAt: Date;
+  durationSec: number | null;
+  distanceMi: number | null;
+  elevationGainFt: number | null;
+  location: string | null;
+};
+
 export type ActivityCoverageData = {
   weeks: HeatmapWeek[];
   trainingRoutines: Array<{
@@ -23,6 +33,8 @@ export type ActivityCoverageData = {
   }>;
   totalSessions: number;
   totalTrainingLogs: number;
+  /** All-time sport sessions in pulse-ready shape, for buildCardioPulse / buildBoardSportPulse. */
+  allTimeSportLogs: ActivityPulseLog[];
 };
 
 /**
@@ -142,6 +154,14 @@ export const loadActivityCoverage = cache(async function loadActivityCoverage(
     };
   });
 
+  const allTimeSportLogs: ActivityPulseLog[] = sportLogs.map((log) => ({
+    performedAt: log.performedAt,
+    durationSec: log.durationSec ?? null,
+    distanceMi: log.distanceMi ?? null,
+    elevationGainFt: log.elevationGainFt ?? null,
+    location: log.location?.trim() || null,
+  }));
+
   return {
     weeks: buildWeeklyGrid(sessionEvents, trainingEvents, new Date()),
     trainingRoutines,
@@ -149,5 +169,6 @@ export const loadActivityCoverage = cache(async function loadActivityCoverage(
     recentTrainingLogs,
     totalSessions: sportLogs.length,
     totalTrainingLogs: trainingLogs.length,
+    allTimeSportLogs,
   };
 });
