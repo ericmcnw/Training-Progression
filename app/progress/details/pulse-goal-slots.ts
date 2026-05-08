@@ -14,7 +14,17 @@ const GOAL_ACCENT = "rgba(139,92,246,0.9)"; // violet — matches ActivityGoalsS
  */
 function goalToSlotRole(goal: GoalInsight): PulseSlotRole | null {
   const goalType = goal.goal.goalType;
+  const metricType = goal.goal.metricType;
   const timeframe = goal.goal.timeframe;
+
+  // Session-metric targets (climbing grade goals like "Send V5", session
+  // score targets, etc.) are performance-shaped regardless of how they were
+  // created — VOLUME goals on a SESSION_METRIC still represent "hit grade X",
+  // not weekly volume.
+  if (metricType === "SESSION_METRIC") return "recent-performance";
+
+  // MAX_WEIGHT, fastest pace, longest single distance are all performance.
+  if (metricType === "MAX_WEIGHT") return "recent-performance";
 
   if (goalType === "FREQUENCY") return "frequency";
   if (goalType === "PERFORMANCE") return "recent-performance";

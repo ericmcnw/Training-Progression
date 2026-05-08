@@ -43,51 +43,87 @@ export const getActivityGoals = cache(async function getActivityGoals(
   // group frequency goals all flow through this single overview call.
   const allInsights = await getGoalsOverview({ active: "active" });
 
-  // For ROUTINE-target goals, we need to know each routine's metadata-group
-  // memberships to decide if it belongs to this activity. Batch-fetch in one
-  // query.
-  const routineTargetIds = Array.from(
-    new Set(
-      allInsights
-        .filter((entry) => entry.goal.targetType === "ROUTINE")
-        .map((entry) => entry.goal.targetId)
-    )
-  );
+  // For ROUTINE / SESSION_TEMPLATE / EXERCISE goals, we need each entity's
+  // metadata-group memberships to decide if it belongs to this activity.
+  // Batch-fetch in three parallel queries.
+  const routineTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "ROUTINE").map((e) => e.goal.targetId));
+  const templateTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "SESSION_TEMPLATE").map((e) => e.goal.targetId));
+  const exerciseTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "EXERCISE").map((e) => e.goal.targetId));
 
-  const routineGroupMembership = new Map<string, Set<string>>();
-  if (routineTargetIds.length > 0) {
-    const routines = await prisma.routine.findMany({
-      where: { id: { in: routineTargetIds } },
-      select: {
-        id: true,
-        metadataGroups: { select: { groupId: true } },
-      },
-    });
-    for (const routine of routines) {
-      routineGroupMembership.set(
-        routine.id,
-        new Set(routine.metadataGroups.map((entry) => entry.groupId))
-      );
-    }
-  }
+  const [routineMembership, templateMembership, exerciseMembership] = await Promise.all([
+    fetchGroupMembership(routineTargetIds, "routine"),
+    fetchGroupMembership(templateTargetIds, "sessionTemplate"),
+    fetchGroupMembership(exerciseTargetIds, "exercise"),
+  ]);
 
   return allInsights.filter((insight) => {
     const targetType = insight.goal.targetType;
     const targetId = insight.goal.targetId;
 
-    if (targetType === "GROUP") {
+    // GROUP and CARDIO both store a metadata-group id in targetId — CARDIO is
+    // just a labeling distinction for cardio-shaped activity groups.
+    if (targetType === "GROUP" || targetType === "CARDIO") {
       return activityGroupIds.has(targetId);
     }
     if (targetType === "ROUTINE") {
-      const memberships = routineGroupMembership.get(targetId);
-      if (!memberships) return false;
-      for (const groupId of memberships) {
-        if (activityGroupIds.has(groupId)) return true;
-      }
-      return false;
+      return intersectsActivity(routineMembership.get(targetId), activityGroupIds);
     }
-
-    // EXERCISE / SESSION_TEMPLATE / CARDIO targets — out of scope for v1.
+    if (targetType === "SESSION_TEMPLATE") {
+      return intersectsActivity(templateMembership.get(targetId), activityGroupIds);
+    }
+    if (targetType === "EXERCISE") {
+      return intersectsActivity(exerciseMembership.get(targetId), activityGroupIds);
+    }
     return false;
   });
 });
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function intersectsActivity(memberships: Set<string> | undefined, activityGroupIds: Set<string>): boolean {
+  if (!memberships) return false;
+  for (const groupId of memberships) {
+    if (activityGroupIds.has(groupId)) return true;
+  }
+  return false;
+}
+
+async function fetchGroupMembership(
+  ids: string[],
+  entity: "routine" | "sessionTemplate" | "exercise"
+): Promise<Map<string, Set<string>>> {
+  if (ids.length === 0) return new Map();
+  const result = new Map<string, Set<string>>();
+
+  if (entity === "routine") {
+    const rows = await prisma.routine.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, metadataGroups: { select: { groupId: true } } },
+    });
+    for (const row of rows) {
+      result.set(row.id, new Set(row.metadataGroups.map((m) => m.groupId)));
+    }
+    return result;
+  }
+  if (entity === "sessionTemplate") {
+    const rows = await prisma.sessionTemplate.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, metadataGroups: { select: { groupId: true } } },
+    });
+    for (const row of rows) {
+      result.set(row.id, new Set(row.metadataGroups.map((m) => m.groupId)));
+    }
+    return result;
+  }
+  // exercise
+  const rows = await prisma.exercise.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, metadataGroups: { select: { groupId: true } } },
+  });
+  for (const row of rows) {
+    result.set(row.id, new Set(row.metadataGroups.map((m) => m.groupId)));
+  }
+  return result;
+}
