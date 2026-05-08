@@ -56,6 +56,11 @@ export type StrengthRecentSession = {
   topSet: { exerciseName: string; weight: number; reps: number } | null;
 };
 
+export type StrengthSessionStat = {
+  date: Date;
+  sets: number;
+};
+
 export type StrengthWorldData = {
   totalSessions: number;
   totalSets: number;
@@ -68,6 +73,9 @@ export type StrengthWorldData = {
   recentSessions: StrengthRecentSession[];
   /** All exercise summaries, used to compute "Recent PR" and other aggregates. */
   allExercises: StrengthExerciseSummary[];
+  /** Per-session set totals across the entire history — for accurate
+   *  week-over-week aggregates without a slice cap. */
+  sessionStats: StrengthSessionStat[];
 };
 
 // ── Loader ──────────────────────────────────────────────────────────────────
@@ -261,6 +269,11 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     (a, b) => b.totalSessions - a.totalSessions || (b.lastDate?.getTime() ?? 0) - (a.lastDate?.getTime() ?? 0)
   );
 
+  const sessionStats: StrengthSessionStat[] = recentSessionList.map((s) => ({
+    date: s.date,
+    sets: s.totalSets,
+  }));
+
   const recentSessions = recentSessionList
     .sort((a, b) => b.date.getTime() - a.date.getTime())
     .slice(0, 8);
@@ -284,5 +297,6 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     routines,
     recentSessions,
     allExercises,
+    sessionStats,
   };
 });

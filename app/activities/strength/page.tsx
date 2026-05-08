@@ -131,24 +131,12 @@ export default async function StrengthWorldPage() {
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const sessionsThisWeek = strength.sessionDates.filter((d) => d >= thisWeekStart).length;
-  const setsThisWeek = strength.recentSessions.reduce(
-    (sum, s) => sum + (s.date >= thisWeekStart ? s.totalSets : 0),
-    0
-  );
-  // recentSessions is capped at 8 — if we want exact this-week / last-week
-  // sets, we should walk all sessions. The recent-sessions list is a recent
-  // slice. Use a quick lookup by date instead.
-  const allWeeklyBuckets = new Map<string, { sets: number; sessions: number }>();
-  for (const session of strength.recentSessions) {
-    // Only the last 8 are tracked here, which is enough for week-over-week.
-    const key = startOfWeek(session.date).toISOString().slice(0, 10);
-    const bucket = allWeeklyBuckets.get(key) ?? { sets: 0, sessions: 0 };
-    bucket.sets += session.totalSets;
-    bucket.sessions += 1;
-    allWeeklyBuckets.set(key, bucket);
+  let setsThisWeek = 0;
+  let setsLastWeek = 0;
+  for (const stat of strength.sessionStats) {
+    if (stat.date >= thisWeekStart) setsThisWeek += stat.sets;
+    else if (stat.date >= lastWeekStart) setsLastWeek += stat.sets;
   }
-  const lastWeekBucket = allWeeklyBuckets.get(lastWeekStart.toISOString().slice(0, 10));
-  const setsLastWeek = lastWeekBucket?.sets ?? 0;
 
   // Recent PR — most recently set new max weight in last 30 days, by date desc
   const thirtyDaysAgo = new Date();
