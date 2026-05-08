@@ -1,0 +1,485 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { effectiveRoutineDomain } from "@/lib/routines";
+import { formatAppDate } from "@/lib/dates";
+import { getActivityGoals } from "@/lib/activity-goals";
+import { loadStrengthWorld } from "@/app/progress/details/strength-world-loader";
+import { buildStrengthPulse } from "@/app/progress/details/sport-pulse";
+import { applyGoalsToPulseSlots } from "@/app/progress/details/pulse-goal-slots";
+import ActivityPulseStrip from "@/app/progress/details/ActivityPulseStrip";
+import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
+import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
+import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+
+export const dynamic = "force-dynamic";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatNumber(n: number) {
+  if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toLocaleString("en-US");
+}
+
+// ── Strength goals helper ────────────────────────────────────────────────────
+//
+// "Strength" isn't a metadata group — it's a domain derived from kind+subtype.
+// So getActivityGoals(slug) won't work directly. Instead, we look up:
+//   - Goals with targetType=ROUTINE where the routine's effective domain is strength
+//   - Goals with targetType=EXERCISE where the exercise was actually performed in
+//     a strength session (covers the user's "185 RDL" / "50 lb Dip" style goals)
+async function getStrengthGoals() {
+  const allActiveGoals = await prisma.goal.findMany({ where: { isActive: true } });
+
+  const routineIds = Array.from(new Set(allActiveGoals.filter((g) => g.targetType === "ROUTINE").map((g) => g.targetId)));
+  const exerciseIds = Array.from(new Set(allActiveGoals.filter((g) => g.targetType === "EXERCISE").map((g) => g.targetId)));
+
+  const [routineRows, exerciseSessionRows] = await Promise.all([
+    routineIds.length > 0
+      ? prisma.routine.findMany({
+          where: { id: { in: routineIds } },
+          select: { id: true, kind: true, subtype: true, domain: true },
+        })
+      : Promise.resolve([]),
+    exerciseIds.length > 0
+      ? prisma.sessionExercise.findMany({
+          where: {
+            exerciseId: { in: exerciseIds },
+            routineLog: {
+              routine: { kind: "WORKOUT" },
+            },
+          },
+          select: {
+            exerciseId: true,
+            routineLog: { select: { routine: { select: { kind: true, subtype: true, domain: true } } } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const strengthRoutineIds = new Set(
+    routineRows
+      .filter((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength")
+      .map((r) => r.id)
+  );
+
+  const strengthExerciseIds = new Set<string>();
+  for (const row of exerciseSessionRows) {
+    if (effectiveRoutineDomain(row.routineLog.routine.domain, row.routineLog.routine.kind, row.routineLog.routine.subtype) === "strength") {
+      strengthExerciseIds.add(row.exerciseId);
+    }
+  }
+
+  // Reuse getActivityGoals' insight-building path by deferring to it via a
+  // synthetic slug — but since strength has no slug, we need to call it
+  // differently. Simplest path: build the same shape from getGoalsOverview.
+  const { getGoalsOverview } = await import("@/lib/goals");
+  const insights = await getGoalsOverview({ active: "active" });
+  return insights.filter((insight) => {
+    const goal = insight.goal;
+    if (goal.targetType === "ROUTINE") return strengthRoutineIds.has(goal.targetId);
+    if (goal.targetType === "EXERCISE") return strengthExerciseIds.has(goal.targetId);
+    return false;
+  });
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function StrengthWorldPage() {
+  void getActivityGoals; // keep import side-effect-free across files; goals fetched below
+  const [strength, strengthGoals] = await Promise.all([
+    loadStrengthWorld(),
+    getStrengthGoals(),
+  ]);
+
+  if (strength.totalSessions === 0) {
+    return (
+      <>
+        <TargetHeader
+          section="routines"
+          title="Strength"
+          eyebrow="Activity world"
+          subtitle="Lift and resistance training — sets, reps, weight, and progression."
+          basePath="/activities/strength"
+          tab="overview"
+          range="all"
+          hideTabs
+          hideRange
+          actions={<SectionLinkButton href="/activities" label="All Activities" />}
+        />
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px" }}>
+          <SectionCard title="No strength data yet" subtitle="Log a workout to start seeing your strength world here.">
+            <EmptyState message="Log a workout routine with sets/reps/weight to populate this view." />
+          </SectionCard>
+        </div>
+      </>
+    );
+  }
+
+  // ── Pulse aggregates ──────────────────────────────────────────────────────
+  const now = new Date();
+  const thisWeekStart = startOfWeek(now);
+  const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const sessionsThisWeek = strength.sessionDates.filter((d) => d >= thisWeekStart).length;
+  const setsThisWeek = strength.recentSessions.reduce(
+    (sum, s) => sum + (s.date >= thisWeekStart ? s.totalSets : 0),
+    0
+  );
+  // recentSessions is capped at 8 — if we want exact this-week / last-week
+  // sets, we should walk all sessions. The recent-sessions list is a recent
+  // slice. Use a quick lookup by date instead.
+  const allWeeklyBuckets = new Map<string, { sets: number; sessions: number }>();
+  for (const session of strength.recentSessions) {
+    // Only the last 8 are tracked here, which is enough for week-over-week.
+    const key = startOfWeek(session.date).toISOString().slice(0, 10);
+    const bucket = allWeeklyBuckets.get(key) ?? { sets: 0, sessions: 0 };
+    bucket.sets += session.totalSets;
+    bucket.sessions += 1;
+    allWeeklyBuckets.set(key, bucket);
+  }
+  const lastWeekBucket = allWeeklyBuckets.get(lastWeekStart.toISOString().slice(0, 10));
+  const setsLastWeek = lastWeekBucket?.sets ?? 0;
+
+  // Recent PR — most recently set new max weight in last 30 days, by date desc
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const recentPRCandidates = strength.allExercises
+    .filter((e) => e.recentPR && e.lastDate && e.lastDate >= thirtyDaysAgo && e.allTimePR)
+    .map((e) => ({
+      exerciseName: e.name,
+      weight: e.allTimePR!.weightLb,
+      reps: e.allTimePR!.reps,
+      date: e.lastDate!,
+    }))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+  const recentPR = recentPRCandidates[0] ?? null;
+
+  // All-time top weight set across all exercises
+  const allTimeBest = strength.allExercises
+    .filter((e) => e.allTimePR && e.allTimePR.weightLb > 0)
+    .sort((a, b) => (b.allTimePR!.weightLb - a.allTimePR!.weightLb))
+    [0];
+  const allTimePR = allTimeBest
+    ? { exerciseName: allTimeBest.name, weight: allTimeBest.allTimePR!.weightLb, reps: allTimeBest.allTimePR!.reps }
+    : null;
+
+  const defaultSlots = buildStrengthPulse(
+    {
+      sessionDates: strength.sessionDates,
+      thisWeekSets: setsThisWeek,
+      lastWeekSets: setsLastWeek,
+      thisWeekSessions: sessionsThisWeek,
+      recentPR,
+      allTimePR,
+    },
+    now
+  );
+  const pulseSlots = applyGoalsToPulseSlots(defaultSlots, strengthGoals);
+
+  return (
+    <>
+      <TargetHeader
+        section="routines"
+        title="Strength"
+        eyebrow="Activity world"
+        subtitle="Lift and resistance training — sets, reps, weight, and progression over time."
+        basePath="/activities/strength"
+        tab="overview"
+        range="all"
+        hideTabs
+        hideRange
+        actions={<SectionLinkButton href="/activities" label="All Activities" />}
+      />
+
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+        {/* Pulse strip */}
+        <ActivityPulseStrip slots={pulseSlots} />
+
+        {/* Active goals */}
+        <ActivityGoalsSection
+          goals={strengthGoals}
+          activitySlug="strength"
+          activityLabel="Strength"
+        />
+
+        {/* Activity coverage heatmap (single row, sessions only) */}
+        {strength.heatmapWeeks.length > 1 ? (
+          <SectionCard
+            title="Activity Coverage"
+            subtitle="Strength sessions over the last 52 weeks. Tap any week to see what you trained."
+          >
+            <ActivityCoverageHeatmap
+              weeks={strength.heatmapWeeks}
+              sessionLabel="Strength session"
+              sessionRowLabel="Strength"
+              hideTrainingRow
+            />
+          </SectionCard>
+        ) : null}
+
+        {/* Top exercises */}
+        {strength.topExercises.length > 0 ? (
+          <SectionCard
+            title="Top Exercises"
+            subtitle="Your most-trained lifts, with all-time top weight and recent progression."
+            actions={<SectionLinkButton href="/progress?section=exercises" label="All exercises" />}
+          >
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+              {strength.topExercises.slice(0, 8).map((ex) => (
+                <ExerciseCard key={ex.exerciseId} exercise={ex} />
+              ))}
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {/* Strength routines */}
+        {strength.routines.length > 0 ? (
+          <SectionCard
+            title="Strength Routines"
+            subtitle="Click a routine to dive into per-exercise progression and recent sessions."
+            actions={<SectionLinkButton href="/progress?section=routines" label="All routines" />}
+          >
+            <div style={{ display: "grid", gap: 8 }}>
+              {strength.routines.map((r) => (
+                <RoutineRow key={r.routineId} routine={r} />
+              ))}
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {/* Recent sessions */}
+        {strength.recentSessions.length > 0 ? (
+          <SectionCard
+            title="Recent Sessions"
+            subtitle="Last 8 strength workouts at a glance — tap a card to drill in."
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                overflowX: "auto",
+                scrollSnapType: "x proximity",
+                paddingBottom: 6,
+                marginBottom: -6,
+              }}
+            >
+              {strength.recentSessions.map((s) => (
+                <SessionCard key={s.id} session={s} />
+              ))}
+            </div>
+          </SectionCard>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function ExerciseCard({ exercise }: { exercise: import("@/app/progress/details/strength-world-loader").StrengthExerciseSummary }) {
+  const sparkline = exercise.recentTopWeights.filter((p) => p.weight > 0);
+  const maxSpark = Math.max(1, ...sparkline.map((p) => p.weight));
+  const minSpark = Math.min(...sparkline.map((p) => p.weight));
+  const sparkRange = Math.max(1, maxSpark - minSpark);
+
+  return (
+    <Link
+      href={exercise.routineLink}
+      style={{
+        display: "grid",
+        gap: 10,
+        padding: "14px 16px",
+        borderRadius: 14,
+        border: "1px solid rgba(84,203,130,0.18)",
+        background: "linear-gradient(180deg, rgba(84,203,130,0.06), rgba(255,255,255,0.02))",
+        textDecoration: "none",
+        color: "inherit",
+        transition: "border-color 120ms ease",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.2 }}>{exercise.name}</span>
+          <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 700 }}>
+            {exercise.totalSessions} session{exercise.totalSessions !== 1 ? "s" : ""} · {exercise.totalSets} set{exercise.totalSets !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {exercise.recentPR ? (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 900,
+              padding: "2px 7px",
+              borderRadius: 999,
+              border: "1px solid rgba(74,222,128,0.4)",
+              background: "rgba(74,222,128,0.15)",
+              color: "rgba(134,239,172,0.95)",
+              letterSpacing: 0.4,
+              whiteSpace: "nowrap",
+              textTransform: "uppercase",
+            }}
+          >
+            New PR
+          </span>
+        ) : null}
+      </div>
+
+      {exercise.allTimePR ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+          <div style={{ display: "grid", gap: 2 }}>
+            <span style={{ fontSize: 9, opacity: 0.55, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase" }}>Top set</span>
+            <span style={{ fontSize: 18, fontWeight: 900, lineHeight: 1, color: "rgba(84,203,130,0.95)" }}>
+              {exercise.allTimePR.weightLb} lb
+            </span>
+            <span style={{ fontSize: 11, opacity: 0.65 }}>
+              {exercise.allTimePR.reps} rep{exercise.allTimePR.reps !== 1 ? "s" : ""}
+            </span>
+          </div>
+          {sparkline.length >= 2 ? (
+            <Sparkline points={sparkline.map((p) => ({ value: p.weight, label: formatAppDate(p.date, { month: "short", day: "numeric" }) }))} min={minSpark} range={sparkRange} />
+          ) : null}
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, opacity: 0.5 }}>No weighted sets logged yet</div>
+      )}
+
+      {exercise.lastDate ? (
+        <div style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>
+          Last {formatAppDate(exercise.lastDate, { month: "short", day: "numeric" })}
+        </div>
+      ) : null}
+    </Link>
+  );
+}
+
+function Sparkline({
+  points,
+  min,
+  range,
+}: {
+  points: Array<{ value: number; label: string }>;
+  min: number;
+  range: number;
+}) {
+  const w = 64;
+  const h = 28;
+  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
+  const path = points
+    .map((p, i) => {
+      const x = i * stepX;
+      const y = h - ((p.value - min) / range) * h;
+      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const lastValue = points[points.length - 1]?.value ?? 0;
+  const lastY = h - ((lastValue - min) / range) * h;
+  const lastX = (points.length - 1) * stepX;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: "visible", flexShrink: 0 }} aria-hidden="true">
+      <path
+        d={`${path} L ${(points.length - 1) * stepX} ${h} L 0 ${h} Z`}
+        fill="rgba(84,203,130,0.12)"
+        stroke="none"
+      />
+      <path d={path} stroke="rgba(84,203,130,0.85)" strokeWidth={1.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r={2.4} fill="rgba(84,203,130,1)" />
+    </svg>
+  );
+}
+
+function RoutineRow({ routine }: { routine: import("@/app/progress/details/strength-world-loader").StrengthRoutineSummary }) {
+  return (
+    <Link
+      href={`/progress/routines/${routine.routineId}?tab=overview&range=4w`}
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: "1px solid rgba(255,255,255,0.07)",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+        textDecoration: "none",
+        color: "inherit",
+        transition: "border-color 120ms ease",
+      }}
+    >
+      <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+        <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2 }}>{routine.name}</span>
+        <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 700 }}>
+          {routine.totalSessions} session{routine.totalSessions !== 1 ? "s" : ""} · {routine.totalSets} sets · {formatNumber(Math.round(routine.totalVolume))} lb volume
+        </span>
+      </div>
+      <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700, whiteSpace: "nowrap" }}>
+        {routine.lastDate ? `Last ${formatAppDate(routine.lastDate, { month: "short", day: "numeric" })}` : "—"}
+      </span>
+    </Link>
+  );
+}
+
+function SessionCard({ session }: { session: import("@/app/progress/details/strength-world-loader").StrengthRecentSession }) {
+  return (
+    <Link
+      href={`/routines/${session.routineId}/logs/${session.id}/details`}
+      style={{
+        flex: "0 0 auto",
+        width: 180,
+        scrollSnapAlign: "start",
+        display: "grid",
+        gap: 8,
+        padding: "12px 14px",
+        borderRadius: 14,
+        border: "1px solid rgba(84,203,130,0.18)",
+        background: "linear-gradient(180deg, rgba(84,203,130,0.05), rgba(255,255,255,0.02))",
+        textDecoration: "none",
+        color: "inherit",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 16, fontWeight: 900, lineHeight: 1 }}>{formatAppDate(session.date, { month: "short", day: "numeric" })}</span>
+        <span style={{ fontSize: 10, opacity: 0.55, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>
+          {session.date.toLocaleDateString("en-US", { weekday: "short" })}
+        </span>
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {session.routineName}
+      </span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 6, marginTop: 2 }}>
+        <div style={{ display: "grid", gap: 2 }}>
+          <span style={{ fontSize: 10, opacity: 0.55, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>Sets</span>
+          <span style={{ fontSize: 18, fontWeight: 900, lineHeight: 1 }}>{session.totalSets}</span>
+        </div>
+        {session.topSet ? (
+          <div
+            style={{
+              padding: "4px 8px",
+              borderRadius: 9,
+              background: "rgba(84,203,130,0.14)",
+              border: "1px solid rgba(84,203,130,0.32)",
+              color: "rgba(134,239,172,0.95)",
+              fontWeight: 900,
+              fontSize: 12,
+              lineHeight: 1.1,
+              whiteSpace: "nowrap",
+            }}
+            title={session.topSet.exerciseName}
+          >
+            {session.topSet.weight}×{session.topSet.reps}
+          </div>
+        ) : null}
+      </div>
+    </Link>
+  );
+}

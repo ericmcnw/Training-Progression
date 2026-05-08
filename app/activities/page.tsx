@@ -329,15 +329,15 @@ export default async function ActivitiesPage(props: {
             >
               <ActivityCardGrid>
                 <ActivityCard
-                  href="/log?view=routines&domain=strength"
-                  eyebrow="Browse"
-                  label="Strength Routines"
+                  href="/activities/strength"
+                  eyebrow="Activity world"
+                  label="Strength"
                   primaryStat={{
-                    value: String(strengthActiveRoutines),
-                    suffix: strengthActiveRoutines === 1 ? "active" : "active",
+                    value: String(strengthLogs4w.length),
+                    suffix: strengthLogs4w.length === 1 ? "session 4w" : "sessions 4w",
                   }}
                   chips={[
-                    `${strengthLogs4w.length} session${strengthLogs4w.length === 1 ? "" : "s"} 4w`,
+                    `${strengthActiveRoutines} active routine${strengthActiveRoutines === 1 ? "" : "s"}`,
                     `${strengthRoutineIds.size} logged routine${strengthRoutineIds.size === 1 ? "" : "s"}`,
                   ]}
                   highlight={strengthLogs4w.length > 0}

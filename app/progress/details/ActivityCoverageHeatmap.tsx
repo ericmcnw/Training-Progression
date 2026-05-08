@@ -34,12 +34,16 @@ export default function ActivityCoverageHeatmap({
   trainingLabel = "Training",
   sessionRowLabel = "Sessions",
   trainingRowLabel = "Training",
+  hideTrainingRow = false,
 }: {
   weeks: HeatmapWeek[];
   sessionLabel?: string;
   trainingLabel?: string;
   sessionRowLabel?: string;
   trainingRowLabel?: string;
+  /** When true, only renders the sessions row — for activities like strength
+   *  where there's no separate "supporting training" lane to show. */
+  hideTrainingRow?: boolean;
 }) {
   const [active, setActive] = useState<{ weekIndex: number; row: RowKind } | null>(null);
 
@@ -132,7 +136,7 @@ export default function ActivityCoverageHeatmap({
           </div>
 
           {renderRow("sessions", sessionRowLabel, SESSION_COLOR, (w) => w.sessions.length, sessionLabel.toLowerCase())}
-          {renderRow("training", trainingRowLabel, TRAINING_COLOR, (w) => w.training.length, trainingLabel.toLowerCase())}
+          {hideTrainingRow ? null : renderRow("training", trainingRowLabel, TRAINING_COLOR, (w) => w.training.length, trainingLabel.toLowerCase())}
         </div>
       </div>
 
@@ -142,10 +146,12 @@ export default function ActivityCoverageHeatmap({
           <span style={{ ...swatchStyle, background: cellBg(SESSION_COLOR, 2) }} />
           {sessionLabel}
         </span>
-        <span style={legendItemStyle}>
-          <span style={{ ...swatchStyle, background: cellBg(TRAINING_COLOR, 2) }} />
-          {trainingLabel}
-        </span>
+        {hideTrainingRow ? null : (
+          <span style={legendItemStyle}>
+            <span style={{ ...swatchStyle, background: cellBg(TRAINING_COLOR, 2) }} />
+            {trainingLabel}
+          </span>
+        )}
         <span style={{ opacity: 0.55, fontWeight: 700 }}>Tap a cell to see details</span>
       </div>
 

@@ -215,6 +215,92 @@ export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlo
   return slots;
 }
 
+// ── Strength inputs ──────────────────────────────────────────────────────────
+
+export type StrengthSetSummary = {
+  weightLb: number;
+  reps: number;
+  volume: number;
+};
+
+export type StrengthPulseInput = {
+  /** All-time strength session dates, used for streak + week filtering. */
+  sessionDates: Date[];
+  /** Set count this week. */
+  thisWeekSets: number;
+  /** Set count last week (for trend). */
+  lastWeekSets: number;
+  /** Number of sessions this week. */
+  thisWeekSessions: number;
+  /** Most-recent PR's exercise name + weight×reps, if any in last 30 days. */
+  recentPR: { exerciseName: string; weight: number; reps: number; date: Date } | null;
+  /** All-time heaviest single set across all exercises. */
+  allTimePR: { exerciseName: string; weight: number; reps: number } | null;
+};
+
+/**
+ * Strength pulse: This Week sets · Recent PR · All-time top weight · Weekly
+ * streak. Strength sessions are workout-shaped (sets+reps+weight) so the
+ * frequency slot uses sets logged, not miles or hours.
+ */
+export function buildStrengthPulse(input: StrengthPulseInput, now: Date): PulseSlot[] {
+  const sessions = input.sessionDates.map((date) => ({
+    performedAt: date,
+    durationSec: null,
+    distanceMi: null,
+  })) satisfies PulseLogInput[];
+  const streak = weeklyStreak(sessions, now);
+
+  const slots: PulseSlot[] = [
+    {
+      role: "frequency",
+      label: "This Week",
+      value: String(input.thisWeekSets),
+      sub:
+        input.thisWeekSessions === 0
+          ? "No sessions yet"
+          : `${input.thisWeekSessions} session${input.thisWeekSessions !== 1 ? "s" : ""} · sets logged`,
+      trend:
+        input.thisWeekSets > 0 || input.lastWeekSets > 0
+          ? { ...trendArrow(input.thisWeekSets, input.lastWeekSets), suffix: " sets vs last wk" }
+          : undefined,
+      accent: ACCENT_GREEN,
+    },
+    {
+      role: "recent-performance",
+      label: "Recent PR",
+      value: input.recentPR ? `${input.recentPR.weight} lb` : "—",
+      sub: input.recentPR
+        ? `${input.recentPR.exerciseName} · ${input.recentPR.reps} rep${input.recentPR.reps !== 1 ? "s" : ""} on ${input.recentPR.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+        : "Hit a new max in the last 30 days to see it here",
+      accent: ACCENT_ORANGE,
+    },
+    {
+      role: "all-time-best",
+      label: "Heaviest Set",
+      value: input.allTimePR ? `${input.allTimePR.weight} lb` : "—",
+      sub: input.allTimePR
+        ? `${input.allTimePR.exerciseName} · ${input.allTimePR.reps} rep${input.allTimePR.reps !== 1 ? "s" : ""}`
+        : "Log a set with weight to start tracking",
+      accent: ACCENT_AMBER,
+    },
+    {
+      role: "streak",
+      label: "Weekly Streak",
+      value: `${streak.current}w`,
+      sub:
+        streak.current === 0
+          ? "Train this week to start"
+          : streak.longest > streak.current
+          ? `Best run: ${streak.longest} weeks`
+          : "Personal best — keep going",
+      accent: ACCENT_BLUE,
+    },
+  ];
+
+  return slots;
+}
+
 /**
  * Board sport pulse (surfing / snowboarding): This Week sessions · Top spot ·
  * All-time time on board · Weekly streak. No pace metric — these activities
