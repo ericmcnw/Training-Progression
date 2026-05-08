@@ -7,6 +7,7 @@ import ActivityGoalsSection from "./ActivityGoalsSection";
 import ActivityPulseStrip from "./ActivityPulseStrip";
 import { loadActivityCoverage } from "./activity-coverage-loader";
 import { buildBoardSportPulse, buildCardioPulse } from "./sport-pulse";
+import { applyGoalsToPulseSlots } from "./pulse-goal-slots";
 import { getActivityGoals } from "@/lib/activity-goals";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "../data";
@@ -223,7 +224,7 @@ export default async function SportsTargetPage(props: {
   // Other sport types (basketball, tennis, golf) skip the pulse strip until
   // we have logs to design around.
   const activityEntry = getActivityEntry(params.slug);
-  const pulseSlots =
+  const defaultPulseSlots =
     !isClimbing && coverage
       ? activityEntry?.family === "endurance"
         ? buildCardioPulse(coverage.allTimeSportLogs, new Date())
@@ -231,6 +232,9 @@ export default async function SportsTargetPage(props: {
         ? buildBoardSportPulse(coverage.allTimeSportLogs, new Date())
         : []
       : [];
+  // Goals matching one of the four pulse roles take over that slot. Default
+  // cards still render for slots without a relevant goal.
+  const pulseSlots = applyGoalsToPulseSlots(defaultPulseSlots, sportGoals);
 
   return (
     <>

@@ -12,7 +12,8 @@ import {
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
 import { buildWeeklyGrid, type SessionEventInput } from "./activity-coverage";
 import ActivityGoalsSection from "./ActivityGoalsSection";
-import { PulseCard } from "./ActivityPulseStrip";
+import ActivityPulseStrip, { type PulseSlot } from "./ActivityPulseStrip";
+import { applyGoalsToPulseSlots } from "./pulse-goal-slots";
 import { getActivityGoals } from "@/lib/activity-goals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -592,46 +593,61 @@ export default async function ClimbingWorldPage() {
 
   const sessionsTrend = trendArrow(sessionsThisWeek, sessionsLastWeek);
 
+  const climbingPulseSlots: PulseSlot[] = [
+    {
+      role: "frequency",
+      label: "This Week",
+      value: String(sessionsThisWeek),
+      sub:
+        sessionsThisWeek === 0
+          ? "No sessions yet"
+          : `${climbsThisWeek} climb${climbsThisWeek !== 1 ? "s" : ""} logged`,
+      trend:
+        sessionsLastWeek > 0 || sessionsThisWeek > 0
+          ? { ...sessionsTrend, suffix: " vs last wk" }
+          : undefined,
+      accent: "rgba(78,148,255,0.9)",
+    },
+    {
+      role: "recent-performance",
+      label: "30-Day Top",
+      value: top30dGrade ?? "—",
+      sub: top30dGrade
+        ? priorTop30dGrade && priorTop30dGrade !== top30dGrade
+          ? `Prior 30d top: ${priorTop30dGrade}`
+          : `${sessions30d} session${sessions30d !== 1 ? "s" : ""} in window`
+        : "Send something in the next 30 days",
+      accent: "rgba(251,146,60,0.9)",
+    },
+    {
+      role: "all-time-best",
+      label: "Highpoint",
+      value: bestGrade,
+      sub: bestGradeLabel,
+      accent: "rgba(251,191,36,0.9)",
+    },
+    {
+      role: "streak",
+      label: "Weekly Streak",
+      value: `${streak.current}w`,
+      sub:
+        streak.longest > streak.current
+          ? `Best run: ${streak.longest} weeks`
+          : streak.current > 0
+          ? "Personal best — keep going"
+          : "Climb this week to start",
+      accent: "rgba(74,222,128,0.9)",
+    },
+  ];
+
+  // Goals matching one of the four pulse roles take over that slot — frequency
+  // goals replace "This Week", performance goals replace "30-Day Top", etc.
+  const resolvedClimbingPulse = applyGoalsToPulseSlots(climbingPulseSlots, climbingGoals);
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {/* ── Pulse strip — momentum at a glance ── */}
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
-        <PulseCard
-          label="This Week"
-          value={String(sessionsThisWeek)}
-          sub={sessionsThisWeek === 0
-            ? "No sessions yet"
-            : `${climbsThisWeek} climb${climbsThisWeek !== 1 ? "s" : ""} logged`}
-          trend={
-            sessionsLastWeek > 0 || sessionsThisWeek > 0
-              ? { ...sessionsTrend, suffix: " vs last wk" }
-              : undefined
-          }
-          accent="rgba(78,148,255,0.9)"
-        />
-        <PulseCard
-          label="30-Day Top"
-          value={top30dGrade ?? "—"}
-          sub={top30dGrade
-            ? priorTop30dGrade && priorTop30dGrade !== top30dGrade
-              ? `Prior 30d top: ${priorTop30dGrade}`
-              : `${sessions30d} session${sessions30d !== 1 ? "s" : ""} in window`
-            : "Send something in the next 30 days"}
-          accent="rgba(251,146,60,0.9)"
-        />
-        <PulseCard
-          label="Highpoint"
-          value={bestGrade}
-          sub={bestGradeLabel}
-          accent="rgba(251,191,36,0.9)"
-        />
-        <PulseCard
-          label="Weekly Streak"
-          value={`${streak.current}w`}
-          sub={streak.longest > streak.current ? `Best run: ${streak.longest} weeks` : streak.current > 0 ? "Personal best — keep going" : "Climb this week to start"}
-          accent="rgba(74,222,128,0.9)"
-        />
-      </div>
+      {/* ── Pulse strip — momentum at a glance, with goal-slot replacement ── */}
+      <ActivityPulseStrip slots={resolvedClimbingPulse} />
 
       {/* ── Active climbing goals — slot reserved between pulse and timeline ── */}
       <ActivityGoalsSection

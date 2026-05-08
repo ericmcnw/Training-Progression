@@ -146,6 +146,7 @@ export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlo
 
   // Slot 1 — This Week
   slots.push({
+    role: "frequency",
     label: "This Week",
     value: thisWeekMiles > 0 ? formatMiles(thisWeekMiles) : `${thisWeekSessions}`,
     sub:
@@ -167,6 +168,7 @@ export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlo
   // Slot 2 — Recent Pace (only if we have pace data)
   if (paceCandidates.length > 0) {
     slots.push({
+      role: "recent-performance",
       label: "30-Day Best Pace",
       value: recentBestPace ? formatPace(recentBestPace) : "—",
       sub: recentBestPace
@@ -187,6 +189,7 @@ export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlo
 
   // Slot 3 — All-time longest
   slots.push({
+    role: "all-time-best",
     label: "Longest",
     value: longestMi > 0 ? formatMiles(longestMi) : "—",
     sub: longestLog
@@ -197,6 +200,7 @@ export function buildCardioPulse(sessions: PulseLogInput[], now: Date): PulseSlo
 
   // Slot 4 — Weekly streak
   slots.push({
+    role: "streak",
     label: "Weekly Streak",
     value: `${streak.current}w`,
     sub:
@@ -244,6 +248,7 @@ export function buildBoardSportPulse(sessions: PulseLogInput[], now: Date): Puls
 
   const slots: PulseSlot[] = [
     {
+      role: "frequency",
       label: "This Week",
       value: String(thisWeekSessions),
       sub:
@@ -259,6 +264,7 @@ export function buildBoardSportPulse(sessions: PulseLogInput[], now: Date): Puls
       accent: ACCENT_BLUE,
     },
     {
+      role: "recent-performance",
       label: "Top Spot",
       value: topSpot ? String(topSpot[1]) : "—",
       sub: topSpot
@@ -267,6 +273,7 @@ export function buildBoardSportPulse(sessions: PulseLogInput[], now: Date): Puls
       accent: ACCENT_TEAL,
     },
     {
+      role: "all-time-best",
       label: "Time on Board",
       value: totalDurationSec > 0 ? formatHours(totalDurationSec) : "—",
       sub: totalNamedSpots > 0
@@ -275,6 +282,7 @@ export function buildBoardSportPulse(sessions: PulseLogInput[], now: Date): Puls
       accent: ACCENT_AMBER,
     },
     {
+      role: "streak",
       label: "Weekly Streak",
       value: `${streak.current}w`,
       sub:
