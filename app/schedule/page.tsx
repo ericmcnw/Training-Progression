@@ -308,7 +308,7 @@ export default async function SchedulePage({
   return (
     <div className="mobileSchedulePage" style={container}>
       <div className="mobileScheduleTopRow" style={topRow}>
-        <div>
+        <div style={{ minWidth: 0, maxWidth: "100%" }}>
           <h1 style={title}>Schedule</h1>
           <div style={subText}>Plan the next few weeks, compare plan versus completed work, and use the month view for broader context.</div>
         </div>
@@ -524,9 +524,12 @@ export default async function SchedulePage({
 }
 
 const container: React.CSSProperties = { maxWidth: 980, margin: "0 auto", padding: 20 };
-const topRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 };
+const topRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, minWidth: 0 };
 const title: React.CSSProperties = { fontSize: 26, fontWeight: 900, margin: 0 };
-const subText: React.CSSProperties = { marginTop: 6, opacity: 0.75, fontSize: 13 };
+// max-width + overflow-wrap stops the long subtext from extending past the
+// schedule page's right edge on narrow phones (the parent column already
+// constrains width — these protect against the children-overflowing-parent case).
+const subText: React.CSSProperties = { marginTop: 6, opacity: 0.75, fontSize: 13, maxWidth: "100%", overflowWrap: "anywhere" };
 
 const panel: React.CSSProperties = {
   marginTop: 16,

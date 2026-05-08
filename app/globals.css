@@ -748,6 +748,13 @@ details[open] > summary[data-collapsible-summary]::before{
   .mobileHomePage,
   .mobileSchedulePage{
     padding: 0 !important;
+    /* Hard-cap the schedule page at the parent's width so nothing inside
+       (week strip pills, day rows, paragraph text) can push the page wider
+       than the viewport. The week strip + month calendar inside still
+       scroll horizontally via their own overflow-x:auto wrappers. */
+    max-width: 100% !important;
+    overflow-x: clip;
+    width: 100%;
   }
 
   /* Tighter mobile schedule header. The 26px H1 sized for desktop felt
@@ -758,6 +765,7 @@ details[open] > summary[data-collapsible-summary]::before{
   }
   .mobileSchedulePage section{
     border-radius: 10px !important;
+    max-width: 100%;
   }
 
   .mobileHomeSummaryGrid,
