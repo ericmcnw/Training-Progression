@@ -647,11 +647,22 @@ export default async function ClimbingWorldPage() {
           title="Recent Sessions"
           subtitle="Last 8 sessions at a glance — tap a card to drill into the log."
           actions={
-            totalSessions > timelineSessions.length ? (
-              <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, letterSpacing: 0.4 }}>
-                {totalSessions - timelineSessions.length} more in history
-              </span>
-            ) : undefined
+            <Link
+              href="/activities/climbing/climbs"
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                padding: "6px 11px",
+                borderRadius: 9,
+                border: "1px solid rgba(120,190,255,0.32)",
+                background: "rgba(120,190,255,0.10)",
+                color: "rgba(191,219,254,0.95)",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Browse all climbs
+            </Link>
           }
         >
           <SessionTimeline sessions={timelineSessions} />
