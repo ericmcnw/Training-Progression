@@ -56,6 +56,8 @@ export default function MetricLineChart({
   yAxisTicks,
   format,
   omitTotal = false,
+  accent = "rgba(51,255,122,0.95)",
+  prIndices,
 }: {
   title: string;
   yLabel: string;
@@ -72,6 +74,12 @@ export default function MetricLineChart({
   yAxisTicks?: number[];
   format?: "duration";
   omitTotal?: boolean;
+  /** Line + dot color. Defaults to green. Pass a metric-specific color for
+   *  visual variety across stacked charts (eg. amber for weight, blue for reps). */
+  accent?: string;
+  /** Indices into `points` that are personal records — rendered as a larger
+   *  diamond marker so progression milestones pop visually. */
+  prIndices?: number[];
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -158,13 +166,31 @@ export default function MetricLineChart({
     .filter((value) => value >= 0 && value <= yMax)
     .sort((a, b) => b - a);
 
-  const summaryChips = [
+  // Latest-vs-prior trend for the "Latest" chip — small ↑/↓ + delta hint.
+  const activePoints = points.filter((p) => !p.skipped);
+  const priorValue = activePoints.length >= 2 ? activePoints[activePoints.length - 2].value : null;
+  const latestDelta = priorValue !== null ? metrics.latest - priorValue : null;
+  const latestTrend =
+    latestDelta === null
+      ? null
+      : latestDelta > 0
+      ? { arrow: "↑", tone: "up" as const, delta: `+${fmt(latestDelta).replace(/^\s/, "")}` }
+      : latestDelta < 0
+      ? { arrow: "↓", tone: "down" as const, delta: fmt(latestDelta) }
+      : { arrow: "→", tone: "flat" as const, delta: "0" };
+
+  const summaryChips: Array<{ label: string; value: string; trend?: typeof latestTrend }> = [
     { label: "Max", value: fmt(metrics.max) },
-    { label: "Latest", value: fmt(metrics.latest) },
+    { label: "Latest", value: fmt(metrics.latest), trend: latestTrend ?? undefined },
     { label: "Avg", value: fmt(metrics.avg) },
     ...(!omitTotal ? [{ label: "Total", value: fmt(metrics.total) }] : []),
     ...(goalValue !== undefined ? [{ label: "Target", value: formatValue(goalValue, targetDecimals ?? decimals, targetUnit ?? unit) }] : []),
   ];
+
+  const prSet = new Set(prIndices ?? []);
+  // Lighter / darker variants of accent for fill + stroke.
+  const accentSoft = accent.replace(/0?\.\d+\)$/, "0.18)");
+  const accentDot = accent;
 
   return (
     <div
@@ -178,12 +204,25 @@ export default function MetricLineChart({
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ fontWeight: 900, fontSize: 13 }}>{title}</div>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {summaryChips.map((chip) => (
-            <span key={chip.label} style={{ display: "inline-flex", gap: 4, alignItems: "baseline", padding: "3px 8px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", fontSize: 11, fontWeight: 700 }}>
-              <span style={{ opacity: 0.58, fontWeight: 800, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.5 }}>{chip.label}</span>
-              <span>{chip.value}</span>
-            </span>
-          ))}
+          {summaryChips.map((chip) => {
+            const trendColor =
+              chip.trend?.tone === "up"
+                ? "rgba(74,222,128,0.95)"
+                : chip.trend?.tone === "down"
+                ? "rgba(251,113,133,0.95)"
+                : "rgba(255,255,255,0.55)";
+            return (
+              <span key={chip.label} style={{ display: "inline-flex", gap: 4, alignItems: "baseline", padding: "3px 8px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", fontSize: 11, fontWeight: 700 }}>
+                <span style={{ opacity: 0.58, fontWeight: 800, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.5 }}>{chip.label}</span>
+                <span>{chip.value}</span>
+                {chip.trend ? (
+                  <span style={{ color: trendColor, fontSize: 10, fontWeight: 800, marginLeft: 1 }}>
+                    {chip.trend.arrow}{chip.trend.delta !== "0" ? chip.trend.delta : ""}
+                  </span>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -256,7 +295,7 @@ export default function MetricLineChart({
           )}
 
           {lineSegments.filter((seg) => seg.length > 1).map((seg, i) => (
-            <polyline key={i} fill="none" stroke="rgba(51,255,122,0.95)" strokeWidth="2" points={seg.join(" ")} />
+            <polyline key={i} fill="none" stroke={accentDot} strokeWidth="2" points={seg.join(" ")} />
           ))}
 
           {series.map((p, idx) => (
@@ -284,15 +323,37 @@ export default function MetricLineChart({
                       togglePoint(idx);
                     }}
                   />
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={3.5}
-                    fill="rgba(51,255,122,0.95)"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    <title>{`${p.label}: ${fmt(p.value)}`}</title>
-                  </circle>
+                  {prSet.has(idx) ? (
+                    // PR marker — diamond + halo glow so progression milestones pop.
+                    <>
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={9}
+                        fill={accentSoft}
+                        style={{ pointerEvents: "none" }}
+                      />
+                      <polygon
+                        points={`${p.x},${p.y - 6} ${p.x + 6},${p.y} ${p.x},${p.y + 6} ${p.x - 6},${p.y}`}
+                        fill={accentDot}
+                        stroke="rgba(255,255,255,0.85)"
+                        strokeWidth="1.2"
+                        style={{ pointerEvents: "none" }}
+                      >
+                        <title>{`PR — ${p.label}: ${fmt(p.value)}`}</title>
+                      </polygon>
+                    </>
+                  ) : (
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={3.5}
+                      fill={accentDot}
+                      style={{ pointerEvents: "none" }}
+                    >
+                      <title>{`${p.label}: ${fmt(p.value)}`}</title>
+                    </circle>
+                  )}
                 </>
               )}
 
@@ -329,7 +390,7 @@ export default function MetricLineChart({
                 height={34 + detailLines.length * 13}
                 rx={6}
                 fill="rgba(17,27,46,0.96)"
-                stroke="rgba(51,255,122,0.65)"
+                stroke={accent.replace(/0?\.\d+\)$/, "0.65)")}
               />
               <text x={hoverX + 7} y={hoverY + 13} fontSize="11" fill="rgba(255,255,255,0.95)">
                 {hoverLabel}

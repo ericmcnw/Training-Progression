@@ -1,4 +1,5 @@
 import MetricLineChart from "../MetricLineChart";
+import { metricAccent } from "../metric-accents";
 import { cardioPerformanceSeries, cardioWorkloadSeries, durationWeeklySeries, getRoutineLogs, routineSubtitle, summarizeRoutineLogs, workoutSessionSeries, workoutWeeklySeries } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetCard, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
@@ -272,6 +273,31 @@ export default async function RoutineTargetPage(props: {
     const useWeightMetric = routineExercise.exercise.supportsWeight && sessionRows.some((row) => row.hasRecordedWeight);
     const useTimeMetric = !useWeightMetric && routineExercise.exercise.unit === "TIME";
 
+    const points = sessionRows.map((row) => ({
+      label: row.label,
+      value: useWeightMetric ? row.topWeight : useTimeMetric ? row.topSeconds : row.topReps,
+      detailLines: row.detailLines,
+    }));
+
+    // PR markers — only meaningful for weighted exercises. Walk in chronological
+    // order (logs come in asc), flag indices that exceed the running max.
+    const prIndices: number[] = [];
+    if (useWeightMetric) {
+      let runningMax = 0;
+      points.forEach((p, idx) => {
+        if (p.value > runningMax) {
+          if (idx > 0) prIndices.push(idx); // skip the very first point (everything is a "PR" by definition)
+          runningMax = p.value;
+        }
+      });
+    }
+
+    const accent = useWeightMetric
+      ? metricAccent("weight")
+      : useTimeMetric
+      ? metricAccent("duration")
+      : metricAccent("reps");
+
     return {
       exercise: routineExercise.exercise,
       metricLabel: useWeightMetric ? "Top weight" : useTimeMetric ? "Top time" : "Top reps",
@@ -283,11 +309,9 @@ export default async function RoutineTargetPage(props: {
         : useTimeMetric
         ? `${routineExercise.exercise.name}: Top Time per Session`
         : `${routineExercise.exercise.name}: Top Reps per Session`,
-      points: sessionRows.map((row) => ({
-        label: row.label,
-        value: useWeightMetric ? row.topWeight : useTimeMetric ? row.topSeconds : row.topReps,
-        detailLines: row.detailLines,
-      })),
+      points,
+      prIndices,
+      accent,
     };
   }).filter((entry) => entry.points.length > 0);
 
@@ -356,19 +380,19 @@ export default async function RoutineTargetPage(props: {
 
   const overviewSecondaryChart =
     kind === "CARDIO" ? (
-      <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
+      <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} accent={metricAccent("distance")} />
     ) : kind === "WORKOUT" ? (
       routineExerciseSessionData.length > 0 ? (
         <div style={{ display: "grid", gap: 8 }}>
           {routineExerciseSessionData.slice(0, 4).map((entry) => (
-            <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} compact />
+            <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} compact accent={metricAccent("volume")} />
           ))}
         </div>
       ) : (
-        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} accent={metricAccent("volume")} />
       )
     ) : (
-      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+      <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} accent={metricAccent("duration")} />
     );
 
   const performanceContent =
@@ -376,13 +400,13 @@ export default async function RoutineTargetPage(props: {
       <EmptyState message="No routine logs in this range." />
     ) : kind === "CARDIO" ? (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} targetValue={sessionDistanceGoalLine?.targetValue} targetLabel={sessionDistanceGoalLine?.label} targetUnit={sessionDistanceGoalLine?.unit} targetDecimals={sessionDistanceGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Elevation per Session`} yLabel="Elevation" xLabel="Session" points={cardioPerf.elevationPoints} unit="ft" decimals={0} targetValue={sessionElevationGoalLine?.targetValue} targetLabel={sessionElevationGoalLine?.label} targetUnit={sessionElevationGoalLine?.unit} targetDecimals={sessionElevationGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} />
+        <MetricLineChart title={`${targetLabel}: Distance per Session`} yLabel="Distance" xLabel="Session" points={cardioPerf.distancePoints} unit="mi" decimals={2} targetValue={sessionDistanceGoalLine?.targetValue} targetLabel={sessionDistanceGoalLine?.label} targetUnit={sessionDistanceGoalLine?.unit} targetDecimals={sessionDistanceGoalLine?.decimals} accent={metricAccent("distance")} />
+        <MetricLineChart title={`${targetLabel}: Elevation per Session`} yLabel="Elevation" xLabel="Session" points={cardioPerf.elevationPoints} unit="ft" decimals={0} targetValue={sessionElevationGoalLine?.targetValue} targetLabel={sessionElevationGoalLine?.label} targetUnit={sessionElevationGoalLine?.unit} targetDecimals={sessionElevationGoalLine?.decimals} accent={metricAccent("elevation")} />
+        <MetricLineChart title={`${targetLabel}: Pace per Session`} yLabel="Pace" xLabel="Session" points={cardioPerf.pacePoints} unit="sec/mi" decimals={0} accent={metricAccent("pace")} />
       </div>
     ) : kind === "WORKOUT" ? (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Volume per Session`} yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} />
+        <MetricLineChart title={`${targetLabel}: Volume per Session`} yLabel="Volume" xLabel="Session" points={workoutPerf.totalVolume} decimals={0} accent={metricAccent("volume")} />
         {routineExercisePerformance.map((entry) => (
           <MetricLineChart
             key={entry.exercise.id}
@@ -393,6 +417,8 @@ export default async function RoutineTargetPage(props: {
             unit={entry.unit}
             decimals={entry.decimals}
             valueLabel={entry.metricLabel}
+            accent={entry.accent}
+            prIndices={entry.prIndices}
           />
         ))}
       </div>
@@ -410,6 +436,7 @@ export default async function RoutineTargetPage(props: {
           decimals={0}
           format="duration"
           omitTotal
+          accent={metricAccent("duration")}
         />
         {sessionPerformanceCharts.map((entry) => (
           <MetricLineChart
@@ -420,6 +447,7 @@ export default async function RoutineTargetPage(props: {
             points={entry.points}
             unit={entry.definition.unit ?? undefined}
             decimals={entry.definition.valueType === "DECIMAL" ? 1 : 0}
+            accent={metricAccent("default")}
           />
         ))}
       </div>
@@ -430,24 +458,24 @@ export default async function RoutineTargetPage(props: {
       <EmptyState message="No routine logs in this range." />
     ) : kind === "CARDIO" ? (
         <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Elevation per Week`} yLabel="Elevation" xLabel="Week" points={cardioWorkload.elevation} unit="ft" decimals={0} targetValue={weeklyElevationGoalLine?.targetValue} targetLabel={weeklyElevationGoalLine?.label} targetUnit={weeklyElevationGoalLine?.unit} targetDecimals={weeklyElevationGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={cardioWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} accent={metricAccent("sessions")} />
+        <MetricLineChart title={`${targetLabel}: Distance per Week`} yLabel="Distance" xLabel="Week" points={cardioWorkload.distance} unit="mi" decimals={2} targetValue={weeklyDistanceGoalLine?.targetValue} targetLabel={weeklyDistanceGoalLine?.label} targetUnit={weeklyDistanceGoalLine?.unit} targetDecimals={weeklyDistanceGoalLine?.decimals} accent={metricAccent("distance")} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={cardioWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} accent={metricAccent("duration")} />
+        <MetricLineChart title={`${targetLabel}: Elevation per Week`} yLabel="Elevation" xLabel="Week" points={cardioWorkload.elevation} unit="ft" decimals={0} targetValue={weeklyElevationGoalLine?.targetValue} targetLabel={weeklyElevationGoalLine?.label} targetUnit={weeklyElevationGoalLine?.unit} targetDecimals={weeklyElevationGoalLine?.decimals} accent={metricAccent("elevation")} />
       </div>
     ) : kind === "WORKOUT" ? (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} targetValue={setsGoalLine?.targetValue} targetLabel={setsGoalLine?.label} targetUnit={setsGoalLine?.unit} targetDecimals={setsGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} targetValue={repsGoalLine?.targetValue} targetLabel={repsGoalLine?.label} targetUnit={repsGoalLine?.unit} targetDecimals={repsGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Sets per Week`} yLabel="Sets" xLabel="Week" points={workoutWorkload.sets} decimals={0} targetValue={setsGoalLine?.targetValue} targetLabel={setsGoalLine?.label} targetUnit={setsGoalLine?.unit} targetDecimals={setsGoalLine?.decimals} accent={metricAccent("sets")} />
+        <MetricLineChart title={`${targetLabel}: Reps per Week`} yLabel="Reps" xLabel="Week" points={workoutWorkload.reps} decimals={0} targetValue={repsGoalLine?.targetValue} targetLabel={repsGoalLine?.label} targetUnit={repsGoalLine?.unit} targetDecimals={repsGoalLine?.decimals} accent={metricAccent("reps")} />
+        <MetricLineChart title={`${targetLabel}: Volume per Week`} yLabel="Volume" xLabel="Week" points={workoutWorkload.volume} decimals={0} targetValue={volumeGoalLine?.targetValue} targetLabel={volumeGoalLine?.label} targetUnit={volumeGoalLine?.unit} targetDecimals={volumeGoalLine?.decimals} accent={metricAccent("volume")} />
         {routineExerciseSessionData.map((entry) => (
-          <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} />
+          <MetricLineChart key={entry.exercise.id} title={entry.title} yLabel={entry.yLabel} xLabel="Session" points={entry.points} unit={entry.unit} decimals={entry.decimals} format={entry.format} omitTotal={entry.omitTotal} accent={metricAccent("volume")} />
         ))}
       </div>
     ) : (
       <div style={{ display: "grid", gap: 10 }}>
-        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
-        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} />
+        <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={durationWorkload.sessions} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} accent={metricAccent("sessions")} />
+        <MetricLineChart title={`${targetLabel}: Duration per Week`} yLabel="Duration" xLabel="Week" points={durationWorkload.duration} unit="sec" decimals={0} format="duration" omitTotal targetValue={durationGoalLine?.targetValue} targetLabel={durationGoalLine?.label} targetUnit={durationGoalLine?.unit} targetDecimals={durationGoalLine?.decimals} accent={metricAccent("duration")} />
         {sessionWorkloadCharts.map((entry) => (
           <MetricLineChart
             key={entry.definition.id}
@@ -642,24 +670,47 @@ export default async function RoutineTargetPage(props: {
         ) : null}
 
         <SectionCard title="Overview Snapshot">
+          {/* For WORKOUT routines the pulse strip + activity-coverage heatmap above
+              already show this-week sessions, weekly streak, and recent activity.
+              We trim the StatGrid here to the things the pulse doesn't surface
+              (range scope, YTD count, frequency-goal target + status, and total
+              duration) so the card stays useful without echoing what's right above it. */}
           <StatGrid
-            items={[
-              { label: "Range", value: rangeChipLabel(range) },
-              { label: "Sessions", value: String(summary.sessions) },
-              { label: "YTD sessions", value: String(ytdCount) },
-              { label: "Target", value: frequencySummary.summaryLabel },
-              {
-                label: "Status",
-                value: frequencySummary.shortStatusLabel,
-                accent: frequencySummary.status === "behind"
-                  ? "rgba(251,113,133,0.95)"
-                  : frequencySummary.status === "ahead" || frequencySummary.status === "on_track"
-                  ? "rgba(84,203,130,0.95)"
-                  : undefined,
-              },
-              { label: "Last completed", value: lastCompletedLabel },
-              { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
-            ]}
+            items={
+              kind === "WORKOUT"
+                ? [
+                    { label: "Range", value: rangeChipLabel(range) },
+                    { label: "YTD sessions", value: String(ytdCount) },
+                    { label: "Target", value: frequencySummary.summaryLabel },
+                    {
+                      label: "Status",
+                      value: frequencySummary.shortStatusLabel,
+                      accent: frequencySummary.status === "behind"
+                        ? "rgba(251,113,133,0.95)"
+                        : frequencySummary.status === "ahead" || frequencySummary.status === "on_track"
+                        ? "rgba(84,203,130,0.95)"
+                        : undefined,
+                    },
+                    { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
+                  ]
+                : [
+                    { label: "Range", value: rangeChipLabel(range) },
+                    { label: "Sessions", value: String(summary.sessions) },
+                    { label: "YTD sessions", value: String(ytdCount) },
+                    { label: "Target", value: frequencySummary.summaryLabel },
+                    {
+                      label: "Status",
+                      value: frequencySummary.shortStatusLabel,
+                      accent: frequencySummary.status === "behind"
+                        ? "rgba(251,113,133,0.95)"
+                        : frequencySummary.status === "ahead" || frequencySummary.status === "on_track"
+                        ? "rgba(84,203,130,0.95)"
+                        : undefined,
+                    },
+                    { label: "Last completed", value: lastCompletedLabel },
+                    { label: "Total duration", value: formatDuration(summary.totalDurationSec) },
+                  ]
+            }
           />
           <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.78 }}>{frequencySummary.detailLabel}</div>
           {routine.metadataGroups.length > 0 || routine.tagAssignments.length > 0 ? (
@@ -687,7 +738,7 @@ export default async function RoutineTargetPage(props: {
               {logs.length === 0 ? (
                 <EmptyState message="No routine logs in this range." />
               ) : (
-                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />
+                <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} accent={metricAccent("sessions")} />
               )}
             </SectionCard>
             <SectionCard title={kind === "CARDIO" ? "Workload Snapshot" : kind === "WORKOUT" ? "Workload Snapshot" : "Session Snapshot"}>
@@ -696,7 +747,7 @@ export default async function RoutineTargetPage(props: {
           </>
         ) : null}
 
-        {tab === "completion" ? <SectionCard title="Completion">{logs.length === 0 ? <EmptyState message="No routine logs in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} />}</SectionCard> : null}
+        {tab === "completion" ? <SectionCard title="Completion">{logs.length === 0 ? <EmptyState message="No routine logs in this range." /> : <MetricLineChart title={`${targetLabel}: Sessions per Week`} yLabel="Sessions" xLabel="Week" points={completionSeries} decimals={0} targetValue={completionGoalLine?.targetValue} targetLabel={completionGoalLine?.label} targetUnit={completionGoalLine?.unit} targetDecimals={completionGoalLine?.decimals} accent={metricAccent("sessions")} />}</SectionCard> : null}
         {tab === "performance" ? <SectionCard title="Performance">{performanceContent}</SectionCard> : null}
         {tab === "workload" ? <SectionCard title="Workload">{workloadContent}</SectionCard> : null}
 
