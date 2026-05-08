@@ -76,36 +76,247 @@ function hardestGrade(rows: PyramidRow[], filter: Set<ClimbOutcome>) {
   return eligible.length > 0 ? eligible[eligible.length - 1].grade : null;
 }
 
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function daysAgo(now: Date, days: number): Date {
+  const d = new Date(now);
+  d.setDate(d.getDate() - days);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function weeklyStreak(sessionDates: Date[], now: Date): { current: number; longest: number } {
+  if (sessionDates.length === 0) return { current: 0, longest: 0 };
+  const weekKeys = new Set<string>();
+  for (const d of sessionDates) {
+    weekKeys.add(startOfWeek(d).toISOString().slice(0, 10));
+  }
+  const sortedWeeks = [...weekKeys].sort();
+
+  // longest streak across history
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < sortedWeeks.length; i += 1) {
+    const prev = new Date(sortedWeeks[i - 1]);
+    const curr = new Date(sortedWeeks[i]);
+    const gap = Math.round((curr.getTime() - prev.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    if (gap === 1) {
+      run += 1;
+      longest = Math.max(longest, run);
+    } else {
+      run = 1;
+    }
+  }
+
+  // current streak: walk back from this week
+  let current = 0;
+  let cursor = startOfWeek(now);
+  while (weekKeys.has(cursor.toISOString().slice(0, 10))) {
+    current += 1;
+    cursor = new Date(cursor.getTime() - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  return { current, longest };
+}
+
+function trendArrow(curr: number, prev: number): { arrow: string; tone: "up" | "down" | "flat"; delta: string } {
+  if (curr === prev) return { arrow: "→", tone: "flat", delta: "0" };
+  if (curr > prev) return { arrow: "↑", tone: "up", delta: `+${curr - prev}` };
+  return { arrow: "↓", tone: "down", delta: `${curr - prev}` };
+}
+
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function HeroStat({
+function PulseCard({
   label,
   value,
   sub,
+  trend,
   accent,
 }: {
   label: string;
   value: string;
   sub?: string;
-  accent?: string;
+  trend?: { arrow: string; tone: "up" | "down" | "flat"; delta: string; suffix?: string };
+  accent: string;
 }) {
+  // accent is "rgba(r,g,b,0.9)" — derive subtler variants for the surface.
+  const accentSoft = accent.replace("0.9)", "0.10)");
+  const accentBorder = accent.replace("0.9)", "0.28)");
+  const accentGlow = accent.replace("0.9)", "0.05)");
+  const trendColor =
+    trend?.tone === "up" ? "rgba(74,222,128,0.95)" : trend?.tone === "down" ? "rgba(251,113,133,0.95)" : "rgba(255,255,255,0.55)";
+  const trendBg =
+    trend?.tone === "up" ? "rgba(74,222,128,0.10)" : trend?.tone === "down" ? "rgba(251,113,133,0.10)" : "rgba(255,255,255,0.04)";
+  const trendBorder =
+    trend?.tone === "up" ? "rgba(74,222,128,0.28)" : trend?.tone === "down" ? "rgba(251,113,133,0.28)" : "rgba(255,255,255,0.10)";
+
   return (
     <div
       style={{
-        flex: "1 1 120px",
+        flex: "1 1 160px",
+        minWidth: 0,
         display: "grid",
-        gap: 4,
-        padding: "18px 16px",
-        borderRadius: 16,
-        border: `1px solid ${accent ? accent.replace("0.9)", "0.28)") : "rgba(255,255,255,0.1)"}`,
-        background: accent
-          ? `radial-gradient(circle at top left, ${accent.replace("0.9)", "0.10)")}, transparent 60%), rgba(255,255,255,0.03)`
-          : "rgba(255,255,255,0.03)",
+        gap: 6,
+        padding: "16px 18px",
+        borderRadius: 18,
+        border: `1px solid ${accentBorder}`,
+        background: `radial-gradient(circle at top left, ${accentSoft}, transparent 55%), linear-gradient(180deg, ${accentGlow}, rgba(255,255,255,0.02))`,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", opacity: 0.55, fontWeight: 900 }}>{label}</div>
-      <div style={{ fontSize: 36, fontWeight: 950, lineHeight: 1, color: accent ?? "inherit" }}>{value}</div>
-      {sub ? <div style={{ fontSize: 12, opacity: 0.65, lineHeight: 1.4 }}>{sub}</div> : null}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.6, fontWeight: 900 }}>
+          {label}
+        </span>
+        {trend ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              fontWeight: 800,
+              padding: "2px 7px",
+              borderRadius: 999,
+              border: `1px solid ${trendBorder}`,
+              background: trendBg,
+              color: trendColor,
+              letterSpacing: 0.3,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1 }}>{trend.arrow}</span>
+            {trend.delta}{trend.suffix ?? ""}
+          </span>
+        ) : null}
+      </div>
+      <div
+        style={{
+          fontSize: 36,
+          fontWeight: 950,
+          lineHeight: 1,
+          color: accent,
+          letterSpacing: -0.5,
+        }}
+      >
+        {value}
+      </div>
+      {sub ? <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>{sub}</div> : null}
+    </div>
+  );
+}
+
+type TimelineSession = {
+  id: string;
+  routineId: string;
+  date: Date;
+  venue: "GYM" | "CRAG" | "UNKNOWN";
+  locationName: string | null;
+  attempts: number;
+  topGrade: string | null;
+  topGradeOutcome: ClimbOutcome | null;
+  topGradeSystem: ClimbGradeSystem | null;
+};
+
+function SessionTimeline({ sessions }: { sessions: TimelineSession[] }) {
+  if (sessions.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        overflowX: "auto",
+        scrollSnapType: "x proximity",
+        paddingBottom: 6,
+        marginBottom: -6,
+      }}
+    >
+      {sessions.map((s) => {
+        const venueColor = s.venue === "GYM" ? "rgba(78,148,255,0.85)" : s.venue === "CRAG" ? "rgba(74,222,128,0.85)" : "rgba(255,255,255,0.55)";
+        const venueBg = s.venue === "GYM" ? "rgba(78,148,255,0.10)" : s.venue === "CRAG" ? "rgba(74,222,128,0.10)" : "rgba(255,255,255,0.04)";
+        const venueLabel = s.venue === "GYM" ? "Indoor" : s.venue === "CRAG" ? "Outdoor" : "—";
+        const dateLabel = s.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const weekdayLabel = s.date.toLocaleDateString("en-US", { weekday: "short" });
+
+        return (
+          <Link
+            key={s.id}
+            href={`/routines/${s.routineId}/logs/${s.id}/details`}
+            style={{
+              flex: "0 0 auto",
+              width: 168,
+              scrollSnapAlign: "start",
+              display: "grid",
+              gap: 8,
+              padding: "12px 14px",
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
+              textDecoration: "none",
+              color: "inherit",
+              transition: "border-color 120ms ease, transform 120ms ease",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: 16, fontWeight: 900, lineHeight: 1 }}>{dateLabel}</span>
+              <span style={{ fontSize: 10, opacity: 0.55, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>{weekdayLabel}</span>
+            </div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  border: `1px solid ${venueColor.replace("0.85)", "0.3)")}`,
+                  background: venueBg,
+                  color: venueColor,
+                  letterSpacing: 0.3,
+                }}
+              >
+                {venueLabel}
+              </span>
+              {s.locationName ? (
+                <span style={{ fontSize: 10, opacity: 0.55, fontWeight: 700, alignSelf: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
+                  {s.locationName}
+                </span>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginTop: 2 }}>
+              <div style={{ display: "grid", gap: 2 }}>
+                <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6 }}>Climbs</span>
+                <span style={{ fontSize: 18, fontWeight: 900, lineHeight: 1 }}>{s.attempts}</span>
+              </div>
+              {s.topGrade && s.topGradeOutcome ? (
+                <div
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 9,
+                    background: climbOutcomeBg(s.topGradeOutcome),
+                    border: `1px solid ${climbOutcomeColor(s.topGradeOutcome).replace("0.9)", "0.32)")}`,
+                    color: climbOutcomeColor(s.topGradeOutcome),
+                    fontWeight: 900,
+                    fontSize: 13,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {s.topGrade}
+                </div>
+              ) : null}
+            </div>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -384,9 +595,61 @@ export default async function ClimbingWorldPage() {
     existing.attempts.push(a);
     recentSessionMap.set(a.sessionLogId, existing);
   }
-  const recentSessions = [...recentSessionMap.values()]
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .slice(0, 6);
+  const allRecentSessions = [...recentSessionMap.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
+  const recentSessions = allRecentSessions.slice(0, 6);
+
+  // ── Pulse-strip aggregates ─────────────────────────────────────────────────
+  const thisWeekStart = startOfWeek(now);
+  const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = daysAgo(now, 30);
+  const sixtyDaysAgo = daysAgo(now, 60);
+
+  const attemptsThisWeek = attempts.filter((a) => a.sessionLog.performedAt >= thisWeekStart);
+  const attemptsLastWeek = attempts.filter((a) => a.sessionLog.performedAt >= lastWeekStart && a.sessionLog.performedAt < thisWeekStart);
+  const sessionsThisWeek = new Set(attemptsThisWeek.map((a) => a.sessionLogId)).size;
+  const sessionsLastWeek = new Set(attemptsLastWeek.map((a) => a.sessionLogId)).size;
+  const climbsThisWeek = attemptsThisWeek.length;
+
+  const attempts30d = attempts.filter((a) => a.sessionLog.performedAt >= thirtyDaysAgo);
+  const attemptsPrior30d = attempts.filter((a) => a.sessionLog.performedAt >= sixtyDaysAgo && a.sessionLog.performedAt < thirtyDaysAgo);
+  const sessions30d = new Set(attempts30d.map((a) => a.sessionLogId)).size;
+
+  const top30dRows = buildPyramidRows(attempts30d);
+  const top30dGrade =
+    hardestGrade(top30dRows.boulderRows, sends) ??
+    hardestGrade(top30dRows.yosemiteRows, sends);
+  const priorTop30dRows = buildPyramidRows(attemptsPrior30d);
+  const priorTop30dGrade =
+    hardestGrade(priorTop30dRows.boulderRows, sends) ??
+    hardestGrade(priorTop30dRows.yosemiteRows, sends);
+
+  const sessionDates = [...new Set([...uniqueSessionMap.values()].map((s) => s.performedAt.toISOString().slice(0, 10)))].map((iso) => new Date(iso));
+  const streak = weeklyStreak(sessionDates, now);
+
+  // ── Recent session timeline ────────────────────────────────────────────────
+  const sendOutcomes: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT"];
+  const timelineSessions: TimelineSession[] = allRecentSessions.slice(0, 8).map((s) => {
+    // Pick the hardest sent attempt; fall back to hardest attempted.
+    const sentAttempts = s.attempts.filter((a) => sendOutcomes.includes(a.outcome));
+    const pool = sentAttempts.length > 0 ? sentAttempts : s.attempts;
+    const top = pool.reduce<typeof pool[number] | null>((best, a) => {
+      if (!best) return a;
+      const aRank = gradeSort(a.grade, a.gradeSystem);
+      const bRank = gradeSort(best.grade, best.gradeSystem);
+      return aRank > bRank ? a : best;
+    }, null);
+    return {
+      id: s.id,
+      routineId: s.attempts[0]?.sessionLog.routineId ?? "",
+      date: s.date,
+      venue: s.venueLabel === "Indoor" ? "GYM" : s.venueLabel === "Outdoor" ? "CRAG" : "UNKNOWN",
+      locationName: s.locationName,
+      attempts: s.attempts.length,
+      topGrade: top?.grade ?? null,
+      topGradeOutcome: top?.outcome ?? null,
+      topGradeSystem: top?.gradeSystem ?? null,
+    };
+  });
 
   // Supporting training
   const trainingByRoutine = new Map<string, { name: string; sessions: number; lastDate: Date }>();
@@ -400,25 +663,65 @@ export default async function ClimbingWorldPage() {
   const trainingMax = trainingRoutines[0]?.sessions ?? 1;
   const recentTrainingSessions = rawTrainingLogs.slice(0, 5);
 
+  const sessionsTrend = trendArrow(sessionsThisWeek, sessionsLastWeek);
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {/* ── Hero metrics ── */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <HeroStat
-          label="Sessions"
-          value={String(totalSessions)}
-          sub="all time"
+      {/* ── Pulse strip — momentum at a glance ── */}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+        <PulseCard
+          label="This Week"
+          value={String(sessionsThisWeek)}
+          sub={sessionsThisWeek === 0
+            ? "No sessions yet"
+            : `${climbsThisWeek} climb${climbsThisWeek !== 1 ? "s" : ""} logged`}
+          trend={
+            sessionsLastWeek > 0 || sessionsThisWeek > 0
+              ? { ...sessionsTrend, suffix: " vs last wk" }
+              : undefined
+          }
           accent="rgba(78,148,255,0.9)"
         />
-        {bestGrade !== "—" && (
-          <HeroStat
-            label="Highpoint"
-            value={bestGrade}
-            sub={bestGradeLabel}
-            accent="rgba(251,191,36,0.9)"
-          />
-        )}
+        <PulseCard
+          label="30-Day Top"
+          value={top30dGrade ?? "—"}
+          sub={top30dGrade
+            ? priorTop30dGrade && priorTop30dGrade !== top30dGrade
+              ? `Prior 30d top: ${priorTop30dGrade}`
+              : `${sessions30d} session${sessions30d !== 1 ? "s" : ""} in window`
+            : "Send something in the next 30 days"}
+          accent="rgba(251,146,60,0.9)"
+        />
+        <PulseCard
+          label="Highpoint"
+          value={bestGrade}
+          sub={bestGradeLabel}
+          accent="rgba(251,191,36,0.9)"
+        />
+        <PulseCard
+          label="Weekly Streak"
+          value={`${streak.current}w`}
+          sub={streak.longest > streak.current ? `Best run: ${streak.longest} weeks` : streak.current > 0 ? "Personal best — keep going" : "Climb this week to start"}
+          accent="rgba(74,222,128,0.9)"
+        />
       </div>
+
+      {/* ── Recent session timeline (glanceable horizontal strip) ── */}
+      {timelineSessions.length > 0 && (
+        <SectionCard
+          title="Recent Sessions"
+          subtitle="Last 8 sessions at a glance — tap a card to drill into the log."
+          actions={
+            totalSessions > timelineSessions.length ? (
+              <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, letterSpacing: 0.4 }}>
+                {totalSessions - timelineSessions.length} more in history
+              </span>
+            ) : undefined
+          }
+        >
+          <SessionTimeline sessions={timelineSessions} />
+        </SectionCard>
+      )}
 
       {/* ── Grade pyramids ── */}
       {(hasBoulder || hasYosemite) && (
@@ -606,9 +909,9 @@ export default async function ClimbingWorldPage() {
         </SectionCard>
       )}
 
-      {/* ── Recent Sessions ── */}
+      {/* ── Session Detail — full grade breakdown per session ── */}
       {recentSessions.length > 0 && (
-        <SectionCard title="Recent Sessions" subtitle="Latest sessions with grade breakdown.">
+        <SectionCard title="Session Detail" subtitle="Full grade breakdown of each recent session.">
           <div style={{ display: "grid", gap: 10 }}>
             {recentSessions.map((session) => {
               const gradeOutcomeCounts = new Map<string, { grade: string; gradeSystem: ClimbGradeSystem; outcome: ClimbOutcome; count: number }>();
@@ -619,17 +922,22 @@ export default async function ClimbingWorldPage() {
                 gradeOutcomeCounts.set(key, existing);
               }
               const badges = [...gradeOutcomeCounts.values()].slice(0, 8);
+              const routineId = session.attempts[0]?.sessionLog.routineId ?? "";
 
               return (
-                <div
+                <Link
                   key={session.id}
+                  href={`/routines/${routineId}/logs/${session.id}/details`}
                   style={{
                     display: "grid",
                     gap: 8,
                     padding: "12px 14px",
                     borderRadius: 14,
                     border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.025)",
+                    background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+                    color: "inherit",
+                    textDecoration: "none",
+                    transition: "border-color 120ms ease",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -682,7 +990,7 @@ export default async function ClimbingWorldPage() {
                       ))}
                     </div>
                   )}
-                </div>
+                </Link>
               );
             })}
           </div>
