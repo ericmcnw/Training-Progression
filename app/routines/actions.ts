@@ -1236,14 +1236,21 @@ export async function toggleArchiveRoutine(id: string) {
 export async function deleteRoutine(id: string) {
   if (!id) throw new Error("Missing routine id.");
 
-  await prisma.routine.update({
-    where: { id },
-    data: {
-      isDeleted: true,
-      deletedAt: new Date(),
-      isActive: false,
-    },
-  });
+  await prisma.$transaction([
+    prisma.routine.update({
+      where: { id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        isActive: false,
+      },
+    }),
+    // Drop the per-routine FrequencyGoal companion (id = `fg_<routineId>`) —
+    // otherwise it lingers as an orphan and surfaces on /goals pointing at a
+    // routine that no longer exists. Group FrequencyGoals are unaffected; they
+    // just lose the join row via the cascade on FrequencyGoalRoutine.
+    prisma.frequencyGoal.deleteMany({ where: { id: `fg_${id}` } }),
+  ]);
 
   revalidateRoutineSurfaces(id);
   redirect("/routines");

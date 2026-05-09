@@ -10,6 +10,9 @@ export default async function FrequencyGoalsSection() {
   const now = new Date();
   const [goals, allRoutines] = await Promise.all([
     prisma.frequencyGoal.findMany({
+      // Group section only — exclude `fg_*` per-routine companion goals so they
+      // don't appear here in addition to the per-routine row.
+      where: { id: { not: { startsWith: "fg_" } } },
       orderBy: { name: "asc" },
       include: {
         routines: {

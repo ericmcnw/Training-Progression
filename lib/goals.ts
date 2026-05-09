@@ -1392,12 +1392,17 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
       : Promise.resolve([]),
     includeRoutineFrequencyGoals
       ? prisma.frequencyGoal.findMany({
-          where:
-            filters.active === "active"
+          where: {
+            // Exclude per-routine `fg_*` records — those render via the routine
+            // frequency path above. Without this filter, single-routine
+            // FrequencyGoals appeared twice on /goals (once per code path).
+            id: { not: { startsWith: "fg_" } },
+            ...(filters.active === "active"
               ? { isActive: true }
               : filters.active === "inactive"
               ? { isActive: false }
-              : undefined,
+              : {}),
+          },
           include: {
             routines: {
               select: {
