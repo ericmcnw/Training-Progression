@@ -6,6 +6,9 @@ import WeekAtGlanceClient from "./WeekAtGlanceClient";
 import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
 import DashboardInjuries from "@/app/components/dashboard/DashboardInjuries";
 import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
+import HabitLane, { type HabitLaneRow } from "@/app/components/dashboard/HabitLane";
+import FrequencyTargetsCard, { type FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
+import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
@@ -34,6 +37,18 @@ function formatDayLabel(ymd: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+// Status priority for habit/frequency rows: at-risk first so the user sees
+// what needs attention without scrolling.
+function statusSortRank(status: "complete" | "ahead" | "on_track" | "behind" | "at_risk"): number {
+  switch (status) {
+    case "at_risk":  return 0;
+    case "behind":   return 1;
+    case "on_track": return 2;
+    case "ahead":    return 3;
+    case "complete": return 4;
+  }
 }
 
 function formatShortWeekRangeLabel(startYmd: string) {
@@ -889,6 +904,102 @@ export default async function HomePage() {
     };
   });
 
+  // ── HABIT LANE + FREQUENCY TARGETS DATA PREP ─────────────────────────────
+  // Builds the rows consumed by HabitLane (per habit-domain routine) and
+  // FrequencyTargetsCard (per active FrequencyGoal whose linked routines aren't
+  // exclusively habit-domain). Both share log data already loaded for the week
+  // glance (12 weeks back), so no extra DB roundtrips are needed.
+
+  const logsByRoutineId = new Map<string, Array<{ performedAt: Date }>>();
+  for (const log of glanceLogs) {
+    const arr = logsByRoutineId.get(log.routineId);
+    if (arr) arr.push({ performedAt: log.performedAt });
+    else logsByRoutineId.set(log.routineId, [{ performedAt: log.performedAt }]);
+  }
+
+  function targetFromGoal(goal: { targetCount: number; targetInterval: number; targetUnit: typeof groupFrequencyGoals[number]["targetUnit"] } | null | undefined): FrequencyTarget | null {
+    if (!goal) return null;
+    return {
+      targetCount: goal.targetCount,
+      targetInterval: goal.targetInterval,
+      targetUnit: goal.targetUnit,
+      weekdayMask: null,
+    };
+  }
+
+  const habitRoutines = routinesWithTargets.filter(
+    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit"
+  );
+
+  const habitLaneRows: HabitLaneRow[] = habitRoutines
+    .map((routine) => {
+      const primaryLink = routine.frequencyGoalRoutines.find((rel) => rel.goal?.isActive);
+      const goal = primaryLink?.goal ?? null;
+      const target = targetFromGoal(goal);
+      const logs = logsByRoutineId.get(routine.id) ?? [];
+      const state = computeFrequencyState({ target, logs, today, trailingDays: 14 });
+      const goalLabel = target
+        ? `${target.targetCount}× per ${target.targetInterval === 1 ? target.targetUnit.toLowerCase() : `${target.targetInterval} ${target.targetUnit.toLowerCase()}s`}`
+        : null;
+      return {
+        routineId: routine.id,
+        routineName: routine.name,
+        goalId: goal?.id ?? null,
+        goalLabel,
+        weekdayMask: null,
+        state,
+      } satisfies HabitLaneRow;
+    })
+    .sort((a, b) => {
+      // Surface "at risk" and "behind" first, then by streak desc, then name
+      const rankA = statusSortRank(a.state.currentWindow.status);
+      const rankB = statusSortRank(b.state.currentWindow.status);
+      if (rankA !== rankB) return rankA - rankB;
+      const streakDiff = (b.state.windowStreak || b.state.currentDayStreak) - (a.state.windowStreak || a.state.currentDayStreak);
+      if (streakDiff !== 0) return streakDiff;
+      return a.routineName.localeCompare(b.routineName);
+    });
+
+  // Build dashboard "Frequency Targets" rows from every active FrequencyGoal,
+  // EXCLUDING any goal whose linked routines are *all* habit-domain — those
+  // already render in the habit lane and we don't want to double-surface.
+  const habitRoutineIdSet = new Set(habitRoutines.map((r) => r.id));
+  const frequencyTargetRows: FrequencyTargetRow[] = groupFrequencyGoals
+    .filter((goal) => goal.routines.length > 0)
+    .filter((goal) => goal.routines.some((rel) => !habitRoutineIdSet.has(rel.routineId)))
+    .map((goal) => {
+      const linkedRoutines = goal.routines
+        .map((rel) => routineMap.get(rel.routineId))
+        .filter((r): r is NonNullable<typeof r> => Boolean(r));
+      const routineNames = linkedRoutines.map((r) => r.name);
+      const primaryDomain = linkedRoutines[0]
+        ? effectiveRoutineDomain(linkedRoutines[0].domain, linkedRoutines[0].kind, linkedRoutines[0].subtype)
+        : "general";
+      const aggregatedLogs = linkedRoutines.flatMap((r) => logsByRoutineId.get(r.id) ?? []);
+      const target: FrequencyTarget = {
+        targetCount: goal.targetCount,
+        targetInterval: goal.targetInterval,
+        targetUnit: goal.targetUnit,
+        weekdayMask: null,
+      };
+      const state = computeFrequencyState({ target, logs: aggregatedLogs, today, trailingDays: 14 });
+      return {
+        goalId: goal.id,
+        goalName: goal.name,
+        routineNames,
+        primaryDomain,
+        isGroup: !goal.id.startsWith("fg_"),
+        target,
+        state,
+      } satisfies FrequencyTargetRow;
+    })
+    .sort((a, b) => {
+      const rankA = statusSortRank(a.state.currentWindow.status);
+      const rankB = statusSortRank(b.state.currentWindow.status);
+      if (rankA !== rankB) return rankA - rankB;
+      return a.goalName.localeCompare(b.goalName);
+    });
+
   // Consecutive active-day streak ending today
   const loggedDaySet = new Set(sparkLogs.map((log) => toAppYmd(log.performedAt)));
   let currentStreak = 0;
@@ -1038,6 +1149,28 @@ export default async function HomePage() {
         <div style={panelHeader}>WEEK AT A GLANCE</div>
         <div style={{ padding: "12px 14px 14px" }}>
           <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
+        </div>
+      </section>
+
+      {/* ── HABITS ── */}
+      <section style={panel}>
+        <div style={panelHeader}>
+          HABITS
+          <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}> · last 14 days</span>
+        </div>
+        <div style={{ padding: "12px 14px 14px" }}>
+          <HabitLane rows={habitLaneRows} today={today} />
+        </div>
+      </section>
+
+      {/* ── FREQUENCY TARGETS ── */}
+      <section style={panel}>
+        <div style={panelHeader}>
+          FREQUENCY TARGETS
+          <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}> · how often you&apos;re hitting your goals</span>
+        </div>
+        <div style={{ padding: "12px 14px 14px" }}>
+          <FrequencyTargetsCard rows={frequencyTargetRows} />
         </div>
       </section>
 
