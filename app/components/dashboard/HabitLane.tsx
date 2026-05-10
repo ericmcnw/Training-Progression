@@ -1,16 +1,12 @@
-// Habit lane — a calendar strip per habit-domain routine, rendered into the
-// dashboard right below the Week at a Glance section. One row per habit with
-// a 14-day strip (matches default trailing window) and a streak chip.
+// Habit lane — compact, single-row layout. Renders a list of habits with a
+// 7-day default strip and a leading streak chip. The owning RhythmPanel
+// provides the panel chrome; this component is list-only.
 //
-// All math comes from lib/frequency-state.ts so this component stays purely
-// presentational. Per-day cells use four states:
-//   • done   — solid amber pill
-//   • missed — hollow red pill
-//   • rest   — faint dot (off-mask day or pre-window noise)
-//   • future — outlined ghost cell
-//
-// If a routine has no FrequencyGoal, daily semantics apply (every past day is
-// expected). If it has one with a weekday mask, only mask days are expected.
+// Per-day cells use four states:
+//   • done   — soft amber fill
+//   • missed — red outline only
+//   • rest   — faint dot
+//   • future — dashed outline
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
@@ -18,82 +14,53 @@ import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
   formatMaskLabel,
   frequencyStatusColor,
-  frequencyStatusLabel,
   type FrequencyState,
 } from "@/lib/frequency-state";
 
 export type HabitLaneRow = {
   routineId: string;
   routineName: string;
-  goalId: string | null;       // null when habit has no FrequencyGoal
-  goalLabel: string | null;    // e.g. "3× / week" or "Mon · Wed · Fri"
-  weekdayMask: number | null;  // null for daily / flexible
+  goalId: string | null;
+  goalLabel: string | null;
+  weekdayMask: number | null;
   state: FrequencyState;
 };
 
-const STRIP_DAYS = 14;
-const CELL_GAP = 4;
+const CELL_GAP = 3;
 
 export default function HabitLane({
   rows,
   today,
+  trailingDays = 7,
 }: {
   rows: HabitLaneRow[];
   today: string;
+  trailingDays?: 7 | 14 | 30;
 }) {
   if (rows.length === 0) {
     return (
-      <div style={emptyShell}>
-        <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>No habits yet</div>
-        <div style={{ fontSize: 12, opacity: 0.62, lineHeight: 1.45 }}>
-          Set a routine&apos;s domain to <strong>Habit / Routine</strong> to track it here as a daily streak.
-        </div>
-        <Link href="/routines?domain=habit" style={emptyCta}>Browse habit routines</Link>
+      <div style={emptyInline}>
+        <span style={{ opacity: 0.65 }}>No habits yet —</span>
+        <Link href="/routines?domain=habit" style={emptyInlineLink}>
+          set a routine&apos;s domain to Habit/Routine
+        </Link>
       </div>
     );
   }
 
-  const stripStart = addDaysYmd(today, -(STRIP_DAYS - 1));
-  const dayHeaders = Array.from({ length: STRIP_DAYS }, (_, i) => addDaysYmd(stripStart, i));
+  const stripStart = addDaysYmd(today, -(trailingDays - 1));
 
   return (
-    <div style={shell}>
-      <div style={headerRow}>
-        <div style={headerCol1}>Habit</div>
-        <div style={stripHeader}>
-          {dayHeaders.map((ymd, idx) => {
-            const isToday = ymd === today;
-            const dayLabel = formatUtcDateLabel(ymd, { weekday: "narrow" });
-            return (
-              <div
-                key={ymd}
-                style={{
-                  ...headerCell,
-                  fontWeight: isToday ? 900 : 700,
-                  opacity: isToday ? 1 : idx % 2 === 0 ? 0.7 : 0.55,
-                  color: isToday ? "rgba(251,191,36,0.95)" : "inherit",
-                }}
-              >
-                {dayLabel}
-              </div>
-            );
-          })}
-        </div>
-        <div style={headerColLast}>Streak</div>
-      </div>
-
-      <div style={rowsWrap}>
-        {rows.map((row) => (
-          <HabitRow key={row.routineId} row={row} today={today} stripStart={stripStart} />
-        ))}
-      </div>
-
-      <div style={legendRow}>
-        <Legend swatch={swatchDone} label="Done" />
-        <Legend swatch={swatchMissed} label="Missed" />
-        <Legend swatch={swatchRest} label="Rest day" />
-        <Legend swatch={swatchFuture} label="Upcoming" />
-      </div>
+    <div style={listShell}>
+      {rows.map((row) => (
+        <HabitRow
+          key={row.routineId}
+          row={row}
+          today={today}
+          stripStart={stripStart}
+          trailingDays={trailingDays}
+        />
+      ))}
     </div>
   );
 }
@@ -102,35 +69,35 @@ function HabitRow({
   row,
   today,
   stripStart,
+  trailingDays,
 }: {
   row: HabitLaneRow;
   today: string;
   stripStart: string;
+  trailingDays: number;
 }) {
   const { state } = row;
-  // Routine detail is the canonical landing page — the goal (if any) is
-  // accessible from there, and routes always exist regardless of goal type.
+  const accent = frequencyStatusColor(state.currentWindow.status);
   const detailHref = `/routines/${row.routineId}`;
-  const subLabel = row.goalLabel ?? "Daily streak";
-  const maskLabel = row.weekdayMask ? formatMaskLabel(row.weekdayMask) : null;
-  const statusColor = frequencyStatusColor(state.currentWindow.status);
-  const statusLabel = frequencyStatusLabel(state.currentWindow.status);
+  const subLabel = row.weekdayMask ? formatMaskLabel(row.weekdayMask) : (row.goalLabel ?? "Daily");
   const streakValue = state.windowStreak > 0 ? state.windowStreak : state.currentDayStreak;
   const streakUnit = state.windowStreak > 0 ? "wk" : "d";
+  const showStreak = streakValue > 0;
+  const isAtRisk = state.currentWindow.status === "at_risk";
 
   return (
     <Link href={detailHref} style={rowCard}>
+      <div style={{ ...rowAccent, background: accent }} />
+
       <div style={col1}>
-        <div style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.2 }}>{row.routineName}</div>
-        <div style={subline}>
-          <span style={{ ...statusPill, color: statusColor, borderColor: statusColor }}>{statusLabel}</span>
-          <span style={{ opacity: 0.7 }}>{subLabel}</span>
-          {maskLabel ? <span style={{ opacity: 0.55 }}>· {maskLabel}</span> : null}
+        <div style={nameLine}>
+          <span style={nameText}>{row.routineName}</span>
+          <span style={subText}>· {subLabel}</span>
         </div>
       </div>
 
       <div style={strip}>
-        {Array.from({ length: STRIP_DAYS }, (_, i) => {
+        {Array.from({ length: trailingDays }, (_, i) => {
           const ymd = addDaysYmd(stripStart, i);
           const cellState = state.dailyState[ymd] ?? "rest";
           const isToday = ymd === today;
@@ -138,55 +105,52 @@ function HabitRow({
             <div
               key={ymd}
               title={`${formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" })} — ${cellState}`}
-              style={{ ...cellStyle(cellState), ...(isToday ? todayRing : null) }}
+              style={{ ...cellStyle(cellState, accent), ...(isToday ? todayBadge : null) }}
             />
           );
         })}
       </div>
 
-      <div style={colLast}>
-        <div style={streakNumber}>{streakValue}</div>
-        <div style={streakUnitLabel}>{streakUnit}</div>
+      <div style={trailing}>
+        {isAtRisk ? <span style={{ ...riskDot, background: accent }} title="At risk" /> : null}
+        {showStreak ? (
+          <span style={streakChip}>
+            {streakValue}
+            <span style={streakUnitText}>{streakUnit}</span>
+          </span>
+        ) : (
+          <span style={{ ...streakChip, opacity: 0.35, color: "inherit" }}>—</span>
+        )}
       </div>
     </Link>
   );
 }
 
-function Legend({ swatch, label }: { swatch: CSSProperties; label: string }) {
-  return (
-    <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-      <div style={swatch} />
-      <span style={{ fontSize: 11, opacity: 0.7 }}>{label}</span>
-    </div>
-  );
-}
-
-function cellStyle(state: "done" | "missed" | "rest" | "future"): CSSProperties {
+function cellStyle(state: "done" | "missed" | "rest" | "future", accent: string): CSSProperties {
   switch (state) {
     case "done":
       return {
         ...cellBase,
-        background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
-        border: "1px solid rgba(251,191,36,0.6)",
-        boxShadow: "0 0 0 1px rgba(251,191,36,0.18) inset",
+        background: "rgba(251,191,36,0.85)",
+        border: "1px solid rgba(251,191,36,0.65)",
       };
     case "missed":
       return {
         ...cellBase,
-        background: "rgba(248,113,113,0.10)",
+        background: "transparent",
         border: "1px solid rgba(248,113,113,0.55)",
       };
     case "rest":
       return {
         ...cellBase,
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.05)",
       };
     case "future":
       return {
         ...cellBase,
         background: "transparent",
-        border: "1px dashed rgba(255,255,255,0.15)",
+        border: "1px dashed rgba(255,255,255,0.13)",
       };
   }
 }
@@ -194,120 +158,85 @@ function cellStyle(state: "done" | "missed" | "rest" | "future"): CSSProperties 
 const cellBase: CSSProperties = {
   flex: "1 1 0",
   minWidth: 0,
-  height: 22,
-  borderRadius: 5,
+  height: 14,
+  borderRadius: 3,
 };
 
-const todayRing: CSSProperties = {
-  outline: "1.5px solid rgba(251,191,36,0.65)",
+const todayBadge: CSSProperties = {
+  outline: "1.5px solid rgba(255,255,255,0.5)",
   outlineOffset: 1,
 };
 
-const shell: CSSProperties = {
+const listShell: CSSProperties = {
   display: "grid",
-  gap: 10,
+  gap: 4,
 };
 
-const emptyShell: CSSProperties = {
-  display: "grid",
-  gap: 6,
-  padding: "16px 18px",
-  borderRadius: 14,
-  border: "1px dashed rgba(251,191,36,0.28)",
-  background: "rgba(251,191,36,0.04)",
-  justifyItems: "start",
-};
-
-const emptyCta: CSSProperties = {
-  marginTop: 4,
+const emptyInline: CSSProperties = {
   fontSize: 12,
-  fontWeight: 800,
-  color: "rgba(251,191,36,0.95)",
-  textDecoration: "none",
-  padding: "6px 12px",
-  borderRadius: 8,
-  border: "1px solid rgba(251,191,36,0.4)",
-  background: "rgba(251,191,36,0.08)",
-};
-
-const headerRow: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(120px, 1.6fr) minmax(0, 4fr) 56px",
-  gap: 12,
+  padding: "10px 4px",
+  display: "inline-flex",
+  gap: 5,
+  flexWrap: "wrap",
   alignItems: "center",
-  padding: "0 4px 4px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
 };
 
-const headerCol1: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.6,
-  textTransform: "uppercase",
-  opacity: 0.5,
-};
-
-const headerColLast: CSSProperties = {
-  ...headerCol1,
-  textAlign: "right",
-};
-
-const stripHeader: CSSProperties = {
-  display: "flex",
-  gap: CELL_GAP,
-  fontSize: 10,
-  textTransform: "uppercase",
-  letterSpacing: 0.4,
-};
-
-const headerCell: CSSProperties = {
-  flex: "1 1 0",
-  minWidth: 0,
-  textAlign: "center",
-};
-
-const rowsWrap: CSSProperties = {
-  display: "grid",
-  gap: 6,
+const emptyInlineLink: CSSProperties = {
+  color: "rgba(251,191,36,0.95)",
+  textDecoration: "underline",
+  textUnderlineOffset: 2,
 };
 
 const rowCard: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(120px, 1.6fr) minmax(0, 4fr) 56px",
-  gap: 12,
+  gridTemplateColumns: "3px minmax(110px, 1.4fr) minmax(0, 2.2fr) 52px",
+  gap: 8,
   alignItems: "center",
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.06)",
-  background: "rgba(255,255,255,0.02)",
+  padding: "6px 8px 6px 0",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.05)",
+  background: "rgba(255,255,255,0.015)",
   color: "inherit",
   textDecoration: "none",
-  transition: "background 120ms ease, border-color 120ms ease",
+  minHeight: 32,
+};
+
+const rowAccent: CSSProperties = {
+  height: 18,
+  width: 3,
+  borderRadius: "0 2px 2px 0",
+  marginLeft: 0,
 };
 
 const col1: CSSProperties = {
-  display: "grid",
-  gap: 3,
   minWidth: 0,
 };
 
-const subline: CSSProperties = {
+const nameLine: CSSProperties = {
   display: "flex",
-  flexWrap: "wrap",
-  gap: 6,
-  alignItems: "center",
-  fontSize: 11,
+  gap: 4,
+  alignItems: "baseline",
+  minWidth: 0,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
-const statusPill: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: 0.4,
-  textTransform: "uppercase",
-  border: "1px solid",
-  padding: "1px 6px",
-  borderRadius: 999,
-  background: "rgba(255,255,255,0.02)",
+const nameText: CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 800,
+  lineHeight: 1.1,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const subText: CSSProperties = {
+  fontSize: 10.5,
+  opacity: 0.55,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 const strip: CSSProperties = {
@@ -316,66 +245,36 @@ const strip: CSSProperties = {
   alignItems: "center",
 };
 
-const colLast: CSSProperties = {
-  display: "grid",
-  justifyItems: "center",
-  alignContent: "center",
-  borderRadius: 10,
-  background: "rgba(251,191,36,0.06)",
-  border: "1px solid rgba(251,191,36,0.18)",
-  padding: "4px 0",
-  minWidth: 50,
+const trailing: CSSProperties = {
+  display: "flex",
+  gap: 4,
+  alignItems: "center",
+  justifyContent: "flex-end",
 };
 
-const streakNumber: CSSProperties = {
-  fontSize: 18,
+const streakChip: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: 1,
+  fontSize: 13,
   fontWeight: 900,
-  lineHeight: 1,
   color: "rgba(251,191,36,0.95)",
+  lineHeight: 1,
 };
 
-const streakUnitLabel: CSSProperties = {
+const streakUnitText: CSSProperties = {
   fontSize: 9,
   fontWeight: 800,
-  letterSpacing: 0.6,
+  opacity: 0.65,
+  marginLeft: 1,
   textTransform: "uppercase",
-  marginTop: 2,
-  opacity: 0.7,
+  letterSpacing: 0.4,
 };
 
-const legendRow: CSSProperties = {
-  display: "flex",
-  gap: 14,
-  flexWrap: "wrap",
-  paddingTop: 4,
-};
-
-const swatchBase: CSSProperties = {
-  width: 14,
-  height: 10,
-  borderRadius: 3,
-};
-
-const swatchDone: CSSProperties = {
-  ...swatchBase,
-  background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
-  border: "1px solid rgba(251,191,36,0.6)",
-};
-
-const swatchMissed: CSSProperties = {
-  ...swatchBase,
-  background: "rgba(248,113,113,0.10)",
-  border: "1px solid rgba(248,113,113,0.55)",
-};
-
-const swatchRest: CSSProperties = {
-  ...swatchBase,
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.06)",
-};
-
-const swatchFuture: CSSProperties = {
-  ...swatchBase,
-  background: "transparent",
-  border: "1px dashed rgba(255,255,255,0.15)",
+const riskDot: CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: 999,
+  flexShrink: 0,
+  boxShadow: "0 0 0 2px rgba(248,113,113,0.18)",
 };

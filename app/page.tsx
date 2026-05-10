@@ -6,8 +6,9 @@ import WeekAtGlanceClient from "./WeekAtGlanceClient";
 import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
 import DashboardInjuries from "@/app/components/dashboard/DashboardInjuries";
 import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
-import HabitLane, { type HabitLaneRow } from "@/app/components/dashboard/HabitLane";
-import FrequencyTargetsCard, { type FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
+import RhythmPanel from "@/app/components/dashboard/RhythmPanel";
+import type { HabitLaneRow } from "@/app/components/dashboard/HabitLane";
+import type { FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
@@ -1152,27 +1153,14 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── HABITS ── */}
-      <section style={panel}>
-        <div style={panelHeader}>
-          HABITS
-          <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}> · last 14 days</span>
-        </div>
-        <div style={{ padding: "12px 14px 14px" }}>
-          <HabitLane rows={habitLaneRows} today={today} />
-        </div>
-      </section>
-
-      {/* ── FREQUENCY TARGETS ── */}
-      <section style={panel}>
-        <div style={panelHeader}>
-          FREQUENCY TARGETS
-          <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}> · how often you&apos;re hitting your goals</span>
-        </div>
-        <div style={{ padding: "12px 14px 14px" }}>
-          <FrequencyTargetsCard rows={frequencyTargetRows} />
-        </div>
-      </section>
+      {/* ── RHYTHM (habits + frequency targets) ── */}
+      <RhythmPanel
+        habits={habitLaneRows}
+        frequencyTargets={frequencyTargetRows}
+        today={today}
+        panelStyle={panel}
+        panelHeaderStyle={panelHeader}
+      />
 
       <div className="mobileHomeMainGrid" style={mainGrid}>
         {/* ── Column 1: TODAY'S FOCUS ── */}
