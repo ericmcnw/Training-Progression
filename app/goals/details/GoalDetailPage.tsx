@@ -1,13 +1,15 @@
 import Link from "next/link";
 import MetricLineChart from "@/app/progress/MetricLineChart";
 import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
-import { toAppYmd } from "@/lib/dates";
+import { toAppYmd, todayAppYmd } from "@/lib/dates";
 import { getGoalById, getGoalFormOptions, getGoalInsight, getGroupFrequencyGoalById, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
 import GoalForm, { type GoalFormInitial } from "../GoalForm";
 import { updateGoal } from "../actions";
 import { updateFrequencyGoal } from "@/app/routines/actions";
 import DeleteGoalButton from "../DeleteGoalButton";
 import { GoalMetaLine, GoalProgressRing, GoalStatusBadge, cardStyle, chipStyle, subtleTextStyle } from "../ui";
+import { getFrequencyConsistency } from "@/lib/frequency-consistency";
+import FrequencyHeatmap from "@/app/components/dashboard/FrequencyHeatmap";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +137,13 @@ export default async function GoalDetailPage(props: {
     return <div style={{ padding: 20 }}>Goal not found.</div>;
   }
 
+  // Habit-aware consistency view — fetched only for FREQUENCY-type goals so
+  // we don't waste a query on performance/volume goals where it's irrelevant.
+  const consistency =
+    entry.goal.goalType === "FREQUENCY"
+      ? await getFrequencyConsistency(normalizedGoalId)
+      : null;
+
   const isSessionBasedExerciseTopWeight =
     entry.goal.goalType === "PERFORMANCE" &&
     entry.goal.targetType === "EXERCISE" &&
@@ -181,6 +190,17 @@ export default async function GoalDetailPage(props: {
           </div>
         </div>
       </SectionCard>
+
+      {consistency ? (
+        <SectionCard title="Consistency">
+          <FrequencyHeatmap
+            target={consistency.target}
+            state={consistency.state}
+            today={todayAppYmd()}
+            weekdayMask={consistency.weekdayMask}
+          />
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="History">
         <MetricLineChart
