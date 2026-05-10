@@ -10,7 +10,7 @@ import RhythmPanel from "@/app/components/dashboard/RhythmPanel";
 import ThisWeekPanel from "@/app/components/dashboard/ThisWeekPanel";
 import type { HabitLaneRow } from "@/app/components/dashboard/HabitLane";
 import type { FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
-import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
+import { computeFrequencyState, isExpectedDay, type FrequencyTarget } from "@/lib/frequency-state";
 
 // Set USE_THIS_WEEK_PANEL to false to revert to the original two separate
 // sections (Week-at-a-Glance + Rhythm). Reverting is a single boolean flip;
@@ -465,6 +465,7 @@ export default async function HomePage() {
         subtype: true,
         domain: true,
         kind: true,
+        createdAt: true,
         frequencyGoalRoutines: {
           include: { goal: true },
         },
@@ -908,6 +909,7 @@ export default async function HomePage() {
       dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
       planned,
       logs,
+      habitAggregate: { expected: 0, completed: 0 } as { expected: number; completed: number },
     };
   });
 
@@ -937,6 +939,45 @@ export default async function HomePage() {
   const habitRoutines = routinesWithTargets.filter(
     (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit"
   );
+
+  // Habit aggregate per day — drives the WaG cell's amber pie-fill dot.
+  // Counts habit-domain routines that were created on or before that day AND
+  // expected on that day (daily / mask-matching). Flexible weekly habits with
+  // no per-day expectation are excluded from the per-day denominator.
+  const habitYmdSetById = new Map<string, Set<string>>();
+  for (const habit of habitRoutines) {
+    const set = new Set<string>();
+    for (const log of glanceLogs) {
+      if (log.routineId === habit.id) set.add(toAppYmd(log.performedAt));
+    }
+    habitYmdSetById.set(habit.id, set);
+  }
+  const habitTargetById = new Map<string, FrequencyTarget | null>();
+  for (const habit of habitRoutines) {
+    const goal = habit.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal ?? null;
+    habitTargetById.set(habit.id, targetFromGoal(goal));
+  }
+  const habitCreatedYmdById = new Map<string, string>();
+  for (const habit of habitRoutines) {
+    habitCreatedYmdById.set(habit.id, toAppYmd(habit.createdAt));
+  }
+  for (const day of glanceDays) {
+    if (day.ymd > today) {
+      day.habitAggregate = { expected: 0, completed: 0 };
+      continue;
+    }
+    let expected = 0;
+    let completed = 0;
+    for (const habit of habitRoutines) {
+      if ((habitCreatedYmdById.get(habit.id) ?? day.ymd) > day.ymd) continue;
+      const target = habitTargetById.get(habit.id) ?? null;
+      const isPerDay = !target || isExpectedDay(target, day.ymd);
+      if (!isPerDay) continue;
+      expected++;
+      if (habitYmdSetById.get(habit.id)?.has(day.ymd)) completed++;
+    }
+    day.habitAggregate = { expected, completed };
+  }
 
   const habitLaneRows: HabitLaneRow[] = habitRoutines
     .map((routine) => {

@@ -9,8 +9,9 @@
 
 import type { CSSProperties } from "react";
 import WeekAtGlanceClient from "@/app/WeekAtGlanceClient";
-import HabitLane, { type HabitLaneRow } from "./HabitLane";
-import FrequencyTargetsCard, { type FrequencyTargetRow } from "./FrequencyTargetsCard";
+import RhythmGrid from "./RhythmGrid";
+import type { HabitLaneRow } from "./HabitLane";
+import type { FrequencyTargetRow } from "./FrequencyTargetsCard";
 import type { RoutineDomain } from "@/lib/routines";
 
 type GlanceDay = {
@@ -26,6 +27,7 @@ type GlanceDay = {
     logged: number;
   }>;
   logs: Array<{ id: string; routineId: string; routineName: string; kind: string; domain: RoutineDomain }>;
+  habitAggregate?: { expected: number; completed: number };
 };
 
 export default function ThisWeekPanel({
@@ -91,52 +93,11 @@ export default function ThisWeekPanel({
 
         {hasRhythm ? <div style={dividerStyle} /> : null}
 
-        {hasHabits ? (
-          <Subsection
-            label="HABITS"
-            count={habits.length}
-            sublabel="last 7 days · daily completion"
-          >
-            <HabitLane rows={habits} today={today} trailingDays={7} />
-          </Subsection>
-        ) : null}
-
-        {hasHabits && hasTargets ? <div style={subDividerStyle} /> : null}
-
-        {hasTargets ? (
-          <Subsection
-            label="FREQUENCY TARGETS"
-            count={frequencyTargets.length}
-            sublabel="window progress · group goals included"
-          >
-            <FrequencyTargetsCard rows={frequencyTargets} />
-          </Subsection>
+        {hasRhythm ? (
+          <RhythmGrid habits={habits} frequencyTargets={frequencyTargets} today={today} />
         ) : null}
       </div>
     </section>
-  );
-}
-
-function Subsection({
-  label,
-  count,
-  sublabel,
-  children,
-}: {
-  label: string;
-  count: number;
-  sublabel: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <div style={subhead}>
-        <span style={subheadLabel}>{label}</span>
-        <span style={subheadCount}>{count}</span>
-        <span style={subheadSublabel}>{sublabel}</span>
-      </div>
-      {children}
-    </div>
   );
 }
 
@@ -233,38 +194,3 @@ const dividerStyle: CSSProperties = {
   marginBottom: 2,
 };
 
-// Lighter divider between Habits and Frequency Targets — they're peers.
-const subDividerStyle: CSSProperties = {
-  height: 1,
-  background: "rgba(255,255,255,0.04)",
-  margin: "2px 0",
-};
-
-const subhead: CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 6,
-  paddingLeft: 4,
-};
-
-const subheadLabel: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: 0.6,
-  opacity: 0.65,
-};
-
-const subheadCount: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  opacity: 0.6,
-  padding: "1px 5px",
-  borderRadius: 6,
-  background: "rgba(255,255,255,0.05)",
-};
-
-const subheadSublabel: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 500,
-  opacity: 0.4,
-};
