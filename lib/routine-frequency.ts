@@ -12,14 +12,19 @@ export type RoutineFrequencyTargetShape = {
   targetFrequencyUnit: RoutineFrequencyUnit | null;
   targetFrequencyInterval: number | null;
   frequencyGoalEnabled?: boolean | null;
+  // Weekday bitmask (Sun=1, Mon=2, ..., Sat=64). Only meaningful when the
+  // unit is WEEK; null/zero = "any day counts".
+  weekdayMask?: number | null;
 };
 
 // Subset of FrequencyGoal needed to construct a target shape.
 export type FrequencyGoalSource = {
+  id?: string;
   targetCount: number;
   targetUnit: RoutineFrequencyUnit;
   targetInterval: number;
   isActive: boolean;
+  weekdayMask?: number | null;
 };
 
 // A "no target" shape — what callers see for a routine without a FrequencyGoal.
@@ -28,6 +33,7 @@ export const NULL_FREQUENCY_TARGET: RoutineFrequencyTargetShape = {
   targetFrequencyUnit: null,
   targetFrequencyInterval: null,
   frequencyGoalEnabled: false,
+  weekdayMask: null,
 };
 
 // Convert a single FrequencyGoal into the legacy shape callers consume.
@@ -38,6 +44,7 @@ export function frequencyTargetFromGoal(goal: FrequencyGoalSource | null | undef
     targetFrequencyUnit: goal.targetUnit,
     targetFrequencyInterval: goal.targetInterval,
     frequencyGoalEnabled: goal.isActive,
+    weekdayMask: goal.weekdayMask ?? null,
   };
 }
 
@@ -49,8 +56,14 @@ export function routineFrequencyTarget(
   routine: { frequencyGoalRoutines?: Array<{ goal: FrequencyGoalSource | null }> } | null | undefined
 ): RoutineFrequencyTargetShape {
   if (!routine?.frequencyGoalRoutines) return NULL_FREQUENCY_TARGET;
-  const active = routine.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal;
-  return frequencyTargetFromGoal(active ?? null);
+  const activeGoals = routine.frequencyGoalRoutines
+    .map((rel) => rel.goal)
+    .filter((g): g is FrequencyGoalSource => Boolean(g?.isActive));
+  // Prefer the per-routine (`fg_*`) goal as primary — it represents the user's
+  // intent for this specific routine. Falls back to the first active goal
+  // (typically a group goal) if no per-routine companion exists.
+  const primary = activeGoals.find((g) => g.id?.startsWith("fg_")) ?? activeGoals[0] ?? null;
+  return frequencyTargetFromGoal(primary);
 }
 
 // Extends a routine with the legacy frequency target shape, derived from any
@@ -283,17 +296,39 @@ export function suggestedTimesPerWeekForRoutineTarget(target: RoutineFrequencyTa
   return null;
 }
 
-export function shouldAutoScheduleRoutineDaily(target: RoutineFrequencyTargetShape) {
+// Auto-scheduling triggers when:
+//   • DAY/1 (literal daily)
+//   • WEEK/1 with count 7 (also literal daily, just expressed weekly)
+//   • WEEK with a weekdayMask set (specific days each week)
+// Other patterns (3× per week with no mask, monthly, etc.) are flexible —
+// the user picks when to do them and the schedule stays uncluttered.
+export function shouldAutoScheduleRoutine(target: RoutineFrequencyTargetShape) {
   const normalized = normalizeRoutineFrequencyTarget(target);
-  return normalized.hasTarget && normalized.unit === "WEEK" && normalized.interval === 1 && normalized.count === 7;
+  if (!normalized.hasTarget) return false;
+  if (normalized.unit === "DAY" && normalized.interval === 1) return true;
+  if (normalized.unit === "WEEK" && normalized.interval === 1 && normalized.count === 7) return true;
+  if (normalized.unit === "WEEK" && (target.weekdayMask ?? 0) > 0) return true;
+  return false;
 }
 
-export function isRoutineAutoScheduledDailyOnDay(
+export function isRoutineAutoScheduledOnDay(
   target: RoutineFrequencyTargetShape,
   dayYmd: string,
   autoScheduleStartYmd?: string | null
 ) {
-  if (!shouldAutoScheduleRoutineDaily(target)) return false;
-  if (!autoScheduleStartYmd) return true;
-  return dayYmd >= autoScheduleStartYmd;
+  if (!shouldAutoScheduleRoutine(target)) return false;
+  if (autoScheduleStartYmd && dayYmd < autoScheduleStartYmd) return false;
+  // If a weekday mask is set, only fire on masked days; otherwise the routine
+  // is daily and every day qualifies.
+  const mask = target.weekdayMask ?? 0;
+  if (mask > 0 && target.targetFrequencyUnit === "WEEK") {
+    const dow = new Date(`${dayYmd}T00:00:00.000Z`).getUTCDay();
+    return (mask & (1 << dow)) !== 0;
+  }
+  return true;
 }
+
+// Backward-compat aliases: legacy callers expect the old "Daily" naming.
+// Both functions now respect weekday masks transparently.
+export const shouldAutoScheduleRoutineDaily = shouldAutoScheduleRoutine;
+export const isRoutineAutoScheduledDailyOnDay = isRoutineAutoScheduledOnDay;
