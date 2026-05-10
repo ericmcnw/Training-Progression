@@ -7,9 +7,15 @@ import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
 import DashboardInjuries from "@/app/components/dashboard/DashboardInjuries";
 import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
 import RhythmPanel from "@/app/components/dashboard/RhythmPanel";
+import ThisWeekPanel from "@/app/components/dashboard/ThisWeekPanel";
 import type { HabitLaneRow } from "@/app/components/dashboard/HabitLane";
 import type { FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
+
+// Set USE_THIS_WEEK_PANEL to false to revert to the original two separate
+// sections (Week-at-a-Glance + Rhythm). Reverting is a single boolean flip;
+// the underlying components remain untouched.
+const USE_THIS_WEEK_PANEL = true;
 import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
 import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
@@ -1145,22 +1151,50 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* ── WEEK AT A GLANCE ── */}
-      <section style={panel}>
-        <div style={panelHeader}>WEEK AT A GLANCE</div>
-        <div style={{ padding: "12px 14px 14px" }}>
-          <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
-        </div>
-      </section>
+      {USE_THIS_WEEK_PANEL ? (
+        <>
+          {/* ── THIS WEEK (combined plan + habits + frequency targets) ── */}
+          <ThisWeekPanel
+            weekDays={glanceDays.slice(-7)}
+            habits={habitLaneRows}
+            frequencyTargets={frequencyTargetRows}
+            today={today}
+            weekRangeLabel={weekDateRangeLabel}
+            panelStyle={panel}
+            panelHeaderStyle={panelHeader}
+          />
 
-      {/* ── RHYTHM (habits + frequency targets) ── */}
-      <RhythmPanel
-        habits={habitLaneRows}
-        frequencyTargets={frequencyTargetRows}
-        today={today}
-        panelStyle={panel}
-        panelHeaderStyle={panelHeader}
-      />
+          {/* ── 12-WEEK HISTORY (collapsed expandable) ── */}
+          <details id="full-week-history" style={historyDetails}>
+            <summary style={historyDetailsSummary}>
+              <span>12-WEEK HISTORY</span>
+              <span style={{ opacity: 0.55, fontWeight: 600, fontSize: 11 }}>· tap to expand</span>
+            </summary>
+            <div style={{ padding: "12px 14px 14px" }}>
+              <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          {/* ── WEEK AT A GLANCE (original) ── */}
+          <section style={panel}>
+            <div style={panelHeader}>WEEK AT A GLANCE</div>
+            <div style={{ padding: "12px 14px 14px" }}>
+              <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
+            </div>
+          </section>
+
+          {/* ── RHYTHM (habits + frequency targets) (original) ── */}
+          <RhythmPanel
+            habits={habitLaneRows}
+            frequencyTargets={frequencyTargetRows}
+            today={today}
+            panelStyle={panel}
+            panelHeaderStyle={panelHeader}
+          />
+        </>
+      )}
 
       <div className="mobileHomeMainGrid" style={mainGrid}>
         {/* ── Column 1: TODAY'S FOCUS ── */}
@@ -1474,6 +1508,27 @@ const panelHeader: React.CSSProperties = {
   letterSpacing: 1,
   borderBottom: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(255,255,255,0.04)",
+};
+
+// Collapsible 12-week history wrapper — quieter chrome than a full panel
+// since it's secondary to the THIS WEEK summary above.
+const historyDetails: React.CSSProperties = {
+  borderRadius: 14,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.05)",
+  background: "rgba(255,255,255,0.015)",
+};
+
+const historyDetailsSummary: React.CSSProperties = {
+  padding: "10px 14px",
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 1,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  listStyle: "none",
 };
 
 const sectionSub: React.CSSProperties = {
