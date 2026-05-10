@@ -1152,29 +1152,16 @@ export default async function HomePage() {
       </div>
 
       {USE_THIS_WEEK_PANEL ? (
-        <>
-          {/* ── THIS WEEK (combined plan + habits + frequency targets) ── */}
-          <ThisWeekPanel
-            weekDays={glanceDays.slice(-7)}
-            habits={habitLaneRows}
-            frequencyTargets={frequencyTargetRows}
-            today={today}
-            weekRangeLabel={weekDateRangeLabel}
-            panelStyle={panel}
-            panelHeaderStyle={panelHeader}
-          />
-
-          {/* ── 12-WEEK HISTORY (collapsed expandable) ── */}
-          <details id="full-week-history" style={historyDetails}>
-            <summary style={historyDetailsSummary}>
-              <span>12-WEEK HISTORY</span>
-              <span style={{ opacity: 0.55, fontWeight: 600, fontSize: 11 }}>· tap to expand</span>
-            </summary>
-            <div style={{ padding: "12px 14px 14px" }}>
-              <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
-            </div>
-          </details>
-        </>
+        <ThisWeekPanel
+          glanceDays={glanceDays}
+          weekStart={weekStart}
+          habits={habitLaneRows}
+          frequencyTargets={frequencyTargetRows}
+          today={today}
+          weekRangeLabel={weekDateRangeLabel}
+          panelStyle={panel}
+          panelHeaderStyle={panelHeader}
+        />
       ) : (
         <>
           {/* ── WEEK AT A GLANCE (original) ── */}
@@ -1510,26 +1497,6 @@ const panelHeader: React.CSSProperties = {
   background: "rgba(255,255,255,0.04)",
 };
 
-// Collapsible 12-week history wrapper — quieter chrome than a full panel
-// since it's secondary to the THIS WEEK summary above.
-const historyDetails: React.CSSProperties = {
-  borderRadius: 14,
-  overflow: "hidden",
-  border: "1px solid rgba(255,255,255,0.05)",
-  background: "rgba(255,255,255,0.015)",
-};
-
-const historyDetailsSummary: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 1,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  listStyle: "none",
-};
 
 const sectionSub: React.CSSProperties = {
   fontSize: 12,
