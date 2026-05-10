@@ -918,13 +918,13 @@ export default async function HomePage() {
     else logsByRoutineId.set(log.routineId, [{ performedAt: log.performedAt }]);
   }
 
-  function targetFromGoal(goal: { targetCount: number; targetInterval: number; targetUnit: typeof groupFrequencyGoals[number]["targetUnit"] } | null | undefined): FrequencyTarget | null {
+  function targetFromGoal(goal: { targetCount: number; targetInterval: number; targetUnit: typeof groupFrequencyGoals[number]["targetUnit"]; weekdayMask?: number | null } | null | undefined): FrequencyTarget | null {
     if (!goal) return null;
     return {
       targetCount: goal.targetCount,
       targetInterval: goal.targetInterval,
       targetUnit: goal.targetUnit,
-      weekdayMask: null,
+      weekdayMask: goal.weekdayMask ?? null,
     };
   }
 
@@ -947,7 +947,7 @@ export default async function HomePage() {
         routineName: routine.name,
         goalId: goal?.id ?? null,
         goalLabel,
-        weekdayMask: null,
+        weekdayMask: goal?.weekdayMask ?? null,
         state,
       } satisfies HabitLaneRow;
     })
@@ -981,7 +981,7 @@ export default async function HomePage() {
         targetCount: goal.targetCount,
         targetInterval: goal.targetInterval,
         targetUnit: goal.targetUnit,
-        weekdayMask: null,
+        weekdayMask: goal.weekdayMask,
       };
       const state = computeFrequencyState({ target, logs: aggregatedLogs, today, trailingDays: 14 });
       return {

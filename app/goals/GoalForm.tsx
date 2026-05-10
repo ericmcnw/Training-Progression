@@ -11,6 +11,7 @@ import {
 } from "@/lib/goals-config";
 import type { GoalFormOptions } from "@/lib/goals";
 import { formInputStyle } from "./ui";
+import { WEEKDAY_BITS, formatMaskLabel } from "@/lib/frequency-state";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ export type GoalFormInitial = {
     targetCount: number;
     targetInterval: number;
     targetUnit: "DAY" | "WEEK" | "MONTH";
+    weekdayMask?: number | null;
     routineIds: string[];
   };
 };
@@ -212,6 +214,7 @@ export default function GoalForm({
   const [gfTargetCount, setGfTargetCount]   = useState(String(initial.groupFrequency?.targetCount ?? 3));
   const [gfTargetInterval, setGfTargetInterval] = useState(String(initial.groupFrequency?.targetInterval ?? 1));
   const [gfTargetUnit, setGfTargetUnit]     = useState<"DAY" | "WEEK" | "MONTH">(initial.groupFrequency?.targetUnit ?? "WEEK");
+  const [gfWeekdayMask, setGfWeekdayMask]   = useState<number>(initial.groupFrequency?.weekdayMask ?? 0);
 
   // Whether the grade-scope target is a SESSION_TEMPLATE (vs ROUTINE)
   const [gradeTargetIsTemplate, setGradeTargetIsTemplate] = useState(
@@ -474,6 +477,10 @@ export default function GoalForm({
                   </select>
                 </div>
               </div>
+
+              {gfTargetUnit === "WEEK" ? (
+                <WeekdayPicker mask={gfWeekdayMask} onChange={setGfWeekdayMask} />
+              ) : null}
             </div>
           </div>
 
@@ -978,4 +985,166 @@ const checkboxRowStyle: React.CSSProperties = {
   gap: 8,
   alignItems: "center",
   cursor: "pointer",
+};
+
+// ─── Weekday picker ─────────────────────────────────────────────────────────
+// Renders 7 toggle buttons + a row of preset shortcuts (Daily / Weekdays /
+// Weekends / M·W·F). Backs the form with a hidden <input name="weekday">
+// per checked bit so the server-side parser (parseFrequencyGoalFields) can
+// read them via formData.getAll("weekday").
+//
+// A null/zero mask means "any day counts" — the row of toggles is shown
+// unselected with an explanatory hint.
+
+const PRESETS: Array<{ label: string; mask: number }> = [
+  { label: "Any day",  mask: 0 },
+  { label: "Daily",    mask: 0b1111111 },
+  { label: "Weekdays", mask: 0b0111110 },
+  { label: "Weekends", mask: 0b1000001 },
+  { label: "M·W·F",    mask: 0b0101010 },
+  { label: "T·Th",     mask: 0b0010100 },
+];
+
+function WeekdayPicker({ mask, onChange }: { mask: number; onChange: (next: number) => void }) {
+  const isAnyDay = mask === 0;
+  const label = isAnyDay
+    ? "Any day counts — flexible weekly target"
+    : (formatMaskLabel(mask) ?? "");
+
+  function toggleBit(bit: number) {
+    onChange(mask ^ bit);
+  }
+
+  return (
+    <div style={weekdayBlockStyle}>
+      <div style={weekdayHeaderRow}>
+        <span style={weekdayLabelStyle}>On these days</span>
+        <span style={weekdayHintStyle}>{label}</span>
+      </div>
+
+      <div style={weekdayPresetRow}>
+        {PRESETS.map((p) => {
+          const active = mask === p.mask;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onChange(p.mask)}
+              style={{ ...weekdayPresetBtn, ...(active ? weekdayPresetBtnActive : null) }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={weekdayToggleRow}>
+        {WEEKDAY_BITS.map((day) => {
+          const active = (mask & day.bit) !== 0;
+          return (
+            <button
+              key={day.bit}
+              type="button"
+              onClick={() => toggleBit(day.bit)}
+              aria-pressed={active}
+              aria-label={day.full}
+              title={day.full}
+              style={{ ...weekdayToggleBtn, ...(active ? weekdayToggleBtnActive : null) }}
+            >
+              {day.short}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Hidden inputs serialize the mask to formData. We post one value per
+          set bit (1, 2, 4, ...) so the server parser can OR them back. */}
+      {WEEKDAY_BITS.map((day) =>
+        (mask & day.bit) !== 0 ? (
+          <input key={day.bit} type="hidden" name="weekday" value={day.bit} />
+        ) : null
+      )}
+    </div>
+  );
+}
+
+const weekdayBlockStyle: React.CSSProperties = {
+  marginTop: 10,
+  display: "grid",
+  gap: 8,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px dashed rgba(129,140,248,0.32)",
+  background: "rgba(129,140,248,0.04)",
+};
+
+const weekdayHeaderRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const weekdayLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.75,
+};
+
+const weekdayHintStyle: React.CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 600,
+  opacity: 0.65,
+};
+
+const weekdayPresetRow: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+};
+
+const weekdayPresetBtn: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.03)",
+  color: "inherit",
+  cursor: "pointer",
+};
+
+const weekdayPresetBtnActive: React.CSSProperties = {
+  borderColor: "rgba(129,140,248,0.6)",
+  background: "rgba(129,140,248,0.18)",
+  color: "rgb(199,210,254)",
+};
+
+const weekdayToggleRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+  gap: 6,
+};
+
+const weekdayToggleBtn: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  padding: "8px 0",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.02)",
+  color: "rgba(255,255,255,0.62)",
+  cursor: "pointer",
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+};
+
+const weekdayToggleBtnActive: React.CSSProperties = {
+  borderColor: "rgba(129,140,248,0.55)",
+  background: "rgba(129,140,248,0.18)",
+  color: "rgb(224,231,255)",
+  boxShadow: "0 0 0 1px rgba(129,140,248,0.18) inset",
 };

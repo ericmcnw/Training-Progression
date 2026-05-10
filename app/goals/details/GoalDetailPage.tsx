@@ -65,6 +65,7 @@ export default async function GoalDetailPage(props: {
           targetCount: goal.targetCount,
           targetInterval: goal.targetInterval,
           targetUnit: goal.targetUnit,
+          weekdayMask: goal.weekdayMask ?? null,
           routineIds: goal.routines.map((entry) => entry.routineId),
         },
       };

@@ -5,6 +5,7 @@ import { deleteFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions
 import { SectionCard } from "@/app/progress/ui";
 import { formInputStyle, subtleTextStyle } from "./ui";
 import { normalizeRoutineKind } from "@/lib/routines";
+import { WEEKDAY_BITS, formatMaskLabel } from "@/lib/frequency-state";
 
 export default async function FrequencyGoalsSection() {
   const now = new Date();
@@ -98,6 +99,9 @@ export default async function FrequencyGoalsSection() {
                   <div style={{ fontSize: 12, opacity: 0.65 }}>
                     {goal.routines.length} routine{goal.routines.length !== 1 ? "s" : ""} ·{" "}
                     {goal.targetCount}× per {goal.targetInterval} {goal.targetUnit.toLowerCase()}{goal.targetInterval !== 1 ? "s" : ""}
+                    {goal.weekdayMask && goal.targetUnit === "WEEK"
+                      ? ` · ${formatMaskLabel(goal.weekdayMask)}`
+                      : null}
                   </div>
 
                   <details style={detailsBoxStyle}>
@@ -129,6 +133,22 @@ export default async function FrequencyGoalsSection() {
                           </select>
                         </div>
                       </div>
+
+                      {/* Preserve existing weekday mask through quick-edit submits.
+                          Full picker lives in the dedicated goal form. */}
+                      {goal.weekdayMask && goal.targetUnit === "WEEK" ? (
+                        <>
+                          <div style={{ fontSize: 11, opacity: 0.7 }}>
+                            Weekday pattern: <strong>{formatMaskLabel(goal.weekdayMask)}</strong>{" "}
+                            <span style={{ opacity: 0.55 }}>(edit on the goal detail page)</span>
+                          </div>
+                          {WEEKDAY_BITS.map((day) =>
+                            (goal.weekdayMask! & day.bit) !== 0 ? (
+                              <input key={day.bit} type="hidden" name="weekday" value={day.bit} />
+                            ) : null
+                          )}
+                        </>
+                      ) : null}
 
                       <div>
                         <label style={labelStyle}>Included routines</label>

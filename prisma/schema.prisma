@@ -840,6 +840,10 @@ model FrequencyGoal {
   targetCount    Int
   targetInterval Int
   targetUnit     RoutineFrequencyUnit
+  // Weekday bitmask: bit 0 = Sun, bit 1 = Mon, ..., bit 6 = Sat. Null/zero
+  // means "any day counts" (flexible weekly target). Only meaningful when
+  // targetUnit = WEEK; ignored for DAY/MONTH targets.
+  weekdayMask    Int?
   isActive       Boolean              @default(true)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt

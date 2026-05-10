@@ -1269,12 +1269,25 @@ function parseFrequencyGoalFields(formData: FormData) {
       : null;
   const routineIds = formData.getAll("routineIds").map(String).filter(Boolean);
 
+  // Weekday mask: posted as multiple form fields named "weekday" with bit
+  // values 1, 2, 4, 8, 16, 32, 64 (Sun..Sat). We OR them and clamp to a
+  // valid 0–127 range; null means "any day counts" (flexible weekly).
+  let weekdayMask: number | null = null;
+  if (targetUnit === "WEEK") {
+    let mask = 0;
+    for (const raw of formData.getAll("weekday")) {
+      const bit = Math.floor(Number(String(raw)));
+      if (Number.isFinite(bit) && bit > 0 && bit <= 64) mask |= bit;
+    }
+    weekdayMask = mask > 0 ? mask & 0x7f : null;
+  }
+
   if (!name) throw new Error("Goal name is required.");
   if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
   if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
   if (!targetUnit) throw new Error("Target unit is required.");
 
-  return { name, targetCount, targetInterval, targetUnit, routineIds };
+  return { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds };
 }
 
 async function syncFrequencyGoalRoutines(goalId: string, routineIds: string[]) {
@@ -1288,10 +1301,10 @@ async function syncFrequencyGoalRoutines(goalId: string, routineIds: string[]) {
 }
 
 export async function createFrequencyGoal(formData: FormData) {
-  const { name, targetCount, targetInterval, targetUnit, routineIds } = parseFrequencyGoalFields(formData);
+  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds } = parseFrequencyGoalFields(formData);
 
   const goal = await prisma.frequencyGoal.create({
-    data: { name, targetCount, targetInterval, targetUnit },
+    data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
     select: { id: true },
   });
   await syncFrequencyGoalRoutines(goal.id, routineIds);
@@ -1304,11 +1317,11 @@ export async function createFrequencyGoal(formData: FormData) {
 export async function updateFrequencyGoal(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
   if (!id) throw new Error("Missing goal id.");
-  const { name, targetCount, targetInterval, targetUnit, routineIds } = parseFrequencyGoalFields(formData);
+  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds } = parseFrequencyGoalFields(formData);
 
   await prisma.frequencyGoal.update({
     where: { id },
-    data: { name, targetCount, targetInterval, targetUnit },
+    data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
   });
   await syncFrequencyGoalRoutines(id, routineIds);
 
