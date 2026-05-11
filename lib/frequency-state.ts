@@ -389,3 +389,49 @@ export function frequencyStatusLabel(status: FrequencyWindowStatus): string {
     case "at_risk":  return "At risk";
   }
 }
+
+// Streak chip helpers — single source of truth so every dashboard surface
+// renders the same compact label and tooltip. Day streaks read as "Nd",
+// window streaks as "Nw" (week) or "Nm" (month). Both get a clear hover
+// description so the abbreviation isn't ambiguous.
+export type StreakLabel = {
+  value: number;
+  unit: "d" | "w" | "m";
+  short: string;       // "6d" / "3w"
+  long: string;        // "6-day streak" / "3-week streak (3× / week)"
+  tooltip: string;     // full description with target context
+};
+
+export function getStreakLabel(
+  state: FrequencyState,
+  target: FrequencyTarget | null
+): StreakLabel | null {
+  // Window streak takes precedence — a multi-day count where target was met
+  // each window is more meaningful than per-day for non-daily targets.
+  if (state.windowStreak > 0 && target) {
+    const unit: "d" | "w" | "m" =
+      target.targetUnit === "DAY" ? "d" : target.targetUnit === "WEEK" ? "w" : "m";
+    const unitWord = unit === "d" ? "day" : unit === "w" ? "week" : "month";
+    const cadence = `${target.targetCount}× / ${unitWord}`;
+    const value = state.windowStreak;
+    return {
+      value,
+      unit,
+      short: `${value}${unit}`,
+      long: `${value}-${unitWord} streak`,
+      tooltip: `${value} ${unitWord}${value === 1 ? "" : "s"} in a row hitting ${cadence}`,
+    };
+  }
+  // Daily streak — every consecutive expected day was logged.
+  if (state.currentDayStreak > 0) {
+    const value = state.currentDayStreak;
+    return {
+      value,
+      unit: "d",
+      short: `${value}d`,
+      long: `${value}-day streak`,
+      tooltip: `${value} consecutive day${value === 1 ? "" : "s"} logged`,
+    };
+  }
+  return null;
+}

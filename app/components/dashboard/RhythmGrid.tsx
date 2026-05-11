@@ -16,6 +16,7 @@ import { useState, type CSSProperties } from "react";
 import {
   formatMaskLabel,
   frequencyStatusColor,
+  getStreakLabel,
   type FrequencyState,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
@@ -105,8 +106,15 @@ function Column({
 function HabitRow({ habit }: { habit: HabitLaneRow; today: string }) {
   const accent = frequencyStatusColor(habit.state.currentWindow.status);
   const sub = habit.weekdayMask ? formatMaskLabel(habit.weekdayMask) : (habit.goalLabel ?? "Daily");
-  const streakValue = habit.state.windowStreak > 0 ? habit.state.windowStreak : habit.state.currentDayStreak;
-  const streakUnit = habit.state.windowStreak > 0 ? "wk" : "d";
+  const habitTarget: FrequencyTarget | null = habit.state.currentWindow.target > 0
+    ? {
+        targetCount: habit.state.currentWindow.target,
+        targetInterval: 1,
+        targetUnit: habit.weekdayMask ? "WEEK" : "DAY",
+        weekdayMask: habit.weekdayMask,
+      }
+    : null;
+  const streak = getStreakLabel(habit.state, habitTarget);
   const progress = habit.state.currentWindow.progress;
   const target = habit.state.currentWindow.target;
 
@@ -127,13 +135,13 @@ function HabitRow({ habit }: { habit: HabitLaneRow; today: string }) {
         </span>
       </div>
       <div style={trailing}>
-        {streakValue > 0 ? (
-          <span style={streakChip}>
-            {streakValue}
-            <span style={streakUnitText}>{streakUnit}</span>
+        {streak ? (
+          <span style={streakChip} title={streak.tooltip} aria-label={streak.long}>
+            {streak.value}
+            <span style={streakUnitText}>{streak.unit}</span>
           </span>
         ) : (
-          <span style={{ ...streakChip, opacity: 0.35 }}>—</span>
+          <span style={{ ...streakChip, opacity: 0.35 }} title="No streak yet">—</span>
         )}
       </div>
     </Link>
@@ -146,8 +154,7 @@ function FrequencyRow({ target }: { target: FrequencyTargetRow }) {
     ? `/goals/group-frequency:${target.goalId}?mode=edit`
     : `/routines/${target.goalId.replace(/^fg_/, "")}`;
   const cadence = formatCadence(target.target);
-  const streakValue = target.state.windowStreak > 0 ? target.state.windowStreak : target.state.currentDayStreak;
-  const streakUnit = target.state.windowStreak > 0 ? "wk" : "d";
+  const streak = getStreakLabel(target.state, target.target);
 
   return (
     <Link href={detailHref} style={rowCard}>
@@ -172,13 +179,13 @@ function FrequencyRow({ target }: { target: FrequencyTargetRow }) {
         </span>
       </div>
       <div style={trailing}>
-        {streakValue > 0 ? (
-          <span style={streakChip}>
-            {streakValue}
-            <span style={streakUnitText}>{streakUnit}</span>
+        {streak ? (
+          <span style={streakChip} title={streak.tooltip} aria-label={streak.long}>
+            {streak.value}
+            <span style={streakUnitText}>{streak.unit}</span>
           </span>
         ) : (
-          <span style={{ ...streakChip, opacity: 0.35 }}>—</span>
+          <span style={{ ...streakChip, opacity: 0.35 }} title="No streak yet">—</span>
         )}
       </div>
     </Link>

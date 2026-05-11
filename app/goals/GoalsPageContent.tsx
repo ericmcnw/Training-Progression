@@ -41,6 +41,10 @@ export default async function GoalsPage({
   const type = getParam(params, "type") ?? "all";
   const active = getParam(params, "active") ?? "active";
   const mode = getParam(params, "mode") === "new" ? "new" : "list";
+  // Prefill from caller context — e.g., "Add frequency goal" CTA on a
+  // routine page links to /goals?mode=new&routineId=…&goalType=FREQUENCY
+  const prefillRoutineId = getParam(params, "routineId") ?? "";
+  const prefillGoalType = (getParam(params, "goalType") ?? "").toUpperCase();
   const currentGoalsHref = buildGoalsHref({ type, active });
   const [goals, options] = await Promise.all([
     getGoalsOverview({ type, active }),
@@ -61,11 +65,27 @@ export default async function GoalsPage({
     active: type === item.value || (item.value === "all" && type === "all"),
   }));
 
+  // Resolve prefill values once options are loaded so we can validate the
+  // requested routine actually exists in the picker. Falls back to the first
+  // routine in the list when the requested id is unknown.
+  const prefillRoutine = prefillRoutineId && options
+    ? options.routines.find((r) => r.id === prefillRoutineId)
+    : null;
+  const initialGoalType =
+    prefillGoalType === "FREQUENCY" ||
+    prefillGoalType === "PERFORMANCE" ||
+    prefillGoalType === "VOLUME" ||
+    prefillGoalType === "COMPLETION"
+      ? (prefillGoalType as GoalFormInitial["goalType"])
+      : "FREQUENCY";
+  const initialTargetId = prefillRoutine?.id ?? options?.routines[0]?.id ?? "";
+  const initialName = prefillRoutine ? `${prefillRoutine.label} frequency` : "";
+
   const initial: GoalFormInitial = {
-    name: "",
-    goalType: "FREQUENCY",
+    name: initialName,
+    goalType: initialGoalType,
     targetType: "ROUTINE",
-    targetId: options?.routines[0]?.id ?? "",
+    targetId: initialTargetId,
     metricType: "SESSIONS",
     timeframe: "WEEK",
     targetValue: 3,

@@ -143,7 +143,16 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
               View frequency goal →
             </Link>
           </div>
-        ) : null}
+        ) : (
+          <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(128,128,128,0.2)" }}>
+            <Link
+              href={`/goals?mode=new&goalType=FREQUENCY&routineId=${encodeURIComponent(routine.id)}`}
+              style={styles.goalLink}
+            >
+              + Add frequency goal for this routine
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
