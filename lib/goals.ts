@@ -1490,7 +1490,77 @@ export async function getGroupFrequencyGoalById(goalId: string) {
 }
 
 export async function getGoalInsight(goalId: string) {
-  const goal = await prisma.goal.findUnique({ where: { id: goalId } });
+  // Three id flavors flow through here:
+  //   • `group-frequency:<id>` — synthesized group frequency goal
+  //   • `fg_<routineId>`       — per-routine FrequencyGoal companion
+  //   • `<goalId>`             — actual Goal table row
+  const decoded = decodeURIComponent(goalId);
+
+  if (decoded.startsWith("group-frequency:")) {
+    const id = decoded.slice("group-frequency:".length);
+    const goal = await prisma.frequencyGoal.findUnique({
+      where: { id },
+      include: {
+        routines: {
+          select: {
+            routineId: true,
+            routine: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    if (!goal || goal.routines.length === 0) return null;
+    const shape: GroupFrequencyGoalRow = {
+      id: goal.id,
+      name: goal.name,
+      isActive: goal.isActive,
+      createdAt: goal.createdAt,
+      updatedAt: goal.updatedAt,
+      targetCount: goal.targetCount,
+      targetInterval: goal.targetInterval,
+      targetUnit: goal.targetUnit,
+      routines: goal.routines
+        .filter((r): r is typeof r & { routine: { id: string; name: string } } => Boolean(r.routine))
+        .map((r) => ({ routineId: r.routineId, routine: { id: r.routine.id, name: r.routine.name } })),
+    };
+    const [insight] = await batchBuildGroupFrequencyGoalInsights([shape]);
+    return insight ?? null;
+  }
+
+  if (decoded.startsWith("fg_")) {
+    const routineId = decoded.slice("fg_".length);
+    const fg = await prisma.frequencyGoal.findUnique({
+      where: { id: decoded },
+      include: {
+        routines: {
+          include: {
+            routine: {
+              select: { id: true, name: true, kind: true, subtype: true, isActive: true, isDeleted: true, createdAt: true },
+            },
+          },
+        },
+      },
+    });
+    const link = fg?.routines.find((r) => r.routineId === routineId) ?? fg?.routines[0];
+    if (!fg || !link?.routine || link.routine.isDeleted) return null;
+    const row: RoutineFrequencyGoalRow = {
+      id: link.routine.id,
+      name: link.routine.name,
+      kind: link.routine.kind,
+      subtype: link.routine.subtype,
+      isActive: link.routine.isActive,
+      frequencyGoalEnabled: fg.isActive,
+      createdAt: link.routine.createdAt,
+      updatedAt: fg.updatedAt,
+      targetFrequencyCount: fg.targetCount,
+      targetFrequencyUnit: fg.targetUnit,
+      targetFrequencyInterval: fg.targetInterval,
+    };
+    const [insight] = await batchBuildRoutineFrequencyGoalInsights([row]);
+    return insight ?? null;
+  }
+
+  const goal = await prisma.goal.findUnique({ where: { id: decoded } });
   if (!goal) return null;
   return buildGoalInsight(goal);
 }

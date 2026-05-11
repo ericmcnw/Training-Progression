@@ -52,12 +52,12 @@ function FrequencyRow({ row }: { row: FrequencyTargetRow }) {
   const { state, target } = row;
   const accent = domainColor(row.primaryDomain);
   const statusColor = frequencyStatusColor(state.currentWindow.status);
-  // Group goals route to their edit form (the only surface that resolves
-  // group-frequency: ids today); per-routine `fg_*` goals route to the
-  // underlying routine. Detail-mode for both is a follow-up.
+  // Both id flavors resolve through the unified goal detail page now —
+  // group-frequency ids and fg_<routineId> ids both render the heatmap +
+  // history view. Edit is one click away from there.
   const detailHref = row.isGroup
-    ? `/goals/${encodeURIComponent(`group-frequency:${row.goalId}`)}?mode=edit`
-    : `/routines/${row.goalId.replace(/^fg_/, "")}`;
+    ? `/goals/${encodeURIComponent(`group-frequency:${row.goalId}`)}`
+    : `/goals/${encodeURIComponent(row.goalId)}`;
 
   const fraction = Math.min(1, state.currentWindow.progress / Math.max(1, state.currentWindow.target));
   const targetLabel = formatTarget(target);

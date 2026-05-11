@@ -150,12 +150,12 @@ function HabitRow({ habit }: { habit: HabitLaneRow; today: string }) {
 
 function FrequencyRow({ target }: { target: FrequencyTargetRow }) {
   const accent = domainColor(target.primaryDomain);
-  // Group goals route to their edit form (currently the only surface that
-  // resolves the `group-frequency:` id); per-routine `fg_*` goals route
-  // to the underlying routine. Goal detail-mode for both is a follow-up.
+  // Both id flavors now resolve through the unified goal detail page (which
+  // shows the consistency heatmap, history chart, and recent contributing
+  // sessions). Edit is one click away from there.
   const detailHref = target.isGroup
-    ? `/goals/${encodeURIComponent(`group-frequency:${target.goalId}`)}?mode=edit`
-    : `/routines/${target.goalId.replace(/^fg_/, "")}`;
+    ? `/goals/${encodeURIComponent(`group-frequency:${target.goalId}`)}`
+    : `/goals/${encodeURIComponent(target.goalId)}`;
   const cadence = formatCadence(target.target);
   const streak = getStreakLabel(target.state, target.target);
 
