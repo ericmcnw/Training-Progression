@@ -298,6 +298,13 @@ export default function WeekAtGlanceClient({
             {selectedDay.planned.map((item) => {
               const normalizedKind = normalizeRoutineKind(item.kind);
               const isCompletion = normalizedKind === "COMPLETION";
+              const isFutureDay = selectedDay.ymd > today;
+              const isFullyLogged = item.planned > 0 && item.logged >= item.planned;
+              // Hide the Log button when the planned slots are already filled
+              // (avoids accidental double-logging) or when the day is in the
+              // future (no past-day logging via this surface). For more, use
+              // the routine's log page directly.
+              const showLogButton = !isCompletion && !isFutureDay && !isFullyLogged;
               return (
                 <div key={item.routineId} style={item.logged > 0 ? completedDetailRow : detailRow}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -308,13 +315,16 @@ export default function WeekAtGlanceClient({
                     <div style={{ fontSize: 11, opacity: 0.7 }}>
                       {item.logged > 0 ? `${Math.min(item.logged, item.planned)}/${item.planned} done` : `${item.planned} planned`} | {formatRoutineTypeLabel(normalizedKind)}
                     </div>
-                    {isCompletion ? (
+                    {isCompletion && !isFutureDay ? (
                       <CompletionCheckbox routineId={item.routineId} ymd={selectedDay.ymd} done={item.logged > 0} />
-                    ) : (
-                      <Link href={`/routines/${item.routineId}/log`} style={rowLogButton}>
+                    ) : showLogButton ? (
+                      <Link
+                        href={`/routines/${item.routineId}/log?date=${encodeURIComponent(selectedDay.ymd)}`}
+                        style={rowLogButton}
+                      >
                         Log
                       </Link>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );

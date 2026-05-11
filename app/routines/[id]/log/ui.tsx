@@ -18,6 +18,7 @@ export default function LogWorkoutForm({
   onExpandedIdChange,
   onComplete,
   onBack,
+  defaultPerformedAtLocal,
 }: {
   routineId: string;
   routineName: string;
@@ -28,6 +29,7 @@ export default function LogWorkoutForm({
   onExpandedIdChange?: (expandedId: string | null) => void;
   onComplete?: () => void;
   onBack?: () => void;
+  defaultPerformedAtLocal?: string;
 }) {
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
@@ -46,7 +48,7 @@ export default function LogWorkoutForm({
       routineName={routineName}
       draftEnabled
       initialNotes=""
-      initialPerformedAt=""
+      initialPerformedAt={defaultPerformedAtLocal ?? ""}
       initialBlocks={initialBlocks}
       availableExercises={availableExercises}
       initialExpandedId={initialExpandedId}

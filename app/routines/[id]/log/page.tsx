@@ -27,8 +27,10 @@ import CompletionLogForm from "../log-completion/CompletionLogForm";
 import GuidedLogForm from "../log-guided/GuidedLogForm";
 import SessionLogForm from "../log-session/SessionLogForm";
 import LogWorkoutForm from "./ui";
+import { localDateTimeForYmd } from "./form-ui";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
 import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning, getRoutinePainCheckZones } from "@/lib/injury-warnings";
+import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -63,9 +65,21 @@ function getRecentLogHeading(kind: string) {
   return "RECENT COMPLETION LOGS";
 }
 
-export default async function LogRoutinePage(props: { params: Promise<Params> }) {
+export default async function LogRoutinePage(props: {
+  params: Promise<Params>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const params = await props.params;
+  const searchParams: Record<string, string | string[] | undefined> = await Promise.resolve(
+    props.searchParams ?? {}
+  );
   const routineId = params?.id;
+
+  // Optional `?date=YYYY-MM-DD` lets callers (the WaG detail card, the
+  // heatmap quick-confirm) prefill the form for backfilling a past day.
+  const rawDate = searchParams.date;
+  const dateParam = Array.isArray(rawDate) ? rawDate[0] : rawDate;
+  const backDateYmd = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
 
   if (!routineId) return <div style={{ padding: 20 }}>Missing routine id.</div>;
 
@@ -376,6 +390,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
       <section className="mobileSectionCard" style={styles.panel}>
         <div className="mobileSectionHeader" style={styles.panelHeader}>{getDetailHeading(kind)}</div>
         <div className="mobileSectionBody" style={{ padding: 14 }}>
+          {backDateYmd ? <BackDateBanner ymd={backDateYmd} /> : null}
           <RoutineInjuryWarningBanner warning={routineInjuryWarning} />
           {isWorkoutKind(kind) ? (
             <LogWorkoutForm
@@ -384,9 +399,15 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               initialBlocks={initialBlocks}
               availableExercises={availableExercisesForLog}
               activePainZones={activePainZones}
+              defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : isCardioKind(kind) ? (
-            <LogRunForm routineId={routineId} routineName={routine.name} activePainZones={activePainZones} />
+            <LogRunForm
+              routineId={routineId}
+              routineName={routine.name}
+              activePainZones={activePainZones}
+              defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
+            />
           ) : isGuidedKind(kind) ? (
             <GuidedLogForm
               routineId={routineId}
@@ -416,6 +437,7 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
               definitions={sessionDefinitions}
               preferredClimbingGrades={preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
               activePainZones={activePainZones}
+              defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (
             <CompletionLogForm routineId={routineId} />
@@ -460,6 +482,39 @@ export default async function LogRoutinePage(props: { params: Promise<Params> })
 
 const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
+
+// Banner shown above the log form when arrived via `?date=` — gives the
+// user clear feedback that they're back-dating and how far back.
+function BackDateBanner({ ymd }: { ymd: string }) {
+  const today = todayAppYmd();
+  const daysBack = diffYmdDays(today, ymd);
+  const dateLabel = formatUtcDateLabel(ymd, { weekday: "long", month: "short", day: "numeric" });
+  const ago =
+    daysBack === 0
+      ? "today"
+      : daysBack === 1
+      ? "yesterday"
+      : `${daysBack} days ago`;
+  return (
+    <div
+      style={{
+        marginBottom: 12,
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: "1px solid rgba(251,191,36,0.32)",
+        background: "rgba(251,191,36,0.06)",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 900, color: "rgba(251,191,36,0.95)", letterSpacing: 0.4 }}>BACK-DATING</span>
+      <span style={{ fontSize: 13, fontWeight: 700 }}>Logging for {dateLabel}</span>
+      <span style={{ fontSize: 11.5, opacity: 0.7 }}>· {ago} · time defaults to noon</span>
+    </div>
+  );
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },

@@ -22,12 +22,14 @@ export default function LogRunForm({
   activePainZones = [],
   onComplete,
   onBack,
+  defaultPerformedAtLocal,
 }: {
   routineId: string;
   routineName: string;
   activePainZones?: PainCheckZone[];
   onComplete?: () => void;
   onBack?: () => void;
+  defaultPerformedAtLocal?: string;
 }) {
   const drawer = useOptionalLogDrawer();
   const [distanceMi, setDistanceMi] = useState("");
@@ -36,7 +38,7 @@ export default function LogRunForm({
   const [seconds, setSeconds] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
-  const [performedAtLocal, setPerformedAtLocal] = useState(localDateTimeNow);
+  const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
 

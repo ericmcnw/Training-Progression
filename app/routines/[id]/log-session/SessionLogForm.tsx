@@ -126,6 +126,7 @@ export default function SessionLogForm({
   savedClimbLocations = [],
   onComplete,
   onBack,
+  defaultPerformedAtLocal,
 }: {
   routineId: string;
   routineName: string;
@@ -137,6 +138,7 @@ export default function SessionLogForm({
   savedClimbLocations?: ClimbLocationBasic[];
   onComplete?: () => void;
   onBack?: () => void;
+  defaultPerformedAtLocal?: string;
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
   const drawer = useOptionalLogDrawer();
@@ -170,7 +172,7 @@ export default function SessionLogForm({
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
   const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
-  const [performedAtLocal, setPerformedAtLocal] = useState(localDateTimeNow);
+  const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [effortRating, setEffortRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);

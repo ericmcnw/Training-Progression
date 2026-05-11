@@ -198,6 +198,12 @@ export default async function GoalDetailPage(props: {
             state={consistency.state}
             today={todayAppYmd()}
             weekdayMask={consistency.weekdayMask}
+            // Single-routine goals enable click-to-back-date on missed cells.
+            // Group goals span multiple routines so we can't pick which one
+            // to back-date for — they get a passive heatmap instead.
+            retroactiveLogRoutineId={
+              consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
+            }
           />
         </SectionCard>
       ) : null}

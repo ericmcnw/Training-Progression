@@ -6,6 +6,7 @@
 // presentational. The header shows current/longest streak chips and the
 // running window progress.
 
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
@@ -26,11 +27,16 @@ export default function FrequencyHeatmap({
   state,
   today,
   weekdayMask,
+  // When provided, "missed" cells become clickable links to back-date a log
+  // for that exact date+routine. Only single-routine goals supply this —
+  // group goals span multiple routines and can't pick one to log against.
+  retroactiveLogRoutineId,
 }: {
   target: FrequencyTarget;
   state: FrequencyState;
   today: string;
   weekdayMask?: number | null;
+  retroactiveLogRoutineId?: string;
 }) {
   // Anchor the grid on the most recent Sunday (≤ today). Walk back WEEKS rows.
   const todayDate = new Date(`${today}T00:00:00.000Z`);
@@ -87,11 +93,27 @@ export default function FrequencyHeatmap({
                 const cellState = state.dailyState[ymd] ?? "rest";
                 const isToday = ymd === today;
                 const isFuture = ymd > today;
+                const dateLabel = formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
+                const cellSx: CSSProperties = { ...cellStyle(cellState, isFuture), ...(isToday ? todayRing : null) };
+                // Missed cells become quick-confirm log links when the goal
+                // is single-routine (group goals can't disambiguate which
+                // routine to back-date for).
+                if (cellState === "missed" && retroactiveLogRoutineId) {
+                  return (
+                    <Link
+                      key={ymd}
+                      href={`/routines/${retroactiveLogRoutineId}/log?date=${encodeURIComponent(ymd)}`}
+                      title={`${dateLabel} — missed · tap to log`}
+                      style={{ ...cellSx, cursor: "pointer", display: "block" }}
+                      aria-label={`Back-date a log for ${dateLabel}`}
+                    />
+                  );
+                }
                 return (
                   <div
                     key={ymd}
-                    title={`${formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" })} — ${cellState}`}
-                    style={{ ...cellStyle(cellState, isFuture), ...(isToday ? todayRing : null) }}
+                    title={`${dateLabel} — ${cellState}`}
+                    style={cellSx}
                   />
                 );
               })}
