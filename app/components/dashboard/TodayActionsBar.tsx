@@ -69,7 +69,10 @@ export default function TodayActionsBar({
       </div>
 
       {items.length === 0 && todos.length === 0 ? (
-        <div style={emptyState}>Nothing planned today — rest up.</div>
+        <div style={emptyState}>
+          Nothing planned today — rest up.{" "}
+          <span style={{ opacity: 0.6 }}>Tap today in the week below to add a quick to-do.</span>
+        </div>
       ) : (
         <div style={chipsRow}>
           {/* Habits first so the user sees one-tap actions before bigger Logs */}

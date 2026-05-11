@@ -56,6 +56,7 @@ export default function DayTodoList({
   }
 
   function onDelete(id: string) {
+    if (typeof window !== "undefined" && !window.confirm("Delete this to-do?")) return;
     startTransition(async () => {
       await deleteDayTodo(id);
       refresh();
@@ -147,10 +148,15 @@ export default function DayTodoList({
       >
         <input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // Hide carry-forward suggestions once the user starts typing —
+            // they're composing something new, not picking from history.
+            if (e.target.value.trim().length > 0) setShowSuggestions(false);
+          }}
           onFocus={() => {
             setAdding(true);
-            void loadSuggestions();
+            if (draft.trim().length === 0) void loadSuggestions();
           }}
           onBlur={() => setTimeout(() => setAdding(false), 120)}
           placeholder="+ Add a quick task…"

@@ -57,6 +57,7 @@ export default function GuidedLogForm({
   onDrawerStateChange,
   onComplete,
   onBack,
+  defaultPerformedAtLocal,
 }: {
   routineId: string;
   routineName?: string;
@@ -67,6 +68,7 @@ export default function GuidedLogForm({
   onDrawerStateChange?: (state: GuidedDrawerState) => void;
   onComplete?: () => void;
   onBack?: () => void;
+  defaultPerformedAtLocal?: string;
 }) {
   const [screen, setScreen] = useState<Screen>(initialDrawerState?.screen ?? "entry");
   const [autoPlay, setAutoPlay] = useState(initialDrawerState?.autoPlay ?? true);
@@ -241,11 +243,13 @@ export default function GuidedLogForm({
     );
   }
 
-  // review screen
+  // review screen — back-date param wins when present (user is logging
+  // for a past day), otherwise fall back to the live session start time.
   const initialPerformedAt =
-    reviewMode === "review" && sessionStartedAt
+    defaultPerformedAtLocal ??
+    (reviewMode === "review" && sessionStartedAt
       ? toLocalInputValue(sessionStartedAt)
-      : undefined;
+      : undefined);
 
   return (
     <GuidedReviewForm

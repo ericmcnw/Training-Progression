@@ -427,6 +427,7 @@ export default async function LogRoutinePage(props: {
                 sortOrder: step.sortOrder,
               }))}
               activePainZones={activePainZones}
+              defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : isSessionKind(kind) ? (
             <SessionLogForm

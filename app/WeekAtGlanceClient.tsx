@@ -282,13 +282,16 @@ export default function WeekAtGlanceClient({
             <div style={{ fontSize: 13, fontWeight: 900 }}>
               {selectedDay ? formatDayDetailLabel(selectedDay.ymd) : "Tap a day to inspect routines"}
             </div>
-            {selectedDay ? <div style={{ fontSize: 11, opacity: 0.6 }}>{plannedCount(selectedDay)} planned</div> : null}
+            {selectedDay ? (
+              <div style={{ fontSize: 11, opacity: 0.6 }}>
+                {plannedCount(selectedDay)} planned
+                {selectedDay.ymd > today ? " · upcoming" : selectedDay.ymd < today ? " · past day" : " · today"}
+              </div>
+            ) : null}
           </div>
-          {selectedDay ? (
-            <Link href="/routines" style={logButton}>
-              Log
-            </Link>
-          ) : null}
+          {/* Header-level "Log" button removed — each row has its own context-
+              aware Log button (or checkbox), and a generic /routines link
+              from here was a navigational dead-end. */}
         </div>
         {!selectedDay ? (
           <div style={{ fontSize: 12, opacity: 0.62 }}>Select any day cell to see the routines planned there.</div>

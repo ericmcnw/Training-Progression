@@ -52,8 +52,11 @@ function FrequencyRow({ row }: { row: FrequencyTargetRow }) {
   const { state, target } = row;
   const accent = domainColor(row.primaryDomain);
   const statusColor = frequencyStatusColor(state.currentWindow.status);
+  // Group goals route to their edit form (the only surface that resolves
+  // group-frequency: ids today); per-routine `fg_*` goals route to the
+  // underlying routine. Detail-mode for both is a follow-up.
   const detailHref = row.isGroup
-    ? `/goals/group-frequency:${row.goalId}?mode=edit`
+    ? `/goals/${encodeURIComponent(`group-frequency:${row.goalId}`)}?mode=edit`
     : `/routines/${row.goalId.replace(/^fg_/, "")}`;
 
   const fraction = Math.min(1, state.currentWindow.progress / Math.max(1, state.currentWindow.target));
