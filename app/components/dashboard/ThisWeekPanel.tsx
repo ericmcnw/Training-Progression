@@ -10,6 +10,7 @@
 import type { CSSProperties } from "react";
 import WeekAtGlanceClient from "@/app/WeekAtGlanceClient";
 import RhythmGrid from "./RhythmGrid";
+import TodayActionsBar, { type TodayActionItem } from "./TodayActionsBar";
 import type { HabitLaneRow } from "./HabitLane";
 import type { FrequencyTargetRow } from "./FrequencyTargetsCard";
 import type { RoutineDomain } from "@/lib/routines";
@@ -36,6 +37,8 @@ export default function ThisWeekPanel({
   habits,
   frequencyTargets,
   today,
+  todayLabel,
+  todayItems,
   weekRangeLabel,
   panelStyle,
   panelHeaderStyle,
@@ -45,6 +48,8 @@ export default function ThisWeekPanel({
   habits: HabitLaneRow[];
   frequencyTargets: FrequencyTargetRow[];
   today: string;
+  todayLabel: string;
+  todayItems: TodayActionItem[];
   weekRangeLabel: string;
   panelStyle: CSSProperties;
   panelHeaderStyle: CSSProperties;
@@ -86,6 +91,9 @@ export default function ThisWeekPanel({
       </div>
 
       <div style={body}>
+        {/* ── TODAY: one-tap log surface for today's planned + habits ── */}
+        <TodayActionsBar todayYmd={today} todayLabel={todayLabel} items={todayItems} />
+
         {/* ── Day rail + selectable detail card (original WaG behavior) ── */}
         <div style={dayRailWrap}>
           <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />

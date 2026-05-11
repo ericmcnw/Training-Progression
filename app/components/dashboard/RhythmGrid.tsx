@@ -5,14 +5,14 @@
 // the top 3 by urgency (at-risk → behind → streak desc → name) with an
 // inline `Show N more ▾` toggle to reveal the rest in place.
 //
-// Visual language matches the rest of the dashboard:
-//   • Habit row: 7-day strip + streak chip
-//   • Frequency target row: domain-colored pie-fill aggregate dot + count
-//     + streak chip — same dot vocabulary as the WaG cell habit aggregate
+// Single-line rows. The per-day visualization for habits lives in WaG cell
+// aggregate dots above; here we focus on cadence + this-week count + streak.
+//
+//   • Habit row: dot · name · cadence · this-week count · streak
+//   • Freq target row: dot · name · cadence · pie-fill dot + X/Y · streak
 
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
-import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
   formatMaskLabel,
   frequencyStatusColor,
@@ -24,7 +24,6 @@ import type { HabitLaneRow } from "./HabitLane";
 import type { FrequencyTargetRow } from "./FrequencyTargetsCard";
 
 const COLLAPSED_LIMIT = 3;
-const STRIP_DAYS = 7;
 
 export default function RhythmGrid({
   habits,
@@ -103,12 +102,13 @@ function Column({
   );
 }
 
-function HabitRow({ habit, today }: { habit: HabitLaneRow; today: string }) {
+function HabitRow({ habit }: { habit: HabitLaneRow; today: string }) {
   const accent = frequencyStatusColor(habit.state.currentWindow.status);
   const sub = habit.weekdayMask ? formatMaskLabel(habit.weekdayMask) : (habit.goalLabel ?? "Daily");
   const streakValue = habit.state.windowStreak > 0 ? habit.state.windowStreak : habit.state.currentDayStreak;
   const streakUnit = habit.state.windowStreak > 0 ? "wk" : "d";
-  const stripStart = addDaysYmd(today, -(STRIP_DAYS - 1));
+  const progress = habit.state.currentWindow.progress;
+  const target = habit.state.currentWindow.target;
 
   return (
     <Link href={`/routines/${habit.routineId}`} style={rowCard}>
@@ -119,19 +119,12 @@ function HabitRow({ habit, today }: { habit: HabitLaneRow; today: string }) {
         </div>
         <div style={subText}>{sub}</div>
       </div>
-      <div style={strip}>
-        {Array.from({ length: STRIP_DAYS }, (_, i) => {
-          const ymd = addDaysYmd(stripStart, i);
-          const cellState = habit.state.dailyState[ymd] ?? "rest";
-          const isToday = ymd === today;
-          return (
-            <div
-              key={ymd}
-              title={`${formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" })} — ${cellState}`}
-              style={{ ...habitCell(cellState), ...(isToday ? todayBadge : null) }}
-            />
-          );
-        })}
+      <div style={progressArea}>
+        <ProgressDot done={progress} target={target} color={accent} />
+        <span style={progressNumber}>
+          <span style={{ ...progressNumberValue, color: accent }}>{progress}</span>
+          <span style={progressNumberDenom}>/{target}</span>
+        </span>
       </div>
       <div style={trailing}>
         {streakValue > 0 ? (
@@ -235,31 +228,6 @@ function formatCadence(t: FrequencyTarget): string {
   if (t.targetInterval === 1) return `${t.targetCount}× / ${unit}`;
   return `${t.targetCount}× / ${t.targetInterval} ${unit}s`;
 }
-
-function habitCell(state: "done" | "missed" | "rest" | "future"): CSSProperties {
-  switch (state) {
-    case "done":
-      return { ...cellBase, background: "rgba(251,191,36,0.85)", border: "1px solid rgba(251,191,36,0.65)" };
-    case "missed":
-      return { ...cellBase, background: "transparent", border: "1px solid rgba(248,113,113,0.55)" };
-    case "rest":
-      return { ...cellBase, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)" };
-    case "future":
-      return { ...cellBase, background: "transparent", border: "1px dashed rgba(255,255,255,0.13)" };
-  }
-}
-
-const cellBase: CSSProperties = {
-  flex: "1 1 0",
-  minWidth: 0,
-  height: 12,
-  borderRadius: 3,
-};
-
-const todayBadge: CSSProperties = {
-  outline: "1.5px solid rgba(255,255,255,0.45)",
-  outlineOffset: 1,
-};
 
 const grid: CSSProperties = {
   display: "grid",
@@ -388,13 +356,6 @@ const subText: CSSProperties = {
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
-};
-
-const strip: CSSProperties = {
-  display: "flex",
-  gap: 2,
-  alignItems: "center",
-  minWidth: 0,
 };
 
 const progressArea: CSSProperties = {

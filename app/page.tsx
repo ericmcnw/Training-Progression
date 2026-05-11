@@ -694,6 +694,19 @@ export default async function HomePage() {
   const todayFocus = Array.from(todayPlanMap.values()).sort(
     (a, b) => b.logged - a.logged || b.planned - a.planned || a.routineName.localeCompare(b.routineName)
   );
+  // Enriched with domain so the TodayActionsBar chips can color-code by
+  // domain (habit / strength / cardio / etc.) without re-querying.
+  const todayItems = todayFocus.map((item) => {
+    const routine = routineMap.get(item.routineId);
+    return {
+      routineId: item.routineId,
+      routineName: item.routineName,
+      kind: item.kind,
+      domain: routine ? effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype) : ("general" as RoutineDomain),
+      planned: item.planned,
+      logged: item.logged,
+    };
+  });
   const tomorrowPlan = Array.from(tomorrowPlanMap.values()).sort(
     (a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName)
   );
@@ -1199,6 +1212,8 @@ export default async function HomePage() {
           habits={habitLaneRows}
           frequencyTargets={frequencyTargetRows}
           today={today}
+          todayLabel={formatDayLabel(today)}
+          todayItems={todayItems}
           weekRangeLabel={weekDateRangeLabel}
           panelStyle={panel}
           panelHeaderStyle={panelHeader}
@@ -1225,47 +1240,12 @@ export default async function HomePage() {
       )}
 
       <div className="mobileHomeMainGrid" style={mainGrid}>
-        {/* ── Column 1: TODAY'S FOCUS ── */}
-        <section style={{ ...panel, gridColumn: 1 }}>
-          <div style={panelHeader}>TODAY&apos;S FOCUS</div>
-          <div style={{ padding: 14, display: "grid", gap: 10 }}>
-            <div style={sectionSub}>{formatDayLabel(today)}</div>
-            <div className="mobileHomeSummaryGrid" style={summaryGrid}>
-              <div style={summaryRingCard}>
-                <SummaryFractionRing current={todayDoneRoutines} target={todayPlannedTotal} />
-              </div>
-            </div>
-            {todayFocus.length === 0 && <div style={emptyState}>Nothing planned or logged yet today.</div>}
-            {todayFocus.map((item) => (
-              <div key={item.routineId} style={item.logged > 0 ? focusDoneCard : focusCard}>
-                <div style={focusCardTopRow}>
-                  <div style={focusCardInfo}>
-                    <div style={{ fontWeight: 900, fontSize: 15 }}>{item.routineName}</div>
-                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>
-                      {formatRoutineTypeLabel(item.kind)}
-                    </div>
-                    <div style={focusMetaLine}>
-                      Planned: {item.planned} | Logged: {item.logged} | Remaining: {Math.max(0, item.planned - item.logged)}
-                    </div>
-                  </div>
-                  <div style={focusStatusColumn}>
-                    <div className="mobileHomeKindPill" style={{ ...kindPill, borderColor: kindAccent(item.kind), color: kindAccent(item.kind) }}>
-                      {item.logged > 0 ? "DONE" : "PLANNED"}
-                    </div>
-                    {item.planned > 0 && (
-                      <Link href={loggingHref(item)} style={focusActionLink}>
-                        Log
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* TODAY'S FOCUS section was here — now lives at the top of the
+            THIS WEEK panel as TodayActionsBar. Training balance promotes to
+            column 1; body map slides up to column 2. */}
 
-        {/* ── Column 2: TRAINING BALANCE ── */}
-        <section style={{ ...panel, gridColumn: 2 }}>
+        {/* ── Column 1: TRAINING BALANCE ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
           <div style={panelHeader}>TRAINING BALANCE <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}>· last 4 weeks</span></div>
           <div style={{ padding: "12px 14px 14px", display: "grid", gap: 10 }}>
             <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.45 }}>
@@ -1281,14 +1261,14 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ── Column 1: BODY MAP ── */}
-        <div style={{ gridColumn: 1, display: "grid", gap: 16 }}>
+        {/* ── Column 2: BODY MAP ── */}
+        <div style={{ gridColumn: 2, display: "grid", gap: 16 }}>
           <DashboardBodyMap />
           <DashboardInjuries />
         </div>
 
-        {/* ── Column 2: WEEKLY MOMENTUM ── */}
-        <div className="homeMomentumSection" style={{ gridColumn: 2 }}>
+        {/* ── Column 1: WEEKLY MOMENTUM ── */}
+        <div className="homeMomentumSection" style={{ gridColumn: 1 }}>
           <WeeklyMomentumSectionBoundary
             weekDateRangeLabel={weekDateRangeLabel}
             weekLoggedTotal={weekLoggedTotal}
