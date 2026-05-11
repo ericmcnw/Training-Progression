@@ -13,6 +13,7 @@ import RhythmGrid from "./RhythmGrid";
 import TodayActionsBar, { type TodayActionItem } from "./TodayActionsBar";
 import type { HabitLaneRow } from "./HabitLane";
 import type { FrequencyTargetRow } from "./FrequencyTargetsCard";
+import type { DayTodoItem } from "./DayTodoList";
 import type { RoutineDomain } from "@/lib/routines";
 
 type GlanceDay = {
@@ -29,6 +30,7 @@ type GlanceDay = {
   }>;
   logs: Array<{ id: string; routineId: string; routineName: string; kind: string; domain: RoutineDomain }>;
   habitAggregate?: { expected: number; completed: number };
+  todos?: DayTodoItem[];
 };
 
 export default function ThisWeekPanel({
@@ -39,6 +41,7 @@ export default function ThisWeekPanel({
   today,
   todayLabel,
   todayItems,
+  todayTodos,
   weekRangeLabel,
   panelStyle,
   panelHeaderStyle,
@@ -50,6 +53,7 @@ export default function ThisWeekPanel({
   today: string;
   todayLabel: string;
   todayItems: TodayActionItem[];
+  todayTodos: DayTodoItem[];
   weekRangeLabel: string;
   panelStyle: CSSProperties;
   panelHeaderStyle: CSSProperties;
@@ -92,7 +96,7 @@ export default function ThisWeekPanel({
 
       <div style={body}>
         {/* ── TODAY: one-tap log surface for today's planned + habits ── */}
-        <TodayActionsBar todayYmd={today} todayLabel={todayLabel} items={todayItems} />
+        <TodayActionsBar todayYmd={today} todayLabel={todayLabel} items={todayItems} todos={todayTodos} />
 
         {/* ── Day rail + selectable detail card (original WaG behavior) ── */}
         <div style={dayRailWrap}>

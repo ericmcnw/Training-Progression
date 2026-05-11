@@ -864,3 +864,19 @@ model FrequencyGoalRoutine {
   @@id([goalId, routineId])
   @@index([routineId])
 }
+
+// Lightweight, date-bound to-do items for "random not-important" things the
+// user wants to check off for a specific day (e.g., laundry, doctor's
+// appointment). Distinct from routines/habits — no streak math, no history
+// of completion patterns; once done it just sits checked off on its day.
+model DayTodo {
+  id        String   @id @default(cuid())
+  ymd       String   // app-tz YYYY-MM-DD the todo belongs to
+  label     String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ymd, done])
+  @@index([done, ymd])
+}

@@ -563,6 +563,21 @@ export default async function HomePage() {
     }),
   ]);
 
+  // Day to-dos for the entire visible glance window — cheap lookup since
+  // each row is a few bytes, and rendering them in WaG detail cards needs
+  // them keyed by ymd.
+  const dayTodosRaw = await prisma.dayTodo.findMany({
+    where: { ymd: { gte: glanceStart } },
+    orderBy: [{ done: "asc" }, { createdAt: "asc" }],
+    select: { id: true, ymd: true, label: true, done: true },
+  });
+  const dayTodosByYmd = new Map<string, Array<{ id: string; ymd: string; label: string; done: boolean }>>();
+  for (const todo of dayTodosRaw) {
+    const arr = dayTodosByYmd.get(todo.ymd);
+    if (arr) arr.push(todo);
+    else dayTodosByYmd.set(todo.ymd, [todo]);
+  }
+
   // Each routine carries its frequency-goal links (Phase 1: source of truth).
   // Flatten to the legacy target shape so habit/auto-schedule helpers work.
   const routinesWithTargets = routines.map(routineWithFrequencyTarget);
@@ -923,6 +938,7 @@ export default async function HomePage() {
       planned,
       logs,
       habitAggregate: { expected: 0, completed: 0 } as { expected: number; completed: number },
+      todos: dayTodosByYmd.get(ymd) ?? [],
     };
   });
 
@@ -1214,6 +1230,7 @@ export default async function HomePage() {
           today={today}
           todayLabel={formatDayLabel(today)}
           todayItems={todayItems}
+          todayTodos={dayTodosByYmd.get(today) ?? []}
           weekRangeLabel={weekDateRangeLabel}
           panelStyle={panel}
           panelHeaderStyle={panelHeader}

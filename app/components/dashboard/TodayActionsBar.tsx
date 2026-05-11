@@ -12,6 +12,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import CompletionCheckbox from "./CompletionCheckbox";
+import DayTodoList, { type DayTodoItem } from "./DayTodoList";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 
 export type TodayActionItem = {
@@ -27,10 +28,12 @@ export default function TodayActionsBar({
   todayYmd,
   todayLabel,
   items,
+  todos = [],
 }: {
   todayYmd: string;
   todayLabel: string;
   items: TodayActionItem[];
+  todos?: DayTodoItem[];
 }) {
   const habits = items.filter((i) => i.domain === "habit");
   const others = items.filter((i) => i.domain !== "habit");
@@ -38,6 +41,7 @@ export default function TodayActionsBar({
   const habitsDone = habits.filter((h) => h.logged > 0).length;
   const othersDone = others.filter((o) => o.logged >= o.planned && o.planned > 0).length;
   const othersPending = Math.max(0, others.length - othersDone);
+  const todosDone = todos.filter((t) => t.done).length;
 
   return (
     <div style={shell}>
@@ -56,10 +60,15 @@ export default function TodayActionsBar({
               {habitsDone}/{habits.length} habits
             </span>
           ) : null}
+          {todos.length > 0 ? (
+            <span style={statChip(todosDone === todos.length ? "done" : "pending")}>
+              {todosDone}/{todos.length} to-dos
+            </span>
+          ) : null}
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {items.length === 0 && todos.length === 0 ? (
         <div style={emptyState}>Nothing planned today — rest up.</div>
       ) : (
         <div style={chipsRow}>
@@ -70,6 +79,9 @@ export default function TodayActionsBar({
           {others.map((o) => (
             <PlannedChip key={o.routineId} item={o} />
           ))}
+          {/* Day to-dos appear inline as their own chip flavor; add UX lives
+              in the WaG detail card panel-mode list instead. */}
+          <DayTodoList ymd={todayYmd} todos={todos} mode="chips" />
         </div>
       )}
     </div>

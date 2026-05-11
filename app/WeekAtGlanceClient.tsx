@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 import CompletionCheckbox from "@/app/components/dashboard/CompletionCheckbox";
+import DayTodoList from "@/app/components/dashboard/DayTodoList";
 
 type GlanceDay = {
   ymd: string;
@@ -29,6 +30,9 @@ type GlanceDay = {
   // day. When present + expected > 0, the cell renders a single amber pie-fill
   // dot pinned at the start of the dot row, replacing the per-habit dots.
   habitAggregate?: { expected: number; completed: number };
+  // Optional date-bound to-do list items for this day. Rendered inside the
+  // detail card via DayTodoList in panel mode.
+  todos?: Array<{ id: string; ymd: string; label: string; done: boolean }>;
 };
 
 const WINDOW_SIZE = 7;
@@ -288,8 +292,11 @@ export default function WeekAtGlanceClient({
         </div>
         {!selectedDay ? (
           <div style={{ fontSize: 12, opacity: 0.62 }}>Select any day cell to see the routines planned there.</div>
-        ) : selectedDay.planned.length === 0 && selectedDay.logs.length === 0 ? (
-          <div style={{ fontSize: 12, opacity: 0.62 }}>No routines planned on this day.</div>
+        ) : selectedDay.planned.length === 0 && selectedDay.logs.length === 0 && (selectedDay.todos?.length ?? 0) === 0 ? (
+          <>
+            <div style={{ fontSize: 12, opacity: 0.62 }}>No routines planned on this day.</div>
+            <DayTodoList ymd={selectedDay.ymd} todos={selectedDay.todos ?? []} mode="panel" />
+          </>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
             {selectedDay.planned.length === 0 ? (
@@ -338,6 +345,7 @@ export default function WeekAtGlanceClient({
                 <div style={{ fontSize: 11, opacity: 0.7 }}>Logged extra | {formatRoutineTypeLabel(normalizeRoutineKind(log.kind))}</div>
               </div>
             ))}
+            <DayTodoList ymd={selectedDay.ymd} todos={selectedDay.todos ?? []} mode="panel" />
           </div>
         )}
       </div>
