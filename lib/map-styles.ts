@@ -23,7 +23,7 @@ export type BaseStyleId =
   | "raster-osm";    // Plain OpenStreetMap — fallback / original
 
 /** The base style every map opens with. */
-export const DEFAULT_BASE_STYLE_ID: BaseStyleId = "vector-liberty";
+export const DEFAULT_BASE_STYLE_ID: BaseStyleId = "vector-fiord";
 
 /** When true, each map shows a Map / Satellite toggle in the top-right. */
 export const SATELLITE_TOGGLE_ENABLED = true;
