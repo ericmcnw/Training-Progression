@@ -192,7 +192,12 @@ export default async function ClimbsBrowsePage(props: {
         range="all"
         hideTabs
         hideRange
-        actions={<SectionLinkButton href="/activities/climbing" label="Back to climbing" />}
+        actions={
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
+            <SectionLinkButton href="/activities/climbing" label="Back to climbing" />
+          </div>
+        }
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
@@ -483,7 +488,9 @@ const pillStyle: React.CSSProperties = {
   alignItems: "center",
   padding: "5px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   textDecoration: "none",

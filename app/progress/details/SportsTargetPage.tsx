@@ -10,6 +10,7 @@ import { buildBoardSportPulse, buildCardioPulse } from "./sport-pulse";
 import { applyGoalsToPulseSlots } from "./pulse-goal-slots";
 import { getActivityGoals } from "@/lib/activity-goals";
 import { getActivityEntry } from "@/lib/activity-families";
+import { getActivitySpotConfig } from "@/lib/activity-spots";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget, summarizeRoutineLogs } from "../data";
 import { EmptyState, SectionCard, SectionLinkButton, StatGrid, TargetHeader } from "../ui";
 import { formatAppDate } from "@/lib/dates";
@@ -248,7 +249,16 @@ export default async function SportsTargetPage(props: {
         range={range}
         hideTabs={params.slug === "climbing"}
         hideRange={params.slug === "climbing"}
-        actions={<SectionLinkButton href="/activities" label="All Activities" />}
+        actions={
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {params.slug === "climbing" ? (
+              <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
+            ) : getActivitySpotConfig(params.slug)?.supportsMap ? (
+              <SectionLinkButton href={`/activities/${params.slug}/map`} label="🗺 Map" />
+            ) : null}
+            <SectionLinkButton href="/activities" label="All Activities" />
+          </div>
+        }
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>

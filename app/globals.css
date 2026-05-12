@@ -1472,3 +1472,61 @@ input.ghostInput::placeholder {
     background: var(--panel);
   }
 }
+
+/* ── Climbing map page (responsive sidebar) ─────────────────────────────── */
+/* Default (mobile): sidebar lives at the bottom as a draggable sheet,
+   handle floats above it. Desktop overrides below promote it to a fixed
+   left column. */
+.spotsMapSheetHandle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 14px 14px 0 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-bottom: none;
+  background: rgba(15,23,42,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: inherit;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.spotsMapSidebar {
+  /* Bottom-sheet position (mobile default) */
+  left: 8px;
+  right: 8px;
+  bottom: 36px; /* sit just above the handle */
+  max-height: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  transition: max-height 220ms ease, padding 220ms ease;
+}
+
+.spotsMapSidebar.is-open {
+  max-height: 60vh;
+  padding: 12px;
+}
+
+@media (min-width: 720px) {
+  /* Desktop: sidebar becomes a persistent left column. Handle is hidden. */
+  .spotsMapSheetHandle {
+    display: none;
+  }
+  .spotsMapSidebar {
+    left: 12px;
+    top: 12px;
+    bottom: 12px;
+    right: auto;
+    width: 320px;
+    max-height: none !important;
+    padding: 12px !important;
+    overflow-y: auto;
+  }
+}

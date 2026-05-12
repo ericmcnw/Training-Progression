@@ -283,12 +283,40 @@ model ClimbLocation {
   id        String            @id @default(cuid())
   name      String
   type      ClimbLocationType
+  // Geo coords are optional — locations can exist as label-only and have
+  // coords added later from the climbing map page.
+  latitude  Float?
+  longitude Float?
   createdAt DateTime          @default(now())
+  updatedAt DateTime          @default(now()) @updatedAt
 
   routineLogs RoutineLog[]
   problems    ClimbProblem[]
 
   @@index([type, name])
+}
+
+// Generic location pin for non-climbing activities (Phase 2 of the spots-map
+// feature). Each spot belongs to a specific activity slug (matches
+// MetadataGroup.slug / activity-families registry). Climbing keeps its own
+// ClimbLocation model — that one ties to ClimbProblem and is stricter about
+// type. ActivitySpot is the loose, per-activity equivalent.
+model ActivitySpot {
+  id           String   @id @default(cuid())
+  activitySlug String
+  name         String
+  // Free-form per-activity convention: "indoor"/"outdoor" for ball sports,
+  // "trail"/"peak"/"trailhead" for hiking, etc. Nullable when an activity
+  // doesn't use sub-types.
+  type         String?
+  latitude     Float?
+  longitude    Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  routineLogs RoutineLog[]
+
+  @@index([activitySlug, name])
 }
 
 model ClimbProblem {
@@ -341,9 +369,11 @@ model RoutineLog {
   elevationGainFt Int?
   location        String?
   climbLocationId String?
+  activitySpotId  String?
 
   routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
   climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)
+  activitySpot  ActivitySpot?  @relation(fields: [activitySpotId], references: [id], onDelete: SetNull)
 
   exercises           SessionExercise[]
   guidedSteps         GuidedStepLog[]
@@ -358,6 +388,7 @@ model RoutineLog {
 
   @@index([routineId, performedAt])
   @@index([climbLocationId])
+  @@index([activitySpotId])
 }
 
 model BodyZone {

@@ -222,7 +222,30 @@ export default async function ActivitiesPage(props: {
     <ActivitiesShell
       title="Activities"
       subtitle={`Your training worlds — browse by activity and dive into each one's recent volume, trends, and content. ${totalSessions4w} ${totalSessions4w === 1 ? "session" : "sessions"} logged in the last 4 weeks.`}
-      toolbar={<FilterBar query={query} familyFilter={familyFilter} />}
+      toolbar={
+        <div style={{ display: "grid", gap: 10 }}>
+          <Link
+            href="/activities/map"
+            style={{
+              alignSelf: "start",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 800,
+              padding: "7px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(74,222,128,0.32)",
+              background: "rgba(74,222,128,0.10)",
+              color: "rgba(187,247,208,0.95)",
+              textDecoration: "none",
+            }}
+          >
+            🗺 World Map
+          </Link>
+          <FilterBar query={query} familyFilter={familyFilter} />
+        </div>
+      }
     >
       {familiesToRender.map((family) => {
         const meta = ACTIVITY_FAMILY_META[family];
