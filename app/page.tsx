@@ -709,19 +709,6 @@ export default async function HomePage() {
   const todayFocus = Array.from(todayPlanMap.values()).sort(
     (a, b) => b.logged - a.logged || b.planned - a.planned || a.routineName.localeCompare(b.routineName)
   );
-  // Enriched with domain so the TodayActionsBar chips can color-code by
-  // domain (habit / strength / cardio / etc.) without re-querying.
-  const todayItems = todayFocus.map((item) => {
-    const routine = routineMap.get(item.routineId);
-    return {
-      routineId: item.routineId,
-      routineName: item.routineName,
-      kind: item.kind,
-      domain: routine ? effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype) : ("general" as RoutineDomain),
-      planned: item.planned,
-      logged: item.logged,
-    };
-  });
   const tomorrowPlan = Array.from(tomorrowPlanMap.values()).sort(
     (a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName)
   );
@@ -1228,9 +1215,6 @@ export default async function HomePage() {
           habits={habitLaneRows}
           frequencyTargets={frequencyTargetRows}
           today={today}
-          todayLabel={formatDayLabel(today)}
-          todayItems={todayItems}
-          todayTodos={dayTodosByYmd.get(today) ?? []}
           weekRangeLabel={weekDateRangeLabel}
           panelStyle={panel}
           panelHeaderStyle={panelHeader}
