@@ -77,14 +77,11 @@ export function localDateTimeNow(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
-// Build a datetime-local input value for a given YYYY-MM-DD at a specific
-// hour:minute. Used by retroactive logging — the WaG detail card and the
-// goal heatmap pass `?date=` to the log page; we default to noon since the
-// real time of day is unknown.
-export function localDateTimeForYmd(ymd: string, hour = 12, minute = 0): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${ymd}T${pad(hour)}:${pad(minute)}`;
-}
+// Re-export from the server-safe helper so any existing client callers keep
+// working unchanged. The implementation lives in ./date-helpers so the
+// server log page can import it directly without crossing the
+// "use client" boundary.
+export { localDateTimeForYmd } from "./date-helpers";
 
 export function DateTimeField({
   value,

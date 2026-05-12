@@ -1,0 +1,1977 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { getRecommendationModel } from "@/lib/recommendations";
+import WeeklyMomentumSectionBoundary from "./WeeklyMomentumSectionBoundary";
+import WeekAtGlanceClient from "./WeekAtGlanceClient";
+import DashboardBodyMap from "@/app/components/dashboard/DashboardBodyMap";
+import DashboardInjuries from "@/app/components/dashboard/DashboardInjuries";
+import RehabRoutinePrompt from "@/app/components/dashboard/RehabRoutinePrompt";
+import RhythmPanel from "@/app/components/dashboard/RhythmPanel";
+import ThisWeekPanel from "@/app/components/dashboard/ThisWeekPanel";
+import type { HabitLaneRow } from "@/app/components/dashboard/HabitLane";
+import type { FrequencyTargetRow } from "@/app/components/dashboard/FrequencyTargetsCard";
+import { computeFrequencyState, isExpectedDay, type FrequencyTarget } from "@/lib/frequency-state";
+
+// Set USE_THIS_WEEK_PANEL to false to revert to the original two separate
+// sections (Week-at-a-Glance + Rhythm). Reverting is a single boolean flip;
+// the underlying components remain untouched.
+const USE_THIS_WEEK_PANEL = true;
+import { sparklineCoordinates, sparklinePoints } from "@/lib/progress";
+import { addDaysYmd, diffYmdDays, formatAppDate, formatAppDateTime, formatUtcDateLabel, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
+import { formatRoutineSubtype, formatRoutineTypeLabel, normalizeRoutineKind, routineKindColor, effectiveRoutineDomain, domainColor, type RoutineDomain } from "@/lib/routines";
+import { isRoutineAutoScheduledDailyOnDay, routineWithFrequencyTarget, shouldAutoScheduleRoutineDaily } from "@/lib/routine-frequency";
+import { getWeekBoundsSunday } from "@/lib/week";
+import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
+
+// `export const dynamic` lives on the route file (app/page.tsx) so both
+// legacy + v2 share the same rendering behavior. Don't re-export here.
+
+function utcDateOnlyYmd(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  return toAppYmd(date);
+}
+
+function addDays(ymd: string, plus: number) {
+  return addDaysYmd(ymd, plus);
+}
+
+function dayDiff(a: string, b: string) {
+  return diffYmdDays(a, b);
+}
+
+function formatDayLabel(ymd: string) {
+  return formatUtcDateLabel(ymd, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// Status priority for habit/frequency rows: at-risk first so the user sees
+// what needs attention without scrolling.
+function statusSortRank(status: "complete" | "ahead" | "on_track" | "behind" | "at_risk"): number {
+  switch (status) {
+    case "at_risk":  return 0;
+    case "behind":   return 1;
+    case "on_track": return 2;
+    case "ahead":    return 3;
+    case "complete": return 4;
+  }
+}
+
+function formatShortWeekRangeLabel(startYmd: string) {
+  const endYmd = addDays(startYmd, 6);
+  const start = formatUtcDateLabel(startYmd, { month: "numeric", day: "numeric" });
+  const end = formatUtcDateLabel(endYmd, { month: "numeric", day: "numeric" });
+  return `${start}-${end}`;
+}
+
+function formatHeroWeekRange(startYmd: string) {
+  const endYmd = addDays(startYmd, 6);
+  const start = formatUtcDateLabel(startYmd, { month: "short", day: "numeric" });
+  const end = formatUtcDateLabel(endYmd, { day: "numeric" });
+  return `${start}–${end}`;
+}
+
+function formatWeeklyPointTooltip(week: {
+  label: string;
+  sessions: number;
+  miles: number;
+  logs: Array<{ routineName: string; performedAt: Date }>;
+}) {
+  const header = `${formatShortWeekRangeLabel(week.label)}\n${week.sessions} logs • ${week.miles.toFixed(1)} mi`;
+  if (week.logs.length === 0) return `${header}\nNo sessions logged`;
+
+  const details = week.logs.map((log) => {
+    const dateLabel = formatAppDate(log.performedAt, { month: "numeric", day: "numeric" });
+    return `${dateLabel}: ${log.routineName}`;
+  });
+  return `${header}\n${details.join("\n")}`;
+}
+
+function formatLogTime(date: Date) {
+  return formatAppDateTime(date, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatLastCompletedLabel(date: Date | null) {
+  if (!date) return "Never completed";
+  return `Last completed ${formatAppDate(date, { month: "short", day: "numeric" })}`;
+}
+
+function localDayRange(ymd: string) {
+  return getAppDayRange(ymd);
+}
+
+function kindAccent(kind: string) {
+  return routineKindColor(kind);
+}
+
+
+function TrainingBalance({ rows }: {
+  rows: Array<{ domain: RoutineDomain; label: string; sessions: number; maxSessions: number }>;
+}) {
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map((r) => r.maxSessions));
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {rows.map((row) => {
+        const fillPct = max > 0 ? (row.sessions / max) * 100 : 0;
+        const color = domainColor(row.domain);
+        const status = row.sessions === 0 ? "absent" : row.sessions < 2 ? "light" : "active";
+        return (
+          <div key={row.domain} style={{ display: "grid", gap: 5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.3 }}>{row.label}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  background: status === "absent" ? "rgba(255,255,255,0.06)" : status === "light" ? "rgba(251,199,92,0.15)" : "rgba(84,203,130,0.12)",
+                  color: status === "absent" ? "rgba(255,255,255,0.4)" : status === "light" ? "rgba(251,199,92,0.9)" : "rgba(84,203,130,0.9)",
+                  border: `1px solid ${status === "absent" ? "rgba(255,255,255,0.08)" : status === "light" ? "rgba(251,199,92,0.25)" : "rgba(84,203,130,0.25)"}`,
+                }}>
+                  {status === "absent" ? "Quiet" : status === "light" ? "Light" : "Active"}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>{row.sessions}</span>
+              </div>
+            </div>
+            <div style={{ height: 7, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                borderRadius: 999,
+                width: `${fillPct}%`,
+                background: color,
+                transition: "width 0.4s ease",
+                minWidth: row.sessions > 0 ? 10 : 0,
+              }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function loggingHref(routine: { routineId: string; kind: string }) {
+  return `/routines/${routine.routineId}/log`;
+}
+
+function recommendationPriorityBadge(priority: "high" | "medium" | "low"): React.CSSProperties {
+  if (priority === "high") {
+    return {
+      ...recommendationBadgeBase,
+      background: "rgba(255, 186, 125, 0.18)",
+      borderColor: "rgba(255, 186, 125, 0.4)",
+      color: "#ffd4a8",
+    };
+  }
+  if (priority === "medium") {
+    return {
+      ...recommendationBadgeBase,
+      background: "rgba(142, 197, 255, 0.18)",
+      borderColor: "rgba(142, 197, 255, 0.35)",
+      color: "#d2e7ff",
+    };
+  }
+  return {
+    ...recommendationBadgeBase,
+    background: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.16)",
+    color: "rgba(255,255,255,0.82)",
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function WeeklyMomentumSection({
+  weekDateRangeLabel,
+  weekLoggedTotal,
+  weekSessionTargetTotal,
+  totalWeeklyCardioMiles,
+  cardioTypeGroups,
+  weeklySeries,
+  weeklySparkPoints,
+  recentCompletions,
+  needsAttention,
+}: {
+  weekDateRangeLabel: string;
+  weekLoggedTotal: number;
+  weekSessionTargetTotal: number;
+  totalWeeklyCardioMiles: number;
+  cardioTypeGroups: Array<{
+    type: string;
+    miles: number;
+    items: Array<{ id: string; name: string; miles: number; logs: number }>;
+  }>;
+  weeklySeries: Array<{
+    label: string;
+    sessions: number;
+    miles: number;
+    logs: Array<{ routineName: string; performedAt: Date }>;
+  }>;
+  weeklySparkPoints: Array<{ x: number; y: number }>;
+  recentCompletions: Array<{ id: string; name: string; lastCompletedAt: Date | null }>;
+  needsAttention: Array<{ id: string; name: string; lastCompletedAt: Date | null; detailLabel?: string; href?: string }>;
+}) {
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>WEEKLY MOMENTUM</div>
+      <div style={{ padding: 14, display: "grid", gap: 14 }}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div className="mobileHomeWeeklyHeader" style={weeklySubheaderRow}>
+            <div style={weeklySubheader}>This Week</div>
+            <SessionFractionRing current={weekLoggedTotal} target={weekSessionTargetTotal} />
+          </div>
+          <div style={sectionSub}>{weekDateRangeLabel}</div>
+        </div>
+
+        <div style={mileageBand}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Weekly Endurance Mileage</div>
+            <div style={sectionSub}>Combined miles from all endurance routines this week.</div>
+          </div>
+          <div className="mobileHomeMileageValue" style={mileageValue}>{totalWeeklyCardioMiles.toFixed(1)} mi</div>
+          <details style={cardioDetails}>
+            <summary data-collapsible-summary style={cardioSummary}>
+              Show endurance routine breakdown
+            </summary>
+            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+              {cardioTypeGroups.length === 0 && <div style={emptyState}>No endurance logged this week.</div>}
+              {cardioTypeGroups.map((group) => (
+                <div key={group.type} style={cardioGroupCard}>
+                  <div className="mobileHomeCardioRow" style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontWeight: 900 }}>{group.type}</div>
+                    <div style={cardioMilesPill}>{group.miles.toFixed(1)} mi</div>
+                  </div>
+                  <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+                    {group.items.map((item) => (
+                      <div key={item.id} style={cardioRoutineRow}>
+                        <span>{item.name}</span>
+                        <span>{item.miles.toFixed(1)} mi ({item.logs} logs)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+
+        <div style={sparkCard}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Last 4 Weeks</div>
+            <div style={sectionSub}>Session count trend with weekly dots you can hover for the session list.</div>
+          </div>
+          <svg width="100%" height="84" viewBox="0 0 220 84" preserveAspectRatio="none">
+            <polyline
+              fill="none"
+              stroke="rgba(84,203,130,0.95)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={sparklinePoints(weeklySeries.map((item) => item.sessions), 220, 84, 8)}
+            />
+            {weeklySparkPoints.map((point, index) => {
+              const week = weeklySeries[index];
+              if (!week) return null;
+              return (
+                <g key={week.label}>
+                  <title>{formatWeeklyPointTooltip(week)}</title>
+                  <circle cx={point.x} cy={point.y} r="9" fill="transparent" style={{ cursor: "pointer" }} />
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r="3.5"
+                    fill="rgba(84,203,130,0.98)"
+                    stroke="rgba(246,252,248,0.96)"
+                    strokeWidth="1.5"
+                    style={{ pointerEvents: "none" }}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+          <div className="mobileHomeSparkMeta" style={sparkMetaRow}>
+            {weeklySeries.map((item) => (
+              <div key={item.label} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, opacity: 0.66 }}>{formatShortWeekRangeLabel(item.label)}</div>
+                <div style={{ fontSize: 12, fontWeight: 800 }}>{item.sessions} logs</div>
+                <div style={{ fontSize: 11, opacity: 0.74 }}>{item.miles.toFixed(1)} mi</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mobileHomeTwoCol" style={twoColGrid}>
+          <div style={subPanel}>
+            <div style={subPanelTitle}>Recently Completed</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {recentCompletions.length === 0 && <div style={emptyState}>No routines completed yet.</div>}
+              {recentCompletions.map((item) => (
+                <div key={item.id} style={miniCardSuccess}>
+                  <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  <div style={miniCardMeta}>{formatLastCompletedLabel(item.lastCompletedAt)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={subPanel}>
+            <div style={subPanelTitle}>Needs Attention</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {needsAttention.length === 0 && <div style={emptyState}>Everything has been completed recently.</div>}
+              {needsAttention.map((item) => (
+                <div key={item.id} style={miniCardWarn}>
+                  {item.href ? (
+                    <Link href={item.href} style={miniCardTitleLink}>{item.name}</Link>
+                  ) : (
+                    <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  )}
+                  <div style={miniCardMeta}>{item.detailLabel ?? formatLastCompletedLabel(item.lastCompletedAt)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SessionFractionRing({ current, target }: { current: number; target: number }) {
+  const size = 86;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = target > 0 ? current / target : 0;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const dashOffset = circumference * (1 - clamped);
+
+  return (
+    <div style={{ width: size, height: size, position: "relative", display: "grid", placeItems: "center" }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(128,128,128,0.25)"
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(84,203,130,0.95)"
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <div style={{ position: "absolute", textAlign: "center", lineHeight: 1.1 }}>
+        <div style={{ fontWeight: 900, fontSize: 17 }}>
+          {current}/{target}
+        </div>
+        <div style={{ fontSize: 10, opacity: 0.72 }}>sessions</div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryFractionRing({ current, target }: { current: number; target: number }) {
+  const size = 92;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = target > 0 ? current / target : 0;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const dashOffset = circumference * (1 - clamped);
+
+  return (
+    <div style={{ display: "grid", justifyItems: "center", gap: 10 }}>
+      <div style={{ width: size, height: size, position: "relative", display: "grid", placeItems: "center" }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(255,255,255,0.15)"
+            strokeWidth={stroke}
+            fill="none"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(84,203,130,0.95)"
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
+        <div style={{ position: "absolute", textAlign: "center", lineHeight: 1.05 }}>
+          <div style={{ fontSize: 19, fontWeight: 900 }}>
+            {current}/{target}
+          </div>
+          <div style={{ fontSize: 10, opacity: 0.68 }}>done</div>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", display: "grid", gap: 3 }}>
+        <div style={summaryLabel}>Today: Done/Planned</div>
+        <div style={summarySub}>completed routines / planned routines</div>
+      </div>
+    </div>
+  );
+}
+
+export default async function HomePageLegacy() {
+  const today = todayAppYmd();
+  const tomorrow = addDays(today, 1);
+  const weekBounds = getWeekBoundsSunday(new Date());
+  const weekStart = toAppYmd(weekBounds.start);
+  const sparkStart = addDays(weekStart, -35);
+  const glanceWeekCount = 12;
+  const glanceStart = addDays(weekStart, -(glanceWeekCount - 1) * 7);
+
+  const [
+    routines,
+    recentLogs,
+    weeklyLogs,
+    latestLogs,
+    activeGoals,
+    routineFrequencyGoals,
+    planEntriesRaw,
+    manualEntriesRaw,
+    sparkLogs,
+    glanceLogs,
+    recommendationModel,
+    groupFrequencyGoals,
+  ] = await Promise.all([
+    prisma.routine.findMany({
+      where: { isDeleted: false, isActive: true },
+      orderBy: [{ kind: "asc" }, { domain: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        subtype: true,
+        domain: true,
+        kind: true,
+        createdAt: true,
+        frequencyGoalRoutines: {
+          include: { goal: true },
+        },
+      },
+    }),
+    prisma.routineLog.findMany({
+      orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+      take: 8,
+      select: {
+        id: true,
+        performedAt: true,
+        distanceMi: true,
+        elevationGainFt: true,
+        durationSec: true,
+        exercises: { select: { id: true, sets: { select: { id: true } } } },
+        routine: { select: { id: true, name: true, kind: true } },
+      },
+    }),
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
+      where: {
+        performedAt: {
+          gte: weekBounds.start,
+          lt: weekBounds.end,
+        },
+      },
+      _count: { _all: true },
+      _sum: { distanceMi: true },
+      _max: { performedAt: true },
+    }),
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
+      _max: { performedAt: true },
+    }),
+    prisma.goal.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: { id: true, name: true, targetValue: true, createdAt: true },
+    }),
+    prisma.goal.findMany({
+      where: {
+        isActive: true,
+        goalType: "FREQUENCY",
+        targetType: "ROUTINE",
+        metricType: "SESSIONS",
+      },
+      orderBy: { createdAt: "asc" },
+      select: { targetId: true, createdAt: true },
+    }),
+    prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
+      'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
+    ),
+    prisma.$queryRawUnsafe<Array<{ routineId: string; scheduledDate: string; sortOrder: number }>>(
+      'SELECT "routineId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
+    ),
+    prisma.routineLog.findMany({
+      where: {
+        performedAt: {
+          gte: new Date(`${sparkStart}T00:00:00.000Z`),
+          lt: weekBounds.end,
+        },
+      },
+      orderBy: { performedAt: "asc" },
+      select: {
+        performedAt: true,
+        distanceMi: true,
+        routine: { select: { id: true, name: true, kind: true } },
+      },
+    }),
+    prisma.routineLog.findMany({
+      where: {
+        performedAt: {
+          gte: new Date(`${glanceStart}T00:00:00.000Z`),
+          lt: weekBounds.end,
+        },
+      },
+      orderBy: { performedAt: "asc" },
+      select: {
+        id: true,
+        routineId: true,
+        performedAt: true,
+        routine: { select: { name: true, kind: true, domain: true, subtype: true } },
+      },
+    }),
+    getRecommendationModel(),
+    prisma.frequencyGoal.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        routines: {
+          select: { routineId: true },
+        },
+      },
+    }),
+  ]);
+
+  // Day to-dos for the entire visible glance window — cheap lookup since
+  // each row is a few bytes, and rendering them in WaG detail cards needs
+  // them keyed by ymd.
+  const dayTodosRaw = await prisma.dayTodo.findMany({
+    where: { ymd: { gte: glanceStart } },
+    orderBy: [{ done: "asc" }, { createdAt: "asc" }],
+    select: { id: true, ymd: true, label: true, done: true },
+  });
+  const dayTodosByYmd = new Map<string, Array<{ id: string; ymd: string; label: string; done: boolean }>>();
+  for (const todo of dayTodosRaw) {
+    const arr = dayTodosByYmd.get(todo.ymd);
+    if (arr) arr.push(todo);
+    else dayTodosByYmd.set(todo.ymd, [todo]);
+  }
+
+  // Each routine carries its frequency-goal links (Phase 1: source of truth).
+  // Flatten to the legacy target shape so habit/auto-schedule helpers work.
+  const routinesWithTargets = routines.map(routineWithFrequencyTarget);
+  const routineMap = new Map(routinesWithTargets.map((routine) => [routine.id, routine]));
+  const autoDailyRoutineStartById = new Map<string, string>();
+  for (const goal of routineFrequencyGoals) {
+    if (!autoDailyRoutineStartById.has(goal.targetId)) {
+      autoDailyRoutineStartById.set(goal.targetId, toAppYmd(goal.createdAt));
+    }
+  }
+
+  const weeklyMap = new Map(
+    weeklyLogs.map((row) => [
+      row.routineId,
+      {
+        count: row._count._all,
+        miles: row._sum.distanceMi ?? 0,
+        lastAt: row._max.performedAt,
+      },
+    ])
+  );
+  const latestLogMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
+
+  const manualToday = manualEntriesRaw
+    .map((entry) => ({
+      routineId: entry.routineId,
+      scheduledDate: utcDateOnlyYmd(entry.scheduledDate),
+      sortOrder: Number(entry.sortOrder),
+    }))
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.sortOrder - b.sortOrder);
+
+  const cycleEntries = planEntriesRaw
+    .map((entry) => ({
+      routineId: entry.routineId,
+      dayOffset: Number(entry.dayOffset),
+      sortOrder: Number(entry.sortOrder),
+      startDate: utcDateOnlyYmd(entry.startDate),
+      cycleLengthDays: Number(entry.cycleLengthDays),
+    }));
+
+  function buildPlanForDay(day: string) {
+    const dayPlanMap = new Map<
+      string,
+      { routineId: string; routineName: string; kind: string; planned: number; logged: number }
+    >();
+
+    const manualForDay = manualToday.filter((entry) => entry.scheduledDate === day);
+    const cyclesForDay = cycleEntries.filter((entry) => {
+      if (entry.cycleLengthDays <= 0) return false;
+      const diff = dayDiff(day, entry.startDate);
+      return diff >= 0 && diff % entry.cycleLengthDays === entry.dayOffset;
+    });
+
+    for (const item of [...manualForDay, ...cyclesForDay]) {
+      const routine = routineMap.get(item.routineId);
+      if (!routine) continue;
+      const existing = dayPlanMap.get(item.routineId);
+      if (existing) {
+        existing.planned += 1;
+        continue;
+      }
+      dayPlanMap.set(item.routineId, {
+        routineId: item.routineId,
+        routineName: routine.name,
+        kind: routine.kind,
+        planned: 1,
+        logged: 0,
+      });
+    }
+
+    for (const routine of routinesWithTargets) {
+      if (!shouldAutoScheduleRoutineDaily(routine)) continue;
+      if (!isRoutineAutoScheduledDailyOnDay(routine, day, autoDailyRoutineStartById.get(routine.id) ?? today)) {
+        continue;
+      }
+      const existing = dayPlanMap.get(routine.id);
+      if (existing) {
+        existing.planned = Math.max(1, existing.planned);
+        continue;
+      }
+      dayPlanMap.set(routine.id, {
+        routineId: routine.id,
+        routineName: routine.name,
+        kind: routine.kind,
+        planned: 1,
+        logged: 0,
+      });
+    }
+
+    return dayPlanMap;
+  }
+
+  const todayPlanMap = buildPlanForDay(today);
+  const tomorrowPlanMap = buildPlanForDay(tomorrow);
+
+  const todayRange = localDayRange(today);
+  const todayLogs = await prisma.routineLog.findMany({
+    where: {
+      performedAt: {
+        gte: todayRange.start,
+        lt: todayRange.end,
+      },
+    },
+    select: { routineId: true },
+  });
+
+  const todayLogCountMap = new Map<string, number>();
+  for (const log of todayLogs) {
+    todayLogCountMap.set(log.routineId, (todayLogCountMap.get(log.routineId) ?? 0) + 1);
+  }
+
+  for (const [routineId, count] of todayLogCountMap.entries()) {
+    const routine = routineMap.get(routineId);
+    if (!routine) continue;
+    const existing = todayPlanMap.get(routineId);
+    if (existing) {
+      existing.logged = count;
+    } else {
+      todayPlanMap.set(routineId, {
+        routineId,
+        routineName: routine.name,
+        kind: routine.kind,
+        planned: 0,
+        logged: count,
+      });
+    }
+  }
+
+  const todayFocus = Array.from(todayPlanMap.values()).sort(
+    (a, b) => b.logged - a.logged || b.planned - a.planned || a.routineName.localeCompare(b.routineName)
+  );
+  const tomorrowPlan = Array.from(tomorrowPlanMap.values()).sort(
+    (a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName)
+  );
+
+  const weeklyCards = routinesWithTargets
+    .map((routine) => {
+      const week = weeklyMap.get(routine.id) ?? { count: 0, miles: 0, lastAt: null };
+      return {
+        id: routine.id,
+        name: routine.name,
+        kind: routine.kind,
+        count: week.count,
+        miles: week.miles,
+        lastCompletedAt: latestLogMap.get(routine.id) ?? null,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  const weeklyCardioBreakdown = routinesWithTargets
+    .filter((routine) => normalizeRoutineKind(routine.kind) === "CARDIO")
+    .map((routine) => ({
+      id: routine.id,
+      name: routine.name,
+      cardioType: formatRoutineSubtype(routine.subtype) || "Cardio",
+      miles: weeklyMap.get(routine.id)?.miles ?? 0,
+      logs: weeklyMap.get(routine.id)?.count ?? 0,
+    }))
+    .sort((a, b) => b.miles - a.miles || b.logs - a.logs || a.name.localeCompare(b.name));
+
+  const totalWeeklyCardioMiles = weeklyCardioBreakdown.reduce((sum, item) => sum + item.miles, 0);
+  const cardioByType = new Map<string, typeof weeklyCardioBreakdown>();
+  for (const item of weeklyCardioBreakdown) {
+    if (!cardioByType.has(item.cardioType)) cardioByType.set(item.cardioType, []);
+    cardioByType.get(item.cardioType)!.push(item);
+  }
+  const cardioTypeGroups = Array.from(cardioByType.entries())
+    .map(([type, items]) => ({
+      type,
+      items,
+      miles: items.reduce((sum, item) => sum + item.miles, 0),
+    }))
+    .sort((a, b) => b.miles - a.miles || a.type.localeCompare(b.type));
+
+  const recentCompletions = weeklyCards
+    .filter((item) => item.lastCompletedAt)
+    .sort((a, b) => (b.lastCompletedAt?.getTime() ?? 0) - (a.lastCompletedAt?.getTime() ?? 0))
+    .slice(0, 4);
+
+  const weeklySeries = Array.from({ length: 4 }, (_, index) => {
+    const start = addDays(weekStart, -(3 - index) * 7);
+    const end = addDays(start, 7);
+    const logsInWeek = sparkLogs.filter((log) => {
+      const ymd = toAppYmd(log.performedAt);
+      return ymd >= start && ymd < end;
+    });
+    return {
+      label: start,
+      sessions: logsInWeek.length,
+      miles: logsInWeek.reduce((sum, log) => sum + (log.distanceMi ?? 0), 0),
+      logs: logsInWeek.map((log) => ({
+        routineName: log.routine.name,
+        performedAt: log.performedAt,
+      })),
+    };
+  });
+  const weeklySparkPoints = sparklineCoordinates(
+    weeklySeries.map((item) => item.sessions),
+    220,
+    84,
+    8
+  );
+
+  const todayPlannedTotal = todayFocus.reduce((sum, item) => sum + item.planned, 0);
+  const todayDoneRoutines = todayFocus.filter((item) => item.logged > 0).length;
+  const tomorrowPlannedTotal = tomorrowPlan.reduce((sum, item) => sum + item.planned, 0);
+  const weekLoggedByRoutine = new Map(weeklyCards.map((item) => [item.id, item.count]));
+  const weekLoggedTotal = weeklyCards.reduce((sum, item) => sum + item.count, 0);
+  const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekPlannedByRoutine = new Map<string, number>();
+  for (const day of weekDays) {
+    const dayPlan = buildPlanForDay(day);
+    for (const item of dayPlan.values()) {
+      weekPlannedByRoutine.set(item.routineId, (weekPlannedByRoutine.get(item.routineId) ?? 0) + item.planned);
+    }
+  }
+  const weekPlannedTotal = Array.from(weekPlannedByRoutine.values()).reduce((sum, count) => sum + count, 0);
+  const weekUnplannedLoggedTotal = Array.from(weekLoggedByRoutine.entries()).reduce((sum, [routineId, logged]) => {
+    const planned = weekPlannedByRoutine.get(routineId) ?? 0;
+    return sum + Math.max(0, logged - planned);
+  }, 0);
+  const weekSessionTargetTotal = weekPlannedTotal + weekUnplannedLoggedTotal;
+  const routineNeedsAttention = weeklyCards
+    .map((item) => {
+      const lastCompletedYmd = item.lastCompletedAt ? toAppYmd(item.lastCompletedAt) : null;
+      return {
+        ...item,
+        daysSinceLastCompleted: lastCompletedYmd ? dayDiff(today, lastCompletedYmd) : Number.POSITIVE_INFINITY,
+        attentionPriority: lastCompletedYmd ? dayDiff(today, lastCompletedYmd) : 9999,
+      };
+    })
+    .filter((item) => item.daysSinceLastCompleted > 7)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      lastCompletedAt: item.lastCompletedAt,
+      attentionPriority: item.attentionPriority,
+    }));
+  const groupFrequencyGoalShapes = groupFrequencyGoals
+    .filter((goal) => goal.routines.length > 0)
+    .map((goal) => ({
+      id: goal.id,
+      name: goal.name,
+      targetCount: goal.targetCount,
+      targetInterval: goal.targetInterval,
+      targetUnit: goal.targetUnit,
+      isActive: goal.isActive,
+      routineIds: goal.routines.map((entry) => entry.routineId),
+    }));
+  const groupFrequencyMaxWindowDays = Math.max(0, ...groupFrequencyGoalShapes.map((goal) => getFrequencyGoalWindowDays(goal)));
+  const groupFrequencyRoutineIds = Array.from(new Set(groupFrequencyGoalShapes.flatMap((goal) => goal.routineIds)));
+  const groupFrequencyLogs =
+    groupFrequencyMaxWindowDays > 0 && groupFrequencyRoutineIds.length > 0
+      ? await prisma.routineLog.findMany({
+          where: {
+            routineId: { in: groupFrequencyRoutineIds },
+            performedAt: { gte: new Date(new Date().getTime() - groupFrequencyMaxWindowDays * 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { performedAt: "desc" },
+          select: { routineId: true, performedAt: true },
+        })
+      : [];
+  const groupFrequencyProgress = getFrequencyGoalProgressList({
+    goals: groupFrequencyGoalShapes,
+    logs: groupFrequencyLogs,
+  });
+  const groupFrequencyNeedsAttention = groupFrequencyProgress
+    .filter((progress) => progress.status === "behind")
+    .map((progress) => {
+      const routineIdSet = new Set(progress.goal.routineIds);
+      const lastCompletedAt = groupFrequencyLogs.find((log) => routineIdSet.has(log.routineId))?.performedAt ?? null;
+      return {
+        id: `group-frequency:${progress.goal.id}`,
+        name: progress.goal.name,
+        lastCompletedAt,
+        detailLabel: `${progress.detailLabel} (${progress.summaryLabel})`,
+        href: `/goals/group-frequency:${progress.goal.id}?mode=edit`,
+        attentionPriority: 10000 + progress.remainingCount,
+      };
+    });
+  const needsAttention = [...groupFrequencyNeedsAttention, ...routineNeedsAttention]
+    .sort((a, b) => b.attentionPriority - a.attentionPriority || a.name.localeCompare(b.name))
+    .slice(0, 4);
+  const weekEnd = addDays(weekStart, 6);
+  const weekDateRangeLabel = `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`;
+  const glanceLogsByDay = new Map<
+    string,
+    Array<{ id: string; routineId: string; routineName: string; kind: string; domain: RoutineDomain }>
+  >();
+  for (const log of glanceLogs) {
+    const ymd = toAppYmd(log.performedAt);
+    if (!glanceLogsByDay.has(ymd)) glanceLogsByDay.set(ymd, []);
+    glanceLogsByDay.get(ymd)!.push({
+      id: log.id,
+      routineId: log.routineId,
+      routineName: log.routine.name,
+      kind: log.routine.kind,
+      domain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
+    });
+  }
+  const glanceDays = Array.from({ length: glanceWeekCount * 7 }, (_, index) => {
+    const ymd = addDays(glanceStart, index);
+    const logs = glanceLogsByDay.get(ymd) ?? [];
+    const logCountByRoutine = new Map<string, number>();
+    for (const log of logs) {
+      logCountByRoutine.set(log.routineId, (logCountByRoutine.get(log.routineId) ?? 0) + 1);
+    }
+    const dayPlan = buildPlanForDay(ymd);
+    // For past/today days, ensure any logged routine appears even if not in the plan
+    // (mirrors schedule page behavior — handles retroactive logs and recently-created goals)
+    if (ymd <= today) {
+      for (const [routineId, count] of logCountByRoutine.entries()) {
+        if (!dayPlan.has(routineId)) {
+          const routine = routineMap.get(routineId);
+          if (routine) {
+            dayPlan.set(routineId, {
+              routineId,
+              routineName: routine.name,
+              kind: routine.kind,
+              planned: count,
+              logged: count,
+            });
+          }
+        }
+      }
+    }
+    const planned = Array.from(dayPlan.values())
+      .map((item) => {
+        const routine = routineMap.get(item.routineId);
+        return {
+          routineId: item.routineId,
+          routineName: item.routineName,
+          kind: item.kind,
+          domain: routine ? effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype) : ("general" as RoutineDomain),
+          planned: item.planned,
+          logged: logCountByRoutine.get(item.routineId) ?? 0,
+        };
+      })
+      .sort((a, b) => b.planned - a.planned || a.routineName.localeCompare(b.routineName));
+    return {
+      ymd,
+      label: dayLabels[index % 7],
+      dayNumber: formatUtcDateLabel(ymd, { day: "numeric" }),
+      planned,
+      logs,
+      habitAggregate: { expected: 0, completed: 0 } as { expected: number; completed: number },
+      todos: dayTodosByYmd.get(ymd) ?? [],
+    };
+  });
+
+  // ── HABIT LANE + FREQUENCY TARGETS DATA PREP ─────────────────────────────
+  // Builds the rows consumed by HabitLane (per habit-domain routine) and
+  // FrequencyTargetsCard (per active FrequencyGoal whose linked routines aren't
+  // exclusively habit-domain). Both share log data already loaded for the week
+  // glance (12 weeks back), so no extra DB roundtrips are needed.
+
+  const logsByRoutineId = new Map<string, Array<{ performedAt: Date }>>();
+  for (const log of glanceLogs) {
+    const arr = logsByRoutineId.get(log.routineId);
+    if (arr) arr.push({ performedAt: log.performedAt });
+    else logsByRoutineId.set(log.routineId, [{ performedAt: log.performedAt }]);
+  }
+
+  function targetFromGoal(goal: { targetCount: number; targetInterval: number; targetUnit: typeof groupFrequencyGoals[number]["targetUnit"]; weekdayMask?: number | null } | null | undefined): FrequencyTarget | null {
+    if (!goal) return null;
+    return {
+      targetCount: goal.targetCount,
+      targetInterval: goal.targetInterval,
+      targetUnit: goal.targetUnit,
+      weekdayMask: goal.weekdayMask ?? null,
+    };
+  }
+
+  const habitRoutines = routinesWithTargets.filter(
+    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit"
+  );
+
+  // Habit aggregate per day — drives the WaG cell's amber pie-fill dot.
+  // Counts habit-domain routines that were created on or before that day AND
+  // expected on that day (daily / mask-matching). Flexible weekly habits with
+  // no per-day expectation are excluded from the per-day denominator.
+  const habitYmdSetById = new Map<string, Set<string>>();
+  for (const habit of habitRoutines) {
+    const set = new Set<string>();
+    for (const log of glanceLogs) {
+      if (log.routineId === habit.id) set.add(toAppYmd(log.performedAt));
+    }
+    habitYmdSetById.set(habit.id, set);
+  }
+  const habitTargetById = new Map<string, FrequencyTarget | null>();
+  for (const habit of habitRoutines) {
+    const goal = habit.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal ?? null;
+    habitTargetById.set(habit.id, targetFromGoal(goal));
+  }
+  const habitCreatedYmdById = new Map<string, string>();
+  for (const habit of habitRoutines) {
+    habitCreatedYmdById.set(habit.id, toAppYmd(habit.createdAt));
+  }
+  for (const day of glanceDays) {
+    if (day.ymd > today) {
+      day.habitAggregate = { expected: 0, completed: 0 };
+      continue;
+    }
+    let expected = 0;
+    let completed = 0;
+    for (const habit of habitRoutines) {
+      if ((habitCreatedYmdById.get(habit.id) ?? day.ymd) > day.ymd) continue;
+      const target = habitTargetById.get(habit.id) ?? null;
+      const isPerDay = !target || isExpectedDay(target, day.ymd);
+      if (!isPerDay) continue;
+      expected++;
+      if (habitYmdSetById.get(habit.id)?.has(day.ymd)) completed++;
+    }
+    day.habitAggregate = { expected, completed };
+  }
+
+  const habitLaneRows: HabitLaneRow[] = habitRoutines
+    .map((routine) => {
+      const primaryLink = routine.frequencyGoalRoutines.find((rel) => rel.goal?.isActive);
+      const goal = primaryLink?.goal ?? null;
+      const target = targetFromGoal(goal);
+      const logs = logsByRoutineId.get(routine.id) ?? [];
+      const state = computeFrequencyState({ target, logs, today, trailingDays: 14 });
+      const goalLabel = target
+        ? `${target.targetCount}× per ${target.targetInterval === 1 ? target.targetUnit.toLowerCase() : `${target.targetInterval} ${target.targetUnit.toLowerCase()}s`}`
+        : null;
+      return {
+        routineId: routine.id,
+        routineName: routine.name,
+        goalId: goal?.id ?? null,
+        goalLabel,
+        weekdayMask: goal?.weekdayMask ?? null,
+        state,
+      } satisfies HabitLaneRow;
+    })
+    .sort((a, b) => {
+      // Surface "at risk" and "behind" first, then by streak desc, then name
+      const rankA = statusSortRank(a.state.currentWindow.status);
+      const rankB = statusSortRank(b.state.currentWindow.status);
+      if (rankA !== rankB) return rankA - rankB;
+      const streakDiff = (b.state.windowStreak || b.state.currentDayStreak) - (a.state.windowStreak || a.state.currentDayStreak);
+      if (streakDiff !== 0) return streakDiff;
+      return a.routineName.localeCompare(b.routineName);
+    });
+
+  // Build dashboard "Frequency Targets" rows from every active FrequencyGoal,
+  // EXCLUDING any goal whose linked routines are *all* habit-domain — those
+  // already render in the habit lane and we don't want to double-surface.
+  const habitRoutineIdSet = new Set(habitRoutines.map((r) => r.id));
+  const frequencyTargetRows: FrequencyTargetRow[] = groupFrequencyGoals
+    .filter((goal) => goal.routines.length > 0)
+    .filter((goal) => goal.routines.some((rel) => !habitRoutineIdSet.has(rel.routineId)))
+    .map((goal) => {
+      const linkedRoutines = goal.routines
+        .map((rel) => routineMap.get(rel.routineId))
+        .filter((r): r is NonNullable<typeof r> => Boolean(r));
+      const routineNames = linkedRoutines.map((r) => r.name);
+      const primaryDomain = linkedRoutines[0]
+        ? effectiveRoutineDomain(linkedRoutines[0].domain, linkedRoutines[0].kind, linkedRoutines[0].subtype)
+        : "general";
+      const aggregatedLogs = linkedRoutines.flatMap((r) => logsByRoutineId.get(r.id) ?? []);
+      const target: FrequencyTarget = {
+        targetCount: goal.targetCount,
+        targetInterval: goal.targetInterval,
+        targetUnit: goal.targetUnit,
+        weekdayMask: goal.weekdayMask,
+      };
+      const state = computeFrequencyState({ target, logs: aggregatedLogs, today, trailingDays: 14 });
+      return {
+        goalId: goal.id,
+        goalName: goal.name,
+        routineNames,
+        primaryDomain,
+        isGroup: !goal.id.startsWith("fg_"),
+        target,
+        state,
+      } satisfies FrequencyTargetRow;
+    })
+    .sort((a, b) => {
+      const rankA = statusSortRank(a.state.currentWindow.status);
+      const rankB = statusSortRank(b.state.currentWindow.status);
+      if (rankA !== rankB) return rankA - rankB;
+      return a.goalName.localeCompare(b.goalName);
+    });
+
+  // Consecutive active-day streak ending today
+  const loggedDaySet = new Set(sparkLogs.map((log) => toAppYmd(log.performedAt)));
+  let currentStreak = 0;
+  {
+    let check = today;
+    while (loggedDaySet.has(check)) {
+      currentStreak++;
+      check = addDays(check, -1);
+    }
+    // If today has no log yet, check if yesterday kept the streak alive
+    if (currentStreak === 0) {
+      const yesterday = addDays(today, -1);
+      if (loggedDaySet.has(yesterday)) {
+        let check2 = yesterday;
+        while (loggedDaySet.has(check2)) {
+          currentStreak++;
+          check2 = addDays(check2, -1);
+        }
+      }
+    }
+  }
+
+  // Training balance: sessions per domain over last 4 weeks (sparkLogs window)
+  const domainSessionMap = new Map<RoutineDomain, number>();
+  for (const log of sparkLogs) {
+    const routine = routineMap.get(log.routine.id);
+    if (!routine) continue;
+    const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
+    domainSessionMap.set(domain, (domainSessionMap.get(domain) ?? 0) + 1);
+  }
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "skill", "habit"];
+  const domainLabels: Record<RoutineDomain, string> = {
+    strength: "Strength", cardio: "Endurance", mobility: "Mobility / Rehab",
+    sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
+    habit: "Habits", general: "General",
+  };
+  const trainingBalanceRows = domainOrder
+    .map((domain) => ({
+      domain,
+      label: domainLabels[domain],
+      sessions: domainSessionMap.get(domain) ?? 0,
+      maxSessions: domainSessionMap.get(domain) ?? 0,
+    }))
+    .filter((row) => {
+      // Always show domains with sessions; also show domains that have active routines
+      const hasRoutine = routinesWithTargets.some((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === row.domain);
+      return row.sessions > 0 || hasRoutine;
+    });
+  const maxDomainSessions = Math.max(1, ...trainingBalanceRows.map((r) => r.sessions));
+  const trainingBalanceRowsWithMax = trainingBalanceRows.map((r) => ({ ...r, maxSessions: maxDomainSessions }));
+
+  // Today's top unlogged planned item for the hero CTA
+  const todayNextAction = todayFocus.find((item) => item.planned > item.logged) ?? null;
+
+  const recentItems = recentLogs.map((log) => {
+    const setCount = log.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+    const isRun = log.distanceMi !== null && log.durationSec !== null;
+    const isWorkout = !isRun && log.exercises.length > 0;
+    return {
+      id: log.id,
+      name: log.routine.name,
+      kind: log.routine.kind,
+      stamp: formatLogTime(log.performedAt),
+      detail: isRun
+        ? `${(log.distanceMi ?? 0).toFixed(2)} mi${log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}`
+        : isWorkout
+        ? `${setCount} sets logged`
+        : "Completed check-in",
+    };
+  });
+
+  const goalCards = activeGoals.map((goal) => ({
+    id: goal.id,
+    title: goal.name,
+    target: goal.targetValue,
+    createdAt: formatAppDate(goal.createdAt),
+  }));
+
+  return (
+    <div className="mobileHomePage" style={page}>
+      {/* ── HERO STATUS STRIP ── */}
+      <div className="mobileHeroStrip" style={heroStrip}>
+        <div style={heroCell}>
+          <div style={heroCellLabel}>THIS WEEK</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ position: "relative", width: 46, height: 46, flexShrink: 0 }}>
+              <svg width={46} height={46} style={{ transform: "rotate(-90deg)" }}>
+                <circle cx={23} cy={23} r={18} stroke="rgba(255,255,255,0.12)" strokeWidth={5} fill="none" />
+                <circle
+                  cx={23} cy={23} r={18}
+                  stroke="rgba(84,203,130,0.95)" strokeWidth={5} fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 18}
+                  strokeDashoffset={2 * Math.PI * 18 * (1 - Math.min(1, weekSessionTargetTotal > 0 ? weekLoggedTotal / weekSessionTargetTotal : 0))}
+                />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", lineHeight: 1.1 }}>
+                <span style={{ fontSize: 12, fontWeight: 900 }}>{weekLoggedTotal}</span>
+                <span style={{ fontSize: 9, opacity: 0.6 }}>/{weekSessionTargetTotal}</span>
+              </div>
+            </div>
+            <div style={{ minWidth: 0, overflow: "hidden" }}>
+              <div style={{ fontSize: 14, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{weekLoggedTotal} sessions</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatHeroWeekRange(weekStart)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mobileHeroPriority" style={{ ...heroCell, borderLeft: "1px solid rgba(255,255,255,0.07)", borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={heroCellLabel}>TODAY&apos;S PRIORITY</div>
+          {todayNextAction ? (
+            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{todayNextAction.routineName}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatRoutineTypeLabel(todayNextAction.kind)}</div>
+              <Link href={loggingHref(todayNextAction)} style={heroCTALink}>Log Now →</Link>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 900 }}>
+                {todayFocus.length > 0 ? "All done today!" : "Rest day"}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.6 }}>
+                {todayFocus.length > 0 ? `${todayDoneRoutines} done` : "Nothing scheduled"}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mobileHeroStreak" style={heroCell}>
+          <div style={heroCellLabel}>STREAK</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color: currentStreak >= 7 ? "rgba(251,199,92,0.95)" : currentStreak >= 3 ? "rgba(84,203,130,0.95)" : "inherit" }}>
+              {currentStreak}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>day{currentStreak !== 1 ? "s" : ""}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 1 }}>
+                {currentStreak === 0 ? "Start today" : currentStreak >= 7 ? "On fire!" : currentStreak >= 3 ? "Building" : "Keep it up"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {USE_THIS_WEEK_PANEL ? (
+        <ThisWeekPanel
+          glanceDays={glanceDays}
+          weekStart={weekStart}
+          habits={habitLaneRows}
+          frequencyTargets={frequencyTargetRows}
+          today={today}
+          weekRangeLabel={weekDateRangeLabel}
+          panelStyle={panel}
+          panelHeaderStyle={panelHeader}
+        />
+      ) : (
+        <>
+          {/* ── WEEK AT A GLANCE (original) ── */}
+          <section style={panel}>
+            <div style={panelHeader}>WEEK AT A GLANCE</div>
+            <div style={{ padding: "12px 14px 14px" }}>
+              <WeekAtGlanceClient days={glanceDays} today={today} currentWeekStart={weekStart} />
+            </div>
+          </section>
+
+          {/* ── RHYTHM (habits + frequency targets) (original) ── */}
+          <RhythmPanel
+            habits={habitLaneRows}
+            frequencyTargets={frequencyTargetRows}
+            today={today}
+            panelStyle={panel}
+            panelHeaderStyle={panelHeader}
+          />
+        </>
+      )}
+
+      <div className="mobileHomeMainGrid" style={mainGrid}>
+        {/* TODAY'S FOCUS section was here — now lives at the top of the
+            THIS WEEK panel as TodayActionsBar. Training balance promotes to
+            column 1; body map slides up to column 2. */}
+
+        {/* ── Column 1: TRAINING BALANCE ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>TRAINING BALANCE <span style={{ fontWeight: 500, opacity: 0.55, letterSpacing: 0 }}>· last 4 weeks</span></div>
+          <div style={{ padding: "12px 14px 14px", display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.45 }}>
+              Sessions across all training domains. Quiet domains may need attention.
+            </div>
+            <TrainingBalance rows={trainingBalanceRowsWithMax} />
+            {trainingBalanceRowsWithMax.length === 0 && (
+              <div style={{ fontSize: 12, opacity: 0.55 }}>No training logged yet. Start a session to see your balance.</div>
+            )}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+              <Link href="/progress" style={secondaryLinkBlock}>Full Progress View →</Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 2: BODY MAP ── */}
+        <div style={{ gridColumn: 2, display: "grid", gap: 16 }}>
+          <DashboardBodyMap />
+          <DashboardInjuries />
+        </div>
+
+        {/* ── Column 1: WEEKLY MOMENTUM ── */}
+        <div className="homeMomentumSection" style={{ gridColumn: 1 }}>
+          <WeeklyMomentumSectionBoundary
+            weekDateRangeLabel={weekDateRangeLabel}
+            weekLoggedTotal={weekLoggedTotal}
+            weekSessionTargetTotal={weekSessionTargetTotal}
+            totalWeeklyCardioMiles={totalWeeklyCardioMiles}
+            cardioTypeGroups={cardioTypeGroups}
+            weeklySeries={weeklySeries.map((item) => ({
+              ...item,
+              logs: item.logs.map((log) => ({
+                ...log,
+                performedAt: log.performedAt.toISOString(),
+              })),
+            }))}
+            weeklySparkPoints={weeklySparkPoints}
+            recentCompletions={recentCompletions.map((item) => ({
+              ...item,
+              lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+            }))}
+            needsAttention={needsAttention.map((item) => ({
+              ...item,
+              lastCompletedAt: item.lastCompletedAt ? item.lastCompletedAt.toISOString() : null,
+            }))}
+          />
+        </div>
+
+        {/* ── Column 1: SUGGESTED NEXT ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>SUGGESTED NEXT</div>
+          <div style={{ padding: 14, display: "grid", gap: 12 }}>
+            <RehabRoutinePrompt />
+            <div style={sectionSub}>
+              Recommendations prioritize behind-target routines, thin recent coverage, and recent overconcentration. Focus only nudges the ranking when the main evidence is close.
+            </div>
+            {recommendationModel.primaryRecommendation ? (
+              <div style={recommendationPrimaryCard}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <div style={{ fontWeight: 900, fontSize: 18 }}>{recommendationModel.primaryRecommendation.title}</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.82 }}>{recommendationModel.primaryRecommendation.summary}</div>
+                  </div>
+                  <div style={recommendationPriorityBadge(recommendationModel.primaryRecommendation.priority)}>
+                    {recommendationModel.primaryRecommendation.priority.toUpperCase()}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(recommendationModel.emphasisLabels.length > 0 ? recommendationModel.emphasisLabels : ["No special focus"]).slice(0, 3).map((label) => (
+                    <span key={label} style={recommendationChip}>
+                      {label}
+                    </span>
+                  ))}
+                  {recommendationModel.primaryRecommendation.targetCategories.map((slug) => (
+                    <span key={slug} style={recommendationChipMuted}>
+                      {slug}
+                    </span>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <Link href={recommendationModel.primaryRecommendation.suggestedAction.href} style={recommendationActionLink}>
+                    {recommendationModel.primaryRecommendation.suggestedAction.label}
+                  </Link>
+                  {recommendationModel.primaryRecommendation.suggestedRoutines[1] ? (
+                    <Link href={recommendationModel.primaryRecommendation.suggestedRoutines[1].href} style={recommendationSecondaryLink}>
+                      Or {recommendationModel.primaryRecommendation.suggestedRoutines[1].name}
+                    </Link>
+                  ) : null}
+                </div>
+
+                <details style={recommendationDetails}>
+                  <summary data-collapsible-summary style={recommendationSummary}>
+                    Why?
+                  </summary>
+                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                    {recommendationModel.primaryRecommendation.rationale.map((item) => (
+                      <div key={item} style={recommendationWhyRow}>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            ) : (
+              <div style={emptyState}>Recommendations will appear once there is enough recent routine and coverage history to rank the next best move.</div>
+            )}
+
+            {recommendationModel.secondaryRecommendations.length > 0 ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                {recommendationModel.secondaryRecommendations.map((item) => (
+                  <div key={item.id} style={recommendationSecondaryCard}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ display: "grid", gap: 5, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800 }}>{item.title}</div>
+                        <div style={{ fontSize: 12, lineHeight: 1.45, opacity: 0.76 }}>{item.summary}</div>
+                      </div>
+                      <div style={recommendationPriorityBadge(item.priority)}>{item.priority.toUpperCase()}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <Link href={item.suggestedAction.href} style={recommendationSecondaryLink}>
+                        {item.suggestedAction.label}
+                      </Link>
+                      {item.suggestedRoutines[1] ? <span style={{ fontSize: 12, opacity: 0.62 }}>or {item.suggestedRoutines[1].name}</span> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {recommendationModel.hiddenDueToInjury.length > 0 ? (
+              <details style={recommendationDetails}>
+                <summary data-collapsible-summary style={recommendationSummary}>
+                  Hidden due to injury
+                </summary>
+                <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                  {recommendationModel.hiddenDueToInjury.map((item) => (
+                    <div key={item.routineId} style={recommendationWhyRow}>
+                      <Link href={item.href} style={{ color: "inherit", fontWeight: 900 }}>
+                        {item.routineName}
+                      </Link>{" "}
+                      - {item.reason}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        </section>
+
+        {/* ── Column 2: ACTIVE GOALS ── */}
+        <section style={{ ...panel, gridColumn: 2 }}>
+          <div style={panelHeader}>ACTIVE GOALS</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            {goalCards.length === 0 && <div style={emptyState}>No active goals yet.</div>}
+            {goalCards.map((goal) => (
+              <div key={goal.id} style={goalRow}>
+                <div>
+                  <div style={{ fontWeight: 800 }}>{goal.title}</div>
+                  <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
+                    Target: {goal.target} | Created: {goal.createdAt}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Link href="/goals" style={secondaryLinkBlock}>Manage Goals</Link>
+          </div>
+        </section>
+
+        {/* ── Column 1: TOMORROW PREVIEW ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>TOMORROW PREVIEW</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div style={sectionSub}>{formatDayLabel(tomorrow)}</div>
+            <div style={summaryCard}>
+              <div style={summaryLabel}>Tomorrow Planned</div>
+              <div style={summaryValue}>{tomorrowPlannedTotal}</div>
+              <div style={summarySub}>planned entries tomorrow</div>
+            </div>
+            {tomorrowPlan.length === 0 && <div style={emptyState}>Nothing planned yet for tomorrow.</div>}
+            <div className="mobileHomeTomorrowGrid" style={tomorrowPreviewGrid}>
+              {tomorrowPlan.slice(0, 8).map((item) => (
+                <div key={`tomorrow-${item.routineId}`} style={metricChip}>
+                  {item.routineName} ({item.kind}) | planned {item.planned}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 2: QUICK PATHS ── */}
+        <section style={{ ...panel, gridColumn: 2 }}>
+          <div style={panelHeader}>QUICK PATHS</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div className="mobileHomeQuickGrid" style={quickGrid}>
+              <Link href="/routines?mode=new" style={quickCard}>
+                <div style={quickTitle}>New Routine</div>
+                <div style={quickSub}>Add a workout, cardio, or check routine.</div>
+              </Link>
+              <Link href="/schedule" style={quickCard}>
+                <div style={quickTitle}>Plan Week</div>
+                <div style={quickSub}>Adjust today and this month on the schedule board.</div>
+              </Link>
+              <Link href="/progress" style={quickCard}>
+                <div style={quickTitle}>Review Trends</div>
+                <div style={quickSub}>Open progression charts and completion history.</div>
+              </Link>
+              <Link href="/goals?mode=new" style={quickCard}>
+                <div style={quickTitle}>Set Goal</div>
+                <div style={quickSub}>Start from a goal template tied to routine, cardio, exercise, or group progress.</div>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Column 1: RECENT ACTIVITY ── */}
+        <section style={{ ...panel, gridColumn: 1 }}>
+          <div style={panelHeader}>RECENT ACTIVITY</div>
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            {recentItems.length === 0 && <div style={emptyState}>No logs yet.</div>}
+            {recentItems.map((item) => (
+              <div key={item.id} className="mobileHomeActivityRow" style={activityRow}>
+                <div style={activityDot(item.kind)} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800 }}>{item.name}</div>
+                  <div style={{ marginTop: 3, fontSize: 12, opacity: 0.76 }}>
+                    {item.detail}
+                  </div>
+                </div>
+                <div className="mobileHomeActivityStamp" style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>{item.stamp}</div>
+              </div>
+            ))}
+            <Link href="/manual-log" style={secondaryLinkBlock}>Open Log History</Link>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+const page: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
+  padding: 20,
+  display: "grid",
+  gap: 16,
+};
+
+const mainGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1.25fr 0.95fr",
+  gap: 16,
+  alignItems: "start",
+};
+
+const panel: React.CSSProperties = {
+  borderRadius: 20,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "linear-gradient(180deg, rgba(20,29,46,0.9), rgba(13,19,31,0.92))",
+  boxShadow: "0 12px 34px rgba(0,0,0,0.16)",
+};
+
+const panelHeader: React.CSSProperties = {
+  padding: "12px 14px",
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 1,
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+};
+
+
+const sectionSub: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.68,
+};
+
+const summaryGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 8,
+};
+
+const summaryCard: React.CSSProperties = {
+  borderRadius: 12,
+  padding: 10,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  display: "grid",
+  gap: 3,
+};
+
+const summaryRingCard: React.CSSProperties = {
+  ...summaryCard,
+  justifyItems: "center",
+  padding: 14,
+};
+
+const summaryLabel: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 0.35,
+  opacity: 0.72,
+};
+
+const summaryValue: React.CSSProperties = {
+  fontSize: 20,
+  fontWeight: 900,
+  lineHeight: 1.1,
+};
+
+const summarySub: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.7,
+};
+
+const focusCard: React.CSSProperties = {
+  borderRadius: 14,
+  padding: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+};
+
+const focusDoneCard: React.CSSProperties = {
+  ...focusCard,
+  border: "1px solid rgba(84,203,130,0.72)",
+  background: "rgba(84,203,130,0.10)",
+  boxShadow: "0 0 0 1px rgba(84,203,130,0.14), 0 0 18px rgba(84,203,130,0.18)",
+};
+
+const focusCardTopRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  alignItems: "flex-start",
+};
+
+const focusCardInfo: React.CSSProperties = {
+  minWidth: 0,
+  flex: 1,
+};
+
+const focusMetaLine: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 13,
+  opacity: 0.88,
+};
+
+const focusActionLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "7px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.08)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const focusStatusColumn: React.CSSProperties = {
+  display: "grid",
+  justifyItems: "end",
+  alignContent: "start",
+  gap: 6,
+  flexShrink: 0,
+};
+
+const kindPill: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.18)",
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+};
+
+const sparkCard: React.CSSProperties = {
+  borderRadius: 16,
+  padding: 14,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background:
+    "linear-gradient(180deg, rgba(84,203,130,0.10), rgba(76,163,255,0.06) 45%, rgba(255,255,255,0.02))",
+  display: "grid",
+  gap: 10,
+};
+
+const mileageBand: React.CSSProperties = {
+  borderRadius: 16,
+  padding: 14,
+  border: "1px solid rgba(76,163,255,0.24)",
+  background: "linear-gradient(135deg, rgba(76,163,255,0.12), rgba(84,203,130,0.07))",
+  display: "grid",
+  gap: 10,
+};
+
+const mileageValue: React.CSSProperties = {
+  fontSize: 32,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const cardioDetails: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.03)",
+  padding: 10,
+};
+
+const cardioSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 800,
+};
+
+const cardioGroupCard: React.CSSProperties = {
+  borderRadius: 12,
+  padding: 10,
+  border: "1px solid rgba(255,255,255,0.07)",
+  background: "rgba(255,255,255,0.03)",
+};
+
+const cardioMilesPill: React.CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  background: "rgba(76,163,255,0.14)",
+  border: "1px solid rgba(76,163,255,0.35)",
+  fontSize: 11,
+  fontWeight: 900,
+};
+
+const cardioRoutineRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  fontSize: 12,
+  opacity: 0.88,
+};
+
+const sparkMetaRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 8,
+};
+
+const twoColGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 12,
+};
+
+const weeklySubheader: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+};
+
+const weeklySubheaderRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const tomorrowPreviewGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 8,
+};
+
+const subPanel: React.CSSProperties = {
+  borderRadius: 16,
+  padding: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.03)",
+  display: "grid",
+  gap: 10,
+};
+
+const subPanelTitle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+};
+
+const metricChip: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.28)",
+  borderRadius: 10,
+  padding: "7px 9px",
+  fontSize: 12,
+  opacity: 0.9,
+  background: "rgba(128,128,128,0.08)",
+};
+
+const miniCardSuccess: React.CSSProperties = {
+  borderRadius: 12,
+  padding: 10,
+  border: "1px solid rgba(84,203,130,0.42)",
+  background: "rgba(84,203,130,0.08)",
+};
+
+const miniCardWarn: React.CSSProperties = {
+  borderRadius: 12,
+  padding: 10,
+  border: "1px solid rgba(255,199,92,0.42)",
+  background: "rgba(255,199,92,0.08)",
+};
+
+const miniCardMeta: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 12,
+  opacity: 0.78,
+};
+
+const miniCardTitleLink: React.CSSProperties = {
+  color: "inherit",
+  fontWeight: 800,
+  textDecoration: "none",
+};
+
+const activityRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "14px minmax(0, 1fr) auto",
+  gap: 10,
+  alignItems: "center",
+  padding: "10px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+};
+
+function activityDot(kind: string): React.CSSProperties {
+  return {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: kindAccent(kind),
+    boxShadow: `0 0 14px ${kindAccent(kind)}`,
+  };
+}
+
+const goalRow: React.CSSProperties = {
+  borderRadius: 14,
+  padding: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.03)",
+};
+
+const quickGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 10,
+};
+
+const quickCard: React.CSSProperties = {
+  display: "block",
+  padding: 14,
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+  textDecoration: "none",
+  color: "inherit",
+};
+
+const quickTitle: React.CSSProperties = {
+  fontWeight: 900,
+  fontSize: 15,
+};
+
+const quickSub: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 12,
+  opacity: 0.76,
+  lineHeight: 1.45,
+};
+
+const secondaryLink: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 999,
+  textDecoration: "none",
+  color: "inherit",
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.04)",
+  fontWeight: 800,
+};
+
+const secondaryLinkBlock: React.CSSProperties = {
+  ...secondaryLink,
+  display: "inline-flex",
+  justifyContent: "center",
+};
+
+const emptyState: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.64,
+};
+
+const recommendationBadgeBase: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.16)",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  whiteSpace: "nowrap",
+};
+
+const recommendationPrimaryCard: React.CSSProperties = {
+  borderRadius: 16,
+  padding: 14,
+  border: "1px solid rgba(142,197,255,0.24)",
+  background: "linear-gradient(135deg, rgba(142,197,255,0.12), rgba(84,203,130,0.06))",
+  display: "grid",
+  gap: 12,
+};
+
+const recommendationSecondaryCard: React.CSSProperties = {
+  borderRadius: 14,
+  padding: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+  display: "grid",
+  gap: 10,
+};
+
+const recommendationChip: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  background: "rgba(84,203,130,0.14)",
+  border: "1px solid rgba(84,203,130,0.3)",
+  fontSize: 11,
+  fontWeight: 800,
+};
+
+const recommendationChipMuted: React.CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "capitalize",
+};
+
+const recommendationActionLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  borderRadius: 10,
+  background: "rgba(84,203,130,0.18)",
+  border: "1px solid rgba(84,203,130,0.34)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const recommendationSecondaryLink: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.84,
+};
+
+const recommendationDetails: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(12,18,30,0.24)",
+  padding: 10,
+};
+
+const recommendationSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.35,
+};
+
+const recommendationWhyRow: React.CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.45,
+  opacity: 0.78,
+};
+
+const heroStrip: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  borderRadius: 20,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "linear-gradient(180deg, rgba(20,29,46,0.95), rgba(13,19,31,0.97))",
+  boxShadow: "0 12px 34px rgba(0,0,0,0.18)",
+};
+
+const heroCell: React.CSSProperties = {
+  padding: "16px 18px",
+  display: "grid",
+  gap: 8,
+  alignContent: "start",
+};
+
+const heroCellLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+  opacity: 0.5,
+};
+
+const heroCTALink: React.CSSProperties = {
+  display: "inline-flex",
+  alignSelf: "start",
+  alignItems: "center",
+  padding: "6px 11px",
+  borderRadius: 8,
+  border: "1px solid rgba(84,203,130,0.4)",
+  background: "rgba(84,203,130,0.12)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 900,
+  marginTop: 2,
+};

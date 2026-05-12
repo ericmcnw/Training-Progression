@@ -27,7 +27,7 @@ import CompletionLogForm from "../log-completion/CompletionLogForm";
 import GuidedLogForm from "../log-guided/GuidedLogForm";
 import SessionLogForm from "../log-session/SessionLogForm";
 import LogWorkoutForm from "./ui";
-import { localDateTimeForYmd } from "./form-ui";
+import { localDateTimeForYmd } from "./date-helpers";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
 import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning, getRoutinePainCheckZones } from "@/lib/injury-warnings";
 import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
