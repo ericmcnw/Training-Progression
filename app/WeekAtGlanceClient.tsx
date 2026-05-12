@@ -170,6 +170,7 @@ export default function WeekAtGlanceClient({
                   ...dayButton,
                   width: dayWidth,
                   minWidth: dayWidth,
+                  position: "relative",
                   border: isToday
                     ? "1px solid rgba(84,203,130,0.5)"
                     : isSelected
@@ -197,25 +198,20 @@ export default function WeekAtGlanceClient({
                   <div style={{ fontSize: 16, fontWeight: isToday ? 900 : 800, lineHeight: 1 }}>{day.dayNumber}</div>
                 </div>
                 <div style={dotWrap}>
-                  {/* Habit aggregate dot — pinned first when expected > 0. Replaces
-                      the per-habit plan dots so the cell stays uncluttered. */}
-                  {day.habitAggregate && day.habitAggregate.expected > 0 ? (
-                    <HabitAggregateDot
-                      done={day.habitAggregate.completed}
-                      expected={day.habitAggregate.expected}
-                    />
-                  ) : null}
-
                   {(() => {
-                    const hasHabitDot = !!day.habitAggregate && day.habitAggregate.expected > 0;
-                    const nonHabitPlanned = hasHabitDot
+                    const hasHabitBar = !!day.habitAggregate && day.habitAggregate.expected > 0;
+                    // Plan dots row stays focused on workouts/cardio/sport;
+                    // habit-domain routines are summarized by the bottom bar
+                    // when present, so we drop their per-routine dots from
+                    // the cluttered top row.
+                    const nonHabitPlanned = hasHabitBar
                       ? day.planned.filter((p) => p.domain !== "habit")
                       : day.planned;
-                    const nonHabitLogs = hasHabitDot
+                    const nonHabitLogs = hasHabitBar
                       ? day.logs.filter((l) => l.domain !== "habit")
                       : day.logs;
 
-                    if (nonHabitPlanned.length === 0 && nonHabitLogs.length === 0 && !hasHabitDot) {
+                    if (nonHabitPlanned.length === 0 && nonHabitLogs.length === 0 && !hasHabitBar) {
                       return (
                         <div style={{ width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.09)" }} />
                       );
@@ -245,9 +241,17 @@ export default function WeekAtGlanceClient({
                           }}
                         />
                       ))
-                    ).slice(0, hasHabitDot ? 6 : 8);
+                    ).slice(0, hasHabitBar ? 6 : 8);
                   })()}
                 </div>
+                {/* Bottom progress bar — habit completion for the day. Pinned
+                    inside the (now relative-positioned) cell button. */}
+                {day.habitAggregate && day.habitAggregate.expected > 0 ? (
+                  <HabitAggregateBar
+                    done={day.habitAggregate.completed}
+                    expected={day.habitAggregate.expected}
+                  />
+                ) : null}
               </button>
             );
           })}
@@ -265,11 +269,19 @@ export default function WeekAtGlanceClient({
             </div>
           );
         })}
-        {/* Habit aggregate legend chip — only show when any visible day has
-            habit expectations, so the chip stays meaningful. */}
+        {/* Habit aggregate legend chip — small bar swatch matching the bottom
+            bar style on each cell. Only renders when any visible day has
+            habit expectations. */}
         {visibleDays.some((d) => d.habitAggregate && d.habitAggregate.expected > 0) ? (
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <HabitAggregateDot done={1} expected={1} />
+            <div
+              style={{
+                width: 16,
+                height: 3,
+                borderRadius: 999,
+                background: "linear-gradient(90deg, rgba(84,203,130,0.95), rgba(132,204,255,0.95))",
+              }}
+            />
             <span style={{ fontSize: 11, opacity: 0.75 }}>Habits</span>
           </div>
         ) : null}
@@ -356,59 +368,45 @@ export default function WeekAtGlanceClient({
   );
 }
 
-// HabitAggregateDot — single 12px circle representing the share of habits
-// completed for a given day. Renders as one of 5 fill states drawn with an
-// SVG conic-style overlay so it reads cleanly at small sizes.
+// HabitAggregateBar — thin horizontal bar pinned to the bottom of a day cell,
+// filled left-to-right based on the share of expected habits completed that
+// day. Sits in its own visual zone (below the planned-routine dot row) so it
+// doesn't compete with them, and uses green to read as "complete" without
+// colliding with the amber today-cell highlight.
 //
-// States by fraction:
-//   0%       → outlined empty (expected but missed)
-//   1–24%    → quarter-filled
-//   25–49%   → half-filled
-//   50–74%   → three-quarter-filled
-//   75–100%  → solid filled
-//
-// Color is the habit-domain amber (rgba(251,191,36,*)) so the dot reads as
-// "habits" without needing a written legend.
-function HabitAggregateDot({ done, expected }: { done: number; expected: number }) {
+// Sized to be readable on phones (38–45px wide bar in ~50px cells) and on
+// desktop (60–95px wide bar in 70–110px cells). 3px tall on both.
+function HabitAggregateBar({ done, expected }: { done: number; expected: number }) {
   const fraction = expected > 0 ? Math.max(0, Math.min(1, done / expected)) : 0;
-  const fillState: 0 | 1 | 2 | 3 | 4 =
-    fraction <= 0 ? 0 : fraction < 0.25 ? 1 : fraction < 0.5 ? 2 : fraction < 0.75 ? 3 : 4;
-  const filledColor = "rgba(251,191,36,0.95)";
-  const outlineColor = "rgba(251,191,36,0.55)";
-  const trackColor = "rgba(251,191,36,0.15)";
-  const SIZE = 12;
-  const R = 5;
-  const C = 6;
-
-  // Pie-segment paths from 12 o'clock clockwise — describes the filled sweep.
-  const ARC_PATHS: Record<1 | 2 | 3, string> = {
-    1: `M ${C} ${C} L ${C} ${C - R} A ${R} ${R} 0 0 1 ${C + R} ${C} Z`,           // quarter
-    2: `M ${C} ${C} L ${C} ${C - R} A ${R} ${R} 0 0 1 ${C} ${C + R} Z`,           // half
-    3: `M ${C} ${C} L ${C} ${C - R} A ${R} ${R} 0 1 1 ${C - R} ${C} Z`,           // three-quarter
-  };
-
+  const filledColor = "rgba(84,203,130,0.95)";
+  const trackColor = "rgba(255,255,255,0.07)";
+  // Below 100% but above 0%, we still draw a tiny seed of fill so the user
+  // can see "something happened" instead of an empty-looking bar.
+  const widthPct = fraction <= 0 ? 0 : Math.max(8, fraction * 100);
   return (
     <div
       title={`Habits: ${done}/${expected} done`}
-      style={{ width: SIZE, height: SIZE, flexShrink: 0, display: "inline-block" }}
+      aria-label={`Habits ${done} of ${expected} done`}
+      style={{
+        position: "absolute",
+        left: 6,
+        right: 6,
+        bottom: 5,
+        height: 3,
+        borderRadius: 999,
+        background: trackColor,
+        overflow: "hidden",
+      }}
     >
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
-        {/* Background track for partial states */}
-        {fillState > 0 && fillState < 4 ? (
-          <circle cx={C} cy={C} r={R} fill={trackColor} />
-        ) : null}
-
-        {/* Solid fill for 100% */}
-        {fillState === 4 ? <circle cx={C} cy={C} r={R} fill={filledColor} /> : null}
-
-        {/* Pie wedge for partial */}
-        {fillState >= 1 && fillState <= 3 ? (
-          <path d={ARC_PATHS[fillState as 1 | 2 | 3]} fill={filledColor} />
-        ) : null}
-
-        {/* Outline always */}
-        <circle cx={C} cy={C} r={R} fill="none" stroke={outlineColor} strokeWidth={1} />
-      </svg>
+      <div
+        style={{
+          height: "100%",
+          width: `${widthPct}%`,
+          background: `linear-gradient(90deg, ${filledColor}, rgba(132,204,255,0.95))`,
+          borderRadius: 999,
+          transition: "width 200ms ease",
+        }}
+      />
     </div>
   );
 }
