@@ -283,6 +283,10 @@ model ClimbLocation {
   id        String            @id @default(cuid())
   name      String
   type      ClimbLocationType
+  // Optional broader area context (city/state/region) — e.g. "Bishop, CA"
+  // for "Buttermilks". Replaces the free-text RoutineLog.location field for
+  // climbing sessions; structured here so it's reusable across logs.
+  region    String?
   // Geo coords are optional — locations can exist as label-only and have
   // coords added later from the climbing map page.
   latitude  Float?

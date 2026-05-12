@@ -151,7 +151,7 @@ export async function GET(
       getRoutinePainCheckZones(routineId),
       isClimbingTemplateKey(templateKey)
         ? prisma.climbLocation.findMany({
-            select: { id: true, name: true, type: true },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
             orderBy: [{ type: "asc" }, { name: "asc" }],
           })
         : Promise.resolve([]),

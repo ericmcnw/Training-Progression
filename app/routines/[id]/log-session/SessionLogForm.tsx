@@ -6,7 +6,7 @@ import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-
 import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import ClimbSessionLogger from "./ClimbSessionLogger";
-import ClimbLocationPicker from "./ClimbLocationPicker";
+import ClimbLocationPicker, { type NewClimbLocationDraft } from "./ClimbLocationPicker";
 import {
   DateTimeField,
   Field,
@@ -148,10 +148,6 @@ export default function SessionLogForm({
   const hasLocationMetric = templateHasPrimaryLocationMetric(definitions);
   const isOutdoorClimbing = isClimbing && (templateKey ?? "").startsWith("outdoor-");
   const climbVenueLabel = isOutdoorClimbing ? "Crag" : "Gym";
-  const climbLocationLabel = "Location";
-  const climbLocationPlaceholder = isOutdoorClimbing
-    ? "e.g. Red Rock Canyon, Joshua Tree NP…"
-    : "e.g. Denver CO, Boulder, San Francisco…";
   const climbDisciplineLabel = isClimbing
     ? climbingDisciplineLabel(climbingDisciplineForTemplateKey(templateKey))
     : null;
@@ -183,7 +179,7 @@ export default function SessionLogForm({
   const [climbAttempts, setClimbAttempts] = useState<ClimbAttemptDraft[]>([]);
   const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
   const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
-  const [newClimbLocation, setNewClimbLocation] = useState<{ name: string; type: ClimbLocationType } | null>(null);
+  const [newClimbLocation, setNewClimbLocation] = useState<NewClimbLocationDraft | null>(null);
   const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
 
   // Draft state
@@ -210,6 +206,9 @@ export default function SessionLogForm({
       setNewClimbLocation({
         name: draft.newClimbLocationName,
         type: draft.newClimbLocationType ?? "GYM",
+        region: draft.newClimbLocationRegion ?? "",
+        latitude: draft.newClimbLocationLatitude ?? null,
+        longitude: draft.newClimbLocationLongitude ?? null,
       });
     }
     isDirtyRef.current = true;
@@ -246,6 +245,9 @@ export default function SessionLogForm({
       climbLocationId,
       newClimbLocationName: newClimbLocation?.name,
       newClimbLocationType: newClimbLocation?.type,
+      newClimbLocationRegion: newClimbLocation?.region || undefined,
+      newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
+      newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -374,6 +376,9 @@ export default function SessionLogForm({
         climbLocationId: climbLocationId ?? undefined,
         newClimbLocationName: newClimbLocation?.name?.trim() || undefined,
         newClimbLocationType: newClimbLocation?.type,
+        newClimbLocationRegion: newClimbLocation?.region?.trim() || undefined,
+        newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
+        newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
@@ -424,25 +429,22 @@ export default function SessionLogForm({
         </Field>
 
         {isClimbing ? (
-          <>
-            <Field label={`${climbLocationLabel} (optional)`} hint={isOutdoorClimbing ? "Broader area or region you climbed in." : "City or region — helpful when you climb at multiple gyms."}>
-              <input
-                style={inputStyle}
-                value={location}
-                onChange={(e) => { markDirty(); setLocation(e.target.value); }}
-                placeholder={climbLocationPlaceholder}
-              />
-            </Field>
-            <Field label={`${climbVenueLabel} (optional)`}>
-              <ClimbLocationPicker
-                savedLocations={savedClimbLocations}
-                selectedId={climbLocationId}
-                onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
-                newLocation={newClimbLocation}
-                onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
-              />
-            </Field>
-          </>
+          <Field
+            label={`${climbVenueLabel} (optional)`}
+            hint={
+              savedClimbLocations.length > 0
+                ? "Pick a saved spot or add a new one. Region + GPS save with the location for future sessions."
+                : "Add a name, optional region, and tap '📍 Use my location' so it appears on your map immediately."
+            }
+          >
+            <ClimbLocationPicker
+              savedLocations={savedClimbLocations}
+              selectedId={climbLocationId}
+              onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
+              newLocation={newClimbLocation}
+              onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
+            />
+          </Field>
         ) : !hasLocationMetric ? (
           <Field label="Location (optional)">
             <input

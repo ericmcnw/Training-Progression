@@ -173,6 +173,10 @@ export const inputStyle: React.CSSProperties = {
   borderRadius: 12,
   background: inputBackground,
   color: "#ffffff",
+  // 16px+ font-size on inputs prevents iOS Safari from auto-zooming the
+  // viewport when the field receives focus. Critical for rapid logging
+  // sessions where you tap inputs repeatedly.
+  fontSize: 16,
 };
 
 export const textareaStyle: React.CSSProperties = {

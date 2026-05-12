@@ -1805,6 +1805,9 @@ export async function logSession(params: {
   climbLocationId?: string;
   newClimbLocationName?: string;
   newClimbLocationType?: "GYM" | "CRAG";
+  newClimbLocationRegion?: string | null;
+  newClimbLocationLatitude?: number | null;
+  newClimbLocationLongitude?: number | null;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
@@ -1816,15 +1819,31 @@ export async function logSession(params: {
   if (!resolvedClimbLocationId && params.newClimbLocationName?.trim()) {
     const name = params.newClimbLocationName.trim();
     const type = params.newClimbLocationType ?? "GYM";
+    const region = params.newClimbLocationRegion?.trim() || null;
+    const latitude = typeof params.newClimbLocationLatitude === "number" && Number.isFinite(params.newClimbLocationLatitude)
+      ? params.newClimbLocationLatitude
+      : null;
+    const longitude = typeof params.newClimbLocationLongitude === "number" && Number.isFinite(params.newClimbLocationLongitude)
+      ? params.newClimbLocationLongitude
+      : null;
     const existing = await prisma.climbLocation.findFirst({
       where: { name: { equals: name, mode: "insensitive" }, type },
-      select: { id: true },
+      select: { id: true, region: true, latitude: true, longitude: true },
     });
     if (existing) {
       resolvedClimbLocationId = existing.id;
+      // Backfill region/coords if the existing record was created without
+      // them and the user just provided some — never clobber existing data.
+      const updates: { region?: string; latitude?: number; longitude?: number } = {};
+      if (region && !existing.region) updates.region = region;
+      if (latitude !== null && existing.latitude == null) updates.latitude = latitude;
+      if (longitude !== null && existing.longitude == null) updates.longitude = longitude;
+      if (Object.keys(updates).length > 0) {
+        await prisma.climbLocation.update({ where: { id: existing.id }, data: updates });
+      }
     } else {
       const created = await prisma.climbLocation.create({
-        data: { name, type },
+        data: { name, type, region, latitude, longitude },
         select: { id: true },
       });
       resolvedClimbLocationId = created.id;

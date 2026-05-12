@@ -32,6 +32,9 @@ export type SessionDraft = {
   climbLocationId?: string | null;
   newClimbLocationName?: string;
   newClimbLocationType?: "GYM" | "CRAG";
+  newClimbLocationRegion?: string;
+  newClimbLocationLatitude?: number;
+  newClimbLocationLongitude?: number;
 };
 
 export type LogDraft = WorkoutDraft | SessionDraft;

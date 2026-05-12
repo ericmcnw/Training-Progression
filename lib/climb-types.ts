@@ -13,6 +13,12 @@ export type ClimbLocationBasic = {
   id: string;
   name: string;
   type: ClimbLocationType;
+  /** Optional broader region (city/state) — shown next to name in pickers
+   *  so the user can disambiguate "Calico Tanks · Red Rock, NV" from a
+   *  similarly-named local crag. */
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type ClimbProblemBasic = {
