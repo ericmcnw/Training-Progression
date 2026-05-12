@@ -67,6 +67,7 @@ export function TargetHeader({
   actions,
   hideTabs,
   hideRange,
+  compact,
 }: {
   section: ProgressSection;
   title: string;
@@ -79,9 +80,16 @@ export function TargetHeader({
   actions?: React.ReactNode;
   hideTabs?: boolean;
   hideRange?: boolean;
+  /** Skips the section-nav row and shrinks the hero on mobile. Use on
+   *  immersive pages like maps where vertical space matters more than the
+   *  global navigation chips. */
+  compact?: boolean;
 }) {
   return (
-    <div className="mobileProgressPage mobilePageShell" style={styles.container}>
+    <div
+      className={`mobileProgressPage mobilePageShell${compact ? " compactTargetHeader" : ""}`}
+      style={styles.container}
+    >
       <div className="mobileSectionCard" style={styles.hero}>
         <div style={styles.heroCopy}>
           <div style={styles.eyebrow}>{eyebrow ?? "Progress Target"}</div>
@@ -91,21 +99,23 @@ export function TargetHeader({
         {actions ? <div className="mobileActionRow" style={styles.heroActions}>{actions}</div> : null}
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 4 }}>
-        <CompactSegmentedNav items={progressSections().map((item) => ({ ...item, active: item.key === section }))} />
-        {!hideTabs && (
-          <>
-            <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
-            <CompactSegmentedNav items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))} />
-          </>
-        )}
-        {!hideRange && (
-          <>
-            <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
-            <CompactSegmentedNav items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))} />
-          </>
-        )}
-      </div>
+      {compact ? null : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 4 }}>
+          <CompactSegmentedNav items={progressSections().map((item) => ({ ...item, active: item.key === section }))} />
+          {!hideTabs && (
+            <>
+              <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+              <CompactSegmentedNav items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))} />
+            </>
+          )}
+          {!hideRange && (
+            <>
+              <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+              <CompactSegmentedNav items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))} />
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

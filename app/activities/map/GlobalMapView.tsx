@@ -470,21 +470,25 @@ function buildFeatureCollection(spots: GlobalSpot[]): GeoJSON.FeatureCollection<
 const layoutShell: React.CSSProperties = {
   position: "relative",
   width: "100%",
-  height: "calc(100vh - 200px)",
-  minHeight: 480,
+  // 100dvh handles iOS Safari's collapsing chrome; the offset accounts for
+  // the compact header above + bottom nav below.
+  height: "calc(100dvh - 230px)",
+  minHeight: 420,
   overflow: "hidden",
 };
 
 const mapStyle: React.CSSProperties = { position: "absolute", inset: 0 };
 
+// Padding is intentionally NOT set inline — the .spotsMapSidebar CSS class
+// owns it so the closed-state collapse (max-height: 0; padding: 0) actually
+// hides all content. Inline styles would override the class transitions.
 const sidebarStyle: React.CSSProperties = {
   position: "absolute",
-  background: "rgba(15,23,42,0.92)",
+  background: "rgba(15,23,42,0.94)",
   backdropFilter: "blur(8px)",
   WebkitBackdropFilter: "blur(8px)",
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 14,
-  padding: 12,
   display: "grid",
   gap: 10,
   overflowY: "auto",

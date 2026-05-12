@@ -45,12 +45,13 @@ export default async function ClimbingMapPage() {
         section="sports"
         title="Climbing Map"
         eyebrow="Climbing"
-        subtitle="Every gym and crag you've logged. Click the map to add a new spot, drag pins to fine-tune coords, or search OpenStreetMap to drop a known location."
+        subtitle="Every gym and crag you've logged. Click the map to add, drag pins to adjust, or search OpenStreetMap."
         basePath="/activities/climbing/map"
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        compact
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities/climbing/climbs" label="📋 Browse climbs" />

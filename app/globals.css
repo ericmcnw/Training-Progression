@@ -1473,10 +1473,46 @@ input.ghostInput::placeholder {
   }
 }
 
-/* ── Climbing map page (responsive sidebar) ─────────────────────────────── */
-/* Default (mobile): sidebar lives at the bottom as a draggable sheet,
-   handle floats above it. Desktop overrides below promote it to a fixed
-   left column. */
+/* ── Compact TargetHeader (used on map pages) ───────────────────────────── */
+/* Map pages need the globe to dominate vertical space. Compact mode hides
+   the section nav and shrinks the hero copy on mobile. */
+.compactTargetHeader .mobileSectionCard {
+  padding: 10px 12px !important;
+  border-radius: 14px !important;
+}
+.compactTargetHeader .mobilePageTitle {
+  font-size: 18px !important;
+  line-height: 1.1 !important;
+}
+.compactTargetHeader .mobilePageSubtitle {
+  display: none !important;
+}
+.compactTargetHeader .mobileActionRow {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  width: auto !important;
+}
+.compactTargetHeader .mobileActionRow > * {
+  width: auto !important;
+}
+@media (min-width: 720px) {
+  .compactTargetHeader .mobilePageTitle {
+    font-size: 22px !important;
+  }
+  .compactTargetHeader .mobilePageSubtitle {
+    display: block !important;
+    font-size: 12px !important;
+  }
+  .compactTargetHeader .mobileSectionCard {
+    padding: 12px 16px !important;
+  }
+}
+
+/* ── Spots map (responsive sidebar) ─────────────────────────────────────── */
+/* Default (mobile): sidebar lives at the bottom as a sheet, handle floats
+   above it. Desktop overrides below promote it to a fixed left column. */
 .spotsMapSheetHandle {
   position: absolute;
   left: 50%;
@@ -1484,34 +1520,36 @@ input.ghostInput::placeholder {
   transform: translateX(-50%);
   z-index: 6;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 7px 16px 9px;
   border-radius: 14px 14px 0 0;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
   border-bottom: none;
-  background: rgba(15,23,42,0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(15,23,42,0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: inherit;
   cursor: pointer;
-  min-width: 200px;
+  min-width: 220px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
 }
 
 .spotsMapSidebar {
   /* Bottom-sheet position (mobile default) */
   left: 8px;
   right: 8px;
-  bottom: 36px; /* sit just above the handle */
+  bottom: 42px; /* sit just above the handle */
   max-height: 0;
-  padding: 0 12px;
+  padding: 0 !important; /* CSS owns padding so closed state fully collapses */
   overflow: hidden;
   transition: max-height 220ms ease, padding 220ms ease;
 }
 
 .spotsMapSidebar.is-open {
-  max-height: 60vh;
-  padding: 12px;
+  max-height: 65vh;
+  padding: 12px !important;
 }
 
 @media (min-width: 720px) {

@@ -752,10 +752,10 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
 const layoutShell: React.CSSProperties = {
   position: "relative",
   width: "100%",
-  // Fill remaining viewport beneath the TargetHeader. This is a reasonable
-  // approximation; the responsive CSS file handles the mobile bottom-sheet.
-  height: "calc(100vh - 200px)",
-  minHeight: 480,
+  // 100dvh handles iOS Safari's collapsing chrome; the offset accounts for
+  // the compact header above + bottom nav below.
+  height: "calc(100dvh - 230px)",
+  minHeight: 420,
   overflow: "hidden",
 };
 
@@ -764,14 +764,15 @@ const mapStyle: React.CSSProperties = {
   inset: 0,
 };
 
+// Padding owned by .spotsMapSidebar CSS so the closed-state max-height: 0
+// fully collapses without inline overrides.
 const sidebarStyle: React.CSSProperties = {
   position: "absolute",
-  background: "rgba(15,23,42,0.92)",
+  background: "rgba(15,23,42,0.94)",
   backdropFilter: "blur(8px)",
   WebkitBackdropFilter: "blur(8px)",
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 14,
-  padding: 12,
   display: "grid",
   gap: 10,
   overflowY: "auto",

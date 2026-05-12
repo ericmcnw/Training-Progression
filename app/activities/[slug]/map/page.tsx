@@ -54,12 +54,13 @@ export default async function ActivitySpotsMapPage(props: {
         section="sports"
         title={`${entry.label} Map`}
         eyebrow={entry.eyebrow}
-        subtitle={`Every ${subtitleNoun} you've logged for ${entry.label.toLowerCase()}. Click the map to add one, drag pins to fine-tune coords, or search OpenStreetMap.`}
+        subtitle={`Every ${subtitleNoun} you've logged for ${entry.label.toLowerCase()}.`}
         basePath={`/activities/${slug}/map`}
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        compact
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href={`/activities/${slug}`} label={`Back to ${entry.label.toLowerCase()}`} />

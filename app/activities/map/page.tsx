@@ -21,12 +21,13 @@ export default async function GlobalSpotsMapPage() {
         section="sports"
         title="World Map"
         eyebrow="All activities"
-        subtitle="Every spot you've placed across all activities. Filter by family or activity, then drill into the per-activity map to add or edit."
+        subtitle="Every spot you've placed across all activities."
         basePath="/activities/map"
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        compact
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities" label="All Activities" />
