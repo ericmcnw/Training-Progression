@@ -28,6 +28,12 @@ import {
   clearActivitySpotCoords,
 } from "./actions";
 import { spotTypeColor, type ActivitySpotConfig } from "@/lib/activity-spots";
+import {
+  DEFAULT_BASE_STYLE_ID,
+  SATELLITE_TOGGLE_ENABLED,
+  getBaseStyle,
+  getSatelliteStyle,
+} from "@/lib/map-styles";
 
 export type MapSpot = {
   id: string;
@@ -52,21 +58,6 @@ type NominatimResult = {
 const PENDING_COLOR = "rgba(251,191,36,0.95)";
 const SELECTED_RING = "rgba(255,255,255,0.95)";
 
-const MAP_STYLE = {
-  version: 8 as const,
-  projection: { type: "globe" as const },
-  sources: {
-    "osm-raster": {
-      type: "raster" as const,
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-      maxzoom: 19,
-    },
-  },
-  layers: [{ id: "osm-raster-layer", type: "raster" as const, source: "osm-raster" }],
-};
-
 export default function SpotMapView({
   activitySlug,
   config,
@@ -80,6 +71,7 @@ export default function SpotMapView({
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Map<string, Marker>>(new Map());
   const pendingMarkerRef = useRef<Marker | null>(null);
+  const skipFirstStyleSwap = useRef(true);
 
   const [spots, setSpots] = useState<MapSpot[]>(initialSpots);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -92,6 +84,7 @@ export default function SpotMapView({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [styleMode, setStyleMode] = useState<"base" | "satellite">("base");
   const [isPending, startTransition] = useTransition();
 
   const defaultType = config.spotTypes[0]?.value ?? null;
@@ -101,10 +94,11 @@ export default function SpotMapView({
     if (!mapContainerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: MAP_STYLE,
+      style: getBaseStyle(DEFAULT_BASE_STYLE_ID),
       center: [0, 20],
       zoom: 1.4,
     });
+    map.once("load", () => map.setProjection({ type: "globe" }));
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
 
     map.on("click", (e) => {
@@ -131,6 +125,19 @@ export default function SpotMapView({
       markersRef.current.clear();
     };
   }, [defaultType]);
+
+  // ── Swap base style when toggle changes ───────────────────────────────────
+  useEffect(() => {
+    if (skipFirstStyleSwap.current) {
+      skipFirstStyleSwap.current = false;
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    const nextStyle = styleMode === "satellite" ? getSatelliteStyle() : getBaseStyle(DEFAULT_BASE_STYLE_ID);
+    map.setStyle(nextStyle, { diff: false });
+    map.once("style.load", () => map.setProjection({ type: "globe" }));
+  }, [styleMode]);
 
   // ── Sync coord-bearing spots to map markers ───────────────────────────────
   useEffect(() => {
@@ -383,6 +390,18 @@ export default function SpotMapView({
   return (
     <div style={layoutShell}>
       <div ref={mapContainerRef} style={mapStyle} />
+
+      {SATELLITE_TOGGLE_ENABLED && (
+        <button
+          type="button"
+          className="spotsMapStyleToggle"
+          onClick={() => setStyleMode((m) => (m === "satellite" ? "base" : "satellite"))}
+          aria-label={styleMode === "satellite" ? "Switch to map view" : "Switch to satellite view"}
+          title={styleMode === "satellite" ? "Switch to map" : "Switch to satellite"}
+        >
+          {styleMode === "satellite" ? "🗺 Map" : "🛰 Satellite"}
+        </button>
+      )}
 
       <button
         type="button"

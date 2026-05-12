@@ -14,12 +14,18 @@
 // already handle gracefully. Each pin's "Edit" link drops the user into
 // the right activity map.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import maplibregl, { type Map as MapLibreMap, type GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ACTIVITY_FAMILY_META, ACTIVITY_FAMILY_ORDER, type ActivityFamily } from "@/lib/activity-families";
 import type { GlobalSpot } from "@/lib/all-spots";
+import {
+  DEFAULT_BASE_STYLE_ID,
+  SATELLITE_TOGGLE_ENABLED,
+  getBaseStyle,
+  getSatelliteStyle,
+} from "@/lib/map-styles";
 
 const SOURCE_ID = "spots";
 const CLUSTER_LAYER = "spot-clusters";
@@ -30,25 +36,6 @@ const POINT_LAYER = "spot-points";
 // pin colors. Count text uses dark fill on the bright bubble.
 const CLUSTER_FILL = "rgba(120,190,255,0.85)";
 const CLUSTER_STROKE = "rgba(255,255,255,0.95)";
-
-// MapLibre needs a `glyphs` URL to render text in symbol layers. The
-// demotiles font CDN is the canonical free source for MapLibre demos and
-// has been stable for years; swap if it ever goes down.
-const MAP_STYLE = {
-  version: 8 as const,
-  projection: { type: "globe" as const },
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sources: {
-    "osm-raster": {
-      type: "raster" as const,
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-      maxzoom: 19,
-    },
-  },
-  layers: [{ id: "osm-raster-layer", type: "raster" as const, source: "osm-raster" }],
-};
 
 type FamilyFilter = "all" | ActivityFamily;
 
@@ -66,147 +53,140 @@ export default function GlobalMapView({
   // Snapshot of the latest visibleSpots so the post-load layer registration
   // can push initial data without a re-render.
   const currentVisibleSpotsRef = useRef<GlobalSpot[]>([]);
+  // Skip the style-swap effect on initial mount — the init effect already
+  // configured the base style via the Map constructor.
+  const skipFirstStyleSwap = useRef(true);
 
   const [familyFilter, setFamilyFilter] = useState<FamilyFilter>("all");
   const [activityFilter, setActivityFilter] = useState<string>("all");
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [styleMode, setStyleMode] = useState<"base" | "satellite">("base");
 
-  // ── Init map + register source/layers ─────────────────────────────────────
+  // Re-register the spots source/layers from scratch. Called on initial map
+  // load AND every time we swap the base style (setStyle nukes everything
+  // that wasn't part of the new style spec).
+  const registerLayers = useCallback((map: MapLibreMap) => {
+    if (map.getSource(SOURCE_ID)) return;
+
+    map.addSource(SOURCE_ID, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      cluster: true,
+      // Keeps city-scale pins clustered until zoomed in enough to need detail.
+      clusterMaxZoom: 8,
+      clusterRadius: 45,
+      // Promotes our stable spot uid to feature.id so feature-state for
+      // selection survives setData() calls.
+      promoteId: "uid",
+    });
+
+    map.addLayer({
+      id: CLUSTER_LAYER,
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": CLUSTER_FILL,
+        "circle-radius": ["step", ["get", "point_count"], 16, 5, 20, 25, 26],
+        "circle-stroke-color": CLUSTER_STROKE,
+        "circle-stroke-width": 1.5,
+      },
+    });
+
+    map.addLayer({
+      id: CLUSTER_COUNT_LAYER,
+      type: "symbol",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": ["Open Sans Bold"],
+        "text-size": 12,
+        "text-allow-overlap": true,
+      },
+      paint: { "text-color": "#0f172a" },
+    });
+
+    map.addLayer({
+      id: POINT_LAYER,
+      type: "circle",
+      source: SOURCE_ID,
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": ["get", "pinColor"],
+        "circle-radius": ["case", ["boolean", ["feature-state", "selected"], false], 10, 7],
+        "circle-stroke-color": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          "rgba(255,255,255,0.98)",
+          "rgba(15,23,42,0.7)",
+        ],
+        "circle-stroke-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5, 1.5],
+      },
+    });
+
+    // Click handlers (these don't need to be re-attached after setStyle —
+    // they're attached to the map object, not the layers — but we keep them
+    // here because addLayer must come first for the layer-targeted events
+    // to actually fire on the right things).
+    map.on("click", CLUSTER_LAYER, (e) => {
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const clusterId = feature.properties?.cluster_id as number | undefined;
+      if (clusterId == null) return;
+      const source = map.getSource(SOURCE_ID) as GeoJSONSource;
+      source
+        .getClusterExpansionZoom(clusterId)
+        .then((zoom) => {
+          if (feature.geometry.type !== "Point") return;
+          const [lng, lat] = feature.geometry.coordinates;
+          map.flyTo({ center: [lng, lat], zoom: zoom + 0.5, speed: 1.4 });
+        })
+        .catch(() => undefined);
+    });
+
+    map.on("click", POINT_LAYER, (e) => {
+      const feature = e.features?.[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      const uid = feature.properties?.uid as string | undefined;
+      if (!uid) return;
+      const [lng, lat] = feature.geometry.coordinates;
+      setSelectedUid(uid);
+      setSheetOpen(true);
+      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9), speed: 1.4 });
+    });
+
+    for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
+      map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
+    }
+
+    layersReadyRef.current = true;
+    // Push initial data now that the source exists.
+    const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+    if (source) source.setData(buildFeatureCollection(currentVisibleSpotsRef.current));
+  }, []);
+
+  // ── Init map ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: MAP_STYLE,
+      style: getBaseStyle(DEFAULT_BASE_STYLE_ID),
       center: [0, 20],
       zoom: 1.4,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
 
-    function registerLayers() {
-      if (map.getSource(SOURCE_ID)) return;
-
-      map.addSource(SOURCE_ID, {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-        cluster: true,
-        // clusterMaxZoom controls when individual pins separate. ~6 keeps
-        // city-scale pins clustered until you're zoomed in enough to want
-        // detail. clusterRadius is in screen pixels.
-        clusterMaxZoom: 8,
-        clusterRadius: 45,
-        // Promotes our stable spot uid to feature.id so feature-state for
-        // selection survives setData() calls.
-        promoteId: "uid",
-      });
-
-      // Cluster bubbles — sized by point count.
-      map.addLayer({
-        id: CLUSTER_LAYER,
-        type: "circle",
-        source: SOURCE_ID,
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": CLUSTER_FILL,
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            16, // up to 5
-            5, 20, // 5–24
-            25, 26, // 25+
-          ],
-          "circle-stroke-color": CLUSTER_STROKE,
-          "circle-stroke-width": 1.5,
-        },
-      });
-
-      // Cluster count label.
-      map.addLayer({
-        id: CLUSTER_COUNT_LAYER,
-        type: "symbol",
-        source: SOURCE_ID,
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": ["get", "point_count_abbreviated"],
-          "text-font": ["Open Sans Bold"],
-          "text-size": 12,
-          "text-allow-overlap": true,
-        },
-        paint: {
-          "text-color": "#0f172a",
-        },
-      });
-
-      // Individual pins. Color comes from per-feature `pinColor` property.
-      // Selected pin gets a thicker white ring via feature-state.
-      map.addLayer({
-        id: POINT_LAYER,
-        type: "circle",
-        source: SOURCE_ID,
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": ["get", "pinColor"],
-          "circle-radius": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false],
-            10,
-            7,
-          ],
-          "circle-stroke-color": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false],
-            "rgba(255,255,255,0.98)",
-            "rgba(15,23,42,0.7)",
-          ],
-          "circle-stroke-width": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false],
-            2.5,
-            1.5,
-          ],
-        },
-      });
-
-      // Cluster click → expand to the zoom level where it splits.
-      map.on("click", CLUSTER_LAYER, (e) => {
-        const feature = e.features?.[0];
-        if (!feature) return;
-        const clusterId = feature.properties?.cluster_id as number | undefined;
-        if (clusterId == null) return;
-        const source = map.getSource(SOURCE_ID) as GeoJSONSource;
-        source.getClusterExpansionZoom(clusterId).then((zoom) => {
-          if (feature.geometry.type !== "Point") return;
-          const [lng, lat] = feature.geometry.coordinates;
-          map.flyTo({ center: [lng, lat], zoom: zoom + 0.5, speed: 1.4 });
-        }).catch(() => undefined);
-      });
-
-      // Individual pin click → select + sidebar focus.
-      map.on("click", POINT_LAYER, (e) => {
-        const feature = e.features?.[0];
-        if (!feature || feature.geometry.type !== "Point") return;
-        const uid = feature.properties?.uid as string | undefined;
-        if (!uid) return;
-        const [lng, lat] = feature.geometry.coordinates;
-        setSelectedUid(uid);
-        setSheetOpen(true);
-        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9), speed: 1.4 });
-      });
-
-      // Cursor affordances.
-      for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
-        map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
-        map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
-      }
-
-      layersReadyRef.current = true;
-      // Trigger an initial data push now that the source exists.
-      const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-      if (source) source.setData(buildFeatureCollection(currentVisibleSpotsRef.current));
+    function onLoad() {
+      // Vector styles loaded from URL don't include our globe projection —
+      // set it explicitly after the style is ready.
+      map.setProjection({ type: "globe" });
+      registerLayers(map);
     }
-
-    if (map.loaded()) registerLayers();
-    else map.once("load", registerLayers);
+    if (map.loaded()) onLoad();
+    else map.once("load", onLoad);
 
     mapRef.current = map;
     return () => {
@@ -214,7 +194,24 @@ export default function GlobalMapView({
       mapRef.current = null;
       layersReadyRef.current = false;
     };
-  }, []);
+  }, [registerLayers]);
+
+  // ── Swap base style when toggle changes ───────────────────────────────────
+  useEffect(() => {
+    if (skipFirstStyleSwap.current) {
+      skipFirstStyleSwap.current = false;
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    layersReadyRef.current = false;
+    const nextStyle = styleMode === "satellite" ? getSatelliteStyle() : getBaseStyle(DEFAULT_BASE_STYLE_ID);
+    map.setStyle(nextStyle, { diff: false });
+    map.once("style.load", () => {
+      map.setProjection({ type: "globe" });
+      registerLayers(map);
+    });
+  }, [styleMode, registerLayers]);
 
   // ── Available activity options derived from current spots ─────────────────
   const activitiesPresent = useMemo(() => {
@@ -282,6 +279,18 @@ export default function GlobalMapView({
   return (
     <div style={layoutShell}>
       <div ref={mapContainerRef} style={mapStyle} />
+
+      {SATELLITE_TOGGLE_ENABLED && (
+        <button
+          type="button"
+          className="spotsMapStyleToggle"
+          onClick={() => setStyleMode((m) => (m === "satellite" ? "base" : "satellite"))}
+          aria-label={styleMode === "satellite" ? "Switch to map view" : "Switch to satellite view"}
+          title={styleMode === "satellite" ? "Switch to map" : "Switch to satellite"}
+        >
+          {styleMode === "satellite" ? "🗺 Map" : "🛰 Satellite"}
+        </button>
+      )}
 
       <button
         type="button"

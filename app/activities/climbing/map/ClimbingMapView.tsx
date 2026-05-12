@@ -30,6 +30,12 @@ import {
   clearClimbLocationCoords,
 } from "./actions";
 import type { ClimbLocationType } from "@/lib/climb-types";
+import {
+  DEFAULT_BASE_STYLE_ID,
+  SATELLITE_TOGGLE_ENABLED,
+  getBaseStyle,
+  getSatelliteStyle,
+} from "@/lib/map-styles";
 
 export type MapLocation = {
   id: string;
@@ -56,32 +62,6 @@ const CRAG_COLOR = "rgba(74,222,128,0.95)";
 const PENDING_COLOR = "rgba(251,191,36,0.95)";
 const SELECTED_RING = "rgba(255,255,255,0.95)";
 
-// Free, no-key, raster style. Globe projection works on raster sources —
-// MapLibre re-projects tiles into the sphere automatically. Projection lives
-// in the style spec in v5.
-const MAP_STYLE = {
-  version: 8 as const,
-  projection: { type: "globe" as const },
-  sources: {
-    "osm-raster": {
-      type: "raster" as const,
-      tiles: [
-        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-      maxzoom: 19,
-    },
-  },
-  layers: [
-    {
-      id: "osm-raster-layer",
-      type: "raster" as const,
-      source: "osm-raster",
-    },
-  ],
-};
-
 export default function ClimbingMapView({
   initialLocations,
 }: {
@@ -91,6 +71,7 @@ export default function ClimbingMapView({
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Map<string, Marker>>(new Map());
   const pendingMarkerRef = useRef<Marker | null>(null);
+  const skipFirstStyleSwap = useRef(true);
 
   const [locations, setLocations] = useState<MapLocation[]>(initialLocations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -103,6 +84,7 @@ export default function ClimbingMapView({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [styleMode, setStyleMode] = useState<"base" | "satellite">("base");
   const [isPending, startTransition] = useTransition();
 
   // ── Init map (once) ────────────────────────────────────────────────────────
@@ -110,11 +92,15 @@ export default function ClimbingMapView({
     if (!mapContainerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: MAP_STYLE,
+      style: getBaseStyle(DEFAULT_BASE_STYLE_ID),
       center: [0, 20],
       zoom: 1.4,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+
+    // Vector styles loaded by URL don't include our globe projection — set
+    // it explicitly after style load.
+    map.once("load", () => map.setProjection({ type: "globe" }));
 
     // Click empty map → drop a temp pin for creation. We check that the
     // click didn't originate on an existing marker (those have stopPropagation
@@ -145,6 +131,21 @@ export default function ClimbingMapView({
       markersRef.current.clear();
     };
   }, []);
+
+  // ── Swap base style when toggle changes ───────────────────────────────────
+  // HTML markers are independent of the style, so they survive setStyle and
+  // we don't need to re-register anything beyond the projection.
+  useEffect(() => {
+    if (skipFirstStyleSwap.current) {
+      skipFirstStyleSwap.current = false;
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    const nextStyle = styleMode === "satellite" ? getSatelliteStyle() : getBaseStyle(DEFAULT_BASE_STYLE_ID);
+    map.setStyle(nextStyle, { diff: false });
+    map.once("style.load", () => map.setProjection({ type: "globe" }));
+  }, [styleMode]);
 
   // ── Sync coord-bearing locations to map markers ────────────────────────────
   useEffect(() => {
@@ -406,6 +407,18 @@ export default function ClimbingMapView({
   return (
     <div style={layoutShell}>
       <div ref={mapContainerRef} style={mapStyle} />
+
+      {SATELLITE_TOGGLE_ENABLED && (
+        <button
+          type="button"
+          className="spotsMapStyleToggle"
+          onClick={() => setStyleMode((m) => (m === "satellite" ? "base" : "satellite"))}
+          aria-label={styleMode === "satellite" ? "Switch to map view" : "Switch to satellite view"}
+          title={styleMode === "satellite" ? "Switch to map" : "Switch to satellite"}
+        >
+          {styleMode === "satellite" ? "🗺 Map" : "🛰 Satellite"}
+        </button>
+      )}
 
       {/* Mobile bottom-sheet handle (visible <= 720px via CSS class) */}
       <button
