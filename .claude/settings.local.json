@@ -26,7 +26,8 @@
       "PowerShell($urls = @\\(\"/\", \"/log\", \"/log?view=routines\", \"/plan\", \"/plan?view=goals\", \"/activities\", \"/activities?family=sports\", \"/activities?show=all\", \"/activities/climbing\", \"/activities/running\", \"/body\", \"/manual-log\"\\); foreach \\($u in $urls\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:3000$u\" -UseBasicParsing -TimeoutSec 90; Write-Output \\(\"{0} OK \\({1}, {2:N0} bytes\\)\" -f $u, $r.StatusCode, $r.Content.Length\\) } catch { Write-Output \\(\"{0} FAIL: {1}\" -f $u, $_.Exception.Message\\) } })",
       "Bash(npx --yes vercel@latest project ls)",
       "Bash(npx --yes vercel@latest project inspect progression-tracker)",
-      "Bash(npx --yes vercel@latest env ls production)"
+      "Bash(npx --yes vercel@latest env ls production)",
+      "Bash(curl -s \"http://localhost:3000/plan?view=schedule\" --max-time 60)"
     ]
   }
 }
