@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import type { ZoneState, ZoneFreshness } from "@/app/components/body-map/types";
-import { fetchZoneDetail, type ZoneDetailResult } from "./_actions";
+import { fetchZoneDetail } from "./_actions";
+import type { ZoneDetailResult } from "./_types";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 
 const MAP_OPEN_STORAGE_KEY = "body:mapOpen";
