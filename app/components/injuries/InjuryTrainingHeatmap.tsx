@@ -268,7 +268,10 @@ const rowButton: CSSProperties = {
 
 const rowButtonExpanded: CSSProperties = {
   background: "rgba(255,255,255,0.04)",
-  borderColor: COLOR.border,
+  // Match the rowButton `border` shorthand instead of swapping in a
+  // borderColor longhand — React 19 warns when you mix the two between
+  // renders because removing one can't undo the other.
+  border: `1px solid ${COLOR.border}`,
 };
 
 const domainDot: CSSProperties = {
