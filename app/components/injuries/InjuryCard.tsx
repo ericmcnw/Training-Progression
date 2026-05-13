@@ -1,10 +1,7 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
 import type { InjuryStatus } from "@/generated/prisma";
 import { formatAppDate } from "@/lib/dates";
-import QuickInjuryPainLog from "./QuickInjuryPainLog";
+import PainSparkline, { type PainSparkDay, type PainSparkTrend } from "./PainSparkline";
 
 type Zone = { slug: string; label: string };
 
@@ -18,6 +15,7 @@ export type InjuryCardProps = {
     zones: Array<{ zone: Zone }>;
   };
   lastPainLog?: { level: number; loggedAt: string } | null;
+  sparkline?: { days: PainSparkDay[]; trend: PainSparkTrend } | null;
 };
 
 function painColor(level: number) {
@@ -58,15 +56,12 @@ function cardBorder(s: InjuryStatus): React.CSSProperties {
   return { border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" };
 }
 
-export default function InjuryCard({ injury, lastPainLog }: InjuryCardProps) {
-  const [logOpen, setLogOpen] = useState(false);
+export default function InjuryCard({ injury, lastPainLog, sparkline }: InjuryCardProps) {
   const zones: Zone[] = injury.zones.map((z) => z.zone);
-  const canLog = injury.status !== "RESOLVED";
   const daysInjured = Math.floor((Date.now() - new Date(injury.startedAt).getTime()) / 86_400_000);
 
   return (
     <div style={{ ...cardBase, ...cardBorder(injury.status) }}>
-      {/* ── Top row: name + status pill · pain level ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 0, display: "grid", gap: 5 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -81,7 +76,6 @@ export default function InjuryCard({ injury, lastPainLog }: InjuryCardProps) {
             {formatAppDate(injury.startedAt, { month: "short", day: "numeric" })}
           </div>
         </div>
-        {/* Pain level readout */}
         {lastPainLog ? (
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div style={{ fontSize: 24, fontWeight: 950, lineHeight: 1, color: painColor(lastPainLog.level) }}>
@@ -92,41 +86,32 @@ export default function InjuryCard({ injury, lastPainLog }: InjuryCardProps) {
               {timeAgo(lastPainLog.loggedAt)}
             </div>
           </div>
-        ) : canLog ? (
+        ) : (
           <div style={{ fontSize: 11, opacity: 0.35, fontWeight: 700, flexShrink: 0 }}>no pain logged</div>
-        ) : null}
+        )}
       </div>
 
-      {/* ── Zone tags ── */}
+      {sparkline && (
+        <div style={sparkRow}>
+          <span style={sparkLabel}>30d pain</span>
+          <PainSparkline days={sparkline.days} trend={sparkline.trend} />
+        </div>
+      )}
+
       <div style={tagRow}>
         {zones.map((z) => (
           <span key={z.slug} style={tag}>{z.label}</span>
         ))}
       </div>
 
-      {/* ── Action row ── */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {canLog && (
-          <button type="button" onClick={() => setLogOpen((o) => !o)} style={logBtnStyle(logOpen, injury.status)}>
-            {logOpen ? "↑ Cancel" : "Log pain"}
-          </button>
-        )}
         <Link href={`/injuries/${injury.id}`} style={detailLink}>
           Details →
         </Link>
       </div>
-
-      {/* ── Inline quick-log (expandable) ── */}
-      {logOpen && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 12, marginTop: 2 }}>
-          <QuickInjuryPainLog zones={zones} onLogged={() => setLogOpen(false)} />
-        </div>
-      )}
     </div>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const cardBase: React.CSSProperties = {
   borderRadius: 18,
@@ -150,6 +135,23 @@ const meta: React.CSSProperties = {
   fontSize: 12,
   color: "rgba(255,255,255,0.55)",
   fontWeight: 700,
+};
+
+const sparkRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+  paddingTop: 2,
+};
+
+const sparkLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 1,
+  textTransform: "uppercase",
+  opacity: 0.45,
+  flexShrink: 0,
 };
 
 const tagRow: React.CSSProperties = {
@@ -183,29 +185,3 @@ const detailLink: React.CSSProperties = {
   minHeight: 38,
   marginLeft: "auto",
 };
-
-function logBtnStyle(open: boolean, status: InjuryStatus): React.CSSProperties {
-  const isFlared = status === "FLARED";
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "8px 16px",
-    borderRadius: 10,
-    border: open
-      ? "1px solid rgba(255,255,255,0.12)"
-      : isFlared
-      ? "1px solid rgba(251,146,60,0.45)"
-      : "1px solid rgba(248,113,113,0.45)",
-    background: open
-      ? "rgba(255,255,255,0.05)"
-      : isFlared
-      ? "rgba(251,146,60,0.12)"
-      : "rgba(248,113,113,0.12)",
-    color: "inherit",
-    fontWeight: 900,
-    fontSize: 13,
-    cursor: "pointer",
-    minHeight: 38,
-  };
-}

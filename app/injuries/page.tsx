@@ -1,38 +1,111 @@
 import Link from "next/link";
 import InjuryCard from "@/app/components/injuries/InjuryCard";
+import type { PainSparkDay, PainSparkTrend } from "@/app/components/injuries/PainSparkline";
 import { getInjuries } from "./actions";
 import { prisma } from "@/lib/prisma";
+import { addDaysYmd, toAppYmd, todayAppYmd } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
+const SPARK_DAYS = 30;
+// last-7 vs prior-21 split — same window as the sparkline, weighted so a
+// recent flare-up beats a baseline established weeks ago.
+const TREND_RECENT = 7;
+const TREND_PRIOR = 21;
+
 const groups = [
-  { status: "ACTIVE", title: "Active" },
-  { status: "FLARED", title: "Flared" },
-  { status: "RECOVERING", title: "Recovering" },
-  { status: "RESOLVED", title: "Resolved" },
+  { key: "needs-attention", title: "Needs attention", statuses: ["ACTIVE", "FLARED"] as const },
+  { key: "recovering", title: "Recovering", statuses: ["RECOVERING"] as const },
+  { key: "resolved", title: "Resolved", statuses: ["RESOLVED"] as const },
 ] as const;
+
+type GroupKey = (typeof groups)[number]["key"];
+
+type SparkData = { days: PainSparkDay[]; trend: PainSparkTrend };
+
+function buildSpark(
+  zoneIds: Set<string>,
+  rows: Array<{ zoneId: string; level: number; loggedAt: Date }>,
+  today: string,
+): SparkData {
+  const dailyPeak = new Map<string, number>();
+  for (const row of rows) {
+    if (!zoneIds.has(row.zoneId)) continue;
+    const ymd = toAppYmd(row.loggedAt);
+    const current = dailyPeak.get(ymd) ?? 0;
+    if (row.level > current) dailyPeak.set(ymd, row.level);
+  }
+
+  const days: PainSparkDay[] = [];
+  for (let i = SPARK_DAYS - 1; i >= 0; i--) {
+    const ymd = addDaysYmd(today, -i);
+    days.push({ ymd, peak: dailyPeak.has(ymd) ? dailyPeak.get(ymd)! : null });
+  }
+
+  const recentSlice = days.slice(-TREND_RECENT).filter((d) => d.peak !== null) as Array<{ ymd: string; peak: number }>;
+  const priorSlice = days.slice(-(TREND_RECENT + TREND_PRIOR), -TREND_RECENT).filter((d) => d.peak !== null) as Array<{ ymd: string; peak: number }>;
+
+  const last7avg = recentSlice.length > 0 ? recentSlice.reduce((sum, d) => sum + d.peak, 0) / recentSlice.length : null;
+  const prior21avg = priorSlice.length > 0 ? priorSlice.reduce((sum, d) => sum + d.peak, 0) / priorSlice.length : null;
+
+  let direction: PainSparkTrend["direction"] = "unknown";
+  let weeklyDelta: number | null = null;
+  if (last7avg !== null && prior21avg !== null) {
+    const delta = last7avg - prior21avg;
+    weeklyDelta = Math.round(delta * 10) / 10;
+    if (Math.abs(delta) < 0.4) direction = "steady";
+    else if (delta < 0) direction = "improving";
+    else direction = "worsening";
+  } else if (last7avg !== null && prior21avg === null) {
+    // First week of data with no prior baseline — show steady until we have
+    // something to compare against rather than flagging it as worsening.
+    direction = "steady";
+  }
+
+  return { days, trend: { direction, weeklyDelta, last7avg, prior21avg } };
+}
 
 export default async function InjuriesPage() {
   const injuries = await getInjuries();
 
-  // Last pain log per injury — one query, mapped locally
   const allZoneIds = [...new Set(injuries.flatMap((i) => i.zones.map((z) => z.zoneId)))];
-  const recentLogs =
+  const today = todayAppYmd();
+  const sparkFromYmd = addDaysYmd(today, -(SPARK_DAYS - 1));
+  const sparkFromDate = new Date(`${sparkFromYmd}T00:00:00Z`);
+
+  // Single bulk query covers both the sparkline strip AND the
+  // "most recent log" readout used by the InjuryCard, since the sparkline
+  // window is always larger than what we need for that.
+  const painRows =
     allZoneIds.length > 0
       ? await prisma.painLog.findMany({
-          where: { zoneId: { in: allZoneIds } },
+          where: { zoneId: { in: allZoneIds }, loggedAt: { gte: sparkFromDate } },
           orderBy: { loggedAt: "desc" },
-          take: 500,
           select: { zoneId: true, level: true, loggedAt: true },
         })
       : [];
 
+  const sparkByInjuryId = new Map<string, SparkData>();
   const lastLogByInjuryId = new Map<string, { level: number; loggedAt: string }>();
   for (const injury of injuries) {
-    if (lastLogByInjuryId.has(injury.id)) continue;
     const injZoneIds = new Set(injury.zones.map((z) => z.zoneId));
-    const match = recentLogs.find((l) => injZoneIds.has(l.zoneId));
-    if (match) lastLogByInjuryId.set(injury.id, { level: match.level, loggedAt: match.loggedAt.toISOString() });
+    const spark = buildSpark(injZoneIds, painRows, today);
+    sparkByInjuryId.set(injury.id, spark);
+    const mostRecent = painRows.find((row) => injZoneIds.has(row.zoneId));
+    if (mostRecent) {
+      lastLogByInjuryId.set(injury.id, {
+        level: mostRecent.level,
+        loggedAt: mostRecent.loggedAt.toISOString(),
+      });
+    }
+  }
+
+  const injuriesByGroup = new Map<GroupKey, typeof injuries>();
+  for (const group of groups) {
+    injuriesByGroup.set(
+      group.key,
+      injuries.filter((i) => (group.statuses as readonly string[]).includes(i.status)),
+    );
   }
 
   return (
@@ -53,8 +126,8 @@ export default async function InjuriesPage() {
       </div>
 
       {groups.map((group) => {
-        const rows = injuries.filter((i) => i.status === group.status);
-        if (rows.length === 0 && group.status !== "RESOLVED") return null;
+        const rows = injuriesByGroup.get(group.key) ?? [];
+        if (rows.length === 0 && group.key !== "resolved") return null;
         const content = (
           <div style={{ display: "grid", gap: 10 }}>
             {rows.length === 0 ? (
@@ -65,18 +138,19 @@ export default async function InjuriesPage() {
                   key={injury.id}
                   injury={injury}
                   lastPainLog={lastLogByInjuryId.get(injury.id) ?? null}
+                  sparkline={sparkByInjuryId.get(injury.id) ?? null}
                 />
               ))
             )}
           </div>
         );
-        return group.status === "RESOLVED" ? (
-          <details key={group.status} style={panel}>
+        return group.key === "resolved" ? (
+          <details key={group.key} style={panel}>
             <summary style={summaryStyle}>{group.title}</summary>
             <div style={{ padding: 14 }}>{content}</div>
           </details>
         ) : (
-          <section key={group.status} style={panel}>
+          <section key={group.key} style={panel}>
             <div style={header}>{group.title}</div>
             <div style={{ padding: 14 }}>{content}</div>
           </section>
