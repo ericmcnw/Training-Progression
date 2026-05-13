@@ -43,13 +43,12 @@ export default async function BodyPage(props: {
 
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.2, opacity: 0.55, textTransform: "uppercase" }}>Body</div>
-        <h1 style={{ margin: "5px 0 0", fontSize: 32, lineHeight: 1.08 }}>Body</h1>
-      </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link href="/body/log-pain" style={linkStyle}>Log pain</Link>
-        <Link href="/injuries" style={linkStyle}>Injuries</Link>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.08 }}>Body</h1>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Link href="/body/log-pain" style={linkStyle}>Log pain</Link>
+          <Link href="/injuries" style={linkStyle}>Injuries</Link>
+        </div>
       </div>
       <BodyPageClient zones={zones} />
 

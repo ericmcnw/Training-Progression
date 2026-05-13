@@ -72,24 +72,6 @@ function ZonePanel({
         </button>
       </div>
 
-      {/* Active injuries */}
-      {detail.activeInjuries.length > 0 && (
-        <div style={section}>
-          <div style={sectionHead}>INJURY STATUS</div>
-          {detail.activeInjuries.map((inj) => (
-            <div key={inj.id} style={injuryCard}>
-              <div>
-                <div style={{ fontWeight: 900 }}>{inj.name}</div>
-                <div style={mutedText}>
-                  {"●".repeat(inj.severity)}{"○".repeat(Math.max(0, 5 - inj.severity))} · {inj.status.toLowerCase()}
-                </div>
-              </div>
-              <Link href={`/injuries/${inj.id}`} style={linkSecondary}>Details</Link>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* This week strip */}
       <div style={section}>
         <div style={sectionHead}>THIS WEEK</div>
@@ -237,17 +219,6 @@ const sectionHead: React.CSSProperties = {
   fontWeight: 900,
   letterSpacing: 1.2,
   color: "rgba(255,255,255,0.45)",
-};
-
-const injuryCard: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 10,
-  padding: 10,
-  borderRadius: 12,
-  border: "1px solid rgba(251,113,133,0.28)",
-  background: "rgba(251,113,133,0.07)",
 };
 
 const weekStrip: React.CSSProperties = {
