@@ -257,8 +257,8 @@ export default function LogRunForm({
             label={`${capitalize(spotConfig.spotNoun)} (optional)`}
             hint={
               savedSpots.length > 0
-                ? "Pick a saved spot — including from related activities (e.g. a climbing crag for a trail run there) — or add a new one."
-                : "Add a name, optional region, and tap '📍 Use my location' to drop it on your activity map."
+                ? "Pick a saved spot — including from related activities (e.g. a climbing crag for a trail run there) — or type to search OpenStreetMap."
+                : "Type a name to search OpenStreetMap, or tap '📍 Use my location' to drop it on your activity map."
             }
           >
             <ActivitySpotPicker
@@ -270,16 +270,7 @@ export default function LogRunForm({
               onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
             />
           </Field>
-        ) : (
-        <Field label="Route / Location (optional)">
-          <input
-            style={inputStyle}
-            value={location}
-            onChange={(e) => { markDirty(); setLocation(e.target.value); }}
-            placeholder="Trail name, park, route…"
-          />
-        </Field>
-        )}
+        ) : null}
 
         <DateTimeField
           value={performedAtLocal}

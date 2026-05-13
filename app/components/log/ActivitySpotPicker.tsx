@@ -11,7 +11,7 @@
 // immediately after the session is saved — no separate "place on map"
 // step needed.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import {
   type ActivitySpotConfig,
@@ -19,6 +19,20 @@ import {
   type SpotPickerItem,
   type SpotSelection,
 } from "@/lib/activity-spots";
+
+type NominatimResult = {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+  };
+};
 
 const NEW_OPTION = "__new__";
 const NONE_OPTION = "";
@@ -64,10 +78,50 @@ export default function ActivitySpotPicker({
   const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "error">("idle");
   const [geoError, setGeoError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [nominatimResults, setNominatimResults] = useState<NominatimResult[]>([]);
+  const [nominatimSearching, setNominatimSearching] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+
+  // Debounced OpenStreetMap search as the user types in the new-spot name
+  // input. Surfaces towns/parks/streets/POIs so the user doesn't have to
+  // know exact coords or even the exact name.
+  const newName = newSpot?.name ?? "";
+  useEffect(() => {
+    const trimmed = newName.trim();
+    if (trimmed.length < 2) {
+      setNominatimResults([]);
+      return;
+    }
+    const handle = window.setTimeout(async () => {
+      setNominatimSearching(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=json&limit=5&addressdetails=1`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (res.ok) {
+          const data: NominatimResult[] = await res.json();
+          setNominatimResults(data);
+        } else {
+          setNominatimResults([]);
+        }
+      } catch {
+        setNominatimResults([]);
+      } finally {
+        setNominatimSearching(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [newName]);
 
   const defaultType = config.spotTypes[0]?.value ?? null;
   const ownSpots = savedSpots.filter((s) => s.isOwnActivity);
   const crossSpots = savedSpots.filter((s) => !s.isOwnActivity);
+
+  // Saved-spot matches against the typed name — surfaced above Nominatim
+  // hits so the user re-uses an existing record instead of duplicating.
+  const trimmedNewName = newName.trim().toLowerCase();
+  const matchingSavedSpots = trimmedNewName.length >= 2
+    ? savedSpots.filter((s) => s.name.toLowerCase().includes(trimmedNewName)).slice(0, 5)
+    : [];
 
   function selectExisting(value: string) {
     const decoded = decodeOptionValue(value);
@@ -194,13 +248,88 @@ export default function ActivitySpotPicker({
             </div>
           )}
 
-          {/* Name (and inline type buttons when the activity has them) */}
-          <input
-            style={inputStyle}
-            placeholder={`Name (e.g. ${exampleNameFor(config.spotNoun)})`}
-            value={newSpot?.name ?? ""}
-            onChange={(e) => patchNew({ name: e.target.value })}
-          />
+          {/* Name input with autocomplete — shows matching saved spots
+              first so the user can re-use, then OpenStreetMap suggestions
+              for towns/parks/streets/etc. with auto-filled coords. */}
+          <div style={{ position: "relative" }}>
+            <input
+              style={inputStyle}
+              placeholder={`Name (e.g. ${exampleNameFor(config.spotNoun)})`}
+              value={newSpot?.name ?? ""}
+              onChange={(e) => { patchNew({ name: e.target.value }); setSuggestionsOpen(true); }}
+              onFocus={() => setSuggestionsOpen(true)}
+              // Delay close so a click on a suggestion can register before
+              // the dropdown unmounts.
+              onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 150)}
+            />
+            {suggestionsOpen && (matchingSavedSpots.length > 0 || nominatimResults.length > 0 || nominatimSearching) && (
+              <div style={suggestionsPanel}>
+                {matchingSavedSpots.length > 0 && (
+                  <>
+                    <div style={suggestionGroupLabel}>Already saved</div>
+                    {matchingSavedSpots.map((s) => (
+                      <button
+                        key={`saved-${s.kind}-${s.id}`}
+                        type="button"
+                        // onMouseDown fires before onBlur, so we still have
+                        // the click target when blur tries to close us.
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          onSelect({ kind: s.kind, id: s.id });
+                          onNewSpot(null);
+                          setShowNew(false);
+                          setSuggestionsOpen(false);
+                        }}
+                        style={suggestionItem}
+                        title={s.region ? `${s.name} · ${s.region}` : s.name}
+                      >
+                        💾 {s.name}
+                        {s.region ? <span style={suggestionMeta}> · {s.region}</span> : null}
+                        {!s.isOwnActivity ? <span style={suggestionMeta}> · from {s.originLabel}</span> : null}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {nominatimResults.length > 0 && (
+                  <>
+                    <div style={suggestionGroupLabel}>From OpenStreetMap</div>
+                    {nominatimResults.map((r) => (
+                      <button
+                        key={`osm-${r.place_id}`}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const lat = parseFloat(r.lat);
+                          const lng = parseFloat(r.lon);
+                          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                          // Trim to first comma-segment so "Paugussett State Forest, Connecticut, USA"
+                          // becomes just "Paugussett State Forest" as the spot name.
+                          const primaryName = r.display_name.split(",")[0].trim();
+                          const a = r.address ?? {};
+                          const place = a.city || a.town || a.village || a.county;
+                          const region = [place, a.state].filter(Boolean).join(", ");
+                          patchNew({
+                            name: primaryName,
+                            latitude: lat,
+                            longitude: lng,
+                            region: newSpot?.region?.trim() || region,
+                          });
+                          setSuggestionsOpen(false);
+                        }}
+                        style={suggestionItem}
+                        title={r.display_name}
+                      >
+                        📍 {r.display_name}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {nominatimSearching && (
+                  <div style={suggestionHint}>Searching OpenStreetMap…</div>
+                )}
+              </div>
+            )}
+          </div>
 
           {hasTypes && (
             <div style={typeRowStyle}>
@@ -355,4 +484,59 @@ const geoErrorStyle: React.CSSProperties = {
   background: "rgba(248,113,113,0.10)",
   border: "1px solid rgba(248,113,113,0.32)",
   color: "rgba(248,113,113,0.95)",
+};
+
+const suggestionsPanel: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  zIndex: 20,
+  background: "rgba(15,23,42,0.98)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 10,
+  padding: 4,
+  display: "grid",
+  gap: 2,
+  maxHeight: 260,
+  overflowY: "auto",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.35)",
+};
+
+const suggestionGroupLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  opacity: 0.55,
+  padding: "6px 8px 2px",
+};
+
+const suggestionItem: React.CSSProperties = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderRadius: 7,
+  border: "none",
+  background: "transparent",
+  color: "rgba(255,255,255,0.92)",
+  fontSize: 12.5,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  width: "100%",
+};
+
+const suggestionMeta: React.CSSProperties = {
+  opacity: 0.55,
+  fontWeight: 500,
+};
+
+const suggestionHint: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.55,
+  padding: "6px 8px",
 };

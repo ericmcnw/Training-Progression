@@ -481,8 +481,8 @@ export default function SessionLogForm({
             label={`${capitalizeFirst(spotConfig.spotNoun)} (optional)`}
             hint={
               savedSpots.length > 0
-                ? "Pick a saved spot — including from related activities — or add a new one."
-                : "Add a name, optional region, and tap '📍 Use my location' to drop it on your activity map."
+                ? "Pick a saved spot — including from related activities — or type to search OpenStreetMap."
+                : "Type a name to search OpenStreetMap, or tap '📍 Use my location' to drop it on your activity map."
             }
           >
             <ActivitySpotPicker
@@ -492,15 +492,6 @@ export default function SessionLogForm({
               onSelect={(sel) => { markDirty(); setSpotSelection(sel); }}
               newSpot={newActivitySpot}
               onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
-            />
-          </Field>
-        ) : !hasLocationMetric ? (
-          <Field label="Location (optional)">
-            <input
-              style={inputStyle}
-              value={location}
-              onChange={(e) => { markDirty(); setLocation(e.target.value); }}
-              placeholder="Gym, crag, trail…"
             />
           </Field>
         ) : null}

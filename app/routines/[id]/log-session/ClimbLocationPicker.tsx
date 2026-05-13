@@ -16,7 +16,7 @@
 //   - Coords mean the location appears on the climbing map immediately,
 //     no separate "place on map" step after the fact.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { ClimbLocationBasic, ClimbLocationType } from "@/lib/climb-types";
 import { inputStyle } from "../log/form-ui";
 
@@ -28,6 +28,20 @@ export type NewClimbLocationDraft = {
    *  the map immediately without a separate placement step. */
   latitude: number | null;
   longitude: number | null;
+};
+
+type NominatimResult = {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+  };
 };
 
 export default function ClimbLocationPicker({
@@ -49,6 +63,38 @@ export default function ClimbLocationPicker({
   const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "error">("idle");
   const [geoError, setGeoError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [nominatimResults, setNominatimResults] = useState<NominatimResult[]>([]);
+  const [nominatimSearching, setNominatimSearching] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+
+  const newName = newLocation?.name ?? "";
+  useEffect(() => {
+    const trimmed = newName.trim();
+    if (trimmed.length < 2) { setNominatimResults([]); return; }
+    const handle = window.setTimeout(async () => {
+      setNominatimSearching(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=json&limit=5&addressdetails=1`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (res.ok) {
+          const data: NominatimResult[] = await res.json();
+          setNominatimResults(data);
+        } else {
+          setNominatimResults([]);
+        }
+      } catch {
+        setNominatimResults([]);
+      } finally {
+        setNominatimSearching(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [newName]);
+
+  const trimmedNewName = newName.trim().toLowerCase();
+  const matchingSavedLocations = trimmedNewName.length >= 2
+    ? savedLocations.filter((l) => l.name.toLowerCase().includes(trimmedNewName)).slice(0, 5)
+    : [];
 
   const gyms = savedLocations.filter((l) => l.type === "GYM");
   const crags = savedLocations.filter((l) => l.type === "CRAG");
@@ -164,13 +210,15 @@ export default function ClimbLocationPicker({
             </div>
           )}
 
-          {/* Name + Type */}
-          <div style={{ display: "flex", gap: 8 }}>
+          {/* Name + Type with autocomplete suggestions */}
+          <div style={{ display: "flex", gap: 8, position: "relative" }}>
             <input
               style={{ ...inputStyle, flex: 1 }}
               placeholder="Name (e.g. Movement RiNo, Buttermilks)"
               value={newLocation?.name ?? ""}
-              onChange={(e) => patchNew({ name: e.target.value })}
+              onChange={(e) => { patchNew({ name: e.target.value }); setSuggestionsOpen(true); }}
+              onFocus={() => setSuggestionsOpen(true)}
+              onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 150)}
             />
             <div style={typeToggleStyle}>
               {(["GYM", "CRAG"] as ClimbLocationType[]).map((t) => (
@@ -184,6 +232,69 @@ export default function ClimbLocationPicker({
                 </button>
               ))}
             </div>
+            {suggestionsOpen && (matchingSavedLocations.length > 0 || nominatimResults.length > 0 || nominatimSearching) && (
+              <div style={suggestionsPanel}>
+                {matchingSavedLocations.length > 0 && (
+                  <>
+                    <div style={suggestionGroupLabel}>Already saved</div>
+                    {matchingSavedLocations.map((l) => (
+                      <button
+                        key={`saved-${l.id}`}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          onSelectId(l.id);
+                          onNewLocation(null);
+                          setShowNew(false);
+                          setSuggestionsOpen(false);
+                        }}
+                        style={suggestionItem}
+                        title={l.region ? `${l.name} · ${l.region}` : l.name}
+                      >
+                        💾 {l.name}
+                        {l.region ? <span style={suggestionMeta}> · {l.region}</span> : null}
+                        <span style={suggestionMeta}> · {l.type === "GYM" ? "Gym" : "Crag"}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {nominatimResults.length > 0 && (
+                  <>
+                    <div style={suggestionGroupLabel}>From OpenStreetMap</div>
+                    {nominatimResults.map((r) => (
+                      <button
+                        key={`osm-${r.place_id}`}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const lat = parseFloat(r.lat);
+                          const lng = parseFloat(r.lon);
+                          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                          const primaryName = r.display_name.split(",")[0].trim();
+                          const a = r.address ?? {};
+                          const place = a.city || a.town || a.village || a.county;
+                          const region = [place, a.state].filter(Boolean).join(", ");
+                          patchNew({
+                            name: primaryName,
+                            latitude: lat,
+                            longitude: lng,
+                            region: newLocation?.region?.trim() || region,
+                          });
+                          setSuggestionsOpen(false);
+                        }}
+                        style={suggestionItem}
+                        title={r.display_name}
+                      >
+                        📍 {r.display_name}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {nominatimSearching && (
+                  <div style={suggestionHint}>Searching OpenStreetMap…</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Region — optional broader context */}
@@ -301,4 +412,59 @@ const geoErrorStyle: React.CSSProperties = {
   background: "rgba(248,113,113,0.10)",
   border: "1px solid rgba(248,113,113,0.32)",
   color: "rgba(248,113,113,0.95)",
+};
+
+const suggestionsPanel: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  zIndex: 20,
+  background: "rgba(15,23,42,0.98)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 10,
+  padding: 4,
+  display: "grid",
+  gap: 2,
+  maxHeight: 260,
+  overflowY: "auto",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.35)",
+};
+
+const suggestionGroupLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  opacity: 0.55,
+  padding: "6px 8px 2px",
+};
+
+const suggestionItem: React.CSSProperties = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderRadius: 7,
+  border: "none",
+  background: "transparent",
+  color: "rgba(255,255,255,0.92)",
+  fontSize: 12.5,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  width: "100%",
+};
+
+const suggestionMeta: React.CSSProperties = {
+  opacity: 0.55,
+  fontWeight: 500,
+};
+
+const suggestionHint: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.55,
+  padding: "6px 8px",
 };
