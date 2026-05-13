@@ -169,11 +169,21 @@ export default function HabitGridV2({ rows, today }: Props) {
 // ───────────────────────────── inline expansion panel
 
 function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
-  // Split trailing30 into 4 lines of 7 (oldest → newest).
-  const lines: HabitRow["trailing30"][] = [];
-  for (let i = 0; i < row.trailing30.length; i += 7) {
-    lines.push(row.trailing30.slice(i, i + 7));
+  // Calendar-aligned grid: every column is a fixed weekday (Sun → Sat) so
+  // the user can scan a column to see "how often do I hit this on Mondays."
+  // We pad the start with empty cells until the first real cell lands in
+  // its correct DOW column, and pad the end so the row fills out cleanly.
+  const cells: Array<HabitRow["trailing30"][number] | null> = [];
+  if (row.trailing30.length > 0) {
+    const firstDow = new Date(`${row.trailing30[0].ymd}T00:00:00.000Z`).getUTCDay();
+    for (let i = 0; i < firstDow; i++) cells.push(null);
+    cells.push(...row.trailing30);
+    while (cells.length % 7 !== 0) cells.push(null);
   }
+  const lines: typeof cells[] = [];
+  for (let i = 0; i < cells.length; i += 7) lines.push(cells.slice(i, i + 7));
+
+  const todayDow = new Date(`${today}T00:00:00.000Z`).getUTCDay();
   const completedDays = row.trailing30.filter((d) => d.state === "done").length;
   const coveredDays = row.trailing30.filter((d) => d.state === "covered").length;
   const missedDays = row.trailing30.filter((d) => d.state === "missed").length;
@@ -184,6 +194,19 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
         <div style={expansionPanel}>
           <div style={expansionLabel}>Last 30 days</div>
           <div style={dotGridShell}>
+            <div style={dotGridRow}>
+              {DAY_INITIALS.map((d, i) => (
+                <span
+                  key={i}
+                  style={{
+                    ...weekdayHeader,
+                    ...(i === todayDow ? weekdayHeaderToday : null),
+                  }}
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
             {lines.map((line, lineIdx) => (
               <div key={lineIdx} style={dotGridRow}>
                 {Array.from({ length: 7 }).map((_, dotIdx) => {
@@ -510,6 +533,24 @@ const dotGridRow: CSSProperties = {
 
 const dotPlaceholder: CSSProperties = {
   background: "transparent",
+};
+
+// Sun-first day initials for the calendar-aligned 30-day grid.
+const DAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"] as const;
+
+const weekdayHeader: CSSProperties = {
+  textAlign: "center",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: 0.5,
+  color: COLOR.textFaint,
+  textTransform: "uppercase",
+  paddingBottom: 1,
+};
+
+const weekdayHeaderToday: CSSProperties = {
+  color: COLOR.success,
+  fontWeight: 900,
 };
 
 const statRow: CSSProperties = {
