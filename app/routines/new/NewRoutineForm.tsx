@@ -304,7 +304,8 @@ export default function NewRoutineForm({
           initialUnit="WEEK"
           initialInterval={1}
           initialEnabled={false}
-          availableSubstituteRoutines={availableSubstituteRoutines}
+          // Substitutes only apply to habit-domain routines.
+          availableSubstituteRoutines={effectiveDomain === "habit" ? availableSubstituteRoutines : []}
         />
       </div>
 

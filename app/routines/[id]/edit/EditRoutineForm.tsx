@@ -194,7 +194,11 @@ export default function EditRoutineForm({
           initialUnit={routine.targetFrequencyUnit}
           initialInterval={routine.targetFrequencyInterval}
           initialEnabled={routine.frequencyGoalEnabled}
-          availableSubstituteRoutines={availableSubstituteRoutines}
+          // Substitutes only make sense for habit-domain routines — those are
+          // the routines whose heatmap reads "covered by another routine."
+          // Strength/sport routines aren't habits, so a "covered by" model
+          // doesn't apply.
+          availableSubstituteRoutines={effectiveDomainValue === "habit" ? availableSubstituteRoutines : []}
           initialSubstituteRoutineIds={initialSubstituteRoutineIds}
         />
       </div>

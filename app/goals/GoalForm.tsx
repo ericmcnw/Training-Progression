@@ -508,9 +508,9 @@ export default function GoalForm({
           </div>
 
           <div style={detailCardStyle}>
-            <div style={stepLabelStyle}>Also counts as completion</div>
+            <div style={stepLabelStyle}>Covered by</div>
             <div style={{ ...hintStyle, marginBottom: 10 }}>
-              Sessions from these routines render as “covered” instead of missed and keep the streak alive — useful when one activity stands in for another (e.g. climbing covers a finger-strength habit).
+              Pick routines that <em>cover</em> this goal. Days where one of these fires (but no included routine does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another (e.g. checking <em>Outdoor Bouldering</em> on a daily fingers goal).
             </div>
             <div style={routineChecklistStyle}>
               {options.routines.map(r => (

@@ -97,9 +97,9 @@ export default function RoutineFrequencyTargetFields({
           {availableSubstituteRoutines.length > 0 ? (
             <div style={substitutesBlockStyle}>
               <div style={substitutesHeaderStyle}>
-                <span style={{ fontWeight: 800, fontSize: 12 }}>Also counts as completion</span>
+                <span style={{ fontWeight: 800, fontSize: 12 }}>Covered by</span>
                 <span style={substitutesHintStyle}>
-                  Days when one of these fires (and this routine doesn’t) render as “covered” instead of missed — and the streak keeps going.
+                  Pick routines that cover <em>this habit</em>. On days you log one of them (but not this routine), the habit cell renders as <strong>covered</strong> instead of missed — and the streak keeps going. Example: checking <em>Outdoor Bouldering</em> here means a climb covers your daily fingers work.
                 </span>
               </div>
               <div style={substitutesListStyle}>

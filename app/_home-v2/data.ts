@@ -214,10 +214,39 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
       : null);
   }
   const habitCreatedYmdById = new Map<string, string>(habitRoutines.map((h) => [h.id, toAppYmd(h.createdAt)]));
+
+  // Substitute routines per habit: which other routines, when logged, count
+  // as covering this habit's day. Stored on the habit's `fg_<id>` goal as
+  // SUBSTITUTE join rows. Pulled in one query so the habit grid can render
+  // covered days and the daily aggregate can credit covered completions.
+  const habitGoalIds = habitRoutines.map((h) => `fg_${h.id}`);
+  const substituteLinks = habitGoalIds.length > 0
+    ? await prisma.frequencyGoalRoutine.findMany({
+        where: { goalId: { in: habitGoalIds }, role: "SUBSTITUTE" },
+        select: { goalId: true, routineId: true },
+      })
+    : [];
+  const substituteRoutineIdsByHabitId = new Map<string, string[]>();
+  for (const link of substituteLinks) {
+    const habitId = link.goalId.startsWith("fg_") ? link.goalId.slice(3) : link.goalId;
+    const list = substituteRoutineIdsByHabitId.get(habitId) ?? [];
+    list.push(link.routineId);
+    substituteRoutineIdsByHabitId.set(habitId, list);
+  }
+
+  // Day sets per habit:
+  //  - habitLogYmdsById: union of own logs + substitute logs (used by daily
+  //    aggregate to credit a habit as completed when a substitute fired).
+  //  - habitCoveredYmdsById: ONLY substitute logs on days the habit itself
+  //    wasn't logged (used by the legacy aggregate to optionally surface
+  //    covered counts later — currently informational).
   const habitLogYmdsById = new Map<string, Set<string>>();
   for (const h of habitRoutines) {
     const set = new Set<string>();
     for (const log of logsByRoutine.get(h.id) ?? []) set.add(toAppYmd(log.performedAt));
+    for (const subId of substituteRoutineIdsByHabitId.get(h.id) ?? []) {
+      for (const log of logsByRoutine.get(subId) ?? []) set.add(toAppYmd(log.performedAt));
+    }
     habitLogYmdsById.set(h.id, set);
   }
 
@@ -324,7 +353,19 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
   // ── Habit rows ───────────────────────────────────────────────────────────
   const habitRows: HabitRow[] = habitRoutines.map((routine) => {
     const target = habitTargetById.get(routine.id) ?? null;
-    const logs = logsByRoutine.get(routine.id) ?? [];
+    // Combine own logs (PRIMARY) with substitute logs so days only covered
+    // by a substitute render sky-blue rather than red.
+    const ownLogs = (logsByRoutine.get(routine.id) ?? []).map((log) => ({
+      performedAt: log.performedAt,
+      isPrimary: true,
+    }));
+    const subLogs = (substituteRoutineIdsByHabitId.get(routine.id) ?? []).flatMap((subId) =>
+      (logsByRoutine.get(subId) ?? []).map((log) => ({
+        performedAt: log.performedAt,
+        isPrimary: false,
+      }))
+    );
+    const logs = [...ownLogs, ...subLogs];
     const state = computeFrequencyState({ target, logs, today, trailingDays: HABIT_GRID_DAYS });
     const trailing30: HabitRow["trailing30"] = [];
     for (let i = 0; i < HABIT_GRID_DAYS; i++) {
