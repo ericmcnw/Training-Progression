@@ -57,14 +57,22 @@ export default function DomainSparklinesV2({ series }: Props) {
         <div style={axisChartShell}>
           <div style={axisYGutter} aria-hidden />
           <div style={weekLabelStrip}>
-            {weekStarts.map((w, i) => (
-              <span
-                key={w.start}
-                style={{ ...weekLabelText, ...(i === weekStarts.length - 1 ? weekLabelTextCurrent : null) }}
-              >
-                {weekRangeShort(w.start, w.end)}
-              </span>
-            ))}
+            {weekStarts.map((w, i) => {
+              const startLabel = monthDay(w.start);
+              const endLabel = monthDay(w.end);
+              return (
+                <span
+                  key={w.start}
+                  style={{ ...weekLabelText, ...(i === weekStarts.length - 1 ? weekLabelTextCurrent : null) }}
+                >
+                  {startLabel}
+                  {/* Hide the "–end" half on narrow viewports so the labels
+                      don't collide. Start date alone is enough to read the
+                      8-week timeline at a glance. */}
+                  <span className="weekLabelEnd">–{endLabel}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
         <div style={axisTotalSlot}>this wk</div>
@@ -201,6 +209,9 @@ export default function DomainSparklinesV2({ series }: Props) {
             gap: 8px;
             padding: 8px;
           }
+          /* Drop the "–end" half so labels stop colliding; start-date alone
+             reads cleanly across the 8 columns. Also nudge the font down. */
+          .weekLabelEnd { display: none; }
         }
         @keyframes homeV2Pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -240,25 +251,63 @@ function ExpandedWeekPanel({
         <div style={emptyState}>No sessions this week.</div>
       ) : (
         <ul style={logList}>
-          {week.logs
-            .slice()
-            .sort((a, b) => a.performedYmd.localeCompare(b.performedYmd))
-            .map((log) => (
-              <li key={log.logId}>
-                <button type="button" onClick={() => onLogClick(log)} style={logRow}>
+          {groupLogsByRoutine(week.logs).map((group) => (
+            <li key={group.routineId}>
+              <div style={groupShell}>
+                <div style={groupHeader}>
                   <span style={{ ...logRowAccent, background: accent }} aria-hidden />
-                  <div style={logRowText}>
-                    <span style={logRowDate}>{prettyDate(log.performedYmd, { weekday: "short" })}</span>
-                    <span style={logRowName}>{log.routineName}</span>
-                  </div>
-                  <span style={logRowTime}>{log.performedTimeLabel}</span>
-                </button>
-              </li>
-            ))}
+                  <span style={logRowName}>{group.routineName}</span>
+                  {group.entries.length > 1 ? (
+                    <span style={countBadge(accent)}>×{group.entries.length}</span>
+                  ) : null}
+                </div>
+                {/* Date pills — one per occurrence, each clickable to open
+                    the per-log detail popover. Even single-log groups use
+                    the pill so the layout reads consistently. */}
+                <div style={datePillRow}>
+                  {group.entries.map((log) => (
+                    <button
+                      key={log.logId}
+                      type="button"
+                      onClick={() => onLogClick(log)}
+                      style={datePill}
+                    >
+                      <span style={datePillDate}>
+                        {prettyDate(log.performedYmd, { weekday: "short" })}
+                      </span>
+                      <span style={datePillTime}>{log.performedTimeLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </li>
+          ))}
         </ul>
       )}
     </div>
   );
+}
+
+// Group logs by routine, keeping each routine's entries in chronological
+// order. Returned groups are sorted by most-recent occurrence first so the
+// list reads "what'd I just do" → "what'd I do earlier this week."
+function groupLogsByRoutine(
+  logs: DomainWeek["logs"]
+): Array<{ routineId: string; routineName: string; entries: DomainWeek["logs"] }> {
+  const byRoutine = new Map<string, { routineId: string; routineName: string; entries: DomainWeek["logs"] }>();
+  for (const log of logs) {
+    const existing = byRoutine.get(log.routineId);
+    if (existing) existing.entries.push(log);
+    else byRoutine.set(log.routineId, { routineId: log.routineId, routineName: log.routineName, entries: [log] });
+  }
+  for (const group of byRoutine.values()) {
+    group.entries.sort((a, b) => a.performedYmd.localeCompare(b.performedYmd));
+  }
+  return Array.from(byRoutine.values()).sort((a, b) => {
+    const aLatest = a.entries[a.entries.length - 1].performedYmd;
+    const bLatest = b.entries[b.entries.length - 1].performedYmd;
+    return bLatest.localeCompare(aLatest);
+  });
 }
 
 // ───────────────────────────── floating log popover (full report)
@@ -495,10 +544,9 @@ function formatSeconds(s: number): string {
 
 // ───────────────────────────── helpers
 
-function weekRangeShort(startYmd: string, endYmd: string): string {
-  const s = new Date(`${startYmd}T00:00:00.000Z`);
-  const e = new Date(`${endYmd}T00:00:00.000Z`);
-  return `${s.getUTCMonth() + 1}/${s.getUTCDate()}–${e.getUTCMonth() + 1}/${e.getUTCDate()}`;
+function monthDay(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00.000Z`);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 function prettyDate(ymd: string, opts?: Intl.DateTimeFormatOptions): string {
@@ -823,6 +871,74 @@ const logRowName: CSSProperties = {
 };
 
 const logRowTime: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: COLOR.textDim,
+  whiteSpace: "nowrap",
+};
+
+const groupShell: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: "8px 10px",
+  borderRadius: 9,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.022)",
+};
+
+const groupHeader: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+};
+
+function countBadge(accent: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "1px 7px",
+    borderRadius: 999,
+    border: `1px solid ${accent}`,
+    color: accent,
+    fontSize: 10.5,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    background: "transparent",
+    flexShrink: 0,
+  };
+}
+
+const datePillRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 5,
+};
+
+const datePill: CSSProperties = {
+  all: "unset",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: 5,
+  padding: "3px 9px",
+  borderRadius: 999,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.04)",
+  color: COLOR.text,
+  fontSize: 11,
+  fontWeight: 700,
+};
+
+const datePillDate: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+};
+
+const datePillTime: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: COLOR.textDim,
