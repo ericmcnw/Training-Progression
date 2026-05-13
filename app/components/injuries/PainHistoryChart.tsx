@@ -12,6 +12,13 @@ export type PainHistoryDay = {
 const MAX_DAYS = 90;
 const PLOT_HEIGHT = 140;
 const Y_AXIS_WIDTH = 28;
+// When the injury was opened long before the first pain log, trim that
+// empty prelude so the chart focuses on the actual data — keep a couple
+// days of context before the first log so the user can see it ramp in.
+const PADDING_BEFORE_FIRST_LOG = 2;
+// Floor for the visible range — a one-day-old injury with a single log
+// shouldn't render as a single tower at the right edge.
+const MIN_VISIBLE_DAYS = 7;
 
 const CONTEXT_COLOR: Record<NonNullable<PainHistoryDay["context"]>, string> = {
   DURING_ACTIVITY: "#FB7185",
@@ -35,9 +42,28 @@ function fmtShortDate(ymd: string) {
 }
 
 export default function PainHistoryChart({ days }: { days: PainHistoryDay[] }) {
-  // Render only the most recent MAX_DAYS so very old injuries stay legible.
-  const visibleDays = days.length > MAX_DAYS ? days.slice(-MAX_DAYS) : days;
-  const truncatedCount = days.length - visibleDays.length;
+  // First cap to MAX_DAYS so very old injuries stay legible.
+  const cappedDays = days.length > MAX_DAYS ? days.slice(-MAX_DAYS) : days;
+  const cappedFromOldest = days.length - cappedDays.length;
+
+  // Then trim the leading run of "no log" days so the chart doesn't lead
+  // with weeks of baseline before the first real entry. Keep a small pad
+  // before the first log, and never trim below MIN_VISIBLE_DAYS so the
+  // plot still has room to breathe.
+  const firstLogIndex = cappedDays.findIndex((d) => d.peak !== null);
+  let visibleDays = cappedDays;
+  let trimmedFromStart = 0;
+  if (firstLogIndex > 0) {
+    const desiredStart = Math.max(0, firstLogIndex - PADDING_BEFORE_FIRST_LOG);
+    const minVisibleStart = Math.max(0, cappedDays.length - MIN_VISIBLE_DAYS);
+    const startIndex = Math.min(desiredStart, minVisibleStart);
+    if (startIndex > 0) {
+      visibleDays = cappedDays.slice(startIndex);
+      trimmedFromStart = startIndex;
+    }
+  }
+  const totalHidden = cappedFromOldest + trimmedFromStart;
+
   const hasAnyData = visibleDays.some((d) => d.peak !== null && d.peak > 0);
   const dayCount = Math.max(1, visibleDays.length);
 
@@ -197,9 +223,15 @@ export default function PainHistoryChart({ days }: { days: PainHistoryDay[] }) {
         </div>
       )}
 
-      {truncatedCount > 0 && (
+      {totalHidden > 0 && (
         <div style={{ fontSize: 11, opacity: 0.5, fontWeight: 700 }}>
-          Showing the most recent {MAX_DAYS} days · {truncatedCount} earlier days hidden
+          {trimmedFromStart > 0 && (
+            <>
+              Skipped {trimmedFromStart} day{trimmedFromStart === 1 ? "" : "s"} with no pain logged before the first entry
+              {cappedFromOldest > 0 ? " · " : ""}
+            </>
+          )}
+          {cappedFromOldest > 0 && <>Capped to the most recent {MAX_DAYS} days</>}
         </div>
       )}
     </div>
