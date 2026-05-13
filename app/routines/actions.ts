@@ -1672,6 +1672,8 @@ async function resolveActivitySpotId(input: {
   newActivitySpotRegion?: string | null;
   newActivitySpotLatitude?: number | null;
   newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
 }): Promise<string | null> {
   if (input.activitySpotId?.trim()) return input.activitySpotId.trim();
   const name = input.newActivitySpotName?.trim();
@@ -1685,16 +1687,33 @@ async function resolveActivitySpotId(input: {
   const lng = typeof input.newActivitySpotLongitude === "number" && Number.isFinite(input.newActivitySpotLongitude)
     ? input.newActivitySpotLongitude
     : null;
+  const osmType = input.newActivitySpotOsmType?.trim() || null;
+  const osmId = input.newActivitySpotOsmId?.trim() || null;
 
-  const existing = await prisma.activitySpot.findFirst({
+  // OSM-identity dedup runs first — finds an existing spot for this
+  // activity that points at the same OSM place even if names differ
+  // slightly (e.g. "Paugussett State Forest" vs "Paugussett SF").
+  const osmExisting = osmType && osmId
+    ? await prisma.activitySpot.findFirst({
+        where: { activitySlug: slug, osmType, osmId },
+        select: { id: true, region: true, latitude: true, longitude: true },
+      })
+    : null;
+  const existing = osmExisting ?? await prisma.activitySpot.findFirst({
     where: { activitySlug: slug, name: { equals: name, mode: "insensitive" } },
     select: { id: true, region: true, latitude: true, longitude: true },
   });
   if (existing) {
-    const updates: { region?: string; latitude?: number; longitude?: number } = {};
+    const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
     if (region && !existing.region) updates.region = region;
     if (lat !== null && existing.latitude == null) updates.latitude = lat;
     if (lng !== null && existing.longitude == null) updates.longitude = lng;
+    // Backfill OSM identity onto a previously-untagged saved spot —
+    // future picks of the same OSM place dedup against this record.
+    if (osmType && osmId && !osmExisting) {
+      updates.osmType = osmType;
+      updates.osmId = osmId;
+    }
     if (Object.keys(updates).length > 0) {
       await prisma.activitySpot.update({ where: { id: existing.id }, data: updates });
     }
@@ -1708,6 +1727,8 @@ async function resolveActivitySpotId(input: {
       region,
       latitude: lat,
       longitude: lng,
+      osmType,
+      osmId,
     },
     select: { id: true },
   });
@@ -1734,6 +1755,8 @@ export async function logCardio(params: {
   newActivitySpotRegion?: string | null;
   newActivitySpotLatitude?: number | null;
   newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) {
@@ -1799,6 +1822,8 @@ export async function logRun(params: {
   newActivitySpotRegion?: string | null;
   newActivitySpotLatitude?: number | null;
   newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
 }) {
   return logCardio(params);
 }
@@ -1886,6 +1911,8 @@ export async function logSession(params: {
   newClimbLocationRegion?: string | null;
   newClimbLocationLatitude?: number | null;
   newClimbLocationLongitude?: number | null;
+  newClimbLocationOsmType?: string | null;
+  newClimbLocationOsmId?: string | null;
   // Generic ActivitySpot — used by non-climbing sport sessions.
   activitySlug?: string;
   activitySpotId?: string;
@@ -1894,6 +1921,8 @@ export async function logSession(params: {
   newActivitySpotRegion?: string | null;
   newActivitySpotLatitude?: number | null;
   newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
@@ -1912,24 +1941,39 @@ export async function logSession(params: {
     const longitude = typeof params.newClimbLocationLongitude === "number" && Number.isFinite(params.newClimbLocationLongitude)
       ? params.newClimbLocationLongitude
       : null;
-    const existing = await prisma.climbLocation.findFirst({
+    const osmType = params.newClimbLocationOsmType?.trim() || null;
+    const osmId = params.newClimbLocationOsmId?.trim() || null;
+    // OSM-identity dedup takes priority — if the user picked an OSM
+    // place that already corresponds to a saved record, link to it.
+    const osmExisting = osmType && osmId
+      ? await prisma.climbLocation.findFirst({
+          where: { osmType, osmId },
+          select: { id: true, region: true, latitude: true, longitude: true },
+        })
+      : null;
+    const existing = osmExisting ?? await prisma.climbLocation.findFirst({
       where: { name: { equals: name, mode: "insensitive" }, type },
       select: { id: true, region: true, latitude: true, longitude: true },
     });
     if (existing) {
       resolvedClimbLocationId = existing.id;
-      // Backfill region/coords if the existing record was created without
-      // them and the user just provided some — never clobber existing data.
-      const updates: { region?: string; latitude?: number; longitude?: number } = {};
+      // Backfill region/coords/OSM identity if the existing record was
+      // created without them and the user just provided some — never
+      // clobber existing data.
+      const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
       if (region && !existing.region) updates.region = region;
       if (latitude !== null && existing.latitude == null) updates.latitude = latitude;
       if (longitude !== null && existing.longitude == null) updates.longitude = longitude;
+      if (osmType && osmId && !osmExisting) {
+        updates.osmType = osmType;
+        updates.osmId = osmId;
+      }
       if (Object.keys(updates).length > 0) {
         await prisma.climbLocation.update({ where: { id: existing.id }, data: updates });
       }
     } else {
       const created = await prisma.climbLocation.create({
-        data: { name, type, region, latitude, longitude },
+        data: { name, type, region, latitude, longitude, osmType, osmId },
         select: { id: true },
       });
       resolvedClimbLocationId = created.id;

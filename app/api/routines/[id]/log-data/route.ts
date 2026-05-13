@@ -173,20 +173,20 @@ export async function GET(
       getRoutinePainCheckZones(routineId),
       isClimbing
         ? prisma.climbLocation.findMany({
-            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ type: "asc" }, { name: "asc" }],
           })
         : Promise.resolve([]),
       activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
             where: { activitySlug: { in: compatibleSlugs } },
-            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
       activitySlug && includeClimbingSpots && !isClimbing
         ? prisma.climbLocation.findMany({
-            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
@@ -226,13 +226,13 @@ export async function GET(
       activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
             where: { activitySlug: { in: compatibleSlugs } },
-            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
       activitySlug && includeClimbingSpots
         ? prisma.climbLocation.findMany({
-            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),

@@ -391,20 +391,20 @@ export default async function LogRoutinePage(props: {
     isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((e) => e.id)) : Promise.resolve(new Map<string, string>()),
     isClimbing
       ? prisma.climbLocation.findMany({
-          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
           orderBy: [{ type: "asc" }, { name: "asc" }],
         })
       : Promise.resolve([]),
     activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
       ? prisma.activitySpot.findMany({
           where: { activitySlug: { in: compatibleSlugs } },
-          select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
           orderBy: [{ name: "asc" }],
         })
       : Promise.resolve([]),
     includeClimbingSpots
       ? prisma.climbLocation.findMany({
-          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
           orderBy: [{ name: "asc" }],
         })
       : Promise.resolve([]),

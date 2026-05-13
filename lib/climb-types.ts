@@ -19,6 +19,11 @@ export type ClimbLocationBasic = {
   region: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** OSM identity (osm_type + osm_id) — present when the location was
+   *  picked from the OpenStreetMap autocomplete. Used by the picker to
+   *  dedup OSM suggestions against already-saved spots. */
+  osmType: string | null;
+  osmId: string | null;
 };
 
 export type ClimbProblemBasic = {

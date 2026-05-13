@@ -225,6 +225,8 @@ export default function SessionLogForm({
         region: draft.newClimbLocationRegion ?? "",
         latitude: draft.newClimbLocationLatitude ?? null,
         longitude: draft.newClimbLocationLongitude ?? null,
+        osmType: null,
+        osmId: null,
       });
     }
     isDirtyRef.current = true;
@@ -395,6 +397,8 @@ export default function SessionLogForm({
         newClimbLocationRegion: newClimbLocation?.region?.trim() || undefined,
         newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
         newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
+        newClimbLocationOsmType: newClimbLocation?.osmType ?? undefined,
+        newClimbLocationOsmId: newClimbLocation?.osmId ?? undefined,
         // Spot wiring — picker selection routes to whichever FK matches
         // its origin (ActivitySpot or cross-activity ClimbLocation). The
         // existing climbLocationId param above only fires for climbing
@@ -410,6 +414,8 @@ export default function SessionLogForm({
         newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
         newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
         newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
+        newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
+        newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);

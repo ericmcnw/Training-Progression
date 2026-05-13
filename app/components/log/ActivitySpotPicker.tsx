@@ -22,6 +22,9 @@ import {
 
 type NominatimResult = {
   place_id: number;
+  /** Stable across Nominatim updates — pair with osm_id to identify a place. */
+  osm_type?: string;
+  osm_id?: number | string;
   display_name: string;
   lat: string;
   lon: string;
@@ -123,6 +126,18 @@ export default function ActivitySpotPicker({
     ? savedSpots.filter((s) => s.name.toLowerCase().includes(trimmedNewName)).slice(0, 5)
     : [];
 
+  // OSM dedup: hide Nominatim suggestions whose place identity is already
+  // represented by a saved spot. The saved one's row above already covers
+  // it, so showing the OSM duplicate just confuses the user.
+  const savedOsmKeys = new Set(
+    savedSpots
+      .filter((s) => s.osmType && s.osmId)
+      .map((s) => `${s.osmType}:${s.osmId}`)
+  );
+  const filteredNominatimResults = nominatimResults.filter(
+    (r) => !savedOsmKeys.has(`${r.osm_type ?? ""}:${r.osm_id ?? ""}`)
+  );
+
   function selectExisting(value: string) {
     const decoded = decodeOptionValue(value);
     if (!decoded) return;
@@ -134,7 +149,7 @@ export default function ActivitySpotPicker({
   function activateNew() {
     onSelect(null);
     onNewSpot(
-      newSpot ?? { name: "", type: defaultType, region: "", latitude: null, longitude: null }
+      newSpot ?? { name: "", type: defaultType, region: "", latitude: null, longitude: null, osmType: null, osmId: null }
     );
     setShowNew(true);
   }
@@ -146,6 +161,8 @@ export default function ActivitySpotPicker({
       region: "",
       latitude: null,
       longitude: null,
+      osmType: null,
+      osmId: null,
     };
     onNewSpot({ ...base, ...patch });
   }
@@ -290,10 +307,10 @@ export default function ActivitySpotPicker({
                     ))}
                   </>
                 )}
-                {nominatimResults.length > 0 && (
+                {filteredNominatimResults.length > 0 && (
                   <>
                     <div style={suggestionGroupLabel}>From OpenStreetMap</div>
-                    {nominatimResults.map((r) => (
+                    {filteredNominatimResults.map((r) => (
                       <button
                         key={`osm-${r.place_id}`}
                         type="button"
@@ -313,6 +330,8 @@ export default function ActivitySpotPicker({
                             latitude: lat,
                             longitude: lng,
                             region: newSpot?.region?.trim() || region,
+                            osmType: r.osm_type ?? null,
+                            osmId: r.osm_id != null ? String(r.osm_id) : null,
                           });
                           setSuggestionsOpen(false);
                         }}

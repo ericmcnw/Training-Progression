@@ -28,10 +28,16 @@ export type NewClimbLocationDraft = {
    *  the map immediately without a separate placement step. */
   latitude: number | null;
   longitude: number | null;
+  /** OSM place identity captured from the autocomplete pick — lets the
+   *  server dedup against an existing record before creating a new one. */
+  osmType: string | null;
+  osmId: string | null;
 };
 
 type NominatimResult = {
   place_id: number;
+  osm_type?: string;
+  osm_id?: number | string;
   display_name: string;
   lat: string;
   lon: string;
@@ -96,6 +102,17 @@ export default function ClimbLocationPicker({
     ? savedLocations.filter((l) => l.name.toLowerCase().includes(trimmedNewName)).slice(0, 5)
     : [];
 
+  // OSM dedup: hide Nominatim suggestions whose place identity is already
+  // saved as a ClimbLocation.
+  const savedOsmKeys = new Set(
+    savedLocations
+      .filter((l) => l.osmType && l.osmId)
+      .map((l) => `${l.osmType}:${l.osmId}`)
+  );
+  const filteredNominatimResults = nominatimResults.filter(
+    (r) => !savedOsmKeys.has(`${r.osm_type ?? ""}:${r.osm_id ?? ""}`)
+  );
+
   const gyms = savedLocations.filter((l) => l.type === "GYM");
   const crags = savedLocations.filter((l) => l.type === "CRAG");
 
@@ -108,13 +125,13 @@ export default function ClimbLocationPicker({
   function activateNew() {
     onSelectId(null);
     onNewLocation(
-      newLocation ?? { name: "", type: "GYM", region: "", latitude: null, longitude: null }
+      newLocation ?? { name: "", type: "GYM", region: "", latitude: null, longitude: null, osmType: null, osmId: null }
     );
     setShowNew(true);
   }
 
   function patchNew(patch: Partial<NewClimbLocationDraft>) {
-    const base = newLocation ?? { name: "", type: "GYM" as ClimbLocationType, region: "", latitude: null, longitude: null };
+    const base: NewClimbLocationDraft = newLocation ?? { name: "", type: "GYM" as ClimbLocationType, region: "", latitude: null, longitude: null, osmType: null, osmId: null };
     onNewLocation({ ...base, ...patch });
   }
 
@@ -258,10 +275,10 @@ export default function ClimbLocationPicker({
                     ))}
                   </>
                 )}
-                {nominatimResults.length > 0 && (
+                {filteredNominatimResults.length > 0 && (
                   <>
                     <div style={suggestionGroupLabel}>From OpenStreetMap</div>
-                    {nominatimResults.map((r) => (
+                    {filteredNominatimResults.map((r) => (
                       <button
                         key={`osm-${r.place_id}`}
                         type="button"
@@ -279,6 +296,8 @@ export default function ClimbLocationPicker({
                             latitude: lat,
                             longitude: lng,
                             region: newLocation?.region?.trim() || region,
+                            osmType: r.osm_type ?? null,
+                            osmId: r.osm_id != null ? String(r.osm_id) : null,
                           });
                           setSuggestionsOpen(false);
                         }}

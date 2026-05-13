@@ -181,6 +181,8 @@ export default function LogRunForm({
         newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
         newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
         newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
+        newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
+        newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
       });
       clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);

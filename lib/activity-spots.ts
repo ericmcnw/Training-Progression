@@ -134,6 +134,8 @@ export type ActivitySpotBasic = {
   region: string | null;
   latitude: number | null;
   longitude: number | null;
+  osmType: string | null;
+  osmId: string | null;
 };
 
 /** Mutable draft used by the picker when the user is creating a new spot
@@ -144,6 +146,11 @@ export type NewActivitySpotDraft = {
   region: string;
   latitude: number | null;
   longitude: number | null;
+  /** OSM place identity captured when the user picked the spot from
+   *  the autocomplete dropdown. Persists with the new spot so future
+   *  picks of the same OSM place dedup against this record. */
+  osmType: string | null;
+  osmId: string | null;
 };
 
 // ── Cross-activity spot compatibility ─────────────────────────────────────
@@ -213,6 +220,10 @@ export type SpotPickerItem = {
   /** True when the spot's origin matches the routine's activity slug —
    *  drives the optgroup split between "your spots" vs "from elsewhere". */
   isOwnActivity: boolean;
+  /** OSM identity. When set, picker dedups Nominatim suggestions against
+   *  this so a single physical place doesn't show twice. */
+  osmType: string | null;
+  osmId: string | null;
 };
 
 /** Discriminated selection shape returned by the picker. The form maps
@@ -233,12 +244,16 @@ export function buildSpotPickerItems(input: {
     name: string;
     type: string | null;
     region: string | null;
+    osmType: string | null;
+    osmId: string | null;
   }>;
   climbLocations: Array<{
     id: string;
     name: string;
     type: string;
     region: string | null;
+    osmType: string | null;
+    osmId: string | null;
   }>;
 }): SpotPickerItem[] {
   const items: SpotPickerItem[] = [];
@@ -253,6 +268,8 @@ export function buildSpotPickerItems(input: {
       originSlug: spot.activitySlug,
       originLabel: entry?.label ?? spot.activitySlug,
       isOwnActivity: spot.activitySlug === input.ownActivitySlug,
+      osmType: spot.osmType,
+      osmId: spot.osmId,
     });
   }
   for (const loc of input.climbLocations) {
@@ -265,10 +282,33 @@ export function buildSpotPickerItems(input: {
       originSlug: "climbing",
       originLabel: "Climbing",
       isOwnActivity: input.ownActivitySlug === "climbing",
+      osmType: loc.osmType,
+      osmId: loc.osmId,
     });
   }
-  // Own-activity spots first, then alphabetical within each group.
-  return items.sort((a, b) => {
+  // Cross-table OSM dedup: if a ClimbLocation and an ActivitySpot share
+  // the same OSM identity, keep the one belonging to the own activity
+  // (or the first one encountered if neither matches). This way a
+  // climbing crag the user has already saved as an ActivitySpot for
+  // trail-running doesn't show twice.
+  const byOsm = new Map<string, SpotPickerItem>();
+  const noOsm: SpotPickerItem[] = [];
+  for (const item of items) {
+    if (item.osmType && item.osmId) {
+      const key = `${item.osmType}:${item.osmId}`;
+      const existing = byOsm.get(key);
+      if (!existing) {
+        byOsm.set(key, item);
+      } else if (!existing.isOwnActivity && item.isOwnActivity) {
+        // Prefer the own-activity record when both exist.
+        byOsm.set(key, item);
+      }
+    } else {
+      noOsm.push(item);
+    }
+  }
+  const deduped = [...byOsm.values(), ...noOsm];
+  return deduped.sort((a, b) => {
     if (a.isOwnActivity !== b.isOwnActivity) return a.isOwnActivity ? -1 : 1;
     return a.name.localeCompare(b.name);
   });

@@ -291,6 +291,13 @@ model ClimbLocation {
   // coords added later from the climbing map page.
   latitude  Float?
   longitude Float?
+  // OpenStreetMap place identity — when the user picks a spot from the
+  // Nominatim autocomplete we store the stable osm_type+osm_id pair so
+  // future picks of the same OSM place link to this existing record
+  // instead of duplicating. Null for spots created without OSM (manual
+  // names, GPS-only, undocumented boulders, etc.).
+  osmType   String?
+  osmId     String?
   createdAt DateTime          @default(now())
   updatedAt DateTime          @default(now()) @updatedAt
 
@@ -298,6 +305,7 @@ model ClimbLocation {
   problems    ClimbProblem[]
 
   @@index([type, name])
+  @@index([osmType, osmId])
 }
 
 // Generic location pin for non-climbing activities (Phase 2 of the spots-map
@@ -318,12 +326,18 @@ model ActivitySpot {
   region       String?
   latitude     Float?
   longitude    Float?
+  // OpenStreetMap place identity (osm_type + osm_id). Same purpose as
+  // ClimbLocation.osm* — dedup the picker so a single OSM place doesn't
+  // generate parallel records across activities.
+  osmType      String?
+  osmId        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   routineLogs RoutineLog[]
 
   @@index([activitySlug, name])
+  @@index([osmType, osmId])
 }
 
 model ClimbProblem {
