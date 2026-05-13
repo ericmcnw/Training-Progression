@@ -43,6 +43,7 @@ export default async function BodyPage(props: {
 
   const triageInjuries = injuries.filter((i) => i.status === "ACTIVE" || i.status === "FLARED");
   const freshnessCounts = countByFreshness(zones);
+  const needsAttention = buildNeedsAttention(zones);
 
   const selectedSection = coverageOverview.sections.find((e) => e.lens === lens) ?? coverageOverview.sections[0];
   const activeCategories = selectedSection.categories.filter((c) => c.totalCount > 0);
@@ -86,6 +87,8 @@ export default async function BodyPage(props: {
       <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} />
 
       <BodyPageClient zones={zones} />
+
+      <NeedsAttentionSection items={needsAttention} />
 
       <section style={coverageSectionStyle}>
         <div style={coverageHeaderStyle}>
@@ -251,6 +254,123 @@ const statusChipCount: React.CSSProperties = {
 const statusChipLabel: React.CSSProperties = {
   fontWeight: 700,
   opacity: 0.92,
+};
+
+// ─── Needs attention ──────────────────────────────────────────────────
+// Surfaces muscle groups that have been sitting cold (no logged work in
+// 7+ days). Excludes anything injured or actively recovering — those are
+// intentionally off, not neglected. Groups left/right zones together so
+// the same muscle doesn't show up twice.
+
+const COLD_THRESHOLD_DAYS = 7;
+const NEEDS_ATTENTION_LIMIT = 4;
+
+type NeedsAttentionItem = {
+  groupSlug: string;
+  label: string;
+  // null = never seen worked in the 30-day window the zones query covers.
+  daysSinceWorked: number | null;
+  zoneCount: number;
+};
+
+function buildNeedsAttention(zones: ZoneState[]): NeedsAttentionItem[] {
+  // Group by metadataGroupSlug; skip injured / recovering zones (those
+  // have their own dedicated surfaces) and zones without a group mapping
+  // (knees, joints, etc. don't represent a muscle group to "warm up").
+  const buckets = new Map<string, { lastWorked: number | null; zoneCount: number }>();
+  for (const zone of zones) {
+    if (zone.freshness === "INJURED" || zone.freshness === "RECOVERING") continue;
+    const slug = zone.groupSlug;
+    if (!slug) continue;
+    const entry = buckets.get(slug) ?? { lastWorked: null, zoneCount: 0 };
+    entry.zoneCount += 1;
+    // Track the *most-recently-worked* zone in the group as the group's
+    // freshness — a single right-hamstring run counts the whole hamstring
+    // group as recently worked even if the left one is cold.
+    const days = zone.daysSinceWorked ?? null;
+    if (days !== null && (entry.lastWorked === null || days < entry.lastWorked)) {
+      entry.lastWorked = days;
+    }
+    buckets.set(slug, entry);
+  }
+
+  const items: NeedsAttentionItem[] = [];
+  for (const [groupSlug, info] of buckets) {
+    const days = info.lastWorked;
+    // null = never worked in the 30-day window. Treat as cold.
+    if (days === null || days >= COLD_THRESHOLD_DAYS) {
+      items.push({
+        groupSlug,
+        label: prettifySlug(groupSlug),
+        daysSinceWorked: days,
+        zoneCount: info.zoneCount,
+      });
+    }
+  }
+
+  // Coldest first (null = "30+ days" → push to top).
+  items.sort((a, b) => {
+    const aDays = a.daysSinceWorked ?? 999;
+    const bDays = b.daysSinceWorked ?? 999;
+    if (aDays !== bDays) return bDays - aDays;
+    return a.label.localeCompare(b.label);
+  });
+
+  return items.slice(0, NEEDS_ATTENTION_LIMIT);
+}
+
+function prettifySlug(slug: string) {
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function NeedsAttentionSection({ items }: { items: NeedsAttentionItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section style={attentionStyle} aria-label="Muscle groups that need attention">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <div style={cardTitle}>Needs attention</div>
+        <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
+          {COLD_THRESHOLD_DAYS}+ days since last loaded
+        </div>
+      </div>
+      <div style={attentionRow}>
+        {items.map((item) => (
+          <div key={item.groupSlug} style={attentionItemStyle}>
+            <div style={{ fontWeight: 900, fontSize: 13 }}>{item.label}</div>
+            <div style={attentionMeta}>
+              {item.daysSinceWorked === null ? "30+ days" : `${item.daysSinceWorked} day${item.daysSinceWorked === 1 ? "" : "s"}`}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const attentionStyle: React.CSSProperties = {
+  ...cardSurface,
+  gap: 10,
+};
+
+const attentionRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 8,
+};
+
+const attentionItemStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(251,191,36,0.28)",
+  background: "rgba(251,191,36,0.06)",
+};
+
+const attentionMeta: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#FDE68A",
+  marginTop: 3,
+  letterSpacing: 0.2,
 };
 
 const linkStyle: React.CSSProperties = {

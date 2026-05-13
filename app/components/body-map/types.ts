@@ -8,6 +8,14 @@ export type ZoneState = {
   freshness: ZoneFreshness;
   painLevel?: number;
   activityCount?: number;
+  // Days since this zone was last loaded. Used by the /body needs-attention
+  // section to surface zones that have been sitting cold. Null = never
+  // worked in the tracked window.
+  daysSinceWorked?: number | null;
+  // Underlying metadata group slug (e.g. "hamstrings"), used by /body to
+  // dedupe left/right pairs into one muscle group entry for surfaces like
+  // the needs-attention list.
+  groupSlug?: string | null;
   recentWorkEntries?: Array<{
     id: string;
     label: string;

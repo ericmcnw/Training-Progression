@@ -26,15 +26,92 @@ const freshnessBadge: Record<ZoneFreshness, React.CSSProperties> = {
   INJURED:         { background: "rgba(225,29,29,0.18)", borderColor: "rgba(255,56,56,0.42)", color: "#FCA5A5" },
 };
 
-function dayLabel(ymd: string, today: string) {
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  if (ymd === today) return "Today";
-  const d = new Date(ymd + "T12:00:00Z");
-  return days[d.getUTCDay()];
-}
-
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function weekTotal(week: Record<string, number>) {
+  return Object.values(week).reduce((sum, n) => sum + n, 0);
+}
+
+function monthTotal(days: Array<{ ymd: string; count: number }>) {
+  return days.reduce((sum, day) => sum + day.count, 0);
+}
+
+// ─── 28-day activity sparkline ─────────────────────────────────────────
+// Server-renderable SVG bar strip. Each day owns one bar; height scales
+// to the peak day in the window (or 4 as a floor so single-session days
+// don't render full-height). Today's bar is tinted brighter so it pops.
+
+function ActivitySparkline({
+  days,
+  today,
+}: {
+  days: Array<{ ymd: string; count: number }>;
+  today: string;
+}) {
+  if (days.length === 0) return null;
+  const peak = Math.max(4, ...days.map((d) => d.count));
+  const height = 44;
+  const dayCount = days.length;
+
+  return (
+    <div style={sparkShell}>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${dayCount * 10} ${height}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Daily activity over the last ${dayCount} days`}
+        style={{ display: "block" }}
+      >
+        {days.map((day, i) => {
+          const slotX = i * 10;
+          const barWidth = 6;
+          const barX = slotX + (10 - barWidth) / 2;
+          if (day.count <= 0) {
+            return (
+              <rect
+                key={day.ymd}
+                x={barX}
+                y={height - 1.5}
+                width={barWidth}
+                height={1.5}
+                fill="rgba(255,255,255,0.10)"
+              />
+            );
+          }
+          const barH = Math.max(3, (day.count / peak) * height);
+          const isToday = day.ymd === today;
+          return (
+            <rect
+              key={day.ymd}
+              x={barX}
+              y={height - barH}
+              width={barWidth}
+              height={barH}
+              fill={isToday ? "rgba(51,255,122,0.85)" : "rgba(132,204,255,0.7)"}
+              rx={1}
+            >
+              <title>{`${day.ymd}: ${day.count} entr${day.count === 1 ? "y" : "ies"}`}</title>
+            </rect>
+          );
+        })}
+      </svg>
+      <div style={sparkAxisRow}>
+        <span>{shortDate(days[0]?.ymd)}</span>
+        <span>{shortDate(days[Math.floor(dayCount / 2)]?.ymd)}</span>
+        <span style={{ color: COLOR.text, fontWeight: 800 }}>Today</span>
+      </div>
+    </div>
+  );
+}
+
+function shortDate(ymd: string | undefined) {
+  if (!ymd) return "";
+  const d = new Date(`${ymd}T12:00:00Z`);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 // ─── Zone detail panel ────────────────────────────────────────────────────────
@@ -47,8 +124,6 @@ function ZonePanel({
   onClose: () => void;
   loading: boolean;
 }) {
-  const weekDays = Object.keys(detail.weekActivityCounts).sort();
-
   return (
     <div style={{ ...panel, opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}>
       {/* Header */}
@@ -75,20 +150,18 @@ function ZonePanel({
         </button>
       </div>
 
-      {/* This week strip */}
+      {/* 28-day activity sparkline — same visual language as the injury
+          pain history so /body and /injuries read as one system. The
+          weekActivityCounts data is still in the payload but we render the
+          richer 28-day signal here. */}
       <div style={section}>
-        <div style={sectionHead}>This week</div>
-        <div style={weekStrip}>
-          {weekDays.map((day) => {
-            const count = detail.weekActivityCounts[day] ?? 0;
-            return (
-              <div key={day} style={dayCell(count > 0)}>
-                <span style={{ fontSize: 10, opacity: 0.7 }}>{dayLabel(day, detail.today)}</span>
-                <span style={dayBubble(count > 0)}>{count > 0 ? count : ""}</span>
-              </div>
-            );
-          })}
+        <div style={sparkHeaderRow}>
+          <div style={sectionHead}>Last 28 days</div>
+          <div style={sparkMeta}>
+            {weekTotal(detail.weekActivityCounts)} this week · {monthTotal(detail.dailyActivityCounts)} this month
+          </div>
         </div>
+        <ActivitySparkline days={detail.dailyActivityCounts} today={detail.today} />
       </div>
 
       {/* Recent activities */}
@@ -375,37 +448,33 @@ const section: React.CSSProperties = {
 
 const sectionHead: React.CSSProperties = cardTitle;
 
-const weekStrip: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-  gap: 6,
+const sparkHeaderRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  gap: 8,
+  flexWrap: "wrap",
 };
 
-function dayCell(active: boolean): React.CSSProperties {
-  return {
-    display: "grid",
-    gap: 5,
-    justifyItems: "center",
-    padding: 8,
-    borderRadius: 10,
-    border: active ? "1px solid rgba(45,212,191,0.35)" : "1px solid rgba(255,255,255,0.07)",
-    background: active ? "rgba(45,212,191,0.09)" : "rgba(255,255,255,0.02)",
-  };
-}
+const sparkMeta: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+};
 
-function dayBubble(filled: boolean): React.CSSProperties {
-  return {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    display: "grid",
-    placeItems: "center",
-    border: filled ? "1px solid rgba(45,212,191,0.40)" : "1px solid rgba(255,255,255,0.10)",
-    background: filled ? "rgba(45,212,191,0.14)" : "rgba(255,255,255,0.02)",
-    fontSize: 11,
-    fontWeight: 900,
-  };
-}
+const sparkShell: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+  width: "100%",
+};
+
+const sparkAxisRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  fontSize: 9.5,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+};
 
 const activityRow: React.CSSProperties = {
   display: "flex",

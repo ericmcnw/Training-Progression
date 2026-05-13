@@ -42,7 +42,10 @@ export type ZoneGroupDetailResult = {
     intensity: string | null;
     zoneLabel: string;
   }>;
+  // 7 most recent days, used by the zone-panel "this week" rollup.
   weekActivityCounts: Record<string, number>;
+  // 28 most recent days, oldest → newest, used by the zone-panel sparkline.
+  dailyActivityCounts: Array<{ ymd: string; count: number }>;
   today: string;
 };
 
@@ -226,6 +229,8 @@ export async function getAllZonesWithState(): Promise<ZoneState[]> {
       freshness: computed.freshness,
       painLevel: computed.painLevel,
       activityCount: computed.activityCount,
+      daysSinceWorked: computed.daysSinceWorked,
+      groupSlug: zone.metadataGroupSlug ?? null,
       recentWorkEntries: zone.activities.slice(0, 4).map((activity) => ({
         id: activity.id,
         label: activity.label,
@@ -289,12 +294,16 @@ export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailR
   ]);
 
   const zoneIds = zonesInGroup.map((zone) => zone.id);
-  const activities = await prisma.zoneActivity.findMany({
-    where: { zoneId: { in: zoneIds }, performedAt: { gte: weekSince } },
+  // Pull 28 days for the sparkline; recentActivities + weekActivityCounts
+  // are derived by filtering the same array, so the larger window
+  // doesn't cost an extra query.
+  const sparkSince = daysAgo(27, now);
+  const allActivities = await prisma.zoneActivity.findMany({
+    where: { zoneId: { in: zoneIds }, performedAt: { gte: sparkSince } },
     orderBy: { performedAt: "desc" },
-    take: 30,
     include: { zone: { select: { label: true } } },
   });
+  const activities = allActivities.filter((entry) => entry.performedAt >= weekSince).slice(0, 30);
 
   const computedStates = zonesInGroup.map((zone) =>
     toZoneState({
@@ -335,6 +344,19 @@ export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailR
     if (ymd in weekActivityCounts) weekActivityCounts[ymd]++;
   }
 
+  // 28-day daily bucket, oldest → newest, for the zone-panel sparkline.
+  const dailyBuckets = new Map<string, number>();
+  for (let i = 27; i >= 0; i -= 1) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    dailyBuckets.set(toAppYmd(date), 0);
+  }
+  for (const activity of allActivities) {
+    const ymd = toAppYmd(activity.performedAt);
+    if (dailyBuckets.has(ymd)) dailyBuckets.set(ymd, (dailyBuckets.get(ymd) ?? 0) + 1);
+  }
+  const dailyActivityCounts = Array.from(dailyBuckets.entries()).map(([ymd, count]) => ({ ymd, count }));
+
   return {
     slug: clickedZone.slug,
     label: group?.label ?? clickedZone.label,
@@ -361,6 +383,7 @@ export async function getZoneGroupDetail(slug: string): Promise<ZoneGroupDetailR
       zoneLabel: activity.zone.label,
     })),
     weekActivityCounts,
+    dailyActivityCounts,
     today,
   };
 }
