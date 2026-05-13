@@ -205,10 +205,10 @@ export default function WeekAtGlanceClient({
                     // when present, so we drop their per-routine dots from
                     // the cluttered top row.
                     const nonHabitPlanned = hasHabitBar
-                      ? day.planned.filter((p) => p.domain !== "habit")
+                      ? day.planned.filter((p) => p.domain !== "lifestyle")
                       : day.planned;
                     const nonHabitLogs = hasHabitBar
-                      ? day.logs.filter((l) => l.domain !== "habit")
+                      ? day.logs.filter((l) => l.domain !== "lifestyle")
                       : day.logs;
 
                     if (nonHabitPlanned.length === 0 && nonHabitLogs.length === 0 && !hasHabitBar) {

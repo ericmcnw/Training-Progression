@@ -45,7 +45,7 @@ function deriveDomain(kind, subtype) {
 
   // COMPLETION
   if (s === "RECOVERY") return "recovery";
-  return "habit";
+  return "lifestyle";
 }
 
 async function main() {

@@ -35,8 +35,8 @@ export default function TodayActionsBar({
   items: TodayActionItem[];
   todos?: DayTodoItem[];
 }) {
-  const habits = items.filter((i) => i.domain === "habit");
-  const others = items.filter((i) => i.domain !== "habit");
+  const habits = items.filter((i) => i.domain === "lifestyle");
+  const others = items.filter((i) => i.domain !== "lifestyle");
 
   const habitsDone = habits.filter((h) => h.logged > 0).length;
   const othersDone = others.filter((o) => o.logged >= o.planned && o.planned > 0).length;

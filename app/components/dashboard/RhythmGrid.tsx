@@ -39,7 +39,7 @@ export default function RhythmGrid({
     return (
       <div style={emptyInline}>
         <span style={{ opacity: 0.65 }}>No habits or frequency targets yet —</span>
-        <Link href="/routines?domain=habit" style={emptyHabitLink}>set a habit routine</Link>
+        <Link href="/routines?domain=lifestyle" style={emptyHabitLink}>set a lifestyle routine</Link>
         <span style={{ opacity: 0.45 }}>or</span>
         <Link href="/goals?type=FREQUENCY&mode=new" style={emptyFreqLink}>create a frequency goal</Link>
       </div>

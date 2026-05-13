@@ -74,7 +74,9 @@ export default async function RoutinesPage(props: {
 
   const searchQuery = (getParam(searchParams, "q") ?? "").trim();
   const normalizedSearchQuery = searchQuery.toLowerCase();
-  const domainFilter = (getParam(searchParams, "domain") ?? "").trim().toLowerCase();
+  // Normalize legacy `habit` → `lifestyle` so old bookmarks/links keep working.
+  const rawDomainFilter = (getParam(searchParams, "domain") ?? "").trim().toLowerCase();
+  const domainFilter = rawDomainFilter === "habit" ? "lifestyle" : rawDomainFilter;
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
@@ -171,10 +173,10 @@ export default async function RoutinesPage(props: {
     now,
   });
 
-  // Habit streak computation. Phase 1: "habit" was dropped from RoutineDomain, so
-  // the habit lens detects habit-shaped routines as kind=COMPLETION with HABIT/HEALTH/OTHER
-  // subtypes (the same set that previously derived to domain=habit). Phase 4 will
-  // formalize habits-as-lens to "any routine with a FrequencyGoal".
+  // Habit streak computation. Picks up COMPLETION-kind routines with the
+  // habit-shaped subtypes — same set that derives to domain=lifestyle. Future
+  // work: formalize "habit" rendering as "any routine with a daily-shape
+  // FrequencyGoal," independent of domain or subtype.
   const HABIT_COMPLETION_SUBTYPES = new Set(["HABIT", "HEALTH", "OTHER"]);
   const habitRoutineIds = routines
     .filter((r) => r.isActive && r.kind === "COMPLETION" && HABIT_COMPLETION_SUBTYPES.has(String(r.subtype ?? "").toUpperCase()))

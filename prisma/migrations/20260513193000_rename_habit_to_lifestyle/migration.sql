@@ -1,0 +1,14 @@
+-- Rename Routine.domain "habit" → "lifestyle".
+--
+-- The `habit` domain was doing two jobs at once: (1) "this is a non-training
+-- activity like reading or supplements", and (2) "render this with a daily
+-- calendar grid on the dashboard." Job 2 is moving to derive from the
+-- frequency-goal target shape (daily → grid, flexible → weekly bars), so the
+-- domain only needs to answer Job 1. "Lifestyle" describes that more
+-- accurately. Hangboarding stays in `strength` (it IS strength training); the
+-- daily-grid render is now driven by its frequency goal, not its category.
+--
+-- effectiveRoutineDomain() still accepts the legacy "habit" value and remaps
+-- it on read, so any rows missed here (or still flowing in from older API
+-- callers during rollout) keep working.
+UPDATE "Routine" SET "domain" = 'lifestyle' WHERE "domain" = 'habit';

@@ -94,6 +94,7 @@ export const DOMAIN_LABEL: Record<string, string> = {
   cardio: "Endurance",
   mobility: "Mobility",
   sport: "Sport",
-  habit: "Habits",
+  lifestyle: "Lifestyle",
+  habit: "Lifestyle",   // legacy alias — pre-rename data still flows through
   recovery: "Recovery",
 };

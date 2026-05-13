@@ -954,7 +954,7 @@ export default async function HomePageLegacy() {
   }
 
   const habitRoutines = routinesWithTargets.filter(
-    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit"
+    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle"
   );
 
   // Habit aggregate per day — drives the WaG cell's amber pie-fill dot.
@@ -1096,11 +1096,11 @@ export default async function HomePageLegacy() {
     const domain = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
     domainSessionMap.set(domain, (domainSessionMap.get(domain) ?? 0) + 1);
   }
-  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "skill", "habit"];
+  const domainOrder: RoutineDomain[] = ["strength", "cardio", "mobility", "sport", "skill", "lifestyle"];
   const domainLabels: Record<RoutineDomain, string> = {
     strength: "Strength", cardio: "Endurance", mobility: "Mobility / Rehab",
     sport: "Sport / Sessions", recovery: "Recovery", skill: "Skill Work",
-    habit: "Habits", general: "General",
+    lifestyle: "Lifestyle", habit: "Lifestyle", general: "General",
   };
   const trainingBalanceRows = domainOrder
     .map((domain) => ({

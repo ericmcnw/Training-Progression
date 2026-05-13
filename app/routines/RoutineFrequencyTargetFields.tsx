@@ -99,7 +99,7 @@ export default function RoutineFrequencyTargetFields({
               <div style={substitutesHeaderStyle}>
                 <span style={{ fontWeight: 800, fontSize: 12 }}>Covered by</span>
                 <span style={substitutesHintStyle}>
-                  Pick routines that cover <em>this habit</em>. On days you log one of them (but not this routine), the habit cell renders as <strong>covered</strong> instead of missed — and the streak keeps going. Example: checking <em>Outdoor Bouldering</em> here means a climb covers your daily fingers work.
+                  Pick routines that <em>cover</em> this goal. On a day you log one of them (and not the primary), the slot renders as <strong>covered</strong> instead of missed — the streak keeps going. Examples: a climb covers your daily fingers work, or it covers a pull-day slot in a 3×/week strength goal.
                 </span>
               </div>
               <div style={substitutesListStyle}>

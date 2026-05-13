@@ -64,7 +64,7 @@ export default function EditRoutineForm({
       ? routine.subtype
       : ROUTINE_SUBTYPE_OPTIONS[routine.kind]?.[0] ?? "OTHER"
   );
-  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general"> | "">(() => {
+  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | "">(() => {
     const eff = effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype);
     const derived = deriveRoutineDomain(routine.kind, routine.subtype);
     return eff !== derived ? eff : "";
@@ -194,11 +194,9 @@ export default function EditRoutineForm({
           initialUnit={routine.targetFrequencyUnit}
           initialInterval={routine.targetFrequencyInterval}
           initialEnabled={routine.frequencyGoalEnabled}
-          // Substitutes only make sense for habit-domain routines — those are
-          // the routines whose heatmap reads "covered by another routine."
-          // Strength/sport routines aren't habits, so a "covered by" model
-          // doesn't apply.
-          availableSubstituteRoutines={effectiveDomainValue === "habit" ? availableSubstituteRoutines : []}
+          // Substitutes work for any frequency goal — a climb can cover a
+          // Pull Day slot, not just a daily fingers habit.
+          availableSubstituteRoutines={availableSubstituteRoutines}
           initialSubstituteRoutineIds={initialSubstituteRoutineIds}
         />
       </div>
@@ -209,7 +207,7 @@ export default function EditRoutineForm({
         <select
           style={styles.input as React.CSSProperties}
           value={effectiveDomainValue}
-          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general">)}
+          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general" | "habit">)}
         >
           {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>

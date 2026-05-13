@@ -6,7 +6,7 @@
 import type { RoutineDomain } from "@/lib/routines";
 import type { FrequencyState } from "@/lib/frequency-state";
 
-export type DomainTone = Exclude<RoutineDomain, "skill" | "general" | "recovery">;
+export type DomainTone = Exclude<RoutineDomain, "skill" | "general" | "recovery" | "habit">;
 
 // Legacy WaG shape — matches the existing WeekAtGlanceClient's GlanceDay
 // contract. Used so we can reuse that scrollable rail unchanged.

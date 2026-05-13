@@ -41,8 +41,8 @@ export default function HabitLane({
     return (
       <div style={emptyInline}>
         <span style={{ opacity: 0.65 }}>No habits yet —</span>
-        <Link href="/routines?domain=habit" style={emptyInlineLink}>
-          set a routine&apos;s domain to Habit/Routine
+        <Link href="/routines?domain=lifestyle" style={emptyInlineLink}>
+          set a routine&apos;s domain to Lifestyle
         </Link>
       </div>
     );

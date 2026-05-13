@@ -29,7 +29,7 @@ export default function HabitGridV2({ rows, today }: Props) {
           <span style={cardTitle}>Habits</span>
         </header>
         <div style={emptyState}>
-          No habit-domain routines yet. Set a routine&apos;s domain to <em>Habit / Routine</em> to track it here.
+          No daily routines yet. Create a routine in <em>Lifestyle</em> (or set its domain there) to track it here.
         </div>
       </section>
     );

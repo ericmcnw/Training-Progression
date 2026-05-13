@@ -17,7 +17,7 @@ import DeleteLogButton from "./DeleteLogButton";
 
 export const dynamic = "force-dynamic";
 
-const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "habit"] as const;
+const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "lifestyle"] as const;
 type Domain = (typeof DOMAIN_ORDER)[number];
 
 const DOMAIN_LABELS: Record<Domain, string> = {
@@ -25,7 +25,7 @@ const DOMAIN_LABELS: Record<Domain, string> = {
   cardio: "Endurance",
   mobility: "Mobility",
   sport: "Sport",
-  habit: "Habit",
+  lifestyle: "Lifestyle",
 };
 
 export default async function ManualLogPage({

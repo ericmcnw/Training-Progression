@@ -157,25 +157,55 @@ export default async function ActivitiesPage(props: {
   const enduranceRoutineIds = enduranceRoutineIdsPreview;
   const enduranceLogs12w = await logs12wPromise;
 
+  // Endurance palette — one color per registered endurance activity. Uses the
+  // same rgba(R,G,B,0.9) format as climbOutcomeColor() and the routine domain
+  // palette in lib/routines.ts so the visual language stays consistent across
+  // every chart in the app. Hues are spaced so no two adjacent stacked
+  // segments collide (trail-running purple is intentionally not green so it
+  // never reads as hiking; mountain-biking is terracotta, not red, to stay
+  // out of rowing's lane).
   const enduranceActivityColors: Record<string, string> = {
-    running:    "#3AAFE8",
-    cycling:    "#F5C842",
-    biking:     "#F5C842",
-    swimming:   "#1DC9BC",
-    hiking:     "#3ECC72",
-    rowing:     "#F07030",
-    walking:    "#88BFEE",
-    golf:       "#28D4A0",
-    triathlon:  "#B04EF5",
+    // Running family (cool blues + a violet jump for trail)
+    running:                "rgba(59,130,246,0.9)",   // bright blue
+    "road-running":         "rgba(30,64,175,0.9)",    // deep navy
+    "trail-running":        "rgba(168,85,247,0.9)",   // violet
+    walking:                "rgba(244,114,182,0.9)",  // soft pink — friendly & distinct from every other slot
+    // Cycling family (warm yellow → earth)
+    biking:                 "rgba(250,204,21,0.9)",   // amber yellow
+    cycling:                "rgba(250,204,21,0.9)",
+    "road-cycling":         "rgba(249,115,22,0.9)",   // orange
+    "mountain-biking":      "rgba(194,65,12,0.9)",    // terracotta
+    "gravel-cycling":       "rgba(214,188,138,0.9)",  // khaki / dust
+    // Swimming family (cyan → ocean)
+    swimming:               "rgba(6,182,212,0.9)",    // cyan
+    "pool-swimming":        "rgba(103,232,249,0.9)",  // pale chlorine cyan
+    "open-water-swimming":  "rgba(14,116,144,0.9)",   // deep ocean
+    // Other endurance
+    rowing:                 "rgba(239,68,68,0.9)",    // crimson
+    hiking:                 "rgba(34,197,94,0.9)",    // forest green
+    // Multi-discipline / legacy
+    golf:                   "rgba(40,212,160,0.9)",
+    triathlon:              "rgba(176,78,245,0.9)",
   };
-  const enduranceFallbackColors = ["#F04DB0", "#F5A420", "#4ADE80"];
+  const enduranceFallbackColors = [
+    "rgba(236,72,153,0.9)",   // pink
+    "rgba(245,158,11,0.9)",   // amber
+    "rgba(167,139,250,0.9)",  // soft violet
+  ];
 
+  // For each routine, pick the MOST SPECIFIC endurance activity tag. Routines
+  // are typically tagged with both the generic parent (e.g. "running") and the
+  // specific child (e.g. "trail-running"), so we use the registry's sortHint
+  // as a specificity score — higher sortHint = more specific child activity.
   const routineEnduranceLabel = new Map<string, string>();
   for (const [routineId, slugs] of routineSlugs) {
-    const slug = [...slugs].find((s) => enduranceSlugs.has(s));
-    if (!slug) continue;
-    const entry = getActivityEntry(slug);
-    if (entry) routineEnduranceLabel.set(routineId, entry.label);
+    const enduranceCandidates = [...slugs]
+      .filter((s) => enduranceSlugs.has(s))
+      .map((s) => ({ slug: s, entry: getActivityEntry(s) }))
+      .filter((c): c is { slug: string; entry: NonNullable<ReturnType<typeof getActivityEntry>> } => c.entry !== null)
+      .sort((a, b) => (b.entry.sortHint ?? 0) - (a.entry.sortHint ?? 0));
+    const chosen = enduranceCandidates[0];
+    if (chosen) routineEnduranceLabel.set(routineId, chosen.entry.label);
   }
 
   const weeklyMilesPerActivity = new Map<string, Map<string, number>>();
@@ -410,7 +440,7 @@ export default async function ActivitiesPage(props: {
                   accent={meta.accent}
                 />
                 <ActivityCard
-                  href="/log?view=routines&domain=habit"
+                  href="/log?view=routines&domain=lifestyle"
                   eyebrow="Daily Habits"
                   label="Daily Routines"
                   chips={["Cold plunge, sauna, breathwork, foam rolling"]}

@@ -42,7 +42,7 @@ const DOMAIN_WEEKS = 8;
 const WAG_WEEKS = 12;       // weeks of history shown in the scrollable WaG rail
 const WAG_FORWARD_DAYS = 3; // extra days past today shown at the right edge
 
-const DOMAIN_ORDER: DomainTone[] = ["strength", "cardio", "mobility", "sport", "habit"];
+const DOMAIN_ORDER: DomainTone[] = ["strength", "cardio", "mobility", "sport", "lifestyle"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function dayLabelOf(ymd: string): string {
@@ -160,7 +160,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
   // panel so the user doesn't have to navigate elsewhere to mark them done.
   const habitDomainRoutineIds = new Set<string>();
   for (const r of routinesWithTargets) {
-    if (effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit") {
+    if (effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle") {
       habitDomainRoutineIds.add(r.id);
     }
   }
@@ -202,7 +202,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
   // Each day exposes planned[], logs[], habitAggregate, todos[].
   const wagDayCount = WAG_WEEKS * 7 + WAG_FORWARD_DAYS;
   const habitRoutines = routinesWithTargets.filter(
-    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "habit"
+    (r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle"
   );
   const habitTargetById = new Map<string, FrequencyTarget | null>();
   for (const h of habitRoutines) {
@@ -384,7 +384,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
     return {
       routineId: routine.id,
       routineName: routine.name,
-      domain: "habit",
+      domain: "lifestyle",
       state,
       trailing30,
       currentStreak: state.currentDayStreak || state.windowStreak,
@@ -538,7 +538,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
 
 // Re-export for callers that want to filter by domain.
 export function isDomainTone(value: string): value is DomainTone {
-  return value === "strength" || value === "cardio" || value === "mobility" || value === "sport" || value === "habit";
+  return value === "strength" || value === "cardio" || value === "mobility" || value === "sport" || value === "lifestyle";
 }
 
 // Note: client components should import `domainColor` directly from

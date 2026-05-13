@@ -48,13 +48,13 @@ export default function NewRoutineForm({
   availableSubstituteRoutines?: Array<{ id: string; name: string }>;
 }) {
   const [step, setStep] = useState<Step>("domain");
-  const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general"> | null>(null);
+  const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<ActivityPreset | null>(null);
 
   // Form state — populated from the preset selection
   const [kind, setKind] = useState<RoutineKind>("COMPLETION");
   const [subtype, setSubtype] = useState<string>("HABIT");
-  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general"> | "">("");
+  const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | "">("");
 
   const derivedDomain = deriveRoutineDomain(kind, subtype);
   const effectiveDomain = domainOverride || derivedDomain;
@@ -97,7 +97,7 @@ export default function NewRoutineForm({
     sessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
     null;
 
-  function chooseDomain(domain: Exclude<RoutineDomain, "skill" | "general">) {
+  function chooseDomain(domain: Exclude<RoutineDomain, "skill" | "general" | "habit">) {
     setSelectedDomain(domain);
     setSelectedPreset(null);
     setStep("activity");
@@ -304,8 +304,10 @@ export default function NewRoutineForm({
           initialUnit="WEEK"
           initialInterval={1}
           initialEnabled={false}
-          // Substitutes only apply to habit-domain routines.
-          availableSubstituteRoutines={effectiveDomain === "habit" ? availableSubstituteRoutines : []}
+          // Substitutes work for any frequency goal — covered-by makes sense
+          // for groups (e.g. a climb covers a Pull Day in a 3×/week strength
+          // goal) just as much as for daily habits.
+          availableSubstituteRoutines={availableSubstituteRoutines}
         />
       </div>
 
@@ -315,7 +317,7 @@ export default function NewRoutineForm({
         <select
           style={s.input as React.CSSProperties}
           value={effectiveDomain}
-          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general">)}
+          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general" | "habit">)}
         >
           {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -383,7 +385,7 @@ function DomainCard({
   onSelect,
 }: {
   meta: DomainMeta;
-  onSelect: (domain: Exclude<RoutineDomain, "skill" | "general">) => void;
+  onSelect: (domain: Exclude<RoutineDomain, "skill" | "general" | "habit">) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (

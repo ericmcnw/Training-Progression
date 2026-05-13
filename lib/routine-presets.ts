@@ -7,7 +7,7 @@ export type ActivityPreset = {
   key: string;
   label: string;
   description: string;
-  domain: Exclude<RoutineDomain, "skill" | "general">;
+  domain: Exclude<RoutineDomain, "skill" | "general" | "habit">;
   kind: RoutineKind;
   subtype: string;
   icon: string;
@@ -19,7 +19,7 @@ export type ActivityPreset = {
 
 // Domain display metadata for the picker grid
 export type DomainMeta = {
-  domain: Exclude<RoutineDomain, "skill" | "general">;
+  domain: Exclude<RoutineDomain, "skill" | "general" | "habit">;
   label: string;
   description: string;
   icon: string;
@@ -75,9 +75,9 @@ export const DOMAIN_META: DomainMeta[] = [
     borderColor: "rgba(251,113,133,0.28)",
   },
   {
-    domain: "habit",
-    label: "Habit",
-    description: "Daily check-ins, health routines, and consistency tracking",
+    domain: "lifestyle",
+    label: "Lifestyle",
+    description: "Supplements, journaling, reading, daily check-ins — anything not directly a training stimulus",
     icon: "✓",
     color: "rgba(251,191,36,1)",
     bgColor: "rgba(251,191,36,0.08)",
@@ -441,12 +441,12 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     icon: "💤",
   },
 
-  // ─── HABIT ───────────────────────────────────────────────────────────────────
+  // ─── LIFESTYLE ────────────────────────────────────────────────────────────────
   {
     key: "DAILY_HABIT",
     label: "Daily Habit",
     description: "Done-or-not-done tracking for daily actions and routines",
-    domain: "habit",
+    domain: "lifestyle",
     kind: "COMPLETION",
     subtype: "HABIT",
     icon: "✅",
@@ -455,7 +455,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     key: "HEALTH_CHECKIN",
     label: "Health Check-in",
     description: "General health habit like sleep, hydration, or supplements",
-    domain: "habit",
+    domain: "lifestyle",
     kind: "COMPLETION",
     subtype: "HEALTH",
     icon: "🩺",
@@ -463,7 +463,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
 ];
 
 export function getActivitiesForDomain(
-  domain: Exclude<RoutineDomain, "skill" | "general">
+  domain: Exclude<RoutineDomain, "skill" | "general" | "habit">
 ): ActivityPreset[] {
   return ACTIVITY_PRESETS.filter((p) => p.domain === domain);
 }
@@ -473,7 +473,7 @@ export function getActivityPreset(key: string): ActivityPreset | undefined {
 }
 
 export function getDomainMeta(
-  domain: Exclude<RoutineDomain, "skill" | "general">
+  domain: Exclude<RoutineDomain, "skill" | "general" | "habit">
 ): DomainMeta {
   return DOMAIN_META.find((m) => m.domain === domain) ?? DOMAIN_META[DOMAIN_META.length - 1];
 }

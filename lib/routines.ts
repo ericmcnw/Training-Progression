@@ -103,20 +103,27 @@ export function supportsRoutineSteps(kind: string | null | undefined) {
   return normalized === "GUIDED";
 }
 
-// Training domain — the dashboard classification used by training balance bars
-// and coverage views. Each routine has an explicit domain or one derived from
-// kind+subtype.
+// Training domain — what kind of activity this is. One of:
+//   • strength / cardio / mobility / sport — actual training stimulus
+//   • lifestyle — non-training activities (supplements, reading, journaling,
+//     cold plunge). These don't contribute to the strength/cardio/mobility/
+//     sport training-balance bars, but still surface on the dashboard via
+//     their frequency goals.
 //
-// UI options: 5 training categories. "habit" was historically a 6th option but
-// was dropped — habit-tracking is now a behavior modifier (FrequencyGoal lens),
-// not a category. Routines that used to be domain=habit are migrated to
-// "recovery". Legacy values "skill" and "general" remap automatically.
+// Domain answers "what kind of thing is this?" — not "how often do I do it?"
+// The "should this render with a daily calendar grid?" decision is derived
+// from the frequency goal's target shape, not from the domain. So a daily
+// hangboard routine sits in `strength` (it IS strength training) but still
+// renders as a daily-grid habit because its frequency goal fires every day.
+//
+// Legacy values "skill" / "general" / "recovery" / "habit" still appear in
+// older rows; effectiveRoutineDomain() remaps them on read.
 export const ROUTINE_DOMAIN_OPTIONS = [
   { value: "strength",  label: "Strength" },
   { value: "cardio",    label: "Endurance" },
   { value: "mobility",  label: "Mobility / Rehab" },
   { value: "sport",     label: "Sport" },
-  { value: "habit",     label: "Habit / Routine" },
+  { value: "lifestyle", label: "Lifestyle" },
 ] as const;
 
 // Full type including legacy values still stored in the DB
@@ -124,12 +131,13 @@ export type RoutineDomain =
   | (typeof ROUTINE_DOMAIN_OPTIONS)[number]["value"]
   | "skill"
   | "general"
-  | "recovery"; // legacy — accepted on read, remapped via effectiveRoutineDomain
+  | "recovery"
+  | "habit"; // legacy — accepted on read, remapped to "lifestyle" via effectiveRoutineDomain
 
 export function deriveRoutineDomain(
   kind: string | null | undefined,
   subtype: string | null | undefined
-): Exclude<RoutineDomain, "skill" | "general" | "recovery"> {
+): Exclude<RoutineDomain, "skill" | "general" | "recovery" | "habit"> {
   const k = normalizeRoutineKind(kind);
   const s = String(subtype ?? "").trim().toUpperCase();
 
@@ -151,24 +159,27 @@ export function deriveRoutineDomain(
     return "sport"; // CLIMBING, SURFING, SNOWBOARDING, BASKETBALL, TENNIS, GOLF, etc.
   }
 
-  // COMPLETION — all check-off style routines are habits (supplements, journaling,
-  // cold plunge, foam rolling, reading, etc.)
-  return "habit";
+  // COMPLETION — all check-off style routines default to lifestyle (supplements,
+  // journaling, cold plunge, foam rolling, reading, etc.). Users can override
+  // (e.g. a daily hangboard COMPLETION routine should be moved to "strength").
+  return "lifestyle";
 }
 
 // Returns the effective domain for a routine — respects an explicit override if set,
 // otherwise falls back to deriving from kind+subtype.
-// Legacy "skill" → strength, "recovery" → re-derived, "general" → derived.
+// Legacy values: "skill" → strength, "habit" → lifestyle (new canonical name),
+// "recovery" / "general" → re-derived from kind+subtype.
 export function effectiveRoutineDomain(
   domain: string | null | undefined,
   kind: string | null | undefined,
   subtype: string | null | undefined
-): Exclude<RoutineDomain, "skill" | "general" | "recovery"> {
+): Exclude<RoutineDomain, "skill" | "general" | "recovery" | "habit"> {
   const raw = String(domain ?? "").trim().toLowerCase();
   if (raw === "skill") return "strength";
+  if (raw === "habit") return "lifestyle";
   if (raw && raw !== "general" && raw !== "recovery") {
     const ui = ROUTINE_DOMAIN_OPTIONS.map((o) => o.value as string);
-    if (ui.includes(raw)) return raw as Exclude<RoutineDomain, "skill" | "general" | "recovery">;
+    if (ui.includes(raw)) return raw as Exclude<RoutineDomain, "skill" | "general" | "recovery" | "habit">;
   }
   return deriveRoutineDomain(kind, subtype);
 }
@@ -180,7 +191,8 @@ export function domainColor(domain: RoutineDomain | string): string {
     case "cardio":    return "rgba(78,148,255,0.9)";
     case "mobility":  return "rgba(192,132,252,0.9)";
     case "sport":     return "rgba(251,146,60,0.9)";
-    case "habit":     return "rgba(251,191,36,0.9)";
+    case "lifestyle": return "rgba(251,191,36,0.9)";
+    case "habit":     return "rgba(251,191,36,0.9)"; // legacy alias for lifestyle
     case "recovery":  return "rgba(251,113,133,0.9)"; // legacy; remapped on read
     default:          return "rgba(148,163,184,0.7)";
   }
