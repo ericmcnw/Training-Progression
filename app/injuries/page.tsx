@@ -1,6 +1,8 @@
 import Link from "next/link";
 import InjuryCard from "@/app/components/injuries/InjuryCard";
 import type { PainSparkDay, PainSparkTrend } from "@/app/components/injuries/PainSparkline";
+import PageShell from "@/app/components/PageShell";
+import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjuries } from "./actions";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, toAppYmd, todayAppYmd } from "@/lib/dates";
@@ -108,26 +110,36 @@ export default async function InjuriesPage() {
     );
   }
 
-  return (
-    <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <div>
-          <div style={eyebrow}>Body</div>
-          <h1 style={h1}>Injuries</h1>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Link href="/body/log-pain" style={{ ...linkStyle, borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}>
-            Log pain
-          </Link>
-          <Link href="/injuries/new" style={linkStyle}>
-            New injury
-          </Link>
-        </div>
-      </div>
+  const totalActive = injuries.filter((i) => i.status === "ACTIVE" || i.status === "FLARED").length;
+  const totalRecovering = injuries.filter((i) => i.status === "RECOVERING").length;
+  const subtitleBits: string[] = [];
+  if (totalActive > 0) subtitleBits.push(`${totalActive} needing attention`);
+  if (totalRecovering > 0) subtitleBits.push(`${totalRecovering} recovering`);
+  const subtitle = subtitleBits.length > 0
+    ? `Currently ${subtitleBits.join(" · ")}. Each card shows the last 30 days of pain.`
+    : "Nothing flagged. Log pain on a routine or open an entry if something starts hurting.";
 
+  return (
+    <PageShell
+      eyebrow="Body"
+      title="Injuries"
+      subtitle={subtitle}
+      toolbar={
+        <>
+          <Link href="/body/log-pain" style={dangerLinkStyle}>Log pain</Link>
+          <Link href="/injuries/new" style={linkStyle}>New injury</Link>
+        </>
+      }
+    >
       {groups.map((group) => {
         const rows = injuriesByGroup.get(group.key) ?? [];
         if (rows.length === 0 && group.key !== "resolved") return null;
+        const headerLabel = (
+          <span style={groupHeaderRow}>
+            <span style={cardTitle}>{group.title}</span>
+            {rows.length > 0 && <span style={countBadgeStyle}>{rows.length}</span>}
+          </span>
+        );
         const content = (
           <div style={{ display: "grid", gap: 10 }}>
             {rows.length === 0 ? (
@@ -146,36 +158,66 @@ export default async function InjuriesPage() {
         );
         return group.key === "resolved" ? (
           <details key={group.key} style={panel}>
-            <summary style={summaryStyle}>{group.title}</summary>
-            <div style={{ padding: 14 }}>{content}</div>
+            <summary style={summaryStyle}>{headerLabel}</summary>
+            <div style={{ marginTop: 12 }}>{content}</div>
           </details>
         ) : (
           <section key={group.key} style={panel}>
-            <div style={header}>{group.title}</div>
-            <div style={{ padding: 14 }}>{content}</div>
+            <div style={{ marginBottom: 4 }}>{headerLabel}</div>
+            {content}
           </section>
         );
       })}
-    </main>
+    </PageShell>
   );
 }
 
-const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 900, letterSpacing: 1.2, opacity: 0.55, textTransform: "uppercase" };
-const h1: React.CSSProperties = { margin: "5px 0 0", fontSize: 32, lineHeight: 1.08 };
-const panel: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.04)" };
-const header: React.CSSProperties = { padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", fontWeight: 900, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", opacity: 0.7 };
-const summaryStyle: React.CSSProperties = { ...header, cursor: "pointer" };
-const empty: React.CSSProperties = { color: "rgba(255,255,255,0.45)", fontSize: 13 };
+const panel: React.CSSProperties = { ...cardSurface, gap: 12 };
+const empty: React.CSSProperties = { color: COLOR.textFaint, fontSize: 13 };
+
+const groupHeaderRow: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const countBadgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 20,
+  height: 18,
+  padding: "0 6px",
+  borderRadius: RADIUS.pill,
+  border: `1px solid ${COLOR.borderStrong}`,
+  background: "rgba(255,255,255,0.06)",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+  color: COLOR.text,
+};
+
+const summaryStyle: React.CSSProperties = {
+  cursor: "pointer",
+  listStyle: "none",
+};
+
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
-  minHeight: 38,
+  minHeight: 36,
   alignItems: "center",
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 10,
+  border: `1px solid ${COLOR.borderStrong}`,
+  borderRadius: RADIUS.control,
   padding: "8px 14px",
   background: "rgba(255,255,255,0.05)",
   color: "inherit",
   textDecoration: "none",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 800,
+};
+
+const dangerLinkStyle: React.CSSProperties = {
+  ...linkStyle,
+  border: "1px solid rgba(248,113,113,0.35)",
+  background: "rgba(248,113,113,0.08)",
 };

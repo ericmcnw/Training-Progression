@@ -3,6 +3,8 @@ import { getAllZonesWithState } from "@/lib/body-zones";
 import BodyPageClient from "./BodyPageClient";
 import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from "@/app/progress/coverage";
 import CoverageGroupedBarChart from "@/app/progress/CoverageGroupedBarChart";
+import PageShell from "@/app/components/PageShell";
+import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -42,21 +44,23 @@ export default async function BodyPage(props: {
     `/body?lens=${nextLens}&range=${nextRange}`;
 
   return (
-    <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.08 }}>Body</h1>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/body/log-pain" style={linkStyle}>Log pain</Link>
+    <PageShell
+      title="Body"
+      subtitle="Map zone freshness, track injuries, and check muscle / movement-pattern coverage."
+      toolbar={
+        <>
+          <Link href="/body/log-pain" style={dangerLinkStyle}>Log pain</Link>
           <Link href="/injuries" style={linkStyle}>Injuries</Link>
-        </div>
-      </div>
+        </>
+      }
+    >
       <BodyPageClient zones={zones} />
 
       <section style={coverageSectionStyle}>
         <div style={coverageHeaderStyle}>
           <div style={{ display: "grid", gap: 4 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>Coverage</h2>
-            <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>
+            <h2 style={cardTitle}>Coverage</h2>
+            <div style={{ fontSize: 12, color: COLOR.textDim, lineHeight: 1.4 }}>
               {selectedSection.label} from completed logs in {coverageOverview.rangeLabel.toLowerCase()}.
             </div>
           </div>
@@ -102,31 +106,33 @@ export default async function BodyPage(props: {
           emptyMessage={selectedSection.emptyMessage}
         />
       </section>
-    </main>
+    </PageShell>
   );
 }
 
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
-  minHeight: 38,
+  minHeight: 36,
   alignItems: "center",
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 8,
-  padding: "8px 12px",
+  border: `1px solid ${COLOR.borderStrong}`,
+  borderRadius: RADIUS.control,
+  padding: "8px 14px",
   background: "rgba(255,255,255,0.05)",
   color: "inherit",
   textDecoration: "none",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 800,
+};
+
+const dangerLinkStyle: React.CSSProperties = {
+  ...linkStyle,
+  border: "1px solid rgba(248,113,113,0.35)",
+  background: "rgba(248,113,113,0.08)",
 };
 
 const coverageSectionStyle: React.CSSProperties = {
-  display: "grid",
+  ...cardSurface,
   gap: 14,
-  padding: 16,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "linear-gradient(180deg, rgba(20,29,46,0.9), rgba(13,19,31,0.92))",
 };
 
 const coverageHeaderStyle: React.CSSProperties = {
@@ -153,8 +159,8 @@ const pillStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: "6px 11px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: RADIUS.pill,
+  border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   textDecoration: "none",

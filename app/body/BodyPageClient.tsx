@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import type { ZoneState, ZoneFreshness } from "@/app/components/body-map/types";
 import { fetchZoneDetail, type ZoneDetailResult } from "./_actions";
+import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const freshnessLabel: Record<ZoneFreshness, string> = {
@@ -74,7 +75,7 @@ function ZonePanel({
 
       {/* This week strip */}
       <div style={section}>
-        <div style={sectionHead}>THIS WEEK</div>
+        <div style={sectionHead}>This week</div>
         <div style={weekStrip}>
           {weekDays.map((day) => {
             const count = detail.weekActivityCounts[day] ?? 0;
@@ -91,7 +92,7 @@ function ZonePanel({
       {/* Recent activities */}
       {detail.recentActivities.length > 0 && (
         <div style={section}>
-          <div style={sectionHead}>WHAT WORKED IT</div>
+          <div style={sectionHead}>What worked it</div>
           <div style={{ display: "grid", gap: 6 }}>
             {detail.recentActivities.map((a) => (
               <div key={a.id} style={activityRow}>
@@ -171,12 +172,8 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const panel: React.CSSProperties = {
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "linear-gradient(180deg, rgba(20,29,46,0.9), rgba(13,19,31,0.92))",
-  display: "grid",
+  ...cardSurface,
   gap: 14,
-  padding: 16,
 };
 
 const panelHead: React.CSSProperties = {
@@ -188,15 +185,16 @@ const panelHead: React.CSSProperties = {
 
 const zoneTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: 22,
+  fontSize: 20,
   fontWeight: 900,
   lineHeight: 1.1,
+  letterSpacing: -0.2,
 };
 
 const badge: React.CSSProperties = {
   display: "inline-block",
   border: "1px solid",
-  borderRadius: 999,
+  borderRadius: RADIUS.pill,
   padding: "4px 10px",
   fontSize: 11,
   fontWeight: 800,
@@ -205,7 +203,7 @@ const badge: React.CSSProperties = {
 
 const mutedText: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.60)",
+  color: COLOR.textDim,
   lineHeight: 1.45,
 };
 
@@ -214,12 +212,7 @@ const section: React.CSSProperties = {
   gap: 8,
 };
 
-const sectionHead: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 1.2,
-  color: "rgba(255,255,255,0.45)",
-};
+const sectionHead: React.CSSProperties = cardTitle;
 
 const weekStrip: React.CSSProperties = {
   display: "grid",

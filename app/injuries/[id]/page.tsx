@@ -5,6 +5,8 @@ import BodyMap from "@/app/components/body-map/BodyMap";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
 import QuickInjuryPainLog from "@/app/components/injuries/QuickInjuryPainLog";
 import PainHistoryChart, { type PainHistoryDay } from "@/app/components/injuries/PainHistoryChart";
+import PageShell from "@/app/components/PageShell";
+import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjury, updateInjury } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
@@ -199,29 +201,23 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const aggravators = buildAggravators(painLogs);
   const recentLogs = painLogs.slice(0, RECENT_LOG_LIMIT);
   const olderLogCount = Math.max(0, painLogs.length - recentLogs.length);
+  const daysInjured = Math.max(0, diffYmdDays(startedYmd, today));
+  const startedLabel = formatAppDate(injury.startedAt, { month: "short", day: "numeric", year: "numeric" });
+  const subtitle =
+    `${injury.status.toLowerCase()} · severity ${injury.severity}/5 · ${daysInjured === 0 ? "started today" : `${daysInjured} days`} · since ${startedLabel}`;
 
   return (
-    <main style={{ maxWidth: 780, margin: "0 auto", display: "grid", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={eyebrow}>Injury</div>
-          <h1 style={h1}>{injury.name}</h1>
-          <div style={muted}>
-            {injury.status.toLowerCase()} · severity {injury.severity}/5 · started{" "}
-            {formatAppDate(injury.startedAt, { month: "short", day: "numeric", year: "numeric" })}
-          </div>
-        </div>
-        <Link href="/injuries" style={linkStyle}>
-          Back
-        </Link>
-      </div>
-
+    <PageShell
+      eyebrow="Injury"
+      title={injury.name}
+      subtitle={subtitle}
+      toolbar={<Link href="/injuries" style={linkStyle}>Back</Link>}
+    >
       {/* Quick log + summary stats */}
       {injury.status !== "RESOLVED" && (
         <section style={panel}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-            <div style={sectionTitle}>Log pain</div>
+            <div style={cardTitle}>Log pain</div>
             {painLogs.length > 0 && (
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                 {recentPainLevel !== null && (
@@ -262,21 +258,21 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 
       {/* Pain history chart */}
       <section style={panel}>
-        <div style={sectionTitle}>Pain history</div>
+        <div style={cardTitle}>Pain history</div>
         <PainHistoryChart days={painHistoryDays} />
       </section>
 
       {/* Aggravators rollup */}
       {aggravators.length > 0 && (
         <section style={panel}>
-          <div style={sectionTitle}>Aggravators</div>
+          <div style={cardTitle}>Aggravators</div>
           <div style={muted}>Routines where this injury flared the most, ranked by average level logged on the same session.</div>
           <div style={{ display: "grid", gap: 8 }}>
             {aggravators.map((row) => (
               <div key={row.routineName} style={aggravatorRow}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 900, fontSize: 14 }}>{row.routineName}</div>
-                  <div style={{ fontSize: 11, opacity: 0.55, fontWeight: 700, marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700, marginTop: 2 }}>
                     {row.logCount} log{row.logCount === 1 ? "" : "s"} · peak {row.peakLevel}/10
                   </div>
                 </div>
@@ -289,12 +285,14 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         </section>
       )}
 
-      {/* Recent logs (notes + context) */}
+      {/* Recent logs */}
       <section style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <div style={sectionTitle}>Recent logs</div>
+          <div style={cardTitle}>Recent logs</div>
           {olderLogCount > 0 && (
-            <div style={{ fontSize: 11, opacity: 0.5, fontWeight: 700 }}>{olderLogCount} earlier log{olderLogCount === 1 ? "" : "s"} in the chart above</div>
+            <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
+              {olderLogCount} earlier log{olderLogCount === 1 ? "" : "s"} in the chart above
+            </div>
           )}
         </div>
         {recentLogs.length === 0 ? (
@@ -306,18 +304,18 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
                     <span style={{ fontWeight: 800, fontSize: 14 }}>{log.zone.label}</span>
-                    <span style={{ fontSize: 12, opacity: 0.55, fontWeight: 700 }}>
+                    <span style={{ fontSize: 12, color: COLOR.textDim, fontWeight: 700 }}>
                       {contextLabels[log.context] ?? log.context}
                     </span>
                     {log.routineLog?.routine && (
-                      <span style={{ fontSize: 12, opacity: 0.55, fontWeight: 700 }}>· {log.routineLog.routine.name}</span>
+                      <span style={{ fontSize: 12, color: COLOR.textDim, fontWeight: 700 }}>· {log.routineLog.routine.name}</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: COLOR.textDim, marginTop: 2 }}>
                     {formatAppDateTime(log.loggedAt, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </div>
                   {log.notes ? (
-                    <div style={{ fontSize: 13, marginTop: 5, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 13, marginTop: 5, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: `1px solid ${COLOR.border}`, lineHeight: 1.45 }}>
                       {log.notes}
                     </div>
                   ) : null}
@@ -331,42 +329,52 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         )}
       </section>
 
-      {/* Training history on affected zones */}
-      <section style={panel}>
-        <div style={sectionTitle}>Training load on affected zones</div>
-        {zoneActivities.length === 0 ? (
-          <div style={muted}>No training activity logged for these zones since this injury started.</div>
-        ) : (
-          <div style={{ display: "grid", gap: 14 }}>
-            {groupZoneActivities(zoneActivities).map((group) => (
-              <div key={group.key} style={sessionCard}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                    <span style={{ fontWeight: 900, fontSize: 13 }}>{group.sessionLabel}</span>
-                    <span style={{ ...sourcePill, ...sourceStyle(group.source) }}>
-                      {activitySourceLabels[group.source] ?? group.source}
+      {/* Training load — collapsed because it can be long-running on chronic injuries */}
+      <details style={panel}>
+        <summary style={detailsSummary}>
+          <span style={cardTitle}>Training load on affected zones</span>
+          <span style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
+            {zoneActivities.length} session{zoneActivities.length === 1 ? "" : "s"} since this injury started
+          </span>
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          {zoneActivities.length === 0 ? (
+            <div style={muted}>No training activity logged for these zones since this injury started.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 14 }}>
+              {groupZoneActivities(zoneActivities).map((group) => (
+                <div key={group.key} style={sessionCard}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+                      <span style={{ fontWeight: 900, fontSize: 13 }}>{group.sessionLabel}</span>
+                      <span style={{ ...sourcePill, ...sourceStyle(group.source) }}>
+                        {activitySourceLabels[group.source] ?? group.source}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, color: COLOR.textFaint, flexShrink: 0 }}>
+                      {formatAppDate(group.performedAt, { weekday: "short", month: "short", day: "numeric" })}
                     </span>
                   </div>
-                  <span style={{ fontSize: 11, opacity: 0.4, flexShrink: 0 }}>
-                    {formatAppDate(group.performedAt, { weekday: "short", month: "short", day: "numeric" })}
-                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {group.entries.map((entry, i) => (
+                      <span key={i} style={exerciseChip} title={entry.zones.join(", ")}>
+                        {entry.label}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {group.entries.map((entry, i) => (
-                    <span key={i} style={exerciseChip} title={entry.zones.join(", ")}>
-                      {entry.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
 
-      {/* Edit — tucked into details since most page visits don't need it */}
+      {/* Edit — collapsed since most visits are about reviewing the trend, not editing */}
       <details style={panel}>
-        <summary style={editSummary}>Edit details</summary>
+        <summary style={detailsSummary}>
+          <span style={cardTitle}>Edit details</span>
+          <span style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>Name, severity, status, zones, notes</span>
+        </summary>
         <div style={{ marginTop: 12 }}>
           <InjuryForm
             zones={zones}
@@ -385,49 +393,65 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
           />
         </div>
       </details>
-    </main>
+    </PageShell>
   );
 }
 
-const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 900, letterSpacing: 1.2, opacity: 0.55, textTransform: "uppercase" };
-const h1: React.CSSProperties = { margin: "5px 0 0", fontSize: 32, lineHeight: 1.08 };
-const panel: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, background: "rgba(255,255,255,0.04)", padding: 14, display: "grid", gap: 14 };
-const sectionTitle: React.CSSProperties = { fontSize: 12, fontWeight: 900, letterSpacing: 0.8, textTransform: "uppercase", opacity: 0.7 };
-const muted: React.CSSProperties = { fontSize: 13, color: "rgba(255,255,255,0.68)", lineHeight: 1.45 };
-const row: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.03)" };
-const statLabel: React.CSSProperties = { fontSize: 11, fontWeight: 800, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase" };
-const statValue: React.CSSProperties = { fontSize: 26, fontWeight: 900, lineHeight: 1.1, marginTop: 2 };
+const panel: React.CSSProperties = { ...cardSurface, gap: 14 };
+const muted: React.CSSProperties = { fontSize: 13, color: COLOR.textDim, lineHeight: 1.45 };
+const row: React.CSSProperties = {
+  border: `1px solid ${COLOR.border}`,
+  borderRadius: RADIUS.control,
+  padding: "10px 12px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  background: "rgba(255,255,255,0.03)",
+};
+const statLabel: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: COLOR.textFaint, letterSpacing: 0.5, textTransform: "uppercase" };
+const statValue: React.CSSProperties = { fontSize: 24, fontWeight: 900, lineHeight: 1.1, marginTop: 2 };
 const sourcePill: React.CSSProperties = { fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 6, flexShrink: 0 };
-const sessionCard: React.CSSProperties = { borderLeft: "2px solid rgba(255,255,255,0.1)", paddingLeft: 12, display: "grid", gap: 7 };
-const exerciseChip: React.CSSProperties = { fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 7, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", lineHeight: 1.4, cursor: "default" };
+const sessionCard: React.CSSProperties = { borderLeft: `2px solid ${COLOR.border}`, paddingLeft: 12, display: "grid", gap: 7 };
+const exerciseChip: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  padding: "4px 9px",
+  borderRadius: 7,
+  background: "rgba(255,255,255,0.05)",
+  border: `1px solid ${COLOR.border}`,
+  lineHeight: 1.4,
+  cursor: "default",
+};
 const aggravatorRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: 12,
   padding: "10px 12px",
-  borderRadius: 12,
+  borderRadius: RADIUS.control,
   border: "1px solid rgba(248,113,113,0.18)",
   background: "rgba(248,113,113,0.04)",
 };
-const editSummary: React.CSSProperties = {
+const detailsSummary: React.CSSProperties = {
   cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 900,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
-  opacity: 0.7,
+  listStyle: "none",
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
 };
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
-  minHeight: 38,
+  minHeight: 36,
   alignItems: "center",
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 8,
-  padding: "8px 12px",
+  border: `1px solid ${COLOR.borderStrong}`,
+  borderRadius: RADIUS.control,
+  padding: "8px 14px",
   background: "rgba(255,255,255,0.05)",
   color: "inherit",
   textDecoration: "none",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 800,
 };
