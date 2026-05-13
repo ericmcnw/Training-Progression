@@ -110,11 +110,22 @@ function ZonePanel({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — when this zone is part of an active injury, surface a
+          direct link to its detail page so users don't have to bounce
+          through /injuries to find it. */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {detail.activeInjuries.length > 0 && (
+          detail.activeInjuries.map((injury) => (
+            <Link key={injury.id} href={`/injuries/${injury.id}`} style={linkInjury}>
+              View injury · {injury.name}
+            </Link>
+          ))
+        )}
         <Link href={`/body/log-pain?zone=${detail.slug}`} style={linkDanger}>Log pain</Link>
         <Link href={`/body/${detail.slug}?manual=1`} style={linkSecondary}>Log activity</Link>
-        <Link href={`/injuries/new?zone=${detail.slug}`} style={linkSecondary}>Mark injured</Link>
+        {detail.activeInjuries.length === 0 && (
+          <Link href={`/injuries/new?zone=${detail.slug}`} style={linkSecondary}>Mark injured</Link>
+        )}
       </div>
     </div>
   );
@@ -288,6 +299,13 @@ const linkDanger: React.CSSProperties = {
   ...linkBase,
   border: "1px solid rgba(251,113,133,0.30)",
   background: "rgba(251,113,133,0.08)",
+};
+
+const linkInjury: React.CSSProperties = {
+  ...linkBase,
+  border: "1px solid rgba(251,146,60,0.4)",
+  background: "rgba(251,146,60,0.10)",
+  color: "#FED7AA",
 };
 
 const closeBtn: React.CSSProperties = {

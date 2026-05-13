@@ -17,7 +17,6 @@ const DOMAIN_ACCENT: Record<HeatmapDomain, string> = {
   cardio:   "rgba(78,148,255,0.9)",
   mobility: "rgba(192,132,252,0.9)",
   sport:    "rgba(251,146,60,0.9)",
-  habit:    "rgba(251,191,36,0.9)",
 };
 
 export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapData }) {

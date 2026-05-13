@@ -1,7 +1,7 @@
 import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
-import { ROUTINE_KIND_LABEL, normalizeRoutineKind, routineKindColor } from "@/lib/routines";
+import { ROUTINE_KIND_LABEL, effectiveRoutineDomain, normalizeRoutineKind, routineKindColor, type RoutineDomain } from "@/lib/routines";
 import { prisma } from "@/lib/prisma";
 import { getRoutineLogs, type RoutineLogWithRelations } from "./data";
 import { isSportGroup, sportGroupTargetHref } from "./sports";
@@ -22,6 +22,10 @@ export type CoverageDetailLog = {
   routineId: string;
   routineName: string;
   routineKind: RoutineKind;
+  // Effective domain — respects an explicit routine.domain override (a PT
+  // routine marked "mobility" stays mobility), otherwise derived from kind +
+  // subtype so consumers don't need to redo the lookup.
+  routineDomain: Exclude<RoutineDomain, "skill" | "general" | "recovery">;
   performedAt: string;
   performedAtLabel: string;
   relevantParts: string[];
@@ -449,6 +453,7 @@ export async function getCoverageOverviewModel(range: CoverageRange = "4w"): Pro
           routineId: log.routineId,
           routineName: log.routine.name,
           routineKind,
+          routineDomain: effectiveRoutineDomain(log.routine.domain, routineKind, log.routine.subtype),
           performedAt: log.performedAt.toISOString(),
           performedAtLabel: formatAppDate(log.performedAt, { month: "short", day: "numeric" }),
           relevantParts: relevantPartsForLog({

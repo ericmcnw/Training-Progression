@@ -14,21 +14,24 @@ import {
   type CoverageDetailLog,
 } from "@/app/progress/coverage";
 import { getWeekBoundsSunday } from "@/lib/week";
-import type { RoutineKind } from "@/generated/prisma";
 
 const WEEKS = 8;
 const RECENT_WEEKS = 4;
 
-export type HeatmapDomain = "strength" | "cardio" | "mobility" | "sport" | "habit";
+// Habit-domain logs aren't training load (they're checkbox completions like
+// "took supplements"), so they're excluded from the heatmap entirely.
+export type HeatmapDomain = "strength" | "cardio" | "mobility" | "sport";
 
 // Reverse lookup: for each muscle group slug, which sport-activity slugs
 // load it heavily enough to count. Conservative — only include sports
 // where a typical session moves that muscle through real range / load.
+// Walking is intentionally excluded everywhere — it's recovery-tier movement
+// and shouldn't show up as "training load" on an injury page.
 const MUSCLE_TO_SPORT_SLUGS: Record<string, string[]> = {
-  hamstrings:    ["running", "walking", "hiking", "biking", "rowing", "climbing"],
+  hamstrings:    ["running", "hiking", "biking", "rowing", "climbing"],
   quads:         ["running", "hiking", "biking", "climbing", "board-sports"],
-  glutes:        ["running", "walking", "hiking", "biking", "climbing"],
-  calves:        ["running", "walking", "hiking", "biking", "climbing", "board-sports"],
+  glutes:        ["running", "hiking", "biking", "climbing"],
+  calves:        ["running", "hiking", "biking", "climbing", "board-sports"],
   "hip-flexors": ["running", "hiking", "climbing"],
   adductors:     ["climbing", "board-sports"],
   abductors:     ["running", "hiking", "climbing", "board-sports"],
@@ -53,10 +56,13 @@ const DOMAIN_LABEL: Record<HeatmapDomain, string> = {
   cardio:   "Cardio",
   sport:    "Sport",
   mobility: "Mobility",
-  habit:    "Habit",
 };
 
-const DOMAIN_ORDER: HeatmapDomain[] = ["cardio", "sport", "strength", "mobility", "habit"];
+const DOMAIN_ORDER: HeatmapDomain[] = ["cardio", "sport", "strength", "mobility"];
+
+function isHeatmapDomain(domain: string): domain is HeatmapDomain {
+  return domain === "strength" || domain === "cardio" || domain === "sport" || domain === "mobility";
+}
 
 export type InjuryHeatmapDomainRow = {
   domain: HeatmapDomain;
@@ -80,20 +86,6 @@ export type InjuryHeatmapData = {
   weekStarts: string[]; // length WEEKS
   categories: InjuryHeatmapCategory[];
 };
-
-// Map RoutineKind → domain bucket. Approximation only: WORKOUT/rehab and
-// SESSION/yoga would technically map to "mobility" via effectiveRoutineDomain,
-// but the kind alone is right ~95% of the time and we don't have subtype
-// on CoverageDetailLog.
-function kindToDomain(kind: RoutineKind): HeatmapDomain {
-  switch (kind) {
-    case "WORKOUT":    return "strength";
-    case "CARDIO":     return "cardio";
-    case "SESSION":    return "sport";
-    case "GUIDED":     return "mobility";
-    case "COMPLETION": return "habit";
-  }
-}
 
 export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Promise<InjuryHeatmapData> {
   if (metadataGroupSlugs.length === 0) return { weekStarts: [], categories: [] };
@@ -149,10 +141,13 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
       }
     }
 
-    // Bucket by domain, then by week.
+    // Bucket by domain (honoring the routine's explicit domain override —
+    // a PT routine marked "mobility" stays mobility), then by week. Habit-
+    // domain logs are dropped here since they're not training load.
     const byDomain = new Map<HeatmapDomain, { logs: CoverageDetailLog[]; weeks: number[] }>();
     for (const dl of pooled) {
-      const domain = kindToDomain(dl.routineKind);
+      if (!isHeatmapDomain(dl.routineDomain)) continue;
+      const domain = dl.routineDomain;
       const entry = byDomain.get(domain) ?? { logs: [], weeks: new Array<number>(WEEKS).fill(0) };
       entry.logs.push(dl);
       const ymd = toAppYmd(new Date(dl.performedAt));
