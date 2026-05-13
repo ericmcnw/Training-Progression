@@ -8,6 +8,7 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { LegacyGlanceDay } from "./types";
+import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
 import { domainAccent } from "./client-utils";
 import {
@@ -382,12 +383,12 @@ function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
                   {isCompletion && !isFutureDay ? (
                     <CompletionCheckbox routineId={item.routineId} ymd={day.ymd} done={isLogged} />
                   ) : showLogButton ? (
-                    <Link
-                      href={`/routines/${item.routineId}/log?date=${encodeURIComponent(day.ymd)}`}
+                    <DrawerLogButton
+                      routineId={item.routineId}
+                      defaultDate={day.ymd}
+                      className=""
                       style={logButton}
-                    >
-                      Log
-                    </Link>
+                    />
                   ) : isLogged ? (
                     <Link href={`/routines/${item.routineId}`} style={viewLink}>view →</Link>
                   ) : null}
@@ -429,12 +430,12 @@ function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
                     {isCompletion && !isFutureDay ? (
                       <CompletionCheckbox routineId={h.routineId} ymd={day.ymd} done={false} />
                     ) : (
-                      <Link
-                        href={`/routines/${h.routineId}/log?date=${encodeURIComponent(day.ymd)}`}
+                      <DrawerLogButton
+                        routineId={h.routineId}
+                        defaultDate={day.ymd}
+                        className=""
                         style={logButton}
-                      >
-                        Log
-                      </Link>
+                      />
                     )}
                   </div>
                 </div>

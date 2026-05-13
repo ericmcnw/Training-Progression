@@ -7,6 +7,7 @@
 
 import Link from "next/link";
 import { useState, useTransition, type CSSProperties } from "react";
+import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import type { QuickPickRoutine } from "./types";
 import { COLOR, RADIUS } from "./tokens";
 import { domainAccent } from "./client-utils";
@@ -118,6 +119,7 @@ function RoutinePicker({
   onBack: () => void;
   onClose: () => void;
 }) {
+  const { openDrawer } = useLogDrawer();
   const norm = filter.trim().toLowerCase();
   const filtered = norm
     ? routines.filter((r) => r.routineName.toLowerCase().includes(norm))
@@ -142,15 +144,18 @@ function RoutinePicker({
         <ul style={pickerList}>
           {filtered.slice(0, 50).map((r) => (
             <li key={r.routineId}>
-              <Link
-                href={`/routines/${r.routineId}/log?date=${today}`}
-                style={pickerItem}
-                onClick={onClose}
+              <button
+                type="button"
+                style={{ ...pickerItem, background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
+                onClick={() => {
+                  openDrawer(r.routineId, { defaultDate: today });
+                  onClose();
+                }}
               >
                 <span style={{ ...pickerDot, background: domainAccent(r.domain) }} aria-hidden />
                 <span style={pickerItemText}>{r.routineName}</span>
                 <span style={pickerKind}>{r.kind.toLowerCase()}</span>
-              </Link>
+              </button>
             </li>
           ))}
         </ul>

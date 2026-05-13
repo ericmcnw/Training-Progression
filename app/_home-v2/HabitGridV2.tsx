@@ -10,6 +10,7 @@
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { HabitRow } from "./types";
+import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
 import { frequencyStatusColor } from "@/lib/frequency-state";
 
@@ -208,9 +209,13 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
       </div>
 
       <div style={actionRow}>
-        <Link href={`/routines/${row.routineId}/log?date=${today}`} style={primaryAction}>
-          Log today
-        </Link>
+        <DrawerLogButton
+          routineId={row.routineId}
+          defaultDate={today}
+          label="Log today"
+          className=""
+          style={primaryAction}
+        />
         <Link href={`/routines/${row.routineId}`} style={secondaryAction}>
           Edit habit
         </Link>

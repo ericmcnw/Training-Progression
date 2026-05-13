@@ -1,3 +1,5 @@
+"use client";
+
 // Frequency heatmap — 8-week consistency calendar for the goal detail page.
 // Renders a Sun→Sat × N-weeks grid where each cell is colored by daily state
 // (done / missed / rest / future). Today is highlighted with a subtle ring.
@@ -5,9 +7,13 @@
 // All math comes from lib/frequency-state.ts — this component is purely
 // presentational. The header shows current/longest streak chips and the
 // running window progress.
+//
+// Marked "use client" so the missed-cell back-date affordance can launch
+// the floating log drawer (instead of full-page navigating away from the
+// goal detail). Has no server-only deps so the boundary is cheap.
 
-import Link from "next/link";
 import type { CSSProperties } from "react";
+import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
   formatMaskLabel,
@@ -38,6 +44,7 @@ export default function FrequencyHeatmap({
   weekdayMask?: number | null;
   retroactiveLogRoutineId?: string;
 }) {
+  const { openDrawer } = useLogDrawer();
   // Anchor the grid on the most recent Sunday (≤ today). Walk back WEEKS rows.
   const todayDate = new Date(`${today}T00:00:00.000Z`);
   const todayDow = todayDate.getUTCDay();
@@ -100,11 +107,12 @@ export default function FrequencyHeatmap({
                 // routine to back-date for).
                 if (cellState === "missed" && retroactiveLogRoutineId) {
                   return (
-                    <Link
+                    <button
                       key={ymd}
-                      href={`/routines/${retroactiveLogRoutineId}/log?date=${encodeURIComponent(ymd)}`}
+                      type="button"
+                      onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
                       title={`${dateLabel} — missed · tap to log`}
-                      style={{ ...cellSx, cursor: "pointer", display: "block" }}
+                      style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, border: "none" }}
                       aria-label={`Back-date a log for ${dateLabel}`}
                     />
                   );
