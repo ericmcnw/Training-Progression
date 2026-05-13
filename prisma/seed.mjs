@@ -194,14 +194,14 @@ const metadataStimulusMappings = [
 
 const boulderingGrades = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"];
 const yosemiteGrades = ["5.6", "5.7", "5.8", "5.9", "5.10a", "5.10b", "5.10c", "5.10d", "5.11a", "5.11b", "5.11c", "5.11d", "5.12a", "5.12b", "5.12c", "5.12d", "5.13a", "5.13b", "5.13c", "5.13d"];
-const climbingTemplateMetadata = ["climbing", "back", "biceps", "forearms", "fingers", "pull", "vertical-pull", "isometric", "core", "strength", "skill-practice"];
+const climbingTemplateMetadata = ["climbing", "back", "shoulders", "biceps", "forearms", "fingers", "pull", "vertical-pull", "isometric", "core", "strength", "skill-practice"];
 const climbingOutdoorTemplateMetadata = [...climbingTemplateMetadata, "outdoor"];
 const hikingTemplateMetadata = ["hiking", "cardio", "endurance", "outdoor", "legs", "quads", "glutes", "calves", "core"];
 const surfingTemplateMetadata = ["board-sports", "outdoor", "cardio", "skill-practice", "full-body", "upper-body", "core", "shoulders", "back"];
 const snowboardingTemplateMetadata = ["board-sports", "outdoor", "legs", "quads", "glutes", "calves", "core", "skill-practice"];
-const basketballPickupTemplateMetadata = ["basketball", "cardio", "full-body", "legs", "core", "skill-practice"];
+const basketballPickupTemplateMetadata = ["basketball", "cardio", "full-body", "legs", "core", "shoulders", "skill-practice"];
 const basketballShootingTemplateMetadata = ["basketball", "skill-practice", "upper-body", "core", "shoulders"];
-const golfTemplateMetadata = ["golf", "outdoor", "skill-practice", "core", "rotation"];
+const golfTemplateMetadata = ["golf", "outdoor", "skill-practice", "core", "rotation", "shoulders", "lats", "hip-flexors", "glutes"];
 
 function deriveExerciseLibraryKind({ name, metadata, unit }) {
   const normalizedName = String(name || "").trim().toLowerCase();

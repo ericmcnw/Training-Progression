@@ -85,36 +85,3 @@ export async function addManualZoneActivity(input: {
   revalidatePath(`/body/${zone.slug}`);
 }
 
-export async function addSportZoneActivities(input: {
-  routineLogId: string;
-  zoneSlugs: string[];
-  label: string;
-  intensity?: string | null;
-}) {
-  const routineLog = await prisma.routineLog.findUnique({
-    where: { id: input.routineLogId },
-    select: { id: true, performedAt: true },
-  });
-  if (!routineLog) throw new Error("Routine log not found.");
-
-  const zones = await prisma.bodyZone.findMany({
-    where: { slug: { in: Array.from(new Set(input.zoneSlugs)) } },
-    select: { id: true, slug: true },
-  });
-  if (zones.length === 0) return;
-
-  await prisma.zoneActivity.createMany({
-    data: zones.map((zone) => ({
-      zoneId: zone.id,
-      routineLogId: routineLog.id,
-      performedAt: routineLog.performedAt,
-      source: "SPORT_TAG",
-      label: input.label.trim() || "Sport session",
-      intensity: input.intensity?.trim() || null,
-    })),
-  });
-
-  revalidatePath("/");
-  revalidatePath("/body");
-  for (const zone of zones) revalidatePath(`/body/${zone.slug}`);
-}

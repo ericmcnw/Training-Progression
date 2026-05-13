@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { GuidedStepKind } from "@/generated/prisma";
 import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 
@@ -51,6 +51,7 @@ export default function GuidedReviewForm({
   saving,
   onSave,
   onBack,
+  bottomSlot,
 }: {
   steps: ReviewTemplateStep[];
   initialSkippedStepIds: Set<string>;
@@ -60,6 +61,7 @@ export default function GuidedReviewForm({
   saving: boolean;
   onSave: (data: ReviewSaveData) => void;
   onBack: () => void;
+  bottomSlot?: ReactNode;
 }) {
   const [reviewMap, setReviewMap] = useState<Map<string, { skipped: boolean; weightLb: string }>>(
     () => {
@@ -231,6 +233,8 @@ export default function GuidedReviewForm({
           style={textareaStyle}
         />
       </div>
+
+      {bottomSlot}
 
       {/* Save */}
       <div className="mobileStickyActions guidedStickyActions" style={{ display: "flex", gap: 10 }}>

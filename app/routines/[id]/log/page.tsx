@@ -36,6 +36,7 @@ import LogWorkoutForm from "./ui";
 import { localDateTimeForYmd } from "./date-helpers";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
 import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning, getRoutinePainCheckZones } from "@/lib/injury-warnings";
+import { getTemplateDefaultZones } from "@/lib/template-zone-defaults";
 import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
@@ -421,6 +422,22 @@ export default async function LogRoutinePage(props: {
     injuryWarning: exerciseInjuryWarnings.get(exercise.id),
   }));
 
+  // Inline "Adjust Muscles Worked" data — only meaningful for sport sessions
+  // backed by a SessionTemplate. The full zone list lets the user toggle any
+  // muscle; the default subset is the template's metadata-derived set.
+  const sessionTemplateId = routine.sessionDetails?.template?.id ?? null;
+  const [templateDefaultZones, allBodyZones] = isSessionKind(kind) && sessionTemplateId
+    ? await Promise.all([
+        getTemplateDefaultZones(sessionTemplateId),
+        prisma.bodyZone.findMany({
+          orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+          select: { slug: true, label: true },
+        }),
+      ])
+    : [[], []] as const;
+  const defaultZoneSlugs = templateDefaultZones.map((zone) => zone.slug);
+  const availableZones = allBodyZones.map((zone) => ({ slug: zone.slug, label: zone.label }));
+
   return (
     <div className="mobileRoutineDetailPage mobilePageShell" style={styles.container}>
       <div className="mobileRoutineLogTopRow mobilePageHeader" style={styles.topRow}>
@@ -491,6 +508,8 @@ export default async function LogRoutinePage(props: {
               savedClimbLocations={savedClimbLocations}
               activitySlug={activitySlug}
               savedSpots={savedSpots}
+              availableZones={availableZones}
+              defaultZoneSlugs={defaultZoneSlugs}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (

@@ -1,7 +1,8 @@
 "use client";
 
 import { createWorkoutExerciseOption, logWorkout } from "../../actions";
-import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import InlinePainCheck, { type PainCheckZone } from "@/app/components/log/InlinePainCheck";
+import type { PainContext } from "@/generated/prisma";
 import { useState } from "react";
 import WorkoutExerciseEditor, {
   type ExerciseOption,
@@ -31,16 +32,11 @@ export default function LogWorkoutForm({
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
 }) {
-  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
-
-  if (painCheckLogId) {
-    return (
-      <div className="painCheckEnter">
-        <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />
-      </div>
-    );
-  }
+  const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
+    Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
+  );
+  const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
 
   return (
     <WorkoutExerciseEditor
@@ -58,17 +54,34 @@ export default function LogWorkoutForm({
       backHref="/routines"
       onBack={onBack}
       createExerciseOption={createWorkoutExerciseOption}
+      bottomSlot={
+        activePainZones.length > 0 ? (
+          <InlinePainCheck
+            zones={activePainZones}
+            levels={painLevels}
+            onLevelsChange={setPainLevels}
+            context={painContext}
+            onContextChange={setPainContext}
+          />
+        ) : null
+      }
       onSave={async (payload) => {
-        const logId = await logWorkout({
+        await logWorkout({
           routineId,
           notes: payload.notes,
           performedAtLocal: payload.performedAtLocal || undefined,
           exercises: payload.exercises,
+          painCheck:
+            activePainZones.length > 0
+              ? {
+                  context: painContext,
+                  rows: activePainZones.map((zone) => ({
+                    zoneSlug: zone.slug,
+                    level: painLevels[zone.slug] ?? 0,
+                  })),
+                }
+              : undefined,
         });
-        if (logId && activePainZones.length > 0) {
-          setPainCheckLogId(logId);
-          return;
-        }
         finish();
       }}
     />

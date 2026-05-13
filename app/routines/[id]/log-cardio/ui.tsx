@@ -3,7 +3,8 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { logRun } from "../../actions";
-import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import InlinePainCheck, { type PainCheckZone } from "@/app/components/log/InlinePainCheck";
+import type { PainContext } from "@/generated/prisma";
 import {
   DateTimeField,
   Field,
@@ -62,9 +63,12 @@ export default function LogRunForm({
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
-  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
   const [spotSelection, setSpotSelection] = useState<SpotSelection | null>(null);
   const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
+  const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
+    Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
+  );
+  const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
 
   const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
   const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
@@ -127,10 +131,6 @@ export default function LogRunForm({
 
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
-  if (painCheckLogId) {
-    return <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />;
-  }
-
   function markDirty() {
     isDirtyRef.current = true;
     drawer?.markDirty();
@@ -162,7 +162,7 @@ export default function LogRunForm({
 
     setSaving(true);
     try {
-      const logId = await logRun({
+      await logRun({
         routineId,
         distanceMi: distance,
         durationSec,
@@ -183,14 +183,20 @@ export default function LogRunForm({
         newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
         newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
         newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
+        painCheck:
+          activePainZones.length > 0
+            ? {
+                context: painContext,
+                rows: activePainZones.map((zone) => ({
+                  zoneSlug: zone.slug,
+                  level: painLevels[zone.slug] ?? 0,
+                })),
+              }
+            : undefined,
       });
       clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
       drawer?.clearDirty();
-      if (logId && activePainZones.length > 0) {
-        setPainCheckLogId(logId);
-        return;
-      }
       finish();
     } finally {
       setSaving(false);
@@ -290,6 +296,16 @@ export default function LogRunForm({
           />
         </Field>
       </FormSection>
+
+      {activePainZones.length > 0 && (
+        <InlinePainCheck
+          zones={activePainZones}
+          levels={painLevels}
+          onLevelsChange={(next) => { markDirty(); setPainLevels(next); }}
+          context={painContext}
+          onContextChange={(next) => { markDirty(); setPainContext(next); }}
+        />
+      )}
 
       <FormActions
         primaryLabel="Save Cardio"

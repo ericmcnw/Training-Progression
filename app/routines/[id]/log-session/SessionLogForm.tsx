@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { logSession } from "../../actions";
-import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
-import SportZoneTagger from "@/app/components/log/SportZoneTagger";
+import InlineMusclesWorked, { type LoggableZone } from "@/app/components/log/InlineMusclesWorked";
+import InlinePainCheck, { type PainCheckZone } from "@/app/components/log/InlinePainCheck";
+import type { PainContext } from "@/generated/prisma";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import ClimbSessionLogger from "./ClimbSessionLogger";
 import ClimbLocationPicker, { type NewClimbLocationDraft } from "./ClimbLocationPicker";
@@ -43,14 +44,6 @@ import {
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, ClimbOutcome } from "@/lib/climb-types";
-
-const CLIMBING_AUTO_ZONES = [
-  { slug: "hands", label: "Fingers / Hands" },
-  { slug: "forearm", label: "Forearms" },
-  { slug: "upper-back", label: "Lats / Upper Back" },
-  { slug: "trapezius", label: "Traps" },
-];
-const CLIMBING_AUTO_ZONE_SLUGS = CLIMBING_AUTO_ZONES.map((z) => z.slug);
 
 // Synthesize SessionMetricValueInput from per-climb attempts (backward compat for progress queries)
 function synthesizeClimbingMetrics(
@@ -133,6 +126,8 @@ export default function SessionLogForm({
   savedClimbLocations = [],
   activitySlug = null,
   savedSpots = [],
+  availableZones = [],
+  defaultZoneSlugs = [],
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -147,6 +142,8 @@ export default function SessionLogForm({
   savedClimbLocations?: ClimbLocationBasic[];
   activitySlug?: string | null;
   savedSpots?: SpotPickerItem[];
+  availableZones?: LoggableZone[];
+  defaultZoneSlugs?: string[];
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -182,8 +179,16 @@ export default function SessionLogForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [effortRating, setEffortRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [zoneTagLogId, setZoneTagLogId] = useState<string | null>(null);
-  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+
+  // Inline post-log state — submitted alongside the log instead of via a
+  // follow-up screen. Defaults pre-tick the template-derived zones; pain
+  // levels stay at 0 unless the user moves a slider.
+  const [selectedZoneSlugs, setSelectedZoneSlugs] = useState<string[]>(defaultZoneSlugs);
+  const [zoneIntensity, setZoneIntensity] = useState<string>("");
+  const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
+    Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
+  );
+  const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
 
   // Climbing-specific state
   const [climbMode, setClimbMode] = useState<"quick" | "per-climb">("per-climb");
@@ -302,33 +307,6 @@ export default function SessionLogForm({
     drawer?.clearDirty();
   }
 
-  if (zoneTagLogId) {
-    return (
-      <SportZoneTagger
-        zones={CLIMBING_AUTO_ZONES}
-        routineLogId={zoneTagLogId}
-        label={routineName}
-        preSelectedSlugs={CLIMBING_AUTO_ZONE_SLUGS}
-        onDone={() => {
-          if (activePainZones.length > 0) {
-            setPainCheckLogId(zoneTagLogId);
-            setZoneTagLogId(null);
-          } else {
-            finish();
-          }
-        }}
-      />
-    );
-  }
-
-  if (painCheckLogId) {
-    return (
-      <div className="painCheckEnter">
-        <PostSessionPainCheck zones={activePainZones} routineLogId={painCheckLogId} onDone={finish} />
-      </div>
-    );
-  }
-
   async function onSave() {
     const trimmedDuration = durationMin.trim();
     const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
@@ -382,7 +360,7 @@ export default function SessionLogForm({
     setSaving(true);
     try {
       const effortPrefix = !isClimbing && effortRating !== null ? `Effort: ${effortRating}/5\n` : "";
-      const logId = await logSession({
+      await logSession({
         routineId,
         durationSec,
         location: location.trim() || undefined,
@@ -416,18 +394,28 @@ export default function SessionLogForm({
         newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
         newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
         newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
+        zoneTags:
+          selectedZoneSlugs.length > 0
+            ? {
+                zoneSlugs: selectedZoneSlugs,
+                label: routineName,
+                intensity: zoneIntensity || null,
+              }
+            : undefined,
+        painCheck:
+          activePainZones.length > 0
+            ? {
+                context: painContext,
+                rows: activePainZones.map((zone) => ({
+                  zoneSlug: zone.slug,
+                  level: painLevels[zone.slug] ?? 0,
+                })),
+              }
+            : undefined,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
       drawer?.clearDirty();
-      if (logId && isClimbing) {
-        setZoneTagLogId(logId);
-        return;
-      }
-      if (logId && activePainZones.length > 0) {
-        setPainCheckLogId(logId);
-        return;
-      }
       finish();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save session.");
@@ -602,6 +590,27 @@ export default function SessionLogForm({
             ))}
           </div>
         </FormSection>
+      )}
+
+      {availableZones.length > 0 && (
+        <InlineMusclesWorked
+          availableZones={availableZones}
+          defaultSlugs={defaultZoneSlugs}
+          selectedSlugs={selectedZoneSlugs}
+          onSelectedSlugsChange={(slugs) => { markDirty(); setSelectedZoneSlugs(slugs); }}
+          intensity={zoneIntensity}
+          onIntensityChange={(value) => { markDirty(); setZoneIntensity(value); }}
+        />
+      )}
+
+      {activePainZones.length > 0 && (
+        <InlinePainCheck
+          zones={activePainZones}
+          levels={painLevels}
+          onLevelsChange={(next) => { markDirty(); setPainLevels(next); }}
+          context={painContext}
+          onContextChange={(next) => { markDirty(); setPainContext(next); }}
+        />
       )}
 
       <FormActions

@@ -8,7 +8,7 @@ import LogRunForm from "@/app/routines/[id]/log-cardio/ui";
 import GuidedLogForm from "@/app/routines/[id]/log-guided/GuidedLogForm";
 import { localDateTimeForYmd } from "@/app/routines/[id]/log/date-helpers";
 import type { WorkoutBlock, ExerciseOption } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
-import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
+import type { PainCheckZone } from "@/app/components/log/InlinePainCheck";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
 import type { GuidedStepKind } from "@/generated/prisma";
 import type { ClimbLocationBasic } from "@/lib/climb-types";
@@ -35,6 +35,8 @@ type SessionLogData = {
   savedClimbLocations?: ClimbLocationBasic[];
   activitySlug?: string | null;
   savedSpots?: SpotPickerItem[];
+  availableZones?: Array<{ slug: string; label: string }>;
+  defaultZoneSlugs?: string[];
 };
 
 type CardioLogData = {
@@ -187,6 +189,8 @@ export default function LogDrawer() {
                   savedClimbLocations={logData.savedClimbLocations ?? []}
                   activitySlug={logData.activitySlug ?? null}
                   savedSpots={logData.savedSpots ?? []}
+                  availableZones={logData.availableZones ?? []}
+                  defaultZoneSlugs={logData.defaultZoneSlugs ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}

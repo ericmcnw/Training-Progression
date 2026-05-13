@@ -59,6 +59,72 @@ type SessionMetricValueInput = {
   booleanValue?: boolean | null;
 };
 
+type ZoneTagInput = {
+  zoneSlugs: string[];
+  label: string;
+  intensity?: string | null;
+};
+
+type PainCheckInput = {
+  context?: "AT_REST" | "DURING_ACTIVITY" | "AFTER_ACTIVITY" | "MORNING" | "GENERAL";
+  rows: Array<{ zoneSlug: string; level: number }>;
+};
+
+async function applyZoneTagsToLog(
+  logId: string,
+  performedAt: Date,
+  tags: ZoneTagInput | null | undefined,
+) {
+  if (!tags) return;
+  const slugs = Array.from(new Set((tags.zoneSlugs ?? []).map((s) => String(s).trim()).filter(Boolean)));
+  if (slugs.length === 0) return;
+  const zones = await prisma.bodyZone.findMany({
+    where: { slug: { in: slugs } },
+    select: { id: true },
+  });
+  if (zones.length === 0) return;
+  await prisma.zoneActivity.createMany({
+    data: zones.map((zone) => ({
+      zoneId: zone.id,
+      routineLogId: logId,
+      performedAt,
+      source: "SPORT_TAG",
+      label: tags.label?.trim() || "Sport session",
+      intensity: tags.intensity?.trim() || null,
+    })),
+  });
+}
+
+async function applyPainCheckToLog(
+  logId: string,
+  painCheck: PainCheckInput | null | undefined,
+) {
+  if (!painCheck || !painCheck.rows || painCheck.rows.length === 0) return;
+  const validContexts = new Set(["AT_REST", "DURING_ACTIVITY", "AFTER_ACTIVITY", "MORNING", "GENERAL"]);
+  const context = painCheck.context && validContexts.has(painCheck.context) ? painCheck.context : "AFTER_ACTIVITY";
+  const rows = painCheck.rows
+    .map((row) => ({
+      zoneSlug: String(row.zoneSlug || "").trim(),
+      level: Math.max(0, Math.min(10, Math.round(Number(row.level)))),
+    }))
+    .filter((row) => row.zoneSlug && row.level > 0);
+  if (rows.length === 0) return;
+  const zones = await prisma.bodyZone.findMany({
+    where: { slug: { in: rows.map((r) => r.zoneSlug) } },
+    select: { id: true, slug: true },
+  });
+  const idBySlug = new Map(zones.map((z) => [z.slug, z.id]));
+  const data = rows
+    .map((row) => {
+      const zoneId = idBySlug.get(row.zoneSlug);
+      if (!zoneId) return null;
+      return { zoneId, level: row.level, context, routineLogId: logId };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+  if (data.length === 0) return;
+  await prisma.painLog.createMany({ data });
+}
+
 type SessionTemplateConfig = {
   preferredClimbingGrades?: string[];
 };
@@ -1483,8 +1549,10 @@ export async function logWorkout(params: {
   notes?: string;
   performedAtLocal?: string;
   exercises: WorkoutExerciseInput[];
+  painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
+  const performedAt = parsePerformedAt(params.performedAtLocal);
   const logId = await prisma.$transaction(async (tx) => {
     const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
     await syncWorkoutTemplateTx(tx, params.routineId, exercises);
@@ -1495,7 +1563,7 @@ export async function logWorkout(params: {
     const log = await tx.routineLog.create({
       data: {
         routineId: params.routineId,
-        performedAt: parsePerformedAt(params.performedAtLocal),
+        performedAt,
         notes: params.notes?.trim() || null,
       },
       select: { id: true },
@@ -1522,6 +1590,7 @@ export async function logWorkout(params: {
   if (logId) {
     await recalculateRoutineLogStimulus(logId);
     await createExerciseZoneActivitiesForLog(prisma, logId);
+    await applyPainCheckToLog(logId, params.painCheck);
   }
 
   revalidateRoutineSurfaces(params.routineId);
@@ -1801,6 +1870,7 @@ export async function logCardio(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) {
@@ -1845,6 +1915,7 @@ export async function logCardio(params: {
   }
   await recalculateRoutineLogStimulus(log.id);
   await createExerciseZoneActivitiesForLog(prisma, log.id);
+  await applyPainCheckToLog(log.id, params.painCheck);
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -1868,6 +1939,7 @@ export async function logRun(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  painCheck?: PainCheckInput;
 }) {
   return logCardio(params);
 }
@@ -1878,6 +1950,7 @@ export async function logGuided(params: {
   notes?: string;
   performedAtLocal?: string;
   steps?: GuidedStepInput[];
+  painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "GUIDED");
   const steps = sanitizeGuidedSteps(params.steps);
@@ -1914,6 +1987,7 @@ export async function logGuided(params: {
   }
   await recalculateRoutineLogStimulus(log.id);
   await createExerciseZoneActivitiesForLog(prisma, log.id);
+  await applyPainCheckToLog(log.id, params.painCheck);
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -1967,6 +2041,8 @@ export async function logSession(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  zoneTags?: ZoneTagInput;
+  painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
@@ -2127,6 +2203,8 @@ export async function logSession(params: {
   if (logId) {
     await recalculateRoutineLogStimulus(logId);
     await createExerciseZoneActivitiesForLog(prisma, logId);
+    await applyZoneTagsToLog(logId, parsePerformedAt(params.performedAtLocal), params.zoneTags);
+    await applyPainCheckToLog(logId, params.painCheck);
   }
 
   revalidateRoutineSurfaces(params.routineId);

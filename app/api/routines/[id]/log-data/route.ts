@@ -10,6 +10,7 @@ import {
 } from "@/lib/exercise-library";
 import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
 import { getRoutinePainCheckZones } from "@/lib/injury-warnings";
+import { getTemplateDefaultZones } from "@/lib/template-zone-defaults";
 import {
   buildSpotPickerItems,
   compatibleActivitySlugs,
@@ -169,7 +170,9 @@ export async function GET(
     const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
     const includeClimbingSpots = compatibleSlugs.includes("climbing");
 
-    const [activePainZones, savedClimbLocations, activitySpotRows, climbingCrossRows] = await Promise.all([
+    const sessionTemplateId = routine.sessionDetails?.template?.id ?? null;
+
+    const [activePainZones, savedClimbLocations, activitySpotRows, climbingCrossRows, templateDefaultZones, allBodyZones] = await Promise.all([
       getRoutinePainCheckZones(routineId),
       isClimbing
         ? prisma.climbLocation.findMany({
@@ -188,6 +191,13 @@ export async function GET(
         ? prisma.climbLocation.findMany({
             select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true, osmType: true, osmId: true },
             orderBy: [{ name: "asc" }],
+          })
+        : Promise.resolve([]),
+      sessionTemplateId ? getTemplateDefaultZones(sessionTemplateId) : Promise.resolve([]),
+      sessionTemplateId
+        ? prisma.bodyZone.findMany({
+            orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+            select: { slug: true, label: true },
           })
         : Promise.resolve([]),
     ]);
@@ -212,6 +222,8 @@ export async function GET(
       savedClimbLocations,
       activitySlug,
       savedSpots,
+      availableZones: allBodyZones.map((zone) => ({ slug: zone.slug, label: zone.label })),
+      defaultZoneSlugs: templateDefaultZones.map((zone) => zone.slug),
     });
   }
 

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
-import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
-import PostSessionPainCheck from "@/app/components/pain-log/PostSessionPainCheck";
+import type { ExerciseLibraryKind, GuidedStepKind, PainContext } from "@/generated/prisma";
+import InlinePainCheck, { type PainCheckZone } from "@/app/components/log/InlinePainCheck";
 import { logGuided } from "../../actions";
 import GuidedEntryScreen from "./GuidedEntryScreen";
 import GuidedPlayer from "./GuidedPlayer";
@@ -106,7 +105,10 @@ export default function GuidedLogForm({
   );
 
   const [saving, setSaving] = useState(false);
-  const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
+    Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
+  );
+  const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
   const draftStartedAtRef = useRef<string>(restoredDraft?.startedAt ?? new Date().toISOString());
@@ -242,35 +244,31 @@ export default function GuidedLogForm({
 
     setSaving(true);
     try {
-      const createdLogId = await logGuided({
+      await logGuided({
         routineId,
         durationSec,
         notes,
         performedAtLocal: performedAtLocal || undefined,
         steps: stepsPayload,
+        painCheck:
+          activePainZones.length > 0
+            ? {
+                context: painContext,
+                rows: activePainZones.map((zone) => ({
+                  zoneSlug: zone.slug,
+                  level: painLevels[zone.slug] ?? 0,
+                })),
+              }
+            : undefined,
       });
       clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
-      if (createdLogId && activePainZones.length > 0) {
-        setPainCheckLogId(createdLogId);
-        return;
-      }
       finish();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save guided session.");
     } finally {
       setSaving(false);
     }
-  }
-
-  if (painCheckLogId) {
-    return (
-      <PostSessionPainCheck
-        zones={activePainZones}
-        routineLogId={painCheckLogId}
-        onDone={finish}
-      />
-    );
   }
 
   const name = routineName ?? "Guided Routine";
@@ -327,6 +325,17 @@ export default function GuidedLogForm({
       saving={saving}
       onSave={onSave}
       onBack={() => setScreen(reviewMode === "review" ? "player" : "entry")}
+      bottomSlot={
+        activePainZones.length > 0 ? (
+          <InlinePainCheck
+            zones={activePainZones}
+            levels={painLevels}
+            onLevelsChange={setPainLevels}
+            context={painContext}
+            onContextChange={setPainContext}
+          />
+        ) : null
+      }
     />
   );
 }

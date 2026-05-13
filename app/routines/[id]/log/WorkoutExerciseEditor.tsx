@@ -11,7 +11,7 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { DateTimeField, Field, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
 
 export type ExerciseOption = {
@@ -91,6 +91,7 @@ export default function WorkoutExerciseEditor({
   emptyStateHelp = "",
   createExerciseOption,
   onSave,
+  bottomSlot,
 }: {
   routineId: string;
   routineName?: string;
@@ -111,6 +112,7 @@ export default function WorkoutExerciseEditor({
   emptyStateHelp?: string;
   createExerciseOption: CreateExerciseOptionFn;
   onSave: (payload: SavePayload) => Promise<void>;
+  bottomSlot?: ReactNode;
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
   const drawer = useOptionalLogDrawer();
@@ -789,6 +791,8 @@ export default function WorkoutExerciseEditor({
           onChange={(e) => { markDirty(); setNotes(e.target.value); }}
         />
       </Field>
+
+      {bottomSlot}
 
       {/* Action bar */}
       <div className="mobileActionRow" style={styles.stickyBar}>
