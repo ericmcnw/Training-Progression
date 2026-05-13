@@ -1,32 +1,27 @@
 "use client";
 
-// Heatmap of training load on the muscle groups affected by this injury.
-// Visually mirrors the dashboard movement-patterns heatmap (rows × weeks),
-// but each row toggles open to show the routine logs that contributed.
+// Heatmap of training load on the muscle groups affected by this injury,
+// split by routine domain (cardio / sport / strength / mobility / habit).
+// Click a domain row to see the routines that contributed in the last 12
+// weeks; each link jumps to its log detail.
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { COLOR, RADIUS } from "@/lib/design-tokens";
-import type { InjuryHeatmapCategory, InjuryHeatmapData } from "@/app/injuries/[id]/training-heatmap";
+import type { HeatmapDomain, InjuryHeatmapData, InjuryHeatmapDomainRow } from "@/app/injuries/[id]/training-heatmap";
 
-const KIND_COLOR: Record<string, string> = {
-  WORKOUT: "#60A5FA",
-  CARDIO: "#A78BFA",
-  GUIDED: "#34D399",
-  SESSION: "#FBBF24",
-  COMPLETION: "#9CA3AF",
-};
-
-const KIND_LABEL: Record<string, string> = {
-  WORKOUT: "Workout",
-  CARDIO: "Cardio",
-  GUIDED: "Guided",
-  SESSION: "Session",
-  COMPLETION: "Completion",
+// Match the dashboard domain palette so this card reads in the same
+// visual language as Training Balance + sparkline charts.
+const DOMAIN_ACCENT: Record<HeatmapDomain, string> = {
+  strength: "rgba(84,203,130,0.9)",
+  cardio:   "rgba(78,148,255,0.9)",
+  mobility: "rgba(192,132,252,0.9)",
+  sport:    "rgba(251,146,60,0.9)",
+  habit:    "rgba(251,191,36,0.9)",
 };
 
 export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapData }) {
-  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   if (data.categories.length === 0) {
     return (
@@ -36,11 +31,16 @@ export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapDat
     );
   }
 
-  // Global peak for consistent color scaling across rows.
-  const globalPeak = Math.max(1, ...data.categories.flatMap((c) => c.weeks));
+  // Global peak across every domain × week cell — keeps color scaling
+  // consistent so a heavy cardio week reads visually similar to a heavy
+  // strength week.
+  const globalPeak = Math.max(
+    1,
+    ...data.categories.flatMap((c) => c.domains.flatMap((d) => d.weeks)),
+  );
 
   return (
-    <div style={{ display: "grid", gap: 4 }}>
+    <div style={{ display: "grid", gap: 14 }}>
       {/* Date axis (top) */}
       <div style={headerRow}>
         <div style={labelCol} />
@@ -54,71 +54,96 @@ export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapDat
         <div style={totalLabel}>recent</div>
       </div>
 
-      {data.categories.map((category) => {
-        const isExpanded = expandedSlug === category.slug;
-        return (
-          <div key={category.slug} style={{ display: "grid", gap: 6 }}>
-            <button
-              type="button"
-              onClick={() => setExpandedSlug(isExpanded ? null : category.slug)}
-              style={{ ...rowButton, ...(isExpanded ? rowButtonExpanded : null) }}
-              aria-expanded={isExpanded}
-            >
-              <div style={labelCol}>
-                <span style={{ ...patternStatusDot, background: accentFor(category) }} />
-                <span style={patternName}>{category.label}</span>
-              </div>
-              <div style={weeksCol}>
-                {category.weeks.map((count, i) => (
-                  <span
-                    key={i}
-                    style={heatmapCell(count, globalPeak, accentFor(category))}
-                    title={`${category.label}: ${count} session${count === 1 ? "" : "s"} · week of ${data.weekStarts[i]}`}
-                  >
-                    {count > 0 ? count : ""}
-                  </span>
-                ))}
-              </div>
-              <div style={totalCol}>
-                <span style={totalValue}>{category.recentCount}</span>
-                <span style={totalSub}>/4w</span>
-              </div>
-            </button>
-
-            {isExpanded && (
-              <div style={expandedPanel}>
-                {category.contributingLogs.length === 0 ? (
-                  <div style={emptyLogs}>No sessions on this muscle group in the last 12 weeks.</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 6 }}>
-                    {category.contributingLogs.slice(0, 20).map((log) => (
-                      <Link
-                        key={log.logId}
-                        href={`/routines/${log.routineId}/logs/${log.logId}`}
-                        style={logRow}
-                      >
-                        <span style={{ ...kindPill, background: tintAccent(KIND_COLOR[log.routineKind] ?? KIND_COLOR.SESSION, 0.16), borderColor: tintAccent(KIND_COLOR[log.routineKind] ?? KIND_COLOR.SESSION, 0.45), color: KIND_COLOR[log.routineKind] ?? COLOR.text }}>
-                          {KIND_LABEL[log.routineKind] ?? log.routineKind.toLowerCase()}
-                        </span>
-                        <span style={logName}>{log.routineName}</span>
-                        {log.relevantParts.length > 0 && (
-                          <span style={logHint}>{log.relevantParts[0]}</span>
-                        )}
-                        <span style={logDate}>{log.performedAtLabel}</span>
-                      </Link>
-                    ))}
-                    {category.contributingLogs.length > 20 && (
-                      <div style={moreNote}>
-                        + {category.contributingLogs.length - 20} more session{category.contributingLogs.length - 20 === 1 ? "" : "s"}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+      {data.categories.map((category) => (
+        <div key={category.slug} style={{ display: "grid", gap: 4 }}>
+          {/* Muscle-group header (non-clickable, just an eyebrow + combined
+              recent count). */}
+          <div style={muscleHeader}>
+            <span style={muscleHeaderLabel}>{category.label}</span>
+            <span style={muscleHeaderMeta}>
+              {category.recentCount} session{category.recentCount === 1 ? "" : "s"} in last 4w · {category.totalCount} total
+            </span>
           </div>
-        );
-      })}
+
+          {category.domains.length === 0 ? (
+            <div style={emptyDomainNote}>
+              No training touched this muscle group in the last 12 weeks.
+            </div>
+          ) : (
+            category.domains.map((domainRow) => {
+              const key = `${category.slug}::${domainRow.domain}`;
+              const isExpanded = expandedKey === key;
+              const accent = DOMAIN_ACCENT[domainRow.domain];
+              return (
+                <div key={key} style={{ display: "grid", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedKey(isExpanded ? null : key)}
+                    style={{ ...rowButton, ...(isExpanded ? rowButtonExpanded : null) }}
+                    aria-expanded={isExpanded}
+                  >
+                    <div style={labelCol}>
+                      <span style={{ ...domainDot, background: accent }} />
+                      <span style={domainName}>{domainRow.domainLabel}</span>
+                    </div>
+                    <div style={weeksCol}>
+                      {domainRow.weeks.map((count, i) => (
+                        <span
+                          key={i}
+                          style={heatmapCell(count, globalPeak, accent)}
+                          title={`${category.label} · ${domainRow.domainLabel}: ${count} session${count === 1 ? "" : "s"} · week of ${data.weekStarts[i]}`}
+                        >
+                          {count > 0 ? count : ""}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={totalCol}>
+                      <span style={totalValue}>{domainRow.recentCount}</span>
+                      <span style={totalSub}>/4w</span>
+                    </div>
+                  </button>
+
+                  {isExpanded && <ExpandedRoutineList row={domainRow} />}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExpandedRoutineList({ row }: { row: InjuryHeatmapDomainRow }) {
+  if (row.contributingLogs.length === 0) {
+    return (
+      <div style={expandedPanel}>
+        <div style={emptyLogs}>No sessions on this muscle group in the last 12 weeks.</div>
+      </div>
+    );
+  }
+  return (
+    <div style={expandedPanel}>
+      <div style={{ display: "grid", gap: 6 }}>
+        {row.contributingLogs.slice(0, 20).map((log) => (
+          <Link
+            key={log.logId}
+            href={`/routines/${log.routineId}/logs/${log.logId}`}
+            style={logRow}
+          >
+            <span style={logName}>{log.routineName}</span>
+            {log.relevantParts.length > 0 && (
+              <span style={logHint}>{log.relevantParts[0]}</span>
+            )}
+            <span style={logDate}>{log.performedAtLabel}</span>
+          </Link>
+        ))}
+        {row.contributingLogs.length > 20 && (
+          <div style={moreNote}>
+            + {row.contributingLogs.length - 20} more session{row.contributingLogs.length - 20 === 1 ? "" : "s"}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -126,16 +151,6 @@ export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapDat
 function weekShort(ymd: string): string {
   const d = new Date(`${ymd}T00:00:00.000Z`);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-}
-
-function accentFor(category: InjuryHeatmapCategory): string {
-  // Hot (red) if recent load is heavy, amber if moderate, faint if light.
-  // The signal here is "this muscle keeps getting worked while injured" —
-  // not a goodness signal like the dashboard's pattern card.
-  if (category.recentCount >= 6) return "rgba(248,113,113,0.95)";
-  if (category.recentCount >= 3) return "rgba(251,191,36,0.95)";
-  if (category.recentCount >= 1) return "rgba(132,204,255,0.85)";
-  return "rgba(255,255,255,0.4)";
 }
 
 function heatmapCell(count: number, peak: number, accent: string): CSSProperties {
@@ -204,6 +219,35 @@ const totalLabel: CSSProperties = {
   textAlign: "right",
 };
 
+const muscleHeader: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
+  paddingTop: 4,
+};
+
+const muscleHeaderLabel: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  color: COLOR.text,
+  letterSpacing: -0.1,
+};
+
+const muscleHeaderMeta: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+};
+
+const emptyDomainNote: CSSProperties = {
+  fontSize: 12,
+  color: COLOR.textFaint,
+  fontStyle: "italic",
+  padding: "4px 0",
+};
+
 const rowButton: CSSProperties = {
   appearance: "none",
   margin: 0,
@@ -228,20 +272,21 @@ const rowButtonExpanded: CSSProperties = {
   borderColor: COLOR.border,
 };
 
-const patternStatusDot: CSSProperties = {
+const domainDot: CSSProperties = {
   width: 8,
   height: 8,
   borderRadius: 999,
   flexShrink: 0,
 };
 
-const patternName: CSSProperties = {
-  fontSize: 13,
+const domainName: CSSProperties = {
+  fontSize: 12,
   fontWeight: 800,
   color: COLOR.text,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  textTransform: "capitalize",
 };
 
 const totalCol: CSSProperties = {
@@ -278,7 +323,7 @@ const emptyLogs: CSSProperties = {
 
 const logRow: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "auto 1fr auto auto",
+  gridTemplateColumns: "1fr auto auto",
   gap: 8,
   alignItems: "center",
   padding: "6px 8px",
@@ -289,17 +334,6 @@ const logRow: CSSProperties = {
   textDecoration: "none",
   fontSize: 12,
   minWidth: 0,
-};
-
-const kindPill: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "2px 7px",
-  borderRadius: 999,
-  fontSize: 10,
-  fontWeight: 800,
-  border: "1px solid",
-  letterSpacing: 0.3,
 };
 
 const logName: CSSProperties = {
