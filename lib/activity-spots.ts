@@ -98,3 +98,50 @@ export function spotTypeColor(config: ActivitySpotConfig, type: string | null): 
   const match = config.spotTypes.find((t) => t.value === type);
   return match?.pinColor ?? config.defaultPinColor;
 }
+
+/** Light shape covering both the Prisma include result and any consumer
+ *  that prefers to pass already-mapped data. */
+export type RoutineMetadataInput = Array<{ group: { slug: string } | null }>;
+
+/** Resolves the activity slug for a routine — used by log forms to know
+ *  which ActivitySpot library to surface in the picker. Falls back to the
+ *  routine's `subtype` when no metadata group resolves to a known activity.
+ *  Returns null when there's no spot-eligible activity (the form can hide
+ *  the picker or fall back to free-text). */
+export function resolveRoutineActivitySlug(
+  metadataGroups: RoutineMetadataInput,
+  subtype: string | null,
+): string | null {
+  for (const entry of metadataGroups) {
+    const slug = entry.group?.slug;
+    if (!slug) continue;
+    const config = getActivitySpotConfig(slug);
+    if (config?.supportsMap) return slug;
+  }
+  if (subtype) {
+    const slug = subtype.toLowerCase().replace(/_/g, "-");
+    const config = getActivitySpotConfig(slug);
+    if (config?.supportsMap) return slug;
+  }
+  return null;
+}
+
+/** Stable shape for a saved ActivitySpot as exposed to log forms. */
+export type ActivitySpotBasic = {
+  id: string;
+  name: string;
+  type: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+/** Mutable draft used by the picker when the user is creating a new spot
+ *  in-line during a log session (parallel to NewClimbLocationDraft). */
+export type NewActivitySpotDraft = {
+  name: string;
+  type: string | null;
+  region: string;
+  latitude: number | null;
+  longitude: number | null;
+};

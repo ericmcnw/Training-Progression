@@ -12,6 +12,7 @@ import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainChe
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
 import type { GuidedStepKind } from "@/generated/prisma";
 import type { ClimbLocationBasic } from "@/lib/climb-types";
+import type { ActivitySpotBasic } from "@/lib/activity-spots";
 
 type WorkoutLogData = {
   kind: "WORKOUT";
@@ -32,6 +33,8 @@ type SessionLogData = {
   preferredClimbingGrades: string[];
   activePainZones: PainCheckZone[];
   savedClimbLocations?: ClimbLocationBasic[];
+  activitySlug?: string | null;
+  savedActivitySpots?: ActivitySpotBasic[];
 };
 
 type CardioLogData = {
@@ -39,6 +42,8 @@ type CardioLogData = {
   routineId: string;
   routineName: string;
   activePainZones: PainCheckZone[];
+  activitySlug?: string | null;
+  savedActivitySpots?: ActivitySpotBasic[];
 };
 
 type GuidedStep = {
@@ -180,6 +185,8 @@ export default function LogDrawer() {
                   preferredClimbingGrades={logData.preferredClimbingGrades}
                   activePainZones={logData.activePainZones}
                   savedClimbLocations={logData.savedClimbLocations ?? []}
+                  activitySlug={logData.activitySlug ?? null}
+                  savedActivitySpots={logData.savedActivitySpots ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}
@@ -193,6 +200,8 @@ export default function LogDrawer() {
                   routineId={logData.routineId}
                   routineName={logData.routineName}
                   activePainZones={logData.activePainZones}
+                  activitySlug={logData.activitySlug ?? null}
+                  savedActivitySpots={logData.savedActivitySpots ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}

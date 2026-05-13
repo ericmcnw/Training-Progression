@@ -313,6 +313,9 @@ model ActivitySpot {
   // "trail"/"peak"/"trailhead" for hiking, etc. Nullable when an activity
   // doesn't use sub-types.
   type         String?
+  // Optional broader area context (city/state/region) — same purpose as
+  // ClimbLocation.region. Shown next to name in pickers for disambiguation.
+  region       String?
   latitude     Float?
   longitude    Float?
   createdAt    DateTime @default(now())

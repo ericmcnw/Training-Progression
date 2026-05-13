@@ -21,7 +21,8 @@ import {
   isWorkoutKind,
   normalizeRoutineKind,
 } from "@/lib/routines";
-import { withSessionMetricConfig } from "@/lib/session-templates";
+import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
+import { getActivitySpotConfig, resolveRoutineActivitySlug } from "@/lib/activity-spots";
 import LogRunForm from "../log-cardio/ui";
 import CompletionLogForm from "../log-completion/CompletionLogForm";
 import GuidedLogForm from "../log-guided/GuidedLogForm";
@@ -90,6 +91,9 @@ export default async function LogRoutinePage(props: {
       name: true,
       kind: true,
       subtype: true,
+      metadataGroups: {
+        select: { group: { select: { slug: true } } },
+      },
       exercises: {
         orderBy: { sortOrder: "asc" },
         select: {
@@ -363,10 +367,34 @@ export default async function LogRoutinePage(props: {
   });
 
   const sessionDefinitions = routine.sessionDetails?.template?.metricDefinitions.map(withSessionMetricConfig) ?? [];
-  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings] = await Promise.all([
+
+  // Spot-library data — feeds the structured location pickers in the
+  // session/cardio forms. Climbing keeps its bespoke ClimbLocation library;
+  // every other spot-eligible activity uses ActivitySpot.
+  const sessionTemplateKey = routine.sessionDetails?.template?.key ?? null;
+  const isClimbing = isSessionKind(kind) && isClimbingTemplateKey(sessionTemplateKey);
+  const activitySlug = isClimbing
+    ? null
+    : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
+  const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+
+  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings, savedClimbLocations, savedActivitySpots] = await Promise.all([
     getRoutinePainCheckZones(routineId),
     getRoutineInjuryLoadWarning(routineId),
     isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((e) => e.id)) : Promise.resolve(new Map<string, string>()),
+    isClimbing
+      ? prisma.climbLocation.findMany({
+          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          orderBy: [{ type: "asc" }, { name: "asc" }],
+        })
+      : Promise.resolve([]),
+    activitySlug && activitySpotConfig?.supportsMap
+      ? prisma.activitySpot.findMany({
+          where: { activitySlug },
+          select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          orderBy: [{ name: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
   const availableExercisesForLog = availableExercises.map((exercise) => ({
     ...exercise,
@@ -406,6 +434,8 @@ export default async function LogRoutinePage(props: {
               routineId={routineId}
               routineName={routine.name}
               activePainZones={activePainZones}
+              activitySlug={activitySlug}
+              savedActivitySpots={savedActivitySpots}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : isGuidedKind(kind) ? (
@@ -438,6 +468,9 @@ export default async function LogRoutinePage(props: {
               definitions={sessionDefinitions}
               preferredClimbingGrades={preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
               activePainZones={activePainZones}
+              savedClimbLocations={savedClimbLocations}
+              activitySlug={activitySlug}
+              savedActivitySpots={savedActivitySpots}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (

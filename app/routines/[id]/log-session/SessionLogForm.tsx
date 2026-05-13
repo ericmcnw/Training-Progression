@@ -7,6 +7,12 @@ import SportZoneTagger from "@/app/components/log/SportZoneTagger";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import ClimbSessionLogger from "./ClimbSessionLogger";
 import ClimbLocationPicker, { type NewClimbLocationDraft } from "./ClimbLocationPicker";
+import ActivitySpotPicker from "@/app/components/log/ActivitySpotPicker";
+import {
+  type ActivitySpotBasic,
+  type NewActivitySpotDraft,
+  getActivitySpotConfig,
+} from "@/lib/activity-spots";
 import {
   DateTimeField,
   Field,
@@ -124,6 +130,8 @@ export default function SessionLogForm({
   preferredClimbingGrades,
   activePainZones = [],
   savedClimbLocations = [],
+  activitySlug = null,
+  savedActivitySpots = [],
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -136,6 +144,8 @@ export default function SessionLogForm({
   preferredClimbingGrades: string[];
   activePainZones?: PainCheckZone[];
   savedClimbLocations?: ClimbLocationBasic[];
+  activitySlug?: string | null;
+  savedActivitySpots?: ActivitySpotBasic[];
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -180,6 +190,11 @@ export default function SessionLogForm({
   const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
   const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
   const [newClimbLocation, setNewClimbLocation] = useState<NewClimbLocationDraft | null>(null);
+  const [activitySpotId, setActivitySpotId] = useState<string | null>(null);
+  const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
+
+  const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+  const showActivitySpotPicker = !isClimbing && activitySlug != null && spotConfig?.supportsMap === true;
   const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
 
   // Draft state
@@ -379,6 +394,14 @@ export default function SessionLogForm({
         newClimbLocationRegion: newClimbLocation?.region?.trim() || undefined,
         newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
         newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
+        // Generic activity-spot wiring (non-climbing sport sessions)
+        activitySlug: activitySlug ?? undefined,
+        activitySpotId: activitySpotId ?? undefined,
+        newActivitySpotName: newActivitySpot?.name?.trim() || undefined,
+        newActivitySpotType: newActivitySpot?.type ?? null,
+        newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
+        newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
+        newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
       });
       clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
@@ -443,6 +466,24 @@ export default function SessionLogForm({
               onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
               newLocation={newClimbLocation}
               onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
+            />
+          </Field>
+        ) : showActivitySpotPicker && spotConfig ? (
+          <Field
+            label={`${capitalizeFirst(spotConfig.spotNoun)} (optional)`}
+            hint={
+              savedActivitySpots.length > 0
+                ? "Pick a saved spot or add a new one. Region + GPS save with the spot for future sessions."
+                : "Add a name, optional region, and tap '📍 Use my location' to drop it on your activity map."
+            }
+          >
+            <ActivitySpotPicker
+              config={spotConfig}
+              savedSpots={savedActivitySpots}
+              selectedId={activitySpotId}
+              onSelectId={(id) => { markDirty(); setActivitySpotId(id); }}
+              newSpot={newActivitySpot}
+              onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
             />
           </Field>
         ) : !hasLocationMetric ? (
@@ -591,6 +632,10 @@ const draftBannerBtnStyle: React.CSSProperties = {
 };
 
 const effortRowStyle: React.CSSProperties = { display: "flex", gap: 8 };
+
+function capitalizeFirst(value: string) {
+  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
 
 function effortBtnStyle(active: boolean): React.CSSProperties {
   return {

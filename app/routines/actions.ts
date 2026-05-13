@@ -1659,6 +1659,61 @@ export async function createWorkoutExerciseOption(params: {
   return exercise;
 }
 
+/** Resolves an ActivitySpot reference for a log: either the explicit
+ *  spotId, or upserts a new spot from the supplied draft fields. Returns
+ *  the resolved id (or null if nothing supplied). Backfills region/coords
+ *  on existing rows when the user supplies new values, but never clobbers.
+ *  Mirrors the climbing version inside logSession. */
+async function resolveActivitySpotId(input: {
+  activitySlug?: string;
+  activitySpotId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
+}): Promise<string | null> {
+  if (input.activitySpotId?.trim()) return input.activitySpotId.trim();
+  const name = input.newActivitySpotName?.trim();
+  const slug = input.activitySlug?.trim();
+  if (!name || !slug) return null;
+
+  const region = input.newActivitySpotRegion?.trim() || null;
+  const lat = typeof input.newActivitySpotLatitude === "number" && Number.isFinite(input.newActivitySpotLatitude)
+    ? input.newActivitySpotLatitude
+    : null;
+  const lng = typeof input.newActivitySpotLongitude === "number" && Number.isFinite(input.newActivitySpotLongitude)
+    ? input.newActivitySpotLongitude
+    : null;
+
+  const existing = await prisma.activitySpot.findFirst({
+    where: { activitySlug: slug, name: { equals: name, mode: "insensitive" } },
+    select: { id: true, region: true, latitude: true, longitude: true },
+  });
+  if (existing) {
+    const updates: { region?: string; latitude?: number; longitude?: number } = {};
+    if (region && !existing.region) updates.region = region;
+    if (lat !== null && existing.latitude == null) updates.latitude = lat;
+    if (lng !== null && existing.longitude == null) updates.longitude = lng;
+    if (Object.keys(updates).length > 0) {
+      await prisma.activitySpot.update({ where: { id: existing.id }, data: updates });
+    }
+    return existing.id;
+  }
+  const created = await prisma.activitySpot.create({
+    data: {
+      activitySlug: slug,
+      name,
+      type: input.newActivitySpotType ?? null,
+      region,
+      latitude: lat,
+      longitude: lng,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 export async function logCardio(params: {
   routineId: string;
   distanceMi: number;
@@ -1668,6 +1723,13 @@ export async function logCardio(params: {
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
+  activitySlug?: string;
+  activitySpotId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) {
@@ -1684,6 +1746,8 @@ export async function logCardio(params: {
     throw new Error("Elevation gain must be 0 or greater.");
   }
 
+  const activitySpotId = await resolveActivitySpotId(params);
+
   const log = await prisma.routineLog.create({
     data: {
       routineId: params.routineId,
@@ -1696,6 +1760,7 @@ export async function logCardio(params: {
           : null,
       notes: params.notes?.trim() || null,
       location: params.location?.trim() || null,
+      activitySpotId,
     },
     select: { id: true },
   });
@@ -1721,6 +1786,13 @@ export async function logRun(params: {
   location?: string;
   notes?: string;
   performedAtLocal?: string;
+  activitySlug?: string;
+  activitySpotId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
 }) {
   return logCardio(params);
 }
@@ -1808,6 +1880,14 @@ export async function logSession(params: {
   newClimbLocationRegion?: string | null;
   newClimbLocationLatitude?: number | null;
   newClimbLocationLongitude?: number | null;
+  // Generic ActivitySpot — used by non-climbing sport sessions.
+  activitySlug?: string;
+  activitySpotId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (params.durationSec !== null && params.durationSec !== undefined && (!Number.isFinite(params.durationSec) || params.durationSec <= 0)) {
@@ -1885,6 +1965,10 @@ export async function logSession(params: {
     attempt.problemId = problemId;
   }
 
+  // Resolve generic ActivitySpot for non-climbing sport sessions. Climbing
+  // uses ClimbLocation above and skips this path.
+  const resolvedActivitySpotId = await resolveActivitySpotId(params);
+
   const logId = await prisma.$transaction(async (tx) => {
     const log = await tx.routineLog.create({
       data: {
@@ -1894,6 +1978,7 @@ export async function logSession(params: {
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
         climbLocationId: resolvedClimbLocationId,
+        activitySpotId: resolvedActivitySpotId,
       },
       select: { id: true },
     });

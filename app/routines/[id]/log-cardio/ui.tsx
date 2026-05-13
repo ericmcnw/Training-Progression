@@ -22,11 +22,19 @@ import {
   loadDraftFromStorage,
   saveDraftToStorage,
 } from "@/lib/log-draft";
+import ActivitySpotPicker from "@/app/components/log/ActivitySpotPicker";
+import {
+  type ActivitySpotBasic,
+  type NewActivitySpotDraft,
+  getActivitySpotConfig,
+} from "@/lib/activity-spots";
 
 export default function LogRunForm({
   routineId,
   routineName,
   activePainZones = [],
+  activitySlug = null,
+  savedActivitySpots = [],
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -34,6 +42,8 @@ export default function LogRunForm({
   routineId: string;
   routineName: string;
   activePainZones?: PainCheckZone[];
+  activitySlug?: string | null;
+  savedActivitySpots?: ActivitySpotBasic[];
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -49,6 +59,11 @@ export default function LogRunForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+  const [activitySpotId, setActivitySpotId] = useState<string | null>(null);
+  const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
+
+  const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+  const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
 
   // Draft autosave + restore so cardio gets the same chip-strip presence and
   // refresh-survival as workout/session logs.
@@ -151,6 +166,16 @@ export default function LogRunForm({
         location: location.trim() || undefined,
         notes,
         performedAtLocal: performedAtLocal || undefined,
+        // Generic activity-spot wiring. Climbing has its own (separate)
+        // path; cardio uses ActivitySpot for outdoor activities like
+        // trail running, mountain biking, hiking.
+        activitySlug: activitySlug ?? undefined,
+        activitySpotId: activitySpotId ?? undefined,
+        newActivitySpotName: newActivitySpot?.name?.trim() || undefined,
+        newActivitySpotType: newActivitySpot?.type ?? null,
+        newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
+        newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
+        newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
       });
       clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
@@ -222,6 +247,25 @@ export default function LogRunForm({
           />
         </Field>
 
+        {showSpotPicker && spotConfig ? (
+          <Field
+            label={`${capitalize(spotConfig.spotNoun)} (optional)`}
+            hint={
+              savedActivitySpots.length > 0
+                ? "Pick a saved spot or add a new one. Region + GPS save with the spot for future sessions."
+                : "Add a name, optional region, and tap '📍 Use my location' to drop it on your activity map."
+            }
+          >
+            <ActivitySpotPicker
+              config={spotConfig}
+              savedSpots={savedActivitySpots}
+              selectedId={activitySpotId}
+              onSelectId={(id) => { markDirty(); setActivitySpotId(id); }}
+              newSpot={newActivitySpot}
+              onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
+            />
+          </Field>
+        ) : (
         <Field label="Route / Location (optional)">
           <input
             style={inputStyle}
@@ -230,6 +274,7 @@ export default function LogRunForm({
             placeholder="Trail name, park, route…"
           />
         </Field>
+        )}
 
         <DateTimeField
           value={performedAtLocal}
@@ -258,6 +303,10 @@ export default function LogRunForm({
       />
     </FormStack>
   );
+}
+
+function capitalize(value: string) {
+  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
 }
 
 const bigInputStyle: React.CSSProperties = {

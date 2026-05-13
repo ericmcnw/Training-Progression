@@ -10,6 +10,7 @@ import {
 } from "@/lib/exercise-library";
 import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
 import { getRoutinePainCheckZones } from "@/lib/injury-warnings";
+import { getActivitySpotConfig, resolveRoutineActivitySlug } from "@/lib/activity-spots";
 import type { Prisma } from "@/generated/prisma";
 
 // TODO: accept userId from session when auth is added — add `where: { id: routineId, userId }` to each query
@@ -26,6 +27,10 @@ export async function GET(
       id: true,
       name: true,
       kind: true,
+      subtype: true,
+      metadataGroups: {
+        select: { group: { select: { slug: true } } },
+      },
       exercises: {
         orderBy: { sortOrder: "asc" },
         select: {
@@ -147,12 +152,28 @@ export async function GET(
       routine.sessionDetails?.templateConfig
     );
 
-    const [activePainZones, savedClimbLocations] = await Promise.all([
+    // Climbing keeps its bespoke ClimbLocation library. For non-climbing
+    // sport sessions, resolve the activity slug from metadataGroups +
+    // subtype so the form can surface the matching ActivitySpot library.
+    const isClimbing = isClimbingTemplateKey(templateKey);
+    const activitySlug = isClimbing
+      ? null
+      : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
+    const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+
+    const [activePainZones, savedClimbLocations, savedActivitySpots] = await Promise.all([
       getRoutinePainCheckZones(routineId),
-      isClimbingTemplateKey(templateKey)
+      isClimbing
         ? prisma.climbLocation.findMany({
             select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
             orderBy: [{ type: "asc" }, { name: "asc" }],
+          })
+        : Promise.resolve([]),
+      activitySlug && activitySpotConfig?.supportsMap
+        ? prisma.activitySpot.findMany({
+            where: { activitySlug },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
     ]);
@@ -167,16 +188,33 @@ export async function GET(
       preferredClimbingGrades,
       activePainZones,
       savedClimbLocations,
+      activitySlug,
+      savedActivitySpots,
     });
   }
 
   if (isCardioKind(kind)) {
-    const activePainZones = await getRoutinePainCheckZones(routineId);
+    const activitySlug = resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
+    const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+
+    const [activePainZones, savedActivitySpots] = await Promise.all([
+      getRoutinePainCheckZones(routineId),
+      activitySlug && activitySpotConfig?.supportsMap
+        ? prisma.activitySpot.findMany({
+            where: { activitySlug },
+            select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            orderBy: [{ name: "asc" }],
+          })
+        : Promise.resolve([]),
+    ]);
+
     return NextResponse.json({
       kind: "CARDIO",
       routineId,
       routineName: routine.name,
       activePainZones,
+      activitySlug,
+      savedActivitySpots,
     });
   }
 
