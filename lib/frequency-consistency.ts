@@ -44,8 +44,8 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         weekdayMask: goal.weekdayMask,
       },
       routines: goal.routines
-        .map((rel) => rel.routine)
-        .filter((r): r is NonNullable<typeof r> => Boolean(r) && !r!.isDeleted),
+        .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
+        .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
     });
   }
@@ -69,8 +69,8 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         weekdayMask: goal.weekdayMask,
       },
       routines: goal.routines
-        .map((rel) => rel.routine)
-        .filter((r): r is NonNullable<typeof r> => Boolean(r) && !r!.isDeleted),
+        .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
+        .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
     });
   }
@@ -90,7 +90,15 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
     }),
     prisma.frequencyGoal.findUnique({
       where: { id: `fg_${goal.targetId}` },
-      select: { targetCount: true, targetInterval: true, targetUnit: true, weekdayMask: true },
+      select: {
+        targetCount: true,
+        targetInterval: true,
+        targetUnit: true,
+        weekdayMask: true,
+        routines: {
+          include: { routine: { select: { id: true, name: true, isDeleted: true } } },
+        },
+      },
     }),
   ]);
   if (!routine || routine.isDeleted || !fg) return null;
@@ -101,36 +109,52 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
       targetUnit: fg.targetUnit,
       weekdayMask: fg.weekdayMask,
     },
-    routines: [routine],
+    // Pull all linked routines (primary + substitutes) so the day classifier
+    // can mark substitute-only days as "covered."
+    routines: fg.routines
+      .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
+      .map((rel) => ({ ...rel.routine!, role: rel.role })),
     today,
   });
 }
 
 async function loadAndCompute(params: {
   target: FrequencyTarget;
-  routines: Array<{ id: string; name: string }>;
+  routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE" }>;
   today: string;
 }): Promise<FrequencyConsistency | null> {
   const { target, routines, today } = params;
   if (routines.length === 0) return null;
 
-  const routineIds = routines.map((r) => r.id);
-  const routineNames = routines.map((r) => r.name);
+  // Only PRIMARY routines count for the visible "this is what the goal tracks"
+  // surfaces (back-date links, recent-sessions list). Substitutes are silent
+  // partners — they color the day but don't claim ownership of the goal.
+  const primaryRoutines = routines.filter((r) => r.role === "PRIMARY");
+  const primaryRoutineIds = new Set(primaryRoutines.map((r) => r.id));
+  const allRoutineIds = routines.map((r) => r.id);
 
   const since = new Date(Date.now() - HEATMAP_DAYS * 24 * 60 * 60 * 1000);
   const logs = await prisma.routineLog.findMany({
-    where: { routineId: { in: routineIds }, performedAt: { gte: since } },
-    select: { performedAt: true },
+    where: { routineId: { in: allRoutineIds }, performedAt: { gte: since } },
+    select: { performedAt: true, routineId: true },
     orderBy: { performedAt: "asc" },
   });
 
-  const state = computeFrequencyState({ target, logs, today, trailingDays: 8 * 7 });
+  const state = computeFrequencyState({
+    target,
+    logs: logs.map((log) => ({
+      performedAt: log.performedAt,
+      isPrimary: primaryRoutineIds.has(log.routineId),
+    })),
+    today,
+    trailingDays: 8 * 7,
+  });
 
   return {
     target,
     state,
     weekdayMask: target.weekdayMask ?? null,
-    routineIds,
-    routineNames,
+    routineIds: primaryRoutines.map((r) => r.id),
+    routineNames: primaryRoutines.map((r) => r.name),
   };
 }

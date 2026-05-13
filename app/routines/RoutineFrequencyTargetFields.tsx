@@ -9,11 +9,19 @@ export default function RoutineFrequencyTargetFields({
   initialUnit,
   initialInterval,
   initialEnabled,
+  // Substitutes: other routines that satisfy this habit on days the primary
+  // wasn't done (e.g. climbing covers a daily hangboard). Days with only a
+  // substitute log render as "covered" in the heatmap and still count toward
+  // the streak. Empty list → behavior unchanged from before.
+  availableSubstituteRoutines = [],
+  initialSubstituteRoutineIds = [],
 }: {
   initialCount?: number | null;
   initialUnit?: RoutineFrequencyUnit | null;
   initialInterval?: number | null;
   initialEnabled?: boolean;
+  availableSubstituteRoutines?: Array<{ id: string; name: string }>;
+  initialSubstituteRoutineIds?: string[];
 }) {
   const hasInitialTarget =
     Number.isFinite(initialCount) &&
@@ -25,6 +33,9 @@ export default function RoutineFrequencyTargetFields({
   const [count, setCount] = useState(String(initialCount ?? 3));
   const [unit, setUnit] = useState<RoutineFrequencyUnit>(initialUnit ?? "WEEK");
   const [interval, setInterval] = useState(String(initialInterval ?? 1));
+  const [substituteIds, setSubstituteIds] = useState<Set<string>>(
+    () => new Set(initialSubstituteRoutineIds)
+  );
 
   const preview = useMemo(
     () =>
@@ -82,6 +93,42 @@ export default function RoutineFrequencyTargetFields({
             </select>
           </div>
           <div style={helpStyle}>Preview: {preview}</div>
+
+          {availableSubstituteRoutines.length > 0 ? (
+            <div style={substitutesBlockStyle}>
+              <div style={substitutesHeaderStyle}>
+                <span style={{ fontWeight: 800, fontSize: 12 }}>Also counts as completion</span>
+                <span style={substitutesHintStyle}>
+                  Days when one of these fires (and this routine doesn’t) render as “covered” instead of missed — and the streak keeps going.
+                </span>
+              </div>
+              <div style={substitutesListStyle}>
+                {availableSubstituteRoutines.map((r) => {
+                  const checked = substituteIds.has(r.id);
+                  return (
+                    <label key={r.id} style={substituteRowStyle}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          setSubstituteIds((prev) => {
+                            const next = new Set(prev);
+                            if (event.target.checked) next.add(r.id);
+                            else next.delete(r.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      {checked ? (
+                        <input type="hidden" name="substituteRoutineId" value={r.id} />
+                      ) : null}
+                      <span style={{ fontSize: 13 }}>{r.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div style={helpStyle}>Leave this off if the routine is open-ended or you only want to track completions without a target.</div>
@@ -129,4 +176,38 @@ const helpStyle: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.74,
   lineHeight: 1.45,
+};
+
+const substitutesBlockStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px dashed rgba(132,204,255,0.32)",
+  background: "rgba(132,204,255,0.04)",
+};
+
+const substitutesHeaderStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+};
+
+const substitutesHintStyle: React.CSSProperties = {
+  fontSize: 11.5,
+  opacity: 0.7,
+  lineHeight: 1.4,
+};
+
+const substitutesListStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 5,
+  maxHeight: 180,
+  overflowY: "auto",
+};
+
+const substituteRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  cursor: "pointer",
 };

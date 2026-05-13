@@ -206,7 +206,9 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
   );
   const habitTargetById = new Map<string, FrequencyTarget | null>();
   for (const h of habitRoutines) {
-    const goal = h.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal ?? null;
+    // Skip SUBSTITUTE links — those belong to another routine's goal and
+    // would otherwise hijack this routine's "primary" cadence.
+    const goal = h.frequencyGoalRoutines.find((rel) => rel.role !== "SUBSTITUTE" && rel.goal?.isActive)?.goal ?? null;
     habitTargetById.set(h.id, goal
       ? { targetCount: goal.targetCount, targetInterval: goal.targetInterval, targetUnit: goal.targetUnit, weekdayMask: goal.weekdayMask ?? null }
       : null);

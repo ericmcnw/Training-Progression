@@ -908,13 +908,23 @@ model FrequencyGoal {
 model FrequencyGoalRoutine {
   goalId    String
   routineId String
-  addedAt   DateTime @default(now())
+  // PRIMARY: counts as a real completion of the goal — what the habit is
+  // really tracking. SUBSTITUTE: another routine that satisfies the day
+  // (so the streak doesn't break) but renders as "covered by" instead of
+  // "done" in the heatmap. Default PRIMARY keeps existing rows unchanged.
+  role      FrequencyGoalRole @default(PRIMARY)
+  addedAt   DateTime          @default(now())
 
   goal    FrequencyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
   routine Routine       @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
   @@id([goalId, routineId])
   @@index([routineId])
+}
+
+enum FrequencyGoalRole {
+  PRIMARY
+  SUBSTITUTE
 }
 
 // Lightweight, date-bound to-do items for "random not-important" things the

@@ -35,6 +35,7 @@ type Step = "domain" | "activity" | "form";
 export default function NewRoutineForm({
   metadataGroups,
   sessionTemplates,
+  availableSubstituteRoutines = [],
 }: {
   metadataGroups: MetadataGroupOption[];
   sessionTemplates: Array<{
@@ -44,6 +45,7 @@ export default function NewRoutineForm({
     description: string | null;
     sessionSubtype: string | null;
   }>;
+  availableSubstituteRoutines?: Array<{ id: string; name: string }>;
 }) {
   const [step, setStep] = useState<Step>("domain");
   const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general"> | null>(null);
@@ -297,7 +299,13 @@ export default function NewRoutineForm({
         <label style={s.label}>
           Frequency goal <span style={s.optional}>(optional)</span>
         </label>
-        <RoutineFrequencyTargetFields initialCount={3} initialUnit="WEEK" initialInterval={1} initialEnabled={false} />
+        <RoutineFrequencyTargetFields
+          initialCount={3}
+          initialUnit="WEEK"
+          initialInterval={1}
+          initialEnabled={false}
+          availableSubstituteRoutines={availableSubstituteRoutines}
+        />
       </div>
 
       {/* Focus Area override */}

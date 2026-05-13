@@ -103,12 +103,20 @@ function parsePerformedAt(performedAtLocal?: string | null) {
 // syncRoutineFrequencyGoal() below.
 function parseRoutineFrequencyTarget(formData: FormData) {
   const enabled = String(formData.get("frequencyTargetEnabled") || "").trim() === "1";
+  // Substitute routine ids — present whether or not a target is enabled, but
+  // only persisted when enabled (no target → no goal → nothing to attach to).
+  const substituteRoutineIds = formData
+    .getAll("substituteRoutineId")
+    .map((v) => String(v || "").trim())
+    .filter((v) => v.length > 0);
+
   if (!enabled) {
     return {
       frequencyGoalEnabled: false,
       targetFrequencyCount: null,
       targetFrequencyUnit: null,
       targetFrequencyInterval: null,
+      substituteRoutineIds: [] as string[],
     } as const;
   }
 
@@ -140,6 +148,7 @@ function parseRoutineFrequencyTarget(formData: FormData) {
     targetFrequencyCount: Math.floor(targetFrequencyCount),
     targetFrequencyUnit,
     targetFrequencyInterval: Math.floor(targetFrequencyInterval),
+    substituteRoutineIds,
   } as const;
 }
 
@@ -156,6 +165,7 @@ async function syncRoutineFrequencyGoal(
     targetFrequencyCount: number | null;
     targetFrequencyUnit: RoutineFrequencyUnit | null;
     targetFrequencyInterval: number | null;
+    substituteRoutineIds?: string[];
   }
 ) {
   const goalId = `fg_${routineId}`;
@@ -168,8 +178,8 @@ async function syncRoutineFrequencyGoal(
     target.targetFrequencyInterval > 0;
 
   if (!valid) {
-    // Clear the routine's primary goal if it exists. Cascade will clean up the
-    // FrequencyGoalRoutine join row.
+    // Clear the routine's primary goal if it exists. Cascade will clean up
+    // ALL FrequencyGoalRoutine join rows (primary + substitutes).
     await prisma.frequencyGoal.deleteMany({ where: { id: goalId } });
     return;
   }
@@ -192,12 +202,32 @@ async function syncRoutineFrequencyGoal(
       isActive: true,
     },
   });
-  // Ensure the join exists. Composite PK makes this idempotent.
+  // Ensure the primary join exists. Composite PK makes this idempotent. Force
+  // role=PRIMARY in case a stale row had been demoted.
   await prisma.frequencyGoalRoutine.upsert({
     where: { goalId_routineId: { goalId, routineId } },
-    update: {},
-    create: { goalId, routineId },
+    update: { role: "PRIMARY" },
+    create: { goalId, routineId, role: "PRIMARY" },
   });
+
+  // Reconcile substitute links — remove any prior substitute that's no longer
+  // checked, then upsert each currently-checked one. The primary is excluded
+  // from substitutes (a routine can't substitute for itself).
+  const requestedSubs = (target.substituteRoutineIds ?? []).filter((id) => id !== routineId);
+  await prisma.frequencyGoalRoutine.deleteMany({
+    where: {
+      goalId,
+      role: "SUBSTITUTE",
+      routineId: { notIn: requestedSubs.length > 0 ? requestedSubs : ["__none__"] },
+    },
+  });
+  for (const subId of requestedSubs) {
+    await prisma.frequencyGoalRoutine.upsert({
+      where: { goalId_routineId: { goalId, routineId: subId } },
+      update: { role: "SUBSTITUTE" },
+      create: { goalId, routineId: subId, role: "SUBSTITUTE" },
+    });
+  }
 }
 
 async function getValidMetadataGroupIds(groupIds: Iterable<string>, appliesTo: "routine" | "exercise") {
@@ -1268,6 +1298,12 @@ function parseFrequencyGoalFields(formData: FormData) {
       ? (unitRaw as import("@/generated/prisma").RoutineFrequencyUnit)
       : null;
   const routineIds = formData.getAll("routineIds").map(String).filter(Boolean);
+  // Substitute routine ids — render as "covered" when only they fire on a
+  // day. We dedup against the primary list; a routine listed in both is
+  // treated as PRIMARY (the stronger claim wins).
+  const rawSubs = formData.getAll("substituteRoutineIds").map(String).filter(Boolean);
+  const primarySet = new Set(routineIds);
+  const substituteRoutineIds = Array.from(new Set(rawSubs.filter((id) => !primarySet.has(id))));
 
   // Weekday mask: posted as multiple form fields named "weekday" with bit
   // values 1, 2, 4, 8, 16, 32, 64 (Sun..Sat). We OR them and clamp to a
@@ -1287,27 +1323,35 @@ function parseFrequencyGoalFields(formData: FormData) {
   if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
   if (!targetUnit) throw new Error("Target unit is required.");
 
-  return { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds };
+  return { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds };
 }
 
-async function syncFrequencyGoalRoutines(goalId: string, routineIds: string[]) {
+async function syncFrequencyGoalRoutines(
+  goalId: string,
+  routineIds: string[],
+  substituteRoutineIds: string[] = []
+) {
   await prisma.frequencyGoalRoutine.deleteMany({ where: { goalId } });
-  if (routineIds.length > 0) {
+  const rows = [
+    ...routineIds.map((routineId) => ({ goalId, routineId, role: "PRIMARY" as const })),
+    ...substituteRoutineIds.map((routineId) => ({ goalId, routineId, role: "SUBSTITUTE" as const })),
+  ];
+  if (rows.length > 0) {
     await prisma.frequencyGoalRoutine.createMany({
-      data: routineIds.map((routineId) => ({ goalId, routineId })),
+      data: rows,
       skipDuplicates: true,
     });
   }
 }
 
 export async function createFrequencyGoal(formData: FormData) {
-  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds } = parseFrequencyGoalFields(formData);
+  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds } = parseFrequencyGoalFields(formData);
 
   const goal = await prisma.frequencyGoal.create({
     data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
     select: { id: true },
   });
-  await syncFrequencyGoalRoutines(goal.id, routineIds);
+  await syncFrequencyGoalRoutines(goal.id, routineIds, substituteRoutineIds);
 
   revalidatePath("/routines");
   revalidatePath("/goals");
@@ -1317,13 +1361,13 @@ export async function createFrequencyGoal(formData: FormData) {
 export async function updateFrequencyGoal(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
   if (!id) throw new Error("Missing goal id.");
-  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds } = parseFrequencyGoalFields(formData);
+  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds } = parseFrequencyGoalFields(formData);
 
   await prisma.frequencyGoal.update({
     where: { id },
     data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
   });
-  await syncFrequencyGoalRoutines(id, routineIds);
+  await syncFrequencyGoalRoutines(id, routineIds, substituteRoutineIds);
 
   revalidatePath("/routines");
   revalidatePath("/goals");

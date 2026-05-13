@@ -96,6 +96,22 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
+  // Routines this one can be "covered by" — every other active routine. The
+  // form filters out the routine itself implicitly (we exclude it here).
+  const availableSubstituteRoutines = await prisma.routine.findMany({
+    where: { isActive: true, isDeleted: false, id: { not: id } },
+    select: { id: true, name: true },
+    orderBy: [{ name: "asc" }],
+  });
+
+  // Existing substitute links on this routine's primary goal (`fg_<id>`).
+  // These pre-check the corresponding rows in the picker.
+  const existingSubLinks = await prisma.frequencyGoalRoutine.findMany({
+    where: { goalId: `fg_${id}`, role: "SUBSTITUTE" },
+    select: { routineId: true },
+  });
+  const initialSubstituteRoutineIds = existingSubLinks.map((row) => row.routineId);
+
   return (
     <div className="mobileRoutineDetailPage mobilePageShell" style={styles.container}>
       <div className="mobilePageHeader" style={styles.topRow}>
@@ -136,6 +152,8 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
           }}
           metadataGroups={metadataGroups}
           sessionTemplates={sessionTemplates}
+          availableSubstituteRoutines={availableSubstituteRoutines}
+          initialSubstituteRoutineIds={initialSubstituteRoutineIds}
         />
         {frequencyGoal ? (
           <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(128,128,128,0.2)" }}>

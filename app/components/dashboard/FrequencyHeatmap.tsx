@@ -144,6 +144,7 @@ export default function FrequencyHeatmap({
 
       <div style={legendRow}>
         <Legend swatch={swatchDone} label="Done" />
+        <Legend swatch={swatchCovered} label="Covered by another routine" />
         <Legend swatch={swatchMissed} label="Missed expected day" />
         <Legend swatch={swatchRest} label="No expectation" />
         <Legend swatch={swatchFuture} label="Upcoming" />
@@ -170,7 +171,7 @@ function Legend({ swatch, label }: { swatch: CSSProperties; label: string }) {
   );
 }
 
-function cellStyle(state: "done" | "missed" | "rest" | "future", isFuture: boolean): CSSProperties {
+function cellStyle(state: "done" | "covered" | "missed" | "rest" | "future", isFuture: boolean): CSSProperties {
   if (isFuture) return { ...cellBase, background: "transparent", border: "1px dashed rgba(255,255,255,0.13)" };
   switch (state) {
     case "done":
@@ -178,6 +179,12 @@ function cellStyle(state: "done" | "missed" | "rest" | "future", isFuture: boole
         ...cellBase,
         background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
         border: "1px solid rgba(251,191,36,0.55)",
+      };
+    case "covered":
+      return {
+        ...cellBase,
+        background: "linear-gradient(180deg, rgba(132,204,255,0.85), rgba(96,165,250,0.75))",
+        border: "1px solid rgba(132,204,255,0.55)",
       };
     case "missed":
       return {
@@ -352,6 +359,12 @@ const swatchDone: CSSProperties = {
   ...swatchBase,
   background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
   border: "1px solid rgba(251,191,36,0.55)",
+};
+
+const swatchCovered: CSSProperties = {
+  ...swatchBase,
+  background: "linear-gradient(180deg, rgba(132,204,255,0.85), rgba(96,165,250,0.75))",
+  border: "1px solid rgba(132,204,255,0.55)",
 };
 
 const swatchMissed: CSSProperties = {

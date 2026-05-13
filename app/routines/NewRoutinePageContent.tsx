@@ -19,11 +19,17 @@ export default function NewRoutinePage() {
     select: { id: true, key: true, name: true, description: true, sessionSubtype: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
+  const availableSubstituteRoutinesPromise = prisma.routine.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: { id: true, name: true },
+    orderBy: [{ name: "asc" }],
+  });
 
   return (
     <NewRoutinePageInner
       metadataGroupsPromise={metadataGroupsPromise}
       sessionTemplatesPromise={sessionTemplatesPromise}
+      availableSubstituteRoutinesPromise={availableSubstituteRoutinesPromise}
     />
   );
 }
@@ -31,11 +37,17 @@ export default function NewRoutinePage() {
 async function NewRoutinePageInner({
   metadataGroupsPromise,
   sessionTemplatesPromise,
+  availableSubstituteRoutinesPromise,
 }: {
   metadataGroupsPromise: Promise<Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>>;
   sessionTemplatesPromise: Promise<Array<{ id: string; key: string; name: string; description: string | null; sessionSubtype: string | null }>>;
+  availableSubstituteRoutinesPromise: Promise<Array<{ id: string; name: string }>>;
 }) {
-  const [metadataGroups, sessionTemplates] = await Promise.all([metadataGroupsPromise, sessionTemplatesPromise]);
+  const [metadataGroups, sessionTemplates, availableSubstituteRoutines] = await Promise.all([
+    metadataGroupsPromise,
+    sessionTemplatesPromise,
+    availableSubstituteRoutinesPromise,
+  ]);
 
   return (
     <div style={styles.container}>
@@ -57,7 +69,11 @@ async function NewRoutinePageInner({
 
       <div style={styles.panel}>
         <div style={styles.panelHeader}>QUICK SETUP</div>
-        <NewRoutineForm metadataGroups={metadataGroups} sessionTemplates={sessionTemplates} />
+        <NewRoutineForm
+          metadataGroups={metadataGroups}
+          sessionTemplates={sessionTemplates}
+          availableSubstituteRoutines={availableSubstituteRoutines}
+        />
       </div>
     </div>
   );

@@ -71,7 +71,7 @@ export type HabitRow = {
   domain: DomainTone;
   state: FrequencyState;
   // 30-day per-day state strip, oldest → newest.
-  trailing30: Array<{ ymd: string; state: "done" | "missed" | "rest" | "future" }>;
+  trailing30: Array<{ ymd: string; state: "done" | "covered" | "missed" | "rest" | "future" }>;
   currentStreak: number;
   longestStreak: number;
   // X/Y format for this-week summary.

@@ -24,6 +24,8 @@ export default function EditRoutineForm({
   routine,
   metadataGroups,
   sessionTemplates,
+  availableSubstituteRoutines = [],
+  initialSubstituteRoutineIds = [],
 }: {
   routine: {
     id: string;
@@ -51,6 +53,8 @@ export default function EditRoutineForm({
     description: string | null;
     sessionSubtype: string | null;
   }>;
+  availableSubstituteRoutines?: Array<{ id: string; name: string }>;
+  initialSubstituteRoutineIds?: string[];
 }) {
   const [tags, setTags] = useState(() => routine.tags.join(", "));
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
@@ -190,6 +194,8 @@ export default function EditRoutineForm({
           initialUnit={routine.targetFrequencyUnit}
           initialInterval={routine.targetFrequencyInterval}
           initialEnabled={routine.frequencyGoalEnabled}
+          availableSubstituteRoutines={availableSubstituteRoutines}
+          initialSubstituteRoutineIds={initialSubstituteRoutineIds}
         />
       </div>
 

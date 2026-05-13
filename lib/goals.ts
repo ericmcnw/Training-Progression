@@ -1483,7 +1483,7 @@ export async function getGroupFrequencyGoalById(goalId: string) {
     where: { id },
     include: {
       routines: {
-        select: { routineId: true },
+        select: { routineId: true, role: true },
       },
     },
   });

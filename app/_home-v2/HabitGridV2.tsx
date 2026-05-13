@@ -247,7 +247,7 @@ function dayInitial(ymd: string): string {
 }
 
 function dotCell(
-  state: "done" | "missed" | "rest" | "future",
+  state: "done" | "covered" | "missed" | "rest" | "future",
   isToday: boolean,
   accent: string,
 ): CSSProperties {
@@ -263,6 +263,8 @@ function dotCell(
   switch (state) {
     case "done":
       return { ...base, ...todayRing, background: COLOR.amber, border: `1px solid ${COLOR.amber}` };
+    case "covered":
+      return { ...base, ...todayRing, background: "rgba(132,204,255,0.85)", border: "1px solid rgba(132,204,255,0.55)" };
     case "missed":
       return { ...base, ...todayRing, background: "transparent", border: `1px solid ${COLOR.red}` };
     case "future":

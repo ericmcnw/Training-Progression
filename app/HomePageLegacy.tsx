@@ -971,7 +971,8 @@ export default async function HomePageLegacy() {
   }
   const habitTargetById = new Map<string, FrequencyTarget | null>();
   for (const habit of habitRoutines) {
-    const goal = habit.frequencyGoalRoutines.find((rel) => rel.goal?.isActive)?.goal ?? null;
+    // Skip SUBSTITUTE links — those belong to another routine's goal.
+    const goal = habit.frequencyGoalRoutines.find((rel) => rel.role !== "SUBSTITUTE" && rel.goal?.isActive)?.goal ?? null;
     habitTargetById.set(habit.id, targetFromGoal(goal));
   }
   const habitCreatedYmdById = new Map<string, string>();
@@ -998,7 +999,7 @@ export default async function HomePageLegacy() {
 
   const habitLaneRows: HabitLaneRow[] = habitRoutines
     .map((routine) => {
-      const primaryLink = routine.frequencyGoalRoutines.find((rel) => rel.goal?.isActive);
+      const primaryLink = routine.frequencyGoalRoutines.find((rel) => rel.role !== "SUBSTITUTE" && rel.goal?.isActive);
       const goal = primaryLink?.goal ?? null;
       const target = targetFromGoal(goal);
       const logs = logsByRoutineId.get(routine.id) ?? [];

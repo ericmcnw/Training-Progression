@@ -39,6 +39,8 @@ export type GoalFormInitial = {
     targetUnit: "DAY" | "WEEK" | "MONTH";
     weekdayMask?: number | null;
     routineIds: string[];
+    /** Substitute routines — count toward streak but render as "covered." */
+    substituteRoutineIds?: string[];
   };
 };
 
@@ -495,6 +497,29 @@ export default function GoalForm({
                     name="routineIds"
                     value={r.id}
                     defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
+                  />
+                  <span style={{ fontSize: 13 }}>
+                    {r.label}
+                    {r.subtitle ? <span style={hintStyle}> — {r.subtitle}</span> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div style={detailCardStyle}>
+            <div style={stepLabelStyle}>Also counts as completion</div>
+            <div style={{ ...hintStyle, marginBottom: 10 }}>
+              Sessions from these routines render as “covered” instead of missed and keep the streak alive — useful when one activity stands in for another (e.g. climbing covers a finger-strength habit).
+            </div>
+            <div style={routineChecklistStyle}>
+              {options.routines.map(r => (
+                <label key={r.id} style={checkboxRowStyle}>
+                  <input
+                    type="checkbox"
+                    name="substituteRoutineIds"
+                    value={r.id}
+                    defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
                   />
                   <span style={{ fontSize: 13 }}>
                     {r.label}

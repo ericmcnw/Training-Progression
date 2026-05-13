@@ -49,14 +49,20 @@ export function frequencyTargetFromGoal(goal: FrequencyGoalSource | null | undef
 }
 
 // A routine can be linked to multiple FrequencyGoals; the routine's "primary"
-// target is the first ACTIVE goal linked to it. Inactive goals are ignored.
+// target is the first ACTIVE goal linked to it. Inactive goals and SUBSTITUTE
+// links are ignored — a routine being a substitute on another goal doesn't
+// give it that goal's cadence as its own.
 // Callers should include `frequencyGoalRoutines: { include: { goal: true } }`
 // in their Prisma selects when they need the target.
 export function routineFrequencyTarget(
-  routine: { frequencyGoalRoutines?: Array<{ goal: FrequencyGoalSource | null }> } | null | undefined
+  routine: { frequencyGoalRoutines?: Array<{ role?: "PRIMARY" | "SUBSTITUTE" | null; goal: FrequencyGoalSource | null }> } | null | undefined
 ): RoutineFrequencyTargetShape {
   if (!routine?.frequencyGoalRoutines) return NULL_FREQUENCY_TARGET;
   const activeGoals = routine.frequencyGoalRoutines
+    // Skip SUBSTITUTE links — they belong to someone else's goal. A missing
+    // role is treated as PRIMARY (back-compat with selects that don't pull
+    // role; default in DB is PRIMARY anyway).
+    .filter((rel) => rel.role !== "SUBSTITUTE")
     .map((rel) => rel.goal)
     .filter((g): g is FrequencyGoalSource => Boolean(g?.isActive));
   // Prefer the per-routine (`fg_*`) goal as primary — it represents the user's
@@ -69,7 +75,7 @@ export function routineFrequencyTarget(
 // Extends a routine with the legacy frequency target shape, derived from any
 // FrequencyGoal links present. Use this when downstream callers expect the
 // flat shape (e.g., inline form previews, frequency status calculators).
-export function routineWithFrequencyTarget<T extends { frequencyGoalRoutines?: Array<{ goal: FrequencyGoalSource | null }> }>(routine: T): T & RoutineFrequencyTargetShape {
+export function routineWithFrequencyTarget<T extends { frequencyGoalRoutines?: Array<{ role?: "PRIMARY" | "SUBSTITUTE" | null; goal: FrequencyGoalSource | null }> }>(routine: T): T & RoutineFrequencyTargetShape {
   return {
     ...routine,
     ...routineFrequencyTarget(routine),

@@ -27,7 +27,11 @@ export type FrequencyTarget = {
   weekdayMask?: number | null;
 };
 
-export type DailyState = "done" | "missed" | "rest" | "future";
+// "covered" — only substitute-routine logs landed on this day; no primary log.
+// Counts toward window/streak (so the user isn't punished for swapping in a
+// related activity), but renders distinctly so the heatmap reads "you climbed
+// instead of hangboarded" rather than "you hangboarded."
+export type DailyState = "done" | "covered" | "missed" | "rest" | "future";
 
 export type FrequencyWindowStatus =
   | "complete"   // hit or exceeded target this window
@@ -104,6 +108,18 @@ export function isExpectedDay(target: FrequencyTarget | null, ymd: string): bool
 function buildLogYmdSet(logs: Array<{ performedAt: Date }>): Set<string> {
   const set = new Set<string>();
   for (const log of logs) set.add(toAppYmd(log.performedAt));
+  return set;
+}
+
+// Build a set of YMDs where at least one PRIMARY-routine log landed. Logs that
+// omit `isPrimary` are treated as primary (back-compat for callers that don't
+// know about substitutes yet).
+function buildPrimaryYmdSet(logs: Array<{ performedAt: Date; isPrimary?: boolean }>): Set<string> {
+  const set = new Set<string>();
+  for (const log of logs) {
+    if (log.isPrimary === false) continue;
+    set.add(toAppYmd(log.performedAt));
+  }
   return set;
 }
 
@@ -255,18 +271,22 @@ function computeDailyStreak(params: {
 function computeDailyStateMap(params: {
   target: FrequencyTarget | null;
   logYmds: Set<string>;
+  primaryYmds: Set<string>;
   today: string;
   trailingDays: number;
   currentWindow: FrequencyWindow | null;
 }): Record<string, DailyState> {
-  const { target, logYmds, today, trailingDays, currentWindow } = params;
+  const { target, logYmds, primaryYmds, today, trailingDays, currentWindow } = params;
   const startYmd = addDaysYmd(today, -(trailingDays - 1));
   const result: Record<string, DailyState> = {};
 
   for (let i = 0; i < trailingDays; i++) {
     const ymd = addDaysYmd(startYmd, i);
     if (ymd > today) { result[ymd] = "future"; continue; }
-    if (logYmds.has(ymd)) { result[ymd] = "done"; continue; }
+    if (logYmds.has(ymd)) {
+      result[ymd] = primaryYmds.has(ymd) ? "done" : "covered";
+      continue;
+    }
 
     if (isDailyEveryDay(target) || (target && hasMask(target))) {
       // Per-day expectation: missed if the day was expected, rest otherwise.
@@ -292,13 +312,18 @@ function computeDailyStateMap(params: {
 
 export function computeFrequencyState(params: {
   target: FrequencyTarget | null;
-  logs: Array<{ performedAt: Date }>;
+  // Logs may carry an `isPrimary` flag — when false, the log came from a
+  // SUBSTITUTE routine. Substitutes still satisfy the day for window/streak
+  // math (so swapping climbing in for hangboard doesn't break a streak), but
+  // the day renders as "covered" instead of "done."
+  logs: Array<{ performedAt: Date; isPrimary?: boolean }>;
   today?: string;
   trailingDays?: number;
 }): FrequencyState {
   const today = params.today ?? todayAppYmd();
   const trailingDays = Math.max(7, params.trailingDays ?? 30);
   const logYmds = buildLogYmdSet(params.logs);
+  const primaryYmds = buildPrimaryYmdSet(params.logs);
 
   // Build a synthetic target for daily-streak fallback so window math still
   // gives us a meaningful "current window" to render.
@@ -312,6 +337,7 @@ export function computeFrequencyState(params: {
   const dailyState = computeDailyStateMap({
     target: params.target,
     logYmds,
+    primaryYmds,
     today,
     trailingDays,
     currentWindow,

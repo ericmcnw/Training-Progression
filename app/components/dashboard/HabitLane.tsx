@@ -126,13 +126,19 @@ function HabitRow({
   );
 }
 
-function cellStyle(state: "done" | "missed" | "rest" | "future", accent: string): CSSProperties {
+function cellStyle(state: "done" | "covered" | "missed" | "rest" | "future", accent: string): CSSProperties {
   switch (state) {
     case "done":
       return {
         ...cellBase,
         background: "rgba(251,191,36,0.85)",
         border: "1px solid rgba(251,191,36,0.65)",
+      };
+    case "covered":
+      return {
+        ...cellBase,
+        background: "rgba(132,204,255,0.75)",
+        border: "1px solid rgba(132,204,255,0.55)",
       };
     case "missed":
       return {
