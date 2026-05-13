@@ -203,10 +203,10 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
         </div>
 
         <div style={statRow}>
-          <StatTile label="Done" value={`${completedDays}d`} />
-          {coveredDays > 0 ? <StatTile label="Covered" value={`${coveredDays}d`} /> : null}
-          <StatTile label="Missed" value={`${missedDays}d`} />
-          <StatTile label="Best" value={`${row.longestStreak}d`} />
+          <StatTile label="Done" value={`${completedDays}d`} tone="done" />
+          {coveredDays > 0 ? <StatTile label="Covered" value={`${coveredDays}d`} tone="covered" /> : null}
+          <StatTile label="Missed" value={`${missedDays}d`} tone="missed" />
+          <StatTile label="Best" value={`${row.longestStreak}d`} tone="best" />
         </div>
       </div>
 
@@ -226,10 +226,26 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+type StatTone = "done" | "covered" | "missed" | "best";
+
+// Tone borrows the same swatch palette the heatmap uses, so the counters
+// read at a glance as "the yellow ones / blue ones / red ones."
+const STAT_TONE: Record<StatTone, { border: string; value: string; bg: string }> = {
+  done:    { border: "rgba(251,191,36,0.55)", value: "rgba(251,191,36,1)",  bg: "rgba(251,191,36,0.08)" },
+  covered: { border: "rgba(132,204,255,0.55)", value: "rgba(132,204,255,1)", bg: "rgba(132,204,255,0.08)" },
+  missed:  { border: "rgba(248,113,113,0.55)", value: "rgba(248,113,113,1)", bg: "rgba(248,113,113,0.07)" },
+  best:    { border: "rgba(251,146,60,0.55)",  value: "rgba(251,146,60,1)",  bg: "rgba(251,146,60,0.08)" },
+};
+
+function StatTile({ label, value, tone }: { label: string; value: string; tone?: StatTone }) {
+  const palette = tone ? STAT_TONE[tone] : null;
+  const tileStyle = palette
+    ? { ...statTile, borderColor: palette.border, background: palette.bg }
+    : statTile;
+  const valueStyle = palette ? { ...statValue, color: palette.value } : statValue;
   return (
-    <div style={statTile}>
-      <span style={statValue}>{value}</span>
+    <div style={tileStyle}>
+      <span style={valueStyle}>{value}</span>
       <span style={statLabel}>{label}</span>
     </div>
   );
