@@ -175,6 +175,7 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
     lines.push(row.trailing30.slice(i, i + 7));
   }
   const completedDays = row.trailing30.filter((d) => d.state === "done").length;
+  const coveredDays = row.trailing30.filter((d) => d.state === "covered").length;
   const missedDays = row.trailing30.filter((d) => d.state === "missed").length;
 
   return (
@@ -203,6 +204,7 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
 
         <div style={statRow}>
           <StatTile label="Done" value={`${completedDays}d`} />
+          {coveredDays > 0 ? <StatTile label="Covered" value={`${coveredDays}d`} /> : null}
           <StatTile label="Missed" value={`${missedDays}d`} />
           <StatTile label="Best" value={`${row.longestStreak}d`} />
         </div>
@@ -286,6 +288,8 @@ function detailDot(state: string, isToday: boolean): CSSProperties {
   switch (state) {
     case "done":
       return { ...base, ...ring, background: COLOR.amber, border: `1px solid ${COLOR.amber}` };
+    case "covered":
+      return { ...base, ...ring, background: "rgba(132,204,255,0.85)", border: "1px solid rgba(132,204,255,0.55)" };
     case "missed":
       return { ...base, ...ring, background: "transparent", border: `1px solid ${COLOR.red}` };
     case "future":
