@@ -5,6 +5,8 @@ import BodyMap from "@/app/components/body-map/BodyMap";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
 import QuickInjuryPainLog from "@/app/components/injuries/QuickInjuryPainLog";
 import PainHistoryChart, { type PainHistoryDay } from "@/app/components/injuries/PainHistoryChart";
+import InjuryTrainingHeatmap from "@/app/components/injuries/InjuryTrainingHeatmap";
+import { getInjuryTrainingHeatmap } from "./training-heatmap";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjury, updateInjury } from "../actions";
@@ -24,33 +26,7 @@ const contextLabels: Record<string, string> = {
   GENERAL: "general",
 };
 
-const activitySourceLabels: Record<string, string> = {
-  EXERCISE: "Workout",
-  SPORT_TAG: "Sport",
-  MANUAL: "Manual",
-};
-
 const RECENT_LOG_LIMIT = 8;
-
-type ZoneActivityRow = {
-  id: string;
-  source: string;
-  label: string;
-  intensity: string | null;
-  notes: string | null;
-  performedAt: Date;
-  routineLogId: string | null;
-  zone: { label: string };
-  routineLog: { routine: { name: string } } | null;
-};
-
-type ActivityGroup = {
-  key: string;
-  source: string;
-  sessionLabel: string;
-  performedAt: Date;
-  entries: Array<{ label: string; zones: string[] }>;
-};
 
 type AggravatorRow = {
   routineName: string;
@@ -58,33 +34,6 @@ type AggravatorRow = {
   peakLevel: number;
   logCount: number;
 };
-
-function groupZoneActivities(activities: ZoneActivityRow[]): ActivityGroup[] {
-  const groups = new Map<string, ActivityGroup>();
-  for (const act of activities) {
-    const key = act.routineLogId ?? `_${act.id}`;
-    if (!groups.has(key)) {
-      const sessionLabel =
-        act.routineLog?.routine?.name ??
-        (act.source === "SPORT_TAG" ? "Sport session" : act.source === "MANUAL" ? "Manual entry" : "Workout");
-      groups.set(key, { key, source: act.source, sessionLabel, performedAt: act.performedAt, entries: [] });
-    }
-    const group = groups.get(key)!;
-    const existing = group.entries.find((e) => e.label === act.label);
-    if (existing) {
-      if (!existing.zones.includes(act.zone.label)) existing.zones.push(act.zone.label);
-    } else {
-      group.entries.push({ label: act.label, zones: [act.zone.label] });
-    }
-  }
-  return Array.from(groups.values()).sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
-}
-
-function sourceStyle(source: string): React.CSSProperties {
-  if (source === "EXERCISE") return { background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.25)", color: "#93C5FD" };
-  if (source === "SPORT_TAG") return { background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.25)", color: "#6EE7B7" };
-  return { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)" };
-}
 
 function painColor(level: number): string {
   if (level >= 8) return "#F87171";
@@ -162,8 +111,18 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const zoneIds = injury.zones.map((entry) => entry.zoneId);
   const zoneSlugs = injury.zones.map((entry) => entry.zone.slug);
   const painZones = injury.zones.map((entry) => ({ slug: entry.zone.slug, label: entry.zone.label }));
+  // Affected zones may map to one or more metadata groups (e.g. left + right
+  // hamstring both → "hamstrings"). Dedupe so the heatmap shows each group
+  // once.
+  const affectedMuscleSlugs = Array.from(
+    new Set(
+      injury.zones
+        .map((entry) => entry.zone.metadataGroupSlug)
+        .filter((slug): slug is string => Boolean(slug)),
+    ),
+  );
 
-  const [zones, painLogs, zoneActivities] = await Promise.all([
+  const [zones, painLogs, trainingHeatmap] = await Promise.all([
     prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } }),
     prisma.painLog.findMany({
       where: {
@@ -176,18 +135,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         routineLog: { select: { id: true, routine: { select: { name: true } } } },
       },
     }),
-    prisma.zoneActivity.findMany({
-      where: {
-        zoneId: { in: zoneIds },
-        performedAt: { gte: injury.startedAt },
-      },
-      orderBy: { performedAt: "desc" },
-      take: 50,
-      include: {
-        zone: { select: { label: true } },
-        routineLog: { select: { routine: { select: { name: true } } } },
-      },
-    }),
+    getInjuryTrainingHeatmap(affectedMuscleSlugs),
   ]);
 
   const recentPainLevel = painLogs.length > 0 ? painLogs[0].level : null;
@@ -332,45 +280,15 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         )}
       </section>
 
-      {/* Training load — collapsed because it can be long-running on chronic injuries */}
-      <details style={panel}>
-        <summary style={detailsSummary}>
-          <span style={cardTitle}>Training load on affected zones</span>
-          <span style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
-            {zoneActivities.length} session{zoneActivities.length === 1 ? "" : "s"} since this injury started
-          </span>
-        </summary>
-        <div style={{ marginTop: 12 }}>
-          {zoneActivities.length === 0 ? (
-            <div style={muted}>No training activity logged for these zones since this injury started.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 14 }}>
-              {groupZoneActivities(zoneActivities).map((group) => (
-                <div key={group.key} style={sessionCard}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                      <span style={{ fontWeight: 900, fontSize: 13 }}>{group.sessionLabel}</span>
-                      <span style={{ ...sourcePill, ...sourceStyle(group.source) }}>
-                        {activitySourceLabels[group.source] ?? group.source}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: 11, color: COLOR.textFaint, flexShrink: 0 }}>
-                      {formatAppDate(group.performedAt, { weekday: "short", month: "short", day: "numeric" })}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {group.entries.map((entry, i) => (
-                      <span key={i} style={exerciseChip} title={entry.zones.join(", ")}>
-                        {entry.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Training load — heatmap of weekly sessions on the affected muscle
+          group, click a row to see the routines that contributed. */}
+      <section style={panel}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <div style={cardTitle}>Training load on affected muscle group{affectedMuscleSlugs.length === 1 ? "" : "s"}</div>
+          <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>last 8 weeks</div>
         </div>
-      </details>
+        <InjuryTrainingHeatmap data={trainingHeatmap} />
+      </section>
 
       {/* Edit — collapsed since most visits are about reviewing the trend, not editing */}
       <details style={panel}>
@@ -414,18 +332,6 @@ const row: React.CSSProperties = {
 };
 const statLabel: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: COLOR.textFaint, letterSpacing: 0.5, textTransform: "uppercase" };
 const statValue: React.CSSProperties = { fontSize: 24, fontWeight: 900, lineHeight: 1.1, marginTop: 2 };
-const sourcePill: React.CSSProperties = { fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 6, flexShrink: 0 };
-const sessionCard: React.CSSProperties = { borderLeft: `2px solid ${COLOR.border}`, paddingLeft: 12, display: "grid", gap: 7 };
-const exerciseChip: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  padding: "4px 9px",
-  borderRadius: 7,
-  background: "rgba(255,255,255,0.05)",
-  border: `1px solid ${COLOR.border}`,
-  lineHeight: 1.4,
-  cursor: "default",
-};
 const aggravatorRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
