@@ -1,6 +1,7 @@
-// Server-renderable inline-SVG chart. Each day since `startedAt` (capped at
-// MAX_DAYS for legibility) is one bar showing that day's peak pain level,
-// tinted by the context of the highest log of the day.
+// Server-renderable chart that fills its container width on any screen.
+// Bars live in an SVG with width="100%" + preserveAspectRatio="none" so the
+// plot stretches horizontally; the y-axis ticks and date labels render as
+// absolutely-positioned HTML so they don't distort with the SVG.
 
 export type PainHistoryDay = {
   ymd: string;
@@ -9,6 +10,8 @@ export type PainHistoryDay = {
 };
 
 const MAX_DAYS = 90;
+const PLOT_HEIGHT = 140;
+const Y_AXIS_WIDTH = 28;
 
 const CONTEXT_COLOR: Record<NonNullable<PainHistoryDay["context"]>, string> = {
   DURING_ACTIVITY: "#FB7185",
@@ -32,36 +35,26 @@ function fmtShortDate(ymd: string) {
 }
 
 export default function PainHistoryChart({ days }: { days: PainHistoryDay[] }) {
-  // Render only the most recent MAX_DAYS so older injuries don't blow up the
-  // SVG width. The full history stays available via the recent-logs table.
+  // Render only the most recent MAX_DAYS so very old injuries stay legible.
   const visibleDays = days.length > MAX_DAYS ? days.slice(-MAX_DAYS) : days;
   const truncatedCount = days.length - visibleDays.length;
   const hasAnyData = visibleDays.some((d) => d.peak !== null && d.peak > 0);
+  const dayCount = Math.max(1, visibleDays.length);
 
-  const chartHeight = 140;
-  const xAxisHeight = 22;
-  const yAxisWidth = 28;
-  const minBarWidth = 4;
-  const maxBarWidth = 12;
-  const gap = 2;
-  // Bar width adapts to day count so a 7-day strip doesn't look squashed
-  // next to a 90-day strip.
-  const targetWidth = 560;
-  const barWidth = Math.max(minBarWidth, Math.min(maxBarWidth, Math.floor((targetWidth - visibleDays.length * gap) / Math.max(1, visibleDays.length))));
-  const plotWidth = visibleDays.length * (barWidth + gap) - gap;
-  const totalWidth = yAxisWidth + plotWidth;
-  const totalHeight = chartHeight + xAxisHeight;
-
+  // viewBox uses 100 units per day so each bar slot is a clean 100-unit
+  // column regardless of how many days are rendered.
+  const viewBoxWidth = dayCount * 100;
   const yTicks = [0, 3, 7, 10];
-  const tickY = (level: number) => chartHeight - (level / 10) * chartHeight;
+  const tickY = (level: number) => PLOT_HEIGHT - (level / 10) * PLOT_HEIGHT;
 
-  // Label every ~1/6th of the strip, plus the first and last days.
-  const labelStride = Math.max(1, Math.floor(visibleDays.length / 6));
+  // Label up to ~6 evenly-spaced dates so they don't overlap on a 30-day or
+  // 90-day strip. First and last always show.
+  const labelStride = Math.max(1, Math.floor(dayCount / 6));
   const labelIndices = new Set<number>();
-  if (visibleDays.length > 0) {
+  if (dayCount > 0) {
     labelIndices.add(0);
-    labelIndices.add(visibleDays.length - 1);
-    for (let i = 0; i < visibleDays.length; i += labelStride) labelIndices.add(i);
+    labelIndices.add(dayCount - 1);
+    for (let i = 0; i < dayCount; i += labelStride) labelIndices.add(i);
   }
 
   const usedContexts = new Set<NonNullable<PainHistoryDay["context"]>>();
@@ -71,92 +64,120 @@ export default function PainHistoryChart({ days }: { days: PainHistoryDay[] }) {
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <div style={{ overflowX: "auto" }}>
-        <svg
-          width={totalWidth}
-          height={totalHeight}
-          viewBox={`0 0 ${totalWidth} ${totalHeight}`}
-          role="img"
-          aria-label="Pain history over time"
-          style={{ display: "block" }}
-        >
-          {/* y-axis grid + labels */}
+      <div style={chartShell}>
+        {/* Y-axis labels — rendered as HTML so they don't get squished by
+            the SVG's preserveAspectRatio="none". */}
+        <div style={{ position: "relative", width: Y_AXIS_WIDTH, height: PLOT_HEIGHT }}>
           {yTicks.map((tick) => (
-            <g key={tick}>
-              <line
-                x1={yAxisWidth}
-                y1={tickY(tick)}
-                x2={totalWidth}
-                y2={tickY(tick)}
-                stroke="rgba(255,255,255,0.06)"
-                strokeWidth={1}
-                strokeDasharray={tick === 0 ? undefined : "2 4"}
-              />
-              <text
-                x={yAxisWidth - 4}
-                y={tickY(tick) + 3}
-                fontSize={9}
-                fontWeight={700}
-                textAnchor="end"
-                fill="rgba(255,255,255,0.4)"
-              >
-                {tick}
-              </text>
-            </g>
+            <div
+              key={tick}
+              style={{
+                position: "absolute",
+                right: 4,
+                top: `${((PLOT_HEIGHT - (tick / 10) * PLOT_HEIGHT) / PLOT_HEIGHT) * 100}%`,
+                transform: "translateY(-50%)",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "rgba(255,255,255,0.4)",
+              }}
+            >
+              {tick}
+            </div>
           ))}
+        </div>
 
-          {/* bars */}
-          {visibleDays.map((day, i) => {
-            const x = yAxisWidth + i * (barWidth + gap);
-            if (day.peak === null || day.peak <= 0) {
-              return (
-                <rect
-                  key={day.ymd}
-                  x={x}
-                  y={chartHeight - 1}
-                  width={barWidth}
-                  height={1}
-                  fill="rgba(255,255,255,0.10)"
+        {/* Plot column — SVG bars + grid + x-axis labels share the same
+            CSS column so a bar at day index i lines up with x-axis label i. */}
+        <div style={{ display: "grid", gridTemplateRows: `${PLOT_HEIGHT}px auto`, gap: 4, minWidth: 0 }}>
+          <div style={{ position: "relative", width: "100%", height: PLOT_HEIGHT }}>
+            <svg
+              width="100%"
+              height={PLOT_HEIGHT}
+              viewBox={`0 0 ${viewBoxWidth} ${PLOT_HEIGHT}`}
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="Pain history over time"
+              style={{ display: "block" }}
+            >
+              {/* gridlines — non-scaling-stroke keeps them 1px thin even
+                  when the SVG scales horizontally. */}
+              {yTicks.map((tick) => (
+                <line
+                  key={tick}
+                  x1={0}
+                  y1={tickY(tick)}
+                  x2={viewBoxWidth}
+                  y2={tickY(tick)}
+                  stroke="rgba(255,255,255,0.07)"
+                  strokeWidth={1}
+                  strokeDasharray={tick === 0 ? undefined : "4 8"}
+                  vectorEffect="non-scaling-stroke"
                 />
-              );
-            }
-            const level = Math.max(0, Math.min(10, day.peak));
-            const barH = Math.max(2, (level / 10) * chartHeight);
-            const color = day.context ? CONTEXT_COLOR[day.context] : CONTEXT_COLOR.GENERAL;
-            return (
-              <rect
-                key={day.ymd}
-                x={x}
-                y={chartHeight - barH}
-                width={barWidth}
-                height={barH}
-                fill={color}
-                rx={1}
-              >
-                <title>{`${fmtShortDate(day.ymd)}: ${level}/10${day.context ? ` · ${CONTEXT_LABEL[day.context]}` : ""}`}</title>
-              </rect>
-            );
-          })}
+              ))}
 
-          {/* x-axis labels */}
-          {visibleDays.map((day, i) => {
-            if (!labelIndices.has(i)) return null;
-            const x = yAxisWidth + i * (barWidth + gap) + barWidth / 2;
-            return (
-              <text
-                key={day.ymd}
-                x={x}
-                y={chartHeight + 14}
-                fontSize={9}
-                fontWeight={700}
-                textAnchor="middle"
-                fill="rgba(255,255,255,0.42)"
-              >
-                {fmtShortDate(day.ymd)}
-              </text>
-            );
-          })}
-        </svg>
+              {/* bars — each day owns a 100-unit slot; the bar takes 60% of
+                  that slot so adjacent days stay visually separated. */}
+              {visibleDays.map((day, i) => {
+                const slotX = i * 100;
+                const barWidth = 60;
+                const barX = slotX + (100 - barWidth) / 2;
+                if (day.peak === null || day.peak <= 0) {
+                  return (
+                    <rect
+                      key={day.ymd}
+                      x={barX}
+                      y={PLOT_HEIGHT - 1.5}
+                      width={barWidth}
+                      height={1.5}
+                      fill="rgba(255,255,255,0.10)"
+                    />
+                  );
+                }
+                const level = Math.max(0, Math.min(10, day.peak));
+                const barH = Math.max(3, (level / 10) * PLOT_HEIGHT);
+                const color = day.context ? CONTEXT_COLOR[day.context] : CONTEXT_COLOR.GENERAL;
+                return (
+                  <rect
+                    key={day.ymd}
+                    x={barX}
+                    y={PLOT_HEIGHT - barH}
+                    width={barWidth}
+                    height={barH}
+                    fill={color}
+                  >
+                    <title>{`${fmtShortDate(day.ymd)}: ${level}/10${day.context ? ` · ${CONTEXT_LABEL[day.context]}` : ""}`}</title>
+                  </rect>
+                );
+              })}
+            </svg>
+          </div>
+
+          {/* x-axis labels — positioned by percentage so they line up with
+              the bar centers regardless of how wide the chart renders. */}
+          <div style={{ position: "relative", height: 14 }}>
+            {Array.from(labelIndices).map((i) => {
+              const day = visibleDays[i];
+              if (!day) return null;
+              const leftPercent = ((i + 0.5) / dayCount) * 100;
+              return (
+                <div
+                  key={day.ymd}
+                  style={{
+                    position: "absolute",
+                    left: `${leftPercent}%`,
+                    transform: "translateX(-50%)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,0.42)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {fmtShortDate(day.ymd)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {!hasAnyData && (
@@ -184,6 +205,13 @@ export default function PainHistoryChart({ days }: { days: PainHistoryDay[] }) {
     </div>
   );
 }
+
+const chartShell: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: `${Y_AXIS_WIDTH}px minmax(0, 1fr)`,
+  gap: 4,
+  width: "100%",
+};
 
 const legendRow: React.CSSProperties = {
   display: "flex",
