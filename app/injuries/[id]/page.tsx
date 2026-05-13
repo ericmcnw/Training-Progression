@@ -106,7 +106,10 @@ function buildPainHistory(
       peaks.set(ymd, { peak: row.level, context: row.context as PainHistoryDay["context"] });
     }
   }
-  const totalDays = Math.max(1, diffYmdDays(startedAtYmd, todayYmd) + 1);
+  // diffYmdDays(a, b) = a - b, so we need (today - started) for a positive
+  // span. Reversing the args silently capped this at 1 day and hid every
+  // pain log older than today.
+  const totalDays = Math.max(1, diffYmdDays(todayYmd, startedAtYmd) + 1);
   const days: PainHistoryDay[] = [];
   for (let i = 0; i < totalDays; i++) {
     const ymd = addDaysYmd(startedAtYmd, i);
@@ -201,7 +204,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const aggravators = buildAggravators(painLogs);
   const recentLogs = painLogs.slice(0, RECENT_LOG_LIMIT);
   const olderLogCount = Math.max(0, painLogs.length - recentLogs.length);
-  const daysInjured = Math.max(0, diffYmdDays(startedYmd, today));
+  const daysInjured = Math.max(0, diffYmdDays(today, startedYmd));
   const startedLabel = formatAppDate(injury.startedAt, { month: "short", day: "numeric", year: "numeric" });
   const subtitle =
     `${injury.status.toLowerCase()} · severity ${injury.severity}/5 · ${daysInjured === 0 ? "started today" : `${daysInjured} days`} · since ${startedLabel}`;
