@@ -59,3 +59,10 @@ export function useLogDraft(): LogDraftContextValue {
   if (!ctx) throw new Error("useLogDraft must be used inside LogDraftProvider");
   return ctx;
 }
+
+/** Variant that returns null instead of throwing when the form is rendered
+ *  outside the provider (e.g. full-page log routes that don't yet wrap the
+ *  provider, or storybook-style isolated mounts). */
+export function useOptionalLogDraft(): LogDraftContextValue | null {
+  return useContext(LogDraftContext);
+}

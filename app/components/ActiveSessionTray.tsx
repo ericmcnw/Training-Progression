@@ -7,6 +7,8 @@ import { type LogDraft, draftAgeLabel } from "@/lib/log-draft";
 const KIND_COLOR: Record<LogDraft["kind"], string> = {
   WORKOUT: "#4a9eff",
   SESSION: "#a78bfa",
+  CARDIO: "#3aafe8",
+  GUIDED: "#54cb82",
 };
 
 export default function ActiveSessionTray() {

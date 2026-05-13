@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { logRun } from "../../actions";
 import PostSessionPainCheck, { type PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import {
@@ -15,10 +15,17 @@ import {
   textareaStyle,
 } from "../log/form-ui";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
+import { useOptionalLogDraft } from "@/app/contexts/LogDraftContext";
+import {
+  type CardioDraft,
+  clearDraftFromStorage,
+  loadDraftFromStorage,
+  saveDraftToStorage,
+} from "@/lib/log-draft";
 
 export default function LogRunForm({
   routineId,
-  routineName: _routineName,
+  routineName,
   activePainZones = [],
   onComplete,
   onBack,
@@ -32,6 +39,7 @@ export default function LogRunForm({
   defaultPerformedAtLocal?: string;
 }) {
   const drawer = useOptionalLogDrawer();
+  const draftCtx = useOptionalLogDraft();
   const [distanceMi, setDistanceMi] = useState("");
   const [elevationGainFt, setElevationGainFt] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -41,6 +49,50 @@ export default function LogRunForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
+
+  // Draft autosave + restore so cardio gets the same chip-strip presence and
+  // refresh-survival as workout/session logs.
+  const isDirtyRef = useRef(false);
+  const draftStartedAtRef = useRef<string>(new Date().toISOString());
+
+  useEffect(() => {
+    const stored = loadDraftFromStorage(routineId);
+    if (!stored || stored.kind !== "CARDIO") return;
+    setDistanceMi(stored.distanceMi);
+    setElevationGainFt(stored.elevationGainFt);
+    setMinutes(stored.minutes);
+    setSeconds(stored.seconds);
+    setLocation(stored.location);
+    setNotes(stored.notes);
+    setPerformedAtLocal(stored.performedAtLocal || localDateTimeNow());
+    draftStartedAtRef.current = stored.startedAt;
+    isDirtyRef.current = true;
+    draftCtx?.saveDraft(stored);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!isDirtyRef.current) return;
+    const draft: CardioDraft = {
+      kind: "CARDIO",
+      routineId,
+      routineName,
+      startedAt: draftStartedAtRef.current,
+      notes,
+      performedAtLocal,
+      distanceMi,
+      elevationGainFt,
+      minutes,
+      seconds,
+      location,
+    };
+    const timer = setTimeout(() => {
+      saveDraftToStorage(draft);
+      draftCtx?.saveDraft(draft);
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distanceMi, elevationGainFt, minutes, seconds, location, notes, performedAtLocal]);
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);
@@ -61,6 +113,7 @@ export default function LogRunForm({
   }
 
   function markDirty() {
+    isDirtyRef.current = true;
     drawer?.markDirty();
   }
 
@@ -99,6 +152,8 @@ export default function LogRunForm({
         notes,
         performedAtLocal: performedAtLocal || undefined,
       });
+      clearDraftFromStorage(routineId);
+      draftCtx?.clearDraft(routineId);
       drawer?.clearDirty();
       if (logId && activePainZones.length > 0) {
         setPainCheckLogId(logId);

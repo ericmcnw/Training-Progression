@@ -37,7 +37,40 @@ export type SessionDraft = {
   newClimbLocationLongitude?: number;
 };
 
-export type LogDraft = WorkoutDraft | SessionDraft;
+export type CardioDraft = {
+  kind: "CARDIO";
+  routineId: string;
+  routineName: string;
+  startedAt: string;
+  notes: string;
+  performedAtLocal: string;
+  // Form field state — preserved for refresh-safety in addition to
+  // chip-strip visibility.
+  distanceMi: string;
+  elevationGainFt: string;
+  minutes: string;
+  seconds: string;
+  location: string;
+};
+
+export type GuidedDraft = {
+  kind: "GUIDED";
+  routineId: string;
+  routineName: string;
+  startedAt: string;
+  notes: string;
+  performedAtLocal: string;
+  // Player progression state — refresh-safe restoration of where the user
+  // was in the guided sequence.
+  screen: "entry" | "player" | "review";
+  autoPlay: boolean;
+  currentSegmentIndex: number;
+  completedDurationSec: number;
+  skippedStepIds: string[];
+  reviewMode: "review" | "log-after";
+};
+
+export type LogDraft = WorkoutDraft | SessionDraft | CardioDraft | GuidedDraft;
 
 function draftKey(routineId: string) {
   return `${DRAFT_KEY_PREFIX}${routineId}`;

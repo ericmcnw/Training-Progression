@@ -13,17 +13,28 @@ function shallowEqualDrawerState(left: DrawerUiState | undefined, right: DrawerU
   return leftKeys.every((key) => Object.is(left[key], right[key]));
 }
 
+export type OpenDrawerOptions = {
+  /** When set, the drawer-launched form pre-fills its performed-at date with
+   *  this YYYY-MM-DD value (default time of day = noon). Used by back-date
+   *  entry points (heatmap, WaG detail card) to keep the floating-drawer
+   *  flow even when logging retroactively. */
+  defaultDate?: string;
+};
+
 type LogDrawerContextValue = {
   activeRoutineId: string | null;
   isOpen: boolean;
   isDirty: boolean;
-  openDrawer: (routineId: string) => void;
+  openDrawer: (routineId: string, options?: OpenDrawerOptions) => void;
   closeDrawer: () => void;
   markDirty: () => void;
   clearDirty: () => void;
   getDrawerState: <T extends DrawerUiState>(routineId: string) => T | null;
   setDrawerState: <T extends DrawerUiState>(routineId: string, state: T) => void;
   clearDrawerState: (routineId: string) => void;
+  /** Default date passed to the currently-open drawer. Form-side code uses
+   *  this to seed `performedAtLocal` when there's no existing draft. */
+  getDefaultDate: (routineId: string) => string | null;
 };
 
 const LogDrawerContext = createContext<LogDrawerContextValue | null>(null);
@@ -33,11 +44,17 @@ export function LogDrawerProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [drawerStates, setDrawerStates] = useState<Record<string, DrawerUiState>>({});
+  // Per-routine defaultDate (one-shot — cleared when the routine's draft is
+  // cleared elsewhere, but otherwise persists so re-opening keeps the date).
+  const [defaultDates, setDefaultDates] = useState<Record<string, string>>({});
 
-  const openDrawer = useCallback((routineId: string) => {
+  const openDrawer = useCallback((routineId: string, options?: OpenDrawerOptions) => {
     setActiveRoutineId(routineId);
     setIsOpen(true);
     setIsDirty(false);
+    if (options?.defaultDate) {
+      setDefaultDates((prev) => ({ ...prev, [routineId]: options.defaultDate! }));
+    }
   }, []);
 
   const closeDrawer = useCallback(() => {
@@ -67,7 +84,17 @@ export function LogDrawerProvider({ children }: { children: React.ReactNode }) {
       delete next[routineId];
       return next;
     });
+    setDefaultDates((current) => {
+      if (!(routineId in current)) return current;
+      const next = { ...current };
+      delete next[routineId];
+      return next;
+    });
   }, []);
+  const getDefaultDate = useCallback(
+    (routineId: string) => defaultDates[routineId] ?? null,
+    [defaultDates]
+  );
 
   return (
     <LogDrawerContext.Provider
@@ -82,6 +109,7 @@ export function LogDrawerProvider({ children }: { children: React.ReactNode }) {
         getDrawerState,
         setDrawerState,
         clearDrawerState,
+        getDefaultDate,
       }}
     >
       {children}

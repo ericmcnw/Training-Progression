@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import PostSessionPainCheck from "@/app/components/pain-log/PostSessionPainCheck";
@@ -9,6 +9,14 @@ import GuidedEntryScreen from "./GuidedEntryScreen";
 import GuidedPlayer from "./GuidedPlayer";
 import GuidedReviewForm from "./GuidedReviewForm";
 import type { ReviewSaveData } from "./GuidedReviewForm";
+import { useOptionalLogDraft } from "@/app/contexts/LogDraftContext";
+import {
+  type GuidedDraft,
+  clearDraftFromStorage,
+  loadDraftFromStorage,
+  saveDraftToStorage,
+} from "@/lib/log-draft";
+import { localDateTimeNow } from "../log/form-ui";
 
 type Step = {
   id: string;
@@ -70,19 +78,73 @@ export default function GuidedLogForm({
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
 }) {
-  const [screen, setScreen] = useState<Screen>(initialDrawerState?.screen ?? "entry");
-  const [autoPlay, setAutoPlay] = useState(initialDrawerState?.autoPlay ?? true);
+  const draftCtx = useOptionalLogDraft();
+  // Restore from localStorage takes priority over the in-memory drawerState
+  // — needed for refresh-survival across page loads.
+  const restoredDraft = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const stored = loadDraftFromStorage(routineId);
+    return stored && stored.kind === "GUIDED" ? stored : null;
+  }, [routineId]);
+
+  const [screen, setScreen] = useState<Screen>(restoredDraft?.screen ?? initialDrawerState?.screen ?? "entry");
+  const [autoPlay, setAutoPlay] = useState(restoredDraft?.autoPlay ?? initialDrawerState?.autoPlay ?? true);
   const [sessionStartedAt, setSessionStartedAt] = useState<Date | null>(null);
 
   // Data flowing from player → review
-  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(new Set(initialDrawerState?.skippedStepIds ?? []));
-  const [completedDurationSec, setCompletedDurationSec] = useState(initialDrawerState?.completedDurationSec ?? 0);
-  const [reviewMode, setReviewMode] = useState<"review" | "log-after">(initialDrawerState?.reviewMode ?? "log-after");
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(initialDrawerState?.currentSegmentIndex ?? 0);
+  const [skippedStepIds, setSkippedStepIds] = useState<Set<string>>(
+    new Set(restoredDraft?.skippedStepIds ?? initialDrawerState?.skippedStepIds ?? [])
+  );
+  const [completedDurationSec, setCompletedDurationSec] = useState(
+    restoredDraft?.completedDurationSec ?? initialDrawerState?.completedDurationSec ?? 0
+  );
+  const [reviewMode, setReviewMode] = useState<"review" | "log-after">(
+    restoredDraft?.reviewMode ?? initialDrawerState?.reviewMode ?? "log-after"
+  );
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(
+    restoredDraft?.currentSegmentIndex ?? initialDrawerState?.currentSegmentIndex ?? 0
+  );
 
   const [saving, setSaving] = useState(false);
   const [painCheckLogId, setPainCheckLogId] = useState<string | null>(null);
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+
+  const draftStartedAtRef = useRef<string>(restoredDraft?.startedAt ?? new Date().toISOString());
+  const isDirtyRef = useRef(restoredDraft !== null);
+
+  // Hydrate the draft context with the restored draft so the chip strip
+  // shows it on first paint of the page (not after the first edit).
+  useEffect(() => {
+    if (restoredDraft) draftCtx?.saveDraft(restoredDraft);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave guided progression to localStorage so a refresh resumes the
+  // user mid-session and the chip strip stays accurate. Uses a 600ms
+  // debounce to avoid hammering storage during scrub.
+  useEffect(() => {
+    if (!isDirtyRef.current && screen === "entry") return;
+    const draft: GuidedDraft = {
+      kind: "GUIDED",
+      routineId,
+      routineName: routineName ?? "Guided Routine",
+      startedAt: draftStartedAtRef.current,
+      notes: "",
+      performedAtLocal: defaultPerformedAtLocal ?? localDateTimeNow(),
+      screen,
+      autoPlay,
+      currentSegmentIndex,
+      completedDurationSec,
+      skippedStepIds: Array.from(skippedStepIds),
+      reviewMode,
+    };
+    const timer = setTimeout(() => {
+      saveDraftToStorage(draft);
+      draftCtx?.saveDraft(draft);
+    }, 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, autoPlay, currentSegmentIndex, completedDurationSec, skippedStepIds, reviewMode]);
 
   const templateSteps = useMemo(
     () =>
@@ -114,11 +176,13 @@ export default function GuidedLogForm({
   }, [autoPlay, completedDurationSec, currentSegmentIndex, onDrawerStateChange, reviewMode, screen, skippedStepIds]);
 
   function startPlayer() {
+    isDirtyRef.current = true;
     setSessionStartedAt(new Date());
     setScreen("player");
   }
 
   function startLogAfter() {
+    isDirtyRef.current = true;
     setSkippedStepIds(new Set());
     setCompletedDurationSec(0);
     setReviewMode("log-after");
@@ -185,6 +249,8 @@ export default function GuidedLogForm({
         performedAtLocal: performedAtLocal || undefined,
         steps: stepsPayload,
       });
+      clearDraftFromStorage(routineId);
+      draftCtx?.clearDraft(routineId);
       if (createdLogId && activePainZones.length > 0) {
         setPainCheckLogId(createdLogId);
         return;

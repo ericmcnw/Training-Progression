@@ -6,6 +6,7 @@ import LogWorkoutForm from "@/app/routines/[id]/log/ui";
 import SessionLogForm from "@/app/routines/[id]/log-session/SessionLogForm";
 import LogRunForm from "@/app/routines/[id]/log-cardio/ui";
 import GuidedLogForm from "@/app/routines/[id]/log-guided/GuidedLogForm";
+import { localDateTimeForYmd } from "@/app/routines/[id]/log/date-helpers";
 import type { WorkoutBlock, ExerciseOption } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainCheck";
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
@@ -82,6 +83,7 @@ export default function LogDrawer() {
     getDrawerState,
     setDrawerState,
     clearDrawerState,
+    getDefaultDate,
   } = useLogDrawer();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,62 +146,80 @@ export default function LogDrawer() {
         <div style={drawerBodyStyle}>
           {loading && <div style={stateStyle}>Loading session…</div>}
           {error && <div style={{ ...stateStyle, color: "rgba(255,100,100,0.9)" }}>{error}</div>}
-          {!loading && !error && logData && (
-            logData.kind === "WORKOUT" ? (
-              <LogWorkoutForm
-                key={logData.routineId}
-                routineId={logData.routineId}
-                routineName={logData.routineName}
-                initialBlocks={logData.initialBlocks}
-                availableExercises={logData.availableExercises}
-                activePainZones={logData.activePainZones}
-                initialExpandedId={getDrawerState<WorkoutDrawerState>(logData.routineId)?.expandedId ?? null}
-                onExpandedIdChange={(expandedId) => {
-                  setDrawerState<WorkoutDrawerState>(logData.routineId, { expandedId });
-                }}
-                onComplete={handleComplete}
-                onBack={closeDrawer}
-              />
-            ) : logData.kind === "SESSION" ? (
-              <SessionLogForm
-                key={logData.routineId}
-                routineId={logData.routineId}
-                routineName={logData.routineName}
-                templateKey={logData.templateKey}
-                templateName={logData.templateName}
-                definitions={logData.definitions}
-                preferredClimbingGrades={logData.preferredClimbingGrades}
-                activePainZones={logData.activePainZones}
-                savedClimbLocations={logData.savedClimbLocations ?? []}
-                onComplete={handleComplete}
-                onBack={closeDrawer}
-              />
-            ) : logData.kind === "CARDIO" ? (
-              <LogRunForm
-                key={logData.routineId}
-                routineId={logData.routineId}
-                routineName={logData.routineName}
-                activePainZones={logData.activePainZones}
-                onComplete={handleComplete}
-                onBack={closeDrawer}
-              />
-            ) : logData.kind === "GUIDED" ? (
-              <GuidedLogForm
-                key={logData.routineId}
-                routineId={logData.routineId}
-                routineName={logData.routineName}
-                steps={logData.steps}
-                availableExercises={[]}
-                activePainZones={logData.activePainZones}
-                initialDrawerState={getDrawerState<GuidedDrawerState>(logData.routineId)}
-                onDrawerStateChange={(state) => {
-                  setDrawerState<GuidedDrawerState>(logData.routineId, state);
-                }}
-                onComplete={handleComplete}
-                onBack={closeDrawer}
-              />
-            ) : null
-          )}
+          {!loading && !error && logData && (() => {
+            const dateYmd = getDefaultDate(logData.routineId);
+            const defaultPerformedAtLocal = dateYmd ? localDateTimeForYmd(dateYmd, 12) : undefined;
+            if (logData.kind === "WORKOUT") {
+              return (
+                <LogWorkoutForm
+                  key={logData.routineId}
+                  routineId={logData.routineId}
+                  routineName={logData.routineName}
+                  initialBlocks={logData.initialBlocks}
+                  availableExercises={logData.availableExercises}
+                  activePainZones={logData.activePainZones}
+                  initialExpandedId={getDrawerState<WorkoutDrawerState>(logData.routineId)?.expandedId ?? null}
+                  onExpandedIdChange={(expandedId) => {
+                    setDrawerState<WorkoutDrawerState>(logData.routineId, { expandedId });
+                  }}
+                  defaultPerformedAtLocal={defaultPerformedAtLocal}
+                  onComplete={handleComplete}
+                  onBack={closeDrawer}
+                />
+              );
+            }
+            if (logData.kind === "SESSION") {
+              return (
+                <SessionLogForm
+                  key={logData.routineId}
+                  routineId={logData.routineId}
+                  routineName={logData.routineName}
+                  templateKey={logData.templateKey}
+                  templateName={logData.templateName}
+                  definitions={logData.definitions}
+                  preferredClimbingGrades={logData.preferredClimbingGrades}
+                  activePainZones={logData.activePainZones}
+                  savedClimbLocations={logData.savedClimbLocations ?? []}
+                  defaultPerformedAtLocal={defaultPerformedAtLocal}
+                  onComplete={handleComplete}
+                  onBack={closeDrawer}
+                />
+              );
+            }
+            if (logData.kind === "CARDIO") {
+              return (
+                <LogRunForm
+                  key={logData.routineId}
+                  routineId={logData.routineId}
+                  routineName={logData.routineName}
+                  activePainZones={logData.activePainZones}
+                  defaultPerformedAtLocal={defaultPerformedAtLocal}
+                  onComplete={handleComplete}
+                  onBack={closeDrawer}
+                />
+              );
+            }
+            if (logData.kind === "GUIDED") {
+              return (
+                <GuidedLogForm
+                  key={logData.routineId}
+                  routineId={logData.routineId}
+                  routineName={logData.routineName}
+                  steps={logData.steps}
+                  availableExercises={[]}
+                  activePainZones={logData.activePainZones}
+                  initialDrawerState={getDrawerState<GuidedDrawerState>(logData.routineId)}
+                  onDrawerStateChange={(state) => {
+                    setDrawerState<GuidedDrawerState>(logData.routineId, state);
+                  }}
+                  defaultPerformedAtLocal={defaultPerformedAtLocal}
+                  onComplete={handleComplete}
+                  onBack={closeDrawer}
+                />
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </>

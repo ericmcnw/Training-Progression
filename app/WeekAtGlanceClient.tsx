@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { formatUtcDateLabel } from "@/lib/dates";
 import { domainColor, formatRoutineTypeLabel, normalizeRoutineKind, type RoutineDomain } from "@/lib/routines";
 import CompletionCheckbox from "@/app/components/dashboard/CompletionCheckbox";
 import DayTodoList from "@/app/components/dashboard/DayTodoList";
+import DrawerLogButton from "@/app/routines/DrawerLogButton";
 
 type GlanceDay = {
   ymd: string;
@@ -340,12 +340,12 @@ export default function WeekAtGlanceClient({
                     {isCompletion && !isFutureDay ? (
                       <CompletionCheckbox routineId={item.routineId} ymd={selectedDay.ymd} done={item.logged > 0} />
                     ) : showLogButton ? (
-                      <Link
-                        href={`/routines/${item.routineId}/log?date=${encodeURIComponent(selectedDay.ymd)}`}
+                      <DrawerLogButton
+                        routineId={item.routineId}
+                        defaultDate={selectedDay.ymd}
+                        className=""
                         style={rowLogButton}
-                      >
-                        Log
-                      </Link>
+                      />
                     ) : null}
                   </div>
                 </div>
