@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import type { ZoneState, ZoneFreshness } from "@/app/components/body-map/types";
 import { fetchZoneDetail, type ZoneDetailResult } from "./_actions";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
+
+const MAP_OPEN_STORAGE_KEY = "body:mapOpen";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const freshnessLabel: Record<ZoneFreshness, string> = {
@@ -136,7 +138,31 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [detail, setDetail] = useState<ZoneDetailResult | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [mapOpen, setMapOpen] = useState(true);
   const requestId = useRef(0);
+
+  // Persist the map collapse state across visits so users who prefer the
+  // page without the map don't have to re-collapse every time.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(MAP_OPEN_STORAGE_KEY);
+      if (stored === "false") setMapOpen(false);
+    } catch {
+      // ignore — localStorage unavailable
+    }
+  }, []);
+
+  function toggleMap() {
+    const next = !mapOpen;
+    setMapOpen(next);
+    try {
+      window.localStorage.setItem(MAP_OPEN_STORAGE_KEY, String(next));
+    } catch {
+      // ignore
+    }
+    // Collapsing while a zone is selected is fine — the detail panel still
+    // lives below the map. We don't auto-clear it.
+  }
 
   function handleZoneClick(slug: string) {
     if (slug === selectedSlug) {
@@ -156,13 +182,35 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <BodyMap
-        zones={zones}
-        size="md"
-        onZoneClick={handleZoneClick}
-        selectedSlugs={selectedSlug ? [selectedSlug] : []}
-      />
+    <div style={{ display: "grid", gap: 14 }}>
+      <section style={mapCardStyle}>
+        <button
+          type="button"
+          onClick={toggleMap}
+          style={mapHeaderButton}
+          aria-expanded={mapOpen}
+          aria-controls="body-map-panel"
+        >
+          <span style={mapHeaderTitle}>Body map</span>
+          <span style={mapHeaderHint}>
+            {mapOpen ? "Tap a zone for details" : "Tap to expand"}
+          </span>
+          <span style={chevronStyle(mapOpen)} aria-hidden>
+            ▾
+          </span>
+        </button>
+        {mapOpen && (
+          <div id="body-map-panel" style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <BodyMap
+              zones={zones}
+              size="md"
+              onZoneClick={handleZoneClick}
+              selectedSlugs={selectedSlug ? [selectedSlug] : []}
+            />
+            <BodyMapLegend />
+          </div>
+        )}
+      </section>
 
       {isPending && !detail && (
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
@@ -181,7 +229,109 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   );
 }
 
+// ─── Body map legend ─────────────────────────────────────────────────────────
+// Inline strip beneath the map so users who don't already know the color
+// scheme can decode what they're looking at. Matches the chip palette
+// rendered above the map on /body so the two read as one system.
+
+const LEGEND_ENTRIES: Array<{ key: ZoneFreshness; label: string; color: string }> = [
+  { key: "INJURED",         label: "Injured",         color: "rgba(248,113,113,0.85)" },
+  { key: "RECOVERING",      label: "Recovering",      color: "rgba(147,197,253,0.85)" },
+  { key: "WORKED_TODAY",    label: "Worked today",    color: "rgba(129,140,248,0.85)" },
+  { key: "RECENTLY_WORKED", label: "Recently worked", color: "rgba(96,165,250,0.85)"  },
+  { key: "FRESH",           label: "Fresh",           color: "rgba(229,231,235,0.55)" },
+];
+
+function BodyMapLegend() {
+  return (
+    <div style={legendRow}>
+      {LEGEND_ENTRIES.map((entry) => (
+        <span key={entry.key} style={legendItem}>
+          <span style={{ ...legendSwatch, background: entry.color }} />
+          {entry.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
+const mapCardStyle: React.CSSProperties = {
+  ...cardSurface,
+  padding: 14,
+  gap: 0,
+};
+
+const mapHeaderButton: React.CSSProperties = {
+  appearance: "none",
+  margin: 0,
+  padding: 0,
+  background: "transparent",
+  border: "none",
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  textAlign: "left",
+  width: "100%",
+  minHeight: 24,
+};
+
+const mapHeaderTitle: React.CSSProperties = {
+  ...cardTitle,
+  flexShrink: 0,
+};
+
+const mapHeaderHint: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+  marginLeft: 8,
+  flex: 1,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+function chevronStyle(open: boolean): React.CSSProperties {
+  return {
+    fontSize: 14,
+    fontWeight: 800,
+    color: COLOR.textDim,
+    transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+    transition: "transform 160ms ease",
+    flexShrink: 0,
+  };
+}
+
+const legendRow: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  paddingTop: 6,
+  borderTop: `1px solid ${COLOR.border}`,
+  fontSize: 10,
+  fontWeight: 700,
+  color: COLOR.textDim,
+};
+
+const legendItem: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  letterSpacing: 0.2,
+};
+
+const legendSwatch: React.CSSProperties = {
+  width: 9,
+  height: 9,
+  borderRadius: 2,
+  display: "inline-block",
+};
+
 const panel: React.CSSProperties = {
   ...cardSurface,
   gap: 14,

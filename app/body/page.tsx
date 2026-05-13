@@ -7,6 +7,7 @@ import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjuries } from "@/app/injuries/actions";
 import type { InjuryStatus } from "@/generated/prisma";
+import type { ZoneFreshness, ZoneState } from "@/app/components/body-map/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function BodyPage(props: {
   ]);
 
   const triageInjuries = injuries.filter((i) => i.status === "ACTIVE" || i.status === "FLARED");
+  const freshnessCounts = countByFreshness(zones);
 
   const selectedSection = coverageOverview.sections.find((e) => e.lens === lens) ?? coverageOverview.sections[0];
   const activeCategories = selectedSection.categories.filter((c) => c.totalCount > 0);
@@ -51,7 +53,7 @@ export default async function BodyPage(props: {
   return (
     <PageShell
       title="Body"
-      subtitle="Map zone freshness, track injuries, and check muscle / movement-pattern coverage."
+      subtitle="Track zone freshness, injuries, and training load by region. Tap a zone on the map for details."
       toolbar={
         <>
           <Link href="/body/log-pain" style={dangerLinkStyle}>Log pain</Link>
@@ -80,6 +82,8 @@ export default async function BodyPage(props: {
           </div>
         </section>
       )}
+
+      <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} />
 
       <BodyPageClient zones={zones} />
 
@@ -136,6 +140,118 @@ export default async function BodyPage(props: {
     </PageShell>
   );
 }
+
+// ─── Body status chip row ─────────────────────────────────────────────
+// Compact at-a-glance summary above the body map. Each chip uses the same
+// tint as the corresponding freshness state on the map, so the chips
+// double as the map's legend. Zero-count states are hidden so the row
+// stays tight when nothing is flagged.
+
+type FreshnessCounts = Record<ZoneFreshness, number>;
+
+function countByFreshness(zones: ZoneState[]): FreshnessCounts {
+  const counts: FreshnessCounts = {
+    FRESH: 0,
+    WORKED_TODAY: 0,
+    RECENTLY_WORKED: 0,
+    RECOVERING: 0,
+    INJURED: 0,
+  };
+  for (const zone of zones) counts[zone.freshness] += 1;
+  return counts;
+}
+
+type StatusChipMeta = {
+  key: ZoneFreshness;
+  label: string;
+  bg: string;
+  border: string;
+  color: string;
+};
+
+const STATUS_CHIPS: StatusChipMeta[] = [
+  { key: "INJURED",         label: "Injured",          bg: "rgba(248,113,113,0.14)", border: "rgba(248,113,113,0.42)", color: "#FCA5A5" },
+  { key: "RECOVERING",      label: "Recovering",       bg: "rgba(147,197,253,0.16)", border: "rgba(147,197,253,0.34)", color: "#DBEAFE" },
+  { key: "WORKED_TODAY",    label: "Worked today",     bg: "rgba(99,102,241,0.16)",  border: "rgba(129,140,248,0.36)", color: "#C7D2FE" },
+  { key: "RECENTLY_WORKED", label: "Recently worked",  bg: "rgba(59,130,246,0.14)",  border: "rgba(96,165,250,0.32)",  color: "#BFDBFE" },
+  { key: "FRESH",           label: "Fresh",            bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.10)", color: COLOR.text },
+];
+
+function BodyStatusRow({ counts, totalZones }: { counts: FreshnessCounts; totalZones: number }) {
+  // Render every state in the canonical order, but only the ones with a
+  // non-zero count. If everything is FRESH (or no zones tracked) the row
+  // still renders the Fresh chip so the user gets a "all good" signal.
+  const visible = STATUS_CHIPS.filter((chip) => (counts[chip.key] ?? 0) > 0);
+  const items = visible.length > 0 ? visible : STATUS_CHIPS.filter((chip) => chip.key === "FRESH");
+  return (
+    <section style={statusRowStyle} aria-label="Body zone status">
+      <span style={statusRowLabel}>
+        {totalZones} {totalZones === 1 ? "zone" : "zones"} tracked
+      </span>
+      <div style={chipRowInline}>
+        {items.map((chip) => (
+          <span
+            key={chip.key}
+            style={{
+              ...statusChipStyle,
+              background: chip.bg,
+              borderColor: chip.border,
+              color: chip.color,
+            }}
+          >
+            <span style={statusChipCount}>{counts[chip.key]}</span>
+            <span style={statusChipLabel}>{chip.label}</span>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const statusRowStyle: React.CSSProperties = {
+  ...cardSurface,
+  padding: "10px 14px",
+  gap: 8,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+};
+
+const statusRowLabel: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+  whiteSpace: "nowrap",
+};
+
+const chipRowInline: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const statusChipStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "5px 10px",
+  borderRadius: 8,
+  border: "1px solid",
+  fontSize: 12,
+};
+
+const statusChipCount: React.CSSProperties = {
+  fontWeight: 900,
+  fontSize: 13,
+};
+
+const statusChipLabel: React.CSSProperties = {
+  fontWeight: 700,
+  opacity: 0.92,
+};
 
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
