@@ -146,7 +146,7 @@ export default function DomainSparklinesV2({ series }: Props) {
                     })}
                   </div>
                 </div>
-                <div style={trailingCol}>
+                <div style={trailingCol} className="homeV2DomainTotal">
                   <span style={countValue}>{row.totalThisWeek}</span>
                   <span style={countLabel}>this wk</span>
                 </div>
@@ -204,13 +204,25 @@ export default function DomainSparklinesV2({ series }: Props) {
           padding: 8px 10px;
         }
         @media (max-width: 540px) {
+          /* Stacked layout on mobile — the 3-col grid was squeezing both
+             the domain label (truncated to "Stren...") and the chart. By
+             stacking, the chart gets full row width, labels stop truncating,
+             and date axis + per-bar values both breathe. */
           .homeV2DomainRow {
-            grid-template-columns: minmax(64px, 0.85fr) minmax(0, 2.2fr) 56px;
-            gap: 8px;
-            padding: 8px;
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+              "label total"
+              "chart chart";
+            column-gap: 8px;
+            row-gap: 4px;
+            padding: 10px 10px 8px;
+            align-items: center;
           }
+          .homeV2DomainRow > :nth-child(1) { grid-area: label; }
+          .homeV2DomainRow > :nth-child(2) { grid-area: chart; }
+          .homeV2DomainRow > :nth-child(3) { grid-area: total; }
           /* Drop the "–end" half so labels stop colliding; start-date alone
-             reads cleanly across the 8 columns. Also nudge the font down. */
+             reads cleanly across the 8 columns. */
           .weekLabelEnd { display: none; }
         }
         @keyframes homeV2Pulse {
