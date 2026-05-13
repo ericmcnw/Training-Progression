@@ -12,7 +12,7 @@ import type { PainCheckZone } from "@/app/components/pain-log/PostSessionPainChe
 import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
 import type { GuidedStepKind } from "@/generated/prisma";
 import type { ClimbLocationBasic } from "@/lib/climb-types";
-import type { ActivitySpotBasic } from "@/lib/activity-spots";
+import type { SpotPickerItem } from "@/lib/activity-spots";
 
 type WorkoutLogData = {
   kind: "WORKOUT";
@@ -34,7 +34,7 @@ type SessionLogData = {
   activePainZones: PainCheckZone[];
   savedClimbLocations?: ClimbLocationBasic[];
   activitySlug?: string | null;
-  savedActivitySpots?: ActivitySpotBasic[];
+  savedSpots?: SpotPickerItem[];
 };
 
 type CardioLogData = {
@@ -43,7 +43,7 @@ type CardioLogData = {
   routineName: string;
   activePainZones: PainCheckZone[];
   activitySlug?: string | null;
-  savedActivitySpots?: ActivitySpotBasic[];
+  savedSpots?: SpotPickerItem[];
 };
 
 type GuidedStep = {
@@ -186,7 +186,7 @@ export default function LogDrawer() {
                   activePainZones={logData.activePainZones}
                   savedClimbLocations={logData.savedClimbLocations ?? []}
                   activitySlug={logData.activitySlug ?? null}
-                  savedActivitySpots={logData.savedActivitySpots ?? []}
+                  savedSpots={logData.savedSpots ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}
@@ -201,7 +201,7 @@ export default function LogDrawer() {
                   routineName={logData.routineName}
                   activePainZones={logData.activePainZones}
                   activitySlug={logData.activitySlug ?? null}
-                  savedActivitySpots={logData.savedActivitySpots ?? []}
+                  savedSpots={logData.savedSpots ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}

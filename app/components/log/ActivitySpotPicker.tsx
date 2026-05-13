@@ -14,43 +14,71 @@
 import { useState, useTransition } from "react";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import {
-  type ActivitySpotBasic,
   type ActivitySpotConfig,
   type NewActivitySpotDraft,
+  type SpotPickerItem,
+  type SpotSelection,
 } from "@/lib/activity-spots";
+
+const NEW_OPTION = "__new__";
+const NONE_OPTION = "";
+
+function optionValueFor(item: SpotPickerItem): string {
+  // Encode kind so we can decode on change without an O(n) lookup.
+  return `${item.kind}:${item.id}`;
+}
+
+function decodeOptionValue(value: string): SpotSelection | null {
+  if (value === NEW_OPTION || value === NONE_OPTION) return null;
+  const [kind, ...rest] = value.split(":");
+  const id = rest.join(":");
+  if ((kind === "activitySpot" || kind === "climbLocation") && id) {
+    return { kind, id };
+  }
+  return null;
+}
+
+function valueForSelection(sel: SpotSelection | null): string {
+  if (!sel) return NONE_OPTION;
+  return `${sel.kind}:${sel.id}`;
+}
 
 export default function ActivitySpotPicker({
   config,
   savedSpots,
-  selectedId,
-  onSelectId,
+  selected,
+  onSelect,
   newSpot,
   onNewSpot,
 }: {
   config: ActivitySpotConfig;
-  savedSpots: ActivitySpotBasic[];
-  selectedId: string | null;
-  onSelectId: (id: string | null) => void;
+  savedSpots: SpotPickerItem[];
+  selected: SpotSelection | null;
+  onSelect: (sel: SpotSelection | null) => void;
   newSpot: NewActivitySpotDraft | null;
   onNewSpot: (s: NewActivitySpotDraft | null) => void;
 }) {
   const [showNew, setShowNew] = useState(
-    savedSpots.length === 0 || (newSpot !== null && !selectedId)
+    savedSpots.length === 0 || (newSpot !== null && !selected)
   );
   const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "error">("idle");
   const [geoError, setGeoError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const defaultType = config.spotTypes[0]?.value ?? null;
+  const ownSpots = savedSpots.filter((s) => s.isOwnActivity);
+  const crossSpots = savedSpots.filter((s) => !s.isOwnActivity);
 
-  function selectExisting(id: string) {
-    onSelectId(id);
+  function selectExisting(value: string) {
+    const decoded = decodeOptionValue(value);
+    if (!decoded) return;
+    onSelect(decoded);
     onNewSpot(null);
     setShowNew(false);
   }
 
   function activateNew() {
-    onSelectId(null);
+    onSelect(null);
     onNewSpot(
       newSpot ?? { name: "", type: defaultType, region: "", latitude: null, longitude: null }
     );
@@ -121,24 +149,40 @@ export default function ActivitySpotPicker({
       {savedSpots.length > 0 && (
         <select
           style={{ ...inputStyle, cursor: "pointer" }}
-          value={showNew ? "__new__" : (selectedId ?? "")}
+          value={showNew ? NEW_OPTION : valueForSelection(selected)}
           onChange={(e) => {
-            if (e.target.value === "__new__") {
+            const v = e.target.value;
+            if (v === NEW_OPTION) {
               activateNew();
-            } else if (e.target.value === "") {
-              onSelectId(null);
+            } else if (v === NONE_OPTION) {
+              onSelect(null);
               onNewSpot(null);
               setShowNew(false);
             } else {
-              selectExisting(e.target.value);
+              selectExisting(v);
             }
           }}
         >
-          <option value="">No {config.spotNoun}</option>
-          {savedSpots.map((spot) => (
-            <option key={spot.id} value={spot.id}>{labelFor(spot)}</option>
-          ))}
-          <option value="__new__">+ Add new {config.spotNoun}…</option>
+          <option value={NONE_OPTION}>No {config.spotNoun}</option>
+          {ownSpots.length > 0 && (
+            <optgroup label={`Your ${config.spotNoun}s`}>
+              {ownSpots.map((spot) => (
+                <option key={optionValueFor(spot)} value={optionValueFor(spot)}>
+                  {labelFor(spot, false)}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {crossSpots.length > 0 && (
+            <optgroup label="From other activities">
+              {crossSpots.map((spot) => (
+                <option key={optionValueFor(spot)} value={optionValueFor(spot)}>
+                  {labelFor(spot, true)}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <option value={NEW_OPTION}>+ Add new {config.spotNoun}…</option>
         </select>
       )}
 
@@ -220,9 +264,10 @@ export default function ActivitySpotPicker({
   );
 }
 
-function labelFor(spot: ActivitySpotBasic): string {
-  if (spot.region) return `${spot.name} · ${spot.region}`;
-  return spot.name;
+function labelFor(spot: SpotPickerItem, includeOriginTag: boolean): string {
+  const region = spot.region ? ` · ${spot.region}` : "";
+  const origin = includeOriginTag ? ` · from ${spot.originLabel}` : "";
+  return `${spot.name}${region}${origin}`;
 }
 
 function exampleNameFor(noun: string): string {

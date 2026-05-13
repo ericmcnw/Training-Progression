@@ -1725,6 +1725,10 @@ export async function logCardio(params: {
   metrics?: MetricInput[];
   activitySlug?: string;
   activitySpotId?: string;
+  /** Cross-activity link: cardio log can reference an existing climbing
+   *  crag's location (e.g. trail run at a crag the user has saved
+   *  through the climbing flow) without duplicating the spot. */
+  climbLocationId?: string;
   newActivitySpotName?: string;
   newActivitySpotType?: string | null;
   newActivitySpotRegion?: string | null;
@@ -1761,6 +1765,7 @@ export async function logCardio(params: {
       notes: params.notes?.trim() || null,
       location: params.location?.trim() || null,
       activitySpotId,
+      climbLocationId: params.climbLocationId?.trim() || null,
     },
     select: { id: true },
   });
@@ -1788,6 +1793,7 @@ export async function logRun(params: {
   performedAtLocal?: string;
   activitySlug?: string;
   activitySpotId?: string;
+  climbLocationId?: string;
   newActivitySpotName?: string;
   newActivitySpotType?: string | null;
   newActivitySpotRegion?: string | null;

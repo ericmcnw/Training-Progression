@@ -10,7 +10,12 @@ import {
 } from "@/lib/exercise-library";
 import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
 import { getRoutinePainCheckZones } from "@/lib/injury-warnings";
-import { getActivitySpotConfig, resolveRoutineActivitySlug } from "@/lib/activity-spots";
+import {
+  buildSpotPickerItems,
+  compatibleActivitySlugs,
+  getActivitySpotConfig,
+  resolveRoutineActivitySlug,
+} from "@/lib/activity-spots";
 import type { Prisma } from "@/generated/prisma";
 
 // TODO: accept userId from session when auth is added — add `where: { id: routineId, userId }` to each query
@@ -152,16 +157,19 @@ export async function GET(
       routine.sessionDetails?.templateConfig
     );
 
-    // Climbing keeps its bespoke ClimbLocation library. For non-climbing
-    // sport sessions, resolve the activity slug from metadataGroups +
-    // subtype so the form can surface the matching ActivitySpot library.
+    // Climbing keeps its bespoke ClimbLocation library + picker. For
+    // non-climbing sport sessions, resolve the activity slug and fetch
+    // saved spots from compatible activities (cross-sport sharing — e.g.
+    // climbing crags appear in trail-running pickers).
     const isClimbing = isClimbingTemplateKey(templateKey);
     const activitySlug = isClimbing
       ? null
       : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
     const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+    const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
+    const includeClimbingSpots = compatibleSlugs.includes("climbing");
 
-    const [activePainZones, savedClimbLocations, savedActivitySpots] = await Promise.all([
+    const [activePainZones, savedClimbLocations, activitySpotRows, climbingCrossRows] = await Promise.all([
       getRoutinePainCheckZones(routineId),
       isClimbing
         ? prisma.climbLocation.findMany({
@@ -169,14 +177,28 @@ export async function GET(
             orderBy: [{ type: "asc" }, { name: "asc" }],
           })
         : Promise.resolve([]),
-      activitySlug && activitySpotConfig?.supportsMap
+      activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
-            where: { activitySlug },
+            where: { activitySlug: { in: compatibleSlugs } },
+            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            orderBy: [{ name: "asc" }],
+          })
+        : Promise.resolve([]),
+      activitySlug && includeClimbingSpots && !isClimbing
+        ? prisma.climbLocation.findMany({
             select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
     ]);
+
+    const savedSpots = activitySlug
+      ? buildSpotPickerItems({
+          ownActivitySlug: activitySlug,
+          activitySpots: activitySpotRows,
+          climbLocations: climbingCrossRows,
+        })
+      : [];
 
     return NextResponse.json({
       kind: "SESSION",
@@ -189,24 +211,40 @@ export async function GET(
       activePainZones,
       savedClimbLocations,
       activitySlug,
-      savedActivitySpots,
+      savedSpots,
     });
   }
 
   if (isCardioKind(kind)) {
     const activitySlug = resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
     const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+    const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
+    const includeClimbingSpots = compatibleSlugs.includes("climbing");
 
-    const [activePainZones, savedActivitySpots] = await Promise.all([
+    const [activePainZones, activitySpotRows, climbingCrossRows] = await Promise.all([
       getRoutinePainCheckZones(routineId),
-      activitySlug && activitySpotConfig?.supportsMap
+      activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
-            where: { activitySlug },
+            where: { activitySlug: { in: compatibleSlugs } },
+            select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+            orderBy: [{ name: "asc" }],
+          })
+        : Promise.resolve([]),
+      activitySlug && includeClimbingSpots
+        ? prisma.climbLocation.findMany({
             select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
     ]);
+
+    const savedSpots = activitySlug
+      ? buildSpotPickerItems({
+          ownActivitySlug: activitySlug,
+          activitySpots: activitySpotRows,
+          climbLocations: climbingCrossRows,
+        })
+      : [];
 
     return NextResponse.json({
       kind: "CARDIO",
@@ -214,7 +252,7 @@ export async function GET(
       routineName: routine.name,
       activePainZones,
       activitySlug,
-      savedActivitySpots,
+      savedSpots,
     });
   }
 

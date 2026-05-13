@@ -22,7 +22,12 @@ import {
   normalizeRoutineKind,
 } from "@/lib/routines";
 import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
-import { getActivitySpotConfig, resolveRoutineActivitySlug } from "@/lib/activity-spots";
+import {
+  buildSpotPickerItems,
+  compatibleActivitySlugs,
+  getActivitySpotConfig,
+  resolveRoutineActivitySlug,
+} from "@/lib/activity-spots";
 import LogRunForm from "../log-cardio/ui";
 import CompletionLogForm from "../log-completion/CompletionLogForm";
 import GuidedLogForm from "../log-guided/GuidedLogForm";
@@ -377,8 +382,10 @@ export default async function LogRoutinePage(props: {
     ? null
     : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
   const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+  const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
+  const includeClimbingSpots = compatibleSlugs.includes("climbing") && !isClimbing;
 
-  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings, savedClimbLocations, savedActivitySpots] = await Promise.all([
+  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings, savedClimbLocations, activitySpotRows, climbingCrossRows] = await Promise.all([
     getRoutinePainCheckZones(routineId),
     getRoutineInjuryLoadWarning(routineId),
     isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((e) => e.id)) : Promise.resolve(new Map<string, string>()),
@@ -388,14 +395,27 @@ export default async function LogRoutinePage(props: {
           orderBy: [{ type: "asc" }, { name: "asc" }],
         })
       : Promise.resolve([]),
-    activitySlug && activitySpotConfig?.supportsMap
+    activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
       ? prisma.activitySpot.findMany({
-          where: { activitySlug },
+          where: { activitySlug: { in: compatibleSlugs } },
+          select: { id: true, activitySlug: true, name: true, type: true, region: true, latitude: true, longitude: true },
+          orderBy: [{ name: "asc" }],
+        })
+      : Promise.resolve([]),
+    includeClimbingSpots
+      ? prisma.climbLocation.findMany({
           select: { id: true, name: true, type: true, region: true, latitude: true, longitude: true },
           orderBy: [{ name: "asc" }],
         })
       : Promise.resolve([]),
   ]);
+  const savedSpots = activitySlug
+    ? buildSpotPickerItems({
+        ownActivitySlug: activitySlug,
+        activitySpots: activitySpotRows,
+        climbLocations: climbingCrossRows,
+      })
+    : [];
   const availableExercisesForLog = availableExercises.map((exercise) => ({
     ...exercise,
     injuryWarning: exerciseInjuryWarnings.get(exercise.id),
@@ -435,7 +455,7 @@ export default async function LogRoutinePage(props: {
               routineName={routine.name}
               activePainZones={activePainZones}
               activitySlug={activitySlug}
-              savedActivitySpots={savedActivitySpots}
+              savedSpots={savedSpots}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : isGuidedKind(kind) ? (
@@ -470,7 +490,7 @@ export default async function LogRoutinePage(props: {
               activePainZones={activePainZones}
               savedClimbLocations={savedClimbLocations}
               activitySlug={activitySlug}
-              savedActivitySpots={savedActivitySpots}
+              savedSpots={savedSpots}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (

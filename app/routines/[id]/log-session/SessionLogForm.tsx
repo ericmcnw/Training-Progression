@@ -9,8 +9,9 @@ import ClimbSessionLogger from "./ClimbSessionLogger";
 import ClimbLocationPicker, { type NewClimbLocationDraft } from "./ClimbLocationPicker";
 import ActivitySpotPicker from "@/app/components/log/ActivitySpotPicker";
 import {
-  type ActivitySpotBasic,
   type NewActivitySpotDraft,
+  type SpotPickerItem,
+  type SpotSelection,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
 import {
@@ -131,7 +132,7 @@ export default function SessionLogForm({
   activePainZones = [],
   savedClimbLocations = [],
   activitySlug = null,
-  savedActivitySpots = [],
+  savedSpots = [],
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -145,7 +146,7 @@ export default function SessionLogForm({
   activePainZones?: PainCheckZone[];
   savedClimbLocations?: ClimbLocationBasic[];
   activitySlug?: string | null;
-  savedActivitySpots?: ActivitySpotBasic[];
+  savedSpots?: SpotPickerItem[];
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -190,7 +191,7 @@ export default function SessionLogForm({
   const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
   const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
   const [newClimbLocation, setNewClimbLocation] = useState<NewClimbLocationDraft | null>(null);
-  const [activitySpotId, setActivitySpotId] = useState<string | null>(null);
+  const [spotSelection, setSpotSelection] = useState<SpotSelection | null>(null);
   const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
 
   const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
@@ -394,9 +395,16 @@ export default function SessionLogForm({
         newClimbLocationRegion: newClimbLocation?.region?.trim() || undefined,
         newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
         newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
-        // Generic activity-spot wiring (non-climbing sport sessions)
+        // Spot wiring — picker selection routes to whichever FK matches
+        // its origin (ActivitySpot or cross-activity ClimbLocation). The
+        // existing climbLocationId param above only fires for climbing
+        // sessions via the ClimbLocationPicker; non-climbing sessions
+        // populate it here when the user picks a climbing crag.
         activitySlug: activitySlug ?? undefined,
-        activitySpotId: activitySpotId ?? undefined,
+        activitySpotId: spotSelection?.kind === "activitySpot" ? spotSelection.id : undefined,
+        ...(spotSelection?.kind === "climbLocation" && !isClimbing
+          ? { climbLocationId: spotSelection.id }
+          : {}),
         newActivitySpotName: newActivitySpot?.name?.trim() || undefined,
         newActivitySpotType: newActivitySpot?.type ?? null,
         newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
@@ -472,16 +480,16 @@ export default function SessionLogForm({
           <Field
             label={`${capitalizeFirst(spotConfig.spotNoun)} (optional)`}
             hint={
-              savedActivitySpots.length > 0
-                ? "Pick a saved spot or add a new one. Region + GPS save with the spot for future sessions."
+              savedSpots.length > 0
+                ? "Pick a saved spot — including from related activities — or add a new one."
                 : "Add a name, optional region, and tap '📍 Use my location' to drop it on your activity map."
             }
           >
             <ActivitySpotPicker
               config={spotConfig}
-              savedSpots={savedActivitySpots}
-              selectedId={activitySpotId}
-              onSelectId={(id) => { markDirty(); setActivitySpotId(id); }}
+              savedSpots={savedSpots}
+              selected={spotSelection}
+              onSelect={(sel) => { markDirty(); setSpotSelection(sel); }}
               newSpot={newActivitySpot}
               onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
             />
