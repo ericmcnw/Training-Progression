@@ -10,6 +10,8 @@ import DeleteGoalButton from "../DeleteGoalButton";
 import { GoalMetaLine, GoalProgressRing, GoalStatusBadge, cardStyle, chipStyle, subtleTextStyle } from "../ui";
 import { getFrequencyConsistency } from "@/lib/frequency-consistency";
 import FrequencyHeatmap from "@/app/components/dashboard/FrequencyHeatmap";
+import WeeklyFrequencyBars from "@/app/components/dashboard/WeeklyFrequencyBars";
+import { getFrequencyRenderMode } from "@/lib/frequency-state";
 
 export const dynamic = "force-dynamic";
 
@@ -194,18 +196,26 @@ export default async function GoalDetailPage(props: {
 
       {consistency ? (
         <SectionCard title="Consistency">
-          <FrequencyHeatmap
-            target={consistency.target}
-            state={consistency.state}
-            today={todayAppYmd()}
-            weekdayMask={consistency.weekdayMask}
-            // Single-routine goals enable click-to-back-date on missed cells.
-            // Group goals span multiple routines so we can't pick which one
-            // to back-date for — they get a passive heatmap instead.
-            retroactiveLogRoutineId={
-              consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
-            }
-          />
+          {getFrequencyRenderMode(consistency.target) === "daily-grid" ? (
+            <FrequencyHeatmap
+              target={consistency.target}
+              state={consistency.state}
+              today={todayAppYmd()}
+              weekdayMask={consistency.weekdayMask}
+              // Single-routine goals enable click-to-back-date on missed cells.
+              // Group goals span multiple routines so we can't pick which one
+              // to back-date for — they get a passive heatmap instead.
+              retroactiveLogRoutineId={
+                consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
+              }
+            />
+          ) : (
+            <WeeklyFrequencyBars
+              target={consistency.target}
+              state={consistency.state}
+              today={todayAppYmd()}
+            />
+          )}
         </SectionCard>
       ) : null}
 

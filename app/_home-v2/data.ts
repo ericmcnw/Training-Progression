@@ -386,6 +386,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
       routineName: routine.name,
       domain: "lifestyle",
       state,
+      target,
       trailing30,
       currentStreak: state.currentDayStreak || state.windowStreak,
       longestStreak: Math.max(state.longestDayStreak, state.longestWindowStreak),

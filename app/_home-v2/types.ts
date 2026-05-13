@@ -70,6 +70,10 @@ export type HabitRow = {
   routineName: string;
   domain: DomainTone;
   state: FrequencyState;
+  // The frequency goal's target. Drives the expansion's render mode pick
+  // (daily grid vs weekly bars). Null means "no explicit target" → daily
+  // streak fallback, daily-grid render.
+  target: import("@/lib/frequency-state").FrequencyTarget | null;
   // 30-day per-day state strip, oldest → newest.
   trailing30: Array<{ ymd: string; state: "done" | "covered" | "missed" | "rest" | "future" }>;
   currentStreak: number;

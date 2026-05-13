@@ -363,6 +363,25 @@ export function computeFrequencyState(params: {
   };
 }
 
+// Render-mode picker. Frequency goals visually fall into two camps:
+//   • daily-grid — every day is an "expected" day, so a calendar grid reads
+//     well. Streak math is meaningful per-day. Daily habits like supplements
+//     or hangboarding fall here, as do mask-based goals (Mon/Wed/Fri).
+//   • weekly-bars — flexible windows where most days are unscheduled. A
+//     calendar grid for "3× per week" is mostly empty cells; a row of weekly
+//     bars showing "did I hit 3 this week?" reads much better.
+//
+// Callers (heatmap, dashboard cards) pick which component to render based
+// on this. The math layer (computeFrequencyState) is shared either way.
+export type FrequencyRenderMode = "daily-grid" | "weekly-bars";
+
+export function getFrequencyRenderMode(target: FrequencyTarget | null): FrequencyRenderMode {
+  if (!target) return "daily-grid"; // null target = daily streak fallback
+  if (isDailyEveryDay(target)) return "daily-grid";
+  if (hasMask(target)) return "daily-grid";
+  return "weekly-bars";
+}
+
 // Bitmask helpers for goal-form weekday pickers.
 export const WEEKDAY_BITS: Array<{ bit: number; short: string; full: string }> = [
   { bit: 1 << 0, short: "S", full: "Sun" },

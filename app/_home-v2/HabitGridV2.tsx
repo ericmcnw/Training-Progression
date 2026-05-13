@@ -11,8 +11,9 @@ import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { HabitRow } from "./types";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
+import WeeklyFrequencyBars from "@/app/components/dashboard/WeeklyFrequencyBars";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
-import { frequencyStatusColor } from "@/lib/frequency-state";
+import { frequencyStatusColor, getFrequencyRenderMode } from "@/lib/frequency-state";
 
 type Props = {
   rows: HabitRow[];
@@ -169,10 +170,35 @@ export default function HabitGridV2({ rows, today }: Props) {
 // ───────────────────────────── inline expansion panel
 
 function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
-  // Calendar-aligned grid: every column is a fixed weekday (Sun → Sat) so
-  // the user can scan a column to see "how often do I hit this on Mondays."
-  // We pad the start with empty cells until the first real cell lands in
-  // its correct DOW column, and pad the end so the row fills out cleanly.
+  // Render mode is picked from the goal's target shape — daily-style targets
+  // get the calendar grid, flexible weekly/monthly targets get the bars view
+  // (which is more meaningful for "3× per week" since a 30-day grid would be
+  // mostly empty cells).
+  const renderMode = getFrequencyRenderMode(row.target);
+
+  if (renderMode === "weekly-bars") {
+    return (
+      <div style={expansionShell}>
+        <WeeklyFrequencyBars target={row.target!} state={row.state} today={today} />
+        <div style={actionRow}>
+          <DrawerLogButton
+            routineId={row.routineId}
+            defaultDate={today}
+            label="Log today"
+            className=""
+            style={primaryAction}
+          />
+          <Link href={`/routines/${row.routineId}`} style={secondaryAction}>
+            Edit habit
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Daily-grid path — calendar-aligned 30-day view + stat tiles.
+  // Padding logic: first real cell lands in its correct DOW column, end is
+  // padded so the row fills cleanly.
   const cells: Array<HabitRow["trailing30"][number] | null> = [];
   if (row.trailing30.length > 0) {
     const firstDow = new Date(`${row.trailing30[0].ymd}T00:00:00.000Z`).getUTCDay();
