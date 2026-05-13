@@ -4,10 +4,11 @@ import { notFound } from "next/navigation";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
 import QuickInjuryPainLog from "@/app/components/injuries/QuickInjuryPainLog";
+import PainHistoryChart, { type PainHistoryDay } from "@/app/components/injuries/PainHistoryChart";
 import { getInjury, updateInjury } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
+import { formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, addDaysYmd, diffYmdDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ const activitySourceLabels: Record<string, string> = {
   MANUAL: "Manual",
 };
 
+const RECENT_LOG_LIMIT = 8;
+
 type ZoneActivityRow = {
   id: string;
   source: string;
@@ -45,6 +48,13 @@ type ActivityGroup = {
   sessionLabel: string;
   performedAt: Date;
   entries: Array<{ label: string; zones: string[] }>;
+};
+
+type AggravatorRow = {
+  routineName: string;
+  avgLevel: number;
+  peakLevel: number;
+  logCount: number;
 };
 
 function groupZoneActivities(activities: ZoneActivityRow[]): ActivityGroup[] {
@@ -79,6 +89,53 @@ function painColor(level: number): string {
   if (level >= 5) return "#FBBF24";
   if (level >= 3) return "#A3E635";
   return "rgba(255,255,255,0.55)";
+}
+
+function buildPainHistory(
+  startedAtYmd: string,
+  todayYmd: string,
+  rows: Array<{ level: number; loggedAt: Date; context: string }>,
+): PainHistoryDay[] {
+  const peaks = new Map<string, { peak: number; context: PainHistoryDay["context"] }>();
+  for (const row of rows) {
+    const ymd = toAppYmd(row.loggedAt);
+    const existing = peaks.get(ymd);
+    if (!existing || row.level > existing.peak) {
+      peaks.set(ymd, { peak: row.level, context: row.context as PainHistoryDay["context"] });
+    }
+  }
+  const totalDays = Math.max(1, diffYmdDays(startedAtYmd, todayYmd) + 1);
+  const days: PainHistoryDay[] = [];
+  for (let i = 0; i < totalDays; i++) {
+    const ymd = addDaysYmd(startedAtYmd, i);
+    const entry = peaks.get(ymd);
+    days.push({ ymd, peak: entry?.peak ?? null, context: entry?.context ?? null });
+  }
+  return days;
+}
+
+function buildAggravators(
+  rows: Array<{ level: number; routineLog: { routine: { name: string } } | null }>,
+): AggravatorRow[] {
+  const byRoutine = new Map<string, { sum: number; peak: number; count: number }>();
+  for (const row of rows) {
+    const routineName = row.routineLog?.routine?.name;
+    if (!routineName) continue;
+    const current = byRoutine.get(routineName) ?? { sum: 0, peak: 0, count: 0 };
+    current.sum += row.level;
+    if (row.level > current.peak) current.peak = row.level;
+    current.count += 1;
+    byRoutine.set(routineName, current);
+  }
+  return Array.from(byRoutine.entries())
+    .map(([routineName, stats]) => ({
+      routineName,
+      avgLevel: Math.round((stats.sum / stats.count) * 10) / 10,
+      peakLevel: stats.peak,
+      logCount: stats.count,
+    }))
+    .sort((a, b) => b.avgLevel - a.avgLevel)
+    .slice(0, 5);
 }
 
 function PainBar({ level }: { level: number }) {
@@ -133,6 +190,15 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
     painLogs.length > 0
       ? Math.round((painLogs.reduce((sum, l) => sum + l.level, 0) / painLogs.length) * 10) / 10
       : null;
+  const peakPainLevel =
+    painLogs.length > 0 ? painLogs.reduce((max, l) => (l.level > max ? l.level : max), 0) : null;
+
+  const startedYmd = toAppYmd(injury.startedAt);
+  const today = todayAppYmd();
+  const painHistoryDays = buildPainHistory(startedYmd, today, painLogs);
+  const aggravators = buildAggravators(painLogs);
+  const recentLogs = painLogs.slice(0, RECENT_LOG_LIMIT);
+  const olderLogCount = Math.max(0, painLogs.length - recentLogs.length);
 
   return (
     <main style={{ maxWidth: 780, margin: "0 auto", display: "grid", gap: 16 }}>
@@ -151,12 +217,12 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         </Link>
       </div>
 
-      {/* Pain stats + quick log — first action above the fold */}
+      {/* Quick log + summary stats */}
       {injury.status !== "RESOLVED" && (
         <section style={panel}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
             <div style={sectionTitle}>Log pain</div>
-            {(recentPainLevel !== null || avgPainLevel !== null) && (
+            {painLogs.length > 0 && (
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                 {recentPainLevel !== null && (
                   <div style={{ textAlign: "right" }}>
@@ -166,8 +232,14 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
                 )}
                 {avgPainLevel !== null && (
                   <div style={{ textAlign: "right" }}>
-                    <div style={statLabel}>Avg ({painLogs.length} logs)</div>
+                    <div style={statLabel}>Avg ({painLogs.length})</div>
                     <div style={{ ...statValue, color: painColor(avgPainLevel) }}>{avgPainLevel}/10</div>
+                  </div>
+                )}
+                {peakPainLevel !== null && (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={statLabel}>Peak</div>
+                    <div style={{ ...statValue, color: painColor(peakPainLevel) }}>{peakPainLevel}/10</div>
                   </div>
                 )}
               </div>
@@ -188,14 +260,48 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         <InjuryStatusButtons id={injury.id} />
       </section>
 
-      {/* Pain history */}
+      {/* Pain history chart */}
       <section style={panel}>
         <div style={sectionTitle}>Pain history</div>
-        {painLogs.length === 0 ? (
+        <PainHistoryChart days={painHistoryDays} />
+      </section>
+
+      {/* Aggravators rollup */}
+      {aggravators.length > 0 && (
+        <section style={panel}>
+          <div style={sectionTitle}>Aggravators</div>
+          <div style={muted}>Routines where this injury flared the most, ranked by average level logged on the same session.</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {aggravators.map((row) => (
+              <div key={row.routineName} style={aggravatorRow}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 900, fontSize: 14 }}>{row.routineName}</div>
+                  <div style={{ fontSize: 11, opacity: 0.55, fontWeight: 700, marginTop: 2 }}>
+                    {row.logCount} log{row.logCount === 1 ? "" : "s"} · peak {row.peakLevel}/10
+                  </div>
+                </div>
+                <div style={{ minWidth: 110 }}>
+                  <PainBar level={Math.round(row.avgLevel)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recent logs (notes + context) */}
+      <section style={panel}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <div style={sectionTitle}>Recent logs</div>
+          {olderLogCount > 0 && (
+            <div style={{ fontSize: 11, opacity: 0.5, fontWeight: 700 }}>{olderLogCount} earlier log{olderLogCount === 1 ? "" : "s"} in the chart above</div>
+          )}
+        </div>
+        {recentLogs.length === 0 ? (
           <div style={muted}>No pain logs since this injury started.</div>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
-            {painLogs.map((log) => (
+            {recentLogs.map((log) => (
               <div key={log.id} style={row}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
@@ -258,25 +364,27 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         )}
       </section>
 
-      {/* Edit form */}
-      <section style={panel}>
-        <div style={sectionTitle}>Edit</div>
-        <InjuryForm
-          zones={zones}
-          submitLabel="Save injury"
-          action={updateInjury.bind(null, injury.id)}
-          initial={{
-            id: injury.id,
-            name: injury.name,
-            severity: injury.severity,
-            status: injury.status,
-            startedAt: toAppYmd(injury.startedAt),
-            resolvedAt: injury.resolvedAt ? toAppYmd(injury.resolvedAt) : "",
-            notes: injury.notes ?? "",
-            zoneSlugs,
-          }}
-        />
-      </section>
+      {/* Edit — tucked into details since most page visits don't need it */}
+      <details style={panel}>
+        <summary style={editSummary}>Edit details</summary>
+        <div style={{ marginTop: 12 }}>
+          <InjuryForm
+            zones={zones}
+            submitLabel="Save injury"
+            action={updateInjury.bind(null, injury.id)}
+            initial={{
+              id: injury.id,
+              name: injury.name,
+              severity: injury.severity,
+              status: injury.status,
+              startedAt: toAppYmd(injury.startedAt),
+              resolvedAt: injury.resolvedAt ? toAppYmd(injury.resolvedAt) : "",
+              notes: injury.notes ?? "",
+              zoneSlugs,
+            }}
+          />
+        </div>
+      </details>
     </main>
   );
 }
@@ -292,6 +400,24 @@ const statValue: React.CSSProperties = { fontSize: 26, fontWeight: 900, lineHeig
 const sourcePill: React.CSSProperties = { fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 6, flexShrink: 0 };
 const sessionCard: React.CSSProperties = { borderLeft: "2px solid rgba(255,255,255,0.1)", paddingLeft: 12, display: "grid", gap: 7 };
 const exerciseChip: React.CSSProperties = { fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 7, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", lineHeight: 1.4, cursor: "default" };
+const aggravatorRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(248,113,113,0.18)",
+  background: "rgba(248,113,113,0.04)",
+};
+const editSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.8,
+  textTransform: "uppercase",
+  opacity: 0.7,
+};
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
   minHeight: 38,
