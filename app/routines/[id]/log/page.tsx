@@ -38,6 +38,8 @@ import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryW
 import { getExerciseInjuryWarnings, getRoutineInjuryLoadWarning, getRoutinePainCheckZones } from "@/lib/injury-warnings";
 import { getTemplateDefaultZones } from "@/lib/template-zone-defaults";
 import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
+import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
+import ContributesToStrip from "./ContributesToStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -386,7 +388,7 @@ export default async function LogRoutinePage(props: {
   const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
   const includeClimbingSpots = compatibleSlugs.includes("climbing") && !isClimbing;
 
-  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings, savedClimbLocations, activitySpotRows, climbingCrossRows] = await Promise.all([
+  const [activePainZones, routineInjuryWarning, exerciseInjuryWarnings, savedClimbLocations, activitySpotRows, climbingCrossRows, goalContributions] = await Promise.all([
     getRoutinePainCheckZones(routineId),
     getRoutineInjuryLoadWarning(routineId),
     isWorkoutKind(kind) ? getExerciseInjuryWarnings(availableExercises.map((e) => e.id)) : Promise.resolve(new Map<string, string>()),
@@ -409,6 +411,7 @@ export default async function LogRoutinePage(props: {
           orderBy: [{ name: "asc" }],
         })
       : Promise.resolve([]),
+    getRoutineGoalContributions(routineId, todayAppYmd()),
   ]);
   const savedSpots = activitySlug
     ? buildSpotPickerItems({
@@ -456,6 +459,7 @@ export default async function LogRoutinePage(props: {
         <div className="mobileSectionHeader" style={styles.panelHeader}>{getDetailHeading(kind)}</div>
         <div className="mobileSectionBody" style={{ padding: 14 }}>
           {backDateYmd ? <BackDateBanner ymd={backDateYmd} /> : null}
+          <ContributesToStrip contributions={goalContributions} />
           <RoutineInjuryWarningBanner warning={routineInjuryWarning} />
           {isWorkoutKind(kind) ? (
             <LogWorkoutForm
