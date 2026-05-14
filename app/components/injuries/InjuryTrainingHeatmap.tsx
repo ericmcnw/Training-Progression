@@ -1,14 +1,17 @@
 "use client";
 
 // Heatmap of training load on the muscle groups affected by this injury,
-// split by routine domain (cardio / sport / strength / mobility / habit).
-// Click a domain row to see the routines that contributed in the last 12
-// weeks; each link jumps to its log detail.
+// split by routine domain (cardio / sport / strength / mobility). Click a
+// single cell to see the routines that contributed during that week; each
+// link jumps to its log detail.
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { COLOR, RADIUS } from "@/lib/design-tokens";
 import type { HeatmapDomain, InjuryHeatmapData, InjuryHeatmapDomainRow } from "@/app/injuries/[id]/training-heatmap";
+import type { CoverageDetailLog } from "@/app/progress/coverage";
+
+type ExpandedKey = { category: string; domain: HeatmapDomain; weekIdx: number };
 
 // Match the dashboard domain palette so this card reads in the same
 // visual language as Training Balance + sparkline charts.
@@ -20,7 +23,7 @@ const DOMAIN_ACCENT: Record<HeatmapDomain, string> = {
 };
 
 export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapData }) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<ExpandedKey | null>(null);
 
   if (data.categories.length === 0) {
     return (
@@ -70,39 +73,60 @@ export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapDat
             </div>
           ) : (
             category.domains.map((domainRow) => {
-              const key = `${category.slug}::${domainRow.domain}`;
-              const isExpanded = expandedKey === key;
               const accent = DOMAIN_ACCENT[domainRow.domain];
+              const isRowExpanded =
+                expanded?.category === category.slug && expanded.domain === domainRow.domain;
               return (
-                <div key={key} style={{ display: "grid", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedKey(isExpanded ? null : key)}
-                    style={{ ...rowButton, ...(isExpanded ? rowButtonExpanded : null) }}
-                    aria-expanded={isExpanded}
-                  >
+                <div key={`${category.slug}::${domainRow.domain}`} style={{ display: "grid", gap: 6 }}>
+                  <div style={rowContent}>
                     <div style={labelCol}>
                       <span style={{ ...domainDot, background: accent }} />
                       <span style={domainName}>{domainRow.domainLabel}</span>
                     </div>
                     <div style={weeksCol}>
-                      {domainRow.weeks.map((count, i) => (
-                        <span
-                          key={i}
-                          style={heatmapCell(count, globalPeak, accent)}
-                          title={`${category.label} · ${domainRow.domainLabel}: ${count} session${count === 1 ? "" : "s"} · week of ${data.weekStarts[i]}`}
-                        >
-                          {count > 0 ? count : ""}
-                        </span>
-                      ))}
+                      {domainRow.weeks.map((count, i) => {
+                        const isCellExpanded = isRowExpanded && expanded.weekIdx === i;
+                        const isClickable = count > 0;
+                        const cellStyle: CSSProperties = {
+                          ...heatmapCell(count, globalPeak, accent),
+                          ...heatmapCellButton,
+                          cursor: isClickable ? "pointer" : "default",
+                          ...(isCellExpanded ? heatmapCellSelected(accent) : null),
+                        };
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={!isClickable}
+                            onClick={() =>
+                              setExpanded(
+                                isCellExpanded
+                                  ? null
+                                  : { category: category.slug, domain: domainRow.domain, weekIdx: i }
+                              )
+                            }
+                            style={cellStyle}
+                            aria-pressed={isCellExpanded}
+                            title={`${category.label} · ${domainRow.domainLabel}: ${count} session${count === 1 ? "" : "s"} · week of ${data.weekStarts[i]}`}
+                          >
+                            {count > 0 ? count : ""}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div style={totalCol}>
                       <span style={totalValue}>{domainRow.recentCount}</span>
                       <span style={totalSub}>/4w</span>
                     </div>
-                  </button>
+                  </div>
 
-                  {isExpanded && <ExpandedRoutineList row={domainRow} />}
+                  {isRowExpanded && (
+                    <ExpandedRoutineList
+                      row={domainRow}
+                      weekIdx={expanded.weekIdx}
+                      weekStarts={data.weekStarts}
+                    />
+                  )}
                 </div>
               );
             })
@@ -113,18 +137,40 @@ export default function InjuryTrainingHeatmap({ data }: { data: InjuryHeatmapDat
   );
 }
 
-function ExpandedRoutineList({ row }: { row: InjuryHeatmapDomainRow }) {
-  if (row.contributingLogs.length === 0) {
+function ExpandedRoutineList({
+  row,
+  weekIdx,
+  weekStarts,
+}: {
+  row: InjuryHeatmapDomainRow;
+  weekIdx: number;
+  weekStarts: string[];
+}) {
+  const weekStart = weekStarts[weekIdx];
+  // Week-end is exclusive — the day after the last day of the bucket. For the
+  // final week we add 7 days; otherwise we use the next week's start.
+  const weekEndExclusive =
+    weekIdx < weekStarts.length - 1
+      ? weekStarts[weekIdx + 1]
+      : addDaysYmd(weekStarts[weekIdx], 7);
+
+  const logs = filterLogsToWeek(row.contributingLogs, weekStart, weekEndExclusive);
+  const rangeLabel = formatWeekRange(weekStart, weekEndExclusive);
+
+  if (logs.length === 0) {
     return (
       <div style={expandedPanel}>
-        <div style={emptyLogs}>No sessions on this muscle group in the last 12 weeks.</div>
+        <div style={weekRangeLabel}>{rangeLabel}</div>
+        <div style={emptyLogs}>No sessions during this week.</div>
       </div>
     );
   }
+
   return (
     <div style={expandedPanel}>
+      <div style={weekRangeLabel}>{rangeLabel}</div>
       <div style={{ display: "grid", gap: 6 }}>
-        {row.contributingLogs.slice(0, 20).map((log) => (
+        {logs.slice(0, 20).map((log) => (
           <Link
             key={log.logId}
             href={`/routines/${log.routineId}/logs/${log.logId}`}
@@ -137,14 +183,43 @@ function ExpandedRoutineList({ row }: { row: InjuryHeatmapDomainRow }) {
             <span style={logDate}>{log.performedAtLabel}</span>
           </Link>
         ))}
-        {row.contributingLogs.length > 20 && (
+        {logs.length > 20 && (
           <div style={moreNote}>
-            + {row.contributingLogs.length - 20} more session{row.contributingLogs.length - 20 === 1 ? "" : "s"}
+            + {logs.length - 20} more session{logs.length - 20 === 1 ? "" : "s"}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function filterLogsToWeek(
+  logs: CoverageDetailLog[],
+  startYmd: string,
+  endYmdExclusive: string,
+): CoverageDetailLog[] {
+  return logs.filter((log) => {
+    const ymd = ymdFromIso(log.performedAt);
+    return ymd >= startYmd && ymd < endYmdExclusive;
+  });
+}
+
+function ymdFromIso(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatWeekRange(startYmd: string, endYmdExclusive: string): string {
+  const endYmd = addDaysYmd(endYmdExclusive, -1);
+  const start = new Date(`${startYmd}T00:00:00.000Z`);
+  const end = new Date(`${endYmd}T00:00:00.000Z`);
+  const fmt = (d: Date) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  return `Week of ${fmt(start)} – ${fmt(end)}`;
 }
 
 function weekShort(ymd: string): string {
@@ -247,32 +322,28 @@ const emptyDomainNote: CSSProperties = {
   padding: "4px 0",
 };
 
-const rowButton: CSSProperties = {
-  appearance: "none",
-  margin: 0,
-  font: "inherit",
-  color: "inherit",
-  textAlign: "left",
-  cursor: "pointer",
-  width: "100%",
+const rowContent: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(110px, 150px) 1fr 56px",
   gap: 10,
   alignItems: "center",
   padding: "6px 8px",
-  borderRadius: RADIUS.inner,
-  border: `1px solid transparent`,
-  background: "transparent",
-  transition: "background 120ms, border-color 120ms",
 };
 
-const rowButtonExpanded: CSSProperties = {
-  background: "rgba(255,255,255,0.04)",
-  // Match the rowButton `border` shorthand instead of swapping in a
-  // borderColor longhand — React 19 warns when you mix the two between
-  // renders because removing one can't undo the other.
-  border: `1px solid ${COLOR.border}`,
+const heatmapCellButton: CSSProperties = {
+  appearance: "none",
+  margin: 0,
+  font: "inherit",
+  color: "inherit",
+  padding: 0,
 };
+
+function heatmapCellSelected(accent: string): CSSProperties {
+  return {
+    outline: `2px solid ${tintAccent(accent, 0.95)}`,
+    outlineOffset: 1,
+  };
+}
 
 const domainDot: CSSProperties = {
   width: 8,
@@ -315,6 +386,16 @@ const expandedPanel: CSSProperties = {
   borderRadius: RADIUS.inner,
   background: "rgba(255,255,255,0.03)",
   border: `1px solid ${COLOR.border}`,
+  display: "grid",
+  gap: 6,
+};
+
+const weekRangeLabel: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  color: COLOR.textFaint,
+  textTransform: "uppercase",
 };
 
 const emptyLogs: CSSProperties = {

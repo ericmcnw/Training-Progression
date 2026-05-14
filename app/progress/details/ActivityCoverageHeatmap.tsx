@@ -11,7 +11,7 @@ type RowColor = { r: number; g: number; b: number };
 const SESSION_COLOR: RowColor = { r: 78, g: 148, b: 255 };
 const TRAINING_COLOR: RowColor = { r: 168, g: 85, b: 247 };
 
-const CELL_W = 16;
+const CELL_MIN_W = 12;
 const CELL_H = 22;
 const GAP = 3;
 const LABEL_W = 64;
@@ -55,15 +55,27 @@ export default function ActivityCoverageHeatmap({
 
   if (weeks.length === 0) return null;
 
+  const cellsGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: `repeat(${weeks.length}, minmax(${CELL_MIN_W}px, 1fr))`,
+    gap: GAP,
+    flex: 1,
+    minWidth: 0,
+  };
+
   function renderRow(row: RowKind, label: string, color: RowColor, getCount: (w: HeatmapWeek) => number, suffix: string) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={rowLabelStyle}>{label}</span>
-        <div style={{ display: "flex", gap: GAP }}>
+        <div style={cellsGridStyle}>
           {weeks.map((w, i) => {
             const count = getCount(w);
             const isActive = active?.weekIndex === i && active.row === row;
             const interactive = count > 0;
+            // Darken the count text on the heaviest cells so it stays
+            // readable against the bright fill; otherwise keep it light.
+            const intensity = Math.min(0.28 + count * 0.22, 0.95);
+            const textColor = count === 0 ? "transparent" : intensity > 0.65 ? "#0b1220" : "rgba(255,255,255,0.95)";
             return (
               <button
                 type="button"
@@ -82,10 +94,9 @@ export default function ActivityCoverageHeatmap({
                 aria-pressed={isActive}
                 disabled={!interactive}
                 style={{
-                  width: CELL_W,
+                  width: "100%",
                   height: CELL_H,
                   borderRadius: 4,
-                  flexShrink: 0,
                   background: cellBg(color, count),
                   border: isActive
                     ? `1.5px solid rgba(${color.r},${color.g},${color.b},0.95)`
@@ -98,8 +109,18 @@ export default function ActivityCoverageHeatmap({
                     ? `0 0 0 2px rgba(${color.r},${color.g},${color.b},0.22)`
                     : "none",
                   transition: "background 0.1s, border-color 0.1s, box-shadow 0.1s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: textColor,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  fontFamily: "inherit",
+                  lineHeight: 1,
                 }}
-              />
+              >
+                {count > 0 ? count : ""}
+              </button>
             );
           })}
         </div>
@@ -113,26 +134,35 @@ export default function ActivityCoverageHeatmap({
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ overflowX: "auto" }}>
-        <div style={{ display: "inline-flex", flexDirection: "column", gap: 6, paddingBottom: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            paddingBottom: 4,
+            minWidth: LABEL_W + 10 + weeks.length * CELL_MIN_W + (weeks.length - 1) * GAP,
+          }}
+        >
           {/* Month labels row */}
-          <div style={{ display: "flex", gap: GAP, marginLeft: LABEL_W + 10 }}>
-            {weeks.map((w, i) => (
-              <div
-                key={i}
-                style={{
-                  width: CELL_W,
-                  flexShrink: 0,
-                  fontSize: 9,
-                  opacity: 0.55,
-                  fontWeight: 800,
-                  letterSpacing: 0.3,
-                  whiteSpace: "nowrap",
-                  overflow: "visible",
-                }}
-              >
-                {w.monthLabel ?? ""}
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ ...rowLabelStyle, visibility: "hidden" }}>x</span>
+            <div style={cellsGridStyle}>
+              {weeks.map((w, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 9,
+                    opacity: 0.55,
+                    fontWeight: 800,
+                    letterSpacing: 0.3,
+                    whiteSpace: "nowrap",
+                    overflow: "visible",
+                  }}
+                >
+                  {w.monthLabel ?? ""}
+                </div>
+              ))}
+            </div>
           </div>
 
           {renderRow("sessions", sessionRowLabel, SESSION_COLOR, (w) => w.sessions.length, sessionLabel.toLowerCase())}

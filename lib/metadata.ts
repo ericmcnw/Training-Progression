@@ -157,7 +157,7 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
   STRENGTH: ["strength"],
   HYPERTROPHY: ["hypertrophy"],
   // Sessions / sports — sport activities now have first-class CARDIO_ACTIVITY tags
-  CLIMBING: ["climbing", "skill-practice", "strength"],
+  CLIMBING: ["climbing", "skill-practice", "strength", "pull", "back", "shoulders", "biceps", "forearms", "fingers", "core", "abs"],
   SURFING: ["surfing", "board-sports", "cardio", "core", "grip", "outdoor"],
   SNOWBOARDING: ["snowboarding", "board-sports", "cardio", "core", "outdoor"],
   BASKETBALL: ["basketball", "cardio", "core", "skill-practice"],
@@ -178,7 +178,8 @@ const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[
   { pattern: /\b(squat|leg press|wall sit)\b/i, slugs: ["squat", "legs", "lower-body", "quads", "glutes"] },
   { pattern: /\b(deadlift|romanian deadlift|rdl|good morning|hip thrust|bridge|swing|pull-through)\b/i, slugs: ["hinge", "legs", "lower-body", "hamstrings", "glutes"] },
   { pattern: /\b(lunge|split squat|step-up)\b/i, slugs: ["lunge", "legs", "lower-body", "quads", "glutes"] },
-  { pattern: /\b(curl)\b/i, slugs: ["pull", "biceps"] },
+  // Negative lookbehind: don't tag biceps for hamstring/leg/nordic/wrist curls.
+  { pattern: /\b(?<!hamstring |leg |nordic |wrist )curl\b/i, slugs: ["pull", "biceps"] },
   { pattern: /\b(hamstring curl|leg curl|nordic curl)\b/i, slugs: ["hinge", "hamstrings", "legs", "lower-body"] },
   { pattern: /\b(leg extension)\b/i, slugs: ["squat", "quads", "legs", "lower-body"] },
   { pattern: /\b(side[\s-]?lying leg lift|side[\s-]?lying leg raise|side[\s-]?lying hip abduction|hip abduction)\b/i, slugs: ["glutes", "abductors", "legs", "lower-body"] },

@@ -28,7 +28,20 @@ const freshnessBadge: Record<ZoneFreshness, React.CSSProperties> = {
 };
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const when = new Date(iso);
+  const time = when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const day = new Date(when.getFullYear(), when.getMonth(), when.getDate()).getTime();
+  const daysAgo = Math.round((startOfToday - day) / 86_400_000);
+
+  if (daysAgo === 0) return `Today · ${time}`;
+  if (daysAgo === 1) return `Yesterday · ${time}`;
+  if (daysAgo >= 2 && daysAgo <= 6) {
+    return `${when.toLocaleDateString([], { weekday: "short" })} · ${time}`;
+  }
+  return `${when.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
 }
 
 function weekTotal(week: Record<string, number>) {
