@@ -59,8 +59,11 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
         },
       },
     }),
-    prisma.goal.findFirst({
-      where: { goalType: "FREQUENCY", targetType: "ROUTINE", metricType: "SESSIONS", targetId: id },
+    // Per-routine frequency now lives exclusively on FrequencyGoal at id
+    // `fg_<routineId>`. Used to surface a "View frequency goal →" link
+    // below the inline editor.
+    prisma.frequencyGoal.findUnique({
+      where: { id: `fg_${id}` },
       select: { id: true },
     }),
   ]);
@@ -161,16 +164,7 @@ export default async function EditRoutinePage(props: { params: Promise<Params> |
               View frequency goal →
             </Link>
           </div>
-        ) : (
-          <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(128,128,128,0.2)" }}>
-            <Link
-              href={`/goals?mode=new&goalType=FREQUENCY&routineId=${encodeURIComponent(routine.id)}`}
-              style={styles.goalLink}
-            >
-              + Add frequency goal for this routine
-            </Link>
-          </div>
-        )}
+        ) : null}
       </div>
 
       <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>

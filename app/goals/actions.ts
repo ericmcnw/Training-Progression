@@ -249,11 +249,10 @@ export async function deleteGoalEntry(input: { goalId: string }) {
     redirect("/goals");
   }
 
-  if (goalId.startsWith("routine-frequency:")) {
-    // Synthetic id from lib/goals.ts pointing at a routine's "primary" goal.
-    // After Phase 1, that's a real FrequencyGoal row with id `fg_<routineId>`.
-    const routineId = goalId.slice("routine-frequency:".length);
-    await prisma.frequencyGoal.deleteMany({ where: { id: `fg_${routineId}` } });
+  if (goalId.startsWith("fg_")) {
+    // Per-routine FrequencyGoal — delete the goal row directly. Cascade
+    // takes care of the FrequencyGoalRoutine join rows.
+    await prisma.frequencyGoal.deleteMany({ where: { id: goalId } });
     revalidateGoals();
     redirect("/goals");
   }
@@ -293,7 +292,7 @@ export async function toggleRoutineFrequencyGoal(formData: FormData) {
   const returnTo = String(formData.get("returnTo") ?? "").trim() || "/goals";
   const shouldSyncGoalRecord =
     goalId.length > 0 &&
-    !goalId.startsWith("routine-frequency:") &&
+    !goalId.startsWith("fg_") &&
     !goalId.startsWith("group-frequency:");
 
   // Phase 1: routine-mirror columns are gone. The routine's primary FrequencyGoal

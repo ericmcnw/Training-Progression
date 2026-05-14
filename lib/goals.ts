@@ -1053,7 +1053,10 @@ function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, 
 
   return {
     goal: {
-      id: `routine-frequency:${routine.id}`,
+      // Canonical id is the FrequencyGoal row's id (`fg_<routineId>`). Used to
+      // be a synthetic `routine-frequency:` prefix while data was split between
+      // Goal and FrequencyGoal tables; collapsed in Phase 4.
+      id: `fg_${routine.id}`,
       name: routine.name,
       goalType: "FREQUENCY",
       targetType: "ROUTINE",

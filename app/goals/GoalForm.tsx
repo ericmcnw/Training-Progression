@@ -80,9 +80,11 @@ type ScopeOption = { value: string; label: string; hint: string };
 
 const SCOPES: Record<GoalTypeValue, ScopeOption[]> = {
   FREQUENCY: [
-    { value: "routine",     label: "Routine",      hint: "Track one routine — e.g. Push Day, Climbing" },
-    { value: "sessionType", label: "Session type", hint: "Count logs by sport or activity type" },
-    { value: "group",       label: "Group",        hint: "Mix of routines counted together" },
+    // Per-routine frequency is set on the routine itself now (Edit Routine →
+    // Frequency goal block). The /goals form only handles multi-routine
+    // shapes: groups and session-type aggregates.
+    { value: "group",       label: "Group",        hint: "Mix of routines counted together — e.g. \"Strength 3× per week\" across Push/Pull/Legs" },
+    { value: "sessionType", label: "Session type", hint: "Count logs by sport or activity type — e.g. \"Climb 2× per week\" across any climbing session" },
   ],
   VOLUME: [
     { value: "routine",  label: "Routine",  hint: "Total output from a single routine" },
@@ -130,9 +132,11 @@ function deriveInitialScope(initial: GoalFormInitial): string {
   const isGroupFreq = !!initial.groupFrequency || !!initial.groupFrequencyGoalId;
   const { goalType, targetType } = initial;
   if (goalType === "FREQUENCY") {
-    if (isGroupFreq) return "group";
+    // Per-routine FREQUENCY no longer has a scope here — those live on the
+    // routine. Default to group for new goals; existing single-routine
+    // legacy values fall through to group too.
     if (targetType === "SESSION_TEMPLATE") return "sessionType";
-    return "routine";
+    return "group";
   }
   if (goalType === "VOLUME") {
     if (targetType === "EXERCISE") return "exercise";

@@ -41,8 +41,10 @@ export default async function GoalsPage({
   const type = getParam(params, "type") ?? "all";
   const active = getParam(params, "active") ?? "active";
   const mode = getParam(params, "mode") === "new" ? "new" : "list";
-  // Prefill from caller context — e.g., "Add frequency goal" CTA on a
-  // routine page links to /goals?mode=new&routineId=…&goalType=FREQUENCY
+  // Prefill from caller context — used for non-frequency goals (PERFORMANCE,
+  // VOLUME, COMPLETION) targeting a specific routine. Per-routine FREQUENCY
+  // is set on the routine itself now, so a `?goalType=FREQUENCY&routineId=…`
+  // link from anywhere (legacy) just opens the form on its group default.
   const prefillRoutineId = getParam(params, "routineId") ?? "";
   const prefillGoalType = (getParam(params, "goalType") ?? "").toUpperCase();
   const currentGoalsHref = buildGoalsHref({ type, active });
