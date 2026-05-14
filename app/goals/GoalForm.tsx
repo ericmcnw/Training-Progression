@@ -449,38 +449,46 @@ export default function GoalForm({
               </label>
               <div style={fieldStyle}>
                 <span style={fieldLabelStyle}>Target frequency</span>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <input
-                    name="targetCount"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={gfTargetCount}
-                    onChange={e => setGfTargetCount(e.target.value)}
-                    style={{ ...formInputStyle, width: 76 }}
-                    inputMode="numeric"
-                  />
-                  <span style={hintStyle}>times per</span>
-                  <input
-                    name="targetInterval"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={gfTargetInterval}
-                    onChange={e => setGfTargetInterval(e.target.value)}
-                    style={{ ...formInputStyle, width: 76 }}
-                    inputMode="numeric"
-                  />
-                  <select
-                    name="targetUnit"
-                    value={gfTargetUnit}
-                    onChange={e => setGfTargetUnit(e.target.value as "DAY" | "WEEK" | "MONTH")}
-                    style={{ ...formInputStyle, width: 112 }}
-                  >
-                    <option value="DAY">day</option>
-                    <option value="WEEK">week</option>
-                    <option value="MONTH">month</option>
-                  </select>
+                <div style={cadenceTriRow}>
+                  <label style={cadenceCell}>
+                    <span style={cadenceCellLabel}>Count</span>
+                    <input
+                      name="targetCount"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={gfTargetCount}
+                      onChange={e => setGfTargetCount(e.target.value)}
+                      style={formInputStyle}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={cadenceCell}>
+                    <span style={cadenceCellLabel}>Per</span>
+                    <input
+                      name="targetInterval"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={gfTargetInterval}
+                      onChange={e => setGfTargetInterval(e.target.value)}
+                      style={formInputStyle}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={cadenceCell}>
+                    <span style={cadenceCellLabel}>Unit</span>
+                    <select
+                      name="targetUnit"
+                      value={gfTargetUnit}
+                      onChange={e => setGfTargetUnit(e.target.value as "DAY" | "WEEK" | "MONTH")}
+                      style={formInputStyle}
+                    >
+                      <option value="DAY">day(s)</option>
+                      <option value="WEEK">week(s)</option>
+                      <option value="MONTH">month(s)</option>
+                    </select>
+                  </label>
                 </div>
               </div>
 
@@ -493,20 +501,17 @@ export default function GoalForm({
           <div style={detailCardStyle}>
             <div style={stepLabelStyle}>Included routines</div>
             <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked routine count toward this goal.</div>
-            <div style={routineChecklistStyle}>
+            <div style={routineCardGrid}>
               {options.routines.map(r => (
-                <label key={r.id} style={checkboxRowStyle}>
-                  <input
-                    type="checkbox"
-                    name="routineIds"
-                    value={r.id}
-                    defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
-                  />
-                  <span style={{ fontSize: 13 }}>
-                    {r.label}
-                    {r.subtitle ? <span style={hintStyle}> — {r.subtitle}</span> : null}
-                  </span>
-                </label>
+                <RoutineCheckboxCard
+                  key={`primary-${r.id}`}
+                  name="routineIds"
+                  value={r.id}
+                  label={r.label}
+                  subtitle={r.subtitle}
+                  defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
+                  tone="primary"
+                />
               ))}
             </div>
           </div>
@@ -514,22 +519,19 @@ export default function GoalForm({
           <div style={detailCardStyle}>
             <div style={stepLabelStyle}>Covered by</div>
             <div style={{ ...hintStyle, marginBottom: 10 }}>
-              Pick routines that <em>cover</em> this goal. Days where one of these fires (but no included routine does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another (e.g. checking <em>Outdoor Bouldering</em> on a daily fingers goal).
+              Routines that <em>cover</em> this goal. Days where one of these fires (but no included routine does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another.
             </div>
-            <div style={routineChecklistStyle}>
+            <div style={routineCardGrid}>
               {options.routines.map(r => (
-                <label key={r.id} style={checkboxRowStyle}>
-                  <input
-                    type="checkbox"
-                    name="substituteRoutineIds"
-                    value={r.id}
-                    defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
-                  />
-                  <span style={{ fontSize: 13 }}>
-                    {r.label}
-                    {r.subtitle ? <span style={hintStyle}> — {r.subtitle}</span> : null}
-                  </span>
-                </label>
+                <RoutineCheckboxCard
+                  key={`sub-${r.id}`}
+                  name="substituteRoutineIds"
+                  value={r.id}
+                  label={r.label}
+                  subtitle={r.subtitle}
+                  defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
+                  tone="substitute"
+                />
               ))}
             </div>
           </div>
@@ -1014,6 +1016,123 @@ const checkboxRowStyle: React.CSSProperties = {
   gap: 8,
   alignItems: "center",
   cursor: "pointer",
+};
+
+// ─── Cadence + routine card subcomponents ─────────────────────────────────
+
+const cadenceTriRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))",
+  gap: 8,
+  marginTop: 6,
+};
+
+const cadenceCell: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+};
+
+const cadenceCellLabel: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.65,
+};
+
+const routineCardGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 6,
+  maxHeight: 280,
+  overflowY: "auto",
+  padding: 2,
+};
+
+// One card-style checkbox row in either the Included or Covered-by routine
+// pickers. Tone changes the accent color: primary = green (real completion),
+// substitute = sky (covers a slot).
+function RoutineCheckboxCard({
+  name,
+  value,
+  label,
+  subtitle,
+  defaultChecked,
+  tone,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  subtitle?: string;
+  defaultChecked: boolean;
+  tone: "primary" | "substitute";
+}) {
+  const [checked, setChecked] = useState(defaultChecked);
+  const palette = tone === "primary" ? primaryPalette : substitutePalette;
+  const cardStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 12px",
+    borderRadius: 10,
+    border: `1px solid ${checked ? palette.borderActive : "rgba(128,128,128,0.3)"}`,
+    background: checked ? palette.bgActive : "rgba(255,255,255,0.018)",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 700,
+    minWidth: 0,
+  };
+  return (
+    <label style={cardStyle}>
+      <input
+        type="checkbox"
+        name={name}
+        value={value}
+        defaultChecked={defaultChecked}
+        onChange={(e) => setChecked(e.target.checked)}
+        style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+      />
+      <span
+        aria-hidden
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 5,
+          border: `1.5px solid ${checked ? palette.checkBorder : "rgba(128,128,128,0.5)"}`,
+          background: checked ? palette.checkBg : "transparent",
+          color: palette.checkColor,
+          fontSize: 12,
+          fontWeight: 900,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {checked ? "✓" : ""}
+      </span>
+      <span style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
+        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        {subtitle ? (
+          <span style={{ display: "block", fontSize: 11, opacity: 0.55, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</span>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
+const primaryPalette = {
+  borderActive: "rgba(74,222,128,0.55)",
+  bgActive: "rgba(74,222,128,0.07)",
+  checkBorder: "rgba(74,222,128,0.85)",
+  checkBg: "rgba(74,222,128,0.18)",
+  checkColor: "rgba(180,242,200,1)",
+};
+
+const substitutePalette = {
+  borderActive: "rgba(132,204,255,0.55)",
+  bgActive: "rgba(132,204,255,0.07)",
+  checkBorder: "rgba(132,204,255,0.85)",
+  checkBg: "rgba(132,204,255,0.18)",
+  checkColor: "rgba(199,228,255,1)",
 };
 
 // ─── Weekday picker ─────────────────────────────────────────────────────────

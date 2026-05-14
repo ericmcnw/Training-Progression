@@ -610,13 +610,14 @@ const s = {
 
   input: {
     width: "100%",
-    padding: 8,
+    padding: "11px 12px",
     border: "1px solid rgba(128,128,128,0.6)",
     borderRadius: 10,
     background: "#111827",
     color: "#ffffff",
     boxSizing: "border-box",
-    fontSize: 14,
+    fontSize: 16, // dodge iOS Safari auto-zoom on focus
+    fontFamily: "inherit",
   } as React.CSSProperties,
 
   btn: {

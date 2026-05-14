@@ -273,6 +273,8 @@ export const formInputStyle: React.CSSProperties = {
   background: "rgba(128,128,128,0.08)",
   color: "inherit",
   width: "100%",
+  fontSize: 16, // dodge iOS Safari auto-zoom on focus
+  fontFamily: "inherit",
 };
 
 export const subtleTextStyle: React.CSSProperties = {
