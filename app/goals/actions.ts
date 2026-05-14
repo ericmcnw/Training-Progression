@@ -175,6 +175,17 @@ async function parseGoalInput(formData: FormData) {
     throw new Error("That metric is not supported for the selected goal.");
   }
 
+  // Phase 4: per-routine FREQUENCY/SESSIONS goals live exclusively on
+  // FrequencyGoal (id `fg_<routineId>`), edited via the routine's own form.
+  // Reject any attempt to write one through this Goal-table path so we
+  // can't accidentally re-create the stranded rows the migration cleaned up.
+  if (goalType === "FREQUENCY" && targetType === "ROUTINE" && metricType === "SESSIONS") {
+    throw new Error(
+      "Per-routine frequency goals are set on the routine itself. " +
+      "Open the routine's edit page and use the Frequency goal block."
+    );
+  }
+
   const startDate = parseDateInput(startDateRaw, "Start date");
   const endDate = endDateRaw ? parseDateInput(endDateRaw, "End date") : null;
   if (endDate && endDate.getTime() < startDate.getTime()) {

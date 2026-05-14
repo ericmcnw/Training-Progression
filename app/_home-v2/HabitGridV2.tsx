@@ -58,7 +58,7 @@ export default function HabitGridV2({ rows, today }: Props) {
             </span>
           ))}
         </div>
-        <div style={trailingHeaderText}>streak · wk</div>
+        <div style={trailingHeaderText}>streak · this wk</div>
       </div>
 
       <ul style={list}>
@@ -88,7 +88,16 @@ export default function HabitGridV2({ rows, today }: Props) {
                 </div>
                 <div style={dotStripGrid}>
                   {last7.map((ymd) => {
-                    const state = row.trailing30.find((d) => d.ymd === ymd)?.state ?? "rest";
+                    let state = row.trailing30.find((d) => d.ymd === ymd)?.state ?? "rest";
+                    // Quiet the compact strip for flexible weekly/monthly
+                    // goals — the underlying classifier marks open-window
+                    // days as "missed" when behind pace, but in the row
+                    // header those red dots are misleading (the user can
+                    // still hit the window). The expansion's bars view
+                    // shows the real story.
+                    if (renderMode === "weekly-bars" && state === "missed") {
+                      state = "rest";
+                    }
                     return <span key={ymd} style={dotCell(state, ymd === today, accent)} />;
                   })}
                 </div>
@@ -102,7 +111,10 @@ export default function HabitGridV2({ rows, today }: Props) {
                   ) : (
                     <span style={streakPillMuted}>—</span>
                   )}
-                  <span style={fractionPill(row.status)}>
+                  <span
+                    style={fractionPill(row.status)}
+                    title={`This ${row.target?.targetUnit === "MONTH" ? "month" : "week"}: ${row.weekFraction.progress} of ${Math.max(row.weekFraction.target, row.weekFraction.progress)}`}
+                  >
                     {row.weekFraction.progress}/{Math.max(row.weekFraction.target, row.weekFraction.progress)}
                   </span>
                   <span style={{ ...chevron, transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }} aria-hidden>›</span>

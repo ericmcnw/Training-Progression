@@ -39,6 +39,11 @@ import type {
 import { DOMAIN_LABEL } from "./tokens";
 
 const HABIT_GRID_DAYS = 30;
+// State window for the unified Frequency Goals card. Wide enough to cover
+// the WeeklyFrequencyBars view (8 weeks = 56 days) so older weeks render
+// real hit counts instead of all-zeros. The daily-grid view still slices
+// out just the last HABIT_GRID_DAYS for its 30-day strip.
+const FREQUENCY_STATE_DAYS = 56;
 const DOMAIN_WEEKS = 8;
 const WAG_WEEKS = 12;       // weeks of history shown in the scrollable WaG rail
 const WAG_FORWARD_DAYS = 3; // extra days past today shown at the right edge
@@ -411,7 +416,7 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
         (logsByRoutine.get(r.id) ?? []).map((log) => ({ performedAt: log.performedAt, isPrimary: false }))
       );
       const logs = [...primaryLogs, ...subLogs2];
-      const state = computeFrequencyState({ target, logs, today, trailingDays: HABIT_GRID_DAYS });
+      const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
 
       const trailing30: HabitRow["trailing30"] = [];
       for (let i = 0; i < HABIT_GRID_DAYS; i++) {
