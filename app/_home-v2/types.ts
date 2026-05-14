@@ -64,10 +64,29 @@ export type DayTodo = {
   done: boolean;
 };
 
-// Habit row for the 7-day grid + the inline expansion (30-day view).
+// One row per active frequency goal. Covers three flavors that all share the
+// same shape:
+//   • per-routine goal (1 PRIMARY routine — the common case for habits)
+//   • per-routine goal with substitutes (e.g. fingers + climbing-as-substitute)
+//   • group goal (N PRIMARY routines counted together — e.g. strength 3x/week)
+//
+// `routineId` carries the *contextual* routine: for single-primary goals it's
+// that routine; for groups it's the first primary (used as a sane default for
+// quick log links). The full primary + substitute lists below let the
+// expansion offer per-routine log buttons when the goal spans multiple.
 export type HabitRow = {
-  routineId: string;
-  routineName: string;
+  // Identity — `goalId` is the FrequencyGoal id (e.g. `fg_<routineId>` for
+  // per-routine, or a cuid for group). `routineId` is included for back-compat
+  // with the existing log button routing.
+  goalId: string;
+  goalName: string;
+  isGroup: boolean;
+  routineId: string;          // primary's id (or first primary for groups)
+  routineName: string;        // primary's name (or group name for groups)
+  primaryRoutines: Array<{ id: string; name: string; domain: DomainTone }>;
+  substituteRoutines: Array<{ id: string; name: string; domain: DomainTone }>;
+
+  // Display
   domain: DomainTone;
   state: FrequencyState;
   // The frequency goal's target. Drives the expansion's render mode pick

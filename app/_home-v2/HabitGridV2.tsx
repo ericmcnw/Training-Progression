@@ -27,10 +27,10 @@ export default function HabitGridV2({ rows, today }: Props) {
     return (
       <section id="habits-grid" style={cardSurface}>
         <header style={cardHeader}>
-          <span style={cardTitle}>Habits</span>
+          <span style={cardTitle}>Frequency Goals</span>
         </header>
         <div style={emptyState}>
-          No daily routines yet. Create a routine in <em>Lifestyle</em> (or set its domain there) to track it here.
+          No frequency goals yet. Add one to a routine (set how often you want to do it) and it&apos;ll show here.
         </div>
       </section>
     );
@@ -43,7 +43,7 @@ export default function HabitGridV2({ rows, today }: Props) {
   return (
     <section id="habits-grid" style={cardSurface}>
       <header style={cardHeader}>
-        <span style={cardTitle}>Habits</span>
+        <span style={cardTitle}>Frequency Goals</span>
         <span style={cardHint}>last 7 days · tap row to expand</span>
       </header>
 
@@ -64,18 +64,27 @@ export default function HabitGridV2({ rows, today }: Props) {
       <ul style={list}>
         {rows.map((row) => {
           const accent = frequencyStatusColor(row.status);
-          const expanded = openId === row.routineId;
+          const expanded = openId === row.goalId;
+          // Streak unit follows the target shape: daily-style targets use day
+          // streaks; weekly/monthly targets use window streaks.
+          const renderMode = getFrequencyRenderMode(row.target);
+          const streakUnit_ = renderMode === "weekly-bars" ? "w" : "d";
           return (
-            <li key={row.routineId}>
+            <li key={row.goalId}>
               <button
                 type="button"
-                onClick={() => setOpenId((current) => (current === row.routineId ? null : row.routineId))}
+                onClick={() => setOpenId((current) => (current === row.goalId ? null : row.goalId))}
                 className="homeV2HabitRow"
                 aria-expanded={expanded}
               >
                 <div style={nameColumn}>
                   <span style={{ ...accentDot, background: accent }} aria-hidden />
-                  <span style={nameText}>{row.routineName}</span>
+                  <span style={nameText}>{row.goalName}</span>
+                  {row.isGroup ? (
+                    <span style={groupBadge} title={`Group goal — ${row.primaryRoutines.map((r) => r.name).join(", ")}`}>
+                      ×{row.primaryRoutines.length}
+                    </span>
+                  ) : null}
                 </div>
                 <div style={dotStripGrid}>
                   {last7.map((ymd) => {
@@ -88,7 +97,7 @@ export default function HabitGridV2({ rows, today }: Props) {
                     <span style={streakPill}>
                       <span style={streakFlame} aria-hidden>🔥</span>
                       <span style={streakValue}>{row.currentStreak}</span>
-                      <span style={streakUnit}>d</span>
+                      <span style={streakUnit}>{streakUnit_}</span>
                     </span>
                   ) : (
                     <span style={streakPillMuted}>—</span>
@@ -180,18 +189,7 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
     return (
       <div style={expansionShell}>
         <WeeklyFrequencyBars target={row.target!} state={row.state} today={today} />
-        <div style={actionRow}>
-          <DrawerLogButton
-            routineId={row.routineId}
-            defaultDate={today}
-            label="Log today"
-            className=""
-            style={primaryAction}
-          />
-          <Link href={`/routines/${row.routineId}`} style={secondaryAction}>
-            Edit habit
-          </Link>
-        </div>
+        <GoalActionRow row={row} today={today} />
       </div>
     );
   }
@@ -259,6 +257,18 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
         </div>
       </div>
 
+      <GoalActionRow row={row} today={today} />
+    </div>
+  );
+}
+
+// Action row at the bottom of any expansion. For per-routine goals it's a
+// single big "Log today" button + Edit link. For group goals it lists each
+// primary routine with its own log button so the user can log against the
+// specific routine that fired (a Pull Day vs a Push Day).
+function GoalActionRow({ row, today }: { row: HabitRow; today: string }) {
+  if (!row.isGroup) {
+    return (
       <div style={actionRow}>
         <DrawerLogButton
           routineId={row.routineId}
@@ -268,7 +278,45 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
           style={primaryAction}
         />
         <Link href={`/routines/${row.routineId}`} style={secondaryAction}>
-          Edit habit
+          Edit
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={groupActionShell}>
+      <div style={groupActionLabel}>Log a routine</div>
+      <div style={groupActionList}>
+        {row.primaryRoutines.map((r) => (
+          <DrawerLogButton
+            key={r.id}
+            routineId={r.id}
+            defaultDate={today}
+            label={r.name}
+            className=""
+            style={groupRoutineButton}
+          />
+        ))}
+        {row.substituteRoutines.length > 0 ? (
+          <>
+            <div style={groupActionDivider}>Substitutes</div>
+            {row.substituteRoutines.map((r) => (
+              <DrawerLogButton
+                key={r.id}
+                routineId={r.id}
+                defaultDate={today}
+                label={r.name}
+                className=""
+                style={groupSubstituteButton}
+              />
+            ))}
+          </>
+        ) : null}
+      </div>
+      <div style={groupActionFooter}>
+        <Link href={`/goals/${encodeURIComponent(row.goalId.startsWith("fg_") ? row.goalId : `group-frequency:${row.goalId}`)}`} style={secondaryAction}>
+          Edit goal
         </Link>
       </div>
     </div>
@@ -559,6 +607,92 @@ const dotGridRow: CSSProperties = {
 
 const dotPlaceholder: CSSProperties = {
   background: "transparent",
+};
+
+// Tiny "×N" badge next to a group goal's name. Tells the user at a glance
+// that this row aggregates multiple routines.
+const groupBadge: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "1px 6px",
+  marginLeft: 6,
+  borderRadius: 999,
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  color: COLOR.textDim,
+  flexShrink: 0,
+};
+
+// Group goal action panel. Replaces the single "Log today" button with a
+// list of per-routine log buttons so the user can log the specific routine
+// that fired today.
+const groupActionShell: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.02)",
+};
+
+const groupActionLabel: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+};
+
+const groupActionList: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+};
+
+const groupActionDivider: CSSProperties = {
+  flexBasis: "100%",
+  fontSize: 9.5,
+  fontWeight: 800,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: "rgba(132,204,255,0.65)",
+  paddingTop: 2,
+};
+
+const groupRoutineButton: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "7px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(251,191,36,0.45)",
+  background: "rgba(251,191,36,0.08)",
+  color: "rgba(251,191,36,1)",
+  fontSize: 12,
+  fontWeight: 800,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+const groupSubstituteButton: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "7px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(132,204,255,0.45)",
+  background: "rgba(132,204,255,0.07)",
+  color: "rgba(132,204,255,1)",
+  fontSize: 12,
+  fontWeight: 800,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+const groupActionFooter: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
 };
 
 // Sun-first day initials for the calendar-aligned 30-day grid.

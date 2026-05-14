@@ -11,6 +11,7 @@ import {
 } from "@/lib/routines";
 import {
   computeFrequencyState,
+  getFrequencyRenderMode,
   isExpectedDay,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
@@ -350,58 +351,125 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
     });
   }
 
-  // ── Habit rows ───────────────────────────────────────────────────────────
-  const habitRows: HabitRow[] = habitRoutines.map((routine) => {
-    const target = habitTargetById.get(routine.id) ?? null;
-    // Combine own logs (PRIMARY) with substitute logs so days only covered
-    // by a substitute render sky-blue rather than red.
-    const ownLogs = (logsByRoutine.get(routine.id) ?? []).map((log) => ({
-      performedAt: log.performedAt,
-      isPrimary: true,
-    }));
-    const subLogs = (substituteRoutineIdsByHabitId.get(routine.id) ?? []).flatMap((subId) =>
-      (logsByRoutine.get(subId) ?? []).map((log) => ({
-        performedAt: log.performedAt,
-        isPrimary: false,
-      }))
-    );
-    const logs = [...ownLogs, ...subLogs];
-    const state = computeFrequencyState({ target, logs, today, trailingDays: HABIT_GRID_DAYS });
-    const trailing30: HabitRow["trailing30"] = [];
-    for (let i = 0; i < HABIT_GRID_DAYS; i++) {
-      const ymd = addDaysYmd(habitWindowStart, i);
-      trailing30.push({ ymd, state: state.dailyState[ymd] ?? (ymd > today ? "future" : "rest") });
-    }
-    let weekTarget = 0;
-    let weekProgress = 0;
-    for (let i = 0; i < 7; i++) {
-      const ymd = addDaysYmd(currentWeekStart, i);
-      if (ymd > today) continue;
-      const expected = isExpectedDay(target, ymd);
-      if (expected) weekTarget++;
-      if (expected && state.dailyState[ymd] === "done") weekProgress++;
-    }
-    return {
-      routineId: routine.id,
-      routineName: routine.name,
-      domain: "lifestyle",
-      state,
-      target,
-      trailing30,
-      currentStreak: state.currentDayStreak || state.windowStreak,
-      longestStreak: Math.max(state.longestDayStreak, state.longestWindowStreak),
-      weekFraction: { progress: weekProgress, target: Math.max(weekTarget, 0) },
-      status: state.currentWindow.status,
-    };
+  // ── Frequency goal rows ──────────────────────────────────────────────────
+  // One row per active FrequencyGoal — covers per-routine goals (the old
+  // "habits" view) AND group goals (e.g. "strength 3x/week" spanning Push/
+  // Pull/Legs). The card renders both, switching between daily-grid and
+  // weekly-bars based on each goal's target shape.
+  const allFrequencyGoals = await prisma.frequencyGoal.findMany({
+    where: { isActive: true },
+    include: {
+      routines: {
+        include: {
+          routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true, isActive: true, isDeleted: true } },
+        },
+      },
+    },
   });
-  // Sort: at-risk first, then by streak desc
+
+  const habitRows: HabitRow[] = allFrequencyGoals
+    .map((goal): HabitRow | null => {
+      // Filter out deleted/inactive routine references.
+      const liveLinks = goal.routines.filter(
+        (rel) => rel.routine && rel.routine.isActive && !rel.routine.isDeleted
+      );
+      const primaryLinks = liveLinks.filter((rel) => rel.role !== "SUBSTITUTE");
+      const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
+      if (primaryLinks.length === 0) return null; // Goal exists but has no primary routine; skip
+
+      const primaryRoutines = primaryLinks.map((rel) => ({
+        id: rel.routine!.id,
+        name: rel.routine!.name,
+        domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
+      }));
+      const substituteRoutines = subLinks.map((rel) => ({
+        id: rel.routine!.id,
+        name: rel.routine!.name,
+        domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
+      }));
+      const isGroup = primaryRoutines.length > 1;
+      // For per-routine goals (`fg_*`), the goal's name is generic
+      // ("X frequency goal") — prefer the routine name. For group goals,
+      // the goal's name is what the user picked.
+      const isPerRoutine = goal.id.startsWith("fg_");
+      const displayName = isPerRoutine ? primaryRoutines[0].name : goal.name;
+
+      const target: FrequencyTarget = {
+        targetCount: goal.targetCount,
+        targetInterval: goal.targetInterval,
+        targetUnit: goal.targetUnit,
+        weekdayMask: goal.weekdayMask ?? null,
+      };
+
+      // Logs: every primary routine's log = isPrimary:true; every substitute's
+      // log = isPrimary:false. The state classifier marks substitute-only days
+      // as "covered" rather than "done."
+      const primaryLogs = primaryRoutines.flatMap((r) =>
+        (logsByRoutine.get(r.id) ?? []).map((log) => ({ performedAt: log.performedAt, isPrimary: true }))
+      );
+      const subLogs2 = substituteRoutines.flatMap((r) =>
+        (logsByRoutine.get(r.id) ?? []).map((log) => ({ performedAt: log.performedAt, isPrimary: false }))
+      );
+      const logs = [...primaryLogs, ...subLogs2];
+      const state = computeFrequencyState({ target, logs, today, trailingDays: HABIT_GRID_DAYS });
+
+      const trailing30: HabitRow["trailing30"] = [];
+      for (let i = 0; i < HABIT_GRID_DAYS; i++) {
+        const ymd = addDaysYmd(habitWindowStart, i);
+        trailing30.push({ ymd, state: state.dailyState[ymd] ?? (ymd > today ? "future" : "rest") });
+      }
+      // This-week summary (used by the row's compact "X/Y" pill).
+      let weekTarget = 0;
+      let weekProgress = 0;
+      for (let i = 0; i < 7; i++) {
+        const ymd = addDaysYmd(currentWeekStart, i);
+        if (ymd > today) continue;
+        const expected = isExpectedDay(target, ymd);
+        if (expected) weekTarget++;
+        if (expected && (state.dailyState[ymd] === "done" || state.dailyState[ymd] === "covered")) {
+          weekProgress++;
+        }
+      }
+      // For weekly-target goals without expected-every-day shape, fall back
+      // to the window progress so the X/Y pill always reads sensibly.
+      if (weekTarget === 0) {
+        weekTarget = target.targetCount;
+        weekProgress = state.currentWindow.progress;
+      }
+
+      return {
+        goalId: goal.id,
+        goalName: displayName,
+        isGroup,
+        routineId: primaryRoutines[0].id,
+        routineName: displayName,
+        primaryRoutines,
+        substituteRoutines,
+        domain: primaryRoutines[0].domain,
+        state,
+        target,
+        trailing30,
+        currentStreak: state.currentDayStreak || state.windowStreak,
+        longestStreak: Math.max(state.longestDayStreak, state.longestWindowStreak),
+        weekFraction: { progress: weekProgress, target: Math.max(weekTarget, 0) },
+        status: state.currentWindow.status,
+      };
+    })
+    .filter((r): r is HabitRow => r !== null);
+
+  // Sort: daily-style first (calendar grid feels like the "habit" surface),
+  // then weekly-style. Within each group: at-risk first, then highest streak,
+  // then alphabetical.
   const statusRank: Record<HabitRow["status"], number> = {
     at_risk: 0, behind: 1, on_track: 2, ahead: 3, complete: 4,
   };
   habitRows.sort((a, b) => {
+    const aMode = getFrequencyRenderMode(a.target);
+    const bMode = getFrequencyRenderMode(b.target);
+    if (aMode !== bMode) return aMode === "daily-grid" ? -1 : 1;
     if (statusRank[a.status] !== statusRank[b.status]) return statusRank[a.status] - statusRank[b.status];
     if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
-    return a.routineName.localeCompare(b.routineName);
+    return a.goalName.localeCompare(b.goalName);
   });
 
   // ── Domain series (8 weeks per domain) ───────────────────────────────────
