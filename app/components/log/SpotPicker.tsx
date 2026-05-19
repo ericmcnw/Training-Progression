@@ -79,6 +79,14 @@ export default function SpotPicker({
   // lets the user pick a different spot without clearing the current one
   // first. Triggered by the "Search again" button on the confirmation card.
   const [searchOverlay, setSearchOverlay] = useState(false);
+  // Pin-to-OSM search — separate state from the main search so the user
+  // can attach OSM identity + coords + region to a custom-named spot
+  // without replacing the name itself.
+  const [pinSearchOpen, setPinSearchOpen] = useState(false);
+  const [pinSearchQuery, setPinSearchQuery] = useState("");
+  const [pinSearchResults, setPinSearchResults] = useState<OsmResult[]>([]);
+  const [pinSearching, setPinSearching] = useState(false);
+  const pinSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [osmResults, setOsmResults] = useState<OsmResult[]>([]);
   const [osmSearching, setOsmSearching] = useState(false);
   const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "error">("idle");
@@ -124,6 +132,35 @@ export default function SpotPicker({
     }, 350);
     return () => window.clearTimeout(handle);
   }, [query]);
+
+  // Debounced OSM search for the "Pin to a known location" affordance.
+  // Independent from the main search so the user can keep their custom
+  // name while pinning to an OSM place.
+  useEffect(() => {
+    const trimmed = pinSearchQuery.trim();
+    if (trimmed.length < 2) {
+      setPinSearchResults([]);
+      return;
+    }
+    const handle = window.setTimeout(async () => {
+      setPinSearching(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=json&limit=5&addressdetails=1`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (res.ok) {
+          const data: OsmResult[] = await res.json();
+          setPinSearchResults(data);
+        } else {
+          setPinSearchResults([]);
+        }
+      } catch {
+        setPinSearchResults([]);
+      } finally {
+        setPinSearching(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [pinSearchQuery]);
 
   // Saved-spot matches: case-insensitive substring on name, top 6.
   const matchedSaved = useMemo(() => {
@@ -263,6 +300,7 @@ export default function SpotPicker({
         longitude: lng,
         osmType: r.osm_type ?? null,
         osmId: r.osm_id != null ? String(r.osm_id) : null,
+        osmName: primaryName,
       },
     });
     setQuery("");
@@ -285,6 +323,7 @@ export default function SpotPicker({
         longitude: null,
         osmType: null,
         osmId: null,
+        osmName: null,
       },
     });
     setQuery("");
@@ -303,6 +342,45 @@ export default function SpotPicker({
     onChange({ kind: "new", draft: { ...value.draft, ...patch } });
   }
 
+  function openPinSearch() {
+    setPinSearchOpen(true);
+    setPinSearchQuery("");
+    requestAnimationFrame(() => pinSearchInputRef.current?.focus());
+  }
+
+  function applyPinFromOsm(r: OsmResult) {
+    const lat = parseFloat(r.lat);
+    const lng = parseFloat(r.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const primaryName = r.display_name.split(",")[0].trim();
+    const a = r.address ?? {};
+    const place = a.city || a.town || a.village || a.county;
+    const region = [place, a.state].filter(Boolean).join(", ") || null;
+    // Patch the location-only fields. Leave `name` and `type` alone so the
+    // user's custom name + type selections survive the pin.
+    patchDraft({
+      latitude: lat,
+      longitude: lng,
+      region: value?.kind === "new" && value.draft.region ? value.draft.region : region,
+      osmType: r.osm_type ?? null,
+      osmId: r.osm_id != null ? String(r.osm_id) : null,
+      osmName: primaryName,
+    });
+    setPinSearchOpen(false);
+    setPinSearchQuery("");
+    setPinSearchResults([]);
+  }
+
+  function unpinLocation() {
+    patchDraft({ osmType: null, osmId: null, osmName: null });
+  }
+
+  function cancelPinSearch() {
+    setPinSearchOpen(false);
+    setPinSearchQuery("");
+    setPinSearchResults([]);
+  }
+
   function clearAndReset() {
     onChange(null);
     setQuery("");
@@ -312,6 +390,9 @@ export default function SpotPicker({
     setCustomEditingCoords(false);
     setGeoStatus("idle");
     setGeoError(null);
+    setPinSearchOpen(false);
+    setPinSearchQuery("");
+    setPinSearchResults([]);
   }
 
   function handleUseMyLocation() {
@@ -513,7 +594,17 @@ export default function SpotPicker({
           <div style={confirmHeadStyle}>
             <div style={confirmTitleStyle}>
               <span aria-hidden="true">{value.kind === "saved" ? "💾" : value.kind === "new" && value.draft.source === "osm" ? "📍" : "✏️"}</span>
-              <span style={confirmNameStyle}>{displayNameOf(value)}</span>
+              {value.kind === "new" ? (
+                <input
+                  style={confirmNameInputStyle}
+                  value={value.draft.name}
+                  onChange={(e) => patchDraft({ name: e.target.value })}
+                  placeholder={`Name this ${spotNoun}`}
+                  aria-label={`${spotNoun} name`}
+                />
+              ) : (
+                <span style={confirmNameStyle}>{displayNameOf(value)}</span>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <button
@@ -569,6 +660,80 @@ export default function SpotPicker({
                 value={value.draft.region ?? ""}
                 onChange={(e) => patchDraft({ region: e.target.value || null })}
               />
+
+              {/* Pin status: when an OSM identity is attached, show a small
+                  indicator with unpin. The OSM display name (osmName) is
+                  the place we're pinned TO, separate from this spot's own
+                  name — useful when the spot is "Clinton road boulder"
+                  pinned to "Clinton Road." */}
+              {value.draft.osmType && value.draft.osmId ? (
+                <div style={pinnedIndicatorStyle}>
+                  <span aria-hidden="true">🔗</span>
+                  <span style={pinnedLabelStyle}>
+                    Pinned to {value.draft.osmName ?? value.draft.region ?? "a known place"}
+                  </span>
+                  <button
+                    type="button"
+                    style={pinnedUnpinBtnStyle}
+                    onClick={unpinLocation}
+                    title="Unpin from OpenStreetMap location"
+                    aria-label="Unpin location"
+                  >
+                    Unpin
+                  </button>
+                </div>
+              ) : !pinSearchOpen ? (
+                <button
+                  type="button"
+                  style={pinTriggerStyle}
+                  onClick={openPinSearch}
+                  title="Attach this spot to a known place on OpenStreetMap"
+                >
+                  🔗 Pin to a known location
+                </button>
+              ) : null}
+
+              {pinSearchOpen && (
+                <div style={pinSearchWrapStyle}>
+                  <input
+                    ref={pinSearchInputRef}
+                    style={smallInputStyle}
+                    type="text"
+                    placeholder="Search OpenStreetMap for a place…"
+                    value={pinSearchQuery}
+                    onChange={(e) => setPinSearchQuery(e.target.value)}
+                  />
+                  {(pinSearchResults.length > 0 || pinSearching) && (
+                    <div style={pinSearchResultsStyle}>
+                      {pinSearchResults.map((r) => (
+                        <button
+                          key={`pin-${r.place_id}`}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            applyPinFromOsm(r);
+                          }}
+                          style={dropdownItemStyle}
+                          title={r.display_name}
+                        >
+                          <span aria-hidden="true">📍</span>
+                          <span style={dropdownItemMain}>{r.display_name}</span>
+                        </button>
+                      ))}
+                      {pinSearching && pinSearchResults.length === 0 && (
+                        <div style={dropdownHintStyle}>Searching OpenStreetMap…</div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    style={geoBtnSecondaryStyle}
+                    onClick={cancelPinSearch}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               <div style={coordsRowStyle}>
                 {value.draft.latitude != null && value.draft.longitude != null && !customEditingCoords ? (
@@ -1000,6 +1165,7 @@ const confirmTitleStyle: CSSProperties = {
   alignItems: "center",
   gap: 7,
   minWidth: 0,
+  flex: 1,
 };
 
 const confirmNameStyle: CSSProperties = {
@@ -1009,6 +1175,18 @@ const confirmNameStyle: CSSProperties = {
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
+};
+
+const confirmNameInputStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: "5px 8px",
+  background: withAlpha(COLOR.text, 0.04),
+  border: `1px solid ${COLOR.border}`,
+  borderRadius: 8,
+  color: COLOR.text,
+  fontSize: 13.5,
+  fontWeight: 800,
 };
 
 const confirmClearStyle: CSSProperties = {
@@ -1191,4 +1369,72 @@ const geoHintStyle: CSSProperties = {
   fontSize: 11,
   color: COLOR.textFaint,
   fontWeight: 600,
+};
+
+const pinTriggerStyle: CSSProperties = {
+  appearance: "none",
+  display: "inline-flex",
+  alignSelf: "flex-start",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 11px",
+  background: withAlpha(COLOR.blue, 0.10),
+  border: `1px solid ${withAlpha(COLOR.blue, 0.30)}`,
+  borderRadius: RADIUS.pill,
+  color: COLOR.blueText,
+  fontSize: 11.5,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const pinnedIndicatorStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 11px",
+  background: withAlpha(COLOR.blue, 0.10),
+  border: `1px solid ${withAlpha(COLOR.blue, 0.30)}`,
+  borderRadius: 10,
+  color: COLOR.blueText,
+  fontSize: 11.5,
+  fontWeight: 700,
+};
+
+const pinnedLabelStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const pinnedUnpinBtnStyle: CSSProperties = {
+  appearance: "none",
+  padding: "3px 8px",
+  background: "transparent",
+  border: `1px solid ${withAlpha(COLOR.blue, 0.35)}`,
+  borderRadius: RADIUS.pill,
+  color: COLOR.blueText,
+  fontSize: 10.5,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const pinSearchWrapStyle: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: 8,
+  borderRadius: RADIUS.inner,
+  background: withAlpha(COLOR.text, 0.03),
+  border: `1px solid ${COLOR.border}`,
+};
+
+const pinSearchResultsStyle: CSSProperties = {
+  display: "grid",
+  gap: 2,
+  maxHeight: 200,
+  overflowY: "auto",
+  padding: 2,
+  borderRadius: 8,
+  background: withAlpha(COLOR.panel, 0.5),
 };

@@ -19,6 +19,12 @@ export type SpotPickerNewDraft = {
   longitude: number | null;
   osmType: string | null;
   osmId: string | null;
+  // Display name of the OSM-pinned location, separate from the spot's own
+  // name. Lets the picker show "Pinned to Clinton Road" even when the
+  // user has renamed the spot itself to "Clinton road boulder." Purely a
+  // client-side hint — recoverable from osmId so we don't persist it
+  // to the server.
+  osmName?: string | null;
 };
 
 export type SpotPickerValue =

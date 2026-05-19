@@ -1910,30 +1910,25 @@ async function resolveActivitySpotId(input: {
   const osmType = input.newActivitySpotOsmType?.trim() || null;
   const osmId = input.newActivitySpotOsmId?.trim() || null;
 
-  // OSM-identity dedup runs first — finds an existing spot for this
-  // activity that points at the same OSM place even if names differ
-  // slightly (e.g. "Paugussett State Forest" vs "Paugussett SF").
-  const osmExisting = osmType && osmId
-    ? await prisma.activitySpot.findFirst({
-        where: { activitySlug: slug, osmType, osmId },
-        select: { id: true, region: true, latitude: true, longitude: true },
-      })
-    : null;
-  const existing = osmExisting ?? await prisma.activitySpot.findFirst({
-    where: { activitySlug: slug, name: { equals: name, mode: "insensitive" } },
+  // Dedup on (slug, name, osmId-or-null). Same name + same OSM id (or both
+  // null) = same spot. Different name = a different spot even when sharing
+  // an OSM pin (so "Clinton road boulder" pinned to OSM Clinton Road stays
+  // separate from a "Clinton Road" spot picked directly from OSM).
+  const existing = await prisma.activitySpot.findFirst({
+    where: {
+      activitySlug: slug,
+      name: { equals: name, mode: "insensitive" },
+      ...(osmType && osmId
+        ? { osmType, osmId }
+        : { osmType: null, osmId: null }),
+    },
     select: { id: true, region: true, latitude: true, longitude: true },
   });
   if (existing) {
-    const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
+    const updates: { region?: string; latitude?: number; longitude?: number } = {};
     if (region && !existing.region) updates.region = region;
     if (lat !== null && existing.latitude == null) updates.latitude = lat;
     if (lng !== null && existing.longitude == null) updates.longitude = lng;
-    // Backfill OSM identity onto a previously-untagged saved spot —
-    // future picks of the same OSM place dedup against this record.
-    if (osmType && osmId && !osmExisting) {
-      updates.osmType = osmType;
-      updates.osmId = osmId;
-    }
     if (Object.keys(updates).length > 0) {
       await prisma.activitySpot.update({ where: { id: existing.id }, data: updates });
     }
@@ -2138,25 +2133,26 @@ async function resolveClimbLocationId(input: {
   const osmType = input.newClimbLocationOsmType?.trim() || null;
   const osmId = input.newClimbLocationOsmId?.trim() || null;
 
-  const osmExisting = osmType && osmId
-    ? await prisma.climbLocation.findFirst({
-        where: { osmType, osmId },
-        select: { id: true, region: true, latitude: true, longitude: true },
-      })
-    : null;
-  const existing = osmExisting ?? await prisma.climbLocation.findFirst({
-    where: { name: { equals: name, mode: "insensitive" }, type },
+  // Dedup on (name, type, osmId-or-null). Same name + same type + same OSM
+  // pin (or both null) = same record. Different name = different record
+  // even when sharing an OSM pin — keeps custom-named spots distinct from
+  // their OSM-default-named counterparts (e.g., "Buttermilks" vs the OSM
+  // "Bishop" both pinned to Bishop's OSM id).
+  const existing = await prisma.climbLocation.findFirst({
+    where: {
+      name: { equals: name, mode: "insensitive" },
+      type,
+      ...(osmType && osmId
+        ? { osmType, osmId }
+        : { osmType: null, osmId: null }),
+    },
     select: { id: true, region: true, latitude: true, longitude: true },
   });
   if (existing) {
-    const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
+    const updates: { region?: string; latitude?: number; longitude?: number } = {};
     if (region && !existing.region) updates.region = region;
     if (latitude !== null && existing.latitude == null) updates.latitude = latitude;
     if (longitude !== null && existing.longitude == null) updates.longitude = longitude;
-    if (osmType && osmId && !osmExisting) {
-      updates.osmType = osmType;
-      updates.osmId = osmId;
-    }
     if (Object.keys(updates).length > 0) {
       await prisma.climbLocation.update({ where: { id: existing.id }, data: updates });
     }
