@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
 import { deleteFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions";
 import { SectionCard } from "@/app/progress/ui";
@@ -19,10 +19,13 @@ export default async function FrequencyGoalsSection() {
         routines: {
           select: { routineId: true, routine: { select: { id: true, name: true, kind: true, isActive: true } } },
         },
+        triggerExercises: {
+          select: { exerciseId: true },
+        },
       },
     }),
     prisma.routine.findMany({
-      where: { isDeleted: false, isActive: true },
+      where: { isDeleted: false, isActive: true, isPlaceholder: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       select: { id: true, name: true, kind: true },
     }),
@@ -32,13 +35,38 @@ export default async function FrequencyGoalsSection() {
   const activeGoals = goals.filter((g) => g.isActive);
   const maxWindowDays = activeGoals.reduce((max, g) => Math.max(max, getFrequencyGoalWindowDays(g)), 0);
 
+  // Pull richer log data so the matcher can evaluate exercise + subtype
+  // triggers in addition to routineId membership. We always include the
+  // shape for simplicity — the matcher just skips trigger paths when a goal
+  // has no triggers configured.
   const logs =
     maxWindowDays > 0
       ? await prisma.routineLog.findMany({
           where: { performedAt: { gte: new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000) } },
-          select: { routineId: true, performedAt: true },
+          select: {
+            id: true,
+            routineId: true,
+            performedAt: true,
+            routine: { select: { subtype: true } },
+            // `_count.sets` is what gates the exercise-trigger min-sets
+            // check — avoids hydrating SetEntry rows just to count them.
+            exercises: {
+              select: {
+                exerciseId: true,
+                _count: { select: { sets: true } },
+              },
+            },
+          },
         })
       : [];
+
+  const matcherLogs = logs.map((log) => ({
+    id: log.id,
+    routineId: log.routineId,
+    performedAt: log.performedAt,
+    routineSubtype: log.routine?.subtype ?? null,
+    exerciseSets: log.exercises.map((e) => ({ exerciseId: e.exerciseId, setCount: e._count.sets })),
+  }));
 
   const goalShapes = activeGoals.map((g) => ({
     id: g.id,
@@ -48,9 +76,12 @@ export default async function FrequencyGoalsSection() {
     targetUnit: g.targetUnit,
     isActive: g.isActive,
     routineIds: g.routines.map((r) => r.routineId),
+    triggerSubtypes: g.triggerSubtypes,
+    triggerExerciseIds: g.triggerExercises.map((e) => e.exerciseId),
+    triggerMinSets: g.triggerMinSets,
   }));
 
-  const progressList = getFrequencyGoalProgressList({ goals: goalShapes, logs });
+  const progressList = getFrequencyGoalProgressList({ goals: goalShapes, logs: matcherLogs });
 
   const progressById = new Map(progressList.map((p) => [p.goal.id, p]));
 
@@ -108,6 +139,17 @@ export default async function FrequencyGoalsSection() {
                     <summary data-collapsible-summary style={detailsSummaryStyle}>Edit</summary>
                     <form action={updateFrequencyGoal} style={{ marginTop: 10, display: "grid", gap: 10 }}>
                       <input type="hidden" name="id" value={goal.id} />
+                      {/* Preserve "Also count when these appear" triggers
+                          through quick-edit submits — full editing lives in
+                          the drawer. Without these the sync helpers would
+                          wipe the user's trigger list on every Save. */}
+                      {(goal.triggerSubtypes ?? []).map((subtype) => (
+                        <input key={`tsub-${subtype}`} type="hidden" name="triggerSubtypes" value={subtype} />
+                      ))}
+                      {(goal.triggerExercises ?? []).map((row) => (
+                        <input key={`tex-${row.exerciseId}`} type="hidden" name="triggerExerciseIds" value={row.exerciseId} />
+                      ))}
+                      <input type="hidden" name="triggerMinSets" value={goal.triggerMinSets} />
 
                       <div>
                         <label style={labelStyle}>Goal name</label>
@@ -193,10 +235,13 @@ export default async function FrequencyGoalsSection() {
 
         <div style={{ fontSize: 13, opacity: 0.7 }}>
           To add a new group frequency goal, use{" "}
-          <Link href="/goals?mode=new&template=GROUP_ROUTINE_FREQUENCY" style={{ color: "inherit" }}>
+          <NewGoalDrawerButton
+            prefill={{ goalType: "FREQUENCY" }}
+            style={{ color: "inherit", background: "none", border: "none", padding: 0, textDecoration: "underline", cursor: "pointer", font: "inherit" }}
+          >
             New Goal
-          </Link>{" "}
-          and select the &ldquo;Group routine frequency&rdquo; template.
+          </NewGoalDrawerButton>{" "}
+          and pick the &ldquo;Group&rdquo; scope.
         </div>
       </div>
     </SectionCard>

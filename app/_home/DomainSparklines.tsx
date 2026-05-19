@@ -1,6 +1,6 @@
 "use client";
 
-// DomainSparklinesV2 — one row per active domain, 8-week mini bar chart.
+// DomainSparklines — one row per active domain, 8-week mini bar chart.
 //
 // Layout:
 //   • Shared week-range axis at the top of the card (e.g. "5/4–5/10"), each
@@ -22,7 +22,7 @@ type Props = { series: DomainSeries[] };
 type OpenSelection = { domain: DomainTone; weekStartYmd: string } | null;
 type OpenLog = { log: DomainWeek["logs"][number]; accent: string; domainLabel: string } | null;
 
-export default function DomainSparklinesV2({ series }: Props) {
+export default function DomainSparklines({ series }: Props) {
   const [open, setOpen] = useState<OpenSelection>(null);
   const [openLog, setOpenLog] = useState<OpenLog>(null);
 

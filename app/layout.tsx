@@ -3,6 +3,7 @@ import Link from "next/link";
 import AppNavigation, { MobileBottomNavigation, MobileProfileButton } from "./AppNavigation";
 import ActiveSessionTray from "./components/ActiveSessionTray";
 import LogDrawer from "./components/LogDrawer";
+import FormDrawer from "./components/FormDrawer";
 import ClientProviders from "./ClientProviders";
 import "./globals.css";
 
@@ -34,6 +35,7 @@ export default function RootLayout({
           <main className="appMain">{children}</main>
           <ActiveSessionTray />
           <LogDrawer />
+          <FormDrawer />
           <MobileBottomNavigation />
         </ClientProviders>
       </body>

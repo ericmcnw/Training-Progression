@@ -46,6 +46,10 @@ export default function StackedWeeklyBarChart({
   compact?: boolean;
 }) {
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
+  // Clicking a bar pins its tooltip — stays visible after pointer leaves.
+  // Click the same bar again (or the chart background) to dismiss.
+  const [pinnedWeek, setPinnedWeek] = useState<number | null>(null);
+  const activeWeek = hoveredWeek ?? pinnedWeek;
 
   const weekTotals = useMemo(
     () => weekLabels.map((_, wi) => series.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0)),
@@ -132,14 +136,14 @@ export default function StackedWeeklyBarChart({
         height={height}
         style={{ marginTop: 6 }}
         onPointerLeave={() => setHoveredWeek(null)}
+        onClick={() => setPinnedWeek(null)}
       >
         <defs>
-          {/* Shared top-shine gradient applied over every bar segment */}
-          <linearGradient id="bar-shine" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="white" stopOpacity="0.28" />
-            <stop offset="45%"  stopColor="white" stopOpacity="0.06" />
-            <stop offset="100%" stopColor="white" stopOpacity="0"    />
-          </linearGradient>
+          {/* Soft drop shadow beneath each bar — calibrated to read on the
+              chart's dark gradient panel without looking heavy. */}
+          <filter id="bar-shadow" x="-25%" y="-10%" width="150%" height="125%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="black" floodOpacity="0.32" />
+          </filter>
 
           {/* Bloom glow applied to the hovered column */}
           <filter id="col-glow" x="-35%" y="-25%" width="170%" height="150%">
@@ -169,57 +173,124 @@ export default function StackedWeeklyBarChart({
           );
         })}
 
-        {/* Bars */}
+        {/* Bars — Direction A: solid flat segments separated by 2px gaps
+            that reveal the chart panel background, one rounded top corner
+            cap per bar, soft drop shadow beneath the whole stack, hairline
+            highlight along the top edge to catch light. No gradients. */}
         {weekLabels.map((label, wi) => {
           const cx = margin.left + wi * barStep + barStep / 2;
           const x = cx - barWidth / 2;
-          const isHovered = hoveredWeek === wi;
-          const isDimmed = hoveredWeek !== null && !isHovered;
-          let currentY = margin.top + innerH;
+          const isActive = activeWeek === wi;
+          const isDimmed = activeWeek !== null && !isActive;
+          const isPinned = pinnedWeek === wi;
+          const baseY = margin.top + innerH;
+          const totalVal = series.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0);
+          const totalBarH = (totalVal / yMax) * innerH;
+          const barTopY = baseY - totalBarH;
+          // Subtle radius — barely-rounded so the bars still feel architectural
+          // and dense, just softened at the top. Matches the small 4px pyramid
+          // bar radius in ClimbingProgressView for visual consistency.
+          const cornerR = Math.min(4, totalBarH / 2);
+          // Gap between stacked segments. Reveals the chart panel background,
+          // giving the bar a clean "stacked card" feel.
+          const SEG_GAP = 2;
+
+          // Path with rounded TOP corners only — bottom sits on the axis line.
+          const clipId = `bar-clip-${wi}`;
+          const roundedTopPath = totalBarH > 0
+            ? `M ${x},${barTopY + cornerR} Q ${x},${barTopY} ${x + cornerR},${barTopY} L ${x + barWidth - cornerR},${barTopY} Q ${x + barWidth},${barTopY} ${x + barWidth},${barTopY + cornerR} L ${x + barWidth},${baseY} L ${x},${baseY} Z`
+            : "";
+
+          let currentY = baseY;
+          const visibleSegments = series
+            .map((s, idx) => ({ s, idx, val: s.weeklyValues[wi] ?? 0 }))
+            .filter((seg) => seg.val > 0);
 
           return (
             <g key={`bar-${wi}`}>
-              {/* Segments — dimmed/glowed as a unit */}
+              {totalBarH > 0 && (
+                <defs>
+                  <clipPath id={clipId}>
+                    <path d={roundedTopPath} />
+                  </clipPath>
+                </defs>
+              )}
+
+              {/* Segments — clipped to a single rounded-top container.
+                  Each non-topmost segment loses 2px from its top edge,
+                  creating a transparent gap above it. Inside the clipPath,
+                  the gaps reveal the chart panel background. */}
               <g
-                opacity={isDimmed ? 0.3 : 1}
-                filter={isHovered ? "url(#col-glow)" : undefined}
+                opacity={isDimmed ? 0.35 : 1}
+                filter={isActive ? "url(#col-glow)" : "url(#bar-shadow)"}
+                clipPath={totalBarH > 0 ? `url(#${clipId})` : undefined}
               >
-                {series.map((s) => {
-                  const val = s.weeklyValues[wi] ?? 0;
-                  if (val <= 0) return null;
-                  const barH = (val / yMax) * innerH;
+                {visibleSegments.map((seg, segIdx) => {
+                  const barH = (seg.val / yMax) * innerH;
                   currentY -= barH;
                   const segY = currentY;
+                  const isTopmost = segIdx === visibleSegments.length - 1;
+                  const drawY = isTopmost ? segY : segY + SEG_GAP;
+                  const drawH = isTopmost ? barH : Math.max(0, barH - SEG_GAP);
+                  if (drawH <= 0) return null;
                   return (
-                    <g key={s.label}>
-                      <rect x={x} y={segY} width={barWidth} height={barH} fill={s.color} rx={3} />
-                      <rect x={x} y={segY} width={barWidth} height={barH}
-                        fill="url(#bar-shine)" rx={3} style={{ pointerEvents: "none" }} />
-                    </g>
+                    <rect
+                      key={seg.s.label}
+                      x={x}
+                      y={drawY}
+                      width={barWidth}
+                      height={drawH}
+                      fill={seg.s.color}
+                    />
                   );
                 })}
               </g>
 
-              {/* Transparent hit area */}
+              {/* Hairline highlight along the rounded top — catches "light"
+                  and defines the bar edge without making it look heavy. */}
+              {totalBarH > 0 && (
+                <path
+                  d={roundedTopPath}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.12)"
+                  strokeWidth="1"
+                  style={{ pointerEvents: "none" }}
+                />
+              )}
+
+              {/* Transparent hit area — hover shows tooltip, click pins it */}
               <rect
                 x={x - 4} y={margin.top}
                 width={barWidth + 8} height={innerH}
                 fill="transparent"
                 style={{ cursor: "pointer" }}
                 onPointerEnter={() => setHoveredWeek(wi)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinnedWeek((p) => (p === wi ? null : wi));
+                }}
               />
 
-              {/* X-axis label */}
+              {/* X-axis label — pinned weeks render with a subtle pill outline so the user knows it's "stuck" */}
               <line
                 x1={cx} y1={margin.top + innerH}
                 x2={cx} y2={margin.top + innerH + 4}
-                stroke={isHovered ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}
+                stroke={isActive ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}
               />
+              {isPinned && (
+                <rect
+                  x={cx - 17} y={margin.top + innerH + 5}
+                  width={34} height={14} rx={4}
+                  fill="rgba(100,170,255,0.12)"
+                  stroke="rgba(100,170,255,0.35)"
+                  style={{ pointerEvents: "none" }}
+                />
+              )}
               <text
                 x={cx} y={margin.top + innerH + 16}
                 textAnchor="middle" fontSize="10"
-                fill={isHovered ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.42)"}
-                fontWeight={isHovered ? "700" : "400"}
+                fill={isActive ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.42)"}
+                fontWeight={isActive ? "700" : "400"}
               >
                 {label}
               </text>
@@ -227,9 +298,10 @@ export default function StackedWeeklyBarChart({
           );
         })}
 
-        {/* Tooltip */}
-        {hoveredWeek !== null && weekTotals[hoveredWeek] > 0 ? (() => {
-          const wi = hoveredWeek;
+        {/* Tooltip — shows for hover OR pinned week. Hover takes precedence. */}
+        {activeWeek !== null && weekTotals[activeWeek] > 0 ? (() => {
+          const wi = activeWeek;
+          const isPinnedTooltip = pinnedWeek === wi && hoveredWeek === null;
           const cx = margin.left + wi * barStep + barStep / 2;
           const activeEntries = series.filter((s) => (s.weeklyValues[wi] ?? 0) > 0);
           const totalMinsWeek = weeklyMinutesTotals[wi] ?? 0;
@@ -265,19 +337,30 @@ export default function StackedWeeklyBarChart({
               {/* Card shadow */}
               <rect x={tx + 2} y={ty + 3} width={tooltipW} height={tooltipH} rx={9}
                 fill="rgba(0,0,0,0.4)" />
-              {/* Card */}
+              {/* Card — pinned tooltips get a warmer amber accent so the user
+                  knows it's "stuck" and not just a hover preview. */}
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={9}
                 fill="rgba(6,12,30,0.97)"
-                stroke="rgba(120,180,255,0.2)" strokeWidth="1" />
+                stroke={isPinnedTooltip ? "rgba(251,191,36,0.35)" : "rgba(120,180,255,0.2)"}
+                strokeWidth="1" />
               {/* Top accent line */}
               <rect x={tx} y={ty} width={tooltipW} height={2} rx={9}
-                fill="rgba(100,170,255,0.35)" />
+                fill={isPinnedTooltip ? "rgba(251,191,36,0.55)" : "rgba(100,170,255,0.35)"} />
 
               {/* Week label */}
               <text x={tx + 11} y={ty + WEEK_Y} fontSize="11"
-                fill="rgba(160,215,255,0.95)" fontWeight="800" letterSpacing="0.2">
+                fill={isPinnedTooltip ? "rgba(251,220,140,0.95)" : "rgba(160,215,255,0.95)"}
+                fontWeight="800" letterSpacing="0.2">
                 {weekLabels[wi]}
               </text>
+
+              {/* Close hint — only when pinned. Tells the user how to dismiss. */}
+              {isPinnedTooltip && (
+                <text x={tx + tooltipW - 11} y={ty + WEEK_Y} fontSize="10"
+                  fill="rgba(255,255,255,0.4)" fontWeight="700" textAnchor="end">
+                  ✕ click to close
+                </text>
+              )}
 
               {/* Divider */}
               <line x1={tx + 8} y1={ty + DIVIDER_Y} x2={tx + tooltipW - 8} y2={ty + DIVIDER_Y}

@@ -1,8 +1,8 @@
 "use client";
 
-// HabitGridV2 — 7-day grid of habit rows. Tapping a row expands an inline
-// detail panel below it (30-day strip + stats + actions). Only one row
-// expanded at a time. No modal popovers.
+// HabitGrid — 7-day grid of frequency-goal rows. Tapping a row expands an
+// inline detail panel below it (30-day strip + stats + actions). Only one
+// row expanded at a time. No modal popovers.
 //
 // The dot strip uses CSS grid (not flex) so every dot lands at exactly 1/7
 // of the column width, regardless of intrinsic size.
@@ -20,7 +20,7 @@ type Props = {
   today: string;
 };
 
-export default function HabitGridV2({ rows, today }: Props) {
+export default function HabitGrid({ rows, today }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (rows.length === 0) {

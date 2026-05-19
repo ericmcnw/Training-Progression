@@ -103,6 +103,11 @@ export type GoalInsight = {
   hasData: boolean;
   history: GoalHistoryPoint[];
   recentItems: GoalRecentItem[];
+  /** Count of trigger-exercise rows on the goal (group frequency goals
+   *  only). Used by the row to render a "+N triggers" chip. */
+  triggerExerciseCount?: number;
+  /** Count of trigger-subtype values on the goal (group frequency only). */
+  triggerSubtypeCount?: number;
 };
 
 export type GoalChartReference = {
@@ -153,6 +158,7 @@ type GroupFrequencyGoalRow = {
   targetCount: number;
   targetInterval: number;
   targetUnit: "DAY" | "WEEK" | "MONTH";
+  weekdayMask?: number | null;
   routines: Array<{
     routineId: string;
     routine: {
@@ -160,6 +166,14 @@ type GroupFrequencyGoalRow = {
       name: string;
     };
   }>;
+  /** Subtypes that broaden the match — see FrequencyGoal model docs. */
+  triggerSubtypes?: string[];
+  /** Exercise ids that broaden the match — captures quick logs that don't
+   *  belong to any enrolled routine. */
+  triggerExerciseIds?: string[];
+  /** Minimum sets of a trigger exercise required in a single log for it
+   *  to claim a session via the exercise-trigger path. Defaults to 1. */
+  triggerMinSets?: number;
 };
 
 function isRoutineFrequencyGoalLike(goal: Pick<Goal, "goalType" | "targetType" | "metricType" | "targetId">) {
@@ -1137,7 +1151,13 @@ function timeframeForGroupFrequencyGoal(goal: Pick<GroupFrequencyGoalRow, "targe
   return "WEEK";
 }
 
-type GroupFrequencyLogRow = { id: string; routineId: string; performedAt: Date; routine: { id: string; name: string } };
+type GroupFrequencyLogRow = {
+  id: string;
+  routineId: string;
+  performedAt: Date;
+  routine: { id: string; name: string; subtype?: string | null };
+  exercises?: Array<{ exerciseId: string; _count: { sets: number } }>;
+};
 
 function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: GroupFrequencyLogRow[], now: Date): GoalInsight {
   const progress = getFrequencyGoalProgressList({
@@ -1150,9 +1170,21 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
         targetUnit: goal.targetUnit,
         isActive: goal.isActive,
         routineIds: goal.routines.map((entry) => entry.routineId),
+        triggerSubtypes: goal.triggerSubtypes,
+        triggerExerciseIds: goal.triggerExerciseIds,
+        triggerMinSets: goal.triggerMinSets,
       },
     ],
-    logs: logs.map((log) => ({ routineId: log.routineId, performedAt: log.performedAt })),
+    logs: logs.map((log) => ({
+      id: log.id,
+      routineId: log.routineId,
+      performedAt: log.performedAt,
+      routineSubtype: log.routine.subtype ?? null,
+      exerciseSets: log.exercises?.map((e) => ({
+        exerciseId: e.exerciseId,
+        setCount: e._count.sets,
+      })) ?? [],
+    })),
     now,
   })[0];
 
@@ -1215,6 +1247,8 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
       performedAt: log.performedAt,
       contributionLabel: "1 session",
     })),
+    triggerExerciseCount: goal.triggerExerciseIds?.length ?? 0,
+    triggerSubtypeCount: goal.triggerSubtypes?.length ?? 0,
   } satisfies GoalInsight;
 }
 
@@ -1223,20 +1257,60 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
   const now = new Date();
   const maxWindowDays = Math.max(0, ...goals.map((g) => getFrequencyGoalWindowDays(g)));
   if (maxWindowDays === 0) return goals.map((goal) => buildGroupFrequencyGoalInsightCore(goal, [], now));
+
+  // Build the union of every match criterion across all goals so we fetch
+  // log rows once instead of N times. Goals without triggers contribute
+  // just their routineIds; goals with triggers also broaden the fetch via
+  // subtype OR exercise-id filters so the in-memory matcher actually sees
+  // the trigger-matching logs.
   const allRoutineIds = Array.from(new Set(goals.flatMap((g) => g.routines.map((r) => r.routineId))));
+  const allTriggerSubtypes = Array.from(new Set(goals.flatMap((g) => g.triggerSubtypes ?? [])));
+  const allTriggerExerciseIds = Array.from(new Set(goals.flatMap((g) => g.triggerExerciseIds ?? [])));
+  const hasTriggers = allTriggerSubtypes.length > 0 || allTriggerExerciseIds.length > 0;
+
+  const windowStart = new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000);
+  const logWhere: import("@/generated/prisma").Prisma.RoutineLogWhereInput = hasTriggers
+    ? {
+        performedAt: { gte: windowStart },
+        OR: [
+          { routineId: { in: allRoutineIds } },
+          ...(allTriggerSubtypes.length > 0
+            ? [{ routine: { subtype: { in: allTriggerSubtypes } } }]
+            : []),
+          ...(allTriggerExerciseIds.length > 0
+            ? [{ exercises: { some: { exerciseId: { in: allTriggerExerciseIds } } } }]
+            : []),
+        ],
+      }
+    : {
+        routineId: { in: allRoutineIds },
+        performedAt: { gte: windowStart },
+      };
+
   const allLogs = await prisma.routineLog.findMany({
-    where: {
-      routineId: { in: allRoutineIds },
-      performedAt: { gte: new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000) },
+    where: logWhere,
+    select: {
+      id: true,
+      routineId: true,
+      performedAt: true,
+      routine: { select: { id: true, name: true, subtype: true } },
+      // Per-exercise set counts so the matcher can honor triggerMinSets.
+      exercises: {
+        select: {
+          exerciseId: true,
+          _count: { select: { sets: true } },
+        },
+      },
     },
-    select: { id: true, routineId: true, performedAt: true, routine: { select: { id: true, name: true } } },
     orderBy: { performedAt: "desc" },
   });
+
   return goals.map((goal) => {
-    const goalRoutineIds = new Set(goal.routines.map((r) => r.routineId));
     const windowMs = getFrequencyGoalWindowDays(goal) * 24 * 60 * 60 * 1000;
-    const windowStart = new Date(now.getTime() - windowMs);
-    const goalLogs = allLogs.filter((log) => goalRoutineIds.has(log.routineId) && log.performedAt >= windowStart);
+    const goalWindowStart = new Date(now.getTime() - windowMs);
+    // Pre-filter to logs in this goal's window — the matcher rechecks but
+    // this trims the input before per-goal allocation.
+    const goalLogs = allLogs.filter((log) => log.performedAt >= goalWindowStart);
     return buildGroupFrequencyGoalInsightCore(goal, goalLogs, now);
   });
 }
@@ -1244,7 +1318,9 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
 export async function getGoalFormOptions(): Promise<GoalFormOptions> {
   const [routines, exercises, groups, sessionTemplates] = await Promise.all([
     prisma.routine.findMany({
-      where: { isDeleted: false },
+      // Hide placeholder routines from goal target dropdowns — they exist
+      // to host ad-hoc logs and were never meant to be picked by a user.
+      where: { isDeleted: false, isPlaceholder: false },
       orderBy: [{ domain: "asc" }, { name: "asc" }],
       select: {
         id: true,
@@ -1418,6 +1494,9 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
                 },
               },
             },
+            triggerExercises: {
+              select: { exerciseId: true },
+            },
           },
           orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }, { name: "asc" }],
         })
@@ -1446,10 +1525,30 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
         },
       ];
     });
+  // Flatten the triggerExercises join into a plain id list so the matcher
+  // input matches the GroupFrequencyGoalRow shape it expects.
+  const groupFrequencyRows: GroupFrequencyGoalRow[] = groupFrequencyGoals.map((g) => ({
+    id: g.id,
+    name: g.name,
+    isActive: g.isActive,
+    createdAt: g.createdAt,
+    updatedAt: g.updatedAt,
+    targetCount: g.targetCount,
+    targetInterval: g.targetInterval,
+    targetUnit: g.targetUnit,
+    weekdayMask: g.weekdayMask ?? null,
+    routines: g.routines.map((r) => ({
+      routineId: r.routineId,
+      routine: r.routine,
+    })),
+    triggerSubtypes: g.triggerSubtypes,
+    triggerExerciseIds: g.triggerExercises.map((e) => e.exerciseId),
+    triggerMinSets: g.triggerMinSets,
+  }));
   const [manualInsights, routineInsights, groupFrequencyInsights] = await Promise.all([
     batchBuildGoalInsights(goals),
     batchBuildRoutineFrequencyGoalInsights(routineFrequencyRows),
-    batchBuildGroupFrequencyGoalInsights(groupFrequencyGoals),
+    batchBuildGroupFrequencyGoalInsights(groupFrequencyRows),
   ]);
   const manualRoutineFrequencyTargetIds = new Set(
     manualInsights
@@ -1482,14 +1581,24 @@ export async function getGroupFrequencyGoalById(goalId: string) {
   const normalizedGoalId = decodeURIComponent(goalId);
   const id = normalizedGoalId.startsWith("group-frequency:") ? normalizedGoalId.slice("group-frequency:".length) : normalizedGoalId;
   if (!id) return null;
-  return prisma.frequencyGoal.findUnique({
+  const goal = await prisma.frequencyGoal.findUnique({
     where: { id },
     include: {
       routines: {
         select: { routineId: true, role: true },
       },
+      triggerExercises: {
+        select: { exerciseId: true },
+      },
     },
   });
+  if (!goal) return null;
+  // Flatten the join rows so callers consume a clean string[] (the form
+  // initial values + matcher input both expect plain ids).
+  return {
+    ...goal,
+    triggerExerciseIds: goal.triggerExercises.map((row) => row.exerciseId),
+  };
 }
 
 export async function getGoalInsight(goalId: string) {
@@ -1510,6 +1619,9 @@ export async function getGoalInsight(goalId: string) {
             routine: { select: { id: true, name: true } },
           },
         },
+        triggerExercises: {
+          select: { exerciseId: true },
+        },
       },
     });
     if (!goal || goal.routines.length === 0) return null;
@@ -1522,9 +1634,13 @@ export async function getGoalInsight(goalId: string) {
       targetCount: goal.targetCount,
       targetInterval: goal.targetInterval,
       targetUnit: goal.targetUnit,
+      weekdayMask: goal.weekdayMask ?? null,
       routines: goal.routines
         .filter((r): r is typeof r & { routine: { id: string; name: string } } => Boolean(r.routine))
         .map((r) => ({ routineId: r.routineId, routine: { id: r.routine.id, name: r.routine.name } })),
+      triggerSubtypes: goal.triggerSubtypes,
+      triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
+      triggerMinSets: goal.triggerMinSets,
     };
     const [insight] = await batchBuildGroupFrequencyGoalInsights([shape]);
     return insight ?? null;

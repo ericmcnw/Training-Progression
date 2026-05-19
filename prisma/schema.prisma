@@ -184,6 +184,12 @@ model Routine {
   timesPerWeek Int?
   isActive     Boolean     @default(true)
 
+  // Placeholder routines are auto-created hosts for ad-hoc logs (e.g. one per
+  // (domain, subtype) combo for Quick Workouts). They participate in Training
+  // Balance and trigger-exercise goal matching, but are filtered out of every
+  // user-facing routine list, picker, and goal-target dropdown.
+  isPlaceholder Boolean @default(false)
+
   // soft delete (hide from UI, keep logs for progress)
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -205,6 +211,7 @@ model Routine {
   @@index([isActive])
   @@index([isDeleted])
   @@index([kind, subtype])
+  @@index([isPlaceholder])
 }
 
 model SessionTemplate {
@@ -639,6 +646,7 @@ model Exercise {
   metadataGroups   ExerciseMetadataGroup[]
   guidedSteps      GuidedStep[]
   guidedStepLogs   GuidedStepLog[]
+  triggeredGoals   FrequencyGoalTriggerExercise[]
 
   @@index([libraryKind, name])
 }
@@ -900,6 +908,20 @@ model FrequencyGoal {
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
+  // Optional broaden-the-net config. A log counts toward this goal when
+  // log.routineId is in `routines` (existing PRIMARY/SUBSTITUTE) OR the
+  // log's routine has a subtype in `triggerSubtypes` OR any exercise inside
+  // the log is in `triggerExercises`. Used to catch ad-hoc / quick logs
+  // that aren't members of a saved routine the user already listed.
+  triggerSubtypes  String[]                       @default([])
+  triggerExercises FrequencyGoalTriggerExercise[]
+  // Minimum number of trigger-exercise sets a log must contain to claim a
+  // session via the exercise-trigger path. 1 = any set counts (default).
+  // Higher values stop a single warmup pull-up from claiming a Pull
+  // Strength session. Ignored for routine-id and subtype matches —
+  // they're already routine-level claims.
+  triggerMinSets   Int                            @default(1)
+
   routines FrequencyGoalRoutine[]
 
   @@index([isActive])
@@ -920,6 +942,22 @@ model FrequencyGoalRoutine {
 
   @@id([goalId, routineId])
   @@index([routineId])
+}
+
+// Exercise-based "also count when these appear" rule. A goal with even one
+// row here will pick up any log that contains the exercise — including quick
+// workout logs that aren't part of an enrolled routine. See the matcher in
+// lib/frequency-goals.ts for the OR'd evaluation order.
+model FrequencyGoalTriggerExercise {
+  goalId     String
+  exerciseId String
+  addedAt    DateTime @default(now())
+
+  goal     FrequencyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  exercise Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, exerciseId])
+  @@index([exerciseId])
 }
 
 enum FrequencyGoalRole {

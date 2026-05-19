@@ -96,7 +96,7 @@ export default async function SchedulePage({
 
   const [rawRoutines, manualRaw, logRange, routineFrequencyGoals] = await prisma.$transaction([
     prisma.routine.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, isPlaceholder: false },
       orderBy: [{ isActive: "desc" }, { kind: "asc" }, { domain: "asc" }, { name: "asc" }],
       select: {
         id: true,

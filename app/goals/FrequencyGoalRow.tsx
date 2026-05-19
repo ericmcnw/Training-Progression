@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { GOAL_TYPE_ACCENT, GoalStatusBadge, smallActionLinkStyle } from "./ui";
 import DeleteGoalButton from "./DeleteGoalButton";
+import { useFormDrawer } from "@/app/contexts/FormDrawerContext";
 
 export type FrequencyGoalRowData = {
   id: string;
@@ -24,6 +24,12 @@ export type FrequencyGoalRowData = {
     date: string;
   }>;
   showRoutineNames: boolean;
+  /** Count of "Also count when these appear" exercises configured on this
+   *  goal — surfaces as a small chip so users know the goal accepts
+   *  trigger-matched logs. Zero suppresses the chip. */
+  triggerExerciseCount?: number;
+  /** Same idea for trigger subtypes (activity types). */
+  triggerSubtypeCount?: number;
 };
 
 function RowDots({
@@ -144,6 +150,7 @@ export function FrequencyGoalRow({
   currentGoalsHref: string;
 }) {
   const [open, setOpen] = useState(false);
+  const { openGoalEdit } = useFormDrawer();
   const accentColor = GOAL_TYPE_ACCENT.FREQUENCY;
 
   return (
@@ -172,14 +179,29 @@ export function FrequencyGoalRow({
           <div style={{ flex: "1 1 0", minWidth: 0, textAlign: "left" }}>
             <div
               style={{
-                fontWeight: 800,
-                fontSize: 14,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                minWidth: 0,
               }}
             >
-              {data.name}
+              <div
+                style={{
+                  fontWeight: 800,
+                  fontSize: 14,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: "1 1 auto",
+                  minWidth: 0,
+                }}
+              >
+                {data.name}
+              </div>
+              <TriggerBadge
+                exerciseCount={data.triggerExerciseCount ?? 0}
+                subtypeCount={data.triggerSubtypeCount ?? 0}
+              />
             </div>
             <div className="goalFreqTriggerWindow" style={{ fontSize: 11, opacity: 0.5, marginTop: 1, whiteSpace: "nowrap" }}>
               {data.timeframeWindowLabel}
@@ -222,9 +244,13 @@ export function FrequencyGoalRow({
             </button>
           </form>
           {data.editHref ? (
-            <Link href={data.editHref} style={smallActionLinkStyle}>
+            <button
+              type="button"
+              onClick={() => openGoalEdit(data.goalId)}
+              style={{ ...smallActionLinkStyle, background: "none", border: "none", cursor: "pointer" }}
+            >
               Edit
-            </Link>
+            </button>
           ) : null}
           <DeleteGoalButton goalId={data.goalId} />
         </div>
@@ -409,3 +435,41 @@ const toggleOffStyle: React.CSSProperties = {
   background: "rgba(248,113,113,0.12)",
   color: "#ffd4d4",
 };
+
+// Small chip rendered next to the goal name when the goal has trigger rules
+// configured. Hover text spells out the counts so curious users know what
+// they're seeing without opening the edit drawer.
+function TriggerBadge({
+  exerciseCount,
+  subtypeCount,
+}: {
+  exerciseCount: number;
+  subtypeCount: number;
+}) {
+  if (exerciseCount === 0 && subtypeCount === 0) return null;
+  const parts: string[] = [];
+  if (exerciseCount > 0) parts.push(`${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}`);
+  if (subtypeCount > 0) parts.push(`${subtypeCount} activity type${subtypeCount === 1 ? "" : "s"}`);
+  const title = `Also counts logs matching: ${parts.join(" + ")}`;
+  const label = exerciseCount + subtypeCount === 1 ? "+1 trigger" : `+${exerciseCount + subtypeCount} triggers`;
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      style={{
+        flexShrink: 0,
+        fontSize: 10,
+        fontWeight: 800,
+        letterSpacing: 0.3,
+        padding: "2px 7px",
+        borderRadius: 999,
+        border: "1px solid rgba(129,140,248,0.42)",
+        background: "rgba(129,140,248,0.13)",
+        color: "rgb(199,210,254)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}

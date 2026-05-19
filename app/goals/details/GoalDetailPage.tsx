@@ -1,12 +1,10 @@
 import Link from "next/link";
 import MetricLineChart from "@/app/progress/MetricLineChart";
-import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
-import { toAppYmd, todayAppYmd } from "@/lib/dates";
-import { getGoalById, getGoalFormOptions, getGoalInsight, getGroupFrequencyGoalById, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
-import GoalForm, { type GoalFormInitial } from "../GoalForm";
-import { updateGoal } from "../actions";
-import { updateFrequencyGoal } from "@/app/routines/actions";
+import { SectionCard, SectionLinkButton } from "@/app/progress/ui";
+import { todayAppYmd } from "@/lib/dates";
+import { getGoalInsight, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
 import DeleteGoalButton from "../DeleteGoalButton";
+import { EditGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { GoalMetaLine, GoalProgressRing, GoalStatusBadge, cardStyle, chipStyle, subtleTextStyle } from "../ui";
 import { getFrequencyConsistency } from "@/lib/frequency-consistency";
 import FrequencyHeatmap from "@/app/components/dashboard/FrequencyHeatmap";
@@ -18,121 +16,13 @@ export const dynamic = "force-dynamic";
 type Params = { goalId: string };
 type SearchParams = Record<string, string | string[] | undefined>;
 
-function getParam(params: SearchParams, key: string) {
-  const value = params[key];
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function toYmd(date: Date | null) {
-  return date ? toAppYmd(date) : "";
-}
-
 export default async function GoalDetailPage(props: {
   params: Promise<Params> | Params;
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
   const params = await Promise.resolve(props.params);
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
-  const mode = getParam(searchParams, "mode") === "edit" ? "edit" : "detail";
+  await Promise.resolve(props.searchParams ?? {});
   const normalizedGoalId = decodeURIComponent(params.goalId);
-  const isGroupFrequencyGoal = normalizedGoalId.startsWith("group-frequency:");
-
-  if (mode === "edit") {
-    if (isGroupFrequencyGoal) {
-      const [goal, options] = await Promise.all([
-        getGroupFrequencyGoalById(normalizedGoalId),
-        getGoalFormOptions(),
-      ]);
-
-      if (!goal) {
-        return <div style={{ padding: 20 }}>Goal not found.</div>;
-      }
-
-      const initial: GoalFormInitial = {
-        name: goal.name,
-        goalType: "FREQUENCY",
-        targetType: "GROUP",
-        targetId: "",
-        metricType: "SESSIONS",
-        timeframe: goal.targetUnit,
-        targetValue: goal.targetCount,
-        startDate: "",
-        endDate: "",
-        isActive: goal.isActive,
-        notes: "",
-        benchmarkDistanceMi: "",
-        benchmarkLabel: "",
-        sessionMetricDefinitionId: "",
-        sessionMetricTarget: "",
-        groupFrequencyGoalId: goal.id,
-        groupFrequency: {
-          targetCount: goal.targetCount,
-          targetInterval: goal.targetInterval,
-          targetUnit: goal.targetUnit,
-          weekdayMask: goal.weekdayMask ?? null,
-          routineIds: goal.routines.filter((entry) => entry.role !== "SUBSTITUTE").map((entry) => entry.routineId),
-          substituteRoutineIds: goal.routines.filter((entry) => entry.role === "SUBSTITUTE").map((entry) => entry.routineId),
-        },
-      };
-
-      return (
-        <ProgressShell
-          section="overview"
-          title={`Edit: ${goal.name}`}
-          subtitle="Update the grouped routine frequency target and included routines."
-          actions={<SectionLinkButton href="/goals" label="Back to Goals" />}
-        >
-          <SectionCard title="Edit Goal">
-            <GoalForm
-              action={updateGoal}
-              groupFrequencyAction={updateFrequencyGoal}
-              options={options}
-              submitLabel="Update Goal"
-              initial={initial}
-            />
-          </SectionCard>
-        </ProgressShell>
-      );
-    }
-
-    const [goal, options] = await Promise.all([getGoalById(normalizedGoalId), getGoalFormOptions()]);
-
-    if (!goal) {
-      return <div style={{ padding: 20 }}>Goal not found.</div>;
-    }
-
-    const initial: GoalFormInitial = {
-      id: goal.id,
-      name: goal.name,
-      goalType: goal.goalType,
-      targetType: goal.targetType,
-      targetId: goal.targetId,
-      metricType: goal.metricType,
-      timeframe: goal.timeframe,
-      targetValue: goal.targetValue,
-      startDate: toYmd(goal.startDate),
-      endDate: toYmd(goal.endDate),
-      isActive: goal.isActive,
-      notes: goal.notes ?? "",
-      benchmarkDistanceMi: goal.config?.benchmarkDistanceMi ? String(goal.config.benchmarkDistanceMi) : "",
-      benchmarkLabel: goal.config?.benchmarkLabel ?? "",
-      sessionMetricDefinitionId: goal.config?.sessionMetricDefinitionId ?? "",
-      sessionMetricTarget: goal.config?.sessionMetricTargetText ?? "",
-    };
-
-    return (
-      <ProgressShell
-        section="overview"
-        title={`Edit: ${goal.name}`}
-        subtitle="Update the target definition without touching the underlying routine or progress data."
-        actions={<SectionLinkButton href={`/goals/${goal.id}`} label="Back to Goal" />}
-      >
-        <SectionCard title="Edit Goal">
-          <GoalForm action={updateGoal} options={options} submitLabel="Update Goal" initial={initial} />
-        </SectionCard>
-      </ProgressShell>
-    );
-  }
 
   const entry = await getGoalInsight(normalizedGoalId);
 
@@ -161,7 +51,9 @@ export default async function GoalDetailPage(props: {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <SectionLinkButton href="/goals" label="Back to Goals" />
-          <SectionLinkButton href={`/goals/${entry.goal.id}?mode=edit`} label="Edit Goal" />
+          <EditGoalDrawerButton goalId={entry.goal.id} style={editGoalCtaStyle}>
+            Edit Goal
+          </EditGoalDrawerButton>
         </div>
       </div>
 
@@ -273,3 +165,13 @@ export default async function GoalDetailPage(props: {
     </div>
   );
 }
+
+const editGoalCtaStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 12,
+  color: "inherit",
+  fontWeight: 800,
+  background: "rgba(255,255,255,0.06)",
+  cursor: "pointer",
+};

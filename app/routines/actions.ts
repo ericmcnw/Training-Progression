@@ -1114,6 +1114,7 @@ export async function createRoutine(formData: FormData) {
   if (kind === "WORKOUT" && postCreate === "template") {
     redirect(`/routines/${created.id}/template`);
   }
+  if (formData.get("noRedirect") === "1") return;
   redirect("/routines");
 }
 
@@ -1240,6 +1241,7 @@ export async function updateRoutine(formData: FormData) {
   if (kind === "WORKOUT" && postSave === "template") {
     redirect(`/routines/${id}/template`);
   }
+  if (formData.get("noRedirect") === "1") return;
   redirect("/routines");
 }
 
@@ -1371,6 +1373,31 @@ function parseFrequencyGoalFields(formData: FormData) {
   const primarySet = new Set(routineIds);
   const substituteRoutineIds = Array.from(new Set(rawSubs.filter((id) => !primarySet.has(id))));
 
+  // "Also count when these appear" — optional broaden-the-net triggers.
+  // - triggerExerciseIds: catches any log containing one of these exercises
+  //   (including quick workouts that aren't in any saved routine).
+  // - triggerSubtypes: catches any log whose routine's activity-type subtype
+  //   is in this set (e.g. "any CLIMBING session", "any STRENGTH workout").
+  const triggerExerciseIds = Array.from(
+    new Set(formData.getAll("triggerExerciseIds").map(String).filter(Boolean))
+  );
+  const triggerSubtypes = Array.from(
+    new Set(
+      formData
+        .getAll("triggerSubtypes")
+        .map((v) => String(v).trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+  // Minimum trigger-exercise sets gate for the exercise-trigger path. Clamp
+  // to [1, 99] so a typo can't make a goal impossible to satisfy. Defaults
+  // to 1 when absent — same as the DB default and pre-feature behavior.
+  const rawMinSets = String(formData.get("triggerMinSets") ?? "").trim();
+  const parsedMinSets = Number(rawMinSets);
+  const triggerMinSets = Number.isFinite(parsedMinSets) && parsedMinSets >= 1
+    ? Math.min(99, Math.floor(parsedMinSets))
+    : 1;
+
   // Weekday mask: posted as multiple form fields named "weekday" with bit
   // values 1, 2, 4, 8, 16, 32, 64 (Sun..Sat). We OR them and clamp to a
   // valid 0–127 range; null means "any day counts" (flexible weekly).
@@ -1389,7 +1416,18 @@ function parseFrequencyGoalFields(formData: FormData) {
   if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
   if (!targetUnit) throw new Error("Target unit is required.");
 
-  return { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds };
+  return {
+    name,
+    targetCount,
+    targetInterval,
+    targetUnit,
+    weekdayMask,
+    routineIds,
+    substituteRoutineIds,
+    triggerExerciseIds,
+    triggerSubtypes,
+    triggerMinSets,
+  };
 }
 
 async function syncFrequencyGoalRoutines(
@@ -1410,33 +1448,72 @@ async function syncFrequencyGoalRoutines(
   }
 }
 
+// Mirror of syncFrequencyGoalRoutines but for the trigger-exercise join.
+// Wipe-and-rewrite is simpler than diffing and the table is tiny per goal.
+async function syncFrequencyGoalTriggerExercises(goalId: string, exerciseIds: string[]) {
+  await prisma.frequencyGoalTriggerExercise.deleteMany({ where: { goalId } });
+  const rows = Array.from(new Set(exerciseIds)).map((exerciseId) => ({ goalId, exerciseId }));
+  if (rows.length > 0) {
+    await prisma.frequencyGoalTriggerExercise.createMany({
+      data: rows,
+      skipDuplicates: true,
+    });
+  }
+}
+
 export async function createFrequencyGoal(formData: FormData) {
-  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds } = parseFrequencyGoalFields(formData);
+  const {
+    name,
+    targetCount,
+    targetInterval,
+    targetUnit,
+    weekdayMask,
+    routineIds,
+    substituteRoutineIds,
+    triggerExerciseIds,
+    triggerSubtypes,
+    triggerMinSets,
+  } = parseFrequencyGoalFields(formData);
 
   const goal = await prisma.frequencyGoal.create({
-    data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
+    data: { name, targetCount, targetInterval, targetUnit, weekdayMask, triggerSubtypes, triggerMinSets },
     select: { id: true },
   });
   await syncFrequencyGoalRoutines(goal.id, routineIds, substituteRoutineIds);
+  await syncFrequencyGoalTriggerExercises(goal.id, triggerExerciseIds);
 
   revalidatePath("/routines");
   revalidatePath("/goals");
+  if (formData.get("noRedirect") === "1") return;
   redirect("/goals");
 }
 
 export async function updateFrequencyGoal(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
   if (!id) throw new Error("Missing goal id.");
-  const { name, targetCount, targetInterval, targetUnit, weekdayMask, routineIds, substituteRoutineIds } = parseFrequencyGoalFields(formData);
+  const {
+    name,
+    targetCount,
+    targetInterval,
+    targetUnit,
+    weekdayMask,
+    routineIds,
+    substituteRoutineIds,
+    triggerExerciseIds,
+    triggerSubtypes,
+    triggerMinSets,
+  } = parseFrequencyGoalFields(formData);
 
   await prisma.frequencyGoal.update({
     where: { id },
-    data: { name, targetCount, targetInterval, targetUnit, weekdayMask },
+    data: { name, targetCount, targetInterval, targetUnit, weekdayMask, triggerSubtypes, triggerMinSets },
   });
   await syncFrequencyGoalRoutines(id, routineIds, substituteRoutineIds);
+  await syncFrequencyGoalTriggerExercises(id, triggerExerciseIds);
 
   revalidatePath("/routines");
   revalidatePath("/goals");
+  if (formData.get("noRedirect") === "1") return;
   redirect("/goals");
 }
 
@@ -1598,20 +1675,36 @@ export async function logWorkout(params: {
 }
 
 export async function logAdHocWorkout(params: {
-  routineId: string;
+  /** Training Balance domain the user chose (or auto-suggested) for this
+   *  one-off session. Used to find-or-create the placeholder routine that
+   *  hosts the log, so the contribution lands in the right bar. */
+  domain: import("@/lib/quick-log").QuickLogDomain;
+  /** Activity subtype (STRENGTH / HYPERTROPHY / REHAB / OTHER) — same role
+   *  as `subtype` on a saved routine. Also used to pick the placeholder
+   *  and to feed frequency-goal trigger-subtype matching. */
+  subtype: string;
   notes?: string;
   performedAtLocal?: string;
   exercises: WorkoutExerciseInput[];
 }) {
-  await ensureRoutineKind(params.routineId, "WORKOUT");
-  const logId = await prisma.$transaction(async (tx) => {
+  const { findOrCreateQuickLogPlaceholder, sanitizeQuickLogDomain, sanitizeQuickWorkoutSubtype } =
+    await import("@/lib/quick-log");
+  const domain = sanitizeQuickLogDomain(params.domain);
+  const subtype = sanitizeQuickWorkoutSubtype(params.subtype);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const placeholder = await findOrCreateQuickLogPlaceholder(tx, {
+      kind: "WORKOUT",
+      domain,
+      subtype,
+    });
     const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
     const loggedExercises = exercises.filter((exercise) => exercise.loggedSets.length > 0);
-    if (loggedExercises.length === 0) return null;
+    if (loggedExercises.length === 0) return { logId: null as string | null, routineId: placeholder.id };
 
     const log = await tx.routineLog.create({
       data: {
-        routineId: params.routineId,
+        routineId: placeholder.id,
         performedAt: parsePerformedAt(params.performedAtLocal),
         notes: params.notes?.trim() || null,
       },
@@ -1634,23 +1727,28 @@ export async function logAdHocWorkout(params: {
         })),
       });
     }
-    return log.id;
+    return { logId: log.id, routineId: placeholder.id };
   });
-  if (logId) {
-    await recalculateRoutineLogStimulus(logId);
-    await createExerciseZoneActivitiesForLog(prisma, logId);
-  }
 
-  revalidateRoutineSurfaces(params.routineId);
+  if (result.logId) {
+    await recalculateRoutineLogStimulus(result.logId);
+    await createExerciseZoneActivitiesForLog(prisma, result.logId);
+  }
+  revalidateRoutineSurfaces(result.routineId);
 }
 
 export async function createWorkoutLogExerciseOption(params: {
-  routineId: string;
+  /** Optional — when absent (e.g. the quick-workout flow, which has no
+   *  caller-side routine), we skip the kind guard and just add the
+   *  exercise to the library. */
+  routineId?: string;
   name: string;
   unit: "REPS" | "TIME";
   supportsWeight?: boolean;
 }) {
-  await ensureRoutineKind(params.routineId, "WORKOUT");
+  if (params.routineId) {
+    await ensureRoutineKind(params.routineId, "WORKOUT");
+  }
 
   const name = normalizeExerciseName(params.name || "");
   const unit = params.unit === "TIME" ? "TIME" : "REPS";
@@ -1689,7 +1787,7 @@ export async function createWorkoutLogExerciseOption(params: {
     }
   });
 
-  revalidateRoutineSurfaces(params.routineId);
+  if (params.routineId) revalidateRoutineSurfaces(params.routineId);
   revalidatePath("/exercises");
 
   return exercise;

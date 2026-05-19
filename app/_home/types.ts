@@ -1,4 +1,4 @@
-// Shape contracts between HomePageV2 (server-side data prep) and the
+// Shape contracts between the server-side data prep (data.ts) and the
 // client subcomponents. Keep these flat and serializable — no Date objects,
 // no Maps, no functions. Everything is a YMD string or a primitive so the
 // server → client boundary stays clean.
@@ -154,7 +154,7 @@ export type QuickPickRoutine = {
 };
 
 // Full props bag for the client-side HomeShell.
-export type HomeV2Data = {
+export type HomeData = {
   today: string;
   currentWeekStart: string;
   legacyGlanceDays: LegacyGlanceDay[]; // ~12 weeks of days for the scrollable WaG

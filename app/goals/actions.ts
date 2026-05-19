@@ -223,6 +223,7 @@ export async function createGoal(formData: FormData) {
     select: { id: true },
   });
   revalidateGoals();
+  if (formData.get("noRedirect") === "1") return;
   redirect(`/goals/${goal.id}`);
 }
 
@@ -246,6 +247,7 @@ export async function updateGoal(formData: FormData) {
     data: input,
   });
   revalidateGoals();
+  if (formData.get("noRedirect") === "1") return;
   redirect(`/goals/${goalId}`);
 }
 

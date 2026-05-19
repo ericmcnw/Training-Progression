@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { GoalInsight } from "@/lib/goals";
 import { SectionCard } from "@/app/progress/ui";
+import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 
 const ACCENT_RGB = "139,92,246"; // violet — distinct from the four pulse cards
 
@@ -131,10 +132,6 @@ function GoalCard({ insight }: { insight: GoalInsight }) {
 }
 
 function EmptyGoalsState({ activityLabel }: { activitySlug: string; activityLabel: string }) {
-  // Goal creation lives at /goals?mode=new — the form doesn't currently
-  // accept prefill query params, so we just send the user there and let them
-  // pick a climbing routine or group target.
-  const newHref = `/goals?mode=new`;
   return (
     <div
       style={{
@@ -152,8 +149,7 @@ function EmptyGoalsState({ activityLabel }: { activitySlug: string; activityLabe
       <div style={{ fontSize: 13, opacity: 0.78, lineHeight: 1.4 }}>
         No active {activityLabel.toLowerCase()} goals yet.
       </div>
-      <Link
-        href={newHref}
+      <NewGoalDrawerButton
         style={{
           fontSize: 12,
           fontWeight: 800,
@@ -162,13 +158,13 @@ function EmptyGoalsState({ activityLabel }: { activitySlug: string; activityLabe
           border: `1px solid rgba(${ACCENT_RGB},0.32)`,
           background: `rgba(${ACCENT_RGB},0.10)`,
           color: `rgba(${ACCENT_RGB},0.95)`,
-          textDecoration: "none",
           letterSpacing: 0.3,
           whiteSpace: "nowrap",
+          cursor: "pointer",
         }}
       >
         + Set a goal
-      </Link>
+      </NewGoalDrawerButton>
     </div>
   );
 }

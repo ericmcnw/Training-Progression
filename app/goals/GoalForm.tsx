@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   GOAL_METRIC_LABELS,
   type GoalMetricTypeValue,
@@ -12,6 +13,7 @@ import {
 import type { GoalFormOptions } from "@/lib/goals";
 import { formInputStyle } from "./ui";
 import { WEEKDAY_BITS, formatMaskLabel } from "@/lib/frequency-state";
+import { ROUTINE_SUBTYPE_OPTIONS, formatRoutineSubtype } from "@/lib/routines";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,16 @@ export type GoalFormInitial = {
     routineIds: string[];
     /** Substitute routines — count toward streak but render as "covered." */
     substituteRoutineIds?: string[];
+    /** "Also count when these appear" — exercise ids that trigger a match
+     *  on any log (including quick workouts that aren't enrolled in any
+     *  listed routine). */
+    triggerExerciseIds?: string[];
+    /** "Also count when these appear" — activity-type subtypes that trigger
+     *  a match on any log whose routine has that subtype (e.g. CLIMBING). */
+    triggerSubtypes?: string[];
+    /** Minimum sets of a trigger exercise required in a single log to claim
+     *  a session via the exercise-trigger path. Defaults to 1. */
+    triggerMinSets?: number;
   };
 };
 
@@ -197,13 +209,21 @@ export default function GoalForm({
   options,
   submitLabel,
   initial,
+  inDrawer = false,
+  onSuccess,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   groupFrequencyAction?: (formData: FormData) => void | Promise<void>;
   options: GoalFormOptions;
   submitLabel: string;
   initial: GoalFormInitial;
+  /** When true the form runs in drawer mode: server action runs without
+   *  redirecting and onSuccess is called so the host can close the drawer. */
+  inDrawer?: boolean;
+  onSuccess?: () => void;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [goalType, setGoalType]     = useState<GoalTypeValue>(initial.goalType);
   const [scope, setScope]           = useState<string>(() => deriveInitialScope(initial));
   const [metricType, setMetricType] = useState<GoalMetricTypeValue>(initial.metricType);
@@ -221,6 +241,19 @@ export default function GoalForm({
   const [gfTargetInterval, setGfTargetInterval] = useState(String(initial.groupFrequency?.targetInterval ?? 1));
   const [gfTargetUnit, setGfTargetUnit]     = useState<"DAY" | "WEEK" | "MONTH">(initial.groupFrequency?.targetUnit ?? "WEEK");
   const [gfWeekdayMask, setGfWeekdayMask]   = useState<number>(initial.groupFrequency?.weekdayMask ?? 0);
+  // "Also count when these appear" triggers — both stored as ordered string
+  // arrays so we can render chip lists with stable keys.
+  const [triggerExerciseIds, setTriggerExerciseIds] = useState<string[]>(
+    () => initial.groupFrequency?.triggerExerciseIds ?? []
+  );
+  const [triggerSubtypes, setTriggerSubtypes] = useState<string[]>(
+    () => initial.groupFrequency?.triggerSubtypes ?? []
+  );
+  // Held as a string so the input behaves naturally (allows clearing while
+  // typing). Parser clamps + defaults to 1 if blank/invalid.
+  const [triggerMinSets, setTriggerMinSets] = useState<string>(
+    () => String(initial.groupFrequency?.triggerMinSets ?? 1)
+  );
 
   // Whether the grade-scope target is a SESSION_TEMPLATE (vs ROUTINE)
   const [gradeTargetIsTemplate, setGradeTargetIsTemplate] = useState(
@@ -354,7 +387,17 @@ export default function GoalForm({
     effectiveTargetType === "SESSION_TEMPLATE"? "Session type" :
     effectiveTargetType === "GROUP"           ? "Group" : "Routine";
 
-  const formAction = isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action;
+  const baseAction = isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action;
+  const formAction = inDrawer
+    ? (formData: FormData) => {
+        formData.set("noRedirect", "1");
+        startTransition(async () => {
+          await baseAction(formData);
+          router.refresh();
+          onSuccess?.();
+        });
+      }
+    : baseAction;
 
   return (
     <form action={formAction} style={{ display: "grid", gap: 22 }}>
@@ -535,6 +578,16 @@ export default function GoalForm({
               ))}
             </div>
           </div>
+
+          <TriggerSection
+            exerciseOptions={options.exercises}
+            triggerExerciseIds={triggerExerciseIds}
+            setTriggerExerciseIds={setTriggerExerciseIds}
+            triggerSubtypes={triggerSubtypes}
+            setTriggerSubtypes={setTriggerSubtypes}
+            triggerMinSets={triggerMinSets}
+            setTriggerMinSets={setTriggerMinSets}
+          />
         </>
       ) : (
         /* ── Step 3b: Standard detail fields ───────────────────── */
@@ -1295,4 +1348,459 @@ const weekdayToggleBtnActive: React.CSSProperties = {
   background: "rgba(129,140,248,0.18)",
   color: "rgb(224,231,255)",
   boxShadow: "0 0 0 1px rgba(129,140,248,0.18) inset",
+};
+
+// ─── "Also count when these appear" trigger picker ──────────────────────────
+// Optional broaden-the-net config below the routine pickers. Collapsed by
+// default so default users don't see it; power users open once and add a
+// few exercises or activity types. Both selectors are search-and-chip
+// patterns to keep long libraries scannable on a phone.
+//
+// Activity-type options come from ROUTINE_SUBTYPE_OPTIONS — same vocabulary
+// the user already sees in the routine create/edit form. We flatten the
+// per-kind buckets and tag each option with its kind so the user knows
+// "Climbing (Session)" from "Climbing" alone.
+
+const ACTIVITY_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string; kindLabel: string }> = (() => {
+  const seen = new Set<string>();
+  const rows: Array<{ value: string; label: string; kindLabel: string }> = [];
+  for (const [kindKey, subtypes] of Object.entries(ROUTINE_SUBTYPE_OPTIONS)) {
+    const kindLabel = kindKey.charAt(0) + kindKey.slice(1).toLowerCase();
+    for (const subtype of subtypes) {
+      // Skip super-generic ones — they'd match everything by accident.
+      if (subtype === "OTHER") continue;
+      const key = subtype;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ value: subtype, label: formatRoutineSubtype(subtype), kindLabel });
+    }
+  }
+  return rows.sort((a, b) => a.label.localeCompare(b.label));
+})();
+
+type TriggerExerciseOption = { id: string; label: string; subtitle?: string };
+
+function TriggerSection({
+  exerciseOptions,
+  triggerExerciseIds,
+  setTriggerExerciseIds,
+  triggerSubtypes,
+  setTriggerSubtypes,
+  triggerMinSets,
+  setTriggerMinSets,
+}: {
+  exerciseOptions: TriggerExerciseOption[];
+  triggerExerciseIds: string[];
+  setTriggerExerciseIds: (ids: string[]) => void;
+  triggerSubtypes: string[];
+  setTriggerSubtypes: (subtypes: string[]) => void;
+  triggerMinSets: string;
+  setTriggerMinSets: (value: string) => void;
+}) {
+  const totalCount = triggerExerciseIds.length + triggerSubtypes.length;
+  const exerciseById = useMemo(() => {
+    const map = new Map<string, TriggerExerciseOption>();
+    for (const e of exerciseOptions) map.set(e.id, e);
+    return map;
+  }, [exerciseOptions]);
+
+  // Min sets only matters when there's at least one trigger exercise —
+  // subtype matches are routine-level and don't have a per-set semantic.
+  const showMinSets = triggerExerciseIds.length > 0;
+
+  return (
+    <details
+      style={{ ...detailCardStyle, gap: 0, padding: "12px 14px" }}
+      open={totalCount > 0}
+    >
+      <summary style={triggerSummaryStyle}>
+        <span style={triggerSummaryTitleStyle}>Also count when these appear</span>
+        <span style={triggerSummaryBadgeStyle}>
+          {totalCount === 0 ? "Optional" : `${totalCount} added`}
+        </span>
+      </summary>
+
+      <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
+        <div style={{ ...hintStyle, lineHeight: 1.45 }}>
+          Sessions matching any selected exercise <em>or</em> activity type also count toward this goal — including quick workouts that aren&apos;t part of any listed routine.
+        </div>
+
+        {/* Hidden form fields — chips serialize into multi-value POSTs that
+            parseFrequencyGoalFields reads via formData.getAll(...). */}
+        {triggerExerciseIds.map((id) => (
+          <input key={`tex-${id}`} type="hidden" name="triggerExerciseIds" value={id} />
+        ))}
+        {triggerSubtypes.map((subtype) => (
+          <input key={`tsub-${subtype}`} type="hidden" name="triggerSubtypes" value={subtype} />
+        ))}
+
+        <TriggerExercisePicker
+          options={exerciseOptions}
+          selectedIds={triggerExerciseIds}
+          onChange={setTriggerExerciseIds}
+          exerciseById={exerciseById}
+        />
+
+        {showMinSets ? (
+          <div style={minSetsRowStyle}>
+            <label style={minSetsLabelStyle} htmlFor="goalTriggerMinSets">
+              Minimum sets to claim a session
+            </label>
+            <div style={minSetsControlRowStyle}>
+              <input
+                id="goalTriggerMinSets"
+                name="triggerMinSets"
+                type="number"
+                min={1}
+                max={99}
+                step={1}
+                inputMode="numeric"
+                value={triggerMinSets}
+                onChange={(e) => setTriggerMinSets(e.target.value)}
+                style={minSetsInputStyle}
+              />
+              <span style={minSetsHintStyle}>
+                A log needs at least this many sets of the listed exercises before it counts.
+                Default 1 — any rep claims the session. Use 2&ndash;3 to ignore quick warmups.
+              </span>
+            </div>
+          </div>
+        ) : (
+          // Submit the existing value so it's preserved even when no
+          // exercises are listed yet (user might add some later).
+          <input type="hidden" name="triggerMinSets" value={triggerMinSets} />
+        )}
+
+        <TriggerActivityTypePicker
+          selected={triggerSubtypes}
+          onChange={setTriggerSubtypes}
+        />
+      </div>
+    </details>
+  );
+}
+
+function TriggerExercisePicker({
+  options,
+  selectedIds,
+  onChange,
+  exerciseById,
+}: {
+  options: TriggerExerciseOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  exerciseById: Map<string, TriggerExerciseOption>;
+}) {
+  const [query, setQuery] = useState("");
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as TriggerExerciseOption[];
+    return options
+      .filter((o) => !selectedSet.has(o.id))
+      .filter((o) => o.label.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [options, query, selectedSet]);
+
+  function add(id: string) {
+    if (selectedSet.has(id)) return;
+    onChange([...selectedIds, id]);
+    setQuery("");
+  }
+  function remove(id: string) {
+    onChange(selectedIds.filter((existing) => existing !== id));
+  }
+
+  return (
+    <div style={triggerFieldBlockStyle}>
+      <div style={triggerFieldHeaderStyle}>
+        <span style={triggerFieldLabelStyle}>Exercises</span>
+        <span style={triggerFieldCountStyle}>
+          {selectedIds.length === 0 ? "None" : `${selectedIds.length} selected`}
+        </span>
+      </div>
+
+      {selectedIds.length > 0 ? (
+        <div style={chipRowStyle}>
+          {selectedIds.map((id) => {
+            const option = exerciseById.get(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => remove(id)}
+                style={triggerChipStyle}
+                aria-label={`Remove ${option?.label ?? id}`}
+              >
+                <span>{option?.label ?? id}</span>
+                <span style={chipRemoveStyle} aria-hidden>×</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div style={{ position: "relative" }}>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search exercises to add..."
+          style={formInputStyle}
+        />
+        {matches.length > 0 ? (
+          <div style={comboPopoverStyle}>
+            {matches.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => add(option.id)}
+                style={comboOptionStyle}
+              >
+                <span>{option.label}</span>
+                {option.subtitle ? <span style={comboOptionSubtitleStyle}>{option.subtitle}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : query.trim().length > 0 ? (
+          <div style={{ ...comboPopoverStyle, padding: "10px 12px", fontSize: 12, opacity: 0.6 }}>
+            No matching exercises.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TriggerActivityTypePicker({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (subtypes: string[]) => void;
+}) {
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  function toggle(value: string) {
+    if (selectedSet.has(value)) {
+      onChange(selected.filter((s) => s !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  }
+  return (
+    <div style={triggerFieldBlockStyle}>
+      <div style={triggerFieldHeaderStyle}>
+        <span style={triggerFieldLabelStyle}>Activity types</span>
+        <span style={triggerFieldCountStyle}>
+          {selected.length === 0 ? "None" : `${selected.length} selected`}
+        </span>
+      </div>
+      <div style={activityTypeGridStyle}>
+        {ACTIVITY_TYPE_OPTIONS.map((option) => {
+          const isActive = selectedSet.has(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => toggle(option.value)}
+              style={{
+                ...activityTypeChipStyle,
+                ...(isActive ? activityTypeChipActiveStyle : null),
+              }}
+              aria-pressed={isActive}
+            >
+              <span style={{ fontWeight: 800 }}>{option.label}</span>
+              <span style={activityTypeKindStyle}>{option.kindLabel}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const triggerSummaryStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  cursor: "pointer",
+  listStyle: "none",
+};
+
+const triggerSummaryTitleStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: 0.8,
+  opacity: 0.7,
+};
+
+const triggerSummaryBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.55,
+};
+
+const triggerFieldBlockStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+};
+
+const triggerFieldHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  gap: 8,
+};
+
+const triggerFieldLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.78,
+};
+
+const triggerFieldCountStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.55,
+};
+
+const chipRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+};
+
+const triggerChipStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "5px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(129,140,248,0.42)",
+  background: "rgba(129,140,248,0.13)",
+  color: "rgb(224,231,255)",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const chipRemoveStyle: React.CSSProperties = {
+  opacity: 0.7,
+  fontSize: 14,
+  lineHeight: 1,
+};
+
+const comboPopoverStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  zIndex: 5,
+  background: "rgb(20,24,32)",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 10,
+  boxShadow: "0 10px 28px rgba(0,0,0,0.55)",
+  maxHeight: 240,
+  overflowY: "auto",
+  display: "grid",
+};
+
+const comboOptionStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 2,
+  padding: "9px 12px",
+  background: "transparent",
+  border: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  color: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+  fontSize: 13,
+};
+
+const comboOptionSubtitleStyle: React.CSSProperties = {
+  fontSize: 11,
+  opacity: 0.55,
+};
+
+const activityTypeGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+  gap: 6,
+};
+
+const activityTypeChipStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 2,
+  padding: "8px 12px",
+  border: "1px solid rgba(128,128,128,0.28)",
+  borderRadius: 10,
+  background: "rgba(128,128,128,0.04)",
+  color: "inherit",
+  cursor: "pointer",
+  textAlign: "left",
+  fontSize: 13,
+};
+
+const activityTypeChipActiveStyle: React.CSSProperties = {
+  borderColor: "rgba(129,140,248,0.55)",
+  background: "rgba(129,140,248,0.16)",
+  color: "rgb(224,231,255)",
+};
+
+const activityTypeKindStyle: React.CSSProperties = {
+  fontSize: 10,
+  opacity: 0.55,
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+  fontWeight: 700,
+};
+
+const minSetsRowStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px dashed rgba(129,140,248,0.32)",
+  background: "rgba(129,140,248,0.04)",
+};
+
+const minSetsLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  opacity: 0.78,
+};
+
+const minSetsControlRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const minSetsInputStyle: React.CSSProperties = {
+  width: 72,
+  padding: "8px 10px",
+  border: "1px solid rgba(128,128,128,0.55)",
+  borderRadius: 10,
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: 16,
+  fontFamily: "inherit",
+  fontWeight: 800,
+  textAlign: "center",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const minSetsHintStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.62,
+  lineHeight: 1.4,
+  flex: "1 1 220px",
+  minWidth: 0,
 };

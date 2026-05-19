@@ -55,6 +55,10 @@ type SavePayload = {
 };
 
 type CreateExerciseOptionFn = (params: {
+  /** Empty string when this editor is hosting a quick-log flow that has
+   *  no caller-side routine id — callers that wrap this in the quick-log
+   *  flow ignore the value and pass `routineId: undefined` to the server
+   *  action so the kind-guard is skipped. */
   routineId: string;
   name: string;
   unit: "REPS" | "TIME";
@@ -91,9 +95,12 @@ export default function WorkoutExerciseEditor({
   emptyStateHelp = "",
   createExerciseOption,
   onSave,
+  onBlocksChange,
   bottomSlot,
 }: {
-  routineId: string;
+  /** Null in quick-log mode — drafts are disabled and the placeholder
+   *  routine is created by the save action. */
+  routineId: string | null;
   routineName?: string;
   initialNotes: string;
   initialPerformedAt: string;
@@ -112,6 +119,9 @@ export default function WorkoutExerciseEditor({
   emptyStateHelp?: string;
   createExerciseOption: CreateExerciseOptionFn;
   onSave: (payload: SavePayload) => Promise<void>;
+  /** Fired whenever the blocks array changes — host can read live exercise
+   *  ids for things like the quick-log auto-suggest button. */
+  onBlocksChange?: (blocks: WorkoutBlock[]) => void;
   bottomSlot?: ReactNode;
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
@@ -139,7 +149,7 @@ export default function WorkoutExerciseEditor({
 
   // Restore draft on mount
   useEffect(() => {
-    if (!draftEnabled) return;
+    if (!draftEnabled || !routineId) return;
     const draft = loadDraftFromStorage(routineId);
     if (!draft || draft.kind !== "WORKOUT") return;
 
@@ -162,7 +172,7 @@ export default function WorkoutExerciseEditor({
 
   // Auto-save draft whenever form state changes
   useEffect(() => {
-    if (!draftEnabled || !isDirtyRef.current) return;
+    if (!draftEnabled || !isDirtyRef.current || !routineId) return;
     const draft: WorkoutDraft = {
       kind: "WORKOUT",
       routineId,
@@ -179,6 +189,12 @@ export default function WorkoutExerciseEditor({
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, notes, performedAtLocal]);
+
+  // Bubble live blocks up to the host (used by the quick-log auto-suggest
+  // button so it can read what's currently selected without owning the state).
+  useEffect(() => {
+    onBlocksChange?.(blocks);
+  }, [blocks, onBlocksChange]);
 
   useEffect(() => {
     onExpandedIdChange?.(expandedId);
@@ -349,8 +365,10 @@ export default function WorkoutExerciseEditor({
   }
 
   function handleStartFresh() {
-    clearDraftFromStorage(routineId);
-    contextClearDraft(routineId);
+    if (routineId) {
+      clearDraftFromStorage(routineId);
+      contextClearDraft(routineId);
+    }
     setBlocks(initialBlocks);
     setNotes(initialNotes);
     setPerformedAtLocal(initialPerformedAt);
@@ -365,8 +383,10 @@ export default function WorkoutExerciseEditor({
       b.rows.some((r) => r.reps || r.seconds || r.weightLb)
     );
     if (hasData && !window.confirm("Discard this session? All entered sets will be lost.")) return;
-    clearDraftFromStorage(routineId);
-    contextClearDraft(routineId);
+    if (routineId) {
+      clearDraftFromStorage(routineId);
+      contextClearDraft(routineId);
+    }
     if (onBack) onBack();
     else window.location.href = backHref;
   }
@@ -394,7 +414,7 @@ export default function WorkoutExerciseEditor({
           })),
         })),
       });
-      if (draftEnabled) {
+      if (draftEnabled && routineId) {
         clearDraftFromStorage(routineId);
         contextClearDraft(routineId);
       }
@@ -413,7 +433,10 @@ export default function WorkoutExerciseEditor({
     startCreateExercise(async () => {
       try {
         const created = await createExerciseOption({
-          routineId,
+          // Quick-log mode has no routineId on the client (the action
+          // creates the placeholder). Pass an empty string so the caller's
+          // wrapper can map it to `undefined` for the server action.
+          routineId: routineId ?? "",
           name,
           unit: customUnit,
           supportsWeight: customSupportsWeight,

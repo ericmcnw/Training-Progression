@@ -3,7 +3,8 @@
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetFields";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { updateRoutine } from "../../actions";
 import {
   ROUTINE_SUBTYPE_OPTIONS,
@@ -26,6 +27,8 @@ export default function EditRoutineForm({
   sessionTemplates,
   availableSubstituteRoutines = [],
   initialSubstituteRoutineIds = [],
+  inDrawer = false,
+  onSuccess,
 }: {
   routine: {
     id: string;
@@ -55,7 +58,23 @@ export default function EditRoutineForm({
   }>;
   availableSubstituteRoutines?: Array<{ id: string; name: string }>;
   initialSubstituteRoutineIds?: string[];
+  /** When true the form runs in drawer mode: server action runs without
+   *  redirecting and onSuccess is called so the host can close the drawer. */
+  inDrawer?: boolean;
+  onSuccess?: () => void;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const drawerSubmit = inDrawer
+    ? (formData: FormData) => {
+        formData.set("noRedirect", "1");
+        startTransition(async () => {
+          await updateRoutine(formData);
+          router.refresh();
+          onSuccess?.();
+        });
+      }
+    : undefined;
   const [tags, setTags] = useState(() => routine.tags.join(", "));
   const [kind, setKind] = useState<RoutineKind>(routine.kind);
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
@@ -112,17 +131,17 @@ export default function EditRoutineForm({
   }, [suggestedMetadataGroupIds]);
 
   return (
-    <form action={updateRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 600 }}>
+    <form action={drawerSubmit ?? updateRoutine} style={{ padding: 14, display: "grid", gap: 18, maxWidth: 600 }}>
       <input type="hidden" name="id" value={routine.id} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="tags" value={tags} />
       <input type="hidden" name="domain" value={effectiveDomainValue} />
 
-      {/* Kind + Subtype */}
+      {/* Format + Activity type */}
       <div style={styles.twoCol}>
         <div>
-          <label style={styles.label}>Kind</label>
+          <label style={styles.label}>Format</label>
           <select
             style={styles.input as React.CSSProperties}
             value={kind}
@@ -139,7 +158,7 @@ export default function EditRoutineForm({
           </select>
         </div>
         <div>
-          <label style={styles.label}>Subtype</label>
+          <label style={styles.label}>Activity type</label>
           <select
             style={styles.input as React.CSSProperties}
             value={subtype}
@@ -153,6 +172,11 @@ export default function EditRoutineForm({
             ))}
           </select>
         </div>
+      </div>
+      <div style={styles.help}>
+        <strong>Format</strong> controls what fields show when you log (sets/reps for Workout, distance/pace for Cardio, etc.).
+        <br />
+        <strong>Activity type</strong> is the specific kind of session (Climbing, Strength, Run...).
       </div>
 
       {/* Name */}
@@ -201,7 +225,7 @@ export default function EditRoutineForm({
         />
       </div>
 
-      {/* Training category */}
+      {/* Training category — drives the Training Balance bars on the dashboard */}
       <div>
         <label style={styles.label}>Training category</label>
         <select
@@ -215,7 +239,10 @@ export default function EditRoutineForm({
             </option>
           ))}
         </select>
-        <div style={styles.help}>How this routine appears in Training Balance.</div>
+        <div style={styles.help}>
+          Which Training Balance bar this routine fills (Strength, Mobility, Endurance, Climb, Lifestyle, etc.).
+          Auto-set from your activity — only override if it&apos;s wrong.
+        </div>
       </div>
 
       {/* More options */}

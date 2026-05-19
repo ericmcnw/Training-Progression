@@ -1,8 +1,7 @@
-// App-wide design tokens. Re-exports from app/_home-v2/tokens for now so the
-// home-v2 module remains the source of truth while these tokens get adopted
-// across the rest of the app (body, injuries, etc.). Once the home-v2 folder
-// is renamed / the prefix dropped, the export site moves here and home-v2
-// imports from this module instead.
+// App-wide design tokens. Source of truth lives in `app/_home/tokens.ts`
+// for now (where the dashboard originally consumed them); this module is
+// the canonical app-wide import point so non-home surfaces don't need to
+// know about the `_home` directory.
 
 export {
   COLOR,
@@ -14,4 +13,4 @@ export {
   cardTitle,
   cardHint,
   DOMAIN_LABEL,
-} from "@/app/_home-v2/tokens";
+} from "@/app/_home/tokens";

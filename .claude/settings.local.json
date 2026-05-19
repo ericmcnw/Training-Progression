@@ -27,7 +27,10 @@
       "Bash(npx --yes vercel@latest project ls)",
       "Bash(npx --yes vercel@latest project inspect progression-tracker)",
       "Bash(npx --yes vercel@latest env ls production)",
-      "Bash(curl -s \"http://localhost:3000/plan?view=schedule\" --max-time 60)"
+      "Bash(curl -s \"http://localhost:3000/plan?view=schedule\" --max-time 60)",
+      "Bash(tee /tmp/tsc-out.txt)",
+      "Bash(echo \"EXIT $?\")",
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { ProgressShell, SectionCard, SectionLinkButton } from "@/app/progress/ui";
-import { formatAppDate, todayAppYmd } from "@/lib/dates";
+import { ProgressShell, SectionCard } from "@/app/progress/ui";
+import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
+import { formatAppDate } from "@/lib/dates";
 import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
-import { getGoalFormOptions, getGoalsOverview, type GoalInsight } from "@/lib/goals";
-import GoalForm, { type GoalFormInitial } from "./GoalForm";
-import { createGoal, toggleGoalActive, toggleGroupFrequencyGoal, toggleRoutineFrequencyGoal } from "./actions";
-import { createFrequencyGoal } from "@/app/routines/actions";
-import { GOAL_TYPE_CHIP_STYLE, GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, FrequencySlotBar, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
+import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
+import { toggleGoalActive, toggleGroupFrequencyGoal, toggleRoutineFrequencyGoal } from "./actions";
+import { GOAL_TYPE_CHIP_STYLE, GoalCardShell, GoalMetaLine, GoalProgressRing, GoalStatusBadge, chipStyle, smallActionLinkStyle, subtleTextStyle } from "./ui";
 import { FrequencyGoalRow, type FrequencyGoalRowData } from "./FrequencyGoalRow";
 import DeleteGoalButton from "./DeleteGoalButton";
 
@@ -22,12 +21,10 @@ function getParam(params: SearchParams, key: string) {
 function buildGoalsHref(params: {
   type?: string;
   active?: string;
-  mode?: "list" | "new";
 }) {
   const search = new URLSearchParams();
   if (params.type && params.type !== "all") search.set("type", params.type);
   if (params.active && params.active !== "active") search.set("active", params.active);
-  if (params.mode === "new") search.set("mode", "new");
   const query = search.toString();
   return query ? `/goals?${query}` : "/goals";
 }
@@ -40,18 +37,8 @@ export default async function GoalsPage({
   const params = await Promise.resolve(searchParams ?? {});
   const type = getParam(params, "type") ?? "all";
   const active = getParam(params, "active") ?? "active";
-  const mode = getParam(params, "mode") === "new" ? "new" : "list";
-  // Prefill from caller context — used for non-frequency goals (PERFORMANCE,
-  // VOLUME, COMPLETION) targeting a specific routine. Per-routine FREQUENCY
-  // is set on the routine itself now, so a `?goalType=FREQUENCY&routineId=…`
-  // link from anywhere (legacy) just opens the form on its group default.
-  const prefillRoutineId = getParam(params, "routineId") ?? "";
-  const prefillGoalType = (getParam(params, "goalType") ?? "").toUpperCase();
   const currentGoalsHref = buildGoalsHref({ type, active });
-  const [goals, options] = await Promise.all([
-    getGoalsOverview({ type, active }),
-    mode === "new" ? getGoalFormOptions() : Promise.resolve(null),
-  ]);
+  const goals = await getGoalsOverview({ type, active });
   const frequencyGoals = goals.filter((e) => e.goal.goalType === "FREQUENCY");
   const otherGoals = goals.filter((e) => e.goal.goalType !== "FREQUENCY");
   const typeLabel = type === "all" ? "All" : GOAL_TYPE_LABELS[type as keyof typeof GOAL_TYPE_LABELS] ?? "All";
@@ -67,40 +54,6 @@ export default async function GoalsPage({
     active: type === item.value || (item.value === "all" && type === "all"),
   }));
 
-  // Resolve prefill values once options are loaded so we can validate the
-  // requested routine actually exists in the picker. Falls back to the first
-  // routine in the list when the requested id is unknown.
-  const prefillRoutine = prefillRoutineId && options
-    ? options.routines.find((r) => r.id === prefillRoutineId)
-    : null;
-  const initialGoalType =
-    prefillGoalType === "FREQUENCY" ||
-    prefillGoalType === "PERFORMANCE" ||
-    prefillGoalType === "VOLUME" ||
-    prefillGoalType === "COMPLETION"
-      ? (prefillGoalType as GoalFormInitial["goalType"])
-      : "FREQUENCY";
-  const initialTargetId = prefillRoutine?.id ?? options?.routines[0]?.id ?? "";
-  const initialName = prefillRoutine ? `${prefillRoutine.label} frequency` : "";
-
-  const initial: GoalFormInitial = {
-    name: initialName,
-    goalType: initialGoalType,
-    targetType: "ROUTINE",
-    targetId: initialTargetId,
-    metricType: "SESSIONS",
-    timeframe: "WEEK",
-    targetValue: 3,
-    startDate: todayAppYmd(),
-    endDate: "",
-    isActive: true,
-    notes: "",
-    benchmarkDistanceMi: "3.11",
-    benchmarkLabel: "5K",
-    sessionMetricDefinitionId: "",
-    sessionMetricTarget: "",
-  };
-
   return (
     <ProgressShell
       section="overview"
@@ -111,24 +64,11 @@ export default async function GoalsPage({
       navHint="Switch between all goals or a single goal category."
       navItems={typeNavItems}
       actions={
-        <SectionLinkButton
-          href={mode === "new" ? buildGoalsHref({ type, active }) : buildGoalsHref({ type, active, mode: "new" })}
-          label={mode === "new" ? "Back to Goals" : "New Goal"}
-        />
+        <NewGoalDrawerButton style={drawerCtaStyle}>
+          New Goal
+        </NewGoalDrawerButton>
       }
     >
-      {mode === "new" && options ? (
-        <SectionCard title="Create Goal">
-          <GoalForm
-            action={createGoal}
-            groupFrequencyAction={createFrequencyGoal}
-            options={options}
-            submitLabel="Save Goal"
-            initial={initial}
-          />
-        </SectionCard>
-      ) : null}
-
       <SectionCard title={`${typeLabel} Goals`}>
         <div style={activeFilterRowStyle}>
           <span style={activeFilterLabelStyle}>Show:</span>
@@ -313,6 +253,16 @@ const sectionDividerStyle: React.CSSProperties = {
   margin: "16px 0",
 };
 
+const drawerCtaStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 12,
+  color: "inherit",
+  fontWeight: 800,
+  background: "rgba(255,255,255,0.06)",
+  cursor: "pointer",
+};
+
 const sectionSubheadStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
@@ -343,5 +293,7 @@ function toFrequencyRowData(entry: GoalInsight): FrequencyGoalRowData {
       date: formatAppDate(item.performedAt, { month: "short", day: "numeric" }),
     })),
     showRoutineNames: isGroupFrequency,
+    triggerExerciseCount: entry.triggerExerciseCount,
+    triggerSubtypeCount: entry.triggerSubtypeCount,
   };
 }

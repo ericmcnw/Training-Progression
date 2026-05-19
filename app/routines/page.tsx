@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { formatAppDate, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
-import NewRoutinePageContent from "./NewRoutinePageContent";
 import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
 import { formatRoutineTypeLabel, normalizeRoutineKind, effectiveRoutineDomain, domainColor, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
@@ -10,6 +9,7 @@ import { getWeekBoundsSunday } from "@/lib/week";
 import { computeHabitStats } from "@/lib/habits";
 import RoutineCard from "./RoutineCard";
 import RoutineSection from "./RoutineSection";
+import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -62,9 +62,6 @@ export default async function RoutinesPage(props: {
 }) {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const mode = getParam(searchParams, "mode");
-  if (mode === "new") {
-    return <NewRoutinePageContent />;
-  }
   if (mode === "quick-log") {
     return <QuickWorkoutLogPageContent />;
   }
@@ -82,7 +79,9 @@ export default async function RoutinesPage(props: {
 
   const [rawRoutines, goalRoutines, routineFrequencyGoals] = await Promise.all([
     prisma.routine.findMany({
-      where: { isDeleted: false },
+      // Hide quick-log placeholder routines — they exist purely to host
+      // ad-hoc logs and would clutter the routine list otherwise.
+      where: { isDeleted: false, isPlaceholder: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       include: {
         exercises: {
@@ -242,9 +241,9 @@ export default async function RoutinesPage(props: {
           <Link href="/exercises" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
             Manage Exercises
           </Link>
-          <Link href="/routines?mode=new" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
+          <NewRoutineDrawerButton className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
             + New Routine
-          </Link>
+          </NewRoutineDrawerButton>
         </div>
       </div>
 

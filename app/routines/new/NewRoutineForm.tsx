@@ -2,7 +2,8 @@
 
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "../RoutineFrequencyTargetFields";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createRoutine } from "../actions";
 import {
   ROUTINE_SUBTYPE_OPTIONS,
@@ -36,6 +37,8 @@ export default function NewRoutineForm({
   metadataGroups,
   sessionTemplates,
   availableSubstituteRoutines = [],
+  inDrawer = false,
+  onSuccess,
 }: {
   metadataGroups: MetadataGroupOption[];
   sessionTemplates: Array<{
@@ -46,7 +49,23 @@ export default function NewRoutineForm({
     sessionSubtype: string | null;
   }>;
   availableSubstituteRoutines?: Array<{ id: string; name: string }>;
+  /** When true the form runs in drawer mode: server action runs without
+   *  redirecting and onSuccess is called so the host can close the drawer. */
+  inDrawer?: boolean;
+  onSuccess?: () => void;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const drawerSubmit = inDrawer
+    ? (formData: FormData) => {
+        formData.set("noRedirect", "1");
+        startTransition(async () => {
+          await createRoutine(formData);
+          router.refresh();
+          onSuccess?.();
+        });
+      }
+    : undefined;
   const [step, setStep] = useState<Step>("domain");
   const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<ActivityPreset | null>(null);
@@ -189,7 +208,7 @@ export default function NewRoutineForm({
   const activePresetMeta = selectedPreset && domainMeta;
 
   return (
-    <form action={createRoutine} style={s.form}>
+    <form action={drawerSubmit ?? createRoutine} style={s.form}>
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="domain" value={effectiveDomain} />
@@ -216,38 +235,45 @@ export default function NewRoutineForm({
         </div>
       )}
 
-      {/* Custom path: show kind + subtype selectors */}
+      {/* Custom path: show format + activity type selectors */}
       {!selectedPreset && (
-        <div style={s.twoCol}>
-          <div>
-            <label style={s.label}>Kind</label>
-            <select
-              style={s.input as React.CSSProperties}
-              value={kind}
-              onChange={(e) => {
-                const nextKind = e.target.value as RoutineKind;
-                setKind(nextKind);
-                setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
-              }}
-            >
-              {ROUTINE_KIND_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+        <>
+          <div style={s.twoCol}>
+            <div>
+              <label style={s.label}>Format</label>
+              <select
+                style={s.input as React.CSSProperties}
+                value={kind}
+                onChange={(e) => {
+                  const nextKind = e.target.value as RoutineKind;
+                  setKind(nextKind);
+                  setSubtype(ROUTINE_SUBTYPE_OPTIONS[nextKind][0] ?? "OTHER");
+                }}
+              >
+                {ROUTINE_KIND_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={s.label}>Activity type</label>
+              <select
+                style={s.input as React.CSSProperties}
+                value={subtype}
+                onChange={(e) => setSubtype(e.target.value)}
+              >
+                {subtypeOptions.map((opt) => (
+                  <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div>
-            <label style={s.label}>Subtype</label>
-            <select
-              style={s.input as React.CSSProperties}
-              value={subtype}
-              onChange={(e) => setSubtype(e.target.value)}
-            >
-              {subtypeOptions.map((opt) => (
-                <option key={opt} value={opt}>{formatRoutineSubtype(opt)}</option>
-              ))}
-            </select>
+          <div style={s.help}>
+            <strong>Format</strong> controls what fields show when you log (sets/reps for Workout, distance/pace for Cardio, etc.).
+            <br />
+            <strong>Activity type</strong> is the specific kind of session (Climbing, Strength, Run...).
           </div>
-        </div>
+        </>
       )}
 
       {/* Name */}
@@ -311,7 +337,7 @@ export default function NewRoutineForm({
         />
       </div>
 
-      {/* Focus Area override */}
+      {/* Training category — drives the Training Balance bars on the dashboard */}
       <div>
         <label style={s.label}>Training category</label>
         <select
@@ -325,7 +351,10 @@ export default function NewRoutineForm({
             </option>
           ))}
         </select>
-        <div style={s.help}>How this routine appears in Training Balance. Auto-set from your activity selection.</div>
+        <div style={s.help}>
+          Which Training Balance bar this routine fills (Strength, Mobility, Endurance, Climb, Lifestyle, etc.).
+          Auto-set from your activity — only override if it&apos;s wrong.
+        </div>
       </div>
 
       {/* More options */}

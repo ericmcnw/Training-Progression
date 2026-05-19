@@ -12,6 +12,7 @@ import {
   domainColor,
 } from "@/lib/routines";
 import DrawerLogButton from "./DrawerLogButton";
+import { EditRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import type { computeHabitStats } from "@/lib/habits";
 import { formatRoutineTargetLabel, type RoutineFrequencySummary, type RoutineFrequencyTargetShape } from "@/lib/routine-frequency";
 import {
@@ -278,9 +279,9 @@ export default function RoutineCard({
 
         <div className="routineCardActions">
           <div className="routineCardActionRow">
-            <Link href={`/routines/${routine.id}/edit`} className="routineCardMiniLink">
+            <EditRoutineDrawerButton routineId={routine.id} className="routineCardMiniLink">
               Edit
-            </Link>
+            </EditRoutineDrawerButton>
             {allowLogging ? <DeleteRoutineButton routineId={routine.id} compact /> : null}
           </div>
 

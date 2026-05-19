@@ -33,6 +33,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         routines: {
           include: { routine: { select: { id: true, name: true, isDeleted: true } } },
         },
+        triggerExercises: { select: { exerciseId: true } },
       },
     });
     if (!goal) return null;
@@ -47,6 +48,9 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
         .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
+      triggerSubtypes: goal.triggerSubtypes,
+      triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
+      triggerMinSets: goal.triggerMinSets,
     });
   }
 
@@ -122,6 +126,15 @@ async function loadAndCompute(params: {
   target: FrequencyTarget;
   routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE" }>;
   today: string;
+  /** Activity-type subtypes that broaden matching beyond the routine roster
+   *  (group frequency goals only — per-routine goals don't expose triggers). */
+  triggerSubtypes?: string[];
+  /** Exercise ids that broaden matching beyond the routine roster — catches
+   *  quick-log sessions whose placeholder routine isn't in the goal's list. */
+  triggerExerciseIds?: string[];
+  /** Minimum trigger-exercise set count required for an exercise-trigger
+   *  match. Defaults to 1 (any set counts). */
+  triggerMinSets?: number;
 }): Promise<FrequencyConsistency | null> {
   const { target, routines, today } = params;
   if (routines.length === 0) return null;
@@ -132,20 +145,95 @@ async function loadAndCompute(params: {
   const primaryRoutines = routines.filter((r) => r.role === "PRIMARY");
   const primaryRoutineIds = new Set(primaryRoutines.map((r) => r.id));
   const allRoutineIds = routines.map((r) => r.id);
+  const triggerSubtypes = (params.triggerSubtypes ?? []).map((s) => s.toUpperCase());
+  const triggerExerciseIds = params.triggerExerciseIds ?? [];
+  const triggerMinSets = Math.max(1, params.triggerMinSets ?? 1);
+  const hasTriggers = triggerSubtypes.length > 0 || triggerExerciseIds.length > 0;
 
   const since = new Date(Date.now() - HEATMAP_DAYS * 24 * 60 * 60 * 1000);
+  // Widen the query when triggers are present so trigger-matched logs are
+  // included in the in-memory matcher below. Without this, the heatmap
+  // shows trigger-matched days as missed.
+  const where: import("@/generated/prisma").Prisma.RoutineLogWhereInput = hasTriggers
+    ? {
+        performedAt: { gte: since },
+        OR: [
+          { routineId: { in: allRoutineIds } },
+          ...(triggerSubtypes.length > 0
+            ? [{ routine: { subtype: { in: triggerSubtypes } } }]
+            : []),
+          ...(triggerExerciseIds.length > 0
+            ? [{ exercises: { some: { exerciseId: { in: triggerExerciseIds } } } }]
+            : []),
+        ],
+      }
+    : {
+        routineId: { in: allRoutineIds },
+        performedAt: { gte: since },
+      };
+
   const logs = await prisma.routineLog.findMany({
-    where: { routineId: { in: allRoutineIds }, performedAt: { gte: since } },
-    select: { performedAt: true, routineId: true },
+    where,
+    select: {
+      id: true,
+      performedAt: true,
+      routineId: true,
+      routine: { select: { subtype: true } },
+      // Always include the per-exercise set counts — small payload (one int
+      // per exercise row) and keeps the typed shape stable regardless of
+      // whether `hasTriggers` is true at runtime.
+      exercises: {
+        select: {
+          exerciseId: true,
+          _count: { select: { sets: true } },
+        },
+      },
+    },
     orderBy: { performedAt: "asc" },
   });
 
+  const triggerSubtypeSet = new Set(triggerSubtypes);
+  const triggerExerciseIdSet = new Set(triggerExerciseIds);
+  const routineIdSet = new Set(allRoutineIds);
+  // Tag each log as primary / substitute / trigger so the day classifier
+  // can decide between "done" (primary or trigger) vs "covered" (substitute
+  // only). Dedupe by log id so the same log can't claim two roles.
+  type StateLog = { performedAt: Date; isPrimary: boolean };
+  const stateLogs: StateLog[] = [];
+  const seen = new Set<string>();
+  for (const log of logs) {
+    if (seen.has(log.id)) continue;
+    if (routineIdSet.has(log.routineId)) {
+      seen.add(log.id);
+      stateLogs.push({
+        performedAt: log.performedAt,
+        isPrimary: primaryRoutineIds.has(log.routineId),
+      });
+      continue;
+    }
+    if (!hasTriggers) continue;
+    const subtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
+    if (subtype && triggerSubtypeSet.has(subtype)) {
+      seen.add(log.id);
+      stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+      continue;
+    }
+    if (triggerExerciseIdSet.size > 0 && log.exercises) {
+      let matchingSets = 0;
+      for (const ex of log.exercises) {
+        if (triggerExerciseIdSet.has(ex.exerciseId)) matchingSets += ex._count.sets;
+        if (matchingSets >= triggerMinSets) break;
+      }
+      if (matchingSets >= triggerMinSets) {
+        seen.add(log.id);
+        stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+      }
+    }
+  }
+
   const state = computeFrequencyState({
     target,
-    logs: logs.map((log) => ({
-      performedAt: log.performedAt,
-      isPrimary: primaryRoutineIds.has(log.routineId),
-    })),
+    logs: stateLogs,
     today,
     trailingDays: 8 * 7,
   });

@@ -1,7 +1,7 @@
-// Server-only data assembly for HomePageV2. Fetches everything the v2 shell
-// needs and returns a single flat HomeV2Data bag. Keeps the page component
-// itself thin (just renders) and isolates the (necessarily long) Prisma
-// queries here.
+// Server-only data assembly for the home dashboard. Fetches everything
+// HomeShell needs and returns a single flat HomeData bag. Keeps the page
+// component itself thin (just renders) and isolates the (necessarily long)
+// Prisma queries here.
 
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, diffYmdDays, toAppYmd, todayAppYmd } from "@/lib/dates";
@@ -31,7 +31,7 @@ import type {
   DomainWeek,
   HabitChipStatus,
   HabitRow,
-  HomeV2Data,
+  HomeData,
   LegacyGlanceDay,
   QuickPickRoutine,
   WeekChipStatus,
@@ -63,7 +63,7 @@ function timeLabel(date: Date): string {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-export async function getHomeV2Data(): Promise<HomeV2Data> {
+export async function getHomeData(): Promise<HomeData> {
   const today = todayAppYmd();
   const habitWindowStart = addDaysYmd(today, -(HABIT_GRID_DAYS - 1));
   const weekBounds = getWeekBoundsSunday(new Date());
@@ -117,7 +117,18 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
         id: true,
         routineId: true,
         performedAt: true,
+        // Exercises + routine.subtype are pulled here so the frequency-goal
+        // builder below can evaluate trigger-exercise / trigger-subtype
+        // matches without a second roundtrip. `_count.sets` gives us the
+        // per-exercise set count for `triggerMinSets` gating without
+        // hydrating every SetEntry row.
         routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true } },
+        exercises: {
+          select: {
+            exerciseId: true,
+            _count: { select: { sets: true } },
+          },
+        },
       },
     }),
     prisma.dayTodo.findMany({
@@ -369,6 +380,10 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
           routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true, isActive: true, isDeleted: true } },
         },
       },
+      // Trigger-exercise links — used below to broaden which logs count
+      // toward a goal (e.g. quick-log pull-ups satisfy a Pull Strength goal
+      // even though the placeholder routine isn't in the goal's roster).
+      triggerExercises: { select: { exerciseId: true } },
     },
   });
 
@@ -408,14 +423,47 @@ export async function getHomeV2Data(): Promise<HomeV2Data> {
 
       // Logs: every primary routine's log = isPrimary:true; every substitute's
       // log = isPrimary:false. The state classifier marks substitute-only days
-      // as "covered" rather than "done."
-      const primaryLogs = primaryRoutines.flatMap((r) =>
-        (logsByRoutine.get(r.id) ?? []).map((log) => ({ performedAt: log.performedAt, isPrimary: true }))
-      );
-      const subLogs2 = substituteRoutines.flatMap((r) =>
-        (logsByRoutine.get(r.id) ?? []).map((log) => ({ performedAt: log.performedAt, isPrimary: false }))
-      );
-      const logs = [...primaryLogs, ...subLogs2];
+      // as "covered" rather than "done." Trigger-matched logs (e.g. a quick
+      // workout containing the goal's triggerExercises beyond triggerMinSets)
+      // count as primary completions. Dedupe by log id so a routine that's
+      // both a primary member AND contains a trigger exercise isn't double-
+      // counted.
+      const primaryRoutineIdSet = new Set(primaryRoutines.map((r) => r.id));
+      const substituteRoutineIdSet = new Set(substituteRoutines.map((r) => r.id));
+      const triggerExerciseIdSet = new Set(goal.triggerExercises.map((e) => e.exerciseId));
+      const triggerSubtypeSet = new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase()));
+      const triggerMinSets = Math.max(1, goal.triggerMinSets ?? 1);
+      const hasTriggers = triggerExerciseIdSet.size > 0 || triggerSubtypeSet.size > 0;
+
+      const matched = new Map<string, { performedAt: Date; isPrimary: boolean }>();
+      for (const log of allLogs) {
+        if (matched.has(log.id)) continue;
+        if (primaryRoutineIdSet.has(log.routineId)) {
+          matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+          continue;
+        }
+        if (substituteRoutineIdSet.has(log.routineId)) {
+          matched.set(log.id, { performedAt: log.performedAt, isPrimary: false });
+          continue;
+        }
+        if (!hasTriggers) continue;
+        const logSubtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
+        if (logSubtype && triggerSubtypeSet.has(logSubtype)) {
+          matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+          continue;
+        }
+        if (triggerExerciseIdSet.size > 0 && log.exercises) {
+          let matchingSets = 0;
+          for (const ex of log.exercises) {
+            if (triggerExerciseIdSet.has(ex.exerciseId)) matchingSets += ex._count.sets;
+            if (matchingSets >= triggerMinSets) break;
+          }
+          if (matchingSets >= triggerMinSets) {
+            matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+          }
+        }
+      }
+      const logs = Array.from(matched.values());
       const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
 
       const trailing30: HabitRow["trailing30"] = [];

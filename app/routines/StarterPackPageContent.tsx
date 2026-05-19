@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { createStarterPack } from "./actions";
+import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import {
   STARTER_PACKS,
   STARTER_STRUCTURES,
@@ -110,9 +111,9 @@ export default function StarterPackPageContent() {
               <button type="submit" style={styles.primaryBtn}>
                 Create Starter Pack
               </button>
-              <Link href="/routines?mode=new" style={styles.linkBtn}>
+              <NewRoutineDrawerButton style={styles.linkBtn}>
                 Create One Routine Instead
-              </Link>
+              </NewRoutineDrawerButton>
             </div>
           </div>
         </section>

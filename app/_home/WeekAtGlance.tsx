@@ -1,9 +1,9 @@
 "use client";
 
-// WeekAtGlanceV3 — combines the old WAAG's scrollable rail + inline detail
-// panel with the new visual style (domain dots + status word per day).
-// Includes habit-domain routines in the dot row so users who train mostly
-// via habits actually see their data instead of empty cells.
+// WeekAtGlance — scrollable day rail + inline detail panel for each day
+// (domain dots + status word). Includes habit-domain routines in the dot
+// row so users who train mostly via habits see their data instead of
+// empty cells.
 
 import React, { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
@@ -38,7 +38,7 @@ const DAY_WIDTH_MOBILE_MIN = 56;
 const DAY_WIDTH_MOBILE_MAX = 76;
 const DAY_GAP = 6;
 
-export default function WeekAtGlanceV3({ days, today, currentWeekStart: _currentWeekStart }: Props) {
+export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedYmd, setSelectedYmd] = useState<string>(today);
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DESKTOP);
