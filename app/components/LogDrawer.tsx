@@ -6,6 +6,7 @@ import LogWorkoutForm from "@/app/routines/[id]/log/ui";
 import SessionLogForm from "@/app/routines/[id]/log-session/SessionLogForm";
 import LogRunForm from "@/app/routines/[id]/log-cardio/ui";
 import GuidedLogForm from "@/app/routines/[id]/log-guided/GuidedLogForm";
+import QuickWorkoutLogForm from "@/app/routines/log-workout-quick/QuickWorkoutLogForm";
 import { localDateTimeForYmd } from "@/app/routines/[id]/log/date-helpers";
 import type { WorkoutBlock, ExerciseOption } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { PainCheckZone } from "@/app/components/log/InlinePainCheck";
@@ -13,6 +14,13 @@ import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates"
 import type { GuidedStepKind } from "@/generated/prisma";
 import type { ClimbLocationBasic } from "@/lib/climb-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
+import type { QuickLogDomain } from "@/lib/quick-log";
+
+// Sentinel routine id for the ad-hoc quick-workout flow. No real routine
+// exists until the user saves — the placeholder is find-or-created server-
+// side in `logAdHocWorkout`. We piggyback on the drawer's id-keyed cache
+// using this constant.
+export const QUICK_LOG_ROUTINE_ID = "quick-log";
 
 type WorkoutLogData = {
   kind: "WORKOUT";
@@ -70,7 +78,17 @@ type GuidedLogData = {
   activePainZones: PainCheckZone[];
 };
 
-type LogData = WorkoutLogData | SessionLogData | CardioLogData | GuidedLogData;
+type QuickLogData = {
+  kind: "QUICK";
+  availableExercises: ExerciseOption[];
+  initialBlocks: WorkoutBlock[];
+  initialDomain: QuickLogDomain;
+  initialSubtype: string;
+  domainOptions: ReadonlyArray<{ value: QuickLogDomain; label: string; description: string }>;
+  subtypeOptions: ReadonlyArray<{ value: string; label: string }>;
+};
+
+type LogData = WorkoutLogData | SessionLogData | CardioLogData | GuidedLogData | QuickLogData;
 type WorkoutDrawerState = { expandedId: string | null };
 type GuidedDrawerState = {
   screen: "entry" | "player" | "review";
@@ -105,7 +123,13 @@ export default function LogDrawer() {
     }
     setLoading(true);
     setError(null);
-    fetch(`/api/routines/${activeRoutineId}/log-data`)
+    // Quick-log sentinel hits a dedicated endpoint — there is no real
+    // routine to fetch yet (the placeholder gets find-or-created on save).
+    const url =
+      activeRoutineId === QUICK_LOG_ROUTINE_ID
+        ? "/api/quick-log-data"
+        : `/api/routines/${activeRoutineId}/log-data`;
+    fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json() as Promise<LogData>;
@@ -116,7 +140,7 @@ export default function LogDrawer() {
         setLoading(false);
       })
       .catch(() => {
-        setError("Could not load session. Tap the chip to open the full page.");
+        setError("Could not load session.");
         setLoading(false);
       });
   }, [isOpen, activeRoutineId]);
@@ -141,7 +165,7 @@ export default function LogDrawer() {
       <div className="logDrawerBackdrop" onClick={handleCloseAttempt} />
       <div className="logDrawerSheet">
         <div style={drawerHeaderStyle}>
-          <span style={drawerTitleStyle}>{logData?.routineName ?? " "}</span>
+          <span style={drawerTitleStyle}>{drawerTitle(logData)}</span>
           <button type="button" onClick={handleCloseAttempt} style={minimizeBtnStyle} aria-label="Minimize log">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" width={16} height={16}>
               <path d="M6 9l6 6 6-6" />
@@ -154,6 +178,21 @@ export default function LogDrawer() {
           {loading && <div style={stateStyle}>Loading session…</div>}
           {error && <div style={{ ...stateStyle, color: "rgba(255,100,100,0.9)" }}>{error}</div>}
           {!loading && !error && logData && (() => {
+            if (logData.kind === "QUICK") {
+              return (
+                <QuickWorkoutLogForm
+                  key={QUICK_LOG_ROUTINE_ID}
+                  availableExercises={logData.availableExercises}
+                  initialBlocks={logData.initialBlocks}
+                  initialDomain={logData.initialDomain}
+                  initialSubtype={logData.initialSubtype}
+                  domainOptions={logData.domainOptions}
+                  subtypeOptions={logData.subtypeOptions}
+                  onComplete={handleComplete}
+                  onBack={closeDrawer}
+                />
+              );
+            }
             const dateYmd = getDefaultDate(logData.routineId);
             const defaultPerformedAtLocal = dateYmd ? localDateTimeForYmd(dateYmd, 12) : undefined;
             if (logData.kind === "WORKOUT") {
@@ -288,3 +327,9 @@ const stateStyle: React.CSSProperties = {
   opacity: 0.65,
   fontSize: 14,
 };
+
+function drawerTitle(logData: LogData | null): string {
+  if (!logData) return " ";
+  if (logData.kind === "QUICK") return "Quick Workout";
+  return logData.routineName;
+}

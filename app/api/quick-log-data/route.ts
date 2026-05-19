@@ -1,12 +1,11 @@
-import Link from "next/link";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import {
   exerciseLibraryWhereForKinds,
   isMissingExerciseLibraryKindError,
   withDerivedExerciseLibraryKind,
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
-import { prisma } from "@/lib/prisma";
-import QuickWorkoutLogForm from "./log-workout-quick/QuickWorkoutLogForm";
 import {
   QUICK_WORKOUT_DOMAIN_OPTIONS,
   QUICK_WORKOUT_SUBTYPE_OPTIONS,
@@ -14,13 +13,11 @@ import {
   DEFAULT_QUICK_WORKOUT_SUBTYPE,
 } from "@/lib/quick-log";
 
-export const dynamic = "force-dynamic";
-
-export default async function QuickWorkoutLogPage() {
-  // Pre-fill seed: most-recent quick-workout log (any placeholder routine).
-  // Lets us pre-suggest the user's last (domain, subtype) and pre-populate
-  // the exercise editor with their last set/rep numbers as faded "previous"
-  // hints — same UX as logging a real routine.
+// Fetched by LogDrawer when activeRoutineId === "quick-log". Mirrors the
+// server-side prep that used to live in QuickWorkoutLogPageContent: workout
+// exercise library + a seed pulled from the user's most recent quick-log so
+// the form opens with their previous (domain, subtype, set/rep numbers).
+export async function GET() {
   const [availableExercises, lastQuickLog] = await Promise.all([
     (async () => {
       try {
@@ -96,7 +93,6 @@ export default async function QuickWorkoutLogPage() {
             seconds: set.seconds !== null ? String(set.seconds) : undefined,
             weightLb: set.weightLb !== null ? String(set.weightLb) : undefined,
           }));
-
         return {
           exerciseId: exercise.exerciseId,
           name: exercise.exercise.name,
@@ -114,41 +110,13 @@ export default async function QuickWorkoutLogPage() {
   const initialSubtype =
     QUICK_WORKOUT_SUBTYPE_OPTIONS.find((opt) => opt.value === lastSubtype)?.value ?? DEFAULT_QUICK_WORKOUT_SUBTYPE;
 
-  return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Quick Workout Log</h1>
-          <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-            One-off workout that doesn&apos;t belong to a saved routine. Pick a Training Balance category so it lands in the right bar, then add what you did.
-          </div>
-        </div>
-        <Link
-          href="/routines"
-          style={{
-            padding: "8px 12px",
-            border: "1px solid rgba(128,128,128,0.8)",
-            borderRadius: 10,
-            textDecoration: "none",
-            color: "inherit",
-            fontWeight: 800,
-            background: "rgba(128,128,128,0.12)",
-          }}
-        >
-          Back
-        </Link>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <QuickWorkoutLogForm
-          availableExercises={availableExercises}
-          initialBlocks={initialBlocks}
-          initialDomain={initialDomain}
-          initialSubtype={initialSubtype}
-          domainOptions={QUICK_WORKOUT_DOMAIN_OPTIONS}
-          subtypeOptions={QUICK_WORKOUT_SUBTYPE_OPTIONS}
-        />
-      </div>
-    </div>
-  );
+  return NextResponse.json({
+    kind: "QUICK" as const,
+    availableExercises,
+    initialBlocks,
+    initialDomain,
+    initialSubtype,
+    domainOptions: QUICK_WORKOUT_DOMAIN_OPTIONS,
+    subtypeOptions: QUICK_WORKOUT_SUBTYPE_OPTIONS,
+  });
 }

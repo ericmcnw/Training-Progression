@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, type ReactNode } from "react";
 
 export default function RoutineSection({
   title,
   count,
-  quickLogHref,
+  quickLogSlot,
   accentColor,
   defaultOpen,
   children,
 }: {
   title: string;
   count: number;
-  quickLogHref?: string;
+  /** Optional small button shown in the section header (e.g. "Quick Log"). */
+  quickLogSlot?: ReactNode;
   accentColor?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -68,31 +68,17 @@ export default function RoutineSection({
           <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5, color: accentColor ?? "inherit" }}>{title}</span>
         </button>
 
-        {quickLogHref ? (
-          <Link
-            href={quickLogHref}
+        {quickLogSlot ? (
+          <div
             style={{
               position: "absolute",
               left: 34,
               top: "50%",
               transform: "translateY(-50%)",
-              minHeight: 28,
-              padding: "4px 8px",
-              border: "1px solid rgba(128,128,128,0.7)",
-              borderRadius: 8,
-              textDecoration: "none",
-              color: "inherit",
-              background: "rgba(255,255,255,0.06)",
-              fontWeight: 800,
-              fontSize: 11,
-              lineHeight: 1.2,
-              display: "inline-flex",
-              alignItems: "center",
-              whiteSpace: "nowrap",
             }}
           >
-            Quick Log
-          </Link>
+            {quickLogSlot}
+          </div>
         ) : null}
 
         <div

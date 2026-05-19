@@ -32,7 +32,9 @@ export default function HomeShell({ data }: { data: HomeData }) {
             today={data.today}
             currentWeekStart={data.currentWeekStart}
           />
-          <MovementPatternsCard data={data.movementPatterns} />
+          <div className="homeMovementPatterns">
+            <MovementPatternsCard data={data.movementPatterns} />
+          </div>
         </div>
         <div className="homeCol">
           <HabitGrid
@@ -64,6 +66,18 @@ export default function HomeShell({ data }: { data: HomeData }) {
         @media (min-width: 980px) {
           .homeCols {
             grid-template-columns: 1fr 1fr;
+          }
+        }
+        @media (max-width: 979px) {
+          /* Single-column mobile/tablet — flatten the column wrappers so
+             every card becomes a direct grid item of .homeCols. That lets
+             us reorder Movement Patterns to the very bottom without
+             changing desktop's left-column grouping. */
+          .homeCol {
+            display: contents;
+          }
+          .homeMovementPatterns {
+            order: 99;
           }
         }
         @media (max-width: 720px) {

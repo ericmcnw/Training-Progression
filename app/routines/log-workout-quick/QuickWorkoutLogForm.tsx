@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { logAdHocWorkout, createWorkoutLogExerciseOption } from "../actions";
 import WorkoutExerciseEditor, {
   type ExerciseOption,
@@ -21,6 +21,9 @@ export default function QuickWorkoutLogForm({
   initialSubtype,
   domainOptions,
   subtypeOptions,
+  onComplete,
+  onBack,
+  backHref = "/routines",
 }: {
   availableExercises: ExerciseOption[];
   initialBlocks: WorkoutBlock[];
@@ -28,6 +31,12 @@ export default function QuickWorkoutLogForm({
   initialSubtype: string;
   domainOptions: ReadonlyArray<DomainOption>;
   subtypeOptions: ReadonlyArray<SubtypeOption>;
+  /** Drawer mode: invoked after a successful save so the host can close. */
+  onComplete?: () => void;
+  /** Drawer mode: invoked when the editor's back button is tapped. */
+  onBack?: () => void;
+  /** Page mode (or fallback): location to navigate to after save / on back. */
+  backHref?: string;
 }) {
   // Manual overrides — null means "let the suggestion win." Once the user
   // picks a value the manual choice sticks until they tap "Reset to auto."
@@ -41,6 +50,19 @@ export default function QuickWorkoutLogForm({
   const [activeExerciseIds, setActiveExerciseIds] = useState<string[]>(
     () => initialBlocks.map((b) => b.exerciseId)
   );
+
+  // Stable callback + content-equality dedupe. Without this the editor's
+  // `useEffect(..., [blocks, onBlocksChange])` re-fires on every parent
+  // render (new inline closure each time) → setState → re-render → loop.
+  const handleBlocksChange = useCallback((blocks: WorkoutBlock[]) => {
+    const next = blocks.map((b) => b.exerciseId);
+    setActiveExerciseIds((prev) => {
+      if (prev.length === next.length && prev.every((id, i) => id === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
 
   const exerciseLibraryById = useMemo(() => {
     const map = new Map<string, ExerciseOption>();
@@ -146,13 +168,14 @@ export default function QuickWorkoutLogForm({
         availableExercises={availableExercises}
         saveLabel="Save Quick Workout"
         savingLabel="Saving..."
-        backHref="/routines"
+        backHref={backHref}
+        onBack={onBack}
         addExerciseTitle="Add Exercise To This Log"
         addExerciseHelp="This quick log doesn't change any saved template. Add only what you want to record today."
         createExerciseHelp="Creating here saves the exercise in your library and adds it to this log only."
         emptyStateHelp="Add one or more exercises above to build a one-off workout log."
         createExerciseOption={(params) => createWorkoutLogExerciseOption({ ...params, routineId: undefined })}
-        onBlocksChange={(blocks) => setActiveExerciseIds(blocks.map((b) => b.exerciseId))}
+        onBlocksChange={handleBlocksChange}
         onSave={async (payload) => {
           await logAdHocWorkout({
             domain,
@@ -161,7 +184,11 @@ export default function QuickWorkoutLogForm({
             performedAtLocal: payload.performedAtLocal || undefined,
             exercises: payload.exercises,
           });
-          window.location.href = "/routines";
+          if (onComplete) {
+            onComplete();
+          } else {
+            window.location.href = backHref;
+          }
         }}
       />
     </div>

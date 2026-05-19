@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { formatAppDate, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
-import QuickWorkoutLogPageContent from "./QuickWorkoutLogPageContent";
 import StarterPackPageContent from "./StarterPackPageContent";
 import { formatRoutineTypeLabel, normalizeRoutineKind, effectiveRoutineDomain, domainColor, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, routineWithFrequencyTarget } from "@/lib/routine-frequency";
@@ -9,6 +8,7 @@ import { getWeekBoundsSunday } from "@/lib/week";
 import { computeHabitStats } from "@/lib/habits";
 import RoutineCard from "./RoutineCard";
 import RoutineSection from "./RoutineSection";
+import QuickLogDrawerButton from "./QuickLogDrawerButton";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +55,21 @@ const styles = {
     background: "#111827",
     color: "#ffffff",
   },
+  quickLogPill: {
+    minHeight: 28,
+    padding: "4px 8px",
+    border: "1px solid rgba(128,128,128,0.7)",
+    borderRadius: 8,
+    color: "inherit",
+    background: "rgba(255,255,255,0.06)",
+    fontWeight: 800,
+    fontSize: 11,
+    lineHeight: 1.2,
+    display: "inline-flex",
+    alignItems: "center",
+    whiteSpace: "nowrap" as const,
+    cursor: "pointer",
+  },
 };
 
 export default async function RoutinesPage(props: {
@@ -62,9 +77,6 @@ export default async function RoutinesPage(props: {
 }) {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const mode = getParam(searchParams, "mode");
-  if (mode === "quick-log") {
-    return <QuickWorkoutLogPageContent />;
-  }
   if (mode === "starter") {
     return <StarterPackPageContent />;
   }
@@ -318,7 +330,11 @@ export default async function RoutinesPage(props: {
               title={label.toUpperCase()}
               count={list.length}
               accentColor={accent}
-              quickLogHref={domain === "strength" ? "/routines?mode=quick-log" : undefined}
+              quickLogSlot={
+                domain === "strength" ? (
+                  <QuickLogDrawerButton style={styles.quickLogPill} />
+                ) : undefined
+              }
               defaultOpen={!!domainFilter}
             >
               {list.map((routine) => (

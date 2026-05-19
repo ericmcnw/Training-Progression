@@ -50,7 +50,7 @@ export default function HabitGrid({ rows, today }: Props) {
       {/* Day-label header row. Same grid columns as the habit rows so the
           weekday letters align exactly with the dot cells below. */}
       <div style={headerRow} className="homeV2HabitHeader">
-        <div />
+        <div className="homeV2HabitHeaderSpacer" />
         <div style={dayLabelGrid}>
           {last7.map((ymd) => (
             <span key={ymd} style={{ ...dayLabelText, ...(ymd === today ? dayLabelToday : null) }}>
@@ -77,7 +77,7 @@ export default function HabitGrid({ rows, today }: Props) {
                 className="homeV2HabitRow"
                 aria-expanded={expanded}
               >
-                <div style={nameColumn}>
+                <div style={nameColumn} className="homeV2HabitName">
                   <span style={{ ...accentDot, background: accent }} aria-hidden />
                   <span style={nameText}>{row.goalName}</span>
                   {row.isGroup ? (
@@ -167,18 +167,33 @@ export default function HabitGrid({ rows, today }: Props) {
           padding: 0 12px 2px;
         }
         @media (max-width: 540px) {
-          .homeV2HabitRow,
-          .homeV2HabitHeader {
-            grid-template-columns: minmax(90px, 1.2fr) minmax(0, 2.4fr) 96px;
-            gap: 8px;
+          /* Two-row layout on mobile so long goal names don't truncate
+             behind the dot strip. Row 1: name spans full width. Row 2:
+             dots + streak/fraction/chevron. The header drops its spacer
+             column so day-initials still align over the dots below. */
+          .homeV2HabitRow {
+            grid-template-columns: minmax(0, 1fr) 96px;
+            grid-template-rows: auto auto;
+            gap: 4px 8px;
             padding-inline: 10px;
+          }
+          .homeV2HabitRow .homeV2HabitName {
+            grid-column: 1 / -1;
+            min-width: 0;
+          }
+          .homeV2HabitHeader {
+            grid-template-columns: minmax(0, 1fr) 96px;
+            padding-inline: 10px;
+          }
+          .homeV2HabitHeader .homeV2HabitHeaderSpacer {
+            display: none;
           }
         }
         @media (max-width: 400px) {
           .homeV2HabitRow,
           .homeV2HabitHeader {
-            grid-template-columns: minmax(70px, 1fr) minmax(0, 2fr) 88px;
-            gap: 6px;
+            grid-template-columns: minmax(0, 1fr) 88px;
+            gap: 4px 6px;
             padding-inline: 8px;
             font-size: 12px;
           }

@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useState, useTransition, type CSSProperties } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
+import { QUICK_LOG_ROUTINE_ID } from "@/app/components/LogDrawer";
 import type { QuickPickRoutine } from "./types";
 import { COLOR, RADIUS } from "./tokens";
 import { domainAccent } from "./client-utils";
@@ -22,6 +23,7 @@ type Props = {
 };
 
 export default function QuickAddMenu({ open, onClose, routines, today }: Props) {
+  const { openDrawer } = useLogDrawer();
   const [picker, setPicker] = useState(false);
   const [todoLabel, setTodoLabel] = useState("");
   const [pending, startTransition] = useTransition();
@@ -54,6 +56,18 @@ export default function QuickAddMenu({ open, onClose, routines, today }: Props) 
             <button type="button" onClick={() => setPicker(true)} style={menuItem}>
               <span style={menuItemIcon}>＋</span>
               <span style={menuItemText}>Log a routine</span>
+              <span style={menuItemChevron}>›</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openDrawer(QUICK_LOG_ROUTINE_ID);
+                onClose();
+              }}
+              style={menuItem}
+            >
+              <span style={menuItemIcon}>⚡</span>
+              <span style={menuItemText}>Quick workout (no routine)</span>
               <span style={menuItemChevron}>›</span>
             </button>
             <Link href="/body/log-pain" style={menuItem} onClick={onClose}>

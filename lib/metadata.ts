@@ -171,10 +171,15 @@ export const ROUTINE_SUBTYPE_GROUP_DEFAULTS: Record<string, string[]> = {
 
 const EXERCISE_METADATA_INFERENCE_RULES: Array<{ pattern: RegExp; slugs: string[] }> = [
   { pattern: /\b(pull[\s-]?up|chin[\s-]?up|lat pulldown|pulldown)\b/i, slugs: ["vertical-pull", "pull", "back", "biceps"] },
+  { pattern: /\b(muscle[\s-]?up)\b/i, slugs: ["vertical-pull", "vertical-push", "pull", "push", "back", "chest", "shoulders", "triceps", "biceps", "core", "full-body", "skill-practice", "strength"] },
+  { pattern: /\b(front lever|scapular pull[\s-]?up|archer pull[\s-]?up)\b/i, slugs: ["vertical-pull", "pull", "back", "shoulders", "core", "skill-practice"] },
   { pattern: /\b(row|seal row|t-bar row|inverted row)\b/i, slugs: ["horizontal-pull", "pull", "back", "biceps"] },
   { pattern: /\b(face pull|rear delt)\b/i, slugs: ["horizontal-pull", "pull", "back", "shoulders"] },
-  { pattern: /\b(bench|push[\s-]?up|chest press|chest fly|dip)\b/i, slugs: ["horizontal-push", "push", "chest", "triceps", "shoulders"] },
+  { pattern: /\b(bench|push[\s-]?up|chest press|chest fly)\b/i, slugs: ["horizontal-push", "push", "chest", "triceps", "shoulders"] },
+  { pattern: /\b(ring dip)\b/i, slugs: ["vertical-push", "push", "chest", "triceps", "shoulders", "core", "skill-practice"] },
+  { pattern: /\b(dip)\b/i, slugs: ["vertical-push", "push", "chest", "triceps", "shoulders"] },
   { pattern: /\b(overhead press|shoulder press|arnold press|pike push[\s-]?up|handstand push[\s-]?up)\b/i, slugs: ["vertical-push", "push", "shoulders", "triceps"] },
+  { pattern: /\b(planche|planche lean)\b/i, slugs: ["push", "chest", "shoulders", "triceps", "core", "isometric", "skill-practice"] },
   { pattern: /\b(squat|leg press|wall sit)\b/i, slugs: ["squat", "legs", "lower-body", "quads", "glutes"] },
   { pattern: /\b(deadlift|romanian deadlift|rdl|good morning|hip thrust|bridge|swing|pull-through)\b/i, slugs: ["hinge", "legs", "lower-body", "hamstrings", "glutes"] },
   { pattern: /\b(lunge|split squat|step-up)\b/i, slugs: ["lunge", "legs", "lower-body", "quads", "glutes"] },
