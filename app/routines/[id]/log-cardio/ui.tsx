@@ -23,11 +23,9 @@ import {
   loadDraftFromStorage,
   saveDraftToStorage,
 } from "@/lib/log-draft";
-import ActivitySpotPicker from "@/app/components/log/ActivitySpotPicker";
+import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import {
-  type NewActivitySpotDraft,
   type SpotPickerItem,
-  type SpotSelection,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
 
@@ -59,12 +57,11 @@ export default function LogRunForm({
   const [elevationGainFt, setElevationGainFt] = useState("");
   const [minutes, setMinutes] = useState("");
   const [seconds, setSeconds] = useState("");
-  const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
-  const [spotSelection, setSpotSelection] = useState<SpotSelection | null>(null);
-  const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
   );
@@ -72,6 +69,16 @@ export default function LogRunForm({
 
   const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
   const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
+
+  useEffect(() => {
+    if (!activitySlug) { setRecentSpots([]); return; }
+    let cancelled = false;
+    fetch(`/api/spots/recent?slug=${encodeURIComponent(activitySlug)}&limit=5`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("recent fetch failed"))))
+      .then((data) => { if (!cancelled) setRecentSpots(data.recent ?? []); })
+      .catch(() => { if (!cancelled) setRecentSpots([]); });
+    return () => { cancelled = true; };
+  }, [activitySlug]);
 
   // Draft autosave + restore so cardio gets the same chip-strip presence and
   // refresh-survival as workout/session logs.
@@ -85,9 +92,12 @@ export default function LogRunForm({
     setElevationGainFt(stored.elevationGainFt);
     setMinutes(stored.minutes);
     setSeconds(stored.seconds);
-    setLocation(stored.location);
     setNotes(stored.notes);
     setPerformedAtLocal(stored.performedAtLocal || localDateTimeNow());
+    // Restore the structured spot pick — preserves OSM identity + coords
+    // across browser refreshes. Drafts written before this schema bump
+    // won't have spotValue and silently skip this step.
+    if (stored.spotValue !== undefined) setSpotValue(stored.spotValue);
     draftStartedAtRef.current = stored.startedAt;
     isDirtyRef.current = true;
     draftCtx?.saveDraft(stored);
@@ -107,7 +117,11 @@ export default function LogRunForm({
       elevationGainFt,
       minutes,
       seconds,
-      location,
+      // Location is now structured-only via SpotPicker. The legacy
+      // free-text field stays in the draft schema for back-compat but
+      // is always empty on new logs.
+      location: "",
+      spotValue: spotValue ?? undefined,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -115,7 +129,7 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, location, notes, performedAtLocal]);
+  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue]);
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);
@@ -162,27 +176,19 @@ export default function LogRunForm({
 
     setSaving(true);
     try {
+      // Map the picker's value to action params. Cardio activities use
+      // the ActivitySpot table; cross-activity ClimbLocation picks are
+      // routed via climbLocationId so we link to the existing record.
+      const spotParams = spotParamsForCardio(spotValue);
       await logRun({
         routineId,
         distanceMi: distance,
         durationSec,
         elevationGainFt: elevation,
-        location: location.trim() || undefined,
         notes,
         performedAtLocal: performedAtLocal || undefined,
-        // Spot wiring — picker may have selected an ActivitySpot OR a
-        // cross-activity ClimbLocation; route to the matching FK so the
-        // log links to the existing record without duplicating data.
         activitySlug: activitySlug ?? undefined,
-        activitySpotId: spotSelection?.kind === "activitySpot" ? spotSelection.id : undefined,
-        climbLocationId: spotSelection?.kind === "climbLocation" ? spotSelection.id : undefined,
-        newActivitySpotName: newActivitySpot?.name?.trim() || undefined,
-        newActivitySpotType: newActivitySpot?.type ?? null,
-        newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
-        newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
-        newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
-        newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
-        newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
+        ...spotParams,
         painCheck:
           activePainZones.length > 0
             ? {
@@ -261,23 +267,14 @@ export default function LogRunForm({
         </Field>
 
         {showSpotPicker && spotConfig ? (
-          <Field
-            label={`${capitalize(spotConfig.spotNoun)} (optional)`}
-            hint={
-              savedSpots.length > 0
-                ? "Pick a saved spot — including from related activities (e.g. a climbing crag for a trail run there) — or type to search OpenStreetMap."
-                : "Type a name to search OpenStreetMap, or tap '📍 Use my location' to drop it on your activity map."
-            }
-          >
-            <ActivitySpotPicker
-              config={spotConfig}
-              savedSpots={savedSpots}
-              selected={spotSelection}
-              onSelect={(sel) => { markDirty(); setSpotSelection(sel); }}
-              newSpot={newActivitySpot}
-              onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
-            />
-          </Field>
+          <SpotPicker
+            config={spotConfig}
+            spotNoun={spotConfig.spotNoun}
+            savedSpots={savedSpots}
+            recentSpots={recentSpots}
+            value={spotValue}
+            onChange={(next) => { markDirty(); setSpotValue(next); }}
+          />
         ) : null}
 
         <DateTimeField
@@ -321,6 +318,29 @@ export default function LogRunForm({
 
 function capitalize(value: string) {
   return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
+
+// Translates a picker value into the param shape `logCardio` expects.
+// Saved ClimbLocation picks route to `climbLocationId` (cross-table link);
+// saved ActivitySpot picks route to `activitySpotId`; new spots ship via
+// the `newActivitySpot*` fields so the server upserts a row.
+function spotParamsForCardio(value: SpotPickerValue) {
+  if (!value) return {};
+  if (value.kind === "saved") {
+    return value.ref.kind === "climbLocation"
+      ? { climbLocationId: value.ref.id }
+      : { activitySpotId: value.ref.id };
+  }
+  const d = value.draft;
+  return {
+    newActivitySpotName: d.name,
+    newActivitySpotType: d.type,
+    newActivitySpotRegion: d.region,
+    newActivitySpotLatitude: d.latitude,
+    newActivitySpotLongitude: d.longitude,
+    newActivitySpotOsmType: d.osmType,
+    newActivitySpotOsmId: d.osmId,
+  };
 }
 
 const bigInputStyle: React.CSSProperties = {

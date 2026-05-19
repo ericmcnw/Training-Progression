@@ -1889,7 +1889,16 @@ async function resolveActivitySpotId(input: {
   if (input.activitySpotId?.trim()) return input.activitySpotId.trim();
   const name = input.newActivitySpotName?.trim();
   const slug = input.activitySlug?.trim();
-  if (!name || !slug) return null;
+  if (!name) return null;
+  // Name supplied but no activity slug = user data we'd otherwise drop on
+  // the floor. Surface it so the caller (and form) knows the spot didn't
+  // land in the library, instead of silently saving only the free-text
+  // location field.
+  if (!slug) {
+    throw new Error(
+      "Can't save spot: this routine has no activity tag, so we don't know which library to put it in.",
+    );
+  }
 
   const region = input.newActivitySpotRegion?.trim() || null;
   const lat = typeof input.newActivitySpotLatitude === "number" && Number.isFinite(input.newActivitySpotLatitude)
@@ -2100,6 +2109,66 @@ export async function getClimbLocations(): Promise<
   });
 }
 
+/** Resolves a ClimbLocation reference for a log: either the explicit
+ *  climbLocationId, or upserts a new one from the supplied draft fields.
+ *  Returns the resolved id (or null if nothing supplied). Backfills
+ *  region/coords/OSM identity onto existing records when the user supplied
+ *  new values, but never clobbers. Mirrors `resolveActivitySpotId`. */
+async function resolveClimbLocationId(input: {
+  climbLocationId?: string;
+  newClimbLocationName?: string;
+  newClimbLocationType?: "GYM" | "CRAG";
+  newClimbLocationRegion?: string | null;
+  newClimbLocationLatitude?: number | null;
+  newClimbLocationLongitude?: number | null;
+  newClimbLocationOsmType?: string | null;
+  newClimbLocationOsmId?: string | null;
+}): Promise<string | null> {
+  if (input.climbLocationId?.trim()) return input.climbLocationId.trim();
+  const name = input.newClimbLocationName?.trim();
+  if (!name) return null;
+  const type = input.newClimbLocationType ?? "GYM";
+  const region = input.newClimbLocationRegion?.trim() || null;
+  const latitude = typeof input.newClimbLocationLatitude === "number" && Number.isFinite(input.newClimbLocationLatitude)
+    ? input.newClimbLocationLatitude
+    : null;
+  const longitude = typeof input.newClimbLocationLongitude === "number" && Number.isFinite(input.newClimbLocationLongitude)
+    ? input.newClimbLocationLongitude
+    : null;
+  const osmType = input.newClimbLocationOsmType?.trim() || null;
+  const osmId = input.newClimbLocationOsmId?.trim() || null;
+
+  const osmExisting = osmType && osmId
+    ? await prisma.climbLocation.findFirst({
+        where: { osmType, osmId },
+        select: { id: true, region: true, latitude: true, longitude: true },
+      })
+    : null;
+  const existing = osmExisting ?? await prisma.climbLocation.findFirst({
+    where: { name: { equals: name, mode: "insensitive" }, type },
+    select: { id: true, region: true, latitude: true, longitude: true },
+  });
+  if (existing) {
+    const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
+    if (region && !existing.region) updates.region = region;
+    if (latitude !== null && existing.latitude == null) updates.latitude = latitude;
+    if (longitude !== null && existing.longitude == null) updates.longitude = longitude;
+    if (osmType && osmId && !osmExisting) {
+      updates.osmType = osmType;
+      updates.osmId = osmId;
+    }
+    if (Object.keys(updates).length > 0) {
+      await prisma.climbLocation.update({ where: { id: existing.id }, data: updates });
+    }
+    return existing.id;
+  }
+  const created = await prisma.climbLocation.create({
+    data: { name, type, region, latitude, longitude, osmType, osmId },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 export async function logSession(params: {
   routineId: string;
   durationSec?: number | null;
@@ -2147,56 +2216,7 @@ export async function logSession(params: {
     throw new Error("Duration must be > 0.");
   }
 
-  // Resolve or create ClimbLocation before transaction
-  let resolvedClimbLocationId: string | null = params.climbLocationId?.trim() || null;
-  if (!resolvedClimbLocationId && params.newClimbLocationName?.trim()) {
-    const name = params.newClimbLocationName.trim();
-    const type = params.newClimbLocationType ?? "GYM";
-    const region = params.newClimbLocationRegion?.trim() || null;
-    const latitude = typeof params.newClimbLocationLatitude === "number" && Number.isFinite(params.newClimbLocationLatitude)
-      ? params.newClimbLocationLatitude
-      : null;
-    const longitude = typeof params.newClimbLocationLongitude === "number" && Number.isFinite(params.newClimbLocationLongitude)
-      ? params.newClimbLocationLongitude
-      : null;
-    const osmType = params.newClimbLocationOsmType?.trim() || null;
-    const osmId = params.newClimbLocationOsmId?.trim() || null;
-    // OSM-identity dedup takes priority — if the user picked an OSM
-    // place that already corresponds to a saved record, link to it.
-    const osmExisting = osmType && osmId
-      ? await prisma.climbLocation.findFirst({
-          where: { osmType, osmId },
-          select: { id: true, region: true, latitude: true, longitude: true },
-        })
-      : null;
-    const existing = osmExisting ?? await prisma.climbLocation.findFirst({
-      where: { name: { equals: name, mode: "insensitive" }, type },
-      select: { id: true, region: true, latitude: true, longitude: true },
-    });
-    if (existing) {
-      resolvedClimbLocationId = existing.id;
-      // Backfill region/coords/OSM identity if the existing record was
-      // created without them and the user just provided some — never
-      // clobber existing data.
-      const updates: { region?: string; latitude?: number; longitude?: number; osmType?: string; osmId?: string } = {};
-      if (region && !existing.region) updates.region = region;
-      if (latitude !== null && existing.latitude == null) updates.latitude = latitude;
-      if (longitude !== null && existing.longitude == null) updates.longitude = longitude;
-      if (osmType && osmId && !osmExisting) {
-        updates.osmType = osmType;
-        updates.osmId = osmId;
-      }
-      if (Object.keys(updates).length > 0) {
-        await prisma.climbLocation.update({ where: { id: existing.id }, data: updates });
-      }
-    } else {
-      const created = await prisma.climbLocation.create({
-        data: { name, type, region, latitude, longitude, osmType, osmId },
-        select: { id: true },
-      });
-      resolvedClimbLocationId = created.id;
-    }
-  }
+  const resolvedClimbLocationId = await resolveClimbLocationId(params);
 
   // Resolve or create ClimbProblems for attempts that name a new problem
   const resolvedAttempts = params.climbAttempts ? [...params.climbAttempts] : [];
@@ -2314,7 +2334,7 @@ export async function logSession(params: {
   return logId;
 }
 
-export async function updateCardioLog(params: {
+export type UpdateCardioLogParams = {
   routineId: string;
   logId: string;
   distanceMi: number;
@@ -2323,7 +2343,29 @@ export async function updateCardioLog(params: {
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
-}) {
+  // Spot wiring — same shape as logCardio. `clearSpot: true` nulls both
+  // FKs; omitting all spot params leaves the existing links untouched.
+  clearSpot?: boolean;
+  activitySlug?: string;
+  activitySpotId?: string;
+  climbLocationId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
+  newClimbLocationName?: string;
+  newClimbLocationType?: "GYM" | "CRAG";
+  newClimbLocationRegion?: string | null;
+  newClimbLocationLatitude?: number | null;
+  newClimbLocationLongitude?: number | null;
+  newClimbLocationOsmType?: string | null;
+  newClimbLocationOsmId?: string | null;
+};
+
+export async function updateCardioLog(params: UpdateCardioLogParams) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   if (!params.logId) throw new Error("Missing logId.");
   if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) throw new Error("Distance must be > 0.");
@@ -2342,6 +2384,24 @@ export async function updateCardioLog(params: {
   });
   if (!existing || existing.routineId !== params.routineId) throw new Error("Log not found for routine.");
 
+  const hasSpotParams =
+    params.clearSpot === true ||
+    params.climbLocationId != null ||
+    params.activitySpotId != null ||
+    params.newClimbLocationName != null ||
+    params.newActivitySpotName != null;
+  let nextClimbLocationId: string | null | undefined = undefined;
+  let nextActivitySpotId: string | null | undefined = undefined;
+  if (hasSpotParams) {
+    if (params.clearSpot) {
+      nextClimbLocationId = null;
+      nextActivitySpotId = null;
+    } else {
+      nextClimbLocationId = await resolveClimbLocationId(params);
+      nextActivitySpotId = await resolveActivitySpotId(params);
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.routineLog.update({
       where: { id: params.logId },
@@ -2354,6 +2414,12 @@ export async function updateCardioLog(params: {
             ? Math.round(params.elevationGainFt)
             : null,
         notes: params.notes?.trim() || null,
+        ...(hasSpotParams
+          ? {
+              climbLocationId: nextClimbLocationId,
+              activitySpotId: nextActivitySpotId,
+            }
+          : {}),
       },
     });
     await tx.routineLogMetric.deleteMany({ where: { routineLogId: params.logId } });
@@ -2370,15 +2436,7 @@ export async function updateCardioLog(params: {
   revalidateRoutineSurfaces(params.routineId);
 }
 
-export async function updateRunLog(params: {
-  routineId: string;
-  logId: string;
-  distanceMi: number;
-  durationSec: number;
-  elevationGainFt?: number | null;
-  notes?: string;
-  performedAtLocal?: string;
-}) {
+export async function updateRunLog(params: UpdateCardioLogParams) {
   await updateCardioLog(params);
 }
 
@@ -2568,6 +2626,26 @@ export async function updateSessionLog(params: {
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
   preferredClimbingGrades?: string[];
+  // Spot wiring: same shape as logSession. When `clearSpot` is true,
+  // clears both climbLocationId and activitySpotId on the log.
+  clearSpot?: boolean;
+  climbLocationId?: string;
+  newClimbLocationName?: string;
+  newClimbLocationType?: "GYM" | "CRAG";
+  newClimbLocationRegion?: string | null;
+  newClimbLocationLatitude?: number | null;
+  newClimbLocationLongitude?: number | null;
+  newClimbLocationOsmType?: string | null;
+  newClimbLocationOsmId?: string | null;
+  activitySlug?: string;
+  activitySpotId?: string;
+  newActivitySpotName?: string;
+  newActivitySpotType?: string | null;
+  newActivitySpotRegion?: string | null;
+  newActivitySpotLatitude?: number | null;
+  newActivitySpotLongitude?: number | null;
+  newActivitySpotOsmType?: string | null;
+  newActivitySpotOsmId?: string | null;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (!params.logId) throw new Error("Missing logId.");
@@ -2581,6 +2659,28 @@ export async function updateSessionLog(params: {
   });
   if (!existing || existing.routineId !== params.routineId) throw new Error("Log not found for routine.");
 
+  // Resolve spot FKs outside the transaction (same pattern as logSession).
+  // Both can be null; "no change" is signaled by omitting all spot params.
+  const hasSpotParams =
+    params.clearSpot === true ||
+    params.climbLocationId != null ||
+    params.activitySpotId != null ||
+    params.newClimbLocationName != null ||
+    params.newActivitySpotName != null;
+  let nextClimbLocationId: string | null | undefined = undefined;
+  let nextActivitySpotId: string | null | undefined = undefined;
+  if (hasSpotParams) {
+    if (params.clearSpot) {
+      nextClimbLocationId = null;
+      nextActivitySpotId = null;
+    } else {
+      const resolvedClimb = await resolveClimbLocationId(params);
+      const resolvedSpot = await resolveActivitySpotId(params);
+      nextClimbLocationId = resolvedClimb;
+      nextActivitySpotId = resolvedSpot;
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.routineLog.update({
       where: { id: params.logId },
@@ -2589,6 +2689,12 @@ export async function updateSessionLog(params: {
         durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
+        ...(hasSpotParams
+          ? {
+              climbLocationId: nextClimbLocationId,
+              activitySpotId: nextActivitySpotId,
+            }
+          : {}),
       },
     });
     await tx.routineLogMetric.deleteMany({ where: { routineLogId: params.logId } });

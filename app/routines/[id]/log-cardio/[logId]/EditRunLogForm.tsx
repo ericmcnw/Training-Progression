@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { updateRunLog } from "../../../actions";
 import { Field, FieldGrid, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
+import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
+import {
+  type SpotPickerItem,
+  getActivitySpotConfig,
+} from "@/lib/activity-spots";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -14,6 +19,28 @@ function toLocalInputValue(date: Date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
+// Mirrors the session edit form's mapper. Saved climbLocation picks
+// route to climbLocationId (cross-table link); new spots go through
+// the ActivitySpot path since cardio routines aren't climbing.
+function spotParamsForUpdate(value: SpotPickerValue, hadInitialSpot: boolean) {
+  if (!value) return hadInitialSpot ? { clearSpot: true } : {};
+  if (value.kind === "saved") {
+    return value.ref.kind === "climbLocation"
+      ? { climbLocationId: value.ref.id }
+      : { activitySpotId: value.ref.id };
+  }
+  const d = value.draft;
+  return {
+    newActivitySpotName: d.name,
+    newActivitySpotType: d.type,
+    newActivitySpotRegion: d.region,
+    newActivitySpotLatitude: d.latitude,
+    newActivitySpotLongitude: d.longitude,
+    newActivitySpotOsmType: d.osmType,
+    newActivitySpotOsmId: d.osmId,
+  };
+}
+
 export default function EditRunLogForm({
   routineId,
   logId,
@@ -23,6 +50,9 @@ export default function EditRunLogForm({
   initialDurationSec,
   initialNotes,
   initialPerformedAt,
+  activitySlug = null,
+  savedSpots = [],
+  initialSpot = null,
 }: {
   routineId: string;
   logId: string;
@@ -32,6 +62,9 @@ export default function EditRunLogForm({
   initialDurationSec: number;
   initialNotes: string;
   initialPerformedAt: Date;
+  activitySlug?: string | null;
+  savedSpots?: SpotPickerItem[];
+  initialSpot?: SpotPickerValue;
 }) {
   const [distanceMi, setDistanceMi] = useState(String(initialDistanceMi));
   const [elevationGainFt, setElevationGainFt] = useState(
@@ -41,7 +74,22 @@ export default function EditRunLogForm({
   const [seconds, setSeconds] = useState(String(initialDurationSec % 60));
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
+  const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
+
+  const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+  const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
+
+  useEffect(() => {
+    if (!activitySlug) { setRecentSpots([]); return; }
+    let cancelled = false;
+    fetch(`/api/spots/recent?slug=${encodeURIComponent(activitySlug)}&limit=5`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("recent fetch failed"))))
+      .then((data) => { if (!cancelled) setRecentSpots(data.recent ?? []); })
+      .catch(() => { if (!cancelled) setRecentSpots([]); });
+    return () => { cancelled = true; };
+  }, [activitySlug]);
 
   async function onSave() {
     const distance = Number(distanceMi);
@@ -67,6 +115,7 @@ export default function EditRunLogForm({
 
     setSaving(true);
     try {
+      const spotParams = spotParamsForUpdate(spotValue, initialSpot !== null);
       await updateRunLog({
         routineId,
         logId,
@@ -75,6 +124,8 @@ export default function EditRunLogForm({
         elevationGainFt: elevation,
         notes,
         performedAtLocal,
+        activitySlug: activitySlug ?? undefined,
+        ...spotParams,
       });
       window.location.href = returnTo;
     } finally {
@@ -84,14 +135,15 @@ export default function EditRunLogForm({
 
   return (
     <FormStack maxWidth={560}>
-      <FormSection title="Cardio details">
-        <Field label="Performed at">
-          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
-        </Field>
-
-        <Field label="Distance (miles)">
-          <input style={inputStyle} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
-        </Field>
+      <FormSection title="Cardio">
+        <FieldGrid>
+          <Field label="Distance (miles)">
+            <input style={inputStyle} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
+          </Field>
+          <Field label="Elevation gain (ft, optional)">
+            <input style={inputStyle} value={elevationGainFt} onChange={(e) => setElevationGainFt(e.target.value)} inputMode="numeric" />
+          </Field>
+        </FieldGrid>
 
         <FieldGrid>
           <Field label="Minutes">
@@ -102,13 +154,19 @@ export default function EditRunLogForm({
           </Field>
         </FieldGrid>
 
-        <Field label="Elevation gain (ft, optional)">
-          <input
-            style={inputStyle}
-            value={elevationGainFt}
-            onChange={(e) => setElevationGainFt(e.target.value)}
-            inputMode="numeric"
+        {showSpotPicker && spotConfig ? (
+          <SpotPicker
+            config={spotConfig}
+            spotNoun={spotConfig.spotNoun}
+            savedSpots={savedSpots}
+            recentSpots={recentSpots}
+            value={spotValue}
+            onChange={setSpotValue}
           />
+        ) : null}
+
+        <Field label="Performed at">
+          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
         </Field>
       </FormSection>
 

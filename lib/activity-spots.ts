@@ -138,21 +138,6 @@ export type ActivitySpotBasic = {
   osmId: string | null;
 };
 
-/** Mutable draft used by the picker when the user is creating a new spot
- *  in-line during a log session (parallel to NewClimbLocationDraft). */
-export type NewActivitySpotDraft = {
-  name: string;
-  type: string | null;
-  region: string;
-  latitude: number | null;
-  longitude: number | null;
-  /** OSM place identity captured when the user picked the spot from
-   *  the autocomplete dropdown. Persists with the new spot so future
-   *  picks of the same OSM place dedup against this record. */
-  osmType: string | null;
-  osmId: string | null;
-};
-
 // ── Cross-activity spot compatibility ─────────────────────────────────────
 //
 // Some places host multiple activities — Paugussett State Forest is both a
@@ -165,37 +150,57 @@ export type NewActivitySpotDraft = {
 // facility-bound sports (basketball, tennis, golf) stay pure to avoid
 // noisy dropdowns. A spot's origin activity is preserved when picked —
 // the log links to the existing record, not a duplicate.
-const COMPATIBLE_ACTIVITY_SPOTS: Record<string, string[]> = {
+// Raw compatibility edges, listed in one direction only. The map below is
+// derived as the symmetric closure so any pair listed here works both ways
+// (e.g., a spot saved under "running" surfaces on a "trail-running" log AND
+// vice-versa).
+const COMPATIBLE_ACTIVITY_SPOTS_RAW: Record<string, string[]> = {
   // Endurance activities can happen almost anywhere outdoor — wide net.
-  "trail-running":     ["trail-running", "hiking", "climbing", "mountain-biking", "gravel-cycling"],
-  "hiking":            ["hiking", "climbing", "trail-running", "mountain-biking"],
-  "running":           ["running", "trail-running", "walking"],
-  "road-running":      ["road-running", "running", "walking"],
-  "walking":           ["walking", "running", "trail-running", "hiking"],
-  "mountain-biking":   ["mountain-biking", "trail-running", "hiking", "gravel-cycling"],
-  "gravel-cycling":    ["gravel-cycling", "mountain-biking", "trail-running", "biking", "road-cycling"],
-  "biking":            ["biking", "road-cycling", "gravel-cycling"],
-  "road-cycling":      ["road-cycling", "biking", "gravel-cycling"],
-  "rowing":            ["rowing"],
-  "open-water-swimming": ["open-water-swimming", "surfing"],
-  "swimming":          ["swimming", "pool-swimming", "open-water-swimming"],
-  "pool-swimming":     ["pool-swimming", "swimming"],
+  "trail-running":     ["hiking", "climbing", "mountain-biking", "gravel-cycling"],
+  "hiking":            ["climbing", "trail-running", "mountain-biking"],
+  "running":           ["trail-running", "walking", "road-running"],
+  "road-running":      ["running", "walking"],
+  "walking":           ["running", "trail-running", "hiking", "road-running"],
+  "mountain-biking":   ["trail-running", "hiking", "gravel-cycling"],
+  "gravel-cycling":    ["mountain-biking", "trail-running", "biking", "road-cycling"],
+  "biking":            ["road-cycling", "gravel-cycling"],
+  "road-cycling":      ["biking", "gravel-cycling"],
+  "open-water-swimming": ["surfing", "swimming"],
+  "swimming":          ["pool-swimming", "open-water-swimming"],
+  "pool-swimming":     ["swimming"],
 
   // Climbing: own crags + hiking spots (approach trails / shared trailheads).
-  "climbing":          ["climbing", "hiking"],
+  "climbing":          ["hiking", "trail-running"],
 
   // Board sports: snow shares between skiing/snowboarding; surf with
   // open-water swimming; skate parks pretty isolated.
-  "snowboarding":      ["snowboarding", "skiing"],
-  "skiing":            ["skiing", "snowboarding"],
-  "surfing":           ["surfing", "open-water-swimming"],
-  "skateboarding":     ["skateboarding"],
+  "snowboarding":      ["skiing"],
+  "skiing":            ["snowboarding"],
+  "surfing":           ["open-water-swimming"],
 
-  // Facility-bound sports — own only.
-  "basketball":        ["basketball"],
-  "tennis":            ["tennis"],
-  "golf":              ["golf"],
+  // Facility-bound sports + standalone — own only.
+  "rowing":            [],
+  "skateboarding":     [],
+  "basketball":        [],
+  "tennis":            [],
+  "golf":              [],
 };
+
+const COMPATIBLE_ACTIVITY_SPOTS: Record<string, string[]> = (() => {
+  const sets: Record<string, Set<string>> = {};
+  const ensure = (slug: string) => {
+    if (!sets[slug]) sets[slug] = new Set([slug]);
+    return sets[slug];
+  };
+  for (const [a, others] of Object.entries(COMPATIBLE_ACTIVITY_SPOTS_RAW)) {
+    const aSet = ensure(a);
+    for (const b of others) {
+      aSet.add(b);
+      ensure(b).add(a);
+    }
+  }
+  return Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, Array.from(v)]));
+})();
 
 /** Returns the activity slugs whose saved spots should appear in this
  *  activity's picker. Always includes the slug itself. Falls back to
@@ -225,12 +230,6 @@ export type SpotPickerItem = {
   osmType: string | null;
   osmId: string | null;
 };
-
-/** Discriminated selection shape returned by the picker. The form maps
- *  this to either `activitySpotId` or `climbLocationId` on RoutineLog. */
-export type SpotSelection =
-  | { kind: "activitySpot"; id: string }
-  | { kind: "climbLocation"; id: string };
 
 /** Server-side helper used by both the log-data API and the full-page log
  *  route to assemble the dropdown contents. Takes raw rows from each

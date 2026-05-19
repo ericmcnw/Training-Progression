@@ -30,7 +30,36 @@ export const COLOR = {
   redSoft: "rgba(248,113,113,0.14)",
   blue: "rgba(96,165,250,0.95)",
   blueSoft: "rgba(96,165,250,0.14)",
+  green: "rgba(74,222,128,0.95)",
+  greenSoft: "rgba(74,222,128,0.14)",
+  purple: "rgba(192,132,252,0.9)",
+  purpleSoft: "rgba(192,132,252,0.14)",
+  orange: "rgba(251,146,60,0.9)",
+  orangeSoft: "rgba(251,146,60,0.14)",
+  blueText: "rgba(191,219,254,0.95)",
 } as const;
+
+// Returns a new color string with the alpha channel replaced. Accepts
+// either `#rrggbb` or `rgba(r,g,b,a)` inputs. Used so component code can
+// compose tints from base tokens instead of hardcoding RGBA literals.
+export function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith("rgba(")) {
+    return color.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, `rgba($1,$2,$3,${alpha})`);
+  }
+  if (color.startsWith("rgb(")) {
+    return color.replace(/rgb\(([^)]+)\)/, `rgba($1,${alpha})`);
+  }
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+  }
+  return color;
+}
 
 export const SHADOW = {
   card: "0 6px 18px rgba(0,0,0,0.22)",

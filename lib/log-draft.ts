@@ -1,6 +1,7 @@
 import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
 import type { ClimbAttemptDraft } from "@/lib/climb-types";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 const DRAFT_KEY_PREFIX = "log-draft:";
 const DRAFT_INDEX_KEY = "log-draft-index";
@@ -24,11 +25,21 @@ export type SessionDraft = {
   notes: string;
   performedAtLocal: string;
   durationMin: string;
+  // Legacy free-text location field. New drafts always set this empty —
+  // the structured `spotValue` below is the canonical location record.
+  // Kept in the schema so old drafts deserialize without crashing.
   location: string;
   sessionMetricValues: Record<string, SessionMetricDraftValue>;
   selectedClimbingGrades: string[];
   climbMode?: "quick" | "per-climb";
   climbAttempts?: ClimbAttemptDraft[];
+  // Structured spot pick — covers both saved-ref and new-spot drafts for
+  // any activity (climbing GYM/CRAG, cardio ActivitySpot, etc.). Preserved
+  // verbatim across refresh so OSM identity + coords survive the round-trip.
+  spotValue?: SpotPickerValue;
+  // Legacy climbLocation fields. Older drafts wrote here; the restore code
+  // promotes them into spotValue if spotValue is missing. New drafts no
+  // longer write these.
   climbLocationId?: string | null;
   newClimbLocationName?: string;
   newClimbLocationType?: "GYM" | "CRAG";
@@ -50,7 +61,11 @@ export type CardioDraft = {
   elevationGainFt: string;
   minutes: string;
   seconds: string;
+  // Legacy free-text location. Same back-compat story as SessionDraft.
   location: string;
+  // Structured spot pick (saved-ref OR new-spot draft) — restored
+  // verbatim into the SpotPicker on form remount.
+  spotValue?: SpotPickerValue;
 };
 
 export type GuidedDraft = {

@@ -21,6 +21,12 @@ import EditRunLogForm from "../../../log-cardio/[logId]/EditRunLogForm";
 import EditGuidedLogForm from "../../../log-guided/[logId]/EditGuidedLogForm";
 import EditSessionLogForm from "../../../log-session/[logId]/EditSessionLogForm";
 import EditCompletionLogForm from "../../../log-check/[logId]/EditCompletionLogForm";
+import {
+  buildSpotPickerItems,
+  compatibleActivitySlugs,
+  resolveRoutineActivitySlug,
+} from "@/lib/activity-spots";
+import { isClimbingTemplateKey } from "@/lib/session-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +82,10 @@ export default async function EditRoutineLogPage(props: {
         id: true,
         name: true,
         kind: true,
+        subtype: true,
+        metadataGroups: {
+          select: { group: { select: { slug: true } } },
+        },
         exercises: {
           orderBy: { sortOrder: "asc" },
           select: {
@@ -116,6 +126,14 @@ export default async function EditRoutineLogPage(props: {
         elevationGainFt: true,
         durationSec: true,
         location: true,
+        climbLocationId: true,
+        activitySpotId: true,
+        climbLocation: {
+          select: { id: true, name: true, region: true, type: true, osmType: true, osmId: true, latitude: true, longitude: true },
+        },
+        activitySpot: {
+          select: { id: true, activitySlug: true, name: true, region: true, type: true, osmType: true, osmId: true, latitude: true, longitude: true },
+        },
         metrics: { select: { id: true } },
         sessionMetricValues: {
           include: {
@@ -288,6 +306,87 @@ export default async function EditRoutineLogPage(props: {
     )
   );
 
+  // ── Spot context for the SpotPicker in session + cardio edit forms ─────
+  // Resolves the routine's activity slug, then pulls saved spots from the
+  // compatible activity tables so the picker can offer them as quick picks.
+  // Cardio + session share the same data shape — only climbing has a
+  // template-driven slug override.
+  const isSessionLog = isSessionKind(logKind);
+  const isCardioLog = isCardioKind(logKind);
+  const needsSpotContext = isSessionLog || isCardioLog;
+  const isClimbingSession = isSessionLog && isClimbingTemplateKey(routine.sessionDetails?.template?.key);
+  const editSpotActivitySlug = needsSpotContext
+    ? isClimbingSession
+      ? "climbing"
+      : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype)
+    : null;
+  const editSpotCompatibleSlugs = editSpotActivitySlug ? compatibleActivitySlugs(editSpotActivitySlug) : [];
+  const editSpotIncludesClimbing = editSpotCompatibleSlugs.includes("climbing");
+
+  const [editActivitySpotRows, editClimbCrossRows, editSavedClimbLocations] = needsSpotContext
+    ? await Promise.all([
+        editSpotActivitySlug && !isClimbingSession && editSpotCompatibleSlugs.length > 0
+          ? prisma.activitySpot.findMany({
+              where: { activitySlug: { in: editSpotCompatibleSlugs } },
+              select: { id: true, activitySlug: true, name: true, type: true, region: true, osmType: true, osmId: true, latitude: true, longitude: true },
+              orderBy: [{ name: "asc" }],
+            })
+          : Promise.resolve([] as Array<{ id: string; activitySlug: string; name: string; type: string | null; region: string | null; osmType: string | null; osmId: string | null; latitude: number | null; longitude: number | null }>),
+        editSpotIncludesClimbing && !isClimbingSession
+          ? prisma.climbLocation.findMany({
+              select: { id: true, name: true, type: true, region: true, osmType: true, osmId: true, latitude: true, longitude: true },
+              orderBy: [{ name: "asc" }],
+            })
+          : Promise.resolve([] as Array<{ id: string; name: string; type: "GYM" | "CRAG"; region: string | null; osmType: string | null; osmId: string | null; latitude: number | null; longitude: number | null }>),
+        isClimbingSession
+          ? prisma.climbLocation.findMany({
+              select: { id: true, name: true, type: true, region: true, osmType: true, osmId: true, latitude: true, longitude: true },
+              orderBy: [{ type: "asc" }, { name: "asc" }],
+            })
+          : Promise.resolve([] as Array<{ id: string; name: string; type: "GYM" | "CRAG"; region: string | null; osmType: string | null; osmId: string | null; latitude: number | null; longitude: number | null }>),
+      ])
+    : [[], [], []];
+
+  const editSavedSpots = editSpotActivitySlug
+    ? buildSpotPickerItems({
+        ownActivitySlug: editSpotActivitySlug,
+        activitySpots: editActivitySpotRows,
+        climbLocations: editClimbCrossRows,
+      })
+    : [];
+
+  // Initial spot value for the picker — derived from the log's structured
+  // FKs. Falls back to a custom-text seed if only the legacy free-text
+  // location exists (lets the user upgrade it to a structured spot).
+  const initialEditSpot =
+    log.climbLocation
+      ? {
+          kind: "saved" as const,
+          ref: { kind: "climbLocation" as const, id: log.climbLocation.id },
+          display: { name: log.climbLocation.name, region: log.climbLocation.region },
+        }
+      : log.activitySpot
+        ? {
+            kind: "saved" as const,
+            ref: { kind: "activitySpot" as const, id: log.activitySpot.id },
+            display: { name: log.activitySpot.name, region: log.activitySpot.region },
+          }
+        : log.location && log.location.trim()
+          ? {
+              kind: "new" as const,
+              draft: {
+                source: "custom" as const,
+                name: log.location.trim(),
+                type: null,
+                region: null,
+                latitude: null,
+                longitude: null,
+                osmType: null,
+                osmId: null,
+              },
+            }
+          : null;
+
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
       <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>
@@ -319,6 +418,9 @@ export default async function EditRoutineLogPage(props: {
               initialDurationSec={log.durationSec ?? 0}
               initialNotes={log.notes ?? ""}
               initialPerformedAt={log.performedAt}
+              activitySlug={editSpotActivitySlug}
+              savedSpots={editSavedSpots}
+              initialSpot={initialEditSpot}
             />
           ) : isGuidedKind(logKind) ? (
             <EditGuidedLogForm
@@ -350,7 +452,6 @@ export default async function EditRoutineLogPage(props: {
               logId={log.id}
               returnTo={returnTo}
               initialDurationSec={log.durationSec ?? 0}
-              initialLocation={log.location ?? ""}
               initialNotes={log.notes ?? ""}
               initialPerformedAt={log.performedAt}
               templateKey={routine.sessionDetails?.template?.key ?? null}
@@ -358,6 +459,10 @@ export default async function EditRoutineLogPage(props: {
               definitions={sessionDefinitions}
               initialValues={initialSessionValues}
               preferredClimbingGrades={currentClimbingGrades.length > 0 ? currentClimbingGrades : preferredClimbingGrades(routine.sessionDetails?.templateConfig)}
+              activitySlug={editSpotActivitySlug}
+              savedSpots={editSavedSpots}
+              savedClimbLocations={editSavedClimbLocations}
+              initialSpot={initialEditSpot}
             />
           ) : (
             <EditCompletionLogForm

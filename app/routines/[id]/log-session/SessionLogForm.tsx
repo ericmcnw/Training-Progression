@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { logSession } from "../../actions";
 import InlineMusclesWorked, { type LoggableZone } from "@/app/components/log/InlineMusclesWorked";
 import InlinePainCheck, { type PainCheckZone } from "@/app/components/log/InlinePainCheck";
 import type { PainContext } from "@/generated/prisma";
 import SessionMetricFields, { type SessionMetricDraftValue } from "./SessionMetricFields";
 import ClimbSessionLogger from "./ClimbSessionLogger";
-import ClimbLocationPicker, { type NewClimbLocationDraft } from "./ClimbLocationPicker";
-import ActivitySpotPicker from "@/app/components/log/ActivitySpotPicker";
+import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import {
-  type NewActivitySpotDraft,
+  type ActivitySpotConfig,
   type SpotPickerItem,
-  type SpotSelection,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
+import { COLOR } from "@/lib/design-tokens";
 import {
   DateTimeField,
   Field,
@@ -172,7 +171,6 @@ export default function SessionLogForm({
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [durationMin, setDurationMin] = useState("");
-  const [location, setLocation] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
   const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
@@ -194,14 +192,57 @@ export default function SessionLogForm({
   const [climbMode, setClimbMode] = useState<"quick" | "per-climb">("per-climb");
   const [climbAttempts, setClimbAttempts] = useState<ClimbAttemptDraft[]>([]);
   const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
-  const [climbLocationId, setClimbLocationId] = useState<string | null>(null);
-  const [newClimbLocation, setNewClimbLocation] = useState<NewClimbLocationDraft | null>(null);
-  const [spotSelection, setSpotSelection] = useState<SpotSelection | null>(null);
-  const [newActivitySpot, setNewActivitySpot] = useState<NewActivitySpotDraft | null>(null);
+  // Single SpotPicker value covers both climbing (ClimbLocation) and non-climbing
+  // (ActivitySpot) flows — the form maps it to the right action params on save.
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
 
-  const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
-  const showActivitySpotPicker = !isClimbing && activitySlug != null && spotConfig?.supportsMap === true;
+  const nonClimbingSpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
+  const climbingSpotConfig: ActivitySpotConfig | null = isClimbing ? buildClimbingSpotConfig(isOutdoorClimbing) : null;
+  const spotPickerConfig = isClimbing ? climbingSpotConfig : nonClimbingSpotConfig;
+  const spotPickerSlug = isClimbing ? "climbing" : activitySlug;
+  const showSpotPicker =
+    spotPickerConfig != null &&
+    (isClimbing || (activitySlug != null && nonClimbingSpotConfig?.supportsMap === true));
+
+  // Currently-selected ClimbLocation id — drives saved-problems fetch for
+  // per-climb mode. Derived from the picker value (saved climbLocation or
+  // no selection).
+  const climbLocationId =
+    isClimbing && spotValue?.kind === "saved" && spotValue.ref.kind === "climbLocation"
+      ? spotValue.ref.id
+      : null;
   const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
+
+  // Saved climb locations come in via prop; merge them into the unified
+  // savedSpots list so the picker can surface them under "Your locations"
+  // for climbing sessions. Memoized so the picker's downstream useMemo
+  // calls don't invalidate on every render.
+  const unifiedSavedSpots = useMemo<SpotPickerItem[]>(() => {
+    if (!isClimbing) return savedSpots;
+    return savedClimbLocations.map((loc) => ({
+      id: loc.id,
+      kind: "climbLocation" as const,
+      name: loc.name,
+      region: loc.region,
+      type: loc.type,
+      originSlug: "climbing",
+      originLabel: "Climbing",
+      isOwnActivity: true,
+      osmType: loc.osmType,
+      osmId: loc.osmId,
+    }));
+  }, [isClimbing, savedClimbLocations, savedSpots]);
+
+  useEffect(() => {
+    if (!spotPickerSlug) { setRecentSpots([]); return; }
+    let cancelled = false;
+    fetch(`/api/spots/recent?slug=${encodeURIComponent(spotPickerSlug)}&limit=5`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("recent fetch failed"))))
+      .then((data) => { if (!cancelled) setRecentSpots(data.recent ?? []); })
+      .catch(() => { if (!cancelled) setRecentSpots([]); });
+    return () => { cancelled = true; };
+  }, [spotPickerSlug]);
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -215,25 +256,17 @@ export default function SessionLogForm({
 
     draftStartedAtRef.current = draft.startedAt;
     setDurationMin(draft.durationMin);
-    setLocation(draft.location);
     setSessionMetricValues(draft.sessionMetricValues);
     setSelectedClimbingGrades(draft.selectedClimbingGrades);
     setNotes(draft.notes);
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     if (draft.climbMode) setClimbMode(draft.climbMode);
     if (draft.climbAttempts) setClimbAttempts(draft.climbAttempts);
-    if (draft.climbLocationId !== undefined) setClimbLocationId(draft.climbLocationId ?? null);
-    if (draft.newClimbLocationName) {
-      setNewClimbLocation({
-        name: draft.newClimbLocationName,
-        type: draft.newClimbLocationType ?? "GYM",
-        region: draft.newClimbLocationRegion ?? "",
-        latitude: draft.newClimbLocationLatitude ?? null,
-        longitude: draft.newClimbLocationLongitude ?? null,
-        osmType: null,
-        osmId: null,
-      });
-    }
+    // Restore the picker value. Prefer the structured `spotValue` (new
+    // format); fall back to the legacy climbLocation* fields for drafts
+    // written before this schema bump.
+    const restoredSpot = restoreSpotFromDraft(draft, savedClimbLocations);
+    if (restoredSpot !== undefined) setSpotValue(restoredSpot);
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
     contextSaveDraft(draft);
@@ -258,19 +291,16 @@ export default function SessionLogForm({
       routineName,
       startedAt: draftStartedAtRef.current,
       durationMin,
-      location,
+      // Free-text location is no longer captured — the picker's spotValue
+      // is the canonical record. Empty string for legacy schema compat.
+      location: "",
       sessionMetricValues,
       selectedClimbingGrades,
       notes,
       performedAtLocal,
       climbMode,
       climbAttempts,
-      climbLocationId,
-      newClimbLocationName: newClimbLocation?.name,
-      newClimbLocationType: newClimbLocation?.type,
-      newClimbLocationRegion: newClimbLocation?.region || undefined,
-      newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
-      newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
+      spotValue: spotValue ?? undefined,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -278,8 +308,8 @@ export default function SessionLogForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durationMin, location, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
-      climbMode, climbAttempts, climbLocationId, newClimbLocation]);
+  }, [durationMin, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
+      climbMode, climbAttempts, spotValue]);
 
   function markDirty() {
     isDirtyRef.current = true;
@@ -290,7 +320,6 @@ export default function SessionLogForm({
     clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
     setDurationMin("");
-    setLocation("");
     setSessionMetricValues({});
     setSelectedClimbingGrades(preferredClimbingGrades);
     setNotes("");
@@ -298,8 +327,7 @@ export default function SessionLogForm({
     setClimbMode("per-climb");
     setClimbAttempts([]);
     setQuickAttemptedValues({});
-    setClimbLocationId(null);
-    setNewClimbLocation(null);
+    setSpotValue(null);
     setSavedProblems([]);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
@@ -360,40 +388,17 @@ export default function SessionLogForm({
     setSaving(true);
     try {
       const effortPrefix = !isClimbing && effortRating !== null ? `Effort: ${effortRating}/5\n` : "";
+      const spotParams = spotParamsForSession(spotValue, isClimbing);
       await logSession({
         routineId,
         durationSec,
-        location: location.trim() || undefined,
         notes: effortPrefix ? `${effortPrefix}${notes}`.trim() : notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: sessionMetricValuesToSend,
         preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
         climbAttempts: activeClimbAttempts,
-        climbLocationId: climbLocationId ?? undefined,
-        newClimbLocationName: newClimbLocation?.name?.trim() || undefined,
-        newClimbLocationType: newClimbLocation?.type,
-        newClimbLocationRegion: newClimbLocation?.region?.trim() || undefined,
-        newClimbLocationLatitude: newClimbLocation?.latitude ?? undefined,
-        newClimbLocationLongitude: newClimbLocation?.longitude ?? undefined,
-        newClimbLocationOsmType: newClimbLocation?.osmType ?? undefined,
-        newClimbLocationOsmId: newClimbLocation?.osmId ?? undefined,
-        // Spot wiring — picker selection routes to whichever FK matches
-        // its origin (ActivitySpot or cross-activity ClimbLocation). The
-        // existing climbLocationId param above only fires for climbing
-        // sessions via the ClimbLocationPicker; non-climbing sessions
-        // populate it here when the user picks a climbing crag.
         activitySlug: activitySlug ?? undefined,
-        activitySpotId: spotSelection?.kind === "activitySpot" ? spotSelection.id : undefined,
-        ...(spotSelection?.kind === "climbLocation" && !isClimbing
-          ? { climbLocationId: spotSelection.id }
-          : {}),
-        newActivitySpotName: newActivitySpot?.name?.trim() || undefined,
-        newActivitySpotType: newActivitySpot?.type ?? null,
-        newActivitySpotRegion: newActivitySpot?.region?.trim() || null,
-        newActivitySpotLatitude: newActivitySpot?.latitude ?? null,
-        newActivitySpotLongitude: newActivitySpot?.longitude ?? null,
-        newActivitySpotOsmType: newActivitySpot?.osmType ?? null,
-        newActivitySpotOsmId: newActivitySpot?.osmId ?? null,
+        ...spotParams,
         zoneTags:
           selectedZoneSlugs.length > 0
             ? {
@@ -453,41 +458,15 @@ export default function SessionLogForm({
           />
         </Field>
 
-        {isClimbing ? (
-          <Field
-            label={`${climbVenueLabel} (optional)`}
-            hint={
-              savedClimbLocations.length > 0
-                ? "Pick a saved spot or add a new one. Region + GPS save with the location for future sessions."
-                : "Add a name, optional region, and tap '📍 Use my location' so it appears on your map immediately."
-            }
-          >
-            <ClimbLocationPicker
-              savedLocations={savedClimbLocations}
-              selectedId={climbLocationId}
-              onSelectId={(id) => { markDirty(); setClimbLocationId(id); }}
-              newLocation={newClimbLocation}
-              onNewLocation={(loc) => { markDirty(); setNewClimbLocation(loc); }}
-            />
-          </Field>
-        ) : showActivitySpotPicker && spotConfig ? (
-          <Field
-            label={`${capitalizeFirst(spotConfig.spotNoun)} (optional)`}
-            hint={
-              savedSpots.length > 0
-                ? "Pick a saved spot — including from related activities — or type to search OpenStreetMap."
-                : "Type a name to search OpenStreetMap, or tap '📍 Use my location' to drop it on your activity map."
-            }
-          >
-            <ActivitySpotPicker
-              config={spotConfig}
-              savedSpots={savedSpots}
-              selected={spotSelection}
-              onSelect={(sel) => { markDirty(); setSpotSelection(sel); }}
-              newSpot={newActivitySpot}
-              onNewSpot={(s) => { markDirty(); setNewActivitySpot(s); }}
-            />
-          </Field>
+        {showSpotPicker && spotPickerConfig ? (
+          <SpotPicker
+            config={spotPickerConfig}
+            spotNoun={isClimbing ? climbVenueLabel.toLowerCase() : spotPickerConfig.spotNoun}
+            savedSpots={unifiedSavedSpots}
+            recentSpots={recentSpots}
+            value={spotValue}
+            onChange={(next) => { markDirty(); setSpotValue(next); }}
+          />
         ) : null}
 
         <DateTimeField
@@ -647,9 +626,91 @@ const draftBannerBtnStyle: React.CSSProperties = {
 
 const effortRowStyle: React.CSSProperties = { display: "flex", gap: 8 };
 
-function capitalizeFirst(value: string) {
-  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+// Climbing exposes GYM/CRAG as its spot-types, defaulting to whichever
+// suits the template (outdoor templates default to CRAG). The picker
+// renders this exactly like any other ActivitySpotConfig.
+function buildClimbingSpotConfig(isOutdoor: boolean): ActivitySpotConfig {
+  const gym = { value: "GYM", label: "Gym", emoji: "🏠", pinColor: COLOR.blue };
+  const crag = { value: "CRAG", label: "Crag", emoji: "🪨", pinColor: COLOR.green };
+  return {
+    supportsMap: true,
+    spotTypes: isOutdoor ? [crag, gym] : [gym, crag],
+    defaultPinColor: COLOR.orange,
+    spotNoun: isOutdoor ? "crag" : "gym",
+  };
 }
+
+// Picker value → action params. Climbing sessions route to climbLocation*
+// fields; everything else to activitySpot*. A saved ClimbLocation picked
+// on a non-climbing session links via climbLocationId (cross-table).
+function spotParamsForSession(value: SpotPickerValue, isClimbing: boolean) {
+  if (!value) return {};
+  if (value.kind === "saved") {
+    return value.ref.kind === "climbLocation"
+      ? { climbLocationId: value.ref.id }
+      : { activitySpotId: value.ref.id };
+  }
+  const d = value.draft;
+  if (isClimbing) {
+    const type: ClimbLocationType = d.type === "CRAG" ? "CRAG" : "GYM";
+    return {
+      newClimbLocationName: d.name,
+      newClimbLocationType: type,
+      newClimbLocationRegion: d.region ?? undefined,
+      newClimbLocationLatitude: d.latitude ?? undefined,
+      newClimbLocationLongitude: d.longitude ?? undefined,
+      newClimbLocationOsmType: d.osmType ?? undefined,
+      newClimbLocationOsmId: d.osmId ?? undefined,
+    };
+  }
+  return {
+    newActivitySpotName: d.name,
+    newActivitySpotType: d.type,
+    newActivitySpotRegion: d.region,
+    newActivitySpotLatitude: d.latitude,
+    newActivitySpotLongitude: d.longitude,
+    newActivitySpotOsmType: d.osmType,
+    newActivitySpotOsmId: d.osmId,
+  };
+}
+
+// Reads the spot value out of a draft. Prefers the structured `spotValue`
+// field (new format); falls back to the legacy climbLocation* fields for
+// drafts written before the schema bump. Returns `undefined` to mean
+// "no spot info in this draft" (so the form keeps its initial state).
+function restoreSpotFromDraft(
+  draft: SessionDraft,
+  savedClimbLocations: Array<{ id: string; name: string; region: string | null }>,
+): SpotPickerValue | undefined {
+  if (draft.spotValue !== undefined) return draft.spotValue;
+  if (draft.climbLocationId) {
+    const loc = savedClimbLocations.find((l) => l.id === draft.climbLocationId);
+    if (loc) {
+      return {
+        kind: "saved",
+        ref: { kind: "climbLocation", id: loc.id },
+        display: { name: loc.name, region: loc.region },
+      };
+    }
+  }
+  if (draft.newClimbLocationName) {
+    return {
+      kind: "new",
+      draft: {
+        source: "custom",
+        name: draft.newClimbLocationName,
+        type: draft.newClimbLocationType ?? "GYM",
+        region: draft.newClimbLocationRegion ?? null,
+        latitude: draft.newClimbLocationLatitude ?? null,
+        longitude: draft.newClimbLocationLongitude ?? null,
+        osmType: null,
+        osmId: null,
+      },
+    };
+  }
+  return undefined;
+}
+
 
 function effortBtnStyle(active: boolean): React.CSSProperties {
   return {
