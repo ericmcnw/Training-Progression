@@ -148,8 +148,11 @@ export default function HabitGrid({ rows, today }: Props) {
       <LogDetailPopover open={openLog} onClose={() => setOpenLog(null)} />
 
       <style>{`
-        /* Fixed trailing column width so the header "T W T F S S M" labels
-           line up exactly over the dot cells in each row.
+        /* Two-row layout at every viewport: name spans the top row in full,
+           dots + streak/fraction/chevron sit in row 2. Mirrors what mobile
+           was already doing — desktop's old 3-column row was still clipping
+           long goal names against the dot strip when the home card was in
+           the 2-up dashboard grid.
            Note: avoiding 'all: unset' on the button — it left display in an
            inconsistent state that prevented the grid from filling the parent
            width. Resetting only what's needed instead. */
@@ -164,15 +167,20 @@ export default function HabitGrid({ rows, today }: Props) {
           width: 100%;
           box-sizing: border-box;
           display: grid;
-          grid-template-columns: minmax(110px, 1.4fr) minmax(0, 2.6fr) 110px;
+          grid-template-columns: minmax(0, 1fr) 110px;
+          grid-template-rows: auto auto;
           align-items: center;
-          gap: 10px;
+          gap: 4px 10px;
           padding: 8px 12px;
           border-radius: 12px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(255,255,255,0.018);
           transition: border-color 120ms ease, background 120ms ease;
           min-height: 44px;
+        }
+        .homeV2HabitRow .homeV2HabitName {
+          grid-column: 1 / -1;
+          min-width: 0;
         }
         .homeV2HabitRow:hover,
         .homeV2HabitRow:focus-visible {
@@ -181,32 +189,23 @@ export default function HabitGrid({ rows, today }: Props) {
         }
         .homeV2HabitHeader {
           display: grid;
-          grid-template-columns: minmax(110px, 1.4fr) minmax(0, 2.6fr) 110px;
+          grid-template-columns: minmax(0, 1fr) 110px;
           align-items: center;
           gap: 10px;
           padding: 0 12px 2px;
         }
+        /* Header's leading spacer column existed only for the old 3-col
+           layout — now that the name is on its own row, the day-initials
+           strip aligns over the dots directly. */
+        .homeV2HabitHeader .homeV2HabitHeaderSpacer {
+          display: none;
+        }
         @media (max-width: 540px) {
-          /* Two-row layout on mobile so long goal names don't truncate
-             behind the dot strip. Row 1: name spans full width. Row 2:
-             dots + streak/fraction/chevron. The header drops its spacer
-             column so day-initials still align over the dots below. */
-          .homeV2HabitRow {
-            grid-template-columns: minmax(0, 1fr) 96px;
-            grid-template-rows: auto auto;
-            gap: 4px 8px;
-            padding-inline: 10px;
-          }
-          .homeV2HabitRow .homeV2HabitName {
-            grid-column: 1 / -1;
-            min-width: 0;
-          }
+          .homeV2HabitRow,
           .homeV2HabitHeader {
             grid-template-columns: minmax(0, 1fr) 96px;
+            gap: 4px 8px;
             padding-inline: 10px;
-          }
-          .homeV2HabitHeader .homeV2HabitHeaderSpacer {
-            display: none;
           }
         }
         @media (max-width: 400px) {
