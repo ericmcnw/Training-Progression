@@ -14,6 +14,7 @@ import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import WeeklyFrequencyBars from "@/app/components/dashboard/WeeklyFrequencyBars";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
 import { frequencyStatusColor, getFrequencyRenderMode } from "@/lib/frequency-state";
+import { LogDetailPopover, type OpenLog } from "./DomainSparklines";
 
 type Props = {
   rows: HabitRow[];
@@ -22,6 +23,11 @@ type Props = {
 
 export default function HabitGrid({ rows, today }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // Single openLog state at the card root — reused by every row's bar
+  // expansion. Renders the same floating popover the Domain Volume card
+  // uses, for a consistent "click bar → expand → click pill → see log
+  // report" interaction across the dashboard.
+  const [openLog, setOpenLog] = useState<OpenLog>(null);
 
   if (rows.length === 0) {
     return (
@@ -121,11 +127,25 @@ export default function HabitGrid({ rows, today }: Props) {
                 </div>
               </button>
 
-              {expanded ? <ExpandedDetail row={row} today={today} /> : null}
+              {expanded ? (
+                <ExpandedDetail
+                  row={row}
+                  today={today}
+                  onLogClick={(log) =>
+                    setOpenLog({
+                      log,
+                      accent: frequencyStatusColor(row.status),
+                      label: row.goalName,
+                    })
+                  }
+                />
+              ) : null}
             </li>
           );
         })}
       </ul>
+
+      <LogDetailPopover open={openLog} onClose={() => setOpenLog(null)} />
 
       <style>{`
         /* Fixed trailing column width so the header "T W T F S S M" labels
@@ -205,7 +225,15 @@ export default function HabitGrid({ rows, today }: Props) {
 
 // ───────────────────────────── inline expansion panel
 
-function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
+function ExpandedDetail({
+  row,
+  today,
+  onLogClick,
+}: {
+  row: HabitRow;
+  today: string;
+  onLogClick: (log: HabitRow["weeklyContributions"][number]["logs"][number]) => void;
+}) {
   // Render mode is picked from the goal's target shape — daily-style targets
   // get the calendar grid, flexible weekly/monthly targets get the bars view
   // (which is more meaningful for "3× per week" since a 30-day grid would be
@@ -215,7 +243,13 @@ function ExpandedDetail({ row, today }: { row: HabitRow; today: string }) {
   if (renderMode === "weekly-bars") {
     return (
       <div style={expansionShell}>
-        <WeeklyFrequencyBars target={row.target!} state={row.state} today={today} />
+        <WeeklyFrequencyBars
+          target={row.target!}
+          state={row.state}
+          today={today}
+          weeklyContributions={row.weeklyContributions}
+          onLogClick={onLogClick}
+        />
         <GoalActionRow row={row} today={today} />
       </div>
     );

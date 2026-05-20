@@ -12,8 +12,14 @@
 //   • zero → faint outline
 // The current week always shows in full color; past weeks dim slightly so
 // the "current" bar reads as the focus.
+//
+// When `weeklyContributions` is provided, the bars become clickable — a tap
+// opens an inline expansion below showing the routines that satisfied the
+// goal that week, grouped by routine with date/time pills (matches the
+// DomainSparklines interaction). Pills call `onLogClick` so the parent can
+// open a floating log report popover.
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
   frequencyStatusColor,
@@ -21,6 +27,21 @@ import {
   type FrequencyState,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
+
+type ContributionLog = {
+  logId: string;
+  routineId: string;
+  routineName: string;
+  performedYmd: string;
+  performedTimeLabel: string;
+  isPrimary: boolean;
+};
+
+type WeekContribution = {
+  weekStartYmd: string;
+  weekEndYmd: string;
+  logs: ContributionLog[];
+};
 
 const WEEKS = 8;
 
@@ -35,14 +56,24 @@ export default function WeeklyFrequencyBars({
   target,
   state,
   today,
+  weeklyContributions,
+  onLogClick,
 }: {
   target: FrequencyTarget;
   state: FrequencyState;
   today: string;
+  // Per-week contributing logs, oldest → newest, length matches the 8-week
+  // chart. When provided, bars become clickable.
+  weeklyContributions?: WeekContribution[];
+  // Fires when a date pill in the expansion is tapped. Parent renders the
+  // floating popover with the full log report.
+  onLogClick?: (log: ContributionLog) => void;
 }) {
   const targetCount = Math.max(1, target.targetCount);
   const accent = frequencyStatusColor(state.currentWindow.status);
   const statusLabel = frequencyStatusLabel(state.currentWindow.status);
+  const [openWeekStart, setOpenWeekStart] = useState<string | null>(null);
+  const interactive = Boolean(weeklyContributions && weeklyContributions.length > 0);
 
   // Anchor on the Sunday of the current week, walk back WEEKS-1 weeks.
   const todayDate = new Date(`${today}T00:00:00.000Z`);
@@ -108,9 +139,14 @@ export default function WeeklyFrequencyBars({
               ? "rgba(132,204,255,0.12)"
               : "rgba(255,255,255,0.05)";
           const opacity = week.isCurrent ? 1 : 0.78;
+          const isOpen = openWeekStart === week.weekStartYmd;
+          const tooltip = `${formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" })} – ${formatUtcDateLabel(
+            week.weekEndYmd,
+            { month: "short", day: "numeric" }
+          )}: ${week.hits} of ${targetCount}`;
 
-          return (
-            <div key={week.weekStartYmd} style={{ ...barColumn, opacity }}>
+          const bar = (
+            <>
               <div style={barCountLabel}>
                 <span style={{ ...countNum, color: hit ? "rgba(251,191,36,1)" : partial ? "rgba(132,204,255,1)" : "rgba(255,255,255,0.45)" }}>
                   {week.hits}
@@ -122,13 +158,13 @@ export default function WeeklyFrequencyBars({
                 style={{
                   ...barTrack,
                   background: trackColor,
-                  borderColor: week.isCurrent ? accent : "rgba(255,255,255,0.08)",
-                  borderWidth: week.isCurrent ? 1.5 : 1,
+                  borderColor: isOpen
+                    ? "rgba(255,255,255,0.55)"
+                    : week.isCurrent
+                      ? accent
+                      : "rgba(255,255,255,0.08)",
+                  borderWidth: week.isCurrent || isOpen ? 1.5 : 1,
                 }}
-                title={`${formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" })} – ${formatUtcDateLabel(
-                  week.weekEndYmd,
-                  { month: "short", day: "numeric" }
-                )}: ${week.hits} of ${targetCount}`}
               >
                 <div
                   style={{
@@ -141,18 +177,176 @@ export default function WeeklyFrequencyBars({
               <div style={{ ...weekLabel, ...(week.isCurrent ? weekLabelCurrent : null) }}>
                 {formatUtcDateLabel(week.weekStartYmd, { month: "numeric", day: "numeric" })}
               </div>
-            </div>
+            </>
+          );
+
+          if (!interactive) {
+            return (
+              <div key={week.weekStartYmd} style={{ ...barColumn, opacity }} title={tooltip}>
+                {bar}
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={week.weekStartYmd}
+              type="button"
+              onClick={() => setOpenWeekStart((prev) => (prev === week.weekStartYmd ? null : week.weekStartYmd))}
+              className="freqBarButton"
+              style={{ ...barColumn, ...barColumnInteractive, opacity }}
+              title={tooltip}
+              aria-pressed={isOpen}
+              aria-label={`Week of ${formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" })}: ${week.hits} of ${targetCount}`}
+            >
+              {bar}
+            </button>
           );
         })}
       </div>
+
+      {interactive && openWeekStart
+        ? (() => {
+            const openWeek = weeklyContributions!.find((w) => w.weekStartYmd === openWeekStart);
+            if (!openWeek) return null;
+            return (
+              <WeekContributionsPanel
+                week={openWeek}
+                accent={accent}
+                targetCount={targetCount}
+                onClose={() => setOpenWeekStart(null)}
+                onLogClick={onLogClick}
+              />
+            );
+          })()
+        : null}
 
       <div style={legendRow}>
         <Legend swatch={swatchHit} label={`Hit ${cadenceLabel.toLowerCase()}`} />
         <Legend swatch={swatchPartial} label="Partial" />
         <Legend swatch={swatchMiss} label="Missed window" />
       </div>
+
+      <style>{`
+        .freqBarButton {
+          appearance: none;
+          -webkit-appearance: none;
+          margin: 0;
+          padding: 0;
+          background: transparent;
+          border: none;
+          color: inherit;
+          font: inherit;
+          cursor: pointer;
+          border-radius: 8px;
+          transition: background 100ms ease;
+        }
+        .freqBarButton:hover,
+        .freqBarButton:focus-visible {
+          background: rgba(255,255,255,0.04);
+        }
+      `}</style>
     </div>
   );
+}
+
+// ───────────────────────────── inline week expansion
+
+function WeekContributionsPanel({
+  week,
+  accent,
+  targetCount,
+  onClose,
+  onLogClick,
+}: {
+  week: WeekContribution;
+  accent: string;
+  targetCount: number;
+  onClose: () => void;
+  onLogClick?: (log: ContributionLog) => void;
+}) {
+  const groups = groupLogsByRoutine(week.logs);
+  const rangeLabel = `${formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" })} – ${formatUtcDateLabel(
+    week.weekEndYmd,
+    { month: "short", day: "numeric" }
+  )}`;
+
+  return (
+    <div style={expansionShell}>
+      <div style={expansionHeader}>
+        <div style={expansionHeaderText}>
+          <span style={{ ...expansionDot, background: accent }} aria-hidden />
+          <span style={expansionLabel}>{rangeLabel}</span>
+          <span style={expansionRange}>
+            {week.logs.length} of {targetCount}
+          </span>
+        </div>
+        <button type="button" onClick={onClose} style={closeBtn} aria-label="Close week detail">
+          ×
+        </button>
+      </div>
+
+      {week.logs.length === 0 ? (
+        <div style={emptyText}>No contributing logs this week.</div>
+      ) : (
+        <ul style={logList}>
+          {groups.map((group) => (
+            <li key={group.routineId}>
+              <div style={groupShell}>
+                <div style={groupHeader}>
+                  <span style={{ ...logRowAccent, background: accent }} aria-hidden />
+                  <span style={logRowName}>{group.routineName}</span>
+                  {group.entries.length > 1 ? (
+                    <span style={countBadge(accent)}>×{group.entries.length}</span>
+                  ) : null}
+                  {group.entries.some((e) => !e.isPrimary) && group.entries.every((e) => !e.isPrimary) ? (
+                    <span style={substituteBadge}>substitute</span>
+                  ) : null}
+                </div>
+                <div style={datePillRow}>
+                  {group.entries.map((log) => (
+                    <button
+                      key={log.logId}
+                      type="button"
+                      onClick={() => onLogClick?.(log)}
+                      disabled={!onLogClick}
+                      style={{ ...datePill, ...(onLogClick ? null : datePillStatic) }}
+                    >
+                      <span style={datePillDate}>{prettyWeekday(log.performedYmd)}</span>
+                      <span style={datePillTime}>{log.performedTimeLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function groupLogsByRoutine(
+  logs: ContributionLog[]
+): Array<{ routineId: string; routineName: string; entries: ContributionLog[] }> {
+  const byRoutine = new Map<string, { routineId: string; routineName: string; entries: ContributionLog[] }>();
+  for (const log of logs) {
+    const existing = byRoutine.get(log.routineId);
+    if (existing) existing.entries.push(log);
+    else byRoutine.set(log.routineId, { routineId: log.routineId, routineName: log.routineName, entries: [log] });
+  }
+  for (const group of byRoutine.values()) {
+    group.entries.sort((a, b) => a.performedYmd.localeCompare(b.performedYmd));
+  }
+  return Array.from(byRoutine.values()).sort((a, b) => {
+    const aLatest = a.entries[a.entries.length - 1].performedYmd;
+    const bLatest = b.entries[b.entries.length - 1].performedYmd;
+    return bLatest.localeCompare(aLatest);
+  });
+}
+
+function prettyWeekday(ymd: string): string {
+  return formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
@@ -332,4 +526,206 @@ const swatchMiss: CSSProperties = {
   ...swatchBase,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.10)",
+};
+
+// Interactive-bar extras layered on top of the base barColumn so the
+// keyboard-focus / hover styles work without altering layout metrics.
+const barColumnInteractive: CSSProperties = {
+  padding: "2px 2px 4px",
+};
+
+// ───────── inline expansion styles (mirrors DomainSparklines panel)
+
+const expansionShell: CSSProperties = {
+  padding: "10px 12px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.025)",
+  display: "grid",
+  gap: 8,
+};
+
+const expansionHeader: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+};
+
+const expansionHeaderText: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  minWidth: 0,
+  flexWrap: "wrap",
+};
+
+const expansionDot: CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+
+const expansionLabel: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.92)",
+};
+
+const expansionRange: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.55)",
+};
+
+const closeBtn: CSSProperties = {
+  width: 24,
+  height: 24,
+  minHeight: 24,
+  padding: 0,
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(255,255,255,0.55)",
+  fontSize: 14,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 800,
+  lineHeight: 1,
+  flexShrink: 0,
+};
+
+const emptyText: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.45)",
+  fontStyle: "italic",
+  padding: "4px 2px",
+};
+
+const logList: CSSProperties = {
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "grid",
+  gap: 4,
+};
+
+// Flex row so the routine name and its date pills sit on the same line —
+// the original 2-row stack wasted vertical space. Wraps when the row is too
+// narrow to fit both halves, so mobile still degrades gracefully.
+const groupShell: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "4px 10px",
+  padding: "6px 10px",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.022)",
+};
+
+const groupHeader: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+  // Shrinks before the pill row does — long routine names get an ellipsis
+  // rather than pushing the pills to the next line.
+  flex: "0 1 auto",
+};
+
+const logRowAccent: CSSProperties = {
+  width: 3,
+  height: 22,
+  borderRadius: 2,
+  flexShrink: 0,
+};
+
+const logRowName: CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.95)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+function countBadge(accent: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "1px 7px",
+    borderRadius: 999,
+    border: `1px solid ${accent}`,
+    color: accent,
+    fontSize: 10.5,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    background: "transparent",
+    flexShrink: 0,
+  };
+}
+
+const substituteBadge: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "1px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(132,204,255,0.45)",
+  color: "rgba(132,204,255,1)",
+  fontSize: 9.5,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  background: "rgba(132,204,255,0.07)",
+  flexShrink: 0,
+};
+
+const datePillRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 5,
+  // Push the pills toward the right edge when the row has room, but still
+  // wrap below on narrow screens.
+  marginLeft: "auto",
+};
+
+const datePill: CSSProperties = {
+  all: "unset",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: 5,
+  padding: "3px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(255,255,255,0.95)",
+  fontSize: 11,
+  fontWeight: 700,
+};
+
+const datePillStatic: CSSProperties = {
+  cursor: "default",
+};
+
+const datePillDate: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.55)",
+};
+
+const datePillTime: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.7)",
+  whiteSpace: "nowrap",
 };

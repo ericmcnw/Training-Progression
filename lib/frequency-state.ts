@@ -185,9 +185,20 @@ function computeWindowStreak(params: {
   maxLookbackWindows?: number;
 }): { current: number; longest: number } {
   const { target, logYmds, today } = params;
-  const windowDays = getWindowDays(target);
   const lookback = Math.max(8, params.maxLookbackWindows ?? 26);
 
+  // For WEEK and MONTH targets, build calendar-aligned windows so the streak
+  // agrees with the bars chart (which buckets by Sun–Sat weeks / calendar
+  // months). The old rolling-N-days approach computed a streak users couldn't
+  // reconcile with what they saw — last 4 calendar weeks all green but
+  // streak said 2.
+  // For DAY/N targets the rolling N-day approach is correct (no calendar
+  // alignment to speak of) and we fall through to it.
+  if (target.targetUnit === "WEEK" || target.targetUnit === "MONTH") {
+    return computeCalendarWindowStreak({ target, logYmds, today, lookback });
+  }
+
+  const windowDays = getWindowDays(target);
   let current = 0;
   let longest = 0;
   let run = 0;
@@ -209,6 +220,90 @@ function computeWindowStreak(params: {
       run = 0;
     }
     if (run > longest) longest = run;
+  }
+
+  return { current, longest };
+}
+
+// Calendar-aligned window streak for WEEK and MONTH targets. Windows are
+// anchored to the current Sun–Sat week (or current calendar month) and walk
+// backward. The current (in-progress) window counts toward the streak if it
+// already met target; otherwise it's treated as a grace window — the streak
+// continues from the most recently completed window so users don't see their
+// streak vanish on the first day of a new week before they've logged.
+function computeCalendarWindowStreak(params: {
+  target: FrequencyTarget;
+  logYmds: Set<string>;
+  today: string;
+  lookback: number;
+}): { current: number; longest: number } {
+  const { target, logYmds, today, lookback } = params;
+  const interval = Math.max(1, target.targetInterval);
+
+  type Window = { startYmd: string; endYmd: string };
+  const windows: Window[] = [];
+
+  if (target.targetUnit === "WEEK") {
+    const todayDate = new Date(`${today}T00:00:00.000Z`);
+    const todayDow = todayDate.getUTCDay();
+    const currentWeekStart = addDaysYmd(today, -todayDow);
+    const spanDays = 7 * interval;
+    for (let i = 0; i < lookback; i++) {
+      const startYmd = addDaysYmd(currentWeekStart, -i * spanDays);
+      const endYmd = addDaysYmd(startYmd, spanDays - 1);
+      windows.push({ startYmd, endYmd });
+    }
+  } else {
+    // MONTH — windows are `interval` calendar months wide, anchored to the
+    // first day of the month containing today.
+    const todayDate = new Date(`${today}T00:00:00.000Z`);
+    const year = todayDate.getUTCFullYear();
+    const month = todayDate.getUTCMonth();
+    for (let i = 0; i < lookback; i++) {
+      const startDate = new Date(Date.UTC(year, month - i * interval, 1));
+      const endDate = new Date(Date.UTC(year, month - i * interval + interval, 0));
+      const startYmd = startDate.toISOString().slice(0, 10);
+      const endYmd = endDate.toISOString().slice(0, 10);
+      windows.push({ startYmd, endYmd });
+    }
+  }
+
+  // Score each window. Future days inside the current window don't count —
+  // we cap the day cursor at today.
+  const hits: boolean[] = windows.map((w) => {
+    let count = 0;
+    let cursor = w.startYmd;
+    while (cursor <= w.endYmd) {
+      if (cursor > today) break;
+      if (logYmds.has(cursor)) count++;
+      cursor = addDaysYmd(cursor, 1);
+    }
+    return count >= target.targetCount;
+  });
+
+  // Current streak — walk backward from the most recent window.
+  // The current (in-progress) window: include if hit, otherwise skip past it
+  // as a grace window so an unfinished week doesn't break the streak.
+  let current = 0;
+  let startIdx = 0;
+  if (!hits[0]) startIdx = 1;
+  for (let i = startIdx; i < hits.length; i++) {
+    if (hits[i]) current++;
+    else break;
+  }
+
+  // Longest run across the lookback. Exclude the in-progress current window
+  // from "longest" when it hasn't hit yet — it could still bump up.
+  let longest = current;
+  let run = 0;
+  for (let i = hits.length - 1; i >= 0; i--) {
+    if (i === 0 && !hits[0]) continue;
+    if (hits[i]) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
   }
 
   return { current, longest };

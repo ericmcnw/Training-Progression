@@ -101,6 +101,26 @@ export type HabitRow = {
   weekFraction: { progress: number; target: number };
   // For ambient chip routing.
   status: "complete" | "ahead" | "on_track" | "behind" | "at_risk";
+  // 8 weeks of contributing logs, oldest → newest. Aligned to the same week
+  // starts the WeeklyFrequencyBars view uses (Sunday-anchored). Each entry
+  // is one log that satisfied this goal — primary or substitute. Used to
+  // expand a bar inline and show "what routines counted toward 3× / week,
+  // and when did I do them?" without an extra roundtrip.
+  weeklyContributions: HabitWeekContribution[];
+};
+
+export type HabitWeekContribution = {
+  weekStartYmd: string;
+  weekEndYmd: string;
+  logs: Array<{
+    logId: string;
+    routineId: string;
+    routineName: string;
+    performedYmd: string;
+    performedTimeLabel: string;
+    // false = log came from a SUBSTITUTE routine (counts but renders distinctly).
+    isPrimary: boolean;
+  }>;
 };
 
 // 8-week per-domain bar chart entry.

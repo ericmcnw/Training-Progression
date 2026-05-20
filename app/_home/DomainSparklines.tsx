@@ -20,7 +20,20 @@ import { getHomeLogReport, type LogReport } from "./log-detail-action";
 type Props = { series: DomainSeries[] };
 
 type OpenSelection = { domain: DomainTone; weekStartYmd: string } | null;
-type OpenLog = { log: DomainWeek["logs"][number]; accent: string; domainLabel: string } | null;
+
+// Shared log reference shape used by both the per-domain expansion and any
+// other surface that wants to open the floating LogDetailPopover (e.g. the
+// frequency-goal weekly bars). Kept structural so callers can hand in extra
+// fields (like `isPrimary`) without having to map.
+export type HomeLogRef = {
+  logId: string;
+  routineId: string;
+  routineName: string;
+  performedYmd: string;
+  performedTimeLabel: string;
+};
+
+export type OpenLog = { log: HomeLogRef; accent: string; label: string } | null;
 
 export default function DomainSparklines({ series }: Props) {
   const [open, setOpen] = useState<OpenSelection>(null);
@@ -158,7 +171,7 @@ export default function DomainSparklines({ series }: Props) {
                   accent={accent}
                   label={DOMAIN_LABEL[row.domain] ?? row.label}
                   onClose={() => setOpen(null)}
-                  onLogClick={(log) => setOpenLog({ log, accent, domainLabel: DOMAIN_LABEL[row.domain] ?? row.label })}
+                  onLogClick={(log) => setOpenLog({ log, accent, label: DOMAIN_LABEL[row.domain] ?? row.label })}
                 />
               ) : null}
             </li>
@@ -324,7 +337,7 @@ function groupLogsByRoutine(
 
 // ───────────────────────────── floating log popover (full report)
 
-function LogDetailPopover({
+export function LogDetailPopover({
   open,
   onClose,
 }: {
@@ -365,7 +378,7 @@ function LogDetailPopover({
   }, [open]);
 
   if (!open) return null;
-  const { log, accent, domainLabel } = open;
+  const { log, accent, label } = open;
   return (
     <Popover
       open={!!open}
@@ -378,8 +391,8 @@ function LogDetailPopover({
       }
       subtitle={
         report
-          ? `${report.performedDateLabel} · ${report.performedTimeLabel} · ${domainLabel}`
-          : `${prettyDate(log.performedYmd, { weekday: "long" })} · ${log.performedTimeLabel} · ${domainLabel}`
+          ? `${report.performedDateLabel} · ${report.performedTimeLabel} · ${label}`
+          : `${prettyDate(log.performedYmd, { weekday: "long" })} · ${log.performedTimeLabel} · ${label}`
       }
       desktopWidth={420}
     >

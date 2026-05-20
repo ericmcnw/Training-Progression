@@ -435,21 +435,34 @@ export async function getHomeData(): Promise<HomeData> {
       const triggerMinSets = Math.max(1, goal.triggerMinSets ?? 1);
       const hasTriggers = triggerExerciseIdSet.size > 0 || triggerSubtypeSet.size > 0;
 
-      const matched = new Map<string, { performedAt: Date; isPrimary: boolean }>();
+      type MatchedLog = {
+        logId: string;
+        performedAt: Date;
+        isPrimary: boolean;
+        routineId: string;
+        routineName: string;
+      };
+      const matched = new Map<string, MatchedLog>();
       for (const log of allLogs) {
         if (matched.has(log.id)) continue;
+        const base = {
+          logId: log.id,
+          performedAt: log.performedAt,
+          routineId: log.routineId,
+          routineName: log.routine.name,
+        };
         if (primaryRoutineIdSet.has(log.routineId)) {
-          matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+          matched.set(log.id, { ...base, isPrimary: true });
           continue;
         }
         if (substituteRoutineIdSet.has(log.routineId)) {
-          matched.set(log.id, { performedAt: log.performedAt, isPrimary: false });
+          matched.set(log.id, { ...base, isPrimary: false });
           continue;
         }
         if (!hasTriggers) continue;
         const logSubtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
         if (logSubtype && triggerSubtypeSet.has(logSubtype)) {
-          matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+          matched.set(log.id, { ...base, isPrimary: true });
           continue;
         }
         if (triggerExerciseIdSet.size > 0 && log.exercises) {
@@ -459,12 +472,36 @@ export async function getHomeData(): Promise<HomeData> {
             if (matchingSets >= triggerMinSets) break;
           }
           if (matchingSets >= triggerMinSets) {
-            matched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
+            matched.set(log.id, { ...base, isPrimary: true });
           }
         }
       }
-      const logs = Array.from(matched.values());
+      const matchedList = Array.from(matched.values());
+      const logs = matchedList.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary }));
       const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
+
+      // 8-week contribution rollup, Sunday-anchored, oldest → newest. Mirrors
+      // the WeeklyFrequencyBars layout so each bar lines up with its entry.
+      const weeklyContributions: HabitRow["weeklyContributions"] = [];
+      for (let w = 0; w < DOMAIN_WEEKS; w++) {
+        const weekStartYmd = addDaysYmd(currentWeekStart, -(DOMAIN_WEEKS - 1 - w) * 7);
+        const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+        const weekLogs = matchedList
+          .filter((m) => {
+            const ymd = toAppYmd(m.performedAt);
+            return ymd >= weekStartYmd && ymd <= weekEndYmd;
+          })
+          .sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime())
+          .map((m) => ({
+            logId: m.logId,
+            routineId: m.routineId,
+            routineName: m.routineName,
+            performedYmd: toAppYmd(m.performedAt),
+            performedTimeLabel: timeLabel(m.performedAt),
+            isPrimary: m.isPrimary,
+          }));
+        weeklyContributions.push({ weekStartYmd, weekEndYmd, logs: weekLogs });
+      }
 
       const trailing30: HabitRow["trailing30"] = [];
       for (let i = 0; i < HABIT_GRID_DAYS; i++) {
@@ -506,6 +543,7 @@ export async function getHomeData(): Promise<HomeData> {
         longestStreak: Math.max(state.longestDayStreak, state.longestWindowStreak),
         weekFraction: { progress: weekProgress, target: Math.max(weekTarget, 0) },
         status: state.currentWindow.status,
+        weeklyContributions,
       };
     })
     .filter((r): r is HabitRow => r !== null);
