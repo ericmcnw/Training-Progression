@@ -38,6 +38,10 @@ const routineScalarSelectWithFrequency = {
   ...frequencyGoalInclude,
 } as const;
 
+// TODO(perf): this include is sized for the heaviest consumer (detail
+// pages) but hydrated for every log on every list/chart view that calls
+// getRoutineLogs. See docs/perf-followups.md §2 for the split-into-
+// light-vs-full plan and the consumer-by-consumer audit checklist.
 const routineRelationSelectBase = {
   ...routineScalarSelect,
   metadataGroups: {

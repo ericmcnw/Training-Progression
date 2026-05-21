@@ -77,6 +77,10 @@ export async function getHomeData(): Promise<HomeData> {
   // Widest log window we need to cover: spark, WaG, and habit grid.
   const widestStart = [sparkStart, wagStart, habitWindowStart].sort()[0];
 
+  // TODO(perf): these queries re-run on every dashboard visit because the
+  // page is `force-dynamic` and nothing here is wrapped in unstable_cache.
+  // The biggest single repeat-visit win in the app. Plan + risks + initial
+  // candidates in docs/perf-followups.md §1.
   const [
     routines,
     allLogs,
