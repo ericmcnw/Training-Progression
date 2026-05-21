@@ -16,7 +16,7 @@ const desktopNavItems = [
   { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
   { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") || pathname.startsWith("/progress") },
   { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
-  { href: "/manual-log", label: "Profile", match: (pathname: string) => pathname.startsWith("/manual-log") },
+  { href: "/profile", label: "Profile", match: (pathname: string) => pathname.startsWith("/profile") },
 ];
 
 const mobileNavItems = [
@@ -182,10 +182,10 @@ function ScheduleIcon() {
 
 export function MobileProfileButton() {
   const pathname = usePathname();
-  const active = pathname.startsWith("/manual-log");
+  const active = pathname.startsWith("/profile");
   return (
     <Link
-      href="/manual-log"
+      href="/profile"
       className="mobileProfileButton"
       aria-current={active ? "page" : undefined}
       aria-label="Profile"
