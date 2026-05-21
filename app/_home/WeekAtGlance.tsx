@@ -7,7 +7,7 @@
 
 import React, { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import type { LegacyGlanceDay } from "./types";
+import type { LegacyGlanceDay, QuickPickRoutine } from "./types";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
 import { domainAccent } from "./client-utils";
@@ -18,11 +18,16 @@ import {
 import { formatUtcDateLabel } from "@/lib/dates";
 import CompletionCheckbox from "@/app/components/dashboard/CompletionCheckbox";
 import DayTodoList from "@/app/components/dashboard/DayTodoList";
+import SchedulePicker from "./SchedulePicker";
 
 type Props = {
   days: LegacyGlanceDay[];
   today: string;
   currentWeekStart: string;
+  // Full active-routine list piped through for the inline schedule picker.
+  // Optional so existing callers (legacy) don't have to provide it — when
+  // absent the "+ Add to plan" button stays hidden.
+  schedulableRoutines?: QuickPickRoutine[];
 };
 
 // Default fallbacks — actual day width is computed from viewport width so
@@ -38,7 +43,7 @@ const DAY_WIDTH_MOBILE_MIN = 56;
 const DAY_WIDTH_MOBILE_MAX = 76;
 const DAY_GAP = 6;
 
-export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart }: Props) {
+export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedYmd, setSelectedYmd] = useState<string>(today);
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DESKTOP);
@@ -218,7 +223,9 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
         </div>
       </div>
 
-      {selectedDay ? <DetailPanel day={selectedDay} today={today} /> : null}
+      {selectedDay ? (
+        <DetailPanel day={selectedDay} today={today} schedulableRoutines={schedulableRoutines} />
+      ) : null}
 
       <style>{`
         .homeV2WagViewport {
@@ -338,7 +345,15 @@ function statusText(
 
 // ───────────────────────────────────────────────────── Detail panel
 
-function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
+function DetailPanel({
+  day,
+  today,
+  schedulableRoutines,
+}: {
+  day: LegacyGlanceDay;
+  today: string;
+  schedulableRoutines?: QuickPickRoutine[];
+}) {
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
   const sub = day.ymd === today ? "today" : day.ymd < today ? "past day" : "upcoming";
   const planned = day.planned;
@@ -346,6 +361,11 @@ function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
   const isFutureDay = day.ymd > today;
   const availableHabits = day.availableHabits ?? [];
   const isEmpty = planned.length === 0 && unplannedLogs.length === 0 && availableHabits.length === 0;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Scheduling onto past days is meaningless — only show the button on today
+  // and future days. Hides itself entirely if the parent didn't pass a
+  // routine list.
+  const canSchedule = (schedulableRoutines?.length ?? 0) > 0 && day.ymd >= today;
 
   return (
     <div style={detailShell}>
@@ -354,6 +374,17 @@ function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
           <span style={detailTitle}>{fullDate}</span>
           <span style={detailSub}>{sub}</span>
         </div>
+        {canSchedule ? (
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            style={schedulePillBtn}
+            aria-label={`Add a routine to ${fullDate}`}
+          >
+            <span aria-hidden style={schedulePillPlus}>+</span>
+            <span>Add</span>
+          </button>
+        ) : null}
       </div>
 
       {isEmpty ? (
@@ -446,6 +477,16 @@ function DetailPanel({ day, today }: { day: LegacyGlanceDay; today: string }) {
       ) : null}
 
       <DayTodoList ymd={day.ymd} todos={day.todos ?? []} mode="panel" />
+
+      {canSchedule && schedulableRoutines ? (
+        <SchedulePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          ymd={day.ymd}
+          dateLabel={fullDate}
+          routines={schedulableRoutines}
+        />
+      ) : null}
     </div>
   );
 }
@@ -650,6 +691,36 @@ const detailSub: CSSProperties = {
   color: COLOR.textFaint,
   textTransform: "uppercase",
   letterSpacing: 0.4,
+};
+
+// Compact pill button — sits next to the date in the panel header. The "+"
+// glyph + "Add" pair reads as a clear affordance at a glance without
+// crowding the panel title.
+const schedulePillBtn: CSSProperties = {
+  all: "unset",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "5px 11px 5px 8px",
+  borderRadius: 999,
+  border: `1px solid rgba(51,255,122,0.40)`,
+  background: COLOR.successSoft,
+  color: COLOR.success,
+  fontSize: 11.5,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+  cursor: "pointer",
+  flexShrink: 0,
+  whiteSpace: "nowrap",
+  minHeight: 28,
+};
+
+const schedulePillPlus: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 900,
+  lineHeight: 1,
+  marginTop: -1,
 };
 
 const emptyHint: CSSProperties = {
