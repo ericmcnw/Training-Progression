@@ -54,6 +54,33 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* Print styles for the reports sheets. Only apply when the user
+   triggers print — leaves the on-screen dark theme untouched. Targets
+   the .reportSheet container so other pages aren't affected. */
+@media print {
+  @page { margin: 14mm; }
+  body {
+    background: #ffffff !important;
+    color: #111 !important;
+  }
+  /* Nuke app chrome — leave only the printed report content. */
+  .appNav, .mobileBottomNav, .activeTray, .reportPrintHide { display: none !important; }
+  /* Reveal print-only elements (date stamp, etc). */
+  .reportPrintOnly { display: block !important; }
+  /* Keep each section together if possible. */
+  .reportSection { break-inside: avoid; page-break-inside: avoid; }
+  /* Lift backgrounds so colored bars/heatmap squares come through.
+     Without this, Chrome strips backgrounds by default. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  /* Section card borders read better in print at higher contrast. */
+  .reportSheet {
+    color: #111 !important;
+  }
+  .reportSheet * {
+    color: inherit;
+  }
+}
+
 /* Global font-size floor for form controls — iOS Safari auto-zooms the
    viewport when focusing an input whose computed font-size is < 16px.
    `max(16px, 1em)` lets components legitimately go *bigger* (e.g. a
