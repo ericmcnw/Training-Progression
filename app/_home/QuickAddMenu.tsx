@@ -254,11 +254,12 @@ const addRow: CSSProperties = {
   gap: 6,
 };
 
+// No inline fontSize — globals.css floors inputs to 16px to prevent iOS
+// Safari from auto-zooming the viewport when this input takes focus.
 const addInput: CSSProperties = {
   flex: 1,
   minHeight: 40,
   padding: "8px 10px",
-  fontSize: 13,
   borderRadius: 10,
   border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",
@@ -295,11 +296,12 @@ const backButton: CSSProperties = {
   cursor: "pointer",
 };
 
+// No inline fontSize — globals.css floors inputs to 16px to prevent iOS
+// Safari from auto-zooming the viewport when this input takes focus.
 const searchInput: CSSProperties = {
   flex: 1,
   minHeight: 36,
   padding: "6px 10px",
-  fontSize: 13,
   borderRadius: 10,
   border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",

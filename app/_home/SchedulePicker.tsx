@@ -140,11 +140,14 @@ const searchRow: CSSProperties = {
   gap: 6,
 };
 
+// Intentionally no fontSize here — globals.css enforces a 16px floor on
+// inputs to prevent iOS Safari from auto-zooming the viewport on focus.
+// Inline styles win over the global rule, so any explicit fontSize < 16px
+// would re-enable the zoom.
 const searchInput: CSSProperties = {
   flex: 1,
   minHeight: 40,
   padding: "8px 10px",
-  fontSize: 13,
   borderRadius: 10,
   border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",
