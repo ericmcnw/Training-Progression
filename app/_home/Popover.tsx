@@ -55,6 +55,50 @@ export default function Popover({
     };
   }, [open, onClose]);
 
+  // Mobile keyboard tracking — when the soft keyboard opens, iOS shrinks
+  // the visualViewport but the layout viewport (vh / inset: bottom 0) stays
+  // the same, so the bottom-sheet ends up hidden behind the keyboard. We
+  // observe visualViewport.resize and lift the sheet by the occluded
+  // amount, capping its max-height to the visible area so the list scrolls
+  // inside instead of disappearing.
+  //
+  // Desktop popovers (centered modal, transform-positioned) aren't affected
+  // and the matchMedia check skips the adjust path on wider screens.
+  useEffect(() => {
+    if (!open) return;
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 720px)");
+    if (!mql.matches) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    function adjust() {
+      const node = sheetRef.current;
+      const viewport = window.visualViewport;
+      if (!node || !viewport) return;
+      const occluded = Math.max(0, window.innerHeight - (viewport.height + viewport.offsetTop));
+      // setProperty with !important so we beat the !important CSS rule on
+      // .homeV2Popover's `inset` shorthand and `max-height`.
+      node.style.setProperty("bottom", `${occluded}px`, "important");
+      node.style.setProperty("max-height", `${Math.max(160, viewport.height - 16)}px`, "important");
+    }
+
+    adjust();
+    vv.addEventListener("resize", adjust);
+    vv.addEventListener("scroll", adjust);
+    return () => {
+      vv.removeEventListener("resize", adjust);
+      vv.removeEventListener("scroll", adjust);
+      const node = sheetRef.current;
+      if (node) {
+        node.style.removeProperty("bottom");
+        node.style.removeProperty("max-height");
+      }
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -107,6 +151,10 @@ export default function Popover({
             transform: none !important;
             max-height: 80vh !important;
             animation: homeV2SheetUp 220ms ease-out;
+            /* Smooth the keyboard-driven bottom/max-height tweaks the JS
+               effect makes when visualViewport changes. Without this the
+               sheet jumps when the keyboard opens. */
+            transition: bottom 180ms ease, max-height 180ms ease;
           }
         }
         @keyframes homeV2SheetUp {

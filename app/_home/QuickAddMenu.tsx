@@ -157,9 +157,11 @@ function RoutinePicker({
     <div style={section}>
       <div style={pickerHeader}>
         <button type="button" onClick={onBack} style={backButton}>‹ back</button>
+        {/* No autoFocus — opening the picker shouldn't pop the soft
+            keyboard. Users can scroll the list first and tap into search
+            only when they want to filter. */}
         <input
           type="text"
-          autoFocus
           value={filter}
           onChange={(e) => onFilter(e.target.value)}
           placeholder="Search routines…"

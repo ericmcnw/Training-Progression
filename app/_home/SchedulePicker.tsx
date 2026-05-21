@@ -87,9 +87,11 @@ export default function SchedulePicker({ open, onClose, ymd, dateLabel, routines
   return (
     <Popover open={open} onClose={handleClose} title="Add to schedule" subtitle={dateLabel} desktopWidth={400}>
       <div style={searchRow}>
+        {/* No autoFocus — opening the picker shouldn't pop the soft
+            keyboard. Users can scroll the list first and tap into search
+            only when they want to filter. */}
         <input
           type="text"
-          autoFocus
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Search routines…"
