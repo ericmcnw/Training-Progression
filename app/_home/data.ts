@@ -15,6 +15,7 @@ import {
   isExpectedDay,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
+import { classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 import {
   routineWithFrequencyTarget,
   shouldAutoScheduleRoutine,
@@ -99,6 +100,13 @@ export async function getHomeData(): Promise<HomeData> {
                 targetInterval: true,
                 targetUnit: true,
                 weekdayMask: true,
+                // Substitute links live on the goal — pull them inline so
+                // the habit grid can credit "covered" days without an
+                // extra `frequencyGoalRoutine.findMany` roundtrip later.
+                routines: {
+                  where: { role: "SUBSTITUTE" },
+                  select: { routineId: true },
+                },
               },
             },
           },
@@ -232,23 +240,19 @@ export async function getHomeData(): Promise<HomeData> {
   }
   const habitCreatedYmdById = new Map<string, string>(habitRoutines.map((h) => [h.id, toAppYmd(h.createdAt)]));
 
-  // Substitute routines per habit: which other routines, when logged, count
-  // as covering this habit's day. Stored on the habit's `fg_<id>` goal as
-  // SUBSTITUTE join rows. Pulled in one query so the habit grid can render
-  // covered days and the daily aggregate can credit covered completions.
-  const habitGoalIds = habitRoutines.map((h) => `fg_${h.id}`);
-  const substituteLinks = habitGoalIds.length > 0
-    ? await prisma.frequencyGoalRoutine.findMany({
-        where: { goalId: { in: habitGoalIds }, role: "SUBSTITUTE" },
-        select: { goalId: true, routineId: true },
-      })
-    : [];
+  // Substitute routines per habit: derived from the routine query's
+  // `goal.routines (where role=SUBSTITUTE)` include. Walks each habit's
+  // own frequencyGoalRoutines, finds its PRIMARY goal (the `fg_<id>`
+  // companion), and collects that goal's substitute routine ids.
   const substituteRoutineIdsByHabitId = new Map<string, string[]>();
-  for (const link of substituteLinks) {
-    const habitId = link.goalId.startsWith("fg_") ? link.goalId.slice(3) : link.goalId;
-    const list = substituteRoutineIdsByHabitId.get(habitId) ?? [];
-    list.push(link.routineId);
-    substituteRoutineIdsByHabitId.set(habitId, list);
+  for (const h of habitRoutines) {
+    const primaryRel = h.frequencyGoalRoutines.find(
+      (rel) => rel.role !== "SUBSTITUTE" && rel.goal?.isActive
+    );
+    const subRoutineIds = (primaryRel?.goal?.routines ?? []).map((r) => r.routineId);
+    if (subRoutineIds.length > 0) {
+      substituteRoutineIdsByHabitId.set(h.id, subRoutineIds);
+    }
   }
 
   // Day sets per habit:
@@ -428,12 +432,13 @@ export async function getHomeData(): Promise<HomeData> {
       // count as primary completions. Dedupe by log id so a routine that's
       // both a primary member AND contains a trigger exercise isn't double-
       // counted.
-      const primaryRoutineIdSet = new Set(primaryRoutines.map((r) => r.id));
-      const substituteRoutineIdSet = new Set(substituteRoutines.map((r) => r.id));
-      const triggerExerciseIdSet = new Set(goal.triggerExercises.map((e) => e.exerciseId));
-      const triggerSubtypeSet = new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase()));
-      const triggerMinSets = Math.max(1, goal.triggerMinSets ?? 1);
-      const hasTriggers = triggerExerciseIdSet.size > 0 || triggerSubtypeSet.size > 0;
+      const membership = {
+        primaryRoutineIds: new Set(primaryRoutines.map((r) => r.id)),
+        substituteRoutineIds: new Set(substituteRoutines.map((r) => r.id)),
+        triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
+        triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
+        triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
+      };
 
       type MatchedLog = {
         logId: string;
@@ -445,36 +450,24 @@ export async function getHomeData(): Promise<HomeData> {
       const matched = new Map<string, MatchedLog>();
       for (const log of allLogs) {
         if (matched.has(log.id)) continue;
-        const base = {
+        const result = classifyLogAgainstFrequencyGoal(
+          {
+            id: log.id,
+            routineId: log.routineId,
+            performedAt: log.performedAt,
+            routineSubtype: log.routine?.subtype ?? null,
+            exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+          },
+          membership
+        );
+        if (!result) continue;
+        matched.set(log.id, {
           logId: log.id,
           performedAt: log.performedAt,
+          isPrimary: result.isPrimary,
           routineId: log.routineId,
           routineName: log.routine.name,
-        };
-        if (primaryRoutineIdSet.has(log.routineId)) {
-          matched.set(log.id, { ...base, isPrimary: true });
-          continue;
-        }
-        if (substituteRoutineIdSet.has(log.routineId)) {
-          matched.set(log.id, { ...base, isPrimary: false });
-          continue;
-        }
-        if (!hasTriggers) continue;
-        const logSubtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
-        if (logSubtype && triggerSubtypeSet.has(logSubtype)) {
-          matched.set(log.id, { ...base, isPrimary: true });
-          continue;
-        }
-        if (triggerExerciseIdSet.size > 0 && log.exercises) {
-          let matchingSets = 0;
-          for (const ex of log.exercises) {
-            if (triggerExerciseIdSet.has(ex.exerciseId)) matchingSets += ex._count.sets;
-            if (matchingSets >= triggerMinSets) break;
-          }
-          if (matchingSets >= triggerMinSets) {
-            matched.set(log.id, { ...base, isPrimary: true });
-          }
-        }
+        });
       }
       const matchedList = Array.from(matched.values());
       const logs = matchedList.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary }));

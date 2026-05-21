@@ -8,6 +8,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
+import { classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 
 export type RoutineGoalContribution = {
   goalId: string;
@@ -35,7 +36,11 @@ export async function getRoutineGoalContributions(
 ): Promise<RoutineGoalContribution[]> {
   // Resolve the routine's own subtype + exercise ids — used to discover
   // goals this routine contributes to via trigger paths (subtype match or
-  // exercise match) in addition to direct membership.
+  // exercise match) in addition to direct membership. Has no other
+  // dependencies, so we fetch it first then issue a single combined
+  // goals query that ORs all three membership paths together (direct
+  // link, subtype trigger, exercise trigger). Previously this took 4
+  // sequential roundtrips — now 2 (plus the logs query below).
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
     select: {
@@ -46,49 +51,36 @@ export async function getRoutineGoalContributions(
   const routineSubtype = routine?.subtype ? routine.subtype.toUpperCase() : null;
   const routineExerciseIds = routine?.exercises.map((e) => e.exerciseId) ?? [];
 
-  // Direct-membership links: goals where this routine is PRIMARY/SUBSTITUTE.
-  const ownLinks = await prisma.frequencyGoalRoutine.findMany({
-    where: { routineId, goal: { isActive: true } },
-    select: { goalId: true, role: true },
-  });
-
-  // Trigger-membership: goals whose triggerSubtypes / triggerExerciseIds
-  // match this routine. Filtered to active goals only.
-  const triggerGoals = await prisma.frequencyGoal.findMany({
-    where: {
-      isActive: true,
-      OR: [
-        ...(routineSubtype
-          ? [{ triggerSubtypes: { has: routineSubtype } as { has: string } }]
-          : []),
-        ...(routineExerciseIds.length > 0
-          ? [{ triggerExercises: { some: { exerciseId: { in: routineExerciseIds } } } }]
-          : []),
-      ],
-    },
-    select: { id: true },
-  });
-
-  const ownLinkGoalIds = new Set(ownLinks.map((l) => l.goalId));
-  const triggerOnlyGoalIds = triggerGoals
-    .map((g) => g.id)
-    .filter((id) => !ownLinkGoalIds.has(id));
-  const allGoalIds = Array.from(new Set([...ownLinkGoalIds, ...triggerOnlyGoalIds]));
-  if (allGoalIds.length === 0) return [];
+  const orClauses: Array<Record<string, unknown>> = [
+    { routines: { some: { routineId } } },
+  ];
+  if (routineSubtype) {
+    orClauses.push({ triggerSubtypes: { has: routineSubtype } });
+  }
+  if (routineExerciseIds.length > 0) {
+    orClauses.push({ triggerExercises: { some: { exerciseId: { in: routineExerciseIds } } } });
+  }
 
   const goals = await prisma.frequencyGoal.findMany({
-    where: { id: { in: allGoalIds } },
+    where: { isActive: true, OR: orClauses },
     include: {
       routines: {
         include: {
           routine: { select: { id: true, name: true, isActive: true, isDeleted: true } },
         },
       },
-      // triggerSubtypes + triggerMinSets are scalars on FrequencyGoal —
-      // pulled automatically by `include`. triggerExercises is the join.
       triggerExercises: { select: { exerciseId: true } },
     },
   });
+  if (goals.length === 0) return [];
+
+  // Derive direct-membership roles from the included `routines` join — no
+  // separate frequencyGoalRoutine query needed.
+  const ownRoleByGoalId = new Map<string, "PRIMARY" | "SUBSTITUTE">();
+  for (const goal of goals) {
+    const link = goal.routines.find((r) => r.routineId === routineId);
+    if (link) ownRoleByGoalId.set(goal.id, link.role);
+  }
 
   // Pull recent logs across every routine that COULD contribute to any of
   // these goals — including trigger paths. We over-fetch a bit (each log
@@ -138,8 +130,6 @@ export async function getRoutineGoalContributions(
     },
   });
 
-  const ownRoleByGoalId = new Map(ownLinks.map((l) => [l.goalId, l.role]));
-
   const contributions: RoutineGoalContribution[] = goals
     .map((goal): RoutineGoalContribution | null => {
       // Effective role: explicit PRIMARY/SUBSTITUTE link wins; otherwise we
@@ -152,12 +142,15 @@ export async function getRoutineGoalContributions(
       // Trigger-only goals may have no member routines yet — that's still
       // a valid contribution shape, render with the goal name only.
 
-      const primaryRoutineIds = new Set(primaryLinks.map((rel) => rel.routineId));
-      const memberRoutineIds = new Set(liveLinks.map((rel) => rel.routineId));
-      const goalTriggerSubtypeSet = new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase()));
-      const goalTriggerExerciseIdSet = new Set(goal.triggerExercises.map((e) => e.exerciseId));
-      const goalTriggerMinSets = Math.max(1, goal.triggerMinSets ?? 1);
-      const goalHasTriggers = goalTriggerSubtypeSet.size > 0 || goalTriggerExerciseIdSet.size > 0;
+      const membership = {
+        primaryRoutineIds: new Set(primaryLinks.map((rel) => rel.routineId)),
+        substituteRoutineIds: new Set(
+          liveLinks.filter((rel) => rel.role === "SUBSTITUTE").map((rel) => rel.routineId)
+        ),
+        triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
+        triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
+        triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
+      };
 
       // Dedupe by log id and classify each match as primary/covered so the
       // streak/window-progress numbers stay correct when a log qualifies
@@ -165,29 +158,18 @@ export async function getRoutineGoalContributions(
       const stateMatched = new Map<string, { performedAt: Date; isPrimary: boolean }>();
       for (const log of logs) {
         if (stateMatched.has(log.id)) continue;
-        if (memberRoutineIds.has(log.routineId)) {
-          stateMatched.set(log.id, {
+        const result = classifyLogAgainstFrequencyGoal(
+          {
+            id: log.id,
+            routineId: log.routineId,
             performedAt: log.performedAt,
-            isPrimary: primaryRoutineIds.has(log.routineId),
-          });
-          continue;
-        }
-        if (!goalHasTriggers) continue;
-        const subtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
-        if (subtype && goalTriggerSubtypeSet.has(subtype)) {
-          stateMatched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
-          continue;
-        }
-        if (goalTriggerExerciseIdSet.size > 0 && log.exercises) {
-          let matchingSets = 0;
-          for (const ex of log.exercises) {
-            if (goalTriggerExerciseIdSet.has(ex.exerciseId)) matchingSets += ex._count.sets;
-            if (matchingSets >= goalTriggerMinSets) break;
-          }
-          if (matchingSets >= goalTriggerMinSets) {
-            stateMatched.set(log.id, { performedAt: log.performedAt, isPrimary: true });
-          }
-        }
+            routineSubtype: log.routine?.subtype ?? null,
+            exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+          },
+          membership
+        );
+        if (!result) continue;
+        stateMatched.set(log.id, { performedAt: log.performedAt, isPrimary: result.isPrimary });
       }
       const stateLogs = Array.from(stateMatched.values());
 

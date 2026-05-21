@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import LogWorkoutForm from "@/app/routines/[id]/log/ui";
 import SessionLogForm from "@/app/routines/[id]/log-session/SessionLogForm";
@@ -102,6 +102,7 @@ type GuidedDrawerState = {
 export default function LogDrawer() {
   const {
     isOpen,
+    isDirty,
     activeRoutineId,
     closeDrawer,
     clearDirty,
@@ -113,6 +114,9 @@ export default function LogDrawer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logData, setLogData] = useState<LogData | null>(null);
+  // Bumped via the Retry button — re-running the load effect by invalidating
+  // its dep list is simpler than refactoring into an imperative loader.
+  const [retryNonce, setRetryNonce] = useState(0);
   const cache = useRef<Map<string, LogData>>(new Map());
 
   useEffect(() => {
@@ -123,27 +127,42 @@ export default function LogDrawer() {
     }
     setLoading(true);
     setError(null);
+
+    const requestedRoutineId = activeRoutineId;
+    const controller = new AbortController();
+    let cancelled = false;
+
     // Quick-log sentinel hits a dedicated endpoint — there is no real
     // routine to fetch yet (the placeholder gets find-or-created on save).
     const url =
-      activeRoutineId === QUICK_LOG_ROUTINE_ID
+      requestedRoutineId === QUICK_LOG_ROUTINE_ID
         ? "/api/quick-log-data"
-        : `/api/routines/${activeRoutineId}/log-data`;
-    fetch(url)
+        : `/api/routines/${requestedRoutineId}/log-data`;
+
+    fetch(url, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json() as Promise<LogData>;
       })
       .then((data) => {
-        cache.current.set(activeRoutineId, data);
+        if (cancelled) return;
+        cache.current.set(requestedRoutineId, data);
         setLogData(data);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) return;
         setError("Could not load session.");
         setLoading(false);
       });
-  }, [isOpen, activeRoutineId]);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [isOpen, activeRoutineId, retryNonce]);
+
+  const retry = useCallback(() => setRetryNonce((n) => n + 1), []);
 
   if (!isOpen || !activeRoutineId) return null;
 
@@ -156,13 +175,27 @@ export default function LogDrawer() {
     closeDrawer();
   }
 
+  // Backdrop tap shouldn't silently discard an in-progress session. For
+  // routine-backed logs the draft auto-persists (WorkoutExerciseEditor
+  // writes to localStorage) so minimizing is safe — confirm only when
+  // the form has unsaved data without a draft fallback (quick-log mode,
+  // which currently doesn't persist drafts).
+  function handleBackdropClose() {
+    const isQuickLog = activeRoutineId === QUICK_LOG_ROUTINE_ID;
+    if (isDirty && isQuickLog) {
+      const ok = window.confirm("Discard this quick workout? Unsaved sets will be lost.");
+      if (!ok) return;
+    }
+    closeDrawer();
+  }
+
   function handleCloseAttempt() {
     closeDrawer();
   }
 
   return (
     <>
-      <div className="logDrawerBackdrop" onClick={handleCloseAttempt} />
+      <div className="logDrawerBackdrop" onClick={handleBackdropClose} />
       <div className="logDrawerSheet">
         <div style={drawerHeaderStyle}>
           <span style={drawerTitleStyle}>{drawerTitle(logData)}</span>
@@ -175,8 +208,17 @@ export default function LogDrawer() {
         </div>
 
         <div style={drawerBodyStyle}>
-          {loading && <div style={stateStyle}>Loading session…</div>}
-          {error && <div style={{ ...stateStyle, color: "rgba(255,100,100,0.9)" }}>{error}</div>}
+          {loading && <LoadingSkeleton />}
+          {error && (
+            <div style={errorBlockStyle}>
+              <div style={{ color: "rgba(255,140,140,0.95)", fontSize: 14, fontWeight: 700 }}>
+                {error}
+              </div>
+              <button type="button" onClick={retry} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          )}
           {!loading && !error && logData && (() => {
             if (logData.kind === "QUICK") {
               return (
@@ -333,3 +375,38 @@ function drawerTitle(logData: LogData | null): string {
   if (logData.kind === "QUICK") return "Quick Workout";
   return logData.routineName;
 }
+
+// Pulsing skeleton that roughly matches the shape of a log form so the
+// drawer never shows a blank frame while the API is in flight. Uses the
+// shared `.skeleton` class from globals.css for the shimmer animation.
+function LoadingSkeleton() {
+  return (
+    <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
+      <div className="skeleton" style={{ height: 22, width: "55%" }} />
+      <div className="skeleton" style={{ height: 44 }} />
+      <div className="skeleton" style={{ height: 80 }} />
+      <div className="skeleton" style={{ height: 80 }} />
+      <div className="skeleton" style={{ height: 44, width: "40%", marginTop: 4 }} />
+    </div>
+  );
+}
+
+const errorBlockStyle: React.CSSProperties = {
+  padding: "32px 16px",
+  textAlign: "center",
+  display: "grid",
+  gap: 14,
+  justifyItems: "center",
+};
+
+const retryBtnStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "8px 18px",
+  border: "1px solid rgba(129,140,248,0.5)",
+  borderRadius: 10,
+  background: "rgba(129,140,248,0.12)",
+  color: "rgb(199,210,254)",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
+};

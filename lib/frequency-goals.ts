@@ -166,3 +166,53 @@ export function getFrequencyGoalProgressList(params: {
     .filter((goal) => goal.isActive)
     .map((goal) => getFrequencyGoalProgress({ goal, logs: params.logs, now: params.now }));
 }
+
+// Richer matcher used by the home dashboard's habit grid and the log
+// page's "Contributes to" strip. Knows about PRIMARY vs SUBSTITUTE
+// membership so the caller can classify a matched log as a real
+// completion ("done") vs a covered slot ("covered by another routine").
+// Trigger-path matches always claim a primary slot — the user did the
+// work, just not via a saved-routine link.
+export type FrequencyGoalMembership = {
+  primaryRoutineIds: Set<string>;
+  substituteRoutineIds: Set<string>;
+  /** Uppercased for case-insensitive comparison. */
+  triggerSubtypes: Set<string>;
+  triggerExerciseIds: Set<string>;
+  /** Minimum trigger-exercise sets a log needs to claim a session.
+   *  Clamped to ≥ 1 by the caller; pass 1 to mean "any set counts." */
+  triggerMinSets: number;
+};
+
+export function classifyLogAgainstFrequencyGoal(
+  log: FrequencyGoalLogShape,
+  goal: FrequencyGoalMembership
+): { isPrimary: boolean } | null {
+  if (goal.primaryRoutineIds.has(log.routineId)) return { isPrimary: true };
+  if (goal.substituteRoutineIds.has(log.routineId)) return { isPrimary: false };
+
+  const hasTriggers = goal.triggerSubtypes.size > 0 || goal.triggerExerciseIds.size > 0;
+  if (!hasTriggers) return null;
+
+  if (goal.triggerSubtypes.size > 0 && log.routineSubtype) {
+    const subtype = log.routineSubtype.toUpperCase();
+    if (goal.triggerSubtypes.has(subtype)) return { isPrimary: true };
+  }
+
+  if (goal.triggerExerciseIds.size > 0) {
+    let matchingSets = 0;
+    if (log.exerciseSets && log.exerciseSets.length > 0) {
+      for (const row of log.exerciseSets) {
+        if (goal.triggerExerciseIds.has(row.exerciseId)) matchingSets += Math.max(0, row.setCount);
+        if (matchingSets >= goal.triggerMinSets) return { isPrimary: true };
+      }
+    } else if (log.exerciseIds && log.exerciseIds.length > 0) {
+      for (const id of log.exerciseIds) {
+        if (goal.triggerExerciseIds.has(id)) matchingSets += 1;
+        if (matchingSets >= goal.triggerMinSets) return { isPrimary: true };
+      }
+    }
+  }
+
+  return null;
+}

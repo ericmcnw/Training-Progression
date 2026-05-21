@@ -65,44 +65,82 @@ const BODY_ZONE_ALIASES: Record<string, string> = {
   "right-knee": "right-knee-front",
 };
 
+// In-memory snapshot of all BodyZone rows. There are ~50 zones and they
+// are static reference data — they don't change at runtime. Caching this
+// at module scope means slug resolution becomes a Map lookup instead of
+// 1–4 sequential DB roundtrips per page load.
+type ZoneIndexRow = {
+  slug: string;
+  metadataGroupSlug: string | null;
+  side: string | null;
+  region: string | null;
+  sortOrder: number;
+  label: string;
+};
+type ZoneIndex = {
+  bySlug: Map<string, ZoneIndexRow>;
+  byGroup: Map<string, ZoneIndexRow[]>;
+  bySideRegion: Map<string, ZoneIndexRow[]>;
+};
+let zoneIndexPromise: Promise<ZoneIndex> | null = null;
+function loadZoneIndex(): Promise<ZoneIndex> {
+  if (zoneIndexPromise) return zoneIndexPromise;
+  const promise = (async () => {
+    const rows = await prisma.bodyZone.findMany({
+      select: { slug: true, metadataGroupSlug: true, side: true, region: true, sortOrder: true, label: true },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    });
+    const bySlug = new Map<string, ZoneIndexRow>();
+    const byGroup = new Map<string, ZoneIndexRow[]>();
+    const bySideRegion = new Map<string, ZoneIndexRow[]>();
+    for (const row of rows) {
+      bySlug.set(row.slug, row);
+      if (row.metadataGroupSlug) {
+        const list = byGroup.get(row.metadataGroupSlug) ?? [];
+        list.push(row);
+        byGroup.set(row.metadataGroupSlug, list);
+      }
+      if (row.side && row.region) {
+        const key = `${row.side}:${row.region}`;
+        const list = bySideRegion.get(key) ?? [];
+        list.push(row);
+        bySideRegion.set(key, list);
+      }
+    }
+    return { bySlug, byGroup, bySideRegion };
+  })();
+  // If the initial load rejects, clear the cached promise so the next
+  // caller retries instead of inheriting the rejection forever.
+  promise.catch(() => { zoneIndexPromise = null; });
+  zoneIndexPromise = promise;
+  return promise;
+}
+
 async function resolveBodyZoneSlug(slug: string) {
   const normalized = decodeURIComponent(slug).trim();
   if (!normalized) return null;
+  const index = await loadZoneIndex();
 
-  const exact = await prisma.bodyZone.findUnique({
-    where: { slug: normalized },
-    select: { slug: true },
-  });
-  if (exact) return exact.slug;
+  // 1. exact slug
+  if (index.bySlug.has(normalized)) return normalized;
 
+  // 2. alias → exact slug
   const alias = BODY_ZONE_ALIASES[normalized];
-  if (alias) {
-    const aliasZone = await prisma.bodyZone.findUnique({
-      where: { slug: alias },
-      select: { slug: true },
-    });
-    if (aliasZone) return aliasZone.slug;
-  }
+  if (alias && index.bySlug.has(alias)) return alias;
 
-  const groupZone = await prisma.bodyZone.findFirst({
-    where: { metadataGroupSlug: normalized },
-    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-    select: { slug: true },
-  });
-  if (groupZone) return groupZone.slug;
+  // 3. group slug → first zone in that group (already sortOrder-ordered)
+  const groupHit = index.byGroup.get(normalized)?.[0];
+  if (groupHit) return groupHit.slug;
 
+  // 4. side+region prefix → first matching zone
   const side = normalized.startsWith("left-") ? "LEFT" : normalized.startsWith("right-") ? "RIGHT" : null;
   if (side) {
     const region = normalized
       .replace(/^left-/, "")
       .replace(/^right-/, "")
       .replace(/-(front|back|proximal|distal)$/, "");
-    const sideRegionZone = await prisma.bodyZone.findFirst({
-      where: { side, region },
-      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-      select: { slug: true },
-    });
-    if (sideRegionZone) return sideRegionZone.slug;
+    const sideHit = index.bySideRegion.get(`${side}:${region}`)?.[0];
+    if (sideHit) return sideHit.slug;
   }
 
   return null;

@@ -28,6 +28,7 @@ export default function QuickAddMenu({ open, onClose, routines, today }: Props) 
   const [todoLabel, setTodoLabel] = useState("");
   const [pending, startTransition] = useTransition();
   const [filter, setFilter] = useState("");
+  const [todoError, setTodoError] = useState<string | null>(null);
 
   function addTodo() {
     const trimmed = todoLabel.trim();
@@ -35,10 +36,18 @@ export default function QuickAddMenu({ open, onClose, routines, today }: Props) 
     const fd = new FormData();
     fd.set("ymd", today);
     fd.set("label", trimmed);
-    setTodoLabel("");
+    setTodoError(null);
     startTransition(async () => {
-      try { await createDayTodo(fd); } catch { /* swallow */ }
-      onClose();
+      try {
+        await createDayTodo(fd);
+        setTodoLabel("");
+        onClose();
+      } catch {
+        // Surface failure instead of silently swallowing — user thinks the
+        // todo saved but it didn't. Keep the label in the input so they can
+        // retry without retyping.
+        setTodoError("Couldn't save. Tap Add again.");
+      }
     });
   }
 
@@ -102,6 +111,11 @@ export default function QuickAddMenu({ open, onClose, routines, today }: Props) 
                 Add
               </button>
             </div>
+            {todoError ? (
+              <div role="alert" style={{ color: COLOR.red, fontSize: 11, marginTop: 6, fontWeight: 700 }}>
+                {todoError}
+              </div>
+            ) : null}
           </div>
         </>
       ) : (

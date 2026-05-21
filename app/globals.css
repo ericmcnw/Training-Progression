@@ -26,6 +26,11 @@
 }
 
 :root{
+  /* Declares the page as dark so the browser themes native controls to
+     match — most importantly, the date/time input's calendar-picker icon
+     flips from black to white instead of disappearing into the dark
+     background. Also fixes scrollbar + caret colors on WebKit. */
+  color-scheme: dark;
   --bg: #0b1220;        /* dark blue-gray */
   --panel: #111b2e;     /* cards */
   --border: rgba(255,255,255,0.10);
@@ -35,6 +40,30 @@
   --app-max-width: 1180px;
   --app-edge-padding: clamp(14px, 3vw, 24px);
   --app-mobile-bottom-offset: calc(116px + env(safe-area-inset-bottom));
+}
+
+/* `color-scheme: dark` above already paints the calendar/picker icon
+   white. We only adjust opacity + cursor here — applying `filter: invert`
+   on top would re-flip the (already white) icon back to black. */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+/* Global font-size floor for form controls — iOS Safari auto-zooms the
+   viewport when focusing an input whose computed font-size is < 16px.
+   `max(16px, 1em)` lets components legitimately go *bigger* (e.g. a
+   16px-base form on a 14px parent stays at 16px; a 20px parent input
+   stays at 20px). Replaces the old mobile-only @media rule which missed
+   iPad landscape. */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
 }
 
 html, body { height: 100%; }
@@ -385,8 +414,10 @@ details[open] > summary[data-collapsible-summary]::before{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  /* 36px tap target — larger than the 26px visual would suggest, so
+     finger touches on mobile don't miss this small icon button. */
+  width: 36px;
+  height: 36px;
   padding: 0;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.16);
@@ -652,11 +683,8 @@ details[open] > summary[data-collapsible-summary]::before{
     padding: 16px 14px var(--app-mobile-bottom-offset);
   }
 
-  input,
-  select,
-  textarea{
-    font-size: 16px;
-  }
+  /* font-size floor is now applied globally above, not just under the
+     720px mobile breakpoint — keeps iPad landscape safe too. */
 
   .mobilePageShell{
     padding: 2px 0 0 !important;
@@ -1234,10 +1262,13 @@ details[open] > summary[data-collapsible-summary]::before{
   .routineCardPrimaryAction,
   .routineCardMiniLink,
   .routineCardMiniButton{
-    min-height: 28px;
-    min-width: 48px;
-    padding: 4px 8px;
-    font-size: 11px;
+    /* 40px tap target on mobile — was 28px, which is below comfortable
+       finger-tap size. Keeps the same visual padding but uses min-height
+       so the hit area expands without making text feel chunky. */
+    min-height: 40px;
+    min-width: 56px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
   .routineCardDateDetails{

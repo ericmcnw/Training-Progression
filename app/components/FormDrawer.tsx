@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFormDrawer } from "@/app/contexts/FormDrawerContext";
 import NewRoutineForm from "@/app/routines/new/NewRoutineForm";
 import EditRoutineForm from "@/app/routines/[id]/edit/EditRoutineForm";
@@ -61,6 +61,11 @@ export default function FormDrawer() {
   const [goalData, setGoalData] = useState<GoalFormData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  // Set true the first time the user types/edits/clicks anything inside the
+  // form body. Drives the "Discard changes?" prompt on backdrop tap so an
+  // accidental tap outside the sheet doesn't wipe a half-filled form.
+  const dirtyRef = useRef(false);
 
   // Reset cached data when drawer mode changes — every open is a fresh fetch
   // so values reflect the latest server state.
@@ -69,6 +74,7 @@ export default function FormDrawer() {
       setRoutineData(null);
       setGoalData(null);
       setError(null);
+      dirtyRef.current = false;
       return;
     }
 
@@ -124,7 +130,27 @@ export default function FormDrawer() {
       cancelled = true;
       controller.abort();
     };
-  }, [isOpen, mode]);
+  }, [isOpen, mode, retryNonce]);
+
+  const retry = useCallback(() => setRetryNonce((n) => n + 1), []);
+
+  const handleSuccess = useCallback(() => {
+    dirtyRef.current = false;
+    close();
+  }, [close]);
+
+  const handleBackdropClose = useCallback(() => {
+    if (dirtyRef.current) {
+      const ok = window.confirm("Discard changes? Anything you've typed will be lost.");
+      if (!ok) return;
+    }
+    dirtyRef.current = false;
+    close();
+  }, [close]);
+
+  function markDirty() {
+    dirtyRef.current = true;
+  }
 
   if (!isOpen || !mode) return null;
 
@@ -139,7 +165,7 @@ export default function FormDrawer() {
 
   return (
     <>
-      <div className="logDrawerBackdrop" onClick={close} />
+      <div className="logDrawerBackdrop" onClick={handleBackdropClose} />
       <div className="logDrawerSheet">
         <div style={drawerHeaderStyle}>
           <span style={drawerTitleStyle}>{title}</span>
@@ -147,9 +173,28 @@ export default function FormDrawer() {
             Close
           </button>
         </div>
-        <div style={drawerBodyStyle}>
-          {loading && <div style={stateStyle}>Loading…</div>}
-          {error && <div style={{ ...stateStyle, color: "rgba(255,100,100,0.9)" }}>{error}</div>}
+        <div
+          style={drawerBodyStyle}
+          onInput={markDirty}
+          onChange={markDirty}
+          onPointerDown={(e) => {
+            // Treat any direct interaction inside the form area as dirty —
+            // covers toggles, custom widgets, and checkboxes that don't fire
+            // `input`/`change` reliably.
+            if (e.target !== e.currentTarget) markDirty();
+          }}
+        >
+          {loading && <FormSkeleton />}
+          {error && (
+            <div style={errorBlockStyle}>
+              <div style={{ color: "rgba(255,140,140,0.95)", fontSize: 14, fontWeight: 700 }}>
+                {error}
+              </div>
+              <button type="button" onClick={retry} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          )}
           {!loading && !error && (
             <>
               {mode.kind === "new-routine" && routineData?.mode === "new" && (
@@ -158,7 +203,7 @@ export default function FormDrawer() {
                   sessionTemplates={routineData.sessionTemplates}
                   availableSubstituteRoutines={routineData.availableSubstituteRoutines}
                   inDrawer
-                  onSuccess={close}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode.kind === "edit-routine" && routineData?.mode === "edit" && (
@@ -169,7 +214,7 @@ export default function FormDrawer() {
                   availableSubstituteRoutines={routineData.availableSubstituteRoutines}
                   initialSubstituteRoutineIds={routineData.initialSubstituteRoutineIds}
                   inDrawer
-                  onSuccess={close}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode.kind === "new-goal" && goalData?.mode === "new" && (
@@ -180,7 +225,7 @@ export default function FormDrawer() {
                   submitLabel="Save Goal"
                   initial={goalData.initial}
                   inDrawer
-                  onSuccess={close}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode.kind === "edit-goal" && goalData?.mode === "edit" && (
@@ -190,7 +235,7 @@ export default function FormDrawer() {
                   submitLabel="Update Goal"
                   initial={goalData.initial}
                   inDrawer
-                  onSuccess={close}
+                  onSuccess={handleSuccess}
                 />
               )}
               {mode.kind === "edit-goal" && goalData?.mode === "edit-group" && (
@@ -201,7 +246,7 @@ export default function FormDrawer() {
                   submitLabel="Update Goal"
                   initial={goalData.initial}
                   inDrawer
-                  onSuccess={close}
+                  onSuccess={handleSuccess}
                 />
               )}
             </>
@@ -259,4 +304,40 @@ const stateStyle: React.CSSProperties = {
   textAlign: "center",
   opacity: 0.65,
   fontSize: 14,
+};
+
+// Pulsing skeleton mirroring a typical routine/goal form layout — header,
+// 3-4 short fields, a fat field, and a primary action — so the drawer
+// never shows a blank frame while /api/*-form-data loads.
+function FormSkeleton() {
+  return (
+    <div style={{ display: "grid", gap: 14, paddingTop: 4 }}>
+      <div className="skeleton" style={{ height: 24, width: "45%" }} />
+      <div className="skeleton" style={{ height: 44 }} />
+      <div className="skeleton" style={{ height: 44 }} />
+      <div className="skeleton" style={{ height: 100 }} />
+      <div className="skeleton" style={{ height: 44 }} />
+      <div className="skeleton" style={{ height: 44, width: "35%", marginTop: 6 }} />
+    </div>
+  );
+}
+
+const errorBlockStyle: React.CSSProperties = {
+  padding: "32px 16px",
+  textAlign: "center",
+  display: "grid",
+  gap: 14,
+  justifyItems: "center",
+};
+
+const retryBtnStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "8px 18px",
+  border: "1px solid rgba(129,140,248,0.5)",
+  borderRadius: 10,
+  background: "rgba(129,140,248,0.12)",
+  color: "rgb(199,210,254)",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
 };
