@@ -269,15 +269,31 @@ function DayCard({
   // Compute the visual summary from the legacy planned/logs arrays. We include
   // habits in the dot row — the user wants to SEE everything they tracked,
   // not have habits hidden behind a separate bar.
+  //
+  // COMPLETION-kind routines (creatine, supplements, finger checks, etc.)
+  // are excluded from the X/Y tally on purpose: they're micro-habit
+  // checkboxes, not training. A day where you did your workout + cardio
+  // should read "done" even if a supplement checkbox is unticked.
   const dots = buildDots(day);
-  const plannedCount = day.planned.reduce((s, p) => s + p.planned, 0);
+  const isTrainingPlanned = (p: { kind: string }) => normalizeRoutineKind(p.kind) !== "COMPLETION";
+  const plannedCount = day.planned.reduce((s, p) => (isTrainingPlanned(p) ? s + p.planned : s), 0);
   const loggedCount =
-    day.planned.reduce((s, p) => s + Math.min(p.logged, p.planned), 0) +
-    day.logs.filter((l) => !day.planned.some((p) => p.routineId === l.routineId)).length;
+    day.planned.reduce(
+      (s, p) => (isTrainingPlanned(p) ? s + Math.min(p.logged, p.planned) : s),
+      0
+    ) +
+    day.logs.filter(
+      (l) =>
+        !day.planned.some((p) => p.routineId === l.routineId) &&
+        normalizeRoutineKind(l.kind) !== "COMPLETION"
+    ).length;
 
   let status: "done" | "partial" | "plan" | "missed" | "empty";
   if (day.planned.length === 0 && day.logs.length === 0) status = "empty";
   else if (isFuture) status = "plan";
+  // No trainings planned and none logged ad-hoc → habits-only day, leave it
+  // visually neutral instead of forcing "missed" / "0/0".
+  else if (plannedCount === 0 && loggedCount === 0) status = "empty";
   else if (plannedCount > 0 && loggedCount === 0) status = "missed";
   else if (loggedCount >= plannedCount && loggedCount > 0) status = "done";
   else status = "partial";
