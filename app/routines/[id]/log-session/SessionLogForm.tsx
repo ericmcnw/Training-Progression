@@ -25,12 +25,14 @@ import {
   textareaStyle,
 } from "../log/form-ui";
 import {
+  isBasketballTemplateKey,
   isClimbingTemplateKey,
+  isPrimaryLocationMetric,
   normalizeSessionMetricText,
   parseSessionMetricNumber,
-  templateHasPrimaryLocationMetric,
   type SessionMetricDefinitionWithConfig,
 } from "@/lib/session-templates";
+import BasketballSessionStats from "./BasketballSessionStats";
 import { climbingDisciplineLabel, climbingDisciplineForTemplateKey } from "@/lib/climb-types";
 import {
   type SessionDraft,
@@ -155,7 +157,7 @@ export default function SessionLogForm({
   const finish = onComplete ?? (() => { window.location.href = "/routines"; });
 
   const isClimbing = isClimbingTemplateKey(templateKey);
-  const hasLocationMetric = templateHasPrimaryLocationMetric(definitions);
+  const isBasketball = isBasketballTemplateKey(templateKey);
   const isOutdoorClimbing = isClimbing && (templateKey ?? "").startsWith("outdoor-");
   const climbVenueLabel = isOutdoorClimbing ? "Crag" : "Gym";
   const climbDisciplineLabel = isClimbing
@@ -168,9 +170,6 @@ export default function SessionLogForm({
 
   const templateNotesDefinition = definitions.find((d) => d.key === "template_notes");
   const mainDefinitions = definitions.filter((d) => d.key !== "template_notes");
-  const hasVisibleMetrics = mainDefinitions.filter(
-    (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
-  ).length > 0;
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [durationMin, setDurationMin] = useState("");
@@ -207,6 +206,18 @@ export default function SessionLogForm({
   const showSpotPicker =
     spotPickerConfig != null &&
     (isClimbing || (activitySlug != null && nonClimbingSpotConfig?.supportsMap === true));
+
+  // Templates predate the structured SpotPicker, so several still carry a
+  // free-text "court / trail / course / break / mountain" metric. When the
+  // picker is rendering the same information, drop those keys from the
+  // generic metric grid to stop the double-entry. Old logs keep their
+  // value (existing rows aren't touched).
+  const visibleMainDefinitions = showSpotPicker
+    ? mainDefinitions.filter((d) => !isPrimaryLocationMetric(d))
+    : mainDefinitions;
+  const hasVisibleMetrics = visibleMainDefinitions.filter(
+    (d) => !(d.config?.gradeBucket && d.config?.climbingColumn)
+  ).length > 0;
 
   // Currently-selected ClimbLocation id — drives saved-problems fetch for
   // per-climb mode. Derived from the picker value (saved climbLocation or
@@ -518,17 +529,32 @@ export default function SessionLogForm({
       {/* Non-climbing metrics section */}
       {!isClimbing && hasVisibleMetrics ? (
         <FormSection title={detailsSectionTitle}>
-          <SessionMetricFields
-            definitions={mainDefinitions}
-            values={sessionMetricValues}
-            onChange={(metricDefinitionId, value) => {
-              markDirty();
-              setSessionMetricValues((current) => ({
-                ...current,
-                [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
-              }));
-            }}
-          />
+          {isBasketball && (templateKey === "basketball-pickup" || templateKey === "basketball-shooting") ? (
+            <BasketballSessionStats
+              templateKey={templateKey}
+              definitions={visibleMainDefinitions}
+              values={sessionMetricValues}
+              onChange={(metricDefinitionId, value) => {
+                markDirty();
+                setSessionMetricValues((current) => ({
+                  ...current,
+                  [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
+                }));
+              }}
+            />
+          ) : (
+            <SessionMetricFields
+              definitions={visibleMainDefinitions}
+              values={sessionMetricValues}
+              onChange={(metricDefinitionId, value) => {
+                markDirty();
+                setSessionMetricValues((current) => ({
+                  ...current,
+                  [metricDefinitionId]: { ...current[metricDefinitionId], ...value },
+                }));
+              }}
+            />
+          )}
         </FormSection>
       ) : null}
 

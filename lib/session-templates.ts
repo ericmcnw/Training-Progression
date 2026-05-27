@@ -159,7 +159,11 @@ export function climbingGradeRowDefinitions(definitions: SessionMetricDefinition
   });
 }
 
-const PRIMARY_LOCATION_METRIC_KEYS = new Set([
+// Metric keys whose job is "where did this happen?" — kept around for back-
+// compat with logs that pre-date the structured SpotPicker. New sessions
+// should record location via the picker, so the form filters these out
+// when the picker is active to avoid double-entry.
+export const PRIMARY_LOCATION_METRIC_KEYS = new Set([
   "break_name",
   "trail_name",
   "court_name",
@@ -169,6 +173,14 @@ const PRIMARY_LOCATION_METRIC_KEYS = new Set([
 
 export function templateHasPrimaryLocationMetric(definitions: SessionMetricDefinitionWithConfig[]): boolean {
   return definitions.some((d) => PRIMARY_LOCATION_METRIC_KEYS.has(d.key));
+}
+
+export function isPrimaryLocationMetric(definition: { key: string }): boolean {
+  return PRIMARY_LOCATION_METRIC_KEYS.has(definition.key);
+}
+
+export function isBasketballTemplateKey(key: string | null): boolean {
+  return key === "basketball-pickup" || key === "basketball-shooting";
 }
 
 export function sessionMetricInputMode(valueType: SessionMetricValueType) {
