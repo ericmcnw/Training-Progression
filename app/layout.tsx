@@ -4,6 +4,7 @@ import AppNavigation, { MobileBottomNavigation, MobileProfileButton } from "./Ap
 import ActiveSessionTray from "./components/ActiveSessionTray";
 import LogDrawer from "./components/LogDrawer";
 import FormDrawer from "./components/FormDrawer";
+import ViewLogDrawer from "./components/ViewLogDrawer";
 import ClientProviders from "./ClientProviders";
 import "./globals.css";
 
@@ -35,6 +36,7 @@ export default function RootLayout({
           <main className="appMain">{children}</main>
           <ActiveSessionTray />
           <LogDrawer />
+          <ViewLogDrawer />
           <FormDrawer />
           <MobileBottomNavigation />
         </ClientProviders>

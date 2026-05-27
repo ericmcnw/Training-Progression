@@ -21,6 +21,10 @@ export type LegacyGlanceDay = {
     domain: RoutineDomain;
     planned: number;
     logged: number;
+    // Log ids for this routine on this day, most-recent first. Feeds the
+    // view-log modal so all same-day logs (e.g. two walks) are openable
+    // from a single "view →" button.
+    logIds: string[];
   }>;
   logs: Array<{
     id: string;

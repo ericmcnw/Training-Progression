@@ -289,6 +289,7 @@ export async function getHomeData(): Promise<HomeData> {
       domain: RoutineDomain;
       planned: number;
       logged: number;
+      logIds: string[];
     }>();
     for (const rid of plannedIds) {
       const r = routineMap.get(rid);
@@ -300,12 +301,17 @@ export async function getHomeData(): Promise<HomeData> {
         domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
         planned: 1,
         logged: 0,
+        logIds: [],
       });
     }
+    // allLogs is sorted performedAt asc, so dayLogs inherits that order.
+    // We want most-recent first in logIds — unshift each into position so
+    // the modal opens with the latest log up top.
     for (const log of dayLogs) {
       const existing = plannedMap.get(log.routineId);
       if (existing) {
         existing.logged += 1;
+        existing.logIds.unshift(log.id);
       } else if (ymd <= today) {
         const r = routineMap.get(log.routineId);
         if (r) {
@@ -316,6 +322,7 @@ export async function getHomeData(): Promise<HomeData> {
             domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
             planned: 0,
             logged: 1,
+            logIds: [log.id],
           });
         }
       }

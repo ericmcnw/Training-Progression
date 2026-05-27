@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { LegacyGlanceDay, QuickPickRoutine } from "./types";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
+import ViewButton from "@/app/components/ViewButton";
 import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
 import { domainAccent } from "./client-utils";
 import {
@@ -420,6 +421,8 @@ function DetailPanel({
                       className=""
                       style={logButton}
                     />
+                  ) : isLogged && item.logIds.length > 0 ? (
+                    <ViewButton logIds={item.logIds} title={item.routineName} style={viewLink} />
                   ) : isLogged ? (
                     <Link href={`/routines/${item.routineId}`} style={viewLink}>view →</Link>
                   ) : null}
@@ -434,7 +437,7 @@ function DetailPanel({
                 <span style={detailRowName}>{log.routineName}</span>
                 <span style={detailRowMeta}>logged extra · {formatRoutineTypeLabel(normalizeRoutineKind(log.kind)).toLowerCase()}</span>
               </div>
-              <Link href={`/routines/${log.routineId}/logs/${log.id}`} style={viewLink}>view →</Link>
+              <ViewButton logIds={[log.id]} title={log.routineName} style={viewLink} />
             </div>
           ))}
         </div>
