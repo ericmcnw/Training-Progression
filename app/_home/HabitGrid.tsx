@@ -19,9 +19,15 @@ import { LogDetailPopover, type OpenLog } from "./DomainSparklines";
 type Props = {
   rows: HabitRow[];
   today: string;
+  // Visual chrome around the rows:
+  //   "card" — full card with header/title. Used on Home.
+  //   "bare" — just the rows + day-initial header. Used on Plan's Goals
+  //   tab where the page provides its own section heading, so we don't
+  //   want a nested "Frequency Goals" title.
+  chrome?: "card" | "bare";
 };
 
-export default function HabitGrid({ rows, today }: Props) {
+export default function HabitGrid({ rows, today, chrome = "card" }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   // Single openLog state at the card root — reused by every row's bar
   // expansion. Renders the same floating popover the Domain Volume card
@@ -30,6 +36,13 @@ export default function HabitGrid({ rows, today }: Props) {
   const [openLog, setOpenLog] = useState<OpenLog>(null);
 
   if (rows.length === 0) {
+    if (chrome === "bare") {
+      return (
+        <div style={emptyState}>
+          No frequency goals yet. Add one to a routine (set how often you want to do it) and it&apos;ll show here.
+        </div>
+      );
+    }
     return (
       <section id="habits-grid" style={cardSurface}>
         <header style={cardHeader}>
@@ -46,13 +59,10 @@ export default function HabitGrid({ rows, today }: Props) {
   const last7: string[] = [];
   for (let i = 6; i >= 0; i--) last7.push(shiftYmd(today, -i));
 
-  return (
-    <section id="habits-grid" style={cardSurface}>
-      <header style={cardHeader}>
-        <span style={cardTitle}>Frequency Goals</span>
-        <span style={cardHint}>last 7 days · tap row to expand</span>
-      </header>
+  const isBare = chrome === "bare";
 
+  const body = (
+    <>
       {/* Day-label header row. Same grid columns as the habit rows so the
           weekday letters align exactly with the dot cells below. */}
       <div style={headerRow} className="homeV2HabitHeader">
@@ -218,6 +228,23 @@ export default function HabitGrid({ rows, today }: Props) {
           }
         }
       `}</style>
+    </>
+  );
+
+  if (isBare) {
+    return (
+      <div id="habits-grid" style={bareShell}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <section id="habits-grid" style={cardSurface}>
+      <header style={cardHeader}>
+        <span style={cardTitle}>Frequency Goals</span>
+        <span style={cardHint}>last 7 days · tap row to expand</span>
+      </header>
+      {body}
     </section>
   );
 }
@@ -327,6 +354,15 @@ function ExpandedDetail({
 // primary routine with its own log button so the user can log against the
 // specific routine that fired (a Pull Day vs a Push Day).
 function GoalActionRow({ row, today }: { row: HabitRow; today: string }) {
+  // Canonical goal-detail route. group-frequency IDs need a prefix when
+  // they don't already carry one — same encoding the legacy /goals page
+  // used so existing links still resolve to the same goal.
+  const detailHref = `/plan/goals/${encodeURIComponent(
+    row.goalId.startsWith("fg_") || row.goalId.startsWith("group-frequency:")
+      ? row.goalId
+      : `group-frequency:${row.goalId}`
+  )}`;
+
   if (!row.isGroup) {
     return (
       <div style={actionRow}>
@@ -337,8 +373,8 @@ function GoalActionRow({ row, today }: { row: HabitRow; today: string }) {
           className=""
           style={primaryAction}
         />
-        <Link href={`/routines/${row.routineId}`} style={secondaryAction}>
-          Edit
+        <Link href={detailHref} style={secondaryAction}>
+          View details →
         </Link>
       </div>
     );
@@ -375,8 +411,8 @@ function GoalActionRow({ row, today }: { row: HabitRow; today: string }) {
         ) : null}
       </div>
       <div style={groupActionFooter}>
-        <Link href={`/goals/${encodeURIComponent(row.goalId.startsWith("fg_") ? row.goalId : `group-frequency:${row.goalId}`)}`} style={secondaryAction}>
-          Edit goal
+        <Link href={detailHref} style={secondaryAction}>
+          View details →
         </Link>
       </div>
     </div>
@@ -480,6 +516,13 @@ const list: CSSProperties = {
   padding: 0,
   display: "grid",
   gap: 4,
+};
+
+// Bare-mode shell — no card chrome, no padding. The parent surface (e.g.
+// Plan's Goals tab section) provides its own background and section title.
+const bareShell: CSSProperties = {
+  display: "grid",
+  gap: 8,
 };
 
 const headerRow: CSSProperties = {};
