@@ -99,6 +99,8 @@ export default function EditSessionLogForm({
   savedSpots = [],
   savedClimbLocations = [],
   initialSpot = null,
+  onComplete,
+  onCancel,
 }: {
   routineId: string;
   logId: string;
@@ -115,6 +117,8 @@ export default function EditSessionLogForm({
   savedSpots?: SpotPickerItem[];
   savedClimbLocations?: Array<{ id: string; name: string; type: "GYM" | "CRAG"; region: string | null; osmType: string | null; osmId: string | null }>;
   initialSpot?: SpotPickerValue;
+  onComplete?: () => void;
+  onCancel?: () => void;
 }) {
   const isClimbing = isClimbingTemplateKey(templateKey);
   const isOutdoorClimbing = isClimbing && (templateKey ?? "").startsWith("outdoor-");
@@ -220,7 +224,8 @@ export default function EditSessionLogForm({
         activitySlug: activitySlug ?? undefined,
         ...spotParams,
       });
-      window.location.href = returnTo;
+      if (onComplete) onComplete();
+      else window.location.href = returnTo;
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save session.");
     } finally {
@@ -302,6 +307,7 @@ export default function EditSessionLogForm({
         saving={saving}
         onPrimary={onSave}
         backHref={returnTo}
+        onBack={onCancel}
       />
     </FormStack>
   );

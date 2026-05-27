@@ -5,6 +5,7 @@ import ActiveSessionTray from "./components/ActiveSessionTray";
 import LogDrawer from "./components/LogDrawer";
 import FormDrawer from "./components/FormDrawer";
 import ViewLogDrawer from "./components/ViewLogDrawer";
+import EditLogDrawer from "./components/EditLogDrawer";
 import ClientProviders from "./ClientProviders";
 import "./globals.css";
 
@@ -37,6 +38,7 @@ export default function RootLayout({
           <ActiveSessionTray />
           <LogDrawer />
           <ViewLogDrawer />
+          <EditLogDrawer />
           <FormDrawer />
           <MobileBottomNavigation />
         </ClientProviders>

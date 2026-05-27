@@ -53,6 +53,8 @@ export default function EditRunLogForm({
   activitySlug = null,
   savedSpots = [],
   initialSpot = null,
+  onComplete,
+  onCancel,
 }: {
   routineId: string;
   logId: string;
@@ -65,6 +67,12 @@ export default function EditRunLogForm({
   activitySlug?: string | null;
   savedSpots?: SpotPickerItem[];
   initialSpot?: SpotPickerValue;
+  // When provided (drawer-mounted edit), called after a successful save
+  // instead of navigating to `returnTo`. Lets the drawer close + refresh
+  // the page in place.
+  onComplete?: () => void;
+  // When provided, the Back button calls this instead of navigating.
+  onCancel?: () => void;
 }) {
   const [distanceMi, setDistanceMi] = useState(String(initialDistanceMi));
   const [elevationGainFt, setElevationGainFt] = useState(
@@ -127,7 +135,8 @@ export default function EditRunLogForm({
         activitySlug: activitySlug ?? undefined,
         ...spotParams,
       });
-      window.location.href = returnTo;
+      if (onComplete) onComplete();
+      else window.location.href = returnTo;
     } finally {
       setSaving(false);
     }
@@ -182,6 +191,7 @@ export default function EditRunLogForm({
         saving={saving}
         onPrimary={onSave}
         backHref={returnTo}
+        onBack={onCancel}
       />
     </FormStack>
   );

@@ -21,6 +21,8 @@ export default function EditCompletionLogForm({
   initialCompletionCount,
   initialNotes,
   initialPerformedAt,
+  onComplete,
+  onCancel,
 }: {
   routineId: string;
   logId: string;
@@ -28,6 +30,8 @@ export default function EditCompletionLogForm({
   initialCompletionCount: number | null;
   initialNotes: string;
   initialPerformedAt: Date;
+  onComplete?: () => void;
+  onCancel?: () => void;
 }) {
   const [completionCount, setCompletionCount] = useState(initialCompletionCount ? String(initialCompletionCount) : "");
   const [notes, setNotes] = useState(initialNotes);
@@ -50,7 +54,8 @@ export default function EditCompletionLogForm({
         completionCount: parsedCount,
         performedAtLocal,
       });
-      window.location.href = returnTo;
+      if (onComplete) onComplete();
+      else window.location.href = returnTo;
     } finally {
       setSaving(false);
     }
@@ -86,6 +91,7 @@ export default function EditCompletionLogForm({
         saving={saving}
         onPrimary={onSave}
         backHref={returnTo}
+        onBack={onCancel}
       />
     </FormStack>
   );

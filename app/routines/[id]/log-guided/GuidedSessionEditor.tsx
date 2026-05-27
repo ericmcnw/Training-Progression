@@ -166,7 +166,7 @@ function payloadStep(step: DraftStep, index: number, exerciseById: Map<string, E
 }
 
 export default function GuidedSessionEditor({
-  routineId, backHref, saveLabel, savePendingLabel, initialSteps, availableExercises, initialDurationSec = 0, initialNotes = "", initialPerformedAt, logId,
+  routineId, backHref, saveLabel, savePendingLabel, initialSteps, availableExercises, initialDurationSec = 0, initialNotes = "", initialPerformedAt, logId, onComplete, onCancel,
 }: {
   routineId: string;
   backHref: string;
@@ -178,6 +178,10 @@ export default function GuidedSessionEditor({
   initialNotes?: string;
   initialPerformedAt?: Date;
   logId?: string;
+  // When provided (drawer-mounted edit), called after a successful save
+  // instead of navigating to `backHref`.
+  onComplete?: () => void;
+  onCancel?: () => void;
 }) {
   const orderedExercises = useMemo(() => orderExercisesForLibraryContext(availableExercises, guidedPreferredLibraryKinds()), [availableExercises]);
   const exerciseById = useMemo(() => new Map(orderedExercises.map((exercise) => [exercise.id, exercise])), [orderedExercises]);
@@ -289,7 +293,8 @@ export default function GuidedSessionEditor({
       } else {
         await logGuided({ routineId, durationSec, notes, performedAtLocal: performedAtLocal || undefined, steps });
       }
-      window.location.href = backHref;
+      if (onComplete) onComplete();
+      else window.location.href = backHref;
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save guided session.");
     } finally {
@@ -541,7 +546,7 @@ export default function GuidedSessionEditor({
 
       {mode === "LOG_AFTER" ? null : <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />}
 
-      <FormActions primaryLabel={saveLabel} primaryPendingLabel={savePendingLabel} saving={saving} onPrimary={onSave} backHref={backHref} />
+      <FormActions primaryLabel={saveLabel} primaryPendingLabel={savePendingLabel} saving={saving} onPrimary={onSave} backHref={backHref} onBack={onCancel} />
     </FormStack>
   );
 }

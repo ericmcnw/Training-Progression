@@ -24,6 +24,8 @@ export default function EditWorkoutLogForm({
   initialPerformedAt,
   initialExercises,
   availableExercises,
+  onComplete,
+  onCancel,
 }: {
   routineId: string;
   logId: string;
@@ -32,6 +34,8 @@ export default function EditWorkoutLogForm({
   initialPerformedAt: Date;
   initialExercises: WorkoutBlock[];
   availableExercises: ExerciseOption[];
+  onComplete?: () => void;
+  onCancel?: () => void;
 }) {
   return (
     <WorkoutExerciseEditor
@@ -43,6 +47,7 @@ export default function EditWorkoutLogForm({
       saveLabel="Save Changes"
       savingLabel="Saving..."
       backHref={returnTo}
+      onBack={onCancel}
       createExerciseOption={createWorkoutExerciseOption}
       onSave={async (payload) => {
         await updateWorkoutLog({
@@ -52,7 +57,8 @@ export default function EditWorkoutLogForm({
           performedAtLocal: payload.performedAtLocal || undefined,
           exercises: payload.exercises,
         });
-        window.location.href = returnTo;
+        if (onComplete) onComplete();
+        else window.location.href = returnTo;
       }}
     />
   );

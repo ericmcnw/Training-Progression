@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import RoutineLogSummary from "@/app/components/RoutineLogSummary";
 import { useViewLogDrawer } from "@/app/contexts/ViewLogDrawerContext";
+import { useEditLogDrawer } from "@/app/contexts/EditLogDrawerContext";
 import { deleteRoutineLog } from "@/app/routines/actions";
 import { formatAppDateTime } from "@/lib/dates";
 import type { LogSummaryData } from "@/lib/log-summary";
@@ -27,6 +28,7 @@ type FetchState =
 
 export default function ViewLogDrawer() {
   const { isOpen, activeLogIds, title, closeViewer, notifyDeleted } = useViewLogDrawer();
+  const { openEditDrawer } = useEditLogDrawer();
   if (!isOpen) return null;
   // Key the inner shell on the active id set. Switching routines while the
   // modal is open (or reopening after a delete) remounts with fresh state —
@@ -38,6 +40,7 @@ export default function ViewLogDrawer() {
       title={title}
       closeViewer={closeViewer}
       notifyDeleted={notifyDeleted}
+      openEditDrawer={openEditDrawer}
     />
   );
 }
@@ -47,11 +50,13 @@ function ViewLogDrawerInner({
   title,
   closeViewer,
   notifyDeleted,
+  openEditDrawer,
 }: {
   activeLogIds: string[];
   title: string | null;
   closeViewer: () => void;
   notifyDeleted: (logId: string) => void;
+  openEditDrawer: (logId: string, options?: { title?: string }) => void;
 }) {
   const router = useRouter();
   const [state, setState] = useState<FetchState>(() =>
@@ -203,6 +208,13 @@ function ViewLogDrawerInner({
                   index={idx}
                   total={visibleLogs.length}
                   onDelete={() => handleDelete(log)}
+                  onEdit={() => {
+                    // Hand off to the edit drawer — close the view shell so
+                    // the edit shell takes its place, mirroring the user's
+                    // "minimizable screen that replaces the current" model.
+                    closeViewer();
+                    openEditDrawer(log.id, { title: log.routine.name });
+                  }}
                 />
               ))}
             </div>
@@ -224,13 +236,14 @@ function LogCard({
   index,
   total,
   onDelete,
+  onEdit,
 }: {
   log: LogSummaryData;
   index: number;
   total: number;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
-  const editHref = `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent("/")}`;
   const fullViewHref = `/routines/${log.routineId}/logs/${log.id}?returnTo=${encodeURIComponent("/")}`;
 
   return (
@@ -246,9 +259,9 @@ function LogCard({
           <Link href={fullViewHref} style={ghostBtn}>
             Full view
           </Link>
-          <Link href={editHref} style={editBtnStyle}>
+          <button type="button" onClick={onEdit} style={editBtnStyle}>
             Edit
-          </Link>
+          </button>
           <button type="button" onClick={onDelete} style={deleteBtnStyle}>
             Delete
           </button>

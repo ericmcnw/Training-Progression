@@ -35,6 +35,8 @@ export default function EditGuidedLogForm({
   initialPerformedAt,
   steps,
   availableExercises,
+  onComplete,
+  onCancel,
 }: {
   routineId: string;
   logId: string;
@@ -44,6 +46,8 @@ export default function EditGuidedLogForm({
   initialPerformedAt: Date;
   steps: Step[];
   availableExercises: ExerciseOption[];
+  onComplete?: () => void;
+  onCancel?: () => void;
 }) {
   return (
     <GuidedSessionEditor
@@ -57,6 +61,8 @@ export default function EditGuidedLogForm({
       initialPerformedAt={initialPerformedAt}
       availableExercises={availableExercises}
       initialSteps={steps}
+      onComplete={onComplete}
+      onCancel={onCancel}
     />
   );
 }
