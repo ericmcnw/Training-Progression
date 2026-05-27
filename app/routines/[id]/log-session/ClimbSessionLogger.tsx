@@ -8,6 +8,7 @@ import {
   climbOutcomeColor,
   climbOutcomeBg,
   climbingDisciplineForTemplateKey,
+  outcomeUsesTriesCount,
   climbNounForDiscipline,
   gradeSystemForTemplateKey,
   type ClimbAttemptDraft,
@@ -289,8 +290,8 @@ function AttemptRow({
             />
           </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <div style={{ display: "grid", gap: 4, flex: 1 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: 4, flex: "1 1 140px", minWidth: 140 }}>
               <div style={expandLabelStyle}>Moves (optional)</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <input
@@ -310,6 +311,28 @@ function AttemptRow({
                 />
               </div>
             </div>
+            {/* Tries — only shown for outcomes where it matters. For SEND/
+                REDPOINT this is "how many tries it took"; for PROJECT it's
+                "how many tries so far." Flash/Onsight are implicitly 1, so
+                we hide the input entirely. */}
+            {outcomeUsesTriesCount(attempt.outcome) && (
+              <div style={{ display: "grid", gap: 4, flex: "1 1 110px", minWidth: 110 }}>
+                <div style={expandLabelStyle}>
+                  {attempt.outcome === "PROJECT" ? "Tries so far (optional)" : "Tries to send (optional)"}
+                </div>
+                <input
+                  style={{ ...expandInputStyle, width: 80, textAlign: "center" }}
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={attempt.triesCount ?? ""}
+                  onChange={(e) =>
+                    onUpdate({
+                      triesCount: e.target.value ? Math.max(1, Number(e.target.value)) : null,
+                    })
+                  }
+                />
+              </div>
+            )}
           </div>
           <div style={{ display: "grid", gap: 4 }}>
             <div style={expandLabelStyle}>Beta notes & video link (optional)</div>
@@ -481,28 +504,33 @@ export default function ClimbSessionLogger({
   // ── Summary ─────────────────────────────────────────────────────────────────
   const summary = (() => {
     if (climbMode === "per-climb") {
-      let flashes = 0, sends = 0, fells = 0, projects = 0;
+      let flashes = 0, sends = 0, projects = 0;
       for (const a of attempts) {
         if (a.outcome === "FLASH" || a.outcome === "ONSIGHT") flashes++;
         else if (a.outcome === "SEND" || a.outcome === "REDPOINT") sends++;
-        else if (a.outcome === "FELL") fells++;
         else if (a.outcome === "PROJECT") projects++;
+        // FELL is no longer producible — historical FELL data sits in DB
+        // but the live logger never creates it.
       }
-      return { flashes, sends, fells, projects, total: attempts.length };
+      return { flashes, sends, projects, total: attempts.length };
     }
-    // Quick mode summary
-    let flashes = 0, sends = 0, fells = 0;
+    // Quick mode summary. The third column ("Project") tracks tried-but-
+    // not-sent attempts; persisted as PROJECT outcome by the synthesizer.
+    let flashes = 0, sends = 0, projects = 0;
     for (const row of gradeRows) {
       flashes += parseInt(quickValues[row.flashDefId ?? ""]?.numberValue ?? "0") || 0;
       sends += parseInt(quickValues[row.sendDefId ?? ""]?.numberValue ?? "0") || 0;
-      fells += parseInt(quickAttemptedValues[row.grade] ?? "0") || 0;
+      projects += parseInt(quickAttemptedValues[row.grade] ?? "0") || 0;
     }
-    return { flashes, sends, fells, projects: 0, total: flashes + sends + fells };
+    return { flashes, sends, projects, total: flashes + sends + projects };
   })();
 
   const flashLabel = discipline === "BOULDER" ? "Flash" : "Onsight";
   const sendLabel = discipline === "SPORT_LEAD" ? "Redpoint" : "Send";
-  const fellLabel = discipline === "BOULDER" ? "Fell" : "Hang";
+  // Third column in quick mode counts climbs you tried but didn't send.
+  // Persisted as PROJECT outcome — the user's mental model is "every
+  // non-send is a project I'm working on."
+  const projectLabel = "Project";
 
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
@@ -700,7 +728,7 @@ export default function ClimbSessionLogger({
                 <div style={quickHeaderStyle}>Grade</div>
                 <div style={quickHeaderStyle}>{flashLabel}</div>
                 <div style={quickHeaderStyle}>{sendLabel}</div>
-                <div style={quickHeaderStyle}>{fellLabel}</div>
+                <div style={quickHeaderStyle}>{projectLabel}</div>
                 <div />
                 {gradeRows.map((row) => (
                   <QuickGradeRow
@@ -742,12 +770,6 @@ export default function ClimbSessionLogger({
             <span style={summaryChipStyle(climbOutcomeColor("SEND"), climbOutcomeBg("SEND"))}>
               <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>{sendLabel.toUpperCase()}</span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.sends}</span>
-            </span>
-          )}
-          {summary.fells > 0 && (
-            <span style={summaryChipStyle(climbOutcomeColor("FELL"), climbOutcomeBg("FELL"))}>
-              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>{fellLabel.toUpperCase()}</span>
-              <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.fells}</span>
             </span>
           )}
           {summary.projects > 0 && (

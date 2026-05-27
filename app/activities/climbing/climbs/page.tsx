@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate } from "@/lib/dates";
+import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import {
   climbOutcomeBg,
   climbOutcomeColor,
   climbOutcomeLabel,
+  gradeSort,
+  SENT_OUTCOMES,
+  venueOf,
   type ClimbGradeSystem,
   type ClimbOutcome,
 } from "@/lib/climb-types";
@@ -19,34 +22,70 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-// Outcome groupings the user actually thinks in. "Sent" = anything you stuck;
-// "Project" = working on it; "Falls" = attempts that didn't go.
-type OutcomeFilter = "all" | "sent" | "project" | "falls";
+// Outcome groupings the user actually thinks in.
+//   "sent"    — anything you stuck (FLASH/ONSIGHT/SEND/REDPOINT)
+//   "working" — projects + recent falls (last 30d) — "what to try next"
+//   "project" — explicit PROJECT only
+//   "falls"   — FELL only
+type OutcomeFilter = "all" | "sent" | "working" | "project" | "falls";
 
-const SENT_OUTCOMES = new Set<ClimbOutcome>(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
+// Recency window for the "working" filter — falls older than this don't
+// count as something you're actively trying.
+const WORKING_FALL_RECENCY_DAYS = 30;
 
-function attemptMatchesOutcomeFilter(outcome: ClimbOutcome, filter: OutcomeFilter): boolean {
+type VenueFilter = "all" | "indoor" | "outdoor";
+
+// Date range filter — applied as a Prisma where-clause so the dataset stays
+// bounded even before the in-memory filter pipeline runs. Default `1y`
+// matches how users naturally think about climbing seasons.
+type RangeFilter = "7d" | "4w" | "12w" | "1y" | "all";
+
+const RANGE_DAYS: Record<Exclude<RangeFilter, "all">, number> = {
+  "7d": 7,
+  "4w": 28,
+  "12w": 84,
+  "1y": 365,
+};
+
+function parseRange(value: string | undefined): RangeFilter {
+  if (value === "7d" || value === "4w" || value === "12w" || value === "1y" || value === "all") return value;
+  return "1y";
+}
+
+function cutoffForRange(range: RangeFilter): Date | null {
+  if (range === "all") return null;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RANGE_DAYS[range]);
+  return cutoff;
+}
+
+function rangeLabel(range: RangeFilter): string {
+  if (range === "7d") return "7 days";
+  if (range === "4w") return "4 weeks";
+  if (range === "12w") return "12 weeks";
+  if (range === "1y") return "1 year";
+  return "All time";
+}
+
+function attemptMatchesOutcomeFilter(
+  outcome: ClimbOutcome,
+  performedAt: Date,
+  filter: OutcomeFilter,
+  now: Date
+): boolean {
   if (filter === "all") return true;
   if (filter === "sent") return SENT_OUTCOMES.has(outcome);
   if (filter === "project") return outcome === "PROJECT";
   if (filter === "falls") return outcome === "FELL";
+  if (filter === "working") {
+    if (outcome === "PROJECT") return true;
+    if (outcome === "FELL") {
+      const days = (now.getTime() - performedAt.getTime()) / 86_400_000;
+      return days <= WORKING_FALL_RECENCY_DAYS;
+    }
+    return false;
+  }
   return true;
-}
-
-type VenueFilter = "all" | "indoor" | "outdoor";
-
-function venueOf(templateKey: string | null | undefined, locationType: "GYM" | "CRAG" | null | undefined): "GYM" | "CRAG" | null {
-  if (templateKey?.startsWith("indoor-") || locationType === "GYM") return "GYM";
-  if (templateKey?.startsWith("outdoor-") || locationType === "CRAG") return "CRAG";
-  return null;
-}
-
-function gradeSort(grade: string, system: ClimbGradeSystem): number {
-  if (system === "BOULDER_V") return parseInt(grade.replace(/^V/, ""), 10) || 0;
-  const m = grade.match(/^5\.(\d+)([abcd]?)$/i);
-  if (!m) return 0;
-  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[m[2].toLowerCase()] ?? 0;
-  return parseInt(m[1], 10) * 4 + sub;
 }
 
 function buildHref(params: SearchParams, overrides: Record<string, string | undefined>): string {
@@ -70,10 +109,15 @@ export default async function ClimbsBrowsePage(props: {
   const outcomeFilter = (getParam(searchParams, "outcome") ?? "all") as OutcomeFilter;
   const locationFilter = getParam(searchParams, "location") ?? "all";
   const gradeFilter = getParam(searchParams, "grade") ?? "all";
+  const range = parseRange(getParam(searchParams, "range"));
   const search = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
+
+  const now = new Date();
+  const cutoff = cutoffForRange(range);
 
   const [allAttempts, allLocations] = await Promise.all([
     prisma.climbAttempt.findMany({
+      where: cutoff ? { sessionLog: { performedAt: { gte: cutoff } } } : undefined,
       orderBy: { sessionLog: { performedAt: "desc" } },
       select: {
         id: true,
@@ -115,7 +159,7 @@ export default async function ClimbsBrowsePage(props: {
 
     if (gradeFilter !== "all" && a.grade !== gradeFilter) return false;
 
-    if (!attemptMatchesOutcomeFilter(a.outcome, outcomeFilter)) return false;
+    if (!attemptMatchesOutcomeFilter(a.outcome, a.sessionLog.performedAt, outcomeFilter, now)) return false;
 
     if (search) {
       const haystack = [
@@ -195,6 +239,7 @@ export default async function ClimbsBrowsePage(props: {
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
+            <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
             <SectionLinkButton href="/activities/climbing" label="Back to climbing" />
           </div>
         }
@@ -202,8 +247,22 @@ export default async function ClimbsBrowsePage(props: {
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
         {/* Summary chips + filter controls */}
-        <SectionCard title="Filters" subtitle={`${totalAttempts} climb${totalAttempts !== 1 ? "s" : ""} matching · ${sentCount} sent · ${projectCount} project${projectCount !== 1 ? "s" : ""}`}>
+        <SectionCard title="Filters" subtitle={`${totalAttempts} climb${totalAttempts !== 1 ? "s" : ""} in ${rangeLabel(range).toLowerCase()} · ${sentCount} sent · ${projectCount} project${projectCount !== 1 ? "s" : ""}`}>
           <div style={{ display: "grid", gap: 12 }}>
+            {/* Range toggle (first row — the most-used filter) */}
+            <FilterPillRow
+              label="Range"
+              options={[
+                { value: "7d", label: "7d" },
+                { value: "4w", label: "4w" },
+                { value: "12w", label: "12w" },
+                { value: "1y", label: "1y" },
+                { value: "all", label: "All" },
+              ]}
+              active={range}
+              hrefFor={(v) => buildHref(searchParams, { range: v === "1y" ? undefined : v })}
+            />
+
             {/* Venue toggle */}
             <FilterPillRow
               label="Venue"
@@ -216,12 +275,14 @@ export default async function ClimbsBrowsePage(props: {
               hrefFor={(v) => buildHref(searchParams, { venue: v === "all" ? undefined : v })}
             />
 
-            {/* Outcome toggle */}
+            {/* Outcome toggle — "working" surfaces projects + recent falls,
+                the "what should I try this session" view. */}
             <FilterPillRow
               label="Outcome"
               options={[
                 { value: "all", label: "All" },
                 { value: "sent", label: "Sent" },
+                { value: "working", label: "Working" },
                 { value: "project", label: "Projects" },
                 { value: "falls", label: "Falls" },
               ]}
@@ -279,6 +340,7 @@ export default async function ClimbsBrowsePage(props: {
               {outcomeFilter !== "all" && <input type="hidden" name="outcome" value={outcomeFilter} />}
               {locationFilter !== "all" && <input type="hidden" name="location" value={locationFilter} />}
               {gradeFilter !== "all" && <input type="hidden" name="grade" value={gradeFilter} />}
+              {range !== "1y" && <input type="hidden" name="range" value={range} />}
               <input
                 type="text"
                 name="q"
@@ -287,7 +349,7 @@ export default async function ClimbsBrowsePage(props: {
                 style={searchInputStyle}
               />
               <button type="submit" style={searchBtnStyle}>Search</button>
-              {(venueFilter !== "all" || outcomeFilter !== "all" || locationFilter !== "all" || gradeFilter !== "all" || search) && (
+              {(venueFilter !== "all" || outcomeFilter !== "all" || locationFilter !== "all" || gradeFilter !== "all" || range !== "1y" || search) && (
                 <Link href="/activities/climbing/climbs" style={searchBtnStyle}>Reset</Link>
               )}
             </form>
@@ -304,11 +366,21 @@ export default async function ClimbsBrowsePage(props: {
             <SectionCard
               key={group.locationId ?? "__nl__"}
               title={group.locationName}
-              subtitle={`${group.attempts.length} climb${group.attempts.length !== 1 ? "s" : ""}${group.lastVisit ? ` · last visit ${formatAppDate(group.lastVisit, { month: "short", day: "numeric", year: "numeric" })}` : ""}`}
+              subtitle={`${group.attempts.length} climb${group.attempts.length !== 1 ? "s" : ""}${group.lastVisit ? ` · last visit ${formatAppDate(group.lastVisit, { month: "short", day: "numeric", year: "numeric" })} · ${relativeFromNow(group.lastVisit, now)}` : ""}`}
               actions={
-                <span style={venueChipStyle(group.locationType)}>
-                  {group.locationType === "GYM" ? "Indoor" : group.locationType === "CRAG" ? "Outdoor" : "—"}
-                </span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <span style={venueChipStyle(group.locationType)}>
+                    {group.locationType === "GYM" ? "Indoor" : group.locationType === "CRAG" ? "Outdoor" : "—"}
+                  </span>
+                  {group.locationId && (
+                    <Link
+                      href={`/activities/climbing/locations/${encodeURIComponent(group.locationId)}`}
+                      style={detailLinkStyle}
+                    >
+                      Details →
+                    </Link>
+                  )}
+                </div>
               }
             >
               <ClimbList attempts={group.attempts} />
@@ -383,13 +455,17 @@ function ClimbList({ attempts }: { attempts: AttemptRow[] }) {
       {dateGroups.map(([dateKey, dateAttempts]) => {
         const date = new Date(dateAttempts[0].sessionLog.performedAt);
         const dateLabel = formatAppDate(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+        const relativeLabel = relativeFromNow(date);
         const sessionRoutineId = dateAttempts[0].sessionLog.routineId;
         const sessionLogId = dateAttempts[0].sessionLogId;
         const routineName = dateAttempts[0].sessionLog.routine.name;
         return (
           <div key={dateKey} style={{ display: "grid", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.9 }}>{dateLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.9 }}>
+                {dateLabel}
+                <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, opacity: 0.6 }}>· {relativeLabel}</span>
+              </span>
               <Link
                 href={`/routines/${sessionRoutineId}/logs/${sessionLogId}/details`}
                 style={{
@@ -527,6 +603,19 @@ const searchBtnStyle: React.CSSProperties = {
   fontWeight: 800,
   cursor: "pointer",
   textDecoration: "none",
+};
+
+const detailLinkStyle: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+  padding: "3px 8px",
+  borderRadius: 999,
+  border: "1px solid rgba(120,190,255,0.32)",
+  background: "rgba(120,190,255,0.10)",
+  color: "rgba(191,219,254,0.95)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };
 
 function venueChipStyle(type: "GYM" | "CRAG" | null): React.CSSProperties {

@@ -1,23 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { climbOutcomeColor, climbOutcomeLabel } from "@/lib/climb-types";
+import {
+  climbOutcomeColor,
+  climbOutcomeLabel,
+  PYRAMID_OUTCOMES,
+  venueOf,
+} from "@/lib/climb-types";
 import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
+import { buildPyramidRows, hardestGrade, type PyramidRow } from "@/lib/climb-stats";
 import { SectionCard, EmptyState, StatGrid } from "./ui";
-
-function gradeSort(grade: string, system: ClimbGradeSystem): number {
-  if (system === "BOULDER_V") {
-    return parseInt(grade.replace(/^V/, ""), 10) ?? 0;
-  }
-  const match = grade.match(/^5\.(\d+)([abcd]?)$/i);
-  if (!match) return 0;
-  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[match[2].toLowerCase()] ?? 0;
-  return parseInt(match[1], 10) * 4 + sub;
-}
-
-// Outcomes shown in the pyramid bars, in stacking order. Falls are intentionally
-// excluded — the pyramid celebrates clean climbs, not attempts. Projects are
-// kept so you can see what you're working without it counting as a send.
-const PYRAMID_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "PROJECT"];
-const ORDERED_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "FELL", "PROJECT"];
 
 type AttemptRow = {
   id: string;
@@ -43,54 +33,13 @@ type AttemptRow = {
   };
 };
 
-type PyramidRow = {
-  grade: string;
-  system: ClimbGradeSystem;
-  counts: Partial<Record<ClimbOutcome, number>>;
-  total: number;
-};
-
-function buildPyramidRows(attempts: AttemptRow[]) {
-  const pyramidMap = new Map<string, PyramidRow>();
-
-  for (const attempt of attempts) {
-    // Falls don't get pyramid bars — the pyramid is what you sent, not what you
-    // tried. Counts are still incremented for non-fall outcomes (sends + projects).
-    if (attempt.outcome === "FELL") continue;
-    const key = `${attempt.gradeSystem}::${attempt.grade}`;
-    const existing = pyramidMap.get(key) ?? {
-      grade: attempt.grade,
-      system: attempt.gradeSystem,
-      counts: {},
-      total: 0,
-    };
-    existing.counts[attempt.outcome] = (existing.counts[attempt.outcome] ?? 0) + 1;
-    existing.total++;
-    pyramidMap.set(key, existing);
-  }
-
-  const boulderRows = Array.from(pyramidMap.values())
-    .filter((row) => row.system === "BOULDER_V")
-    .sort((a, b) => gradeSort(a.grade, "BOULDER_V") - gradeSort(b.grade, "BOULDER_V"));
-  const yosemiteRows = Array.from(pyramidMap.values())
-    .filter((row) => row.system === "YOSEMITE")
-    .sort((a, b) => gradeSort(a.grade, "YOSEMITE") - gradeSort(b.grade, "YOSEMITE"));
-
-  return { boulderRows, yosemiteRows, allRows: [...boulderRows, ...yosemiteRows] };
-}
-
-function hardest(rows: PyramidRow[], filter: Set<ClimbOutcome>) {
-  const eligible = rows.filter((row) => ORDERED_OUTCOMES.some((outcome) => filter.has(outcome) && (row.counts[outcome] ?? 0) > 0));
-  return eligible.length > 0 ? eligible[eligible.length - 1].grade : null;
-}
-
-function venueForAttempt(attempt: AttemptRow) {
-  const templateKey = attempt.sessionLog.routine.sessionDetails?.template?.key ?? "";
-  if (templateKey.startsWith("indoor-")) return "GYM" as const;
-  if (templateKey.startsWith("outdoor-")) return "CRAG" as const;
-  if (attempt.sessionLog.climbLocation?.type === "GYM") return "GYM" as const;
-  if (attempt.sessionLog.climbLocation?.type === "CRAG") return "CRAG" as const;
-  return "UNKNOWN" as const;
+function venueForAttempt(attempt: AttemptRow): "GYM" | "CRAG" | "UNKNOWN" {
+  return (
+    venueOf(
+      attempt.sessionLog.routine.sessionDetails?.template?.key,
+      attempt.sessionLog.climbLocation?.type ?? null
+    ) ?? "UNKNOWN"
+  );
 }
 
 export default async function ClimbingProgressView() {
@@ -154,10 +103,10 @@ export default async function ClimbingProgressView() {
 
   const flashOutcomes = new Set<ClimbOutcome>(["FLASH", "ONSIGHT"]);
   const sendOutcomes = new Set<ClimbOutcome>(["SEND", "REDPOINT", "FLASH", "ONSIGHT"]);
-  const hardestBoulderFlash = hardest(overallRows.boulderRows, flashOutcomes);
-  const hardestBoulderSend = hardest(overallRows.boulderRows, sendOutcomes);
-  const hardestYosemiteFlash = hardest(overallRows.yosemiteRows, flashOutcomes);
-  const hardestYosemiteSend = hardest(overallRows.yosemiteRows, sendOutcomes);
+  const hardestBoulderFlash = hardestGrade(overallRows.boulderRows, flashOutcomes);
+  const hardestBoulderSend = hardestGrade(overallRows.boulderRows, sendOutcomes);
+  const hardestYosemiteFlash = hardestGrade(overallRows.yosemiteRows, flashOutcomes);
+  const hardestYosemiteSend = hardestGrade(overallRows.yosemiteRows, sendOutcomes);
 
   const locationCounts = new Map<string, { name: string; sessions: Set<string> }>();
   for (const attempt of attempts) {

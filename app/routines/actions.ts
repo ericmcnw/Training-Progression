@@ -2181,6 +2181,7 @@ export async function logSession(params: {
     area?: string | null;
     movesCompleted?: number;
     totalMoves?: number;
+    triesCount?: number | null;
     notes?: string;
     attemptOrder: number;
     problemId?: string | null;
@@ -2306,6 +2307,7 @@ export async function logSession(params: {
           area: attempt.area?.trim() || null,
           movesCompleted: attempt.movesCompleted ?? null,
           totalMoves: attempt.totalMoves ?? null,
+          triesCount: attempt.triesCount ?? null,
           notes: attempt.notes?.trim() || null,
           attemptOrder: attempt.attemptOrder,
         })),

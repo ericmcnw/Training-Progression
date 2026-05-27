@@ -44,6 +44,13 @@ export type MapLocation = {
   latitude: number | null;
   longitude: number | null;
   visitCount: number;
+  /** Quick-stats so the pin-selection footer doesn't need a round-trip to
+   *  the location detail page. Null when the location has no logged climbs
+   *  yet (newly created spots). Server computes these in map/page.tsx. */
+  lastVisit: Date | string | null;
+  hardestSendGrade: string | null;
+  sentCount: number;
+  projectCount: number;
 };
 
 type PendingPin =
@@ -62,6 +69,17 @@ const CRAG_COLOR = "rgba(74,222,128,0.95)";
 const PENDING_COLOR = "rgba(251,191,36,0.95)";
 const SELECTED_RING = "rgba(255,255,255,0.95)";
 
+type SidebarFilter = "all" | "GYM" | "CRAG" | "uncoorded";
+
+// Does this coord-bearing location belong on the map under `filter`?
+// `uncoorded` is a sidebar-only filter (those locations have no pin), so
+// returning false there hides every pin.
+function matchesFilter(loc: { type: ClimbLocationType }, filter: SidebarFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "uncoorded") return false;
+  return loc.type === filter;
+}
+
 export default function ClimbingMapView({
   initialLocations,
 }: {
@@ -76,7 +94,7 @@ export default function ClimbingMapView({
   const [locations, setLocations] = useState<MapLocation[]>(initialLocations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingPin, setPendingPin] = useState<PendingPin | null>(null);
-  const [filter, setFilter] = useState<"all" | "GYM" | "CRAG" | "uncoorded">("all");
+  const [filter, setFilter] = useState<SidebarFilter>("all");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
@@ -213,6 +231,24 @@ export default function ClimbingMapView({
     }
   }, [locations, selectedId]);
 
+  // ── Pin visibility follows sidebar filter ─────────────────────────────────
+  // Separate effect from the marker-create loop so toggling the filter
+  // doesn't tear down and rebuild every pin — we just flip `display`.
+  // Clears `selectedId` when the selection no longer matches the filter so
+  // the footer doesn't show stale stats for a hidden pin.
+  useEffect(() => {
+    const locById = new Map(locations.map((l) => [l.id, l]));
+    for (const [id, marker] of markersRef.current) {
+      const loc = locById.get(id);
+      const visible = loc ? matchesFilter(loc, filter) : false;
+      marker.getElement().style.display = visible ? "" : "none";
+    }
+    if (selectedId) {
+      const sel = locById.get(selectedId);
+      if (!sel || !matchesFilter(sel, filter)) setSelectedId(null);
+    }
+  }, [filter, locations, selectedId]);
+
   // ── Sync the pending (temp) marker ────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
@@ -343,7 +379,17 @@ export default function ClimbingMapView({
           latitude: lat,
           longitude: lng,
         });
-        setLocations((prev) => [...prev, { ...created, visitCount: 0 }]);
+        setLocations((prev) => [
+          ...prev,
+          {
+            ...created,
+            visitCount: 0,
+            lastVisit: null,
+            hardestSendGrade: null,
+            sentCount: 0,
+            projectCount: 0,
+          },
+        ]);
         setPendingPin(null);
         setSelectedId(created.id);
       } catch (err) {
@@ -606,15 +652,31 @@ export default function ClimbingMapView({
         </div>
 
         {/* Selected pin actions (extra context that's redundant for keyboard
-            users — visible only when a pin is selected and on coords) */}
+            users — visible only when a pin is selected and on coords).
+            Two CTAs: detail page is the summary view, browse-climbs is the
+            full attempt list filtered to this spot. Stat chips above the
+            buttons preview what's at this spot so the user doesn't have to
+            navigate just to find out. */}
         {selected && selected.latitude != null && selected.longitude != null && (
           <div style={selectedFooter}>
-            <Link
-              href={`/activities/climbing/climbs?location=${encodeURIComponent(selected.id)}`}
-              style={primaryLink}
-            >
-              View climbs at {selected.name} →
-            </Link>
+            <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>
+              {selected.name}
+            </div>
+            <SelectionStats loc={selected} />
+            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              <Link
+                href={`/activities/climbing/locations/${encodeURIComponent(selected.id)}`}
+                style={primaryLink}
+              >
+                View details →
+              </Link>
+              <Link
+                href={`/activities/climbing/climbs?location=${encodeURIComponent(selected.id)}`}
+                style={secondaryLink}
+              >
+                📋 Browse climbs here
+              </Link>
+            </div>
           </div>
         )}
       </aside>
@@ -623,6 +685,82 @@ export default function ClimbingMapView({
 }
 
 // ── Subcomponents ───────────────────────────────────────────────────────────
+
+function SelectionStats({ loc }: { loc: MapLocation }) {
+  if (loc.visitCount === 0) {
+    return (
+      <div style={{ fontSize: 11, opacity: 0.6 }}>
+        No climbs logged here yet.
+      </div>
+    );
+  }
+
+  // Format last-visit as a relative string ("3w ago"). Quick + deterministic;
+  // good enough for a preview chip and we don't need a real diff lib.
+  let lastLabel = "";
+  if (loc.lastVisit) {
+    const date = loc.lastVisit instanceof Date ? loc.lastVisit : new Date(loc.lastVisit);
+    const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (days === 0) lastLabel = "today";
+    else if (days === 1) lastLabel = "yesterday";
+    else if (days < 7) lastLabel = `${days}d ago`;
+    else if (days < 30) lastLabel = `${Math.round(days / 7)}w ago`;
+    else if (days < 365) lastLabel = `${Math.round(days / 30)}mo ago`;
+    else lastLabel = `${Math.round(days / 365)}y ago`;
+  }
+
+  const chips: Array<{ label: string; value: string; tone: "default" | "send" | "project" }> = [];
+  if (loc.lastVisit) chips.push({ label: "Last", value: lastLabel, tone: "default" });
+  if (loc.hardestSendGrade) chips.push({ label: "Hardest send", value: loc.hardestSendGrade, tone: "send" });
+  if (loc.sentCount > 0) chips.push({ label: "Sent", value: String(loc.sentCount), tone: "send" });
+  if (loc.projectCount > 0) chips.push({ label: "Projects", value: String(loc.projectCount), tone: "project" });
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+      {chips.map((c) => (
+        <div
+          key={c.label}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "3px 7px",
+            borderRadius: 999,
+            background:
+              c.tone === "send"
+                ? "rgba(74,222,128,0.12)"
+                : c.tone === "project"
+                ? "rgba(167,139,250,0.12)"
+                : "rgba(255,255,255,0.05)",
+            border: `1px solid ${
+              c.tone === "send"
+                ? "rgba(74,222,128,0.32)"
+                : c.tone === "project"
+                ? "rgba(167,139,250,0.32)"
+                : "rgba(255,255,255,0.12)"
+            }`,
+            fontSize: 10,
+            fontWeight: 800,
+          }}
+        >
+          <span style={{ opacity: 0.65 }}>{c.label}</span>
+          <span
+            style={{
+              color:
+                c.tone === "send"
+                  ? "rgba(74,222,128,0.95)"
+                  : c.tone === "project"
+                  ? "rgba(167,139,250,0.95)"
+                  : "rgba(255,255,255,0.9)",
+            }}
+          >
+            {c.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function SpotRow({
   loc,
@@ -1049,10 +1187,23 @@ const primaryLink: React.CSSProperties = {
   display: "block",
   padding: "8px 10px",
   borderRadius: 10,
-  background: "rgba(120,190,255,0.12)",
-  border: "1px solid rgba(120,190,255,0.32)",
-  color: "rgba(191,219,254,0.95)",
+  background: "rgba(120,190,255,0.18)",
+  border: "1px solid rgba(120,190,255,0.45)",
+  color: "rgba(191,219,254,0.98)",
   fontSize: 12,
+  fontWeight: 900,
+  textAlign: "center",
+  textDecoration: "none",
+};
+
+const secondaryLink: React.CSSProperties = {
+  display: "block",
+  padding: "8px 10px",
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "rgba(255,255,255,0.82)",
+  fontSize: 11.5,
   fontWeight: 800,
   textAlign: "center",
   textDecoration: "none",

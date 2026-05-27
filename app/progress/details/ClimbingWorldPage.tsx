@@ -6,9 +6,13 @@ import {
   climbOutcomeColor,
   climbOutcomeBg,
   climbOutcomeLabel,
+  gradeSort,
+  PYRAMID_OUTCOMES,
+  venueOf,
   type ClimbGradeSystem,
   type ClimbOutcome,
 } from "@/lib/climb-types";
+import { buildPyramidRows, hardestGrade, type PyramidRow } from "@/lib/climb-stats";
 import ActivityCoverageHeatmap from "./ActivityCoverageHeatmap";
 import { buildWeeklyGrid, type SessionEventInput } from "./activity-coverage";
 import ActivityGoalsSection from "./ActivityGoalsSection";
@@ -36,53 +40,13 @@ type AttemptRow = {
   };
 };
 
-type PyramidRow = {
-  grade: string;
-  system: ClimbGradeSystem;
-  counts: Partial<Record<ClimbOutcome, number>>;
-  total: number;
-};
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const ORDERED_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "FELL", "PROJECT"];
-// Outcomes shown in the pyramid bars. Falls are excluded — the pyramid is a
-// snapshot of what you sent, not what you tried.
-const PYRAMID_OUTCOMES: ClimbOutcome[] = ["FLASH", "ONSIGHT", "SEND", "REDPOINT", "PROJECT"];
-
-function gradeSort(grade: string, system: ClimbGradeSystem): number {
-  if (system === "BOULDER_V") return parseInt(grade.replace(/^V/, ""), 10) || 0;
-  const m = grade.match(/^5\.(\d+)([abcd]?)$/i);
-  if (!m) return 0;
-  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[m[2].toLowerCase()] ?? 0;
-  return parseInt(m[1], 10) * 4 + sub;
-}
-
-function buildPyramidRows(attempts: AttemptRow[]) {
-  const map = new Map<string, PyramidRow>();
-  for (const a of attempts) {
-    if (a.outcome === "FELL") continue;
-    const key = `${a.gradeSystem}::${a.grade}`;
-    const row = map.get(key) ?? { grade: a.grade, system: a.gradeSystem, counts: {}, total: 0 };
-    row.counts[a.outcome] = (row.counts[a.outcome] ?? 0) + 1;
-    row.total++;
-    map.set(key, row);
-  }
-  const boulderRows = [...map.values()].filter((r) => r.system === "BOULDER_V").sort((a, b) => gradeSort(a.grade, "BOULDER_V") - gradeSort(b.grade, "BOULDER_V"));
-  const yosemiteRows = [...map.values()].filter((r) => r.system === "YOSEMITE").sort((a, b) => gradeSort(a.grade, "YOSEMITE") - gradeSort(b.grade, "YOSEMITE"));
-  return { boulderRows, yosemiteRows };
-}
-
 function venueType(a: AttemptRow): "GYM" | "CRAG" | null {
-  const key = a.sessionLog.routine.sessionDetails?.template?.key ?? "";
-  if (key.startsWith("indoor-") || a.sessionLog.climbLocation?.type === "GYM") return "GYM";
-  if (key.startsWith("outdoor-") || a.sessionLog.climbLocation?.type === "CRAG") return "CRAG";
-  return null;
-}
-
-function hardestGrade(rows: PyramidRow[], filter: Set<ClimbOutcome>) {
-  const eligible = rows.filter((r) => ORDERED_OUTCOMES.some((o) => filter.has(o) && (r.counts[o] ?? 0) > 0));
-  return eligible.length > 0 ? eligible[eligible.length - 1].grade : null;
+  return venueOf(
+    a.sessionLog.routine.sessionDetails?.template?.key,
+    a.sessionLog.climbLocation?.type ?? null
+  );
 }
 
 function weeklyStreak(sessionDates: Date[], now: Date): { current: number; longest: number } {

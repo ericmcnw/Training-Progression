@@ -48,4 +48,8 @@ next-env.d.ts
 /prisma/dev.db
 /prisma/dev.db-journal
 
+# user-uploaded media (climbing photos, future activity media)
+# served from /public/uploads/ at runtime; never committed
+/public/uploads
+
 .vercel

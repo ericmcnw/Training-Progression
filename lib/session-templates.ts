@@ -25,28 +25,44 @@ export type SessionMetricConfig = {
   climbingColumn?: "DONE" | "FLASHED";
 };
 
-const BOULDER_GRADE_OPTIONS = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"] as const;
+// Grade lists include "+" variants between every integer (V) or letter (YDS)
+// rung — V2 < V2+ < V3, 5.10a < 5.10a+ < 5.10b. The plus slot is useful for
+// gyms / outdoor problems that feel between two grades. gradeSort in
+// lib/climb-types treats "+" as +0.5 so ordering just works.
+const BOULDER_GRADE_OPTIONS = [
+  "V0", "V0+",
+  "V1", "V1+",
+  "V2", "V2+",
+  "V3", "V3+",
+  "V4", "V4+",
+  "V5", "V5+",
+  "V6", "V6+",
+  "V7", "V7+",
+  "V8", "V8+",
+  "V9", "V9+",
+  "V10", "V10+",
+] as const;
 const YOSEMITE_GRADE_OPTIONS = [
-  "5.6",
-  "5.7",
-  "5.8",
-  "5.9",
-  "5.10a",
-  "5.10b",
-  "5.10c",
-  "5.10d",
-  "5.11a",
-  "5.11b",
-  "5.11c",
-  "5.11d",
-  "5.12a",
-  "5.12b",
-  "5.12c",
-  "5.12d",
-  "5.13a",
-  "5.13b",
-  "5.13c",
-  "5.13d",
+  "5.6", "5.6+",
+  "5.7", "5.7+",
+  "5.8", "5.8+",
+  "5.9", "5.9+",
+  "5.10a", "5.10a+",
+  "5.10b", "5.10b+",
+  "5.10c", "5.10c+",
+  "5.10d", "5.10d+",
+  "5.11a", "5.11a+",
+  "5.11b", "5.11b+",
+  "5.11c", "5.11c+",
+  "5.11d", "5.11d+",
+  "5.12a", "5.12a+",
+  "5.12b", "5.12b+",
+  "5.12c", "5.12c+",
+  "5.12d", "5.12d+",
+  "5.13a", "5.13a+",
+  "5.13b", "5.13b+",
+  "5.13c", "5.13c+",
+  "5.13d", "5.13d+",
 ] as const;
 
 export type SessionMetricDefinitionWithConfig = SessionMetricDefinition & {

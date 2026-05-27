@@ -41,6 +41,10 @@ export type ClimbAttemptInput = {
   area?: string | null;
   movesCompleted?: number;
   totalMoves?: number;
+  /** Optional "how many tries" counter. Used for SEND/REDPOINT (how many it
+   *  took to send) and PROJECT (how many tries so far). Null/undefined for
+   *  FLASH/ONSIGHT (implicitly 1). */
+  triesCount?: number | null;
   notes?: string;
   attemptOrder: number;
   problemId?: string | null;
@@ -100,9 +104,20 @@ export function climbOutcomeLabel(
 }
 
 export function climbOutcomesForDiscipline(discipline: ClimbingDiscipline): ClimbOutcome[] {
-  if (discipline === "BOULDER") return ["FLASH", "SEND", "FELL", "PROJECT"];
-  if (discipline === "TOP_ROPE") return ["ONSIGHT", "FLASH", "SEND", "FELL", "PROJECT"];
-  return ["ONSIGHT", "FLASH", "REDPOINT", "FELL", "PROJECT"];
+  // FELL is intentionally absent from the live logger — users log unsent
+  // attempts as PROJECT instead, with an optional tries count. FELL stays
+  // in the enum for back-compat with historical data only.
+  if (discipline === "BOULDER") return ["FLASH", "SEND", "PROJECT"];
+  if (discipline === "TOP_ROPE") return ["ONSIGHT", "FLASH", "SEND", "PROJECT"];
+  return ["ONSIGHT", "FLASH", "REDPOINT", "PROJECT"];
+}
+
+// Outcomes that get an optional "tries" count next to them in the per-climb
+// logger. Send/Redpoint count how many tries it took to clean it; Project
+// counts how many tries you've put in so far on something you're still
+// working. Flash/Onsight are implicitly 1, so no input shown.
+export function outcomeUsesTriesCount(outcome: ClimbOutcome): boolean {
+  return outcome === "SEND" || outcome === "REDPOINT" || outcome === "PROJECT";
 }
 
 // Compat shim — old callers used grade system to derive outcome list.
@@ -138,4 +153,67 @@ export function gradeSystemForTemplateKey(templateKey: string | null | undefined
 // clean.
 export function isSendOutcome(outcome: ClimbOutcome): boolean {
   return outcome === "FLASH" || outcome === "ONSIGHT" || outcome === "SEND" || outcome === "REDPOINT";
+}
+
+export const SENT_OUTCOMES: ReadonlySet<ClimbOutcome> = new Set<ClimbOutcome>([
+  "FLASH",
+  "ONSIGHT",
+  "SEND",
+  "REDPOINT",
+]);
+
+// Stacking order for pyramid bars. Falls are intentionally excluded — the
+// pyramid celebrates clean climbs, not attempts. Projects stay so you can see
+// what you're working on without it counting as a send.
+export const PYRAMID_OUTCOMES: readonly ClimbOutcome[] = [
+  "FLASH",
+  "ONSIGHT",
+  "SEND",
+  "REDPOINT",
+  "PROJECT",
+];
+
+// All outcomes in ascending "good to bad" order — used when searching for the
+// hardest grade meeting some criteria.
+export const ORDERED_OUTCOMES: readonly ClimbOutcome[] = [
+  "FLASH",
+  "ONSIGHT",
+  "SEND",
+  "REDPOINT",
+  "FELL",
+  "PROJECT",
+];
+
+// Numeric ranking so grades sort correctly regardless of system.
+//   V2 < V2+ < V3
+//   5.10a < 5.10a+ < 5.10b
+//   5.10b < 5.10c < 5.11a
+// Returns 0 for unrecognized inputs (shouldn't happen in practice —
+// session templates constrain the grade list).
+export function gradeSort(grade: string, system: ClimbGradeSystem): number {
+  if (system === "BOULDER_V") {
+    const m = grade.match(/^V(\d+)(\+?)$/i);
+    if (!m) return 0;
+    return parseInt(m[1], 10) + (m[2] === "+" ? 0.5 : 0);
+  }
+  const m = grade.match(/^5\.(\d+)([abcd]?)(\+?)$/i);
+  if (!m) return 0;
+  const sub = ({ "": 0, a: 0, b: 1, c: 2, d: 3 } as Record<string, number>)[m[2].toLowerCase()] ?? 0;
+  // Four letter-slots per integer (a/b/c/d), then 0.5 extra for the +
+  // suffix so 5.10a+ slots between 5.10a and 5.10b.
+  return parseInt(m[1], 10) * 4 + sub + (m[3] === "+" ? 0.5 : 0);
+}
+
+// Derive indoor/outdoor from a session template key OR a location type.
+// Template wins when both are present (we trust the user's labeled intent over
+// inferred location category). Returns null when neither signal is available.
+export function venueOf(
+  templateKey: string | null | undefined,
+  locationType: ClimbLocationType | null | undefined
+): ClimbLocationType | null {
+  if (templateKey?.startsWith("indoor-")) return "GYM";
+  if (templateKey?.startsWith("outdoor-")) return "CRAG";
+  if (locationType === "GYM") return "GYM";
+  if (locationType === "CRAG") return "CRAG";
+  return null;
 }

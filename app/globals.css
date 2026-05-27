@@ -1653,3 +1653,106 @@ input.ghostInput::placeholder {
     overflow-y: auto;
   }
 }
+
+/* ── Climbing detail pages (location detail, projects, future tabs) ─────── */
+/* Mobile-first grid that collapses to one column under 720px and splits into
+   two columns above 980px. Used by the location detail page hero block. */
+.climbing-detail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 980px) {
+  .climbing-detail-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+/* Mini-map embed used on the location detail page. Static OSM tile or a
+   tiny non-interactive MapLibre canvas — sized for both phone (200px) and
+   wider viewports (240px). The aspect-ratio guard keeps it sane even when
+   the parent grid forces a narrow column. */
+.climbing-mini-map {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+@media (min-width: 720px) {
+  .climbing-mini-map {
+    height: 240px;
+  }
+}
+
+/* Photo / media grid. 3 columns on mobile, 4 on tablet, 5 on desktop. Each
+   tile uses aspect-ratio: 1 so layout doesn't depend on image dimensions
+   (we don't yet have width/height on every record). */
+.climbing-media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+@media (min-width: 720px) {
+  .climbing-media-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+@media (min-width: 1100px) {
+  .climbing-media-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.climbing-media-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.climbing-media-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Fullscreen lightbox for media — fixed overlay, click outside to close.
+   Reuses the same modal pattern as spotsMapSidebar (bottom sheet on mobile
+   becomes centered modal on desktop). */
+.climbing-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.climbing-lightbox img,
+.climbing-lightbox video {
+  max-width: 100%;
+  max-height: calc(100dvh - 80px);
+  border-radius: 12px;
+}
+
+/* Sticky filter bar (used by Phase 4 browse-page filters and Phase 1 problem
+   library tabs). Stays in view while scrolling long lists. The blur looks
+   great on iOS Safari but degrades gracefully elsewhere. */
+.climbing-sticky-filters {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 8px 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}

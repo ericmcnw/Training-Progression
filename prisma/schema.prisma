@@ -140,6 +140,11 @@ enum ClimbGradeSystem {
   YOSEMITE
 }
 
+enum ClimbMediaKind {
+  PHOTO
+  LINK
+}
+
 enum InjuryStatus {
   ACTIVE
   RECOVERING
@@ -310,6 +315,7 @@ model ClimbLocation {
 
   routineLogs RoutineLog[]
   problems    ClimbProblem[]
+  media       ClimbMedia[]
 
   @@index([type, name])
   @@index([osmType, osmId])
@@ -359,9 +365,42 @@ model ClimbProblem {
 
   location ClimbLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   attempts ClimbAttempt[]
+  media    ClimbMedia[]
 
   @@index([locationId, grade])
   @@index([name])
+}
+
+// Photos and external links attached to a ClimbLocation or ClimbProblem.
+// Exactly one of locationId / problemId is set per row — enforced in the
+// server action, not at the DB level (Postgres CHECK constraints get noisy
+// in Prisma migrations).
+//
+// Storage: PHOTO rows point at a URL we own (e.g. /uploads/climbing/yyyy/mm/
+// {cuid}.jpg in dev; Vercel Blob or R2 in prod). LINK rows point at an
+// external URL (YouTube, Imgur, etc.) — no upload, just metadata.
+model ClimbMedia {
+  id           String         @id @default(cuid())
+  kind         ClimbMediaKind
+  url          String
+  thumbnailUrl String?
+  caption      String?
+  width        Int?
+  height       Int?
+  sizeBytes    Int?
+  // Hand-ordered position within the parent's gallery. Lower = first.
+  // Default 0; new uploads append by writing max(sortOrder)+1.
+  sortOrder    Int            @default(0)
+
+  locationId String?
+  location   ClimbLocation? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  problemId  String?
+  problem    ClimbProblem?  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([locationId, sortOrder])
+  @@index([problemId, sortOrder])
 }
 
 model ClimbAttempt {
@@ -374,6 +413,11 @@ model ClimbAttempt {
   area           String?
   movesCompleted Int?
   totalMoves     Int?
+  // Optional "how many tries" counter. Used for SEND/REDPOINT (how many it
+  // took to send) and PROJECT (how many tries so far). Null for FLASH /
+  // ONSIGHT (implicitly 1) and for historical rows before this field
+  // existed.
+  triesCount     Int?
   notes          String?
   attemptOrder   Int              @default(0)
   createdAt      DateTime         @default(now())

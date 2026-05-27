@@ -116,3 +116,21 @@ export function formatAppDateTime(value: Date | string, options: Intl.DateTimeFo
   const date = value instanceof Date ? value : new Date(value);
   return date.toLocaleString(APP_LOCALE, { ...options, timeZone: APP_TIME_ZONE });
 }
+
+// Compact relative-time formatter ("today", "3d ago", "2w ago", "6mo ago",
+// "2y ago"). Used as a secondary label next to absolute dates so users can
+// scan "how recent" without converting. Server-renders fine — the `now`
+// parameter defaults to the time the page builds, accurate enough for the
+// climbing pages which already use force-dynamic.
+export function relativeFromNow(value: Date | string, now: Date = new Date()): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) return "in future";
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.round(days / 7)}w ago`;
+  if (days < 365) return `${Math.round(days / 30)}mo ago`;
+  return `${Math.round(days / 365)}y ago`;
+}

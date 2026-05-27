@@ -99,7 +99,7 @@ function synthesizeAttemptsFromQuickValues(
     const gradeSystem = (row.gradeSystem === "YOSEMITE" ? "YOSEMITE" : "BOULDER_V") as "BOULDER_V" | "YOSEMITE";
     const flashCount = parseInt(values[row.flashDefId ?? ""]?.numberValue ?? "0") || 0;
     const sendCount = parseInt(values[row.sendDefId ?? ""]?.numberValue ?? "0") || 0;
-    const fellCount = parseInt(quickAttemptedValues[grade] ?? "0") || 0;
+    const projectCount = parseInt(quickAttemptedValues[grade] ?? "0") || 0;
 
     for (let i = 0; i < flashCount; i++) {
       attempts.push({ localId: `qs-flash-${grade}-${i}`, grade, gradeSystem, outcome: flashOutcome, attemptOrder: order++ });
@@ -107,8 +107,11 @@ function synthesizeAttemptsFromQuickValues(
     for (let i = 0; i < sendCount; i++) {
       attempts.push({ localId: `qs-send-${grade}-${i}`, grade, gradeSystem, outcome: sendOutcome, attemptOrder: order++ });
     }
-    for (let i = 0; i < fellCount; i++) {
-      attempts.push({ localId: `qs-fell-${grade}-${i}`, grade, gradeSystem, outcome: "FELL", attemptOrder: order++ });
+    // Third column ("Project") = climbs you tried but didn't send. Persisted
+    // as PROJECT, matching the per-climb mode's "Project" outcome and the
+    // user's intent that every non-send is a project they're working on.
+    for (let i = 0; i < projectCount; i++) {
+      attempts.push({ localId: `qs-project-${grade}-${i}`, grade, gradeSystem, outcome: "PROJECT", attemptOrder: order++ });
     }
   }
   return attempts;

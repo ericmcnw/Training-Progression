@@ -252,7 +252,11 @@ export default async function SportsTargetPage(props: {
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {params.slug === "climbing" ? (
-              <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
+              <>
+                <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
+                <SectionLinkButton href="/activities/climbing/climbs" label="📋 Climbs" />
+                <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
+              </>
             ) : getActivitySpotConfig(params.slug)?.supportsMap ? (
               <SectionLinkButton href={`/activities/${params.slug}/map`} label="🗺 Map" />
             ) : null}
