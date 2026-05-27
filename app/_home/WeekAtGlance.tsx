@@ -395,7 +395,11 @@ function DetailPanel({
           {planned.map((item) => {
             const normalizedKind = normalizeRoutineKind(item.kind);
             const isCompletion = normalizedKind === "COMPLETION";
-            const fullyLogged = item.planned > 0 && item.logged >= item.planned;
+            // "Fully logged" means there's nothing left to log on this row.
+            // For unplanned-but-logged routines (planned = 0, logged > 0) the
+            // user has nothing to add — treat that as done so the view
+            // button wins over the log button.
+            const fullyLogged = item.logged > 0 && (item.planned === 0 || item.logged >= item.planned);
             const showLogButton = !isCompletion && !isFutureDay && !fullyLogged;
             const isLogged = item.logged > 0;
             return (
