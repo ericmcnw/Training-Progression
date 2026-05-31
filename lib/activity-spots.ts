@@ -73,6 +73,20 @@ const PER_SLUG_OVERRIDES: Record<string, Partial<ActivitySpotConfig>> = {
   "open-water-swimming": { spotNoun: "spot" },
 };
 
+// Canonical form of a spot name for dedup comparison. Lowercases, trims,
+// collapses internal whitespace, and folds curly quotation marks to their
+// straight equivalents. Without this, "Will Warren's Den" (curly) and
+// "Will Warren's Den" (straight) save as two different records since
+// Postgres' case-insensitive match treats them as distinct strings.
+export function normalizeSpotName(name: string): string {
+  return name
+    .replace(/[‘’ʼʹ]/g, "'") // curly + modifier apostrophes → '
+    .replace(/[“”]/g, '"')               // curly double quotes → "
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export function getActivitySpotConfig(slug: string): ActivitySpotConfig | null {
   const entry = getActivityEntry(slug);
   if (!entry) return null;

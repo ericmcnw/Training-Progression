@@ -7,6 +7,7 @@ import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
+import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
 import { prisma } from "@/lib/prisma";
 import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
 import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
@@ -1910,20 +1911,52 @@ async function resolveActivitySpotId(input: {
   const osmType = input.newActivitySpotOsmType?.trim() || null;
   const osmId = input.newActivitySpotOsmId?.trim() || null;
 
-  // Dedup on (slug, name, osmId-or-null). Same name + same OSM id (or both
-  // null) = same spot. Different name = a different spot even when sharing
-  // an OSM pin (so "Clinton road boulder" pinned to OSM Clinton Road stays
-  // separate from a "Clinton Road" spot picked directly from OSM).
-  const existing = await prisma.activitySpot.findFirst({
+  // Dedup across the compatible-activity group, not just the caller's slug.
+  // The picker already surfaces saved spots from compatible activities so
+  // users typically tap an existing one — but if they re-type the name
+  // (autocomplete miss, transcription, different routine) we still need to
+  // land them on the existing record instead of cloning it under a new
+  // slug. This is what kept producing parallel "Hubbard Park" rows under
+  // trail-running + hiking + walking when the same spot was reused.
+  //
+  // Same normalized name + same OSM id (or both null) = same spot.
+  // Different name = a different spot even when sharing an OSM pin (so
+  // "Clinton road boulder" pinned to OSM Clinton Road stays separate
+  // from a "Clinton Road" spot picked directly from OSM).
+  //
+  // Postgres `mode: "insensitive"` handles case, but not curly vs
+  // straight apostrophes / quotation marks — comparing in JS after a
+  // narrow DB lookup catches that without scanning the whole table.
+  const compatibleSlugs = compatibleActivitySlugs(slug);
+  const slugFilter = compatibleSlugs.length > 0 ? { in: compatibleSlugs } : slug;
+  const candidates = await prisma.activitySpot.findFirst({
     where: {
-      activitySlug: slug,
-      name: { equals: name, mode: "insensitive" },
+      activitySlug: slugFilter,
       ...(osmType && osmId
         ? { osmType, osmId }
         : { osmType: null, osmId: null }),
     },
-    select: { id: true, region: true, latitude: true, longitude: true },
+    select: { id: true, name: true, region: true, latitude: true, longitude: true },
   });
+  const normalizedTarget = normalizeSpotName(name);
+  // If the narrow filter returned a row whose name normalizes to the same
+  // value, use it. Otherwise, broaden to find any same-OSM / same-slug
+  // candidates with a name match (handles the rare case where the picker
+  // saved a curly-apostrophe variant first).
+  let existing: { id: string; region: string | null; latitude: number | null; longitude: number | null } | null =
+    candidates && normalizeSpotName(candidates.name) === normalizedTarget ? candidates : null;
+  if (!existing) {
+    const broad = await prisma.activitySpot.findMany({
+      where: {
+        activitySlug: slugFilter,
+        ...(osmType && osmId
+          ? { osmType, osmId }
+          : { osmType: null, osmId: null }),
+      },
+      select: { id: true, name: true, region: true, latitude: true, longitude: true },
+    });
+    existing = broad.find((c) => normalizeSpotName(c.name) === normalizedTarget) ?? null;
+  }
   if (existing) {
     const updates: { region?: string; latitude?: number; longitude?: number } = {};
     if (region && !existing.region) updates.region = region;
@@ -2133,21 +2166,26 @@ async function resolveClimbLocationId(input: {
   const osmType = input.newClimbLocationOsmType?.trim() || null;
   const osmId = input.newClimbLocationOsmId?.trim() || null;
 
-  // Dedup on (name, type, osmId-or-null). Same name + same type + same OSM
-  // pin (or both null) = same record. Different name = different record
-  // even when sharing an OSM pin — keeps custom-named spots distinct from
-  // their OSM-default-named counterparts (e.g., "Buttermilks" vs the OSM
-  // "Bishop" both pinned to Bishop's OSM id).
-  const existing = await prisma.climbLocation.findFirst({
+  // Dedup on (normalized name, type, osmId-or-null). Same name + same type
+  // + same OSM pin (or both null) = same record. Different name = different
+  // record even when sharing an OSM pin — keeps custom-named spots distinct
+  // from their OSM-default-named counterparts (e.g., "Buttermilks" vs the
+  // OSM "Bishop" both pinned to Bishop's OSM id).
+  //
+  // Name comparison is done in JS after a narrow DB lookup so curly vs
+  // straight apostrophes ("Will Warren's Den" vs "Will Warren's Den")
+  // fold to the same record — Postgres can't normalize those natively.
+  const normalizedTarget = normalizeSpotName(name);
+  const climbCandidates = await prisma.climbLocation.findMany({
     where: {
-      name: { equals: name, mode: "insensitive" },
       type,
       ...(osmType && osmId
         ? { osmType, osmId }
         : { osmType: null, osmId: null }),
     },
-    select: { id: true, region: true, latitude: true, longitude: true },
+    select: { id: true, name: true, region: true, latitude: true, longitude: true },
   });
+  const existing = climbCandidates.find((c) => normalizeSpotName(c.name) === normalizedTarget) ?? null;
   if (existing) {
     const updates: { region?: string; latitude?: number; longitude?: number } = {};
     if (region && !existing.region) updates.region = region;
