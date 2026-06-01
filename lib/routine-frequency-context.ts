@@ -51,11 +51,28 @@ export async function getRoutineGoalContributions(
   const routineSubtype = routine?.subtype ? routine.subtype.toUpperCase() : null;
   const routineExerciseIds = routine?.exercises.map((e) => e.exerciseId) ?? [];
 
+  // Endurance-specific lookup: load the routine's activityType so a typed
+  // endurance routine can match goals targeting its type or family. Non-
+  // endurance routines just get null here, which short-circuits the
+  // OR-clause additions below.
+  const routineActivityType = await prisma.routine.findUnique({
+    where: { id: routineId },
+    select: { activityType: { select: { id: true, familyId: true } } },
+  });
+  const routineActivityTypeId = routineActivityType?.activityType?.id ?? null;
+  const routineActivityFamilyId = routineActivityType?.activityType?.familyId ?? null;
+
   const orClauses: Array<Record<string, unknown>> = [
     { routines: { some: { routineId } } },
   ];
   if (routineSubtype) {
     orClauses.push({ triggerSubtypes: { has: routineSubtype } });
+  }
+  if (routineActivityTypeId) {
+    orClauses.push({ triggerActivityTypeIds: { has: routineActivityTypeId } });
+  }
+  if (routineActivityFamilyId) {
+    orClauses.push({ triggerActivityFamilyIds: { has: routineActivityFamilyId } });
   }
   if (routineExerciseIds.length > 0) {
     orClauses.push({ triggerExercises: { some: { exerciseId: { in: routineExerciseIds } } } });
@@ -91,10 +108,20 @@ export async function getRoutineGoalContributions(
   const allTriggerSubtypes = Array.from(
     new Set(goals.flatMap((g) => (g.triggerSubtypes ?? []).map((s) => s.toUpperCase())))
   );
+  const allTriggerActivityTypeIds = Array.from(
+    new Set(goals.flatMap((g) => g.triggerActivityTypeIds ?? []))
+  );
+  const allTriggerActivityFamilyIds = Array.from(
+    new Set(goals.flatMap((g) => g.triggerActivityFamilyIds ?? []))
+  );
   const allTriggerExerciseIds = Array.from(
     new Set(goals.flatMap((g) => g.triggerExercises.map((e) => e.exerciseId)))
   );
-  const hasAnyTriggers = allTriggerSubtypes.length > 0 || allTriggerExerciseIds.length > 0;
+  const hasAnyTriggers =
+    allTriggerSubtypes.length > 0 ||
+    allTriggerActivityTypeIds.length > 0 ||
+    allTriggerActivityFamilyIds.length > 0 ||
+    allTriggerExerciseIds.length > 0;
 
   const sinceMs = new Date(`${today}T00:00:00.000Z`).getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const since = new Date(sinceMs);
@@ -107,6 +134,12 @@ export async function getRoutineGoalContributions(
             ...(allTriggerSubtypes.length > 0
               ? [{ routine: { subtype: { in: allTriggerSubtypes } } }]
               : []),
+            ...(allTriggerActivityTypeIds.length > 0
+              ? [{ activityTypeId: { in: allTriggerActivityTypeIds } }]
+              : []),
+            ...(allTriggerActivityFamilyIds.length > 0
+              ? [{ activityType: { familyId: { in: allTriggerActivityFamilyIds } } }]
+              : []),
             ...(allTriggerExerciseIds.length > 0
               ? [{ exercises: { some: { exerciseId: { in: allTriggerExerciseIds } } } }]
               : []),
@@ -117,6 +150,8 @@ export async function getRoutineGoalContributions(
       id: true,
       performedAt: true,
       routineId: true,
+      activityTypeId: true,
+      activityType: { select: { familyId: true } },
       routine: { select: { subtype: true } },
       // Per-exercise set counts so the min-sets gate works for exercise
       // triggers (e.g. a goal with triggerMinSets=2 ignores a single
@@ -148,6 +183,8 @@ export async function getRoutineGoalContributions(
           liveLinks.filter((rel) => rel.role === "SUBSTITUTE").map((rel) => rel.routineId)
         ),
         triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
+        triggerActivityTypeIds: new Set(goal.triggerActivityTypeIds ?? []),
+        triggerActivityFamilyIds: new Set(goal.triggerActivityFamilyIds ?? []),
         triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
         triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
       };
@@ -164,6 +201,8 @@ export async function getRoutineGoalContributions(
             routineId: log.routineId,
             performedAt: log.performedAt,
             routineSubtype: log.routine?.subtype ?? null,
+            activityTypeId: log.activityTypeId ?? null,
+            activityFamilyId: log.activityType?.familyId ?? null,
             exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
           },
           membership

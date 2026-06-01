@@ -1390,6 +1390,15 @@ function parseFrequencyGoalFields(formData: FormData) {
         .filter(Boolean)
     )
   );
+  // Endurance type/family triggers — populated by the new goal builder's
+  // activity-type picker. A goal can mix routine, subtype, type, and
+  // family triggers freely; the rollup ORs them all together.
+  const triggerActivityTypeIds = Array.from(
+    new Set(formData.getAll("triggerActivityTypeIds").map(String).filter(Boolean))
+  );
+  const triggerActivityFamilyIds = Array.from(
+    new Set(formData.getAll("triggerActivityFamilyIds").map(String).filter(Boolean))
+  );
   // Minimum trigger-exercise sets gate for the exercise-trigger path. Clamp
   // to [1, 99] so a typo can't make a goal impossible to satisfy. Defaults
   // to 1 when absent — same as the DB default and pre-feature behavior.
@@ -1427,6 +1436,8 @@ function parseFrequencyGoalFields(formData: FormData) {
     substituteRoutineIds,
     triggerExerciseIds,
     triggerSubtypes,
+    triggerActivityTypeIds,
+    triggerActivityFamilyIds,
     triggerMinSets,
   };
 }
@@ -1473,11 +1484,23 @@ export async function createFrequencyGoal(formData: FormData) {
     substituteRoutineIds,
     triggerExerciseIds,
     triggerSubtypes,
+    triggerActivityTypeIds,
+    triggerActivityFamilyIds,
     triggerMinSets,
   } = parseFrequencyGoalFields(formData);
 
   const goal = await prisma.frequencyGoal.create({
-    data: { name, targetCount, targetInterval, targetUnit, weekdayMask, triggerSubtypes, triggerMinSets },
+    data: {
+      name,
+      targetCount,
+      targetInterval,
+      targetUnit,
+      weekdayMask,
+      triggerSubtypes,
+      triggerActivityTypeIds,
+      triggerActivityFamilyIds,
+      triggerMinSets,
+    },
     select: { id: true },
   });
   await syncFrequencyGoalRoutines(goal.id, routineIds, substituteRoutineIds);
@@ -1502,12 +1525,24 @@ export async function updateFrequencyGoal(formData: FormData) {
     substituteRoutineIds,
     triggerExerciseIds,
     triggerSubtypes,
+    triggerActivityTypeIds,
+    triggerActivityFamilyIds,
     triggerMinSets,
   } = parseFrequencyGoalFields(formData);
 
   await prisma.frequencyGoal.update({
     where: { id },
-    data: { name, targetCount, targetInterval, targetUnit, weekdayMask, triggerSubtypes, triggerMinSets },
+    data: {
+      name,
+      targetCount,
+      targetInterval,
+      targetUnit,
+      weekdayMask,
+      triggerSubtypes,
+      triggerActivityTypeIds,
+      triggerActivityFamilyIds,
+      triggerMinSets,
+    },
   });
   await syncFrequencyGoalRoutines(id, routineIds, substituteRoutineIds);
   await syncFrequencyGoalTriggerExercises(id, triggerExerciseIds);

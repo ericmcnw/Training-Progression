@@ -16,6 +16,15 @@ export type FrequencyGoalShape = {
    *  belongs to has a subtype in this list. Useful for "any climbing
    *  session", "any strength workout", etc. without listing every routine. */
   triggerSubtypes?: string[];
+  /** Endurance type targets: a log counts if its activityTypeId is in this
+   *  list. "Trail Run 2x/wk" sets this to the trail-run type id. Exact
+   *  match — Trail Run doesn't satisfy a Long Run goal. For family-wide
+   *  goals use triggerActivityFamilyIds instead. */
+  triggerActivityTypeIds?: string[];
+  /** Endurance family targets: a log counts if its activity type's family
+   *  is in this list. "Running 3x/wk" sets this to the running family id
+   *  and any run-family log (Run, Trail Run, Long Run, ...) counts. */
+  triggerActivityFamilyIds?: string[];
   /** Optional broaden-the-net rule: a log also counts if it contains enough
    *  sets of an exercise in this list (see `triggerMinSets`). Headline use
    *  case: ad-hoc gym pull-ups satisfy a Pull Strength goal even though
@@ -46,6 +55,15 @@ export type FrequencyGoalLogShape = {
   /** Subtype on the log's routine. Optional so callers that don't include
    *  routine metadata (legacy) just skip the subtype-trigger path. */
   routineSubtype?: string | null;
+  /** Activity type id on the log itself (set by typed endurance logs).
+   *  Optional — non-endurance logs don't have one. Used to match against
+   *  goal.triggerActivityTypeIds (exact) and indirectly via the type's
+   *  familyId against goal.triggerActivityFamilyIds. */
+  activityTypeId?: string | null;
+  /** Activity family id for the log's activity type. Callers pre-resolve
+   *  this (one join in the query) so the matcher doesn't need a separate
+   *  lookup table. Optional — null when no activityTypeId. */
+  activityFamilyId?: string | null;
   /** Per-exercise set counts. Optional same as above; required only when
    *  the goal has trigger-exercise rules. Older callers passing just ids
    *  can use `exerciseIds` instead and the matcher treats each as 1 set. */
@@ -88,6 +106,23 @@ export function logMatchesFrequencyGoal(goal: FrequencyGoalShape, log: Frequency
   if (subtypes.length > 0 && log.routineSubtype) {
     const normalizedTriggers = new Set(subtypes.map(caseInsensitive));
     if (normalizedTriggers.has(caseInsensitive(log.routineSubtype))) return true;
+  }
+
+  // Endurance type trigger — exact match on activity type id. Set by
+  // "Trail Run 2x/wk" style goals where the user wants only that
+  // specific type to count.
+  const activityTypeTriggers = goal.triggerActivityTypeIds ?? [];
+  if (activityTypeTriggers.length > 0 && log.activityTypeId) {
+    if (activityTypeTriggers.includes(log.activityTypeId)) return true;
+  }
+
+  // Endurance family trigger — matches any log whose activity type
+  // belongs to the listed family. Set by "Running 3x/wk" style goals
+  // where the user wants every run-family type to count (Run + Trail
+  // Run + Long Run + ...).
+  const activityFamilyTriggers = goal.triggerActivityFamilyIds ?? [];
+  if (activityFamilyTriggers.length > 0 && log.activityFamilyId) {
+    if (activityFamilyTriggers.includes(log.activityFamilyId)) return true;
   }
 
   const triggerExercises = goal.triggerExerciseIds ?? [];
@@ -178,6 +213,10 @@ export type FrequencyGoalMembership = {
   substituteRoutineIds: Set<string>;
   /** Uppercased for case-insensitive comparison. */
   triggerSubtypes: Set<string>;
+  /** Endurance type triggers (exact match on log.activityTypeId). */
+  triggerActivityTypeIds: Set<string>;
+  /** Endurance family triggers (matched via log.activityFamilyId). */
+  triggerActivityFamilyIds: Set<string>;
   triggerExerciseIds: Set<string>;
   /** Minimum trigger-exercise sets a log needs to claim a session.
    *  Clamped to ≥ 1 by the caller; pass 1 to mean "any set counts." */
@@ -191,12 +230,26 @@ export function classifyLogAgainstFrequencyGoal(
   if (goal.primaryRoutineIds.has(log.routineId)) return { isPrimary: true };
   if (goal.substituteRoutineIds.has(log.routineId)) return { isPrimary: false };
 
-  const hasTriggers = goal.triggerSubtypes.size > 0 || goal.triggerExerciseIds.size > 0;
+  const hasTriggers =
+    goal.triggerSubtypes.size > 0 ||
+    goal.triggerActivityTypeIds.size > 0 ||
+    goal.triggerActivityFamilyIds.size > 0 ||
+    goal.triggerExerciseIds.size > 0;
   if (!hasTriggers) return null;
 
   if (goal.triggerSubtypes.size > 0 && log.routineSubtype) {
     const subtype = log.routineSubtype.toUpperCase();
     if (goal.triggerSubtypes.has(subtype)) return { isPrimary: true };
+  }
+
+  // Activity-type and family triggers — endurance logs land here. Trigger
+  // matches claim PRIMARY (the user did the work, they just used a
+  // type-based goal instead of a routine-based one).
+  if (goal.triggerActivityTypeIds.size > 0 && log.activityTypeId) {
+    if (goal.triggerActivityTypeIds.has(log.activityTypeId)) return { isPrimary: true };
+  }
+  if (goal.triggerActivityFamilyIds.size > 0 && log.activityFamilyId) {
+    if (goal.triggerActivityFamilyIds.has(log.activityFamilyId)) return { isPrimary: true };
   }
 
   if (goal.triggerExerciseIds.size > 0) {

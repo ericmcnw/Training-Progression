@@ -133,7 +133,10 @@ export async function getHomeData(): Promise<HomeData> {
         // builder below can evaluate trigger-exercise / trigger-subtype
         // matches without a second roundtrip. `_count.sets` gives us the
         // per-exercise set count for `triggerMinSets` gating without
-        // hydrating every SetEntry row.
+        // hydrating every SetEntry row. activityTypeId + familyId carry
+        // through for endurance type/family goal triggers.
+        activityTypeId: true,
+        activityType: { select: { familyId: true } },
         routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true } },
         exercises: {
           select: {
@@ -447,6 +450,8 @@ export async function getHomeData(): Promise<HomeData> {
         primaryRoutineIds: new Set(primaryRoutines.map((r) => r.id)),
         substituteRoutineIds: new Set(substituteRoutines.map((r) => r.id)),
         triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
+        triggerActivityTypeIds: new Set(goal.triggerActivityTypeIds ?? []),
+        triggerActivityFamilyIds: new Set(goal.triggerActivityFamilyIds ?? []),
         triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
         triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
       };
@@ -467,6 +472,8 @@ export async function getHomeData(): Promise<HomeData> {
             routineId: log.routineId,
             performedAt: log.performedAt,
             routineSubtype: log.routine?.subtype ?? null,
+            activityTypeId: log.activityTypeId ?? null,
+            activityFamilyId: log.activityType?.familyId ?? null,
             exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
           },
           membership
