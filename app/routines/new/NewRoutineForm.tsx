@@ -195,6 +195,23 @@ export default function NewRoutineForm({
         <div style={s.pageTitle}>Choose an activity</div>
         <div style={s.pageSubtitle}>{domainMeta.description}</div>
 
+        {/* Soft nudge for endurance: the new flow logs by activity type
+            without needing a saved routine. Users can still create one
+            below for scheduled recurring sessions or saved structures. */}
+        {selectedDomain === "cardio" && (
+          <div style={enduranceNudgeStyle}>
+            <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
+              💡 No routine needed
+            </div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.85 }}>
+              You can log endurance directly by activity type (Run, Hike, Bike, …) from
+              the Endurance section on the routines page — no setup. Create a routine
+              here only if you want a scheduled recurring slot or a saved label for a
+              specific workout.
+            </div>
+          </div>
+        )}
+
         <div style={s.activityList}>
           {activityList.map((preset) => (
             <ActivityCard key={preset.key} preset={preset} domainMeta={domainMeta} onSelect={chooseActivity} />
@@ -506,6 +523,16 @@ function ActivityCard({
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+
+// Soft-nudge card shown on the endurance activity picker. Same chrome as
+// the existing info banners — borderless, soft tint, modest padding.
+const enduranceNudgeStyle: React.CSSProperties = {
+  padding: "12px 14px",
+  borderRadius: 12,
+  background: "rgba(78,148,255,0.08)",
+  border: "1px solid rgba(78,148,255,0.28)",
+  color: "rgba(191,219,254,0.95)",
+};
 
 const s = {
   page: {

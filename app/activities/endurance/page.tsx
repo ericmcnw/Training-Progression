@@ -184,6 +184,7 @@ export default async function EnduranceWorldPage(props: {
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/log" label="📋 Log endurance" />
+            <SectionLinkButton href="/activities/endurance/settings" label="⚙ Settings" />
             <SectionLinkButton href="/activities" label="All activities" />
           </div>
         }
