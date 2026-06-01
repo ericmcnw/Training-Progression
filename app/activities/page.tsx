@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import { getMetadataIndex, getRoutineIndex, getRoutineLogs } from "@/app/progress/data";
 import StackedWeeklyBarChart, { type StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import {
@@ -88,16 +89,70 @@ export default async function ActivitiesPage(props: {
 
   // Now we know which routines are endurance — kick off the 12w chart fetch
   // in parallel with awaiting groups + 4w logs (which are still in flight).
+  //
+  // Two log sources roll into the chart so an edited log shows up in its
+  // *current* type bucket, not its routine's pre-edit metadata bucket:
+  //   1. Logs against legacy endurance-tagged routines (metadata-based).
+  //   2. Any log carrying activityTypeId — covers typed quick-log logs
+  //      against the synthetic Endurance routine AND legacy logs whose
+  //      activityTypeId was overridden via the edit-log type switcher.
+  // Both sources OR'd in a single query; activityType included so the
+  // chart-label loop below can prefer it over the routine metadata.
   const enduranceSlugsPreview = new Set(activitiesByFamily("endurance").map((e) => e.slug));
   const enduranceRoutineIdsPreview = Array.from(routineSlugs.entries())
     .filter(([, slugs]) => [...slugs].some((s) => enduranceSlugsPreview.has(s)))
     .map(([routineId]) => routineId);
-  const logs12wPromise = enduranceRoutineIdsPreview.length > 0
-    ? getRoutineLogs("12w", { routineIds: enduranceRoutineIdsPreview })
-    : Promise.resolve([] as Awaited<ReturnType<typeof getRoutineLogs>>);
+  const cutoff12w = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  const logs12wPromise = prisma.routineLog.findMany({
+    where: {
+      performedAt: { gte: cutoff12w },
+      OR: [
+        ...(enduranceRoutineIdsPreview.length > 0
+          ? [{ routineId: { in: enduranceRoutineIdsPreview } }]
+          : []),
+        { activityTypeId: { not: null } },
+      ],
+    },
+    select: {
+      id: true,
+      routineId: true,
+      performedAt: true,
+      distanceMi: true,
+      durationSec: true,
+      elevationGainFt: true,
+      activityTypeId: true,
+      activityType: {
+        select: { slug: true, name: true, family: { select: { slug: true, name: true } } },
+      },
+    },
+  });
 
   const [groups, logs] = await Promise.all([groupsPromise, logs4wPromise]);
   const groupBySlug = new Map(groups.map((group) => [group.slug, group]));
+
+  // Map activity-type slugs → registry slugs so typed logs can credit the
+  // same activity stat cards (and color palette) the legacy metadata-based
+  // routines already do. Shared by the 4w stat aggregation below and the
+  // 12w endurance chart further down.
+  const typeSlugToRegistrySlug: Record<string, string> = {
+    "run": "running",
+    "trail-run": "trail-running",
+    "long-run": "running",
+    "tempo-run": "running",
+    "easy-run": "running",
+    "interval-run": "running",
+    "sprint": "running",
+    "walk": "walking",
+    "hike": "hiking",
+    "bike": "biking",
+    "mtb": "mountain-biking",
+    "road-bike": "road-cycling",
+    "gravel-bike": "gravel-cycling",
+    "swim": "swimming",
+    "open-water-swim": "open-water-swimming",
+    "row": "rowing",
+    "erg-row": "rowing",
+  };
 
   // Aggregate per-activity stats from the last 4 weeks of logs.
   const statsBySlug = new Map<string, ActivityStats>();
@@ -114,7 +169,16 @@ export default async function ActivitiesPage(props: {
   }
   const seenRoutinesBySlug = new Map<string, Set<string>>();
   for (const log of logs) {
-    const slugs = routineSlugs.get(log.routineId);
+    // Prefer the log's activityType when present — that's the source of
+    // truth after an edit-form type switch and the only signal for typed
+    // logs against the synthetic Endurance routine. We map the type slug
+    // to the closest registry slug (e.g. trail-run → "trail-running")
+    // and credit ONLY that bucket; falling back to routine metadata when
+    // there's no per-log type at all.
+    const typedSlug = log.activityType ? typeSlugToRegistrySlug[log.activityType.slug] : undefined;
+    const slugs: Iterable<string> | undefined = typedSlug
+      ? [typedSlug]
+      : routineSlugs.get(log.routineId);
     if (!slugs) continue;
     for (const slug of slugs) {
       const stats = statsBySlug.get(slug);
@@ -208,11 +272,29 @@ export default async function ActivitiesPage(props: {
     if (chosen) routineEnduranceLabel.set(routineId, chosen.entry.label);
   }
 
+  // Track which palette slug each chart series should pick. Stored as a
+  // sibling map to weeklyMilesPerActivity (keyed by series label) so the
+  // color lookup later doesn't have to scan logs again. Reuses
+  // typeSlugToRegistrySlug from above — registry slugs and palette keys
+  // share a namespace ("running", "trail-running", "walking", etc.).
+  const seriesPaletteSlug = new Map<string, string>();
   const weeklyMilesPerActivity = new Map<string, Map<string, number>>();
   const weeklyMinutesPerActivity = new Map<string, Map<string, number>>();
   for (const log of enduranceLogs12w) {
-    const label = routineEnduranceLabel.get(log.routineId);
+    // Prefer the log's activityType when present — that's the source of
+    // truth after an edit-form type switch and the only signal for typed
+    // logs against the synthetic Endurance routine. Fall back to the
+    // routine's metadata label for legacy un-typed logs.
+    let label: string | undefined;
+    let paletteSlug: string | undefined;
+    if (log.activityType) {
+      label = log.activityType.name;
+      paletteSlug = typeSlugToRegistrySlug[log.activityType.slug];
+    } else {
+      label = routineEnduranceLabel.get(log.routineId);
+    }
     if (!label) continue;
+    if (paletteSlug) seriesPaletteSlug.set(label, paletteSlug);
     if (!weeklyMilesPerActivity.has(label)) weeklyMilesPerActivity.set(label, new Map());
     if (!weeklyMinutesPerActivity.has(label)) weeklyMinutesPerActivity.set(label, new Map());
     incrementWeekMap(weeklyMilesPerActivity.get(label)!, log.performedAt, log.distanceMi ?? 0);
@@ -226,8 +308,15 @@ export default async function ActivitiesPage(props: {
     .filter((e) => e.total > 0)
     .sort((a, b) => b.total - a.total)
     .map((e) => {
-      const slug = e.label.toLowerCase().replace(/\s+/g, "-");
-      const color = enduranceActivityColors[slug] ?? enduranceFallbackColors[enduranceFallbackIdx++ % enduranceFallbackColors.length];
+      // Color resolution order: the activity-type slug's mapped palette
+      // key (set in the loop above for typed logs), then the legacy
+      // label-to-slug guess (for metadata-tagged logs), then a fallback.
+      const paletteSlug = seriesPaletteSlug.get(e.label);
+      const labelSlug = e.label.toLowerCase().replace(/\s+/g, "-");
+      const color =
+        (paletteSlug && enduranceActivityColors[paletteSlug]) ||
+        enduranceActivityColors[labelSlug] ||
+        enduranceFallbackColors[enduranceFallbackIdx++ % enduranceFallbackColors.length];
       return {
         label: e.label,
         color,

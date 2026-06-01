@@ -248,6 +248,18 @@ export const getRoutineLogs = cache(async function getRoutineLogs(range: Progres
       routine: {
         select: routineRelationSelectWithFrequency,
       },
+      // Activity type for typed endurance logs — surfaces the per-log
+      // type slug/name + its family so consumers (the /activities chart,
+      // family-tab progress views, etc.) can prefer the log's own type
+      // over its routine's pre-edit metadata after the edit-log type
+      // switcher moves a log between buckets.
+      activityType: {
+        select: {
+          slug: true,
+          name: true,
+          family: { select: { slug: true, name: true } },
+        },
+      },
       ...sharedInclude,
     },
   });
