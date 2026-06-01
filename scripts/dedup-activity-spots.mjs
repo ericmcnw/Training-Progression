@@ -153,12 +153,37 @@ for (const [, locs] of climbGroups) {
 console.log(`Inspected ${allSpots.length} ActivitySpot row(s), ${allClimbs.length} ClimbLocation row(s).`);
 console.log(`Found ${spotDupGroups.length} ActivitySpot duplicate group(s), ${climbDupGroups.length} ClimbLocation duplicate group(s).`);
 
-if (spotDupGroups.length === 0 && climbDupGroups.length === 0) {
-  await prisma.$disconnect();
-  process.exit(0);
+// ── Pass 3: Cross-table merge (ActivitySpot ↔ ClimbLocation) ─────────
+//
+// When the same real-world place exists as both an ActivitySpot (e.g.
+// "Paugussett State Forest" under running) and a ClimbLocation (same
+// name, climbing crag), merge by collapsing the ActivitySpot into the
+// ClimbLocation. ClimbLocation wins as canonical because its schema is
+// richer (problems + media), and RoutineLog can reference either table
+// via its existing FK columns — the ActivitySpot's logs get repointed
+// to climbLocationId and the ActivitySpot row is deleted.
+//
+// Matching rule: normalized name match (case + curly-apostrophe folded).
+// Confidence labels: "osm-match" when both rows share an OSM pin (highest
+// confidence — same real-world place), "name-only" when at least one
+// side is missing the OSM pin. The dry-run output shows both so the
+// operator can bail if a name-only match looks suspicious.
+console.log(`Cross-table candidates: scanning…`);
+const crossPairs = [];
+for (const spot of allSpots) {
+  const spotKey = normName(spot.name);
+  const spotOsm = osmKey(spot.osmType, spot.osmId);
+  for (const loc of allClimbs) {
+    if (normName(loc.name) !== spotKey) continue;
+    const locOsm = osmKey(loc.osmType, loc.osmId);
+    // Either rows share an OSM pin, OR at least one is missing OSM.
+    // Two DIFFERENT real-world OSM pins with the same name = not a dup.
+    if (spotOsm !== locOsm && spotOsm !== "__no_osm__" && locOsm !== "__no_osm__") continue;
+    crossPairs.push({ spot, climb: loc, confidence: spotOsm === locOsm ? "osm-match" : "name-only" });
+  }
 }
 
-const plan = { spots: [], climbs: [] };
+const plan = { spots: [], climbs: [], cross: [] };
 
 for (const group of spotDupGroups) {
   const [canonical, ...dups] = group;
@@ -208,12 +233,30 @@ for (const group of climbDupGroups) {
   plan.climbs.push({ canonical, dups, logCount, problemCount, mediaCount, backfill });
 }
 
+for (const pair of crossPairs) {
+  // Skip pairs whose ActivitySpot side is already scheduled to be
+  // deleted by Pass 1 — those will be gone before this pass runs and
+  // their logs are already getting repointed at the spot canonical.
+  const alreadyMerging = plan.spots.some(({ dups }) => dups.some((d) => d.id === pair.spot.id));
+  if (alreadyMerging) continue;
+  const logCount = await prisma.routineLog.count({ where: { activitySpotId: pair.spot.id } });
+  const backfill = {};
+  if (!pair.climb.region && pair.spot.region) backfill.region = pair.spot.region;
+  if (pair.climb.latitude == null && pair.spot.latitude != null) backfill.latitude = pair.spot.latitude;
+  if (pair.climb.longitude == null && pair.spot.longitude != null) backfill.longitude = pair.spot.longitude;
+  if (!pair.climb.osmType && pair.spot.osmType) backfill.osmType = pair.spot.osmType;
+  if (!pair.climb.osmId && pair.spot.osmId) backfill.osmId = pair.spot.osmId;
+  plan.cross.push({ spot: pair.spot, climb: pair.climb, confidence: pair.confidence, logCount, backfill });
+}
+
 const totalSpotDups = plan.spots.reduce((sum, p) => sum + p.dups.length, 0);
 const totalSpotLogs = plan.spots.reduce((sum, p) => sum + p.logCount, 0);
 const totalClimbDups = plan.climbs.reduce((sum, p) => sum + p.dups.length, 0);
 const totalClimbLogs = plan.climbs.reduce((sum, p) => sum + p.logCount, 0);
 const totalProblems = plan.climbs.reduce((sum, p) => sum + p.problemCount, 0);
 const totalMedia = plan.climbs.reduce((sum, p) => sum + p.mediaCount, 0);
+const totalCrossDeleted = plan.cross.length;
+const totalCrossLogs = plan.cross.reduce((sum, p) => sum + p.logCount, 0);
 
 console.log("");
 console.log("Plan:");
@@ -222,6 +265,9 @@ if (plan.spots.length > 0) {
 }
 if (plan.climbs.length > 0) {
   console.log(`  ClimbLocation: merge ${totalClimbDups} dup row(s), repoint ${totalClimbLogs} log(s), ${totalProblems} problem(s), ${totalMedia} media item(s).`);
+}
+if (plan.cross.length > 0) {
+  console.log(`  Cross-table:   collapse ${totalCrossDeleted} ActivitySpot row(s) into existing ClimbLocation(s), repoint ${totalCrossLogs} log(s).`);
 }
 console.log("");
 
@@ -242,6 +288,15 @@ for (const { canonical, dups, logCount, problemCount, mediaCount, backfill } of 
   if (problemCount > 0) console.log(`    repoint ${problemCount} problem(s)`);
   if (mediaCount > 0) console.log(`    repoint ${mediaCount} media item(s)`);
   if (Object.keys(backfill).length > 0) console.log(`    backfill: ${Object.entries(backfill).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+  console.log("");
+}
+
+for (const { spot, climb, confidence, logCount, backfill } of plan.cross) {
+  console.log(`  [cross] "${climb.name}" — collapse ActivitySpot into ClimbLocation [${confidence}]`);
+  console.log(`    keep   climbLocation id=${climb.id} type=${climb.type} osm=${osmKey(climb.osmType, climb.osmId)}`);
+  console.log(`    drop   activitySpot  id=${spot.id} slug=${spot.activitySlug} osm=${osmKey(spot.osmType, spot.osmId)}`);
+  if (logCount > 0) console.log(`    repoint ${logCount} log(s) onto climbLocation`);
+  if (Object.keys(backfill).length > 0) console.log(`    backfill climbLocation: ${Object.entries(backfill).map(([k, v]) => `${k}=${v}`).join(", ")}`);
   console.log("");
 }
 
@@ -297,6 +352,22 @@ for (const { canonical, dups, backfill } of plan.climbs) {
   });
 }
 
+let appliedCrossLogs = 0, appliedCrossDeleted = 0;
+for (const { spot, climb, backfill } of plan.cross) {
+  await prisma.$transaction(async (tx) => {
+    const repoint = await tx.routineLog.updateMany({
+      where: { activitySpotId: spot.id },
+      data: { activitySpotId: null, climbLocationId: climb.id },
+    });
+    appliedCrossLogs += repoint.count;
+    if (Object.keys(backfill).length > 0) {
+      await tx.climbLocation.update({ where: { id: climb.id }, data: backfill });
+    }
+    await tx.activitySpot.delete({ where: { id: spot.id } });
+    appliedCrossDeleted += 1;
+  });
+}
+
 console.log("");
 console.log("Applied:");
 if (plan.spots.length > 0) {
@@ -304,6 +375,9 @@ if (plan.spots.length > 0) {
 }
 if (plan.climbs.length > 0) {
   console.log(`  ClimbLocation: repointed ${appliedClimbLogs} log(s), ${appliedClimbProblems} problem(s), ${appliedClimbMedia} media item(s); deleted ${appliedClimbDeletes} dup row(s).`);
+}
+if (plan.cross.length > 0) {
+  console.log(`  Cross-table:   repointed ${appliedCrossLogs} log(s), collapsed ${appliedCrossDeleted} ActivitySpot row(s) into ClimbLocation(s).`);
 }
 
 await prisma.$disconnect();

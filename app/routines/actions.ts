@@ -1875,7 +1875,17 @@ export async function createWorkoutExerciseOption(params: {
  *  spotId, or upserts a new spot from the supplied draft fields. Returns
  *  the resolved id (or null if nothing supplied). Backfills region/coords
  *  on existing rows when the user supplies new values, but never clobbers.
- *  Mirrors the climbing version inside logSession. */
+ *  Mirrors the climbing version inside logSession.
+ *
+ *  Returns a discriminated union — when the supplied spot matches an
+ *  existing ClimbLocation by OSM pin (e.g. a trail-run logged at a place
+ *  already saved as a climbing crag), the caller writes the log's
+ *  `climbLocationId` instead of `activitySpotId` so the two tables share
+ *  one row per real-world place. */
+type ResolvedSpot =
+  | { kind: "activitySpot"; id: string }
+  | { kind: "climbLocation"; id: string };
+
 async function resolveActivitySpotId(input: {
   activitySlug?: string;
   activitySpotId?: string;
@@ -1886,8 +1896,9 @@ async function resolveActivitySpotId(input: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
-}): Promise<string | null> {
-  if (input.activitySpotId?.trim()) return input.activitySpotId.trim();
+}): Promise<ResolvedSpot | null> {
+  if (input.activitySpotId?.trim())
+    return { kind: "activitySpot", id: input.activitySpotId.trim() };
   const name = input.newActivitySpotName?.trim();
   const slug = input.activitySlug?.trim();
   if (!name) return null;
@@ -1929,6 +1940,35 @@ async function resolveActivitySpotId(input: {
   // narrow DB lookup catches that without scanning the whole table.
   const compatibleSlugs = compatibleActivitySlugs(slug);
   const slugFilter = compatibleSlugs.length > 0 ? { in: compatibleSlugs } : slug;
+  const normalizedTarget = normalizeSpotName(name);
+
+  // Cross-table dedup: if the activity is climbing-compatible (hiking,
+  // trail-running) AND the user supplied an OSM pin that matches an
+  // existing ClimbLocation with the same normalized name, return that
+  // ClimbLocation. RoutineLog can carry climbLocationId for any kind, so
+  // the log links to the same row a climbing session would use — no
+  // parallel "Paugussett State Forest" in both tables. Restricted to
+  // OSM-pinned matches because that's the only proof the two rows are
+  // the same real-world place; name-only matches across tables are too
+  // weak to merge silently (the migration script surfaces them for a
+  // manual review).
+  if (osmType && osmId && compatibleSlugs.includes("climbing")) {
+    const climbMatch = await prisma.climbLocation.findFirst({
+      where: { osmType, osmId },
+      select: { id: true, name: true, region: true, latitude: true, longitude: true },
+    });
+    if (climbMatch && normalizeSpotName(climbMatch.name) === normalizedTarget) {
+      const updates: { region?: string; latitude?: number; longitude?: number } = {};
+      if (region && !climbMatch.region) updates.region = region;
+      if (lat !== null && climbMatch.latitude == null) updates.latitude = lat;
+      if (lng !== null && climbMatch.longitude == null) updates.longitude = lng;
+      if (Object.keys(updates).length > 0) {
+        await prisma.climbLocation.update({ where: { id: climbMatch.id }, data: updates });
+      }
+      return { kind: "climbLocation", id: climbMatch.id };
+    }
+  }
+
   const candidates = await prisma.activitySpot.findFirst({
     where: {
       activitySlug: slugFilter,
@@ -1938,7 +1978,6 @@ async function resolveActivitySpotId(input: {
     },
     select: { id: true, name: true, region: true, latitude: true, longitude: true },
   });
-  const normalizedTarget = normalizeSpotName(name);
   // If the narrow filter returned a row whose name normalizes to the same
   // value, use it. Otherwise, broaden to find any same-OSM / same-slug
   // candidates with a name match (handles the rare case where the picker
@@ -1965,7 +2004,7 @@ async function resolveActivitySpotId(input: {
     if (Object.keys(updates).length > 0) {
       await prisma.activitySpot.update({ where: { id: existing.id }, data: updates });
     }
-    return existing.id;
+    return { kind: "activitySpot", id: existing.id };
   }
   const created = await prisma.activitySpot.create({
     data: {
@@ -1980,7 +2019,22 @@ async function resolveActivitySpotId(input: {
     },
     select: { id: true },
   });
-  return created.id;
+  return { kind: "activitySpot", id: created.id };
+}
+
+// Helper that flattens the discriminated ResolvedSpot back into the two
+// nullable FK columns on RoutineLog. `existing` (when provided) is the
+// existing climbLocationId set elsewhere — used by the session log path
+// where a separate climbing template might already have resolved one.
+function splitResolvedSpot(
+  resolved: ResolvedSpot | null,
+  existing?: { climbLocationId?: string | null }
+): { activitySpotId: string | null; climbLocationId: string | null } {
+  const fromExisting = existing?.climbLocationId ?? null;
+  if (!resolved) return { activitySpotId: null, climbLocationId: fromExisting };
+  if (resolved.kind === "activitySpot")
+    return { activitySpotId: resolved.id, climbLocationId: fromExisting };
+  return { activitySpotId: null, climbLocationId: resolved.id };
 }
 
 export async function logCardio(params: {
@@ -2022,7 +2076,8 @@ export async function logCardio(params: {
     throw new Error("Elevation gain must be 0 or greater.");
   }
 
-  const activitySpotId = await resolveActivitySpotId(params);
+  const resolved = await resolveActivitySpotId(params);
+  const split = splitResolvedSpot(resolved, { climbLocationId: params.climbLocationId?.trim() || null });
 
   const log = await prisma.routineLog.create({
     data: {
@@ -2036,8 +2091,8 @@ export async function logCardio(params: {
           : null,
       notes: params.notes?.trim() || null,
       location: params.location?.trim() || null,
-      activitySpotId,
-      climbLocationId: params.climbLocationId?.trim() || null,
+      activitySpotId: split.activitySpotId,
+      climbLocationId: split.climbLocationId,
     },
     select: { id: true },
   });
@@ -2289,8 +2344,11 @@ export async function logSession(params: {
   }
 
   // Resolve generic ActivitySpot for non-climbing sport sessions. Climbing
-  // uses ClimbLocation above and skips this path.
-  const resolvedActivitySpotId = await resolveActivitySpotId(params);
+  // uses ClimbLocation above and skips this path. If the resolver finds a
+  // cross-table climb-location match it returns one instead — splitResolvedSpot
+  // routes it to the correct FK column.
+  const resolvedSpot = await resolveActivitySpotId(params);
+  const split = splitResolvedSpot(resolvedSpot, { climbLocationId: resolvedClimbLocationId });
 
   const logId = await prisma.$transaction(async (tx) => {
     const log = await tx.routineLog.create({
@@ -2300,8 +2358,8 @@ export async function logSession(params: {
         durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
-        climbLocationId: resolvedClimbLocationId,
-        activitySpotId: resolvedActivitySpotId,
+        climbLocationId: split.climbLocationId,
+        activitySpotId: split.activitySpotId,
       },
       select: { id: true },
     });
@@ -2433,8 +2491,11 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
       nextClimbLocationId = null;
       nextActivitySpotId = null;
     } else {
-      nextClimbLocationId = await resolveClimbLocationId(params);
-      nextActivitySpotId = await resolveActivitySpotId(params);
+      const climbId = await resolveClimbLocationId(params);
+      const spotResolved = await resolveActivitySpotId(params);
+      const split = splitResolvedSpot(spotResolved, { climbLocationId: climbId });
+      nextClimbLocationId = split.climbLocationId;
+      nextActivitySpotId = split.activitySpotId;
     }
   }
 
@@ -2712,8 +2773,9 @@ export async function updateSessionLog(params: {
     } else {
       const resolvedClimb = await resolveClimbLocationId(params);
       const resolvedSpot = await resolveActivitySpotId(params);
-      nextClimbLocationId = resolvedClimb;
-      nextActivitySpotId = resolvedSpot;
+      const split = splitResolvedSpot(resolvedSpot, { climbLocationId: resolvedClimb });
+      nextClimbLocationId = split.climbLocationId;
+      nextActivitySpotId = split.activitySpotId;
     }
   }
 
