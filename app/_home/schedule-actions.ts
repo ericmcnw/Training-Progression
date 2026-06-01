@@ -15,9 +15,10 @@ function makeId() {
   return randomUUID().replace(/-/g, "");
 }
 
-export async function scheduleRoutineForDay(input: { routineId: string; ymd: string }) {
+export async function scheduleRoutineForDay(input: { routineId: string; ymd: string; activityTypeId?: string | null }) {
   const routineId = input.routineId.trim();
   const ymd = input.ymd.trim();
+  const activityTypeId = input.activityTypeId?.trim() || null;
 
   if (!routineId) throw new Error("Missing routineId.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) throw new Error("Invalid date.");
@@ -27,6 +28,18 @@ export async function scheduleRoutineForDay(input: { routineId: string; ymd: str
     select: { id: true },
   });
   if (!routine) throw new Error("Routine not found.");
+
+  // Validate the activity type exists if one was passed. Most schedule
+  // entries leave it null (legacy routines, non-endurance). When set, the
+  // slot renders as "Run · Tuesday" instead of the synthetic Endurance
+  // routine name.
+  if (activityTypeId) {
+    const type = await prisma.activityType.findUnique({
+      where: { id: activityTypeId },
+      select: { id: true },
+    });
+    if (!type) throw new Error("Activity type not found.");
+  }
 
   const dayStart = getAppDayRange(ymd).start;
   const nextDayStart = getAppDayRange(ymd).end;
@@ -42,6 +55,7 @@ export async function scheduleRoutineForDay(input: { routineId: string; ymd: str
     data: {
       id: makeId(),
       routineId,
+      activityTypeId,
       scheduledDate: dayStart,
       sortOrder: nextSortOrder,
     },
@@ -51,4 +65,17 @@ export async function scheduleRoutineForDay(input: { routineId: string; ymd: str
   // legacy `/schedule` surface stays in sync naturally since it reads the
   // same table on its next visit.
   revalidatePath("/");
+}
+
+// Schedule a typed endurance slot for a day. Convenience wrapper around
+// scheduleRoutineForDay that targets the synthetic Endurance routine + a
+// specific activity type. Used by the new "Schedule endurance" UI in the
+// WaG day picker.
+export async function scheduleEnduranceTypeForDay(input: { activityTypeId: string; ymd: string }) {
+  const { SYNTHETIC_ENDURANCE_ROUTINE_ID } = await import("@/lib/activity-types");
+  return scheduleRoutineForDay({
+    routineId: SYNTHETIC_ENDURANCE_ROUTINE_ID,
+    activityTypeId: input.activityTypeId,
+    ymd: input.ymd,
+  });
 }

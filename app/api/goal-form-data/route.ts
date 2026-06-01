@@ -58,6 +58,8 @@ export async function GET(req: Request) {
           substituteRoutineIds: goal.routines.filter((r) => r.role === "SUBSTITUTE").map((r) => r.routineId),
           triggerExerciseIds: goal.triggerExerciseIds,
           triggerSubtypes: goal.triggerSubtypes,
+          triggerActivityTypeIds: goal.triggerActivityTypeIds,
+          triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
           triggerMinSets: goal.triggerMinSets,
         },
       };

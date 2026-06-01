@@ -20,10 +20,13 @@ type Props = {
   day: MonthDayCell;
   today: string;
   schedulableRoutines?: QuickPickRoutine[];
+  /** Enabled endurance activity types — feeds the schedule picker's
+   *  typed-endurance shortcut. Empty array hides the shortcut cleanly. */
+  scheduleActivityTypes?: import("@/app/_home/SchedulePicker").ScheduleActivityType[];
   onClose: () => void;
 };
 
-export default function DayDetailPopover({ day, today, schedulableRoutines, onClose }: Props) {
+export default function DayDetailPopover({ day, today, schedulableRoutines, scheduleActivityTypes, onClose }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
   const sub = day.ymd === today ? "Today" : day.ymd < today ? "Past day" : "Upcoming";
@@ -72,6 +75,7 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, onCl
           ymd={day.ymd}
           dateLabel={fullDate}
           routines={schedulableRoutines}
+          activityTypes={scheduleActivityTypes}
         />
       ) : null}
     </>

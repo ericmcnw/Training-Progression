@@ -707,6 +707,26 @@ export async function getHomeData(): Promise<HomeData> {
     }))
     .sort((a, b) => a.routineName.localeCompare(b.routineName));
 
+  // ── Enabled endurance activity types for the schedule picker ─────────────
+  // Filters out user-disabled types via the same preference table the
+  // log drawer respects. Empty-array fallback if the seed hasn't run.
+  const activityTypeRows = await prisma.activityType.findMany({
+    include: {
+      family: { select: { name: true, sortOrder: true } },
+      userPreferences: { select: { enabled: true } },
+    },
+    orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+  });
+  const scheduleActivityTypes = activityTypeRows
+    .filter((t) => t.userPreferences[0]?.enabled !== false)
+    .map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      name: t.name,
+      familyId: t.familyId,
+      familyName: t.family.name,
+    }));
+
   return {
     today,
     currentWeekStart,
@@ -718,6 +738,7 @@ export async function getHomeData(): Promise<HomeData> {
     habitChip,
     weekChip,
     quickPickRoutines,
+    scheduleActivityTypes,
   };
 }
 

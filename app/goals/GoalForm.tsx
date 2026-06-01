@@ -50,10 +50,34 @@ export type GoalFormInitial = {
     /** "Also count when these appear" — activity-type subtypes that trigger
      *  a match on any log whose routine has that subtype (e.g. CLIMBING). */
     triggerSubtypes?: string[];
+    /** Endurance activity type ids — "Run 3x/wk" sets the run type id and
+     *  any log explicitly typed Run counts. Exact match. */
+    triggerActivityTypeIds?: string[];
+    /** Endurance family ids — "Running 3x/wk" covering any Run-family log
+     *  (Run + Trail Run + Long Run + …). Broader than triggerActivityTypeIds. */
+    triggerActivityFamilyIds?: string[];
     /** Minimum sets of a trigger exercise required in a single log to claim
      *  a session via the exercise-trigger path. Defaults to 1. */
     triggerMinSets?: number;
   };
+};
+
+// Activity type / family options for the goal-target picker. Loaded
+// server-side by the goals form-data API and passed in via props.
+export type GoalActivityTypeOption = {
+  id: string;
+  slug: string;
+  name: string;
+  familyId: string;
+  familyName: string;
+  familySortOrder: number;
+  sortOrder: number;
+};
+export type GoalActivityFamilyOption = {
+  id: string;
+  slug: string;
+  name: string;
+  sortOrder: number;
 };
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -248,6 +272,12 @@ export default function GoalForm({
   );
   const [triggerSubtypes, setTriggerSubtypes] = useState<string[]>(
     () => initial.groupFrequency?.triggerSubtypes ?? []
+  );
+  const [triggerActivityTypeIds, setTriggerActivityTypeIds] = useState<string[]>(
+    () => initial.groupFrequency?.triggerActivityTypeIds ?? []
+  );
+  const [triggerActivityFamilyIds, setTriggerActivityFamilyIds] = useState<string[]>(
+    () => initial.groupFrequency?.triggerActivityFamilyIds ?? []
   );
   // Held as a string so the input behaves naturally (allows clearing while
   // typing). Parser clamps + defaults to 1 if blank/invalid.
@@ -581,10 +611,16 @@ export default function GoalForm({
 
           <TriggerSection
             exerciseOptions={options.exercises}
+            activityTypeOptions={options.activityTypes ?? []}
+            activityFamilyOptions={options.activityFamilies ?? []}
             triggerExerciseIds={triggerExerciseIds}
             setTriggerExerciseIds={setTriggerExerciseIds}
             triggerSubtypes={triggerSubtypes}
             setTriggerSubtypes={setTriggerSubtypes}
+            triggerActivityTypeIds={triggerActivityTypeIds}
+            setTriggerActivityTypeIds={setTriggerActivityTypeIds}
+            triggerActivityFamilyIds={triggerActivityFamilyIds}
+            setTriggerActivityFamilyIds={setTriggerActivityFamilyIds}
             triggerMinSets={triggerMinSets}
             setTriggerMinSets={setTriggerMinSets}
           />
@@ -1382,22 +1418,38 @@ type TriggerExerciseOption = { id: string; label: string; subtitle?: string };
 
 function TriggerSection({
   exerciseOptions,
+  activityTypeOptions,
+  activityFamilyOptions,
   triggerExerciseIds,
   setTriggerExerciseIds,
   triggerSubtypes,
   setTriggerSubtypes,
+  triggerActivityTypeIds,
+  setTriggerActivityTypeIds,
+  triggerActivityFamilyIds,
+  setTriggerActivityFamilyIds,
   triggerMinSets,
   setTriggerMinSets,
 }: {
   exerciseOptions: TriggerExerciseOption[];
+  activityTypeOptions: GoalActivityTypeOption[];
+  activityFamilyOptions: GoalActivityFamilyOption[];
   triggerExerciseIds: string[];
   setTriggerExerciseIds: (ids: string[]) => void;
   triggerSubtypes: string[];
   setTriggerSubtypes: (subtypes: string[]) => void;
+  triggerActivityTypeIds: string[];
+  setTriggerActivityTypeIds: (ids: string[]) => void;
+  triggerActivityFamilyIds: string[];
+  setTriggerActivityFamilyIds: (ids: string[]) => void;
   triggerMinSets: string;
   setTriggerMinSets: (value: string) => void;
 }) {
-  const totalCount = triggerExerciseIds.length + triggerSubtypes.length;
+  const totalCount =
+    triggerExerciseIds.length +
+    triggerSubtypes.length +
+    triggerActivityTypeIds.length +
+    triggerActivityFamilyIds.length;
   const exerciseById = useMemo(() => {
     const map = new Map<string, TriggerExerciseOption>();
     for (const e of exerciseOptions) map.set(e.id, e);
@@ -1433,6 +1485,12 @@ function TriggerSection({
         {triggerSubtypes.map((subtype) => (
           <input key={`tsub-${subtype}`} type="hidden" name="triggerSubtypes" value={subtype} />
         ))}
+        {triggerActivityTypeIds.map((id) => (
+          <input key={`tat-${id}`} type="hidden" name="triggerActivityTypeIds" value={id} />
+        ))}
+        {triggerActivityFamilyIds.map((id) => (
+          <input key={`taf-${id}`} type="hidden" name="triggerActivityFamilyIds" value={id} />
+        ))}
 
         <TriggerExercisePicker
           options={exerciseOptions}
@@ -1440,6 +1498,21 @@ function TriggerSection({
           onChange={setTriggerExerciseIds}
           exerciseById={exerciseById}
         />
+
+        {/* Endurance type + family picker — present whenever the seed has
+            run (activity families exist). Lets the user create
+            "Run 3x/wk" (family) or "Trail Run 2x/wk" (specific type)
+            goals without having to wire them to a routine first. */}
+        {activityFamilyOptions.length > 0 && (
+          <EndurancePicker
+            typeOptions={activityTypeOptions}
+            familyOptions={activityFamilyOptions}
+            selectedTypeIds={triggerActivityTypeIds}
+            selectedFamilyIds={triggerActivityFamilyIds}
+            onChangeTypes={setTriggerActivityTypeIds}
+            onChangeFamilies={setTriggerActivityFamilyIds}
+          />
+        )}
 
         {showMinSets ? (
           <div style={minSetsRowStyle}>
@@ -1571,6 +1644,163 @@ function TriggerExercisePicker({
     </div>
   );
 }
+
+// Endurance type + family picker. Two parallel pill rows so the user can
+// pick at either grain — family ("Running 3x/wk" catches every run type)
+// or specific type ("Trail Run 2x/wk" matches exactly). Both can be
+// combined; the goal rollup ORs them with all other triggers.
+//
+// Layout matches the existing TriggerActivityTypePicker chip style for
+// visual consistency in the goal builder.
+function EndurancePicker({
+  typeOptions,
+  familyOptions,
+  selectedTypeIds,
+  selectedFamilyIds,
+  onChangeTypes,
+  onChangeFamilies,
+}: {
+  typeOptions: GoalActivityTypeOption[];
+  familyOptions: GoalActivityFamilyOption[];
+  selectedTypeIds: string[];
+  selectedFamilyIds: string[];
+  onChangeTypes: (ids: string[]) => void;
+  onChangeFamilies: (ids: string[]) => void;
+}) {
+  const selectedFamilySet = useMemo(() => new Set(selectedFamilyIds), [selectedFamilyIds]);
+  const selectedTypeSet = useMemo(() => new Set(selectedTypeIds), [selectedTypeIds]);
+  // Group types under their family heading for the picker so users see
+  // the hierarchy at-a-glance.
+  const grouped = useMemo(() => {
+    const byFamily = new Map<string, { familyId: string; familyName: string; familySortOrder: number; types: GoalActivityTypeOption[] }>();
+    for (const t of typeOptions) {
+      const cur = byFamily.get(t.familyId) ?? {
+        familyId: t.familyId,
+        familyName: t.familyName,
+        familySortOrder: t.familySortOrder,
+        types: [],
+      };
+      cur.types.push(t);
+      byFamily.set(t.familyId, cur);
+    }
+    return [...byFamily.values()].sort((a, b) => a.familySortOrder - b.familySortOrder);
+  }, [typeOptions]);
+
+  function toggleFamily(id: string) {
+    if (selectedFamilySet.has(id)) onChangeFamilies(selectedFamilyIds.filter((x) => x !== id));
+    else onChangeFamilies([...selectedFamilyIds, id]);
+  }
+  function toggleType(id: string) {
+    if (selectedTypeSet.has(id)) onChangeTypes(selectedTypeIds.filter((x) => x !== id));
+    else onChangeTypes([...selectedTypeIds, id]);
+  }
+
+  return (
+    <div style={endurancePickerBlockStyle}>
+      <div style={endurancePickerHeaderStyle}>Endurance activity</div>
+
+      {/* Family row — broader rollup target */}
+      <div style={enduranceSubLabelStyle}>Family (any type within counts)</div>
+      <div style={endurancePillRowStyle}>
+        {familyOptions
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((fam) => {
+            const active = selectedFamilySet.has(fam.id);
+            return (
+              <button
+                key={fam.id}
+                type="button"
+                onClick={() => toggleFamily(fam.id)}
+                style={active ? endurancePillActive : endurancePill}
+                aria-pressed={active}
+              >
+                {fam.name}
+              </button>
+            );
+          })}
+      </div>
+
+      {/* Type row — specific match per family */}
+      {grouped.length > 0 && (
+        <>
+          <div style={enduranceSubLabelStyle}>Specific type (exact match only)</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {grouped.map((g) => (
+              <div key={g.familyId} style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 10.5, opacity: 0.55, fontWeight: 800, letterSpacing: 0.4 }}>{g.familyName}</div>
+                <div style={endurancePillRowStyle}>
+                  {g.types.map((t) => {
+                    const active = selectedTypeSet.has(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleType(t.id)}
+                        style={active ? endurancePillActive : endurancePill}
+                        aria-pressed={active}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const endurancePickerBlockStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: 10,
+  borderRadius: 10,
+  background: "rgba(78,148,255,0.04)",
+  border: "1px solid rgba(78,148,255,0.18)",
+};
+
+const endurancePickerHeaderStyle: React.CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+  color: "rgba(191,219,254,0.95)",
+};
+
+const enduranceSubLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  opacity: 0.55,
+  textTransform: "uppercase",
+};
+
+const endurancePillRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 5,
+};
+
+const endurancePill: React.CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 11.5,
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const endurancePillActive: React.CSSProperties = {
+  ...endurancePill,
+  background: "rgba(78,148,255,0.18)",
+  borderColor: "rgba(78,148,255,0.55)",
+  color: "rgba(191,219,254,0.98)",
+};
 
 function TriggerActivityTypePicker({
   selected,

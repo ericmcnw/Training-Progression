@@ -62,6 +62,23 @@ export type GoalFormOptions = {
   sessionTemplates: GoalTargetOption[];
   sessionMetricsByRoutineId: Record<string, GoalTargetOption[]>;
   sessionMetricsByTemplateId: Record<string, GoalTargetOption[]>;
+  /** Endurance activity types — for the goal-builder picker. */
+  activityTypes: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    familyId: string;
+    familyName: string;
+    familySortOrder: number;
+    sortOrder: number;
+  }>;
+  /** Endurance families — broader rollup targets ("Running 3x/wk"). */
+  activityFamilies: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    sortOrder: number;
+  }>;
 };
 
 export type GoalHistoryPoint = {
@@ -168,6 +185,12 @@ type GroupFrequencyGoalRow = {
   }>;
   /** Subtypes that broaden the match — see FrequencyGoal model docs. */
   triggerSubtypes?: string[];
+  /** Endurance activity type ids — exact-match triggers for typed
+   *  endurance logs (Run 3x/wk style goals). */
+  triggerActivityTypeIds?: string[];
+  /** Endurance family ids — broader rollup triggers (any Run-family log
+   *  counts). */
+  triggerActivityFamilyIds?: string[];
   /** Exercise ids that broaden the match — captures quick logs that don't
    *  belong to any enrolled routine. */
   triggerExerciseIds?: string[];
@@ -1171,6 +1194,8 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
         isActive: goal.isActive,
         routineIds: goal.routines.map((entry) => entry.routineId),
         triggerSubtypes: goal.triggerSubtypes,
+        triggerActivityTypeIds: goal.triggerActivityTypeIds,
+        triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
         triggerExerciseIds: goal.triggerExerciseIds,
         triggerMinSets: goal.triggerMinSets,
       },
@@ -1316,7 +1341,7 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
 }
 
 export async function getGoalFormOptions(): Promise<GoalFormOptions> {
-  const [routines, exercises, groups, sessionTemplates] = await Promise.all([
+  const [routines, exercises, groups, sessionTemplates, enduranceFamilies] = await Promise.all([
     prisma.routine.findMany({
       // Hide placeholder routines from goal target dropdowns — they exist
       // to host ad-hoc logs and were never meant to be picked by a user.
@@ -1354,6 +1379,20 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
         metricDefinitions: {
           where: { showInGoals: true },
           orderBy: { sortOrder: "asc" },
+        },
+      },
+    }),
+    // Endurance taxonomy for the new goal-target picker: types + families.
+    // Filtered by enabled status (UserActivityTypePreference.enabled !== false)
+    // so the picker stays in sync with the user's settings choices.
+    prisma.enduranceFamily.findMany({
+      orderBy: [{ sortOrder: "asc" }],
+      include: {
+        types: {
+          orderBy: [{ sortOrder: "asc" }],
+          include: {
+            userPreferences: { select: { enabled: true } },
+          },
         },
       },
     }),
@@ -1421,6 +1460,28 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
     })),
     sessionMetricsByRoutineId: sessionMetricOptionsByRoutineId,
     sessionMetricsByTemplateId: sessionMetricOptionsByTemplateId,
+    // Flatten the EnduranceFamily → ActivityType[] tree into a list of
+    // type options + a sibling list of family options. The picker UI
+    // groups types under their family for display.
+    activityTypes: enduranceFamilies.flatMap((fam) =>
+      fam.types
+        .filter((t) => t.userPreferences[0]?.enabled !== false)
+        .map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          familyId: t.familyId,
+          familyName: fam.name,
+          familySortOrder: fam.sortOrder,
+          sortOrder: t.sortOrder,
+        }))
+    ),
+    activityFamilies: enduranceFamilies.map((fam) => ({
+      id: fam.id,
+      slug: fam.slug,
+      name: fam.name,
+      sortOrder: fam.sortOrder,
+    })),
   };
 }
 

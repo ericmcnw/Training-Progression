@@ -10,7 +10,15 @@ import Popover from "./Popover";
 import type { QuickPickRoutine } from "./types";
 import { COLOR, DOMAIN_LABEL } from "./tokens";
 import { domainAccent } from "./client-utils";
-import { scheduleRoutineForDay } from "./schedule-actions";
+import { scheduleRoutineForDay, scheduleEnduranceTypeForDay } from "./schedule-actions";
+
+export type ScheduleActivityType = {
+  id: string;
+  slug: string;
+  name: string;
+  familyId: string;
+  familyName: string;
+};
 
 type Props = {
   open: boolean;
@@ -18,14 +26,44 @@ type Props = {
   ymd: string;
   dateLabel: string;
   routines: QuickPickRoutine[];
+  /** Endurance activity types — enables the typed-endurance shortcut section
+   *  at the top of the picker. Empty array = section hidden (cleanly
+   *  degrades on databases that haven't run the endurance seed). */
+  activityTypes?: ScheduleActivityType[];
 };
 
 const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "lifestyle"] as const;
 
-export default function SchedulePicker({ open, onClose, ymd, dateLabel, routines }: Props) {
+export default function SchedulePicker({ open, onClose, ymd, dateLabel, routines, activityTypes = [] }: Props) {
   const [filter, setFilter] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function pickEnduranceType(activityTypeId: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await scheduleEnduranceTypeForDay({ activityTypeId, ymd });
+        reset();
+        onClose();
+      } catch {
+        setError("Couldn't add endurance to schedule. Try again.");
+      }
+    });
+  }
+
+  // Group activity types by family for the header row so the user sees
+  // hierarchy (Running ▸ Run / Trail Run / …). Each row is collapsible
+  // implicitly via overflow scroll on mobile.
+  const enduranceGroups = useMemo(() => {
+    const byFamily = new Map<string, { familyId: string; familyName: string; types: ScheduleActivityType[] }>();
+    for (const t of activityTypes) {
+      const cur = byFamily.get(t.familyId) ?? { familyId: t.familyId, familyName: t.familyName, types: [] };
+      cur.types.push(t);
+      byFamily.set(t.familyId, cur);
+    }
+    return [...byFamily.values()];
+  }, [activityTypes]);
 
   function reset() {
     setFilter("");
@@ -86,6 +124,35 @@ export default function SchedulePicker({ open, onClose, ymd, dateLabel, routines
 
   return (
     <Popover open={open} onClose={handleClose} title="Add to schedule" subtitle={dateLabel} desktopWidth={400}>
+      {/* Typed endurance shortcut — surfaces all enabled activity types
+          so the user can schedule "Run on Tuesday" or "Hike on Saturday"
+          without creating a routine. Hidden when no types are seeded. */}
+      {enduranceGroups.length > 0 && (
+        <div style={enduranceShortcutBlock}>
+          <div style={enduranceShortcutHeader}>🏃 Endurance — pick an activity</div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {enduranceGroups.map((g) => (
+              <div key={g.familyId} style={{ display: "grid", gap: 4 }}>
+                <div style={enduranceFamilyLabel}>{g.familyName}</div>
+                <div style={endurancePillRow}>
+                  {g.types.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => pickEnduranceType(t.id)}
+                      disabled={pending}
+                      style={endurancePill}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={searchRow}>
         {/* No autoFocus — opening the picker shouldn't pop the soft
             keyboard. Users can scroll the list first and tap into search
@@ -136,6 +203,52 @@ export default function SchedulePicker({ open, onClose, ymd, dateLabel, routines
     </Popover>
   );
 }
+
+// Typed-endurance shortcut block at the top of the picker. Soft tint
+// matches the goal-builder's endurance picker so the type/family
+// shortcuts feel like a related affordance across the app.
+const enduranceShortcutBlock: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  marginBottom: 10,
+  padding: 10,
+  borderRadius: 10,
+  background: "rgba(78,148,255,0.04)",
+  border: "1px solid rgba(78,148,255,0.18)",
+};
+
+const enduranceShortcutHeader: CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+  color: "rgba(191,219,254,0.95)",
+};
+
+const enduranceFamilyLabel: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  opacity: 0.55,
+  textTransform: "uppercase",
+};
+
+const endurancePillRow: CSSProperties = {
+  display: "flex",
+  gap: 5,
+  flexWrap: "wrap",
+};
+
+const endurancePill: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 11.5,
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
 
 const searchRow: CSSProperties = {
   display: "flex",

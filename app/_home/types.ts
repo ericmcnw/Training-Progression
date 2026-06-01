@@ -189,4 +189,13 @@ export type HomeData = {
   habitChip: HabitChipStatus;
   weekChip: WeekChipStatus;
   quickPickRoutines: QuickPickRoutine[];
+  /** Enabled endurance activity types for the typed-endurance schedule
+   *  shortcut in the schedule picker. */
+  scheduleActivityTypes: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    familyId: string;
+    familyName: string;
+  }>;
 };

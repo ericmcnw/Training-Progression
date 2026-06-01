@@ -14,12 +14,13 @@ import type { QuickPickRoutine } from "@/app/_home/types";
 type Props = {
   data: MonthData;
   schedulableRoutines?: QuickPickRoutine[];
+  scheduleActivityTypes?: import("@/app/_home/SchedulePicker").ScheduleActivityType[];
 };
 
 const MAX_DOTS_MOBILE = 6;
 const MAX_DOTS_DESKTOP = 10;
 
-export default function MonthCalendar({ data, schedulableRoutines }: Props) {
+export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
   const selectedDay = selectedYmd ? data.days.find((d) => d.ymd === selectedYmd) ?? null : null;
 
@@ -60,6 +61,7 @@ export default function MonthCalendar({ data, schedulableRoutines }: Props) {
           day={selectedDay}
           today={data.today}
           schedulableRoutines={schedulableRoutines}
+          scheduleActivityTypes={scheduleActivityTypes}
           onClose={() => setSelectedYmd(null)}
         />
       ) : null}

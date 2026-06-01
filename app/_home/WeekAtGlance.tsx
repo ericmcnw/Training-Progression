@@ -29,6 +29,9 @@ type Props = {
   // Optional so existing callers (legacy) don't have to provide it — when
   // absent the "+ Add to plan" button stays hidden.
   schedulableRoutines?: QuickPickRoutine[];
+  /** Enabled endurance activity types — feeds the SchedulePicker's
+   *  typed-endurance shortcut block. Empty hides the section cleanly. */
+  scheduleActivityTypes?: import("./SchedulePicker").ScheduleActivityType[];
 };
 
 // Default fallbacks — actual day width is computed from viewport width so
@@ -44,7 +47,7 @@ const DAY_WIDTH_MOBILE_MIN = 56;
 const DAY_WIDTH_MOBILE_MAX = 76;
 const DAY_GAP = 6;
 
-export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines }: Props) {
+export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines, scheduleActivityTypes }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedYmd, setSelectedYmd] = useState<string>(today);
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DESKTOP);
@@ -225,7 +228,7 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
       </div>
 
       {selectedDay ? (
-        <DetailPanel day={selectedDay} today={today} schedulableRoutines={schedulableRoutines} />
+        <DetailPanel day={selectedDay} today={today} schedulableRoutines={schedulableRoutines} scheduleActivityTypes={scheduleActivityTypes} />
       ) : null}
 
       <style>{`
@@ -366,10 +369,12 @@ function DetailPanel({
   day,
   today,
   schedulableRoutines,
+  scheduleActivityTypes,
 }: {
   day: LegacyGlanceDay;
   today: string;
   schedulableRoutines?: QuickPickRoutine[];
+  scheduleActivityTypes?: import("./SchedulePicker").ScheduleActivityType[];
 }) {
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
   const sub = day.ymd === today ? "today" : day.ymd < today ? "past day" : "upcoming";
@@ -508,6 +513,7 @@ function DetailPanel({
           ymd={day.ymd}
           dateLabel={fullDate}
           routines={schedulableRoutines}
+          activityTypes={scheduleActivityTypes}
         />
       ) : null}
     </div>

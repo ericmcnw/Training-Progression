@@ -20,12 +20,22 @@ function getParam(params: SearchParams, key: string) {
 export default async function MonthTab({ searchParams }: { searchParams: SearchParams }) {
   const requestedMonth = getParam(searchParams, "month");
 
-  const [monthData, routineRows] = await Promise.all([
+  const [monthData, routineRows, activityTypeRows] = await Promise.all([
     getMonthData(requestedMonth),
     prisma.routine.findMany({
       where: { isActive: true, isDeleted: false, isPlaceholder: false },
       orderBy: [{ name: "asc" }],
       select: { id: true, name: true, domain: true, kind: true, subtype: true },
+    }),
+    // Enabled endurance types for the typed-endurance schedule shortcut.
+    // Disabled types filter out via UserActivityTypePreference (default
+    // enabled when no preference row exists).
+    prisma.activityType.findMany({
+      include: {
+        family: { select: { name: true, sortOrder: true } },
+        userPreferences: { select: { enabled: true } },
+      },
+      orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
     }),
   ]);
 
@@ -36,11 +46,24 @@ export default async function MonthTab({ searchParams }: { searchParams: SearchP
     domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
     kind: r.kind,
   }));
+  const scheduleActivityTypes = activityTypeRows
+    .filter((t) => t.userPreferences[0]?.enabled !== false)
+    .map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      name: t.name,
+      familyId: t.familyId,
+      familyName: t.family.name,
+    }));
 
   return (
     <section style={shell} aria-label="Month view">
       <MonthHeader data={monthData} />
-      <MonthCalendar data={monthData} schedulableRoutines={schedulableRoutines} />
+      <MonthCalendar
+        data={monthData}
+        schedulableRoutines={schedulableRoutines}
+        scheduleActivityTypes={scheduleActivityTypes}
+      />
     </section>
   );
 }
