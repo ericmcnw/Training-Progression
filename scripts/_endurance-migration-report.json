@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-06-01T16:21:48.302Z",
+  "mode": "apply",
+  "routineCount": 6,
+  "high": 6,
+  "medium": 0,
+  "low": 0,
+  "mappings": [
+    {
+      "routineId": "cmmecqrm00011bvdgr2dg25k0",
+      "routineName": "Easy Run",
+      "subtype": "RUN",
+      "domain": "general",
+      "logCount": 6,
+      "resolvedSlug": "easy-run",
+      "confidence": "high",
+      "reason": "name contains \"easy run\""
+    },
+    {
+      "routineId": "cmnpccx12002wbv40g9xk370v",
+      "routineName": "Trail Run",
+      "subtype": "RUN",
+      "domain": "cardio",
+      "logCount": 2,
+      "resolvedSlug": "trail-run",
+      "confidence": "high",
+      "reason": "name contains \"trail run\""
+    },
+    {
+      "routineId": "cmmk0iqyd0001bvacurlpe4md",
+      "routineName": "Long Run",
+      "subtype": "RUN",
+      "domain": "general",
+      "logCount": 1,
+      "resolvedSlug": "long-run",
+      "confidence": "high",
+      "reason": "name contains \"long run\""
+    },
+    {
+      "routineId": "cmnpccb9a002tbv40mmd7uzri",
+      "routineName": "Hike",
+      "subtype": "HIKE",
+      "domain": "cardio",
+      "logCount": 3,
+      "resolvedSlug": "hike",
+      "confidence": "high",
+      "reason": "name contains \"hike\""
+    },
+    {
+      "routineId": "cmmjq53mm0021bv08i40jdrrz",
+      "routineName": "Walk",
+      "subtype": "WALK",
+      "domain": "general",
+      "logCount": 48,
+      "resolvedSlug": "walk",
+      "confidence": "high",
+      "reason": "name contains \"walk\""
+    },
+    {
+      "routineId": "cmmijpjl0001dbv08lpramsum",
+      "routineName": "Tempo Run",
+      "subtype": "RUN",
+      "domain": "general",
+      "logCount": 0,
+      "resolvedSlug": "tempo-run",
+      "confidence": "high",
+      "reason": "name contains \"tempo run\""
+    }
+  ]
+}

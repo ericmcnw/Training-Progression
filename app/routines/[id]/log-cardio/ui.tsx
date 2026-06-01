@@ -28,6 +28,7 @@ import {
   type SpotPickerItem,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
+import type { ActivityTypeOption } from "@/app/components/LogDrawer";
 
 export default function LogRunForm({
   routineId,
@@ -35,6 +36,9 @@ export default function LogRunForm({
   activePainZones = [],
   activitySlug = null,
   savedSpots = [],
+  activityTypes = [],
+  initialActivityTypeId = null,
+  routineIsSynthetic = false,
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -47,6 +51,16 @@ export default function LogRunForm({
    *  ActivitySpots + (when applicable) ClimbLocations. The form maps the
    *  selected item's `kind` to the right FK on save. */
   savedSpots?: SpotPickerItem[];
+  /** Available activity types (Run, Trail Run, …) for the dropdown.
+   *  Sorted by family then sortOrder by the API. */
+  activityTypes?: ActivityTypeOption[];
+  /** Routine's stored activityTypeId, used as the default selection for
+   *  legacy endurance routines. Null for the synthetic routine and for
+   *  routines without a mapped type. */
+  initialActivityTypeId?: string | null;
+  /** True when logging through the synthetic Endurance routine — the
+   *  type picker is required (no default). Legacy routines preselect. */
+  routineIsSynthetic?: boolean;
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -61,6 +75,12 @@ export default function LogRunForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  // Active activity type. Defaults to whatever the legacy routine maps to;
+  // null for synthetic routine (user must pick). Drives form field
+  // visibility (elevation hidden when !hasElevation) and goes through to
+  // the log row on save.
+  const [activityTypeId, setActivityTypeId] = useState<string | null>(initialActivityTypeId);
+  const activeType = activityTypes.find((t) => t.id === activityTypeId) ?? null;
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
@@ -160,6 +180,14 @@ export default function LogRunForm({
     const secs = Number(seconds || "0");
     const durationSec = mins * 60 + secs;
 
+    // Synthetic routine requires a type pick — otherwise the log lands
+    // against the synthetic Endurance routine with no type, which would
+    // disappear from family rollups.
+    if (routineIsSynthetic && !activityTypeId) {
+      alert("Pick an activity type first (Run, Hike, Bike, etc.).");
+      return;
+    }
+
     if (!Number.isFinite(distance) || distance <= 0) {
       alert("Enter a valid distance in miles.");
       return;
@@ -188,6 +216,7 @@ export default function LogRunForm({
         notes,
         performedAtLocal: performedAtLocal || undefined,
         activitySlug: activitySlug ?? undefined,
+        activityTypeId: activityTypeId ?? undefined,
         ...spotParams,
         painCheck:
           activePainZones.length > 0
@@ -211,6 +240,25 @@ export default function LogRunForm({
 
   return (
     <FormStack maxWidth={560}>
+      {/* Activity type picker — present for every CARDIO log. Hidden only
+          if the API didn't return any types (legacy/error state). Selecting
+          a type retunes the elevation field's visibility immediately. */}
+      {activityTypes.length > 0 && (
+        <FormSection title="Activity">
+          <Field
+            label="Activity type"
+            hint={routineIsSynthetic ? "Pick what kind of endurance you're logging." : undefined}
+          >
+            <ActivityTypeSelect
+              value={activityTypeId}
+              types={activityTypes}
+              required={routineIsSynthetic}
+              onChange={(next) => { markDirty(); setActivityTypeId(next); }}
+            />
+          </Field>
+        </FormSection>
+      )}
+
       <FormSection title="Cardio">
         <Field label="Distance (miles)">
           <input
@@ -256,15 +304,21 @@ export default function LogRunForm({
           </div>
         )}
 
-        <Field label="Elevation gain (ft, optional)" hint="Hiking, trail runs, or any climb-heavy cardio.">
-          <input
-            style={bigInputStyle}
-            value={elevationGainFt}
-            onChange={(e) => { markDirty(); setElevationGainFt(e.target.value); }}
-            inputMode="numeric"
-            placeholder="0"
-          />
-        </Field>
+        {/* Elevation gain — hidden when the active type doesn't track it
+            (e.g. pool swim, erg row). Stays visible whenever no type is
+            picked yet (synthetic flow before user selects), since hiding
+            on null would feel wrong before the picker decision is made. */}
+        {(activeType?.hasElevation ?? true) && (
+          <Field label="Elevation gain (ft, optional)" hint="Hiking, trail runs, or any climb-heavy cardio.">
+            <input
+              style={bigInputStyle}
+              value={elevationGainFt}
+              onChange={(e) => { markDirty(); setElevationGainFt(e.target.value); }}
+              inputMode="numeric"
+              placeholder="0"
+            />
+          </Field>
+        )}
 
         {showSpotPicker && spotConfig ? (
           <SpotPicker
@@ -318,6 +372,50 @@ export default function LogRunForm({
 
 function capitalize(value: string) {
   return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
+
+// Activity-type picker. Native <select> with options grouped by family so
+// the user sees "Running ▸ Run / Trail Run / Long Run / …" structure
+// without managing a custom dropdown. Native control means the OS picker
+// renders nicely on iOS / Android (touch wheel) and on desktop.
+function ActivityTypeSelect({
+  value,
+  types,
+  required,
+  onChange,
+}: {
+  value: string | null;
+  types: ActivityTypeOption[];
+  required: boolean;
+  onChange: (next: string | null) => void;
+}) {
+  // Group by family while preserving sort order.
+  const byFamily = new Map<string, { name: string; sortOrder: number; types: ActivityTypeOption[] }>();
+  for (const t of types) {
+    const cur = byFamily.get(t.familyId) ?? { name: t.familyName, sortOrder: t.familySortOrder, types: [] };
+    cur.types.push(t);
+    byFamily.set(t.familyId, cur);
+  }
+  const families = [...byFamily.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return (
+    <select
+      style={bigInputStyle}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+    >
+      <option value="">{required ? "— Pick an activity —" : "No type"}</option>
+      {families.map((fam) => (
+        <optgroup key={fam.name} label={fam.name}>
+          {fam.types.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
 }
 
 // Translates a picker value into the param shape `logCardio` expects.

@@ -9,6 +9,7 @@ import {
   workoutLibraryKinds,
 } from "@/lib/exercise-library";
 import { withSessionMetricConfig, isClimbingTemplateKey } from "@/lib/session-templates";
+import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import { getRoutinePainCheckZones } from "@/lib/injury-warnings";
 import { getTemplateDefaultZones } from "@/lib/template-zone-defaults";
 import {
@@ -34,6 +35,7 @@ export async function GET(
       name: true,
       kind: true,
       subtype: true,
+      activityTypeId: true,
       metadataGroups: {
         select: { group: { select: { slug: true } } },
       },
@@ -232,8 +234,9 @@ export async function GET(
     const activitySpotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
     const compatibleSlugs = activitySlug ? compatibleActivitySlugs(activitySlug) : [];
     const includeClimbingSpots = compatibleSlugs.includes("climbing");
+    const routineIsSynthetic = routine.id === SYNTHETIC_ENDURANCE_ROUTINE_ID;
 
-    const [activePainZones, activitySpotRows, climbingCrossRows] = await Promise.all([
+    const [activePainZones, activitySpotRows, climbingCrossRows, activityTypeRows] = await Promise.all([
       getRoutinePainCheckZones(routineId),
       activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
@@ -248,6 +251,17 @@ export async function GET(
             orderBy: [{ name: "asc" }],
           })
         : Promise.resolve([]),
+      // Activity types + their families. UserActivityTypePreference can
+      // disable specific types; the form filters them out via the disabled
+      // join below. Sort by (family.sortOrder, type.sortOrder) so the
+      // dropdown reads family-by-family in the expected order.
+      prisma.activityType.findMany({
+        include: {
+          family: { select: { id: true, name: true, sortOrder: true } },
+          userPreferences: { select: { enabled: true } },
+        },
+        orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+      }),
     ]);
 
     const savedSpots = activitySlug
@@ -258,6 +272,23 @@ export async function GET(
         })
       : [];
 
+    // Filter out user-disabled types (preference.enabled === false). When
+    // no preference row exists, type is visible by default.
+    const activityTypes = activityTypeRows
+      .filter((t) => t.userPreferences[0]?.enabled !== false)
+      .map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        familyId: t.familyId,
+        familyName: t.family.name,
+        familySortOrder: t.family.sortOrder,
+        sortOrder: t.sortOrder,
+        hasDistance: t.hasDistance,
+        hasElevation: t.hasElevation,
+        hasPace: t.hasPace,
+      }));
+
     return NextResponse.json({
       kind: "CARDIO",
       routineId,
@@ -265,6 +296,9 @@ export async function GET(
       activePainZones,
       activitySlug,
       savedSpots,
+      activityTypes,
+      initialActivityTypeId: routine.activityTypeId ?? null,
+      routineIsSynthetic,
     });
   }
 

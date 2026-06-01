@@ -2047,6 +2047,12 @@ export async function logCardio(params: {
   performedAtLocal?: string;
   metrics?: MetricInput[];
   activitySlug?: string;
+  /** Activity type for the endurance type-driven model. Required for new
+   *  logs against the synthetic Endurance routine; preselected for legacy
+   *  endurance routines based on their migrated type. Stored on the log
+   *  so the progress view can roll up by type/family without inspecting
+   *  the routine. */
+  activityTypeId?: string;
   activitySpotId?: string;
   /** Cross-activity link: cardio log can reference an existing climbing
    *  crag's location (e.g. trail run at a crag the user has saved
@@ -2093,6 +2099,7 @@ export async function logCardio(params: {
       location: params.location?.trim() || null,
       activitySpotId: split.activitySpotId,
       climbLocationId: split.climbLocationId,
+      activityTypeId: params.activityTypeId ?? null,
     },
     select: { id: true },
   });
@@ -2120,6 +2127,7 @@ export async function logRun(params: {
   notes?: string;
   performedAtLocal?: string;
   activitySlug?: string;
+  activityTypeId?: string;
   activitySpotId?: string;
   climbLocationId?: string;
   newActivitySpotName?: string;

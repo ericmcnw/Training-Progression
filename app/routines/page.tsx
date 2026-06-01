@@ -9,6 +9,7 @@ import { computeHabitStats } from "@/lib/habits";
 import RoutineCard from "./RoutineCard";
 import RoutineSection from "./RoutineSection";
 import QuickLogDrawerButton from "./QuickLogDrawerButton";
+import EnduranceQuickLogButton from "./EnduranceQuickLogButton";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
@@ -333,6 +334,12 @@ export default async function RoutinesPage(props: {
               quickLogSlot={
                 domain === "strength" ? (
                   <QuickLogDrawerButton style={styles.quickLogPill} />
+                ) : domain === "cardio" ? (
+                  // Endurance section uses domain="cardio" under the hood
+                  // (see ROUTINE_DOMAIN_OPTIONS in lib/routines). The
+                  // section header still reads "Endurance" via that
+                  // label map.
+                  <EnduranceQuickLogButton style={styles.quickLogPill} />
                 ) : undefined
               }
               defaultOpen={!!domainFilter}

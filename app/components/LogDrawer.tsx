@@ -54,6 +54,25 @@ type CardioLogData = {
   activePainZones: PainCheckZone[];
   activitySlug?: string | null;
   savedSpots?: SpotPickerItem[];
+  // Endurance type model — present for every CARDIO routine. The synthetic
+  // Endurance routine has no preselected type (user must pick); legacy
+  // routines preselect from their migrated activityTypeId.
+  activityTypes?: ActivityTypeOption[];
+  initialActivityTypeId?: string | null;
+  routineIsSynthetic?: boolean;
+};
+
+export type ActivityTypeOption = {
+  id: string;
+  slug: string;
+  name: string;
+  familyId: string;
+  familyName: string;
+  familySortOrder: number;
+  sortOrder: number;
+  hasDistance: boolean;
+  hasElevation: boolean;
+  hasPace: boolean;
 };
 
 type GuidedStep = {
@@ -287,6 +306,9 @@ export default function LogDrawer() {
                   activePainZones={logData.activePainZones}
                   activitySlug={logData.activitySlug ?? null}
                   savedSpots={logData.savedSpots ?? []}
+                  activityTypes={logData.activityTypes ?? []}
+                  initialActivityTypeId={logData.initialActivityTypeId ?? null}
+                  routineIsSynthetic={logData.routineIsSynthetic ?? false}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}
