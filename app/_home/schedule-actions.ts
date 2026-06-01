@@ -61,10 +61,13 @@ export async function scheduleRoutineForDay(input: { routineId: string; ymd: str
     },
   });
 
-  // Home pulls schedule data into the WeekAtGlance — refresh that route. The
-  // legacy `/schedule` surface stays in sync naturally since it reads the
-  // same table on its next visit.
+  // Home + Plan both pull schedule data into their week/month views, so
+  // both need invalidation here. /schedule survives the legacy redirect
+  // (see app/schedule/page.tsx) but we cover it too in case the user
+  // bookmarked the old URL.
   revalidatePath("/");
+  revalidatePath("/plan");
+  revalidatePath("/schedule");
 }
 
 // Schedule a typed endurance slot for a day. Convenience wrapper around

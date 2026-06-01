@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ClimbLocationType } from "@/lib/climb-types";
+import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 
 function clampLat(value: number) {
   if (!Number.isFinite(value)) return null;
@@ -32,7 +33,10 @@ export async function createClimbLocationOnMap(input: {
     data: { name, type: input.type, latitude: lat, longitude: lng },
     select: { id: true, name: true, type: true, latitude: true, longitude: true },
   });
-  revalidatePath("/activities/climbing/map");
+  // Layout-scoped revalidate so the new pin appears across every
+  // climbing subroute (map sidebar, climbs browse location filter,
+  // projects, location detail) on the next visit.
+  revalidateActivityWorlds();
   return created;
 }
 
@@ -50,7 +54,7 @@ export async function updateClimbLocationCoords(input: {
     data: { latitude: lat, longitude: lng },
     select: { id: true, name: true, type: true, latitude: true, longitude: true },
   });
-  revalidatePath("/activities/climbing/map");
+  revalidateActivityWorlds();
   return updated;
 }
 
@@ -73,7 +77,7 @@ export async function updateClimbLocationMeta(input: {
     data,
     select: { id: true, name: true, type: true, latitude: true, longitude: true },
   });
-  revalidatePath("/activities/climbing/map");
+  revalidateActivityWorlds();
   return updated;
 }
 
@@ -83,6 +87,6 @@ export async function clearClimbLocationCoords(id: string) {
     data: { latitude: null, longitude: null },
     select: { id: true, name: true, type: true, latitude: true, longitude: true },
   });
-  revalidatePath("/activities/climbing/map");
+  revalidateActivityWorlds();
   return updated;
 }

@@ -10,6 +10,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 
 // Enable/disable a specific activity type for the user. Disabled types
 // drop out of the log drawer's picker but keep all their data; old logs
@@ -21,8 +22,12 @@ export async function setActivityTypeEnabled(input: { activityTypeId: string; en
     create: { activityTypeId: input.activityTypeId, enabled: input.enabled },
     update: { enabled: input.enabled },
   });
-  revalidatePath("/activities/endurance/settings");
+  // Disabling a type filters it out of the log drawer picker, the goal
+  // builder picker, the schedule shortcut, the world page sub-filter,
+  // and the settings page itself. Layout-scoped revalidation across
+  // /activities + a manual refresh of /log keeps every surface in sync.
   revalidatePath("/log");
+  revalidateActivityWorlds();
 }
 
 // Soft-archive a legacy endurance routine. Equivalent to clicking the
@@ -38,9 +43,13 @@ export async function archiveLegacyEnduranceRoutine(input: { routineId: string }
     where: { id: input.routineId },
     data: { isDeleted: true, deletedAt: new Date() },
   });
-  revalidatePath("/activities/endurance/settings");
+  // Archiving hides the routine from /log, /routines, the schedule
+  // picker, and any goal-builder routine list. Layout-scoped
+  // revalidation across /activities catches the settings page plus
+  // any world-page surface that ever surfaced it.
   revalidatePath("/routines");
   revalidatePath("/log");
+  revalidateActivityWorlds();
 }
 
 // Reverse of archive — un-soft-deletes the routine. Logs are unaffected
@@ -50,9 +59,9 @@ export async function restoreLegacyEnduranceRoutine(input: { routineId: string }
     where: { id: input.routineId },
     data: { isDeleted: false, deletedAt: null },
   });
-  revalidatePath("/activities/endurance/settings");
   revalidatePath("/routines");
   revalidatePath("/log");
+  revalidateActivityWorlds();
 }
 
 // Manually set the activityTypeId on a routine (legacy retag from the
@@ -64,7 +73,8 @@ export async function setRoutineActivityType(input: { routineId: string; activit
     where: { id: input.routineId },
     data: { activityTypeId: input.activityTypeId },
   });
-  revalidatePath("/activities/endurance/settings");
-  revalidatePath("/activities/endurance");
+  // Type retagging shifts the routine's logs in the family/type
+  // rollups across every world page surface.
   revalidatePath("/log");
+  revalidateActivityWorlds();
 }

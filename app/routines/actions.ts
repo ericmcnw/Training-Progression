@@ -18,6 +18,7 @@ import {
 } from "@/lib/routines";
 import type { GuidedStepKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
+import { revalidateAllLogSurfaces } from "@/lib/revalidate-helpers";
 import { redirect } from "next/navigation";
 
 type WorkoutExerciseInput = {
@@ -1060,20 +1061,13 @@ async function syncRoutineTypeDetails(routineId: string, kind: RoutineKind, sess
   }
 }
 
+// Thin wrapper around the shared helper so existing call sites in this
+// file keep their familiar name. Centralizing the surface list in
+// lib/revalidate-helpers keeps every action — routines, settings,
+// media, location detail, etc. — in sync without each having to
+// re-list the activity-world paths.
 function revalidateRoutineSurfaces(routineId?: string) {
-  revalidatePath("/");
-  revalidatePath("/manual-log");
-  revalidatePath("/routines");
-  revalidatePath("/progress");
-  revalidatePath("/goals");
-  revalidatePath("/schedule");
-  revalidatePath("/body");
-  if (routineId) {
-    revalidatePath(`/routines/${routineId}/log`);
-    revalidatePath(`/routines/${routineId}/logs`);
-    revalidatePath(`/routines/${routineId}/template`);
-    revalidatePath(`/progress/routines/${routineId}`);
-  }
+  revalidateAllLogSurfaces(routineId);
 }
 
 export async function createRoutine(formData: FormData) {

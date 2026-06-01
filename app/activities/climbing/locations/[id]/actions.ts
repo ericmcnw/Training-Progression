@@ -7,12 +7,14 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ClimbLocationType } from "@/lib/climb-types";
+import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 
 function revalidateLocation(locationId: string) {
+  // Layout-scoped invalidate over /activities catches every climbing
+  // subroute in one call, plus the per-location detail page via the
+  // explicit path (helps when the route segment hasn't been hit yet).
   revalidatePath(`/activities/climbing/locations/${locationId}`);
-  revalidatePath("/activities/climbing/map");
-  revalidatePath("/activities/climbing/climbs");
-  revalidatePath("/activities/climbing/projects");
+  revalidateActivityWorlds();
 }
 
 export async function renameClimbProblem(input: { id: string; name: string }) {
@@ -67,9 +69,7 @@ export async function deleteClimbLocationIfEmpty(input: { id: string }) {
   const usage = await prisma.routineLog.count({ where: { climbLocationId: input.id } });
   if (usage > 0) throw new Error("Can't delete a location with logged climbs. Merge it into another spot instead.");
   await prisma.climbLocation.delete({ where: { id: input.id } });
-  revalidatePath("/activities/climbing/map");
-  revalidatePath("/activities/climbing/climbs");
-  revalidatePath("/activities/climbing/projects");
+  revalidateActivityWorlds();
 }
 
 // Merge `sourceId` into `targetId`: reassign every RoutineLog, ClimbProblem,
