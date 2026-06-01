@@ -68,6 +68,13 @@ export type LogSummaryExercise = {
   sets: LogSummarySet[];
 };
 
+export type LogSummaryIntervals = {
+  reps: number | null;
+  workDistanceM: number | null;
+  workDurationSec: number | null;
+  restSec: number | null;
+};
+
 export type LogSummaryData = {
   id: string;
   routineId: string;
@@ -80,6 +87,9 @@ export type LogSummaryData = {
   location: string | null;
   logKind: RoutineKind;
   routine: LogSummaryRoutine;
+  // Structured intervals payload — present when the activity type uses
+  // intervals (Sprint, Interval Run). null for all other logs.
+  intervals: LogSummaryIntervals | null;
   metrics: LogSummaryMetric[];
   hasSessionMetricValues: boolean;
   climbAttempts: LogSummaryClimbAttempt[];
@@ -102,6 +112,27 @@ type RawLog = {
   sessionMetricValues: Array<{ id: string }>;
   climbAttempts: Array<{ id: string }>;
 };
+
+// Coerce the JSON payload off RoutineLog.intervalsConfig into a stable
+// shape. Tolerates missing/extra fields — older logs (pre-Sprint) and
+// hand-edited records degrade gracefully to nulls.
+function parseIntervalsConfig(raw: unknown): LogSummaryIntervals | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const out: LogSummaryIntervals = {
+    reps: num(obj.reps),
+    workDistanceM: num(obj.workDistanceM),
+    workDurationSec: num(obj.workDurationSec),
+    restSec: num(obj.restSec),
+  };
+  // Skip if every field is null — no useful structure to display.
+  if (out.reps === null && out.workDistanceM === null && out.workDurationSec === null && out.restSec === null) {
+    return null;
+  }
+  return out;
+}
 
 // Logs predate the strict-kind era — a routine flagged WORKOUT in the schema
 // can still hold cardio data if it was migrated, so we infer the kind from
@@ -136,6 +167,8 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       // ViewLogDrawer would render "Endurance" literally for every typed
       // log against the synthetic routine.
       activityType: { select: { name: true } },
+      // Structured interval payload for Sprint / Interval Run logs.
+      intervalsConfig: true,
       routine: {
         select: {
           id: true, name: true, kind: true,
@@ -217,6 +250,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     location: log.location,
     logKind,
     routine: { ...log.routine, name: displayName },
+    intervals: parseIntervalsConfig(log.intervalsConfig),
     metrics: log.metrics,
     hasSessionMetricValues: log.sessionMetricValues.length > 0,
     climbAttempts: log.climbAttempts.map((a) => ({

@@ -198,6 +198,11 @@ model ActivityType {
   hasDistance  Boolean  @default(true)
   hasElevation Boolean  @default(false)
   hasPace      Boolean  @default(true)
+  // Types that capture structured interval data (Interval Run, Sprint,
+  // future hill repeats / swim sets etc.). When true the cardio form
+  // surfaces the interval block (reps, work distance, work duration,
+  // rest) and persists the values in RoutineLog.intervalsConfig.
+  usesIntervals Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -560,6 +565,12 @@ model RoutineLog {
   // Display name resolution prefers activityType.name when present (see
   // getRoutineDisplayName).
   activityTypeId  String?
+  // Structured interval data for types where activityType.usesIntervals
+  // is true (Interval Run, Sprint, etc.). Shape: { reps: number,
+  // workDistanceM?: number, workDurationSec?: number, restSec?: number,
+  // targetPaceSecPerMi?: number }. Null for non-interval logs and for
+  // interval logs created before this field landed.
+  intervalsConfig Json?
 
   routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
   climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)

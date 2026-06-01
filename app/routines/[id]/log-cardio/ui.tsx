@@ -81,6 +81,15 @@ export default function LogRunForm({
   // the log row on save.
   const [activityTypeId, setActivityTypeId] = useState<string | null>(initialActivityTypeId);
   const activeType = activityTypes.find((t) => t.id === activityTypeId) ?? null;
+  // Interval-style structured input — surfaced when the active type sets
+  // usesIntervals (currently Interval Run + Sprint). Values held as
+  // strings to play nicely with controlled inputs; parsed at save time.
+  const [intervalReps, setIntervalReps] = useState("");
+  const [intervalWorkDistanceM, setIntervalWorkDistanceM] = useState("");
+  const [intervalWorkMin, setIntervalWorkMin] = useState("");
+  const [intervalWorkSec, setIntervalWorkSec] = useState("");
+  const [intervalRestMin, setIntervalRestMin] = useState("");
+  const [intervalRestSec, setIntervalRestSec] = useState("");
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
@@ -215,6 +224,30 @@ export default function LogRunForm({
       return;
     }
 
+    // Build the intervals payload when the type opts into structure.
+    // Each field is independently optional — user might know reps + work
+    // distance but not rest, or vice versa. Empty block sends null.
+    let intervalsConfig: {
+      reps: number | null;
+      workDistanceM: number | null;
+      workDurationSec: number | null;
+      restSec: number | null;
+    } | null = null;
+    if (activeType?.usesIntervals) {
+      const reps = intervalReps.trim() ? Math.max(0, Math.floor(Number(intervalReps))) : null;
+      const workDistanceM = intervalWorkDistanceM.trim() ? Math.max(0, Number(intervalWorkDistanceM)) : null;
+      const workMins = Number(intervalWorkMin || "0");
+      const workSecs = Number(intervalWorkSec || "0");
+      const workDurationSec = workMins * 60 + workSecs > 0 ? workMins * 60 + workSecs : null;
+      const restMins = Number(intervalRestMin || "0");
+      const restSecs = Number(intervalRestSec || "0");
+      const restSec = restMins * 60 + restSecs > 0 ? restMins * 60 + restSecs : null;
+      // Only persist when at least one structured field has a real value.
+      if (reps !== null || workDistanceM !== null || workDurationSec !== null || restSec !== null) {
+        intervalsConfig = { reps, workDistanceM, workDurationSec, restSec };
+      }
+    }
+
     setSaving(true);
     try {
       // Map the picker's value to action params. Cardio activities use
@@ -230,6 +263,7 @@ export default function LogRunForm({
         performedAtLocal: performedAtLocal || undefined,
         activitySlug: activitySlug ?? undefined,
         activityTypeId: activityTypeId ?? undefined,
+        intervalsConfig: intervalsConfig ?? undefined,
         ...spotParams,
         painCheck:
           activePainZones.length > 0
@@ -331,6 +365,93 @@ export default function LogRunForm({
               placeholder="0"
             />
           </Field>
+        )}
+
+        {/* Interval / Sprint block — surfaces structured rep data for
+            types that opt into usesIntervals. Distance + duration above
+            stay as user-entered totals (intervals + warmup + cooldown). */}
+        {activeType?.usesIntervals && (
+          <div style={intervalsBlockStyle}>
+            <div style={intervalsHeaderStyle}>
+              {activeType.slug === "sprint" ? "Sprint structure" : "Interval structure"}
+            </div>
+            <Field label="Reps" hint={`e.g. 5 (for 5 × 400m)`}>
+              <input
+                style={bigInputStyle}
+                value={intervalReps}
+                onChange={(e) => { markDirty(); setIntervalReps(e.target.value); }}
+                inputMode="numeric"
+                placeholder="0"
+              />
+            </Field>
+
+            <Field
+              label="Work distance (m, optional)"
+              hint={activeType.slug === "sprint" ? "Common: 60, 100, 200, 400" : "Common: 200, 400, 800, 1600"}
+            >
+              <input
+                style={bigInputStyle}
+                value={intervalWorkDistanceM}
+                onChange={(e) => { markDirty(); setIntervalWorkDistanceM(e.target.value); }}
+                inputMode="numeric"
+                placeholder="400"
+              />
+            </Field>
+
+            <div>
+              <div style={fieldLabelStyle}>Work time per rep (optional)</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginTop: 6 }}>
+                <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                  <div style={unitLabelStyle}>min</div>
+                  <input
+                    style={bigInputStyle}
+                    value={intervalWorkMin}
+                    onChange={(e) => { markDirty(); setIntervalWorkMin(e.target.value); }}
+                    inputMode="numeric"
+                    placeholder="0"
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", paddingTop: 20, fontSize: 22, fontWeight: 900, opacity: 0.5 }}>:</div>
+                <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                  <div style={unitLabelStyle}>sec</div>
+                  <input
+                    style={bigInputStyle}
+                    value={intervalWorkSec}
+                    onChange={(e) => { markDirty(); setIntervalWorkSec(e.target.value); }}
+                    inputMode="numeric"
+                    placeholder="00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style={fieldLabelStyle}>Rest between reps (optional)</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginTop: 6 }}>
+                <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                  <div style={unitLabelStyle}>min</div>
+                  <input
+                    style={bigInputStyle}
+                    value={intervalRestMin}
+                    onChange={(e) => { markDirty(); setIntervalRestMin(e.target.value); }}
+                    inputMode="numeric"
+                    placeholder="0"
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", paddingTop: 20, fontSize: 22, fontWeight: 900, opacity: 0.5 }}>:</div>
+                <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                  <div style={unitLabelStyle}>sec</div>
+                  <input
+                    style={bigInputStyle}
+                    value={intervalRestSec}
+                    onChange={(e) => { markDirty(); setIntervalRestSec(e.target.value); }}
+                    inputMode="numeric"
+                    placeholder="00"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {showSpotPicker && spotConfig ? (
@@ -469,6 +590,26 @@ const bigInputStyle: React.CSSProperties = {
 const fieldLabelStyle: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 14,
+};
+
+// Interval/sprint block — soft blue tint matches the endurance picker
+// elsewhere in the app so the structured-workout section reads as
+// "type-driven" content.
+const intervalsBlockStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  padding: 14,
+  borderRadius: 12,
+  background: "rgba(78,148,255,0.05)",
+  border: "1px solid rgba(78,148,255,0.22)",
+};
+
+const intervalsHeaderStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: "rgba(191,219,254,0.95)",
 };
 
 const unitLabelStyle: React.CSSProperties = {

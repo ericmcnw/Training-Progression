@@ -73,6 +73,11 @@ export type ActivityTypeOption = {
   hasDistance: boolean;
   hasElevation: boolean;
   hasPace: boolean;
+  /** When true the cardio form surfaces the structured interval block
+   *  (reps, work distance, work time, rest). Set on Interval Run and
+   *  Sprint by default; flag-driven so adding future structured types
+   *  (hill repeats, swim sets, …) doesn't require form changes. */
+  usesIntervals: boolean;
 };
 
 type GuidedStep = {

@@ -85,6 +85,25 @@ export type EditWorkoutData = {
   availableExercises: Array<{ id: string; name: string; unit: ExerciseUnitValue; supportsWeight: boolean; libraryKind: ExerciseLibraryKind }>;
 };
 
+export type EditCardioActivityTypeOption = {
+  id: string;
+  slug: string;
+  name: string;
+  familyId: string;
+  familyName: string;
+  familySortOrder: number;
+  sortOrder: number;
+  hasElevation: boolean;
+  usesIntervals: boolean;
+};
+
+export type EditCardioIntervals = {
+  reps: number | null;
+  workDistanceM: number | null;
+  workDurationSec: number | null;
+  restSec: number | null;
+};
+
 export type EditCardioData = {
   kind: "CARDIO";
   routineId: string;
@@ -98,6 +117,13 @@ export type EditCardioData = {
   activitySlug: string | null;
   savedSpots: SpotPickerItem[];
   initialSpot: SpotPickerValue;
+  // Endurance type machinery — same data the create form receives via
+  // /api/routines/[id]/log-data. Surfaces the activity type picker
+  // (so users can switch a Trail Run → Long Run after saving) and the
+  // structured interval block for Sprint / Interval Run logs.
+  availableActivityTypes: EditCardioActivityTypeOption[];
+  initialActivityTypeId: string | null;
+  initialIntervals: EditCardioIntervals | null;
 };
 
 export type EditGuidedData = {
@@ -180,6 +206,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       location: true,
       climbLocationId: true,
       activitySpotId: true,
+      activityTypeId: true,
+      intervalsConfig: true,
       climbLocation: {
         select: { id: true, name: true, region: true, type: true, osmType: true, osmId: true, latitude: true, longitude: true },
       },
@@ -402,6 +430,32 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           : null;
 
     if (isCardioKind(logKind)) {
+      // Load activity types + user preferences alongside the cardio log
+      // so the edit form can offer the type picker and (when the type
+      // uses intervals) the structured workout block.
+      const activityTypeRows = await prisma.activityType.findMany({
+        include: {
+          family: { select: { name: true, sortOrder: true } },
+          userPreferences: { select: { enabled: true } },
+        },
+        orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+      });
+      const availableActivityTypes = activityTypeRows
+        .filter((t) => t.userPreferences[0]?.enabled !== false)
+        .map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          familyId: t.familyId,
+          familyName: t.family.name,
+          familySortOrder: t.family.sortOrder,
+          sortOrder: t.sortOrder,
+          hasElevation: t.hasElevation,
+          usesIntervals: t.usesIntervals,
+        }));
+      // Parse the stored interval payload into the typed shape. Tolerates
+      // legacy / hand-edited rows where some fields might be missing.
+      const intervals = parseStoredIntervals(log.intervalsConfig);
       return {
         kind: "CARDIO",
         ...base,
@@ -411,6 +465,9 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         activitySlug: editSpotActivitySlug,
         savedSpots: editSavedSpots,
         initialSpot: initialEditSpot,
+        availableActivityTypes,
+        initialActivityTypeId: log.activityTypeId ?? null,
+        initialIntervals: intervals,
       };
     }
 
@@ -504,4 +561,30 @@ async function fetchGuidedExercises() {
       guidedPreferredLibraryKinds()
     );
   }
+}
+
+// Parse RoutineLog.intervalsConfig (Prisma Json) into the typed shape
+// the edit form expects. Mirrors the helper in log-summary.ts but
+// returns the edit-flavored shape (no separate flatten). Returns null
+// when the field is missing or empty so the form skips the structure.
+function parseStoredIntervals(raw: unknown): EditCardioIntervals | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const out: EditCardioIntervals = {
+    reps: num(obj.reps),
+    workDistanceM: num(obj.workDistanceM),
+    workDurationSec: num(obj.workDurationSec),
+    restSec: num(obj.restSec),
+  };
+  if (
+    out.reps === null &&
+    out.workDistanceM === null &&
+    out.workDurationSec === null &&
+    out.restSec === null
+  ) {
+    return null;
+  }
+  return out;
 }

@@ -205,6 +205,9 @@ function FormForKind({
         activitySlug={data.activitySlug}
         savedSpots={data.savedSpots}
         initialSpot={data.initialSpot}
+        availableActivityTypes={data.availableActivityTypes}
+        initialActivityTypeId={data.initialActivityTypeId}
+        initialIntervals={data.initialIntervals}
         onComplete={onComplete}
         onCancel={onCancel}
       />

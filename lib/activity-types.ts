@@ -25,6 +25,7 @@ export const ACTIVITY_TYPE_SLUGS = {
   TEMPO_RUN: "tempo-run",
   EASY_RUN: "easy-run",
   INTERVAL_RUN: "interval-run",
+  SPRINT: "sprint",
   // Walking
   WALK: "walk",
   HIKE: "hike",
@@ -76,6 +77,7 @@ export const FAMILY_TYPE_SLUGS: Record<EnduranceFamilySlug, readonly ActivityTyp
     ACTIVITY_TYPE_SLUGS.TEMPO_RUN,
     ACTIVITY_TYPE_SLUGS.EASY_RUN,
     ACTIVITY_TYPE_SLUGS.INTERVAL_RUN,
+    ACTIVITY_TYPE_SLUGS.SPRINT,
   ],
   [ENDURANCE_FAMILY_SLUGS.WALKING]: [
     ACTIVITY_TYPE_SLUGS.WALK,

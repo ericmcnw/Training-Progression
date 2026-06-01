@@ -51,6 +51,16 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
                 <div style={statLabel}>Elevation</div>
                 <div style={statValue}>{data.elevationGainFt ? `${data.elevationGainFt} ft` : "0 ft"}</div>
               </div>
+              {/* Sprint / Interval Run reps as a stat chip so the
+                  structured workout flavor reads at-a-glance alongside
+                  the volume totals. Full breakdown lives in the
+                  dedicated section below. */}
+              {data.intervals?.reps != null && (
+                <div style={statCard}>
+                  <div style={statLabel}>Reps</div>
+                  <div style={statValue}>{data.intervals.reps}</div>
+                </div>
+              )}
             </>
           )}
           {isGuidedKind(logKind) && (
@@ -117,6 +127,32 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
           )}
         </div>
       </section>
+
+      {/* Interval breakdown — only shown when the log has structured
+          interval data (Sprint, Interval Run, or future structured
+          types). Reads as "5 × 400m · 1:30 work / 90s rest." Each
+          field is independently optional so a partial entry (e.g.
+          reps + work distance, no times) still renders cleanly. */}
+      {isCardioKind(logKind) && data.intervals && (
+        <section style={panel}>
+          <div style={panelHeader}>INTERVAL STRUCTURE</div>
+          <div style={contentPad}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 13.5, fontWeight: 700 }}>
+              {data.intervals.reps != null && data.intervals.workDistanceM != null ? (
+                <span>{data.intervals.reps} × {data.intervals.workDistanceM}m</span>
+              ) : data.intervals.reps != null ? (
+                <span>{data.intervals.reps} reps</span>
+              ) : null}
+              {data.intervals.workDurationSec != null && (
+                <span style={{ opacity: 0.75 }}>· {formatSeconds(data.intervals.workDurationSec)} work</span>
+              )}
+              {data.intervals.restSec != null && (
+                <span style={{ opacity: 0.75 }}>· {formatSeconds(data.intervals.restSec)} rest</span>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {isWorkoutKind(logKind) && data.exercises.length > 0 && (
         <section style={panel}>

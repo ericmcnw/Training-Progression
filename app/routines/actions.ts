@@ -2088,6 +2088,15 @@ export async function logCardio(params: {
    *  so the progress view can roll up by type/family without inspecting
    *  the routine. */
   activityTypeId?: string;
+  /** Structured interval payload for types where usesIntervals is true
+   *  (Interval Run, Sprint, …). Persisted as JSON on RoutineLog so the
+   *  log detail page can render the reps/work/rest structure later. */
+  intervalsConfig?: {
+    reps: number | null;
+    workDistanceM: number | null;
+    workDurationSec: number | null;
+    restSec: number | null;
+  };
   activitySpotId?: string;
   /** Cross-activity link: cardio log can reference an existing climbing
    *  crag's location (e.g. trail run at a crag the user has saved
@@ -2135,6 +2144,10 @@ export async function logCardio(params: {
       activitySpotId: split.activitySpotId,
       climbLocationId: split.climbLocationId,
       activityTypeId: params.activityTypeId ?? null,
+      // Persist the structured interval payload verbatim when present.
+      // Prisma's Json scalar accepts the object directly; null clears
+      // any prior structured data on this log.
+      intervalsConfig: params.intervalsConfig ?? undefined,
     },
     select: { id: true },
   });
@@ -2163,6 +2176,12 @@ export async function logRun(params: {
   performedAtLocal?: string;
   activitySlug?: string;
   activityTypeId?: string;
+  intervalsConfig?: {
+    reps: number | null;
+    workDistanceM: number | null;
+    workDurationSec: number | null;
+    restSec: number | null;
+  };
   activitySpotId?: string;
   climbLocationId?: string;
   newActivitySpotName?: string;
@@ -2484,6 +2503,18 @@ export type UpdateCardioLogParams = {
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
+  /** Activity type — pass to switch a mis-categorized log's type. Pass
+   *  null to clear the type entirely. Omit to leave unchanged. */
+  activityTypeId?: string | null;
+  /** Intervals structure for Sprint / Interval Run logs. Pass an object
+   *  to overwrite the stored structure; pass null to clear. Omit to
+   *  leave unchanged. */
+  intervalsConfig?: {
+    reps: number | null;
+    workDistanceM: number | null;
+    workDurationSec: number | null;
+    restSec: number | null;
+  } | null;
   // Spot wiring — same shape as logCardio. `clearSpot: true` nulls both
   // FKs; omitting all spot params leaves the existing links untouched.
   clearSpot?: boolean;
@@ -2547,24 +2578,31 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Activity type + intervals: only touch when the caller passed the
+    // field. `undefined` = leave existing data alone; `null` = clear it;
+    // an object = overwrite. Lets the edit form switch mis-categorized
+    // logs without nuking unrelated state. Built as a separate object
+    // so the Prisma narrowed update type accepts the Json field's
+    // null-or-object union cleanly.
+    const partialUpdate: Record<string, unknown> = {
+      performedAt: parsePerformedAt(params.performedAtLocal),
+      distanceMi: params.distanceMi,
+      durationSec: params.durationSec,
+      elevationGainFt:
+        params.elevationGainFt !== null && params.elevationGainFt !== undefined
+          ? Math.round(params.elevationGainFt)
+          : null,
+      notes: params.notes?.trim() || null,
+    };
+    if (params.activityTypeId !== undefined) partialUpdate.activityTypeId = params.activityTypeId;
+    if (params.intervalsConfig !== undefined) partialUpdate.intervalsConfig = params.intervalsConfig ?? null;
+    if (hasSpotParams) {
+      partialUpdate.climbLocationId = nextClimbLocationId;
+      partialUpdate.activitySpotId = nextActivitySpotId;
+    }
     await tx.routineLog.update({
       where: { id: params.logId },
-      data: {
-        performedAt: parsePerformedAt(params.performedAtLocal),
-        distanceMi: params.distanceMi,
-        durationSec: params.durationSec,
-        elevationGainFt:
-          params.elevationGainFt !== null && params.elevationGainFt !== undefined
-            ? Math.round(params.elevationGainFt)
-            : null,
-        notes: params.notes?.trim() || null,
-        ...(hasSpotParams
-          ? {
-              climbLocationId: nextClimbLocationId,
-              activitySpotId: nextActivitySpotId,
-            }
-          : {}),
-      },
+      data: partialUpdate as Parameters<typeof tx.routineLog.update>[0]["data"],
     });
     await tx.routineLogMetric.deleteMany({ where: { routineLogId: params.logId } });
     const metrics = sanitizeMetrics(params.metrics);

@@ -287,6 +287,7 @@ export async function GET(
         hasDistance: t.hasDistance,
         hasElevation: t.hasElevation,
         hasPace: t.hasPace,
+        usesIntervals: t.usesIntervals,
       }));
 
     return NextResponse.json({
