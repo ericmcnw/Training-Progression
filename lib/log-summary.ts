@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { isSessionKind } from "@/lib/routines";
 import type { ExerciseUnitValue } from "@/lib/exercises";
 import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
+import { getRoutineDisplayName } from "@/lib/routine-display";
 
 export type LogSummaryRoutine = {
   id: string;
@@ -130,8 +131,16 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       elevationGainFt: true,
       durationSec: true,
       location: true,
+      // Pull activityType info so getRoutineDisplayName can resolve a
+      // typed endurance log to its activity type name. Without these the
+      // ViewLogDrawer would render "Endurance" literally for every typed
+      // log against the synthetic routine.
+      activityType: { select: { name: true } },
       routine: {
-        select: { id: true, name: true, kind: true },
+        select: {
+          id: true, name: true, kind: true,
+          activityType: { select: { name: true } },
+        },
       },
       metrics: {
         orderBy: { sortOrder: "asc" },
@@ -186,6 +195,15 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
   if (!log) return null;
 
   const logKind = inferLogKind(log, log.routine.kind);
+  // Display name resolves synthetic Endurance routine logs to their
+  // activity type so the drawer / detail page render "Run", "Hike", etc.
+  // instead of the placeholder "Endurance" name.
+  const displayName = getRoutineDisplayName({
+    routineId: log.routineId,
+    routineName: log.routine.name,
+    logActivityTypeName: log.activityType?.name ?? null,
+    routineActivityTypeName: log.routine.activityType?.name ?? null,
+  });
 
   return {
     id: log.id,
@@ -198,7 +216,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     durationSec: log.durationSec,
     location: log.location,
     logKind,
-    routine: log.routine,
+    routine: { ...log.routine, name: displayName },
     metrics: log.metrics,
     hasSessionMetricValues: log.sessionMetricValues.length > 0,
     climbAttempts: log.climbAttempts.map((a) => ({

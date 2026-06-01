@@ -16,6 +16,7 @@ import {
   type FrequencyTarget,
 } from "@/lib/frequency-state";
 import { classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
+import { getLogDisplayName } from "@/lib/routine-display";
 import {
   routineWithFrequencyTarget,
   shouldAutoScheduleRoutine,
@@ -133,11 +134,21 @@ export async function getHomeData(): Promise<HomeData> {
         // builder below can evaluate trigger-exercise / trigger-subtype
         // matches without a second roundtrip. `_count.sets` gives us the
         // per-exercise set count for `triggerMinSets` gating without
-        // hydrating every SetEntry row. activityTypeId + familyId carry
-        // through for endurance type/family goal triggers.
+        // hydrating every SetEntry row. activityTypeId + family carry
+        // through for endurance type/family goal triggers + the
+        // display-name helper (so synthetic-routine logs render as their
+        // activity type name instead of literally "Endurance").
         activityTypeId: true,
-        activityType: { select: { familyId: true } },
-        routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true } },
+        activityType: { select: { name: true, familyId: true } },
+        routine: {
+          select: {
+            id: true, name: true, kind: true, domain: true, subtype: true,
+            // Activity type on the routine itself — used by the display-
+            // name helper to resolve a name for legacy endurance routine
+            // logs that don't have activityType set on the log yet.
+            activityType: { select: { name: true } },
+          },
+        },
         exercises: {
           select: {
             exerciseId: true,
@@ -336,7 +347,10 @@ export async function getHomeData(): Promise<HomeData> {
     const logs = dayLogs.map((log) => ({
       id: log.id,
       routineId: log.routineId,
-      routineName: log.routine.name,
+      // Display name resolves synthetic Endurance routine + typed
+      // endurance logs to their activity type ("Run", "Hike", …) so the
+      // user sees the activity, not the placeholder routine name.
+      routineName: getLogDisplayName(log),
       kind: log.routine.kind,
       domain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
     }));
@@ -484,7 +498,7 @@ export async function getHomeData(): Promise<HomeData> {
           performedAt: log.performedAt,
           isPrimary: result.isPrimary,
           routineId: log.routineId,
-          routineName: log.routine.name,
+          routineName: getLogDisplayName(log),
         });
       }
       const matchedList = Array.from(matched.values());
@@ -594,7 +608,7 @@ export async function getHomeData(): Promise<HomeData> {
         logs: logsInWeek.map((log) => ({
           logId: log.id,
           routineId: log.routineId,
-          routineName: log.routine.name,
+          routineName: getLogDisplayName(log),
           performedYmd: toAppYmd(log.performedAt),
           performedTimeLabel: timeLabel(log.performedAt),
         })),
