@@ -1,6 +1,6 @@
 import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor";
 import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
-import type { ClimbAttemptDraft } from "@/lib/climb-types";
+import type { ClimbAttemptDraft, QuickClimbRow } from "@/lib/climb-types";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 const DRAFT_KEY_PREFIX = "log-draft:";
@@ -33,6 +33,10 @@ export type SessionDraft = {
   selectedClimbingGrades: string[];
   climbMode?: "quick" | "per-climb";
   climbAttempts?: ClimbAttemptDraft[];
+  // Discipline-aware quick-mode rows. Replaces the legacy per-grade counts
+  // (which lived in sessionMetricValues + quickAttemptedValues) so a single
+  // session can mix bouldering + rope work without losing data on resume.
+  quickClimbRows?: QuickClimbRow[];
   // Structured spot pick — covers both saved-ref and new-spot drafts for
   // any activity (climbing GYM/CRAG, cardio ActivitySpot, etc.). Preserved
   // verbatim across refresh so OSM identity + coords survive the round-trip.

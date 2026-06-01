@@ -35,15 +35,19 @@ export type ClimbProblemBasic = {
 };
 
 export type ClimbAttemptInput = {
+  /** Per-climb discipline. Drives the grade system + the outcome options
+   *  available. Used to be derived from the session template; now stored
+   *  per row so a session can mix bouldering and rope work. */
+  discipline: ClimbingDiscipline;
   grade: string;
   gradeSystem: ClimbGradeSystem;
   outcome: ClimbOutcome;
   area?: string | null;
   movesCompleted?: number;
   totalMoves?: number;
-  /** Optional "how many tries" counter. Used for SEND/REDPOINT (how many it
-   *  took to send) and PROJECT (how many tries so far). Null/undefined for
-   *  FLASH/ONSIGHT (implicitly 1). */
+  /** Optional "how many tries it took to send." Only meaningful for
+   *  SEND/REDPOINT — implicitly 1 for FLASH/ONSIGHT, irrelevant for
+   *  PROJECT (still in progress). */
   triesCount?: number | null;
   notes?: string;
   attemptOrder: number;
@@ -53,6 +57,21 @@ export type ClimbAttemptInput = {
 
 export type ClimbAttemptDraft = ClimbAttemptInput & {
   localId: string;
+};
+
+// Quick-mode row. One row = N climbs at a given discipline+grade with
+// flash/send/project counts. The synth in SessionLogForm expands this into
+// individual ClimbAttempt rows on save. Counts kept as strings so the input
+// experience matches the form's other number inputs (placeholder "0",
+// preserves leading zeros while typing).
+export type QuickClimbRow = {
+  localId: string;
+  discipline: ClimbingDiscipline;
+  grade: string;
+  gradeSystem: ClimbGradeSystem;
+  flashCount: string;
+  sendCount: string;
+  projectCount: string;
 };
 
 export function climbingDisciplineForTemplateKey(
@@ -116,8 +135,12 @@ export function climbOutcomesForDiscipline(discipline: ClimbingDiscipline): Clim
 // logger. Send/Redpoint count how many tries it took to clean it; Project
 // counts how many tries you've put in so far on something you're still
 // working. Flash/Onsight are implicitly 1, so no input shown.
+// Tries-count input only appears for SEND/REDPOINT — the number records
+// "how many tries it took to send." For PROJECT it's meaningless (the climb
+// is still in progress; the count would just grow). For FLASH/ONSIGHT it's
+// implicitly 1.
 export function outcomeUsesTriesCount(outcome: ClimbOutcome): boolean {
-  return outcome === "SEND" || outcome === "REDPOINT" || outcome === "PROJECT";
+  return outcome === "SEND" || outcome === "REDPOINT";
 }
 
 // Compat shim — old callers used grade system to derive outcome list.
@@ -146,6 +169,14 @@ export function gradeSystemForTemplateKey(templateKey: string | null | undefined
     return "BOULDER_V";
   }
   return "YOSEMITE";
+}
+
+// Grade system follows discipline directly: bouldering uses V-scale; rope
+// disciplines (top rope, sport, trad) use Yosemite. Same mapping as the
+// template-based helper, but keyed on the per-row discipline so a single
+// session can mix V and YDS grades cleanly.
+export function gradeSystemForDiscipline(discipline: ClimbingDiscipline): ClimbGradeSystem {
+  return discipline === "BOULDER" ? "BOULDER_V" : "YOSEMITE";
 }
 
 // Outcomes that count as a successful "send" for pyramid display. Falls and

@@ -140,6 +140,17 @@ enum ClimbGradeSystem {
   YOSEMITE
 }
 
+// Per-climb discipline. Today's session templates lock a session to one
+// discipline (e.g. indoor-bouldering), but in practice a single gym/crag
+// visit often mixes disciplines — bouldering then rope work, etc. Storing
+// discipline per ClimbAttempt instead of deriving from the session template
+// lets one session log a mix freely.
+enum ClimbingDiscipline {
+  BOULDER
+  TOP_ROPE
+  SPORT_LEAD
+}
+
 enum ClimbMediaKind {
   PHOTO
   LINK
@@ -404,23 +415,26 @@ model ClimbMedia {
 }
 
 model ClimbAttempt {
-  id             String           @id @default(cuid())
+  id             String             @id @default(cuid())
   sessionLogId   String
   problemId      String?
+  // Per-climb discipline. Required for new logs; backfilled from session
+  // template for historical rows. The grade system + available outcomes are
+  // both derived from discipline at the UI layer.
+  discipline     ClimbingDiscipline @default(BOULDER)
   grade          String
   gradeSystem    ClimbGradeSystem
   outcome        ClimbOutcome
   area           String?
   movesCompleted Int?
   totalMoves     Int?
-  // Optional "how many tries" counter. Used for SEND/REDPOINT (how many it
-  // took to send) and PROJECT (how many tries so far). Null for FLASH /
-  // ONSIGHT (implicitly 1) and for historical rows before this field
-  // existed.
+  // Optional "how many tries" counter. Used for SEND/REDPOINT only —
+  // implicitly 1 for FLASH/ONSIGHT and meaningless for PROJECT (it's still
+  // in progress). Null for historical rows before this field existed.
   triesCount     Int?
   notes          String?
-  attemptOrder   Int              @default(0)
-  createdAt      DateTime         @default(now())
+  attemptOrder   Int                @default(0)
+  createdAt      DateTime           @default(now())
 
   sessionLog RoutineLog    @relation(fields: [sessionLogId], references: [id], onDelete: Cascade)
   problem    ClimbProblem? @relation(fields: [problemId], references: [id], onDelete: SetNull)

@@ -2268,6 +2268,7 @@ export async function logSession(params: {
   sessionMetricValues?: SessionMetricValueInput[];
   preferredClimbingGrades?: string[];
   climbAttempts?: Array<{
+    discipline: "BOULDER" | "TOP_ROPE" | "SPORT_LEAD";
     grade: string;
     gradeSystem: "BOULDER_V" | "YOSEMITE";
     outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
@@ -2391,12 +2392,15 @@ export async function logSession(params: {
       });
     }
 
-    // Save individual climb attempts
+    // Save individual climb attempts. Discipline is required for new rows
+    // (the UI always sets it); the column also has a DB-level default of
+    // BOULDER as a safety net for any direct API misuse.
     if (resolvedAttempts.length > 0) {
       await tx.climbAttempt.createMany({
         data: resolvedAttempts.map((attempt) => ({
           sessionLogId: log.id,
           problemId: attempt.problemId ?? null,
+          discipline: attempt.discipline,
           grade: attempt.grade,
           gradeSystem: attempt.gradeSystem,
           outcome: attempt.outcome,

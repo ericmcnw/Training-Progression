@@ -8,17 +8,19 @@ import {
   climbOutcomeColor,
   climbOutcomeBg,
   climbingDisciplineForTemplateKey,
+  climbingDisciplineLabel,
   outcomeUsesTriesCount,
   climbNounForDiscipline,
+  gradeSystemForDiscipline,
   gradeSystemForTemplateKey,
   type ClimbAttemptDraft,
   type ClimbOutcome,
   type ClimbProblemBasic,
   type ClimbingDiscipline,
+  type QuickClimbRow,
 } from "@/lib/climb-types";
-import { climbingGradeOptions } from "@/lib/session-templates";
-import type { SessionMetricDefinitionWithConfig } from "@/lib/session-templates";
-import type { SessionMetricDraftValue } from "./SessionMetricFields";
+import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
+import MediaUploader from "@/app/components/climbing/MediaUploader";
 
 type AttemptHistoryItem = {
   id: string;
@@ -36,57 +38,154 @@ function isOutdoorTemplate(templateKey: string | null | undefined): boolean {
   return (templateKey ?? "").startsWith("outdoor-");
 }
 
-// ─── Quick Mode grade row ─────────────────────────────────────────────────────
+// ─── Quick Mode body ──────────────────────────────────────────────────────────
+//
+// Discipline-grouped grade tracker. Each row = N climbs at a specific
+// discipline+grade, with flash / send / project counts. Rows are added
+// individually (pick discipline → pick grade → tap +), so a single session
+// can mix bouldering + rope work cleanly.
 
-function QuickGradeRow({
-  grade,
-  flashValue,
-  sendValue,
-  attemptedValue,
-  flashDefId,
-  sendDefId,
-  onFlashChange,
-  onSendChange,
-  onAttemptedChange,
-  onRemove,
+function QuickModeBody({
+  activeDiscipline,
+  onSelectDiscipline,
+  rowsByDiscipline,
+  onAddRow,
+  onUpdateRow,
+  onRemoveRow,
 }: {
-  grade: string;
-  flashValue: string;
-  sendValue: string;
-  attemptedValue: string;
-  flashDefId: string | null;
-  sendDefId: string | null;
-  onFlashChange: (id: string, val: string) => void;
-  onSendChange: (id: string, val: string) => void;
-  onAttemptedChange: (grade: string, val: string) => void;
-  onRemove: () => void;
+  activeDiscipline: ClimbingDiscipline;
+  onSelectDiscipline: (d: ClimbingDiscipline) => void;
+  rowsByDiscipline: Map<ClimbingDiscipline, QuickClimbRow[]>;
+  onAddRow: (discipline: ClimbingDiscipline, grade: string) => void;
+  onUpdateRow: (localId: string, patch: Partial<QuickClimbRow>) => void;
+  onRemoveRow: (localId: string) => void;
 }) {
+  const [pickerGrade, setPickerGrade] = useState<string>("");
+  const allGrades = climbingGradeOptionsForDiscipline(activeDiscipline);
+  const existing = new Set(
+    (rowsByDiscipline.get(activeDiscipline) ?? []).map((r) => r.grade)
+  );
+  const available = allGrades.filter((g) => !existing.has(g));
+
+  function commitAdd() {
+    if (!pickerGrade) return;
+    onAddRow(activeDiscipline, pickerGrade);
+    setPickerGrade("");
+  }
+
+  // Render order: Boulder, Top Rope, Sport Lead. Empty disciplines hide so
+  // the page stays compact for single-discipline sessions.
+  const disciplineOrder: ClimbingDiscipline[] = ["BOULDER", "TOP_ROPE", "SPORT_LEAD"];
+
   return (
-    <>
-      <div style={quickCellLabelStyle}>{grade}</div>
-      <input
-        style={quickInputStyle}
-        inputMode="numeric"
-        placeholder="0"
-        value={flashValue}
-        onChange={(e) => flashDefId && onFlashChange(flashDefId, e.target.value)}
-      />
-      <input
-        style={quickInputStyle}
-        inputMode="numeric"
-        placeholder="0"
-        value={sendValue}
-        onChange={(e) => sendDefId && onSendChange(sendDefId, e.target.value)}
-      />
-      <input
-        style={quickInputStyle}
-        inputMode="numeric"
-        placeholder="0"
-        value={attemptedValue}
-        onChange={(e) => onAttemptedChange(grade, e.target.value)}
-      />
-      <button type="button" onClick={onRemove} style={quickRemoveButtonStyle}>×</button>
-    </>
+    <div style={{ display: "grid", gap: 14 }}>
+      {/* Discipline picker — shared with per-climb mode via parent state. */}
+      <div>
+        <div style={sectionLabelStyle}>Discipline</div>
+        <div style={disciplineRowStyle}>
+          {disciplineOrder.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onSelectDiscipline(d)}
+              style={disciplinePillStyle(activeDiscipline === d)}
+              aria-pressed={activeDiscipline === d}
+            >
+              {climbingDisciplineLabel(d)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Add row: grade dropdown + add button, filtered to the active discipline. */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ ...sectionLabelStyle, marginBottom: 0 }}>Add grade</div>
+        <select
+          value={pickerGrade}
+          onChange={(e) => setPickerGrade(e.target.value)}
+          style={quickPickerSelectStyle}
+          disabled={available.length === 0}
+        >
+          <option value="">
+            {available.length === 0 ? "All grades added" : "Pick a grade…"}
+          </option>
+          {available.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={commitAdd}
+          disabled={!pickerGrade}
+          style={pickerGrade ? quickAddButtonStyleActive : quickAddButtonStyle}
+        >
+          + Add
+        </button>
+      </div>
+
+      {/* Discipline-grouped row tables */}
+      {disciplineOrder.map((d) => {
+        const rows = rowsByDiscipline.get(d) ?? [];
+        if (rows.length === 0) return null;
+        const flashLabel = d === "BOULDER" ? "Flash" : "Onsight";
+        const sendLabel = d === "SPORT_LEAD" ? "Redpoint" : "Send";
+        return (
+          <div key={d} style={{ display: "grid", gap: 6 }}>
+            <div style={quickDisciplineHeaderStyle}>{climbingDisciplineLabel(d)}</div>
+            <div style={quickTableScrollStyle}>
+              <div style={quickTableStyle}>
+                <div style={quickHeaderStyle}>Grade</div>
+                <div style={quickHeaderStyle}>{flashLabel}</div>
+                <div style={quickHeaderStyle}>{sendLabel}</div>
+                <div style={quickHeaderStyle}>Project</div>
+                <div />
+                {rows.map((row) => (
+                  <React.Fragment key={row.localId}>
+                    <div style={quickCellLabelStyle}>{row.grade}</div>
+                    <input
+                      style={quickInputStyle}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={row.flashCount}
+                      onChange={(e) => onUpdateRow(row.localId, { flashCount: e.target.value })}
+                    />
+                    <input
+                      style={quickInputStyle}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={row.sendCount}
+                      onChange={(e) => onUpdateRow(row.localId, { sendCount: e.target.value })}
+                    />
+                    <input
+                      style={quickInputStyle}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={row.projectCount}
+                      onChange={(e) => onUpdateRow(row.localId, { projectCount: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveRow(row.localId)}
+                      style={quickRemoveButtonStyle}
+                      aria-label={`Remove ${row.grade}`}
+                    >
+                      ×
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Empty state */}
+      {Array.from(rowsByDiscipline.values()).every((rs) => rs.length === 0) && (
+        <div style={{ fontSize: 12, opacity: 0.5, padding: "12px 0" }}>
+          Pick a discipline + grade above to start logging climbs.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -94,7 +193,6 @@ function QuickGradeRow({
 
 function AttemptRow({
   attempt,
-  discipline,
   expanded,
   onToggleExpand,
   onUpdate,
@@ -103,7 +201,6 @@ function AttemptRow({
   onUpdateProblemNotes,
 }: {
   attempt: ClimbAttemptDraft;
-  discipline: ClimbingDiscipline;
   expanded: boolean;
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<ClimbAttemptDraft>) => void;
@@ -111,6 +208,10 @@ function AttemptRow({
   savedProblems: ClimbProblemBasic[];
   onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
+  // Per-row discipline. Each climb logged in a mixed session keeps its own
+  // discipline so the label, outcome list, and grade system stay correct
+  // regardless of what the active picker currently shows.
+  const discipline = attempt.discipline;
   const color = climbOutcomeColor(attempt.outcome);
   const bg = climbOutcomeBg(attempt.outcome);
   const label = climbOutcomeLabel(attempt.outcome, discipline);
@@ -348,6 +449,22 @@ function AttemptRow({
               rows={3}
             />
           </div>
+
+          {/* Per-climb photo button. Active only when this climb is linked
+              to a saved problem — uploads attach there. Until then, the
+              hint nudges naming + saving the row's problem first. */}
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={expandLabelStyle}>Photo / video link (optional)</div>
+            {attempt.problemId ? (
+              <MediaUploader target={{ kind: "problem", problemId: attempt.problemId }} />
+            ) : (
+              <div style={photoHintStyle}>
+                {attempt.newProblemName
+                  ? "Save the session first — photos for new climbs land on the problem page once it's stored."
+                  : `Name this ${climbNounForDiscipline(discipline).toLowerCase()} above to attach photos to it.`}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -362,14 +479,10 @@ export default function ClimbSessionLogger({
   onModeChange,
   attempts,
   onAttemptsChange,
-  definitions,
-  quickValues,
-  quickAttemptedValues,
-  selectedGrades,
+  quickClimbRows,
+  onQuickClimbRowsChange,
   savedProblems = [],
-  onQuickValuesChange,
-  onQuickAttemptedChange,
-  onSelectedGradesChange,
+  climbLocationId,
   onMarkDirty,
   onUpdateProblemNotes,
 }: {
@@ -378,30 +491,40 @@ export default function ClimbSessionLogger({
   onModeChange: (mode: "quick" | "per-climb") => void;
   attempts: ClimbAttemptDraft[];
   onAttemptsChange: (attempts: ClimbAttemptDraft[]) => void;
-  definitions: SessionMetricDefinitionWithConfig[];
-  quickValues: Record<string, SessionMetricDraftValue>;
-  quickAttemptedValues: Record<string, string>;
-  selectedGrades: string[];
+  quickClimbRows: QuickClimbRow[];
+  onQuickClimbRowsChange: (rows: QuickClimbRow[]) => void;
   savedProblems?: ClimbProblemBasic[];
-  onQuickValuesChange: (id: string, value: SessionMetricDraftValue) => void;
-  onQuickAttemptedChange: (grade: string, value: string) => void;
-  onSelectedGradesChange: (grades: string[]) => void;
+  /** Resolved id of the saved ClimbLocation tied to this session, when one
+   *  exists. New (unsaved) locations don't have an id yet — the session-
+   *  level photo button hides in that case, since photos need a parent. */
+  climbLocationId?: string | null;
   onMarkDirty: () => void;
   onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
-  const gradeSystem = gradeSystemForTemplateKey(templateKey);
-  const discipline = climbingDisciplineForTemplateKey(templateKey);
-  const allGrades = climbingGradeOptions(templateKey);
-  const outcomes = climbOutcomesForDiscipline(discipline);
-  const noun = climbNounForDiscipline(discipline);
-  const nounPlural = noun === "Problem" ? "problems" : "routes";
+  const templateDiscipline = climbingDisciplineForTemplateKey(templateKey);
+  const templateGradeSystem = gradeSystemForTemplateKey(templateKey);
 
-  // Per-climb mode local UI state
+  // Per-climb mode local UI state. activeDiscipline starts from the session
+  // template (so single-discipline sessions feel unchanged) but is sticky to
+  // whatever the user last picked — supporting mixed-discipline sessions
+  // without re-selecting on every climb.
+  const [activeDiscipline, setActiveDiscipline] = useState<ClimbingDiscipline>(templateDiscipline);
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [activeName, setActiveName] = useState("");
   const [activeArea, setActiveArea] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const gradeSystem = gradeSystemForDiscipline(activeDiscipline);
+  const allGrades = climbingGradeOptionsForDiscipline(activeDiscipline);
+  const outcomes = climbOutcomesForDiscipline(activeDiscipline);
+  const noun = climbNounForDiscipline(activeDiscipline);
+  const nounPlural = noun === "Problem" ? "problems" : "routes";
+  // Legacy alias — the rest of the file still reads `discipline` for labels.
+  const discipline = activeDiscipline;
+  // Suppress unused warning during the gradual refactor — templateGradeSystem
+  // is reserved for routine-default behavior if we add it later.
+  void templateGradeSystem;
 
   const activeProblem = selectedProblemId
     ? savedProblems.find((p) => p.id === selectedProblemId) ?? null
@@ -423,11 +546,16 @@ export default function ClimbSessionLogger({
     return 0;
   })();
 
-  // ── Per-climb: add attempt ──────────────────────────────────────────────────
+  // ── Per-climb: add climb ────────────────────────────────────────────────────
+  // Tapping an outcome COMMITS the climb (adds the row) AND auto-closes the
+  // active climb panel. Discipline + area persist (likely to log another in
+  // the same wall/discipline); grade, name, and saved-problem selection
+  // clear so the next climb starts fresh. Re-tap or re-pick to log another.
   function addAttempt(outcome: ClimbOutcome) {
     if (!selectedGrade) return;
     const draft: ClimbAttemptDraft = {
       localId: nanoid(),
+      discipline: activeDiscipline,
       grade: selectedGrade,
       gradeSystem,
       outcome,
@@ -439,8 +567,11 @@ export default function ClimbSessionLogger({
     };
     onAttemptsChange([draft, ...attempts]);
     onMarkDirty();
-    // Keep grade/name/area/problemId selected so the user can rapidly add more
-    // attempts to the same climb (e.g. Project → Fell → Fell → Send).
+    // Auto-close: clear the stage so the user moves on. Keeps area + the
+    // discipline so consecutive climbs in the same wall flow fast.
+    setSelectedGrade(null);
+    setSelectedProblemId(null);
+    setActiveName("");
   }
 
   function clearActiveClimb() {
@@ -448,6 +579,19 @@ export default function ClimbSessionLogger({
     setSelectedProblemId(null);
     setActiveName("");
     setActiveArea("");
+    // Keep activeDiscipline — it's the sticky choice for the session.
+  }
+
+  // Switching discipline mid-session is a meaningful action — clear the
+  // grade since grade systems differ (V vs YDS) and a stray V5 would be
+  // invalid for top-rope. Name + area + problemId all clear too because
+  // those reference a specific climb that doesn't carry across disciplines.
+  function selectDiscipline(next: ClimbingDiscipline) {
+    if (next === activeDiscipline) return;
+    setActiveDiscipline(next);
+    setSelectedGrade(null);
+    setSelectedProblemId(null);
+    setActiveName("");
   }
 
   function selectSavedProblem(problem: ClimbProblemBasic) {
@@ -482,24 +626,53 @@ export default function ClimbSessionLogger({
   }
 
   // ── Quick mode helpers ──────────────────────────────────────────────────────
-  const gradeRows = (() => {
-    const gradeMap = new Map<
-      string,
-      { grade: string; flashDefId: string | null; sendDefId: string | null }
-    >();
-    for (const def of definitions) {
-      const config = def.config;
-      if (!config?.gradeBucket || !config?.climbingColumn) continue;
-      const grade = config.gradeBucket as string;
-      const current = gradeMap.get(grade) ?? { grade, flashDefId: null, sendDefId: null };
-      if (config.climbingColumn === "FLASHED") current.flashDefId = def.id;
-      else current.sendDefId = def.id;
-      gradeMap.set(grade, current);
+  // ── Quick mode row helpers ──────────────────────────────────────────────────
+  // Group rows by discipline so the UI can render a sub-grid per discipline.
+  // Order: Boulder → Top Rope → Sport Lead, matching the picker.
+  const rowsByDiscipline = (() => {
+    const map = new Map<ClimbingDiscipline, QuickClimbRow[]>([
+      ["BOULDER", []],
+      ["TOP_ROPE", []],
+      ["SPORT_LEAD", []],
+    ]);
+    for (const row of quickClimbRows) {
+      const list = map.get(row.discipline) ?? [];
+      list.push(row);
+      map.set(row.discipline, list);
     }
-    return Array.from(gradeMap.values()).filter((r) => selectedGrades.includes(r.grade));
+    return map;
   })();
 
-  const availableGradesForQuick = allGrades.filter((g) => !selectedGrades.includes(g));
+  function addQuickRow(targetDiscipline: ClimbingDiscipline, grade: string) {
+    // Prevent duplicate discipline+grade combos — extra rows for the same
+    // cell would split the counts confusingly. If the user picks an
+    // existing combo, focus stays on the existing row.
+    const exists = quickClimbRows.some(
+      (r) => r.discipline === targetDiscipline && r.grade === grade
+    );
+    if (exists) return;
+    const next: QuickClimbRow = {
+      localId: nanoid(),
+      discipline: targetDiscipline,
+      grade,
+      gradeSystem: gradeSystemForDiscipline(targetDiscipline),
+      flashCount: "",
+      sendCount: "",
+      projectCount: "",
+    };
+    onQuickClimbRowsChange([...quickClimbRows, next]);
+    onMarkDirty();
+  }
+
+  function updateQuickRow(localId: string, patch: Partial<QuickClimbRow>) {
+    onQuickClimbRowsChange(quickClimbRows.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
+    onMarkDirty();
+  }
+
+  function removeQuickRow(localId: string) {
+    onQuickClimbRowsChange(quickClimbRows.filter((r) => r.localId !== localId));
+    onMarkDirty();
+  }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
   const summary = (() => {
@@ -514,23 +687,15 @@ export default function ClimbSessionLogger({
       }
       return { flashes, sends, projects, total: attempts.length };
     }
-    // Quick mode summary. The third column ("Project") tracks tried-but-
-    // not-sent attempts; persisted as PROJECT outcome by the synthesizer.
+    // Quick mode summary aggregates across all discipline rows.
     let flashes = 0, sends = 0, projects = 0;
-    for (const row of gradeRows) {
-      flashes += parseInt(quickValues[row.flashDefId ?? ""]?.numberValue ?? "0") || 0;
-      sends += parseInt(quickValues[row.sendDefId ?? ""]?.numberValue ?? "0") || 0;
-      projects += parseInt(quickAttemptedValues[row.grade] ?? "0") || 0;
+    for (const row of quickClimbRows) {
+      flashes += parseInt(row.flashCount || "0") || 0;
+      sends += parseInt(row.sendCount || "0") || 0;
+      projects += parseInt(row.projectCount || "0") || 0;
     }
     return { flashes, sends, projects, total: flashes + sends + projects };
   })();
-
-  const flashLabel = discipline === "BOULDER" ? "Flash" : "Onsight";
-  const sendLabel = discipline === "SPORT_LEAD" ? "Redpoint" : "Send";
-  // Third column in quick mode counts climbs you tried but didn't send.
-  // Persisted as PROJECT outcome — the user's mental model is "every
-  // non-send is a project I'm working on."
-  const projectLabel = "Project";
 
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
@@ -552,15 +717,54 @@ export default function ClimbSessionLogger({
         </button>
       </div>
 
+      {/* Session-level photo uploader. Only shown when the location is
+          already saved — photos need a parent FK. For new (unsaved) spots
+          users add photos via the location detail page after first save. */}
+      {climbLocationId ? (
+        <details style={sessionPhotoSummaryStyle}>
+          <summary style={sessionPhotoTriggerStyle}>
+            <span>📷 Session photos</span>
+            <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>
+              (gym shot, parking, conditions…)
+            </span>
+          </summary>
+          <div style={{ paddingTop: 8 }}>
+            <MediaUploader target={{ kind: "location", locationId: climbLocationId }} />
+          </div>
+        </details>
+      ) : null}
+
       {/* ─── Per Climb mode ─────────────────────────────────────────────────── */}
       {climbMode === "per-climb" && (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, minWidth: 0 }}>
-          {/* Saved problems at this location */}
-          {savedProblems.length > 0 && (
+          {/* Discipline picker — sticky for the session. Default from
+              template; switching swaps grade system + outcome options. */}
+          <div>
+            <div style={sectionLabelStyle}>Discipline</div>
+            <div style={disciplineRowStyle}>
+              {(["BOULDER", "TOP_ROPE", "SPORT_LEAD"] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => selectDiscipline(d)}
+                  style={disciplinePillStyle(activeDiscipline === d)}
+                  aria-pressed={activeDiscipline === d}
+                >
+                  {climbingDisciplineLabel(d)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Saved problems at this location, filtered to the current
+              discipline's grade system. */}
+          {savedProblems.filter((p) => p.gradeSystem === gradeSystem).length > 0 && (
             <div>
               <div style={sectionLabelStyle}>Known {nounPlural} at this location</div>
               <div style={gradeChipsScrollStyle}>
-                {savedProblems.map((problem) => {
+                {savedProblems
+                  .filter((p) => p.gradeSystem === gradeSystem)
+                  .map((problem) => {
                   const isSelected = selectedProblemId === problem.id;
                   return (
                     <button
@@ -679,7 +883,6 @@ export default function ClimbSessionLogger({
                 <AttemptRow
                   key={attempt.localId}
                   attempt={attempt}
-                  discipline={discipline}
                   expanded={expandedId === attempt.localId}
                   onToggleExpand={() =>
                     setExpandedId(expandedId === attempt.localId ? null : attempt.localId)
@@ -703,72 +906,31 @@ export default function ClimbSessionLogger({
 
       {/* ─── Quick mode ─────────────────────────────────────────────────────── */}
       {climbMode === "quick" && (
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <div style={sectionLabelStyle}>Grades</div>
-            <select
-              value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                onSelectedGradesChange(Array.from(new Set([...selectedGrades, e.target.value])));
-                onMarkDirty();
-              }}
-              style={addGradeSelectStyle}
-            >
-              <option value="">+ Add grade…</option>
-              {availableGradesForQuick.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </div>
-
-          {gradeRows.length > 0 ? (
-            <div style={quickTableScrollStyle}>
-              <div style={quickTableStyle}>
-                <div style={quickHeaderStyle}>Grade</div>
-                <div style={quickHeaderStyle}>{flashLabel}</div>
-                <div style={quickHeaderStyle}>{sendLabel}</div>
-                <div style={quickHeaderStyle}>{projectLabel}</div>
-                <div />
-                {gradeRows.map((row) => (
-                  <QuickGradeRow
-                    key={row.grade}
-                    grade={row.grade}
-                    flashValue={quickValues[row.flashDefId ?? ""]?.numberValue ?? ""}
-                    sendValue={quickValues[row.sendDefId ?? ""]?.numberValue ?? ""}
-                    attemptedValue={quickAttemptedValues[row.grade] ?? ""}
-                    flashDefId={row.flashDefId}
-                    sendDefId={row.sendDefId}
-                    onFlashChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
-                    onSendChange={(id, val) => { onQuickValuesChange(id, { numberValue: val }); onMarkDirty(); }}
-                    onAttemptedChange={(grade, val) => { onQuickAttemptedChange(grade, val); onMarkDirty(); }}
-                    onRemove={() => { onSelectedGradesChange(selectedGrades.filter((g) => g !== row.grade)); onMarkDirty(); }}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, opacity: 0.5, padding: "12px 0" }}>
-              Use the dropdown to add the grades you climbed today.
-            </div>
-          )}
-        </div>
+        <QuickModeBody
+          activeDiscipline={activeDiscipline}
+          onSelectDiscipline={selectDiscipline}
+          rowsByDiscipline={rowsByDiscipline}
+          onAddRow={addQuickRow}
+          onUpdateRow={updateQuickRow}
+          onRemoveRow={removeQuickRow}
+        />
       )}
 
-      {/* Summary strip */}
+      {/* Summary strip — generic labels (FLASH/SEND) since mixed sessions
+          can include onsight + flash and send + redpoint together. */}
       {summary.total > 0 && (
         <div style={summaryStripStyle}>
           {summary.flashes > 0 && (
             <span style={summaryChipStyle(climbOutcomeColor("FLASH"), climbOutcomeBg("FLASH"))}>
               <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>
-                {flashLabel.toUpperCase()}
+                FLASH
               </span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.flashes}</span>
             </span>
           )}
           {summary.sends > 0 && (
             <span style={summaryChipStyle(climbOutcomeColor("SEND"), climbOutcomeBg("SEND"))}>
-              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>{sendLabel.toUpperCase()}</span>
+              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>SEND</span>
               <span style={{ fontSize: 18, fontWeight: 900 }}>{summary.sends}</span>
             </span>
           )}
@@ -885,6 +1047,30 @@ const gradeChipsScrollStyle: React.CSSProperties = {
   overflowY: "hidden",
   paddingBottom: 4,
 };
+
+// Discipline pill row — tight 3-button group, sticky in scroll on mobile.
+const disciplineRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+function disciplinePillStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: "1 1 90px",
+    minHeight: 40,
+    padding: "8px 14px",
+    borderRadius: 10,
+    border: active ? "1px solid rgba(120,190,255,0.55)" : "1px solid rgba(128,128,128,0.35)",
+    background: active ? "rgba(120,190,255,0.16)" : "rgba(128,128,128,0.06)",
+    color: active ? "rgba(120,190,255,1)" : "rgba(255,255,255,0.85)",
+    fontWeight: 800,
+    fontSize: 12.5,
+    letterSpacing: 0.2,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+}
 
 function gradeChipStyle(active: boolean): React.CSSProperties {
   return {
@@ -1083,15 +1269,81 @@ const quickRemoveButtonStyle: React.CSSProperties = {
   justifyContent: "center",
 };
 
-const addGradeSelectStyle: React.CSSProperties = {
-  padding: "6px 10px",
+// Quick-mode grade picker dropdown (paired with the + Add button).
+const quickPickerSelectStyle: React.CSSProperties = {
+  flex: "1 1 140px",
+  minHeight: 40,
+  padding: "8px 10px",
   border: "1px solid rgba(128,128,128,0.5)",
-  borderRadius: 8,
+  borderRadius: 10,
   background: "#111827",
   color: "#ffffff",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 700,
   cursor: "pointer",
+};
+
+const quickAddButtonStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "8px 14px",
+  border: "1px solid rgba(128,128,128,0.35)",
+  borderRadius: 10,
+  background: "rgba(128,128,128,0.06)",
+  color: "rgba(255,255,255,0.5)",
+  fontSize: 13,
+  fontWeight: 900,
+  cursor: "not-allowed",
+};
+
+const quickAddButtonStyleActive: React.CSSProperties = {
+  ...quickAddButtonStyle,
+  border: "1px solid rgba(120,190,255,0.55)",
+  background: "rgba(120,190,255,0.16)",
+  color: "rgba(120,190,255,1)",
+  cursor: "pointer",
+};
+
+// Sub-header above each discipline's grade table in quick mode.
+const quickDisciplineHeaderStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  opacity: 0.65,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  paddingTop: 2,
+};
+
+// Session-level photo uploader collapsed by default — keeps the climb
+// logger above-the-fold clean; expanded with one tap when the user wants
+// to add a gym/crag photo.
+const sessionPhotoSummaryStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.03)",
+};
+
+const sessionPhotoTriggerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12.5,
+  fontWeight: 800,
+  cursor: "pointer",
+  listStyle: "none",
+};
+
+// Hint shown in the per-climb photo slot when the climb isn't linked to a
+// saved problem yet. Two distinct messages depending on whether the user
+// has typed a name or not.
+const photoHintStyle: React.CSSProperties = {
+  fontSize: 11.5,
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px dashed rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.02)",
+  color: "rgba(255,255,255,0.6)",
+  lineHeight: 1.4,
 };
 
 const summaryStripStyle: React.CSSProperties = {

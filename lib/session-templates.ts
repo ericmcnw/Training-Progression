@@ -1,4 +1,5 @@
 import type { Prisma, SessionMetricDefinition, SessionMetricValueType } from "@/generated/prisma";
+import type { ClimbingDiscipline } from "./climb-types";
 
 export const SESSION_TEMPLATE_KEYS = [
   "indoor-bouldering",
@@ -129,6 +130,13 @@ export function climbingGradeOptions(templateKey: string | null | undefined) {
     return [...YOSEMITE_GRADE_OPTIONS];
   }
   return [];
+}
+
+// Per-discipline variant for the new mixed-discipline logger. Bouldering →
+// V-scale; rope disciplines → Yosemite. Same content as the template
+// helper, just keyed on discipline directly.
+export function climbingGradeOptionsForDiscipline(discipline: ClimbingDiscipline): string[] {
+  return discipline === "BOULDER" ? [...BOULDER_GRADE_OPTIONS] : [...YOSEMITE_GRADE_OPTIONS];
 }
 
 export type ClimbingGradeRowDefinition = {

@@ -30,7 +30,8 @@
       "Bash(curl -s \"http://localhost:3000/plan?view=schedule\" --max-time 60)",
       "Bash(tee /tmp/tsc-out.txt)",
       "Bash(echo \"EXIT $?\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

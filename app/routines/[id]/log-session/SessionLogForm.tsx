@@ -44,7 +44,9 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, ClimbOutcome } from "@/lib/climb-types";
+import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, ClimbOutcome, QuickClimbRow } from "@/lib/climb-types";
+import { gradeSystemForDiscipline } from "@/lib/climb-types";
+import { nanoid } from "nanoid";
 
 // Synthesize SessionMetricValueInput from per-climb attempts (backward compat for progress queries)
 function synthesizeClimbingMetrics(
@@ -73,47 +75,52 @@ function synthesizeClimbingMetrics(
   return result;
 }
 
-// Synthesize ClimbAttempt list from quick-mode grade counts
-function synthesizeAttemptsFromQuickValues(
-  values: Record<string, SessionMetricDraftValue>,
-  quickAttemptedValues: Record<string, string>,
-  definitions: SessionMetricDefinitionWithConfig[],
-  templateKey: string | null
-): ClimbAttemptDraft[] {
+// Synthesize ClimbAttempt list from the discipline-aware quick mode rows.
+// Each row carries its own discipline + grade + grade system, so a single
+// session can contain a mix freely. The flash outcome flips to ONSIGHT for
+// rope disciplines; send flips to REDPOINT for sport lead.
+function synthesizeAttemptsFromQuickRows(rows: QuickClimbRow[]): ClimbAttemptDraft[] {
   const attempts: ClimbAttemptDraft[] = [];
-  const gradeRows = new Map<string, { flashDefId: string | null; sendDefId: string | null; gradeSystem: string }>();
-  const discipline = climbingDisciplineForTemplateKey(templateKey);
-  const flashOutcome: ClimbOutcome = discipline === "BOULDER" ? "FLASH" : "ONSIGHT";
-  const sendOutcome: ClimbOutcome = discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
-
-  for (const def of definitions) {
-    const config = def.config;
-    if (!config?.gradeBucket || !config?.climbingColumn) continue;
-    const grade = config.gradeBucket as string;
-    const current = gradeRows.get(grade) ?? { flashDefId: null, sendDefId: null, gradeSystem: config.gradeSystem ?? "BOULDER_V" };
-    if (config.climbingColumn === "FLASHED") current.flashDefId = def.id;
-    else current.sendDefId = def.id;
-    gradeRows.set(grade, current);
-  }
-
   let order = 0;
-  for (const [grade, row] of gradeRows) {
-    const gradeSystem = (row.gradeSystem === "YOSEMITE" ? "YOSEMITE" : "BOULDER_V") as "BOULDER_V" | "YOSEMITE";
-    const flashCount = parseInt(values[row.flashDefId ?? ""]?.numberValue ?? "0") || 0;
-    const sendCount = parseInt(values[row.sendDefId ?? ""]?.numberValue ?? "0") || 0;
-    const projectCount = parseInt(quickAttemptedValues[grade] ?? "0") || 0;
+  for (const row of rows) {
+    const flashOutcome: ClimbOutcome = row.discipline === "BOULDER" ? "FLASH" : "ONSIGHT";
+    const sendOutcome: ClimbOutcome = row.discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
+    const flashCount = parseInt(row.flashCount || "0") || 0;
+    const sendCount = parseInt(row.sendCount || "0") || 0;
+    const projectCount = parseInt(row.projectCount || "0") || 0;
 
     for (let i = 0; i < flashCount; i++) {
-      attempts.push({ localId: `qs-flash-${grade}-${i}`, grade, gradeSystem, outcome: flashOutcome, attemptOrder: order++ });
+      attempts.push({
+        localId: `${row.localId}-flash-${i}`,
+        discipline: row.discipline,
+        grade: row.grade,
+        gradeSystem: row.gradeSystem,
+        outcome: flashOutcome,
+        attemptOrder: order++,
+      });
     }
     for (let i = 0; i < sendCount; i++) {
-      attempts.push({ localId: `qs-send-${grade}-${i}`, grade, gradeSystem, outcome: sendOutcome, attemptOrder: order++ });
+      attempts.push({
+        localId: `${row.localId}-send-${i}`,
+        discipline: row.discipline,
+        grade: row.grade,
+        gradeSystem: row.gradeSystem,
+        outcome: sendOutcome,
+        attemptOrder: order++,
+      });
     }
-    // Third column ("Project") = climbs you tried but didn't send. Persisted
-    // as PROJECT, matching the per-climb mode's "Project" outcome and the
-    // user's intent that every non-send is a project they're working on.
+    // Project column = climbs tried but not sent. Persisted as PROJECT,
+    // matching per-climb mode and the user's mental model that every
+    // non-send is a project they're working on.
     for (let i = 0; i < projectCount; i++) {
-      attempts.push({ localId: `qs-project-${grade}-${i}`, grade, gradeSystem, outcome: "PROJECT", attemptOrder: order++ });
+      attempts.push({
+        localId: `${row.localId}-project-${i}`,
+        discipline: row.discipline,
+        grade: row.grade,
+        gradeSystem: row.gradeSystem,
+        outcome: "PROJECT",
+        attemptOrder: order++,
+      });
     }
   }
   return attempts;
@@ -193,7 +200,11 @@ export default function SessionLogForm({
   // Climbing-specific state
   const [climbMode, setClimbMode] = useState<"quick" | "per-climb">("per-climb");
   const [climbAttempts, setClimbAttempts] = useState<ClimbAttemptDraft[]>([]);
-  const [quickAttemptedValues, setQuickAttemptedValues] = useState<Record<string, string>>({});
+  // Quick mode rows — each row carries discipline + grade + counts so a
+  // single session can mix disciplines. Replaces the old template-driven
+  // selectedGrades + quickAttemptedValues + sessionMetricValues-keyed
+  // climbing inputs.
+  const [quickClimbRows, setQuickClimbRows] = useState<QuickClimbRow[]>([]);
   // Single SpotPicker value covers both climbing (ClimbLocation) and non-climbing
   // (ActivitySpot) flows — the form maps it to the right action params on save.
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
@@ -276,6 +287,7 @@ export default function SessionLogForm({
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     if (draft.climbMode) setClimbMode(draft.climbMode);
     if (draft.climbAttempts) setClimbAttempts(draft.climbAttempts);
+    if (draft.quickClimbRows) setQuickClimbRows(draft.quickClimbRows);
     // Restore the picker value. Prefer the structured `spotValue` (new
     // format); fall back to the legacy climbLocation* fields for drafts
     // written before this schema bump.
@@ -314,6 +326,7 @@ export default function SessionLogForm({
       performedAtLocal,
       climbMode,
       climbAttempts,
+      quickClimbRows,
       spotValue: spotValue ?? undefined,
     };
     const timer = setTimeout(() => {
@@ -323,7 +336,7 @@ export default function SessionLogForm({
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durationMin, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
-      climbMode, climbAttempts, spotValue]);
+      climbMode, climbAttempts, quickClimbRows, spotValue]);
 
   function markDirty() {
     isDirtyRef.current = true;
@@ -340,7 +353,7 @@ export default function SessionLogForm({
     setPerformedAtLocal(localDateTimeNow());
     setClimbMode("per-climb");
     setClimbAttempts([]);
-    setQuickAttemptedValues({});
+    setQuickClimbRows([]);
     setSpotValue(null);
     setSavedProblems([]);
     isDirtyRef.current = false;
@@ -371,7 +384,7 @@ export default function SessionLogForm({
       const activeAttempts =
         climbMode === "per-climb"
           ? climbAttempts
-          : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions, templateKey);
+          : synthesizeAttemptsFromQuickRows(quickClimbRows);
       sessionMetricValuesToSend = synthesizeClimbingMetrics(activeAttempts, definitions);
     } else {
       for (const definition of definitions) {
@@ -396,7 +409,7 @@ export default function SessionLogForm({
     const activeClimbAttempts = isClimbing
       ? climbMode === "per-climb"
         ? climbAttempts.map((a, i) => ({ ...a, attemptOrder: i }))
-        : synthesizeAttemptsFromQuickValues(sessionMetricValues, quickAttemptedValues, definitions, templateKey)
+        : synthesizeAttemptsFromQuickRows(quickClimbRows)
       : undefined;
 
     setSaving(true);
@@ -506,18 +519,10 @@ export default function SessionLogForm({
             onModeChange={(mode) => { markDirty(); setClimbMode(mode); }}
             attempts={climbAttempts}
             onAttemptsChange={(a) => { setClimbAttempts(a); }}
-            definitions={definitions}
-            quickValues={sessionMetricValues}
-            quickAttemptedValues={quickAttemptedValues}
-            selectedGrades={selectedClimbingGrades}
+            quickClimbRows={quickClimbRows}
+            onQuickClimbRowsChange={(rows) => { markDirty(); setQuickClimbRows(rows); }}
             savedProblems={savedProblems}
-            onQuickValuesChange={(id, val) => {
-              setSessionMetricValues((current) => ({ ...current, [id]: { ...current[id], ...val } }));
-            }}
-            onQuickAttemptedChange={(grade, val) => {
-              setQuickAttemptedValues((current) => ({ ...current, [grade]: val }));
-            }}
-            onSelectedGradesChange={(grades) => { markDirty(); setSelectedClimbingGrades(grades); }}
+            climbLocationId={climbLocationId}
             onMarkDirty={markDirty}
             onUpdateProblemNotes={(id, notes) => {
               setSavedProblems((prev) => prev.map((p) => p.id === id ? { ...p, notes } : p));
