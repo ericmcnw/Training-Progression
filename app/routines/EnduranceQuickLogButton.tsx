@@ -12,8 +12,12 @@ import type { CSSProperties } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 
+// Short label by default to match the Strength section's "Quick Log"
+// pill width — the routines list header pins the section title in the
+// center and the quick-log pill absolute-positions on the left, so a
+// wider label collides with the centered "ENDURANCE" text.
 export default function EnduranceQuickLogButton({
-  label = "🏃 Log endurance",
+  label = "🏃 Log",
   style,
   className,
 }: {

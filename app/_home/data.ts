@@ -165,8 +165,8 @@ export async function getHomeData(): Promise<HomeData> {
     prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
       'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
     ),
-    prisma.$queryRawUnsafe<Array<{ routineId: string; scheduledDate: string; sortOrder: number }>>(
-      'SELECT "routineId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
+    prisma.$queryRawUnsafe<Array<{ routineId: string; activityTypeId: string | null; scheduledDate: string; sortOrder: number }>>(
+      'SELECT "routineId","activityTypeId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
     ),
     getAllZonesWithState().catch(() => []),
     getMovementPatternData().catch(() => ({
@@ -187,12 +187,35 @@ export async function getHomeData(): Promise<HomeData> {
     startDate: toAppYmd(new Date(entry.startDate)),
     cycleLengthDays: Number(entry.cycleLengthDays),
   }));
+  // Manual schedule entries grouped by day. Typed endurance slots
+  // (activityTypeId set) live alongside legacy routine slots — they're
+  // pulled into the WaG plan list as a separate path below so a single
+  // synthetic-routine schedule with two different types (Run + Hike on
+  // the same day) doesn't collapse into one entry.
   const manualByDay = new Map<string, string[]>();
+  const typedManualByDay = new Map<string, Array<{ routineId: string; activityTypeId: string }>>();
   for (const entry of manualEntriesRaw) {
     const ymd = toAppYmd(new Date(entry.scheduledDate));
-    if (!manualByDay.has(ymd)) manualByDay.set(ymd, []);
-    manualByDay.get(ymd)!.push(entry.routineId);
+    if (entry.activityTypeId) {
+      if (!typedManualByDay.has(ymd)) typedManualByDay.set(ymd, []);
+      typedManualByDay.get(ymd)!.push({ routineId: entry.routineId, activityTypeId: entry.activityTypeId });
+    } else {
+      if (!manualByDay.has(ymd)) manualByDay.set(ymd, []);
+      manualByDay.get(ymd)!.push(entry.routineId);
+    }
   }
+
+  // Resolve activity type id → display name once so the planned-slot
+  // builder below can label typed slots correctly. Loading here (not at
+  // the bottom) so the lookup is available before the day-by-day plan
+  // builder runs. Falls back to null if a slot references a missing
+  // type (shouldn't happen — onDelete SetNull on the schedule column).
+  const activityTypeNameRows = await prisma.activityType.findMany({
+    select: { id: true, name: true, familyId: true },
+  });
+  const activityTypeNameById = new Map(
+    activityTypeNameRows.map((t) => [t.id, { name: t.name, familyId: t.familyId }])
+  );
   // Routines that auto-schedule (daily, week-with-mask, week/1 count=7).
   // Use the shared helper so weekday masks and edge-cases are handled the
   // same way they are everywhere else in the app.
@@ -318,20 +341,57 @@ export async function getHomeData(): Promise<HomeData> {
         logIds: [],
       });
     }
+    // Typed endurance slots (Run on Tuesday, Hike on Saturday, …) live
+    // on the synthetic Endurance routine + an activityTypeId. Key by
+    // `${routineId}::${activityTypeId}` so two typed slots on the same
+    // day stay distinct, and label them by their activity type name.
+    for (const slot of typedManualByDay.get(ymd) ?? []) {
+      const r = routineMap.get(slot.routineId);
+      if (!r) continue;
+      const typeInfo = activityTypeNameById.get(slot.activityTypeId);
+      if (!typeInfo) continue; // type no longer exists — skip the slot
+      const composite = `${slot.routineId}::${slot.activityTypeId}`;
+      plannedMap.set(composite, {
+        routineId: slot.routineId,
+        routineName: typeInfo.name,
+        kind: r.kind,
+        domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
+        planned: 1,
+        logged: 0,
+        logIds: [],
+      });
+    }
     // allLogs is sorted performedAt asc, so dayLogs inherits that order.
     // We want most-recent first in logIds — unshift each into position so
     // the modal opens with the latest log up top.
+    //
+    // For typed endurance logs (log.activityTypeId set), prefer the
+    // composite key first so a scheduled "Run on Tuesday" pairs with a
+    // logged Run rather than a logged Hike on the same day. Fall back
+    // to plain routineId when no typed plan exists OR the log has no
+    // activityTypeId (legacy / non-endurance).
     for (const log of dayLogs) {
-      const existing = plannedMap.get(log.routineId);
+      const compositeKey = log.activityTypeId
+        ? `${log.routineId}::${log.activityTypeId}`
+        : null;
+      const existing =
+        (compositeKey ? plannedMap.get(compositeKey) : undefined) ??
+        plannedMap.get(log.routineId);
       if (existing) {
         existing.logged += 1;
         existing.logIds.unshift(log.id);
       } else if (ymd <= today) {
         const r = routineMap.get(log.routineId);
         if (r) {
-          plannedMap.set(log.routineId, {
+          // Unplanned typed log — key by composite so two typed logs on
+          // the same day stay distinct. Label by activity type name.
+          const typeInfo = log.activityTypeId
+            ? activityTypeNameById.get(log.activityTypeId)
+            : null;
+          const key = compositeKey ?? log.routineId;
+          plannedMap.set(key, {
             routineId: log.routineId,
-            routineName: r.name,
+            routineName: typeInfo?.name ?? r.name,
             kind: r.kind,
             domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
             planned: 0,

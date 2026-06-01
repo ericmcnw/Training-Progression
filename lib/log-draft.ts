@@ -65,6 +65,12 @@ export type CardioDraft = {
   elevationGainFt: string;
   minutes: string;
   seconds: string;
+  // Active activity type — surfaced so the ActiveSessionTray chip shows
+  // "Run" / "Hike" / etc. instead of literally "Endurance" when the draft
+  // is against the synthetic Endurance routine. Optional so older drafts
+  // (pre-endurance unification) still deserialize cleanly.
+  activityTypeId?: string | null;
+  activityTypeName?: string | null;
   // Legacy free-text location. Same back-compat story as SessionDraft.
   location: string;
   // Structured spot pick (saved-ref OR new-spot draft) — restored

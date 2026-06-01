@@ -118,6 +118,10 @@ export default function LogRunForm({
     // across browser refreshes. Drafts written before this schema bump
     // won't have spotValue and silently skip this step.
     if (stored.spotValue !== undefined) setSpotValue(stored.spotValue);
+    // Restore the saved activity type pick — keeps the typed-endurance
+    // draft chip labeled correctly across refreshes. Older drafts won't
+    // have this field; the form falls back to initialActivityTypeId.
+    if (stored.activityTypeId !== undefined) setActivityTypeId(stored.activityTypeId);
     draftStartedAtRef.current = stored.startedAt;
     isDirtyRef.current = true;
     draftCtx?.saveDraft(stored);
@@ -126,10 +130,17 @@ export default function LogRunForm({
 
   useEffect(() => {
     if (!isDirtyRef.current) return;
+    // Type-aware draft label so the ActiveSessionTray chip shows the
+    // activity type ("Run", "Hike") instead of the synthetic Endurance
+    // routine name. For legacy routines and non-endurance, falls back
+    // to the routine's own name.
+    const activeTypeName = activeType?.name ?? null;
+    const draftRoutineName =
+      activeTypeName && routineIsSynthetic ? activeTypeName : routineName;
     const draft: CardioDraft = {
       kind: "CARDIO",
       routineId,
-      routineName,
+      routineName: draftRoutineName,
       startedAt: draftStartedAtRef.current,
       notes,
       performedAtLocal,
@@ -137,6 +148,8 @@ export default function LogRunForm({
       elevationGainFt,
       minutes,
       seconds,
+      activityTypeId: activityTypeId ?? null,
+      activityTypeName: activeTypeName,
       // Location is now structured-only via SpotPicker. The legacy
       // free-text field stays in the draft schema for back-compat but
       // is always empty on new logs.
@@ -149,7 +162,7 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue]);
+  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId]);
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);
