@@ -60,12 +60,30 @@ export default function WeeklyBarChartWithSessions({
     return sessionsByWeek[selectedWeek] ?? [];
   }, [selectedWeek, sessionsByWeek]);
 
+  // Enrich each series with a per-week "top session" string so the
+  // chart tooltip can render the week's top session for that series
+  // as a small sub-line under the totals. Picks the latest session
+  // matching the series label (sessionsByWeek is date-sorted oldest
+  // → newest, so .at(-1) gives the most recent). For series with no
+  // matching sessions in a given week, leave null and the chart
+  // skips the sub-line.
+  const enrichedSeries = useMemo(() => {
+    return series.map((s) => {
+      const topSessionPerWeek: Array<string | null> = sessionsByWeek.map((wkSessions) => {
+        const matches = wkSessions.filter((ws) => ws.seriesLabel === s.label);
+        if (matches.length === 0) return null;
+        return matches[matches.length - 1].metricFormatted;
+      });
+      return { ...s, topSessionPerWeek };
+    });
+  }, [series, sessionsByWeek]);
+
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <StackedWeeklyBarChart
         title={title}
         weekLabels={weekLabels}
-        series={series}
+        series={enrichedSeries}
         unit={unit}
         decimals={decimals}
         // Default to compact mode on activity dashboards — saves ~60px

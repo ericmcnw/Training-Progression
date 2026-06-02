@@ -7,6 +7,13 @@ export type StackedBarSeries = {
   color: string;
   weeklyValues: number[];
   weeklyMinutes?: number[];
+  /** Pre-formatted "top session" detail per week index, used as a
+   *  small sub-line beneath each series row in the hover tooltip.
+   *  Null/missing entries are simply not rendered. Lets us surface
+   *  "top: Bench 210×3" under a strength session row, "8.2 mi run"
+   *  under an endurance row, etc. — the caller knows the relevant
+   *  per-session detail string. */
+  topSessionPerWeek?: Array<string | null>;
 };
 
 const enduranceChartPalette = [
@@ -269,7 +276,15 @@ export default function StackedWeeklyBarChart({
           const DIVIDER_Y = 23;
           const TOTAL_Y = 38;
           const ROWS_START = 56;
-          const ROW_H = 16;
+          // Per-series rows grow taller when ANY series carries a top-
+          // session detail for the active week — adds a small italic
+          // sub-line under the main row showing the week's top session
+          // for that series. Mixed-height rows would be messy, so just
+          // grow uniformly when at-least-one row needs the extra space.
+          const anySessionDetail = activeEntries.some(
+            (s) => s.topSessionPerWeek?.[wi] != null && s.topSessionPerWeek[wi]!.length > 0
+          );
+          const ROW_H = anySessionDetail ? 28 : 16;
           const tooltipH = activeEntries.length > 0 ? ROWS_START + activeEntries.length * ROW_H + 10 : TOTAL_Y + 16;
           const midX = margin.left + innerW / 2;
           const ty = margin.top;
@@ -305,6 +320,7 @@ export default function StackedWeeklyBarChart({
               {activeEntries.map((s, i) => {
                 const rowY = ty + ROWS_START + i * ROW_H;
                 const mins = s.weeklyMinutes?.[wi] ?? 0;
+                const sessionDetail = s.topSessionPerWeek?.[wi] ?? null;
                 return (
                   <g key={s.label}>
                     <rect x={tx + 8} y={rowY - 10} width={7} height={7} rx={2} fill={s.visualColor} />
@@ -319,6 +335,11 @@ export default function StackedWeeklyBarChart({
                         {fmtMins(mins)}
                       </text>
                     )}
+                    {sessionDetail ? (
+                      <text x={tx + 21} y={rowY + 11} fontSize="9.5" fill="rgba(255,255,255,0.45)" fontStyle="italic">
+                        {sessionDetail.length > 56 ? `${sessionDetail.slice(0, 54)}…` : sessionDetail}
+                      </text>
+                    ) : null}
                   </g>
                 );
               })}
