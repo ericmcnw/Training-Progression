@@ -1,9 +1,20 @@
 "use client";
 
 // MonthCalendar — the calendar grid for Plan / Month. Tap a day to open
-// the day-detail popover (DayDetailPopover). One dot per routine that
-// fired/expected that day, color-coded by domain, filled when logged.
-// Overflows compress into a "+N" chip.
+// the day-detail popover (DayDetailPopover).
+//
+// Cell layout (two lanes):
+//   • Top lane: domain-colored dots for "workout" entries (anything that
+//     isn't a daily-firing frequency goal). Filled = logged, hollow ring =
+//     expected/future. Capped at 4 mobile / 6 desktop with "+N" overflow.
+//   • Bottom lane: a single "habits" pill rolling up all daily-firing
+//     frequency goals into "<done>/<total>" with a thin progress bar.
+//     Shown only when the day has habits expected.
+//
+// Why two lanes: a user with 5+ daily lifestyle goals would otherwise see
+// the same 5+ dot pattern on every cell of every future day, which
+// defeats the calendar's point. Aggregating habits into one indicator
+// lets the day-to-day variation in workouts read at a glance.
 
 import { useState, type CSSProperties } from "react";
 import type { MonthData, MonthDayCell, DayEntry, DayEntryStatus } from "./data";
@@ -17,8 +28,11 @@ type Props = {
   scheduleActivityTypes?: import("@/app/_home/SchedulePicker").ScheduleActivityType[];
 };
 
-const MAX_DOTS_MOBILE = 6;
-const MAX_DOTS_DESKTOP = 10;
+// Workout-dot caps. Lower than the original 6/10 because workouts are the
+// minority of daily entries — most users won't have more than 1-3 actual
+// workout sessions on a given day. The habit pill handles the rest.
+const MAX_DOTS_MOBILE = 4;
+const MAX_DOTS_DESKTOP = 6;
 
 export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
@@ -89,44 +103,61 @@ function DayCell({
   onSelect: () => void;
   isSelected: boolean;
 }) {
-  // Compute display dots. The cap differs by viewport; the JS just builds
-  // both and CSS hides whichever doesn't apply (we approximate by always
-  // using the desktop cap then hiding overflow on mobile via a CSS class).
-  const hasEntries = cell.entries.length > 0;
-  const desktopDots = cell.entries.slice(0, MAX_DOTS_DESKTOP);
-  const desktopOverflow = cell.entries.length - desktopDots.length;
-  const mobileDots = cell.entries.slice(0, MAX_DOTS_MOBILE);
-  const mobileOverflow = cell.entries.length - mobileDots.length;
+  // Split entries into workouts (individual dots) vs habits (rolled-up
+  // pill). See file header for the rationale.
+  const workouts = cell.entries.filter((e) => !e.isHabit);
+  const habits = cell.entries.filter((e) => e.isHabit);
+  const habitsDone = habits.filter((e) => e.logged > 0).length;
+  const habitsTotal = habits.length;
+
+  // Workout dot caps — different on mobile vs desktop. Render both and let
+  // CSS show the appropriate one. Avoids a window-size-dependent fork.
+  const desktopWorkouts = workouts.slice(0, MAX_DOTS_DESKTOP);
+  const desktopWorkoutOverflow = workouts.length - desktopWorkouts.length;
+  const mobileWorkouts = workouts.slice(0, MAX_DOTS_MOBILE);
+  const mobileWorkoutOverflow = workouts.length - mobileWorkouts.length;
+
+  const ariaSummary = [
+    workouts.length > 0 ? `${workouts.length} workout${workouts.length === 1 ? "" : "s"}` : null,
+    habitsTotal > 0 ? `${habitsDone} of ${habitsTotal} habits` : null,
+  ].filter(Boolean).join(", ") || "no activity";
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      aria-label={`${cell.dayNumber}${cell.isToday ? " (today)" : ""} — ${cell.entries.length} routine${cell.entries.length === 1 ? "" : "s"}`}
+      aria-label={`${cell.dayNumber}${cell.isToday ? " (today)" : ""} — ${ariaSummary}`}
       aria-pressed={isSelected}
       style={cellShell(cell, isSelected)}
       className="planMonthCell"
     >
       <span style={dayNumber(cell.isToday)}>{cell.dayNumber}</span>
 
-      {hasEntries ? (
-        <>
-          {/* Mobile dot strip (≤6 dots + optional "+N"). */}
-          <div className="planMonthDots planMonthDotsMobile" style={dotsRow}>
-            {mobileDots.map((entry) => (
-              <Dot key={entry.routineId} entry={entry} />
-            ))}
-            {mobileOverflow > 0 ? <Overflow count={mobileOverflow} /> : null}
-          </div>
-          {/* Desktop dot strip (≤10 dots + optional "+N"). */}
-          <div className="planMonthDots planMonthDotsDesktop" style={dotsRow}>
-            {desktopDots.map((entry) => (
-              <Dot key={entry.routineId} entry={entry} />
-            ))}
-            {desktopOverflow > 0 ? <Overflow count={desktopOverflow} /> : null}
-          </div>
-        </>
-      ) : null}
+      {/* Workout lane (top). Empty div keeps the habit pill aligned to the
+          bottom edge even on days with no workouts, so cells stay visually
+          consistent across the grid. */}
+      <div style={workoutLane}>
+        {workouts.length > 0 ? (
+          <>
+            <div className="planMonthDots planMonthDotsMobile" style={dotsRow}>
+              {mobileWorkouts.map((entry) => (
+                <Dot key={entry.routineId} entry={entry} />
+              ))}
+              {mobileWorkoutOverflow > 0 ? <Overflow count={mobileWorkoutOverflow} /> : null}
+            </div>
+            <div className="planMonthDots planMonthDotsDesktop" style={dotsRow}>
+              {desktopWorkouts.map((entry) => (
+                <Dot key={entry.routineId} entry={entry} />
+              ))}
+              {desktopWorkoutOverflow > 0 ? <Overflow count={desktopWorkoutOverflow} /> : null}
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {/* Habits lane (bottom). One pill summarizing all daily-firing
+          frequency goals for the day. */}
+      {habitsTotal > 0 ? <HabitPill done={habitsDone} total={habitsTotal} isPast={cell.isPast} /> : null}
 
       <style>{`
         .planMonthDotsDesktop { display: none; }
@@ -154,6 +185,36 @@ function Overflow({ count }: { count: number }) {
     <span style={overflowChip} aria-hidden>
       +{count}
     </span>
+  );
+}
+
+// HabitPill — single-row rollup of daily-firing frequency goals for the
+// day. Thin bar + numeric chip. Color tones:
+//   • all done (done === total) → green
+//   • partial (done > 0)        → amber
+//   • zero on a past day        → red-tinged (missed)
+//   • zero on today/future      → neutral gray (still possible)
+function HabitPill({ done, total, isPast }: { done: number; total: number; isPast: boolean }) {
+  const pct = total > 0 ? done / total : 0;
+  const allDone = total > 0 && done >= total;
+  const partial = done > 0 && !allDone;
+  const tone = allDone
+    ? { fill: "rgba(51,255,122,0.85)", text: "rgba(51,255,122,0.95)" }
+    : partial
+    ? { fill: "rgba(251,191,36,0.85)", text: "rgba(251,191,36,0.95)" }
+    : isPast
+    ? { fill: "rgba(248,113,113,0.45)", text: "rgba(248,113,113,0.85)" }
+    : { fill: "rgba(255,255,255,0.18)", text: "rgba(255,255,255,0.55)" };
+
+  return (
+    <div style={habitPillRow}>
+      <div style={habitBarTrack}>
+        <div style={{ ...habitBarFill, width: `${Math.max(4, pct * 100)}%`, background: tone.fill }} />
+      </div>
+      <span style={{ ...habitPillText, color: tone.text }}>
+        {done}/{total}
+      </span>
+    </div>
   );
 }
 
@@ -204,9 +265,13 @@ function cellShell(cell: MonthDayCell, isSelected: boolean): CSSProperties {
     cursor: "pointer",
     boxSizing: "border-box",
     display: "grid",
+    // grid-template-rows: day number (auto) | workout lane (1fr) | habit
+    // pill (auto). Setting the middle row to 1fr keeps the habit pill
+    // pinned at the bottom even on days with no workouts, so cell heights
+    // and pill positions stay stable across the whole grid.
+    gridTemplateRows: "auto 1fr auto",
     gap: 4,
-    alignContent: "start",
-    minHeight: "var(--plan-cell-min-h, 64px)",
+    minHeight: "var(--plan-cell-min-h, 70px)",
     padding: "5px 6px 6px",
     borderRadius: 8,
     border: `1px solid ${borderColor}`,
@@ -225,6 +290,14 @@ function dayNumber(isToday: boolean): CSSProperties {
   };
 }
 
+const workoutLane: CSSProperties = {
+  // Tiny fixed min-height so cells with no workouts still leave room above
+  // the habit pill — keeps the visual rhythm steady across the grid.
+  minHeight: 10,
+  display: "flex",
+  alignItems: "flex-start",
+};
+
 const dotsRow: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -235,11 +308,12 @@ const dotsRow: CSSProperties = {
 function dotStyle(status: DayEntryStatus, domain: string): CSSProperties {
   const color = domainAccent(domain);
   const base: CSSProperties = {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     border: `1.5px solid ${color}`,
     flexShrink: 0,
+    boxSizing: "border-box",
   };
   switch (status) {
     case "done":
@@ -250,10 +324,13 @@ function dotStyle(status: DayEntryStatus, domain: string): CSSProperties {
     case "missed":
       return { ...base, background: "transparent", borderColor: "rgba(248,113,113,0.65)" };
     case "future":
-      return { ...base, background: "transparent", borderStyle: "dashed" };
+      // Solid hollow ring at low opacity. The previous dashed border
+      // rendered as a few tick marks on an 8px circle and read as visual
+      // noise — solid + opacity reads cleanly at this size.
+      return { ...base, background: "transparent", opacity: 0.4 };
     case "planned":
     default:
-      return { ...base, background: "transparent", opacity: 0.85 };
+      return { ...base, background: "transparent", opacity: 0.75 };
   }
 }
 
@@ -264,4 +341,35 @@ const overflowChip: CSSProperties = {
   letterSpacing: 0.2,
   padding: "0 2px",
   lineHeight: 1,
+};
+
+const habitPillRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  marginTop: 2,
+};
+
+const habitBarTrack: CSSProperties = {
+  flex: 1,
+  height: 4,
+  background: "rgba(255,255,255,0.08)",
+  borderRadius: 999,
+  overflow: "hidden",
+  minWidth: 0,
+};
+
+const habitBarFill: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  transition: "width 200ms ease",
+};
+
+const habitPillText: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.2,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };

@@ -445,7 +445,14 @@ const tabRowStyle: React.CSSProperties = {
 const tabStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Split into long-hand props so `tabActiveStyle` can override just the
+  // color without mixing shorthand `border` with non-shorthand
+  // `borderColor` — React warns on that combo during rerender because it
+  // can't reconcile which value should win when toggling between the
+  // two style objects.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "rgba(255,255,255,0.78)",
   fontSize: 12.5,
@@ -480,7 +487,12 @@ const rangeLabelStyle: React.CSSProperties = {
 const rangePill: React.CSSProperties = {
   padding: "5px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Split long-hand so `rangePillActive` can override `borderColor`
+  // without React warning about mixing shorthand `border` with the
+  // non-shorthand override during rerender.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   fontSize: 12,
@@ -505,7 +517,11 @@ const subFilterRowStyle: React.CSSProperties = {
 const subFilterPill: React.CSSProperties = {
   padding: "6px 12px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Split long-hand so `subFilterPillActive` can override `borderColor`
+  // without React's mixed-shorthand warning during rerender.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   fontSize: 12,

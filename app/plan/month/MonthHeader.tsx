@@ -42,14 +42,18 @@ export default function MonthHeader({ data }: { data: MonthData }) {
         ) : null}
       </div>
 
-      <div style={statsRow}>
+      {/* Shorter labels — the original "Days logged / Top domain / Active
+          cycles" were getting truncated to "DAYS LOG… / TOP DOM… / ACTIVE
+          C…" inside a 4-up grid on mobile. The values give the same
+          context with these compact labels. */}
+      <div style={statsRow} className="planMonthStatsRow">
         <Stat
-          label="Days logged"
+          label="Days"
           value={`${data.stats.daysLogged}/${Math.max(1, data.stats.daysWithActivity)}`}
         />
         <Stat label="Sessions" value={String(data.stats.totalSessions)} />
-        <Stat label="Top domain" value={data.stats.topDomain ?? "—"} />
-        <Stat label="Active cycles" value={String(data.stats.activeCycles)} />
+        <Stat label="Top" value={data.stats.topDomain ?? "—"} />
+        <Stat label="Cycles" value={String(data.stats.activeCycles)} />
       </div>
     </header>
   );

@@ -27,6 +27,12 @@ export type DayEntry = {
   logged: number;
   status: DayEntryStatus;
   latestLogId: string | null;
+  // True when this routine is a daily-firing frequency goal (DAY/1, WEEK/7,
+  // or weekday-mask). The calendar aggregates these into a single "habits"
+  // pill per cell so a user with 5+ daily habits doesn't see identical dot
+  // patterns on every day. false = workout-style routine (strength run,
+  // cardio session, etc.) which still gets an individual dot.
+  isHabit: boolean;
 };
 
 export type MonthDayCell = {
@@ -259,6 +265,12 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         logged: loggedCount,
         status,
         latestLogId,
+        // shouldAutoScheduleRoutine returns true exactly when this routine
+        // has a DAY/1, WEEK/7, or weekday-mask frequency goal — i.e. it
+        // fires (or is expected to fire) every day. That's the lens that
+        // matches the user's "daily habit" intuition for the calendar
+        // pill, regardless of domain.
+        isHabit: shouldAutoScheduleRoutine(r),
       });
     }
 
