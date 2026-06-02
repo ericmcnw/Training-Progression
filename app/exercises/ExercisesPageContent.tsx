@@ -189,7 +189,7 @@ export default async function ExercisesPage({
           <div key={exercise.id} className="mobileCard" style={styles.card}>
             <div className="mobileExercisesCardHeader" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div style={{ fontWeight: 900 }}>{exercise.name}</div>
-              <Link href={`/exercises/${exercise.id}`} style={styles.smallLink}>
+              <Link href={`/exercises/${exercise.id}/edit`} style={styles.smallLink}>
                 Edit
               </Link>
             </div>

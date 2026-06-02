@@ -22,7 +22,10 @@ export type StrengthExerciseSession = {
 export type StrengthExerciseSummary = {
   exerciseId: string;
   name: string;
-  routineLink: string; // /progress/exercises/[id]
+  /** Per-exercise detail page URL — /exercises/<id>. Previously
+   *  pointed at the dead /progress/exercises/<id>; redirect was
+   *  dropping the slug and bouncing users to the bare library. */
+  routineLink: string;
   totalSessions: number;
   totalSets: number;
   /** Heaviest single set ever logged. */
@@ -264,7 +267,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     allExercises.push({
       exerciseId: entry.exerciseId,
       name: entry.name,
-      routineLink: `/progress/exercises/${entry.exerciseId}`,
+      routineLink: `/exercises/${entry.exerciseId}`,
       totalSessions: sessions.length,
       totalSets: totalSetCount,
       allTimePR,

@@ -23,9 +23,10 @@ export default async function LogPage(props: {
   const view = (getParam(searchParams, "view") ?? "routines").toLowerCase();
 
   if (view === "exercises") {
-    // The Exercises browse currently lives under Progress; until Phase 3
-    // gives it its own home, send the user there.
-    redirect("/progress/exercises");
+    // The exercise library has its own home at /exercises now (no
+    // /progress hop). Phase 3 may rebuild this as a tab embed inside
+    // /log; for now we just forward.
+    redirect("/exercises");
   }
 
   // The embedded RoutinesPage renders its own "Routines" heading, so /log

@@ -35,7 +35,10 @@ const nextConfig: NextConfig = {
       // ── Exercises (moved to the standalone library route) ─────────────
       {
         source: "/progress/exercises/:slug",
-        destination: "/exercises",
+        // Preserve the slug so users land on the exercise's detail
+        // page, not the bare library. Was dropping the slug and
+        // bouncing to /exercises before 2026-06-02.
+        destination: "/exercises/:slug",
         permanent: false,
       },
       {
@@ -45,7 +48,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/progress/exercise/:slug",
-        destination: "/exercises",
+        destination: "/exercises/:slug",
         permanent: false,
       },
       {
