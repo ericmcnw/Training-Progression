@@ -229,7 +229,14 @@ export default function StackedWeeklyBarChart({
           cursor: pointer;
           touch-action: manipulation;
           -webkit-tap-highlight-color: transparent;
+          /* Prevents iOS from interpreting a tap as the start of a
+             text selection or long-press preview — both of those can
+             cause the page to visually shift on touch. */
+          user-select: none;
+          -webkit-user-select: none;
+          -webkit-touch-callout: none;
         }
+        .swbcBar:focus { outline: none; }
       `}</style>
     </div>
   );

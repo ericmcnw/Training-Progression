@@ -117,6 +117,11 @@ body{
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   overflow-x: hidden;
+  /* Disables iOS Safari double-tap-zoom and the brief 300ms tap delay
+     site-wide. Pinch-zoom remains available. Without this, tapping
+     small interactive elements (like chart bars) can trigger Safari's
+     "zoom to readable" gesture. */
+  touch-action: manipulation;
 }
 
 *{
