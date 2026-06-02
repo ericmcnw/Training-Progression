@@ -16,6 +16,7 @@ import {
 import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
 import MonthlySummary from "./MonthlySummary";
+import YearlySummary from "./YearlySummary";
 
 export const dynamic = "force-dynamic";
 
@@ -210,6 +211,7 @@ export default async function ManualLogPage({
           routines + composition for the month). */}
       {!showHistory && <WeeklySummary logs={enrichedLogs} today={now} />}
       {!showHistory && <MonthlySummary logs={enrichedLogs} today={now} />}
+      {!showHistory && <YearlySummary today={now} />}
 
       {/* ── Recent Activity (profile view only) ── */}
       {!showHistory && (
