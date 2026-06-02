@@ -170,7 +170,7 @@ export default async function ManualLogPage({
               <Link href="/manual-log?view=history" style={primaryLinkBtn}>
                 Log History
               </Link>
-              <Link href="/progress" style={linkBtn}>Progress</Link>
+              <Link href="/activities" style={linkBtn}>Activities</Link>
               <Link href="/routines" style={linkBtn}>Routines</Link>
               <Link href="/goals" style={linkBtn}>Goals</Link>
               <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>

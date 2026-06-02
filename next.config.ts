@@ -2,11 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async redirects() {
-    // Phase 2 nav restructure. Most specific patterns first — Next.js evaluates
-    // these in order, and we want /progress/sports/:slug to match before the
-    // bare /progress/sports redirect would otherwise apply.
+    // The /progress route system was retired in favor of /activities,
+    // /routines, /exercises, /body, and /log. These redirects catch any
+    // bookmarked or in-code links that still target the old URLs so
+    // nothing 404s after the dead-code sweep.
+    //
+    // Next.js evaluates redirects in order — most specific patterns
+    // first, generic catch-all last.
     return [
-      // Sport / cardio detail pages → unified activity-world detail.
+      // ── Sports + cardio (legacy detail + index pages) ──────────────────
       {
         source: "/progress/sports/:slug",
         destination: "/activities/:slug?tab=overview&range=4w",
@@ -17,7 +21,6 @@ const nextConfig: NextConfig = {
         destination: "/activities/:slug?tab=overview&range=4w",
         permanent: false,
       },
-      // Old sport / cardio index pages → new Activities landing (filtered).
       {
         source: "/progress/sports",
         destination: "/activities?family=sports",
@@ -28,10 +31,72 @@ const nextConfig: NextConfig = {
         destination: "/activities?family=endurance",
         permanent: false,
       },
-      // Injuries are now folded into the Body tab.
+
+      // ── Exercises (moved to the standalone library route) ─────────────
+      {
+        source: "/progress/exercises/:slug",
+        destination: "/exercises",
+        permanent: false,
+      },
+      {
+        source: "/progress/exercises",
+        destination: "/exercises",
+        permanent: false,
+      },
+      {
+        source: "/progress/exercise/:slug",
+        destination: "/exercises",
+        permanent: false,
+      },
+      {
+        source: "/progress/exercise",
+        destination: "/exercises",
+        permanent: false,
+      },
+
+      // ── Routines (per-routine pages live at /routines/:id) ────────────
+      {
+        source: "/progress/routines/:slug",
+        destination: "/routines/:slug",
+        permanent: false,
+      },
+      {
+        source: "/progress/routines",
+        destination: "/log",
+        permanent: false,
+      },
+      {
+        source: "/progress/routine/:slug",
+        destination: "/routines/:slug",
+        permanent: false,
+      },
+
+      // ── Body (groups + injuries folded into /body) ────────────────────
+      {
+        source: "/progress/groups/:slug",
+        destination: "/body",
+        permanent: false,
+      },
+      {
+        source: "/progress/groups",
+        destination: "/body",
+        permanent: false,
+      },
       {
         source: "/progress/injuries",
         destination: "/body",
+        permanent: false,
+      },
+
+      // ── Catch-all fallback for any /progress URL not handled above ────
+      {
+        source: "/progress/:path*",
+        destination: "/activities",
+        permanent: false,
+      },
+      {
+        source: "/progress",
+        destination: "/activities",
         permanent: false,
       },
     ];

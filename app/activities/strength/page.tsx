@@ -177,7 +177,7 @@ export default async function StrengthWorldPage() {
           <SectionCard
             title="Top Exercises"
             subtitle="Your most-trained lifts, with all-time top weight and recent progression."
-            actions={<SectionLinkButton href="/progress?section=exercises" label="All exercises" />}
+            actions={<SectionLinkButton href="/exercises" label="All exercises" />}
           >
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
               {strength.topExercises.slice(0, 8).map((ex) => (
@@ -192,7 +192,7 @@ export default async function StrengthWorldPage() {
           <SectionCard
             title="Strength Routines"
             subtitle="Click a routine to dive into per-exercise progression and recent sessions."
-            actions={<SectionLinkButton href="/progress?section=routines" label="All routines" />}
+            actions={<SectionLinkButton href="/log" label="All routines" />}
           >
             <div style={{ display: "grid", gap: 8 }}>
               {strength.routines.map((r) => (
@@ -346,7 +346,7 @@ function Sparkline({
 function RoutineRow({ routine }: { routine: import("@/app/progress/details/strength-world-loader").StrengthRoutineSummary }) {
   return (
     <Link
-      href={`/progress/routines/${routine.routineId}?tab=overview&range=4w`}
+      href={`/routines/${routine.routineId}`}
       style={{
         display: "flex",
         justifyContent: "space-between",
