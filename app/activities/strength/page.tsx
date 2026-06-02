@@ -108,7 +108,9 @@ export default async function StrengthWorldPage() {
   // Pure derivation from the data already loaded by loadStrengthWorld
   // (no extra Prisma roundtrip).
   const chartData = buildStrengthChartData(strength.sessionStats, now);
-  const hasChartData = chartData.sessionsSeries.weeklyValues.some((v) => v > 0);
+  const hasChartData = chartData.sessionsSeries.some((s) =>
+    s.weeklyValues.some((v) => v > 0)
+  );
 
   return (
     <>
@@ -138,7 +140,7 @@ export default async function StrengthWorldPage() {
             <WeeklyBarChartWithSessions
               title="Strength Sessions per Week — Last 12 Weeks"
               weekLabels={chartData.weekLabels}
-              series={[chartData.sessionsSeries]}
+              series={chartData.sessionsSeries}
               sessionsByWeek={chartData.sessionsByWeek}
               unit="sess"
               decimals={0}
@@ -146,7 +148,7 @@ export default async function StrengthWorldPage() {
             <WeeklyBarChartWithSessions
               title="Weekly Volume (lb) — Last 12 Weeks"
               weekLabels={chartData.weekLabels}
-              series={[chartData.volumeSeries]}
+              series={chartData.volumeSeries}
               sessionsByWeek={chartData.sessionsByWeek}
               unit="lb"
               decimals={0}

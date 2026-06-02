@@ -5,24 +5,37 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 
-// Two weekly series the strength dashboard wants:
-//   - Sessions per week (count) over the last 12 weeks
-//   - Total volume per week (lb) over the last 12 weeks
-//
-// Both are single-series stacked charts (the StackedWeeklyBarChart
-// component still renders cleanly with one series). Built from the
-// session stats already loaded by `loadStrengthWorld` — no extra
-// Prisma roundtrip.
+// 12-week strength dashboard charts. Both the sessions-per-week and
+// volume-per-week charts split by ROUTINE (one stacked segment per
+// routine each week) so the user can see at a glance which routine is
+// driving their volume that week.
 
 export type StrengthChartData = {
   weekLabels: string[];
-  sessionsSeries: StackedBarSeries;
-  volumeSeries: StackedBarSeries;
-  /** Per-week session lists, aligned with `weekLabels` indices. The
-   *  sessions metric is formatted as "N sets · X.Yk lb" so it works
-   *  under both the sessions chart and the volume chart panel. */
+  /** Sessions per week, stacked one segment per routine. */
+  sessionsSeries: StackedBarSeries[];
+  /** Volume (lb) per week, stacked one segment per routine. */
+  volumeSeries: StackedBarSeries[];
+  /** Per-week session lists. Stripe color matches each session's
+   *  routine series color. */
   sessionsByWeek: SessionsByWeek;
 };
+
+// Palette assigned in order of routine total-volume (heaviest first
+// gets the first color). Same hue family as the endurance/sports
+// palettes so the visual language stays consistent across activities.
+const ROUTINE_PALETTE = [
+  "rgba(84,203,130,0.92)",   // green
+  "rgba(56,189,248,0.94)",   // sky
+  "rgba(251,191,36,0.94)",   // amber
+  "rgba(167,139,250,0.94)",  // violet
+  "rgba(248,113,113,0.92)",  // red
+  "rgba(244,114,182,0.92)",  // pink
+  "rgba(251,146,60,0.92)",   // orange
+  "rgba(74,222,128,0.92)",   // emerald
+  "rgba(125,211,252,0.92)",  // light blue
+  "rgba(253,224,71,0.92)",   // yellow
+];
 
 export function buildStrengthChartData(
   sessionStats: StrengthSessionStat[],
@@ -31,35 +44,66 @@ export function buildStrengthChartData(
   const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
   const inWindow = sessionStats.filter((s) => s.date >= cutoff);
 
-  const sessionCountByWeek = new Map<string, number>();
-  const volumeByWeek = new Map<string, number>();
-
+  // Group by routine. Keep totals so we can rank routines for color
+  // assignment and series ordering.
+  const byRoutine = new Map<
+    string,
+    {
+      routineId: string;
+      routineName: string;
+      totalVolume: number;
+      totalSessions: number;
+      sessionCountByWeek: Map<string, number>;
+      volumeByWeek: Map<string, number>;
+    }
+  >();
   for (const s of inWindow) {
-    incrementWeekMap(sessionCountByWeek, s.date, 1);
-    incrementWeekMap(volumeByWeek, s.date, s.volume);
+    let bucket = byRoutine.get(s.routineId);
+    if (!bucket) {
+      bucket = {
+        routineId: s.routineId,
+        routineName: s.routineName,
+        totalVolume: 0,
+        totalSessions: 0,
+        sessionCountByWeek: new Map(),
+        volumeByWeek: new Map(),
+      };
+      byRoutine.set(s.routineId, bucket);
+    }
+    bucket.totalVolume += s.volume;
+    bucket.totalSessions += 1;
+    incrementWeekMap(bucket.sessionCountByWeek, s.date, 1);
+    incrementWeekMap(bucket.volumeByWeek, s.date, s.volume);
   }
-  // No duration carried on StrengthSessionStat, so we omit `weeklyMinutes`
-  // from each series. StackedWeeklyBarChart hides its time chip/column
-  // when no series supplies minutes, so the chart stays clean.
+
+  // Rank by total volume (desc), tiebreak by session count then name
+  // so the heaviest-trained routine takes the first palette slot.
+  const rankedRoutines = Array.from(byRoutine.values()).sort((a, b) => {
+    if (b.totalVolume !== a.totalVolume) return b.totalVolume - a.totalVolume;
+    if (b.totalSessions !== a.totalSessions) return b.totalSessions - a.totalSessions;
+    return a.routineName.localeCompare(b.routineName);
+  });
+
+  const colorByRoutineId = new Map<string, string>();
+  rankedRoutines.forEach((r, idx) => {
+    colorByRoutineId.set(r.routineId, ROUTINE_PALETTE[idx % ROUTINE_PALETTE.length]);
+  });
 
   const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
 
-  const sessionsSeries: StackedBarSeries = {
-    label: "Sessions",
-    color: "rgba(84,203,130,0.92)", // strength green — matches domain palette
-    weeklyValues: fillWeeklySeries(sessionCountByWeek, "12w", now).map((p) => p.value),
-  };
+  const sessionsSeries: StackedBarSeries[] = rankedRoutines.map((r) => ({
+    label: r.routineName,
+    color: colorByRoutineId.get(r.routineId)!,
+    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, "12w", now).map((p) => p.value),
+  }));
 
-  const volumeSeries: StackedBarSeries = {
-    label: "Volume",
-    // Amber so the volume chart reads visually distinct from the
-    // sessions chart at a glance — different metric, different color.
-    color: "rgba(251,191,36,0.92)",
-    weeklyValues: fillWeeklySeries(volumeByWeek, "12w", now).map((p) => p.value),
-  };
+  const volumeSeries: StackedBarSeries[] = rankedRoutines.map((r) => ({
+    label: r.routineName,
+    color: colorByRoutineId.get(r.routineId)!,
+    weeklyValues: fillWeeklySeries(r.volumeByWeek, "12w", now).map((p) => p.value),
+  }));
 
-  // Ordered week-key list so each session can be bucketed into its
-  // correct week index for the panel underneath either chart.
+  // Build per-week session lists for the panel underneath either chart.
   const weekKeys: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
   for (let i = 11; i >= 0; i -= 1) {
@@ -73,9 +117,6 @@ export function buildStrengthChartData(
   for (const s of inWindow) {
     const wkIdx = weekIndexByKey.get(weekKey(s.date));
     if (wkIdx === undefined) continue;
-    // Append top-set detail when present so the user sees the actual
-    // heaviest lift from the session, not just aggregate set count +
-    // volume. e.g. "12 sets · 1.5k lb · top: 210×3 Bench".
     const topSetSuffix = s.topSet && s.topSet.weight > 0
       ? ` · top: ${s.topSet.weight}×${s.topSet.reps} ${s.topSet.exerciseName}`
       : "";
@@ -83,11 +124,10 @@ export function buildStrengthChartData(
       id: s.id,
       performedAt: s.date,
       routineName: s.routineName,
-      // Both strength charts share one panel, so we use a neutral
-      // label and color rather than picking sessions-green vs
-      // volume-amber. The panel's left stripe will reflect this.
-      seriesLabel: "Strength",
-      seriesColor: "rgba(84,203,130,0.92)",
+      seriesLabel: s.routineName,
+      // Stripe color matches the routine's chart segment color so the
+      // panel and the bar read as one visual.
+      seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
       metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}${topSetSuffix}`,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });

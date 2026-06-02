@@ -25,6 +25,9 @@ export type StackedBarSeries = {
   topSessionPerWeek?: Array<string | null>;
 };
 
+// Fallback palette only — callers should supply each series'
+// `color` explicitly so different categories (routines, activity
+// types) stay color-stable across visits.
 const seriesPalette = [
   "rgba(56,189,248,0.94)",
   "rgba(251,191,36,0.94)",
@@ -34,8 +37,8 @@ const seriesPalette = [
   "rgba(251,146,60,0.92)",
 ];
 
-function seriesColor(idx: number) {
-  return seriesPalette[idx % seriesPalette.length];
+function seriesColor(s: StackedBarSeries | undefined, idx: number) {
+  return s?.color ?? seriesPalette[idx % seriesPalette.length];
 }
 
 function niceAxisMax(value: number) {
@@ -162,7 +165,7 @@ export default function StackedWeeklyBarChart({
                         style={{
                           width: "100%",
                           height: `${(seg.val / yMax) * 100}%`,
-                          background: seriesColor(seg.idx),
+                          background: seriesColor(seg.s, seg.idx),
                           borderRadius: 2,
                           marginTop: 1,
                         }}
@@ -198,7 +201,7 @@ export default function StackedWeeklyBarChart({
         <div style={legend}>
           {activeSeries.map((s, idx) => (
             <span key={s.label} style={legendItem}>
-              <span style={{ ...legendSwatch, background: seriesColor(idx) }} />
+              <span style={{ ...legendSwatch, background: seriesColor(s, idx) }} />
               <span style={legendLabel}>{s.label}</span>
             </span>
           ))}
