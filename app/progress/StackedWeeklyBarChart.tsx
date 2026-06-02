@@ -350,13 +350,16 @@ export default function StackedWeeklyBarChart({
 const chartShell: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.09)",
   borderRadius: 16,
-  padding: "14px 14px 10px",
+  // Tightened from 14/10 → 12/8 — the chart card was wasting ~10px of
+  // padding on every dashboard. Combined with the chip row at gap: 6
+  // (was 10), the header region drops ~12px overall.
+  padding: "12px 12px 8px",
   overflow: "hidden",
   background: "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.022))",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
 };
 
-const headerStack: React.CSSProperties = { display: "grid", gap: 10 };
+const headerStack: React.CSSProperties = { display: "grid", gap: 6 };
 const titleStyle: React.CSSProperties = { fontWeight: 900, fontSize: 13, letterSpacing: 0, opacity: 0.92 };
 const chipRow: React.CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
 const statChip: React.CSSProperties = {

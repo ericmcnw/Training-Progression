@@ -67,6 +67,7 @@ export function TargetHeader({
   actions,
   hideTabs,
   hideRange,
+  hideSections,
   compact,
 }: {
   section: ProgressSection;
@@ -80,6 +81,10 @@ export function TargetHeader({
   actions?: React.ReactNode;
   hideTabs?: boolean;
   hideRange?: boolean;
+  /** Hide the cross-section nav (Overview / Routines / Exercises / etc.).
+   *  Used on activity-world pages where the section chips wrap awkwardly
+   *  on mobile and the bottom nav already gives back-out navigation. */
+  hideSections?: boolean;
   /** Skips the section-nav row and shrinks the hero on mobile. Use on
    *  immersive pages like maps where vertical space matters more than the
    *  global navigation chips. */
@@ -99,18 +104,20 @@ export function TargetHeader({
         {actions ? <div className="mobileActionRow" style={styles.heroActions}>{actions}</div> : null}
       </div>
 
-      {compact ? null : (
+      {compact || (hideSections && hideTabs && hideRange) ? null : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 4 }}>
-          <CompactSegmentedNav items={progressSections().map((item) => ({ ...item, active: item.key === section }))} />
+          {!hideSections && (
+            <CompactSegmentedNav items={progressSections().map((item) => ({ ...item, active: item.key === section }))} />
+          )}
           {!hideTabs && (
             <>
-              <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+              {!hideSections && <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />}
               <CompactSegmentedNav items={progressTabs(basePath, range, availableTabs).map((item) => ({ ...item, active: item.key === tab }))} />
             </>
           )}
           {!hideRange && (
             <>
-              <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />
+              {(!hideSections || !hideTabs) && <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />}
               <CompactSegmentedNav items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))} />
             </>
           )}
@@ -419,27 +426,27 @@ const styles: Record<string, React.CSSProperties> = {
   hero: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 14,
+    gap: 12,
     flexWrap: "wrap",
     alignItems: "center",
-    padding: "14px 16px",
+    padding: "12px 14px",
     border,
-    borderRadius: 20,
+    borderRadius: 18,
     background:
       "radial-gradient(circle at top left, rgba(51,255,122,0.09), transparent 34%), radial-gradient(circle at top right, rgba(120,190,255,0.14), transparent 26%), linear-gradient(180deg, rgba(20,31,52,0.96), rgba(10,18,31,0.92))",
     boxShadow: "0 14px 30px rgba(0,0,0,0.14)",
   },
-  heroCopy: { display: "grid", gap: 6, flex: "1 1 260px", minWidth: 0 },
-  heroActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" },
+  heroCopy: { display: "grid", gap: 4, flex: "1 1 260px", minWidth: 0 },
+  heroActions: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" },
   eyebrow: {
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 1.1,
     textTransform: "uppercase",
     fontWeight: 900,
     color: "rgba(163,255,201,0.86)",
   },
-  h1: { margin: 0, fontSize: 28, lineHeight: 1.05, fontWeight: 950 },
-  sub: { fontSize: 13, lineHeight: 1.45, opacity: 0.82, maxWidth: 760 },
+  h1: { margin: 0, fontSize: 26, lineHeight: 1.05, fontWeight: 950 },
+  sub: { fontSize: 12, lineHeight: 1.4, opacity: 0.75, maxWidth: 760 },
   navStack: { marginTop: 12, display: "grid", gap: 10 },
   navGrid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" },
   navCluster: {
@@ -579,13 +586,15 @@ const styles: Record<string, React.CSSProperties> = {
   statLabel: { fontSize: 12, opacity: 0.7, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4 },
   statValue: { marginTop: 8, fontSize: 22, lineHeight: 1.15, fontWeight: 950 },
   linkBtn: {
-    padding: "10px 12px",
+    padding: "6px 11px",
     border: "1px solid rgba(255,255,255,0.18)",
-    borderRadius: 12,
+    borderRadius: 999,
     textDecoration: "none",
     color: "inherit",
+    fontSize: 12,
     fontWeight: 800,
     background: "rgba(255,255,255,0.06)",
+    whiteSpace: "nowrap",
   },
   tabHint: { fontSize: 12, opacity: 0.75, marginTop: 4 },
   emptyState: {

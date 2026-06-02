@@ -68,7 +68,11 @@ export default function WeeklyBarChartWithSessions({
         series={series}
         unit={unit}
         decimals={decimals}
-        compact={compact}
+        // Default to compact mode on activity dashboards — saves ~60px
+        // of vertical space per chart on mobile and the bars stay
+        // readable at the smaller height. Callers can opt back into
+        // full-size by passing `compact={false}` explicitly.
+        compact={compact ?? true}
         onPinnedWeekChange={setSelectedWeek}
       />
       {selectedWeek !== null ? (

@@ -32,12 +32,13 @@ export default async function SportsDashboardPage() {
         section="sports"
         title="Sports"
         eyebrow="Activity world"
-        subtitle={meta.description}
+        subtitle="Skill, sessions, time."
         basePath="/activities/sports"
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        hideSections
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities" label="All activities" />

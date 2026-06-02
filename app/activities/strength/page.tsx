@@ -37,12 +37,13 @@ export default async function StrengthWorldPage() {
           section="routines"
           title="Strength"
           eyebrow="Activity world"
-          subtitle="Lift and resistance training — sets, reps, weight, and progression."
+          subtitle="Sets, reps, weight, progression."
           basePath="/activities/strength"
           tab="overview"
           range="all"
           hideTabs
           hideRange
+          hideSections
           actions={<SectionLinkButton href="/activities" label="All Activities" />}
         />
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px" }}>
@@ -115,12 +116,13 @@ export default async function StrengthWorldPage() {
         section="routines"
         title="Strength"
         eyebrow="Activity world"
-        subtitle="Lift and resistance training — sets, reps, weight, and progression over time."
+        subtitle="Sets, reps, weight, progression."
         basePath="/activities/strength"
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        hideSections
         actions={<SectionLinkButton href="/activities" label="All Activities" />}
       />
 

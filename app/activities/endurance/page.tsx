@@ -180,12 +180,13 @@ export default async function EnduranceWorldPage(props: {
         section="sports"
         title="Endurance"
         eyebrow="Cardio"
-        subtitle="Type-driven endurance view — switch families above, filter to a specific activity inside each."
+        subtitle="Pace, distance, time."
         basePath="/activities/endurance"
         tab="overview"
         range="all"
         hideTabs
         hideRange
+        hideSections
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/log" label="📋 Log endurance" />

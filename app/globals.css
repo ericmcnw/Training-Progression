@@ -734,14 +734,18 @@ details[open] > summary[data-collapsible-summary]::before{
   }
 
   .mobilePageTitle{
-    font-size: 28px !important;
-    line-height: 1.04 !important;
+    /* Slightly smaller on mobile so the hero doesn't dominate the first
+       screen — was 28px, which together with the subtitle paragraph
+       was eating ~30% of the viewport on a strength dashboard. */
+    font-size: 24px !important;
+    line-height: 1.05 !important;
   }
 
   .mobilePageSubtitle{
-    font-size: 13px !important;
-    line-height: 1.5 !important;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
     max-width: none !important;
+    opacity: 0.72 !important;
   }
 
   .mobileActionRow,

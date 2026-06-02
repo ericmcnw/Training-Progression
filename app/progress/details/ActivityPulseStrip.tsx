@@ -110,7 +110,23 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
               GOAL
             </span>
           ) : null}
-          <span style={{ fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.6, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          <span style={{
+            fontSize: 10,
+            letterSpacing: 1.1,
+            textTransform: "uppercase",
+            opacity: 0.6,
+            fontWeight: 900,
+            minWidth: 0,
+            // Goal labels are user-named ("50 LBS WEIGHT GOAL") and were
+            // truncating to "50 LBS WE..." on mobile. Allow 2 lines so
+            // the whole name reads. Non-goal labels are short app-defined
+            // strings ("This week", "Best lift") so wrapping is unlikely.
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: 1.2,
+          }}>
             {label}
           </span>
         </div>
@@ -122,11 +138,17 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
       </div>
       <div
         style={{
-          fontSize: 32,
+          // Auto-scale value font based on string length so long values
+          // like "35.0 lb/50.0 lb" don't wrap to 3 lines at 32px. Goal
+          // cards typically need the smaller size; flat values stay big.
+          fontSize: value.length > 12 ? 22 : value.length > 8 ? 26 : 32,
           fontWeight: 950,
-          lineHeight: 1,
+          lineHeight: 1.05,
           color: accent,
           letterSpacing: -0.5,
+          // wrap is allowed if needed but the auto-scale above usually
+          // keeps things on one line.
+          wordBreak: "break-word",
         }}
       >
         {value}
