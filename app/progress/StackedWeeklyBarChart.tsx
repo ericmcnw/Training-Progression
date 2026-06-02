@@ -153,6 +153,13 @@ export default function StackedWeeklyBarChart({
         style={{
           position: "relative",
           marginTop: 8,
+          // aspect-ratio matches the viewBox so the SVG scales
+          // proportionally with the container — no letterboxing.
+          // Without this, on narrow screens xMidYMid meet centers the
+          // viewBox content inside the fixed-height SVG, leaving
+          // empty padding above + below the bars and breaking the
+          // HTML button overlay's percentage-based alignment.
+          aspectRatio: `${width} / ${height}`,
           touchAction: "manipulation",
           userSelect: "none",
           WebkitUserSelect: "none",
@@ -161,14 +168,11 @@ export default function StackedWeeklyBarChart({
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
-        height={height}
-        preserveAspectRatio="none"
+        height="100%"
         style={{
           display: "block",
           overflow: "visible",
           touchAction: "manipulation",
-          // No selectable text/visuals — long-press shouldn't trigger
-          // a text-selection menu either.
           userSelect: "none",
           WebkitUserSelect: "none",
         }}

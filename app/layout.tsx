@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import AppNavigation, { MobileBottomNavigation, MobileProfileButton } from "./AppNavigation";
 import ActiveSessionTray from "./components/ActiveSessionTray";
@@ -12,6 +12,18 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Progression",
   description: "Personal training planning, logging, and progress tracking",
+};
+
+// Explicit viewport tells iOS not to auto-zoom on tap. Without
+// `initial-scale=1`, Safari assumes desktop sizing and zooms in on
+// tapped elements. `maximum-scale=1` blocks the implicit zoom-to-fit
+// gesture; users can still resize text via system accessibility
+// settings.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

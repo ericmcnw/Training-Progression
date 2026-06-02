@@ -225,13 +225,14 @@ export default function ExerciseMetricChart({
 
       {/* Chart — SVG is the visual layer only. HTML <button> overlay
           below handles all click/hover so iOS doesn't double-tap-zoom
-          (the issue the DomainSparklines pattern avoids). */}
-      <div style={{ position: "relative", touchAction: "manipulation" }}>
+          (the issue the DomainSparklines pattern avoids). Wrapper
+          uses aspect-ratio so the SVG fills proportionally — no
+          letterboxing that would break the overlay's alignment. */}
+      <div style={{ position: "relative", aspectRatio: `${W} / ${H}`, touchAction: "manipulation" }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
-        height={H}
-        preserveAspectRatio="none"
+        height="100%"
         style={{
           display: "block",
           overflow: "visible",
