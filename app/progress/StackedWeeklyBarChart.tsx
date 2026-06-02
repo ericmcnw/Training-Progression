@@ -149,26 +149,29 @@ export default function StackedWeeklyBarChart({
         </div>
       </div>
 
+      <div
+        style={{
+          position: "relative",
+          marginTop: 8,
+          touchAction: "manipulation",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
+      >
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         height={height}
+        preserveAspectRatio="none"
         style={{
-          marginTop: 8,
           display: "block",
           overflow: "visible",
-          // touchAction: manipulation tells mobile Safari/Chrome that
-          // this surface only needs single-tap handling — disables the
-          // implicit double-tap-to-zoom delay and prevents tapping a
-          // bar from triggering page zoom on iOS.
           touchAction: "manipulation",
           // No selectable text/visuals — long-press shouldn't trigger
           // a text-selection menu either.
           userSelect: "none",
           WebkitUserSelect: "none",
         }}
-        onPointerLeave={() => setHoveredWeek(null)}
-        onClick={() => setPinnedWeek(null)}
       >
         <defs>
           <filter id="bar-shadow" x="-25%" y="-10%" width="150%" height="125%">
@@ -251,22 +254,13 @@ export default function StackedWeeklyBarChart({
                 })}
               </g>
 
-              <rect
-                x={x - 5}
-                y={margin.top}
-                width={barWidth + 10}
-                height={innerH}
-                fill="transparent"
-                // touchAction: manipulation on the actual interactive
-                // hit element — applying it only to the parent SVG was
-                // not preventing iOS double-tap-zoom on the rect.
-                style={{ cursor: "pointer", touchAction: "manipulation" }}
-                onPointerEnter={() => setHoveredWeek(wi)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPinnedWeek((p) => (p === wi ? null : wi));
-                }}
-              />
+              {/* Hit area moved out of SVG → see the HTML <button> row
+                  overlaid on top of the chart below. SVG <rect> hit
+                  areas were triggering iOS double-tap zoom even with
+                  touch-action: manipulation; HTML buttons (like the
+                  home page DomainSparklines uses) don't have that
+                  problem because iOS treats them as native
+                  interactive elements. */}
 
               <line x1={cx} y1={baseY} x2={cx} y2={baseY + 4} stroke={isActive ? "rgba(255,255,255,0.58)" : "rgba(255,255,255,0.18)"} />
               {isPinned && (
@@ -377,6 +371,41 @@ export default function StackedWeeklyBarChart({
         )}
       </svg>
 
+      {/* HTML <button> overlay — handles all click/hover for the chart.
+          iOS treats native <button> elements as proper interactive
+          surfaces and skips the double-tap-zoom heuristic; SVG <rect>
+          hit areas (the previous approach) did not get that treatment
+          regardless of touch-action. Same pattern as the home page's
+          DomainSparklines, which never had this issue. */}
+      <div
+        style={{
+          position: "absolute",
+          top: `${(margin.top / height) * 100}%`,
+          bottom: `${(margin.bottom / height) * 100}%`,
+          left: `${(margin.left / width) * 100}%`,
+          right: `${(margin.right / width) * 100}%`,
+          display: "flex",
+          gap: 0,
+        }}
+        onPointerLeave={() => setHoveredWeek(null)}
+      >
+        {weekLabels.map((wkLabel, wi) => (
+          <button
+            key={wi}
+            type="button"
+            aria-label={`Week ${wkLabel}`}
+            aria-pressed={pinnedWeek === wi}
+            onPointerEnter={() => setHoveredWeek(wi)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPinnedWeek((p) => (p === wi ? null : wi));
+            }}
+            style={chartHitBtnStyle}
+          />
+        ))}
+      </div>
+      </div>
+
       {activeSeries.length > 1 && (
         <div style={legend}>
           {activeSeries.map((s, idx) => (
@@ -390,6 +419,23 @@ export default function StackedWeeklyBarChart({
     </div>
   );
 }
+
+// Transparent HTML <button> used as the click/hover target for each
+// bar column. Native button element so iOS treats it as a proper
+// interactive surface (no double-tap-zoom delay).
+const chartHitBtnStyle: React.CSSProperties = {
+  flex: 1,
+  appearance: "none",
+  WebkitAppearance: "none",
+  padding: 0,
+  margin: 0,
+  background: "transparent",
+  border: "none",
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+  touchAction: "manipulation",
+};
 
 const chartShell: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.09)",

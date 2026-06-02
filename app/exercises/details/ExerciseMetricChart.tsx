@@ -223,13 +223,15 @@ export default function ExerciseMetricChart({
         )}
       </div>
 
-      {/* Chart — default xMidYMid meet (uniform scale) so it doesn't
-          stretch on mobile. width 100% lets it shrink horizontally;
-          touchAction: manipulation kills double-tap-zoom on the SVG. */}
+      {/* Chart — SVG is the visual layer only. HTML <button> overlay
+          below handles all click/hover so iOS doesn't double-tap-zoom
+          (the issue the DomainSparklines pattern avoids). */}
+      <div style={{ position: "relative", touchAction: "manipulation" }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         height={H}
+        preserveAspectRatio="none"
         style={{
           display: "block",
           overflow: "visible",
@@ -237,8 +239,6 @@ export default function ExerciseMetricChart({
           userSelect: "none",
           WebkitUserSelect: "none",
         }}
-        onPointerLeave={() => setHoverIdx(null)}
-        onClick={() => setPinnedIdx(null)}
       >
         {/* Baseline */}
         <line x1={PAD_LEFT} y1={PAD_TOP + plotH} x2={W - PAD_RIGHT} y2={PAD_TOP + plotH} stroke="rgba(255,255,255,0.14)" />
@@ -367,31 +367,43 @@ export default function ExerciseMetricChart({
           </text>
         ))}
 
-        {/* Invisible hit areas per session */}
-        {sortedSessions.map((s, i) => {
-          const x = xOf(i);
-          const slabW = lastIdx === 0 ? plotW : plotW / Math.max(1, lastIdx);
-          return (
-            <rect
-              key={s.logId}
-              x={x - slabW / 2}
-              y={PAD_TOP}
-              width={slabW}
-              height={plotH + 6}
-              fill="transparent"
-              // touchAction: manipulation on the rect itself — iOS
-              // doesn't reliably cascade it from the parent SVG, so
-              // the bar tap was still triggering double-tap zoom.
-              style={{ cursor: "pointer", touchAction: "manipulation" }}
-              onPointerEnter={() => setHoverIdx(i)}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPinnedIdx((p) => (p === i ? null : i));
-              }}
-            />
-          );
-        })}
+        {/* SVG hit rects removed — replaced by the HTML <button>
+            overlay below the </svg>. Native buttons don't trigger
+            iOS double-tap-zoom the way SVG rects do. */}
       </svg>
+
+      {/* HTML <button> overlay — one button per session, evenly
+          distributed across the plot area. Buttons handle click +
+          hover (mouse / touch) so the chart's SVG never has to
+          receive interactive events. */}
+      <div
+        style={{
+          position: "absolute",
+          top: `${(PAD_TOP / H) * 100}%`,
+          bottom: `${(PAD_BOTTOM / H) * 100}%`,
+          left: `${(PAD_LEFT / W) * 100}%`,
+          right: `${(PAD_RIGHT / W) * 100}%`,
+          display: "flex",
+          gap: 0,
+        }}
+        onPointerLeave={() => setHoverIdx(null)}
+      >
+        {sortedSessions.map((s, i) => (
+          <button
+            key={s.logId}
+            type="button"
+            aria-label={`Session ${i + 1} of ${sortedSessions.length}`}
+            aria-pressed={pinnedIdx === i}
+            onPointerEnter={() => setHoverIdx(i)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPinnedIdx((p) => (p === i ? null : i));
+            }}
+            style={hitBtnStyle}
+          />
+        ))}
+      </div>
+      </div>
 
       {/* Tooltip / detail row beneath the chart */}
       <div style={tooltipRowStyle}>
@@ -498,6 +510,23 @@ function niceAxisMax(value: number): number {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
+
+// Transparent HTML <button> used as the click/hover target per
+// session point. Native button element so iOS treats it as a proper
+// interactive surface (no double-tap-zoom delay).
+const hitBtnStyle: React.CSSProperties = {
+  flex: 1,
+  appearance: "none",
+  WebkitAppearance: "none",
+  padding: 0,
+  margin: 0,
+  background: "transparent",
+  border: "none",
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+  touchAction: "manipulation",
+};
 
 const shellStyle: React.CSSProperties = {
   display: "grid",
