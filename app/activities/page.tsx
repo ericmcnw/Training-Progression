@@ -1,622 +1,250 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { getMetadataIndex, getRoutineIndex, getRoutineLogs } from "@/app/progress/data";
-import StackedWeeklyBarChart, { type StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
+import { getRoutineIndex, getRoutineLogs } from "@/app/progress/data";
 import {
   ACTIVITY_FAMILY_META,
   ACTIVITY_FAMILY_ORDER,
-  ACTIVITY_REGISTRY,
-  activitiesByFamily,
-  getActivityEntry,
   type ActivityFamily,
-  type ActivityRegistryEntry,
 } from "@/lib/activity-families";
-import { effectiveRoutineDomain } from "@/lib/routines";
-import { fillWeeklySeries, incrementWeekMap } from "@/lib/progress-v2";
+import {
+  getFamilyStats,
+  getTopActivitiesForFamily,
+  getTopRoutinesForFamily,
+  type LogForRanking,
+  type RoutineForRanking,
+} from "@/lib/activities/family-rankings";
 import { formatHoursMinutes } from "@/lib/progress";
-import { ActivitiesEmpty, ActivitiesShell, ActivityCard, ActivityCardGrid, FamilySection } from "./ui";
+import FamilySection from "./_shared/FamilySection";
+import Row from "./_shared/Row";
+import SectionStrip from "./_shared/SectionStrip";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
-function getParam(params: SearchParams, key: string) {
-  const value = params[key];
-  return Array.isArray(value) ? value[0] : value;
-}
-
-type ActivityStats = {
-  entry: ActivityRegistryEntry;
-  /** Logs in the last 4 weeks tagged with this activity (via metadata or fallback subtype). */
-  sessions4w: number;
-  totalDistanceMi: number;
-  totalDurationSec: number;
-  totalElevationFt: number;
-  /** Most recent log date for this activity. */
-  lastSession: Date | null;
-  /** Distinct active routines tagged for this activity. */
-  activeRoutines: number;
+// The dashboard route for each family's hub page. Endurance + Strength
+// already exist; Sports + Body Work ship as stub pages in this PR and
+// flesh out in phase 2.
+const FAMILY_DASHBOARD_HREF: Record<ActivityFamily, string> = {
+  endurance: "/activities/endurance",
+  sports: "/activities/sports",
+  strength: "/activities/strength",
+  "body-work": "/activities/body-work",
 };
 
-function formatLastLabel(date: Date | null) {
-  if (!date) return "No recent activity";
-  return `Last ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date)}`;
-}
+export default async function ActivitiesPage() {
+  // Single roundtrip for the page — same data fed to every section helper.
+  // No DB calls happen inside the ranking helpers themselves.
+  const [routinesRaw, logs4wRaw] = await Promise.all([
+    getRoutineIndex(),
+    getRoutineLogs("4w"),
+  ]);
 
-function formatNumber(value: number) {
-  if (value >= 100) return value.toFixed(0);
-  return value.toFixed(1);
-}
+  // Narrow to the shape the rankings need. The wider Prisma row keeps
+  // its full structure for any downstream consumer; we just project the
+  // fields we use here to keep helpers cheap.
+  const routines: RoutineForRanking[] = routinesRaw.map((r) => ({
+    id: r.id,
+    name: r.name,
+    subtype: r.subtype ?? null,
+    domain: r.domain,
+    kind: String(r.kind),
+    isActive: r.isActive,
+    metadataGroups: r.metadataGroups,
+    // activityType isn't pulled by getRoutineIndex today; leave undefined
+    // and the endurance classifier falls back to domain + metadata tags.
+  }));
 
-export default async function ActivitiesPage(props: {
-  searchParams?: Promise<SearchParams> | SearchParams;
-}) {
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
-  const query = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
-  const familyFilter = (getParam(searchParams, "family") ?? "").trim().toLowerCase() as ActivityFamily | "";
-  const showAll = getParam(searchParams, "show") === "all";
-
-  const now = new Date();
-  // Kick off all three independent queries immediately. We don't await them
-  // sequentially — `routines` is needed first to compute the endurance routine
-  // ids for the 12w chart fetch, but groups/logs can resolve in parallel with
-  // that work, so we await routines first and then a Promise.all for the rest.
-  const groupsPromise = getMetadataIndex();
-  const routinesPromise = getRoutineIndex();
-  const logs4wPromise = getRoutineLogs("4w");
-
-  const routines = await routinesPromise;
-
-  // For each routine, collect every CARDIO_ACTIVITY metadata slug it touches.
-  // Routines are tagged via the metadataGroups relation; we treat any slug in
-  // the activity registry as belonging to that activity.
-  const routineSlugs = new Map<string, Set<string>>();
-  for (const routine of routines) {
-    const slugs = new Set<string>();
-    for (const entry of routine.metadataGroups ?? []) {
-      const slug = entry.group?.slug;
-      if (!slug) continue;
-      if (getActivityEntry(slug)) slugs.add(slug);
-    }
-    // Fallback: if no metadata tags resolve to a known activity, try the
-    // routine subtype mapped through the registry (e.g., CLIMBING → climbing).
-    if (slugs.size === 0 && routine.subtype) {
-      const slugFromSubtype = routine.subtype.toLowerCase().replace(/_/g, "-");
-      if (getActivityEntry(slugFromSubtype)) slugs.add(slugFromSubtype);
-    }
-    if (slugs.size > 0) routineSlugs.set(routine.id, slugs);
-  }
-
-  // Now we know which routines are endurance — kick off the 12w chart fetch
-  // in parallel with awaiting groups + 4w logs (which are still in flight).
-  //
-  // Two log sources roll into the chart so an edited log shows up in its
-  // *current* type bucket, not its routine's pre-edit metadata bucket:
-  //   1. Logs against legacy endurance-tagged routines (metadata-based).
-  //   2. Any log carrying activityTypeId — covers typed quick-log logs
-  //      against the synthetic Endurance routine AND legacy logs whose
-  //      activityTypeId was overridden via the edit-log type switcher.
-  // Both sources OR'd in a single query; activityType included so the
-  // chart-label loop below can prefer it over the routine metadata.
-  const enduranceSlugsPreview = new Set(activitiesByFamily("endurance").map((e) => e.slug));
-  const enduranceRoutineIdsPreview = Array.from(routineSlugs.entries())
-    .filter(([, slugs]) => [...slugs].some((s) => enduranceSlugsPreview.has(s)))
-    .map(([routineId]) => routineId);
-  const cutoff12w = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
-  const logs12wPromise = prisma.routineLog.findMany({
-    where: {
-      performedAt: { gte: cutoff12w },
-      OR: [
-        ...(enduranceRoutineIdsPreview.length > 0
-          ? [{ routineId: { in: enduranceRoutineIdsPreview } }]
-          : []),
-        { activityTypeId: { not: null } },
-      ],
-    },
-    select: {
-      id: true,
-      routineId: true,
-      performedAt: true,
-      distanceMi: true,
-      durationSec: true,
-      elevationGainFt: true,
-      activityTypeId: true,
-      activityType: {
-        select: { slug: true, name: true, family: { select: { slug: true, name: true } } },
-      },
-    },
-  });
-
-  const [groups, logs] = await Promise.all([groupsPromise, logs4wPromise]);
-  const groupBySlug = new Map(groups.map((group) => [group.slug, group]));
-
-  // Map activity-type slugs → registry slugs so typed logs can credit the
-  // same activity stat cards (and color palette) the legacy metadata-based
-  // routines already do. Shared by the 4w stat aggregation below and the
-  // 12w endurance chart further down.
-  const typeSlugToRegistrySlug: Record<string, string> = {
-    "run": "running",
-    "trail-run": "trail-running",
-    "long-run": "running",
-    "tempo-run": "running",
-    "easy-run": "running",
-    "interval-run": "running",
-    "sprint": "running",
-    "walk": "walking",
-    "hike": "hiking",
-    "bike": "biking",
-    "mtb": "mountain-biking",
-    "road-bike": "road-cycling",
-    "gravel-bike": "gravel-cycling",
-    "swim": "swimming",
-    "open-water-swim": "open-water-swimming",
-    "row": "rowing",
-    "erg-row": "rowing",
-  };
-
-  // Aggregate per-activity stats from the last 4 weeks of logs.
-  const statsBySlug = new Map<string, ActivityStats>();
-  for (const entry of ACTIVITY_REGISTRY) {
-    statsBySlug.set(entry.slug, {
-      entry,
-      sessions4w: 0,
-      totalDistanceMi: 0,
-      totalDurationSec: 0,
-      totalElevationFt: 0,
-      lastSession: null,
-      activeRoutines: 0,
-    });
-  }
-  const seenRoutinesBySlug = new Map<string, Set<string>>();
-  for (const log of logs) {
-    // Prefer the log's activityType when present — that's the source of
-    // truth after an edit-form type switch and the only signal for typed
-    // logs against the synthetic Endurance routine. We map the type slug
-    // to the closest registry slug (e.g. trail-run → "trail-running")
-    // and credit ONLY that bucket; falling back to routine metadata when
-    // there's no per-log type at all.
-    const typedSlug = log.activityType ? typeSlugToRegistrySlug[log.activityType.slug] : undefined;
-    const slugs: Iterable<string> | undefined = typedSlug
-      ? [typedSlug]
-      : routineSlugs.get(log.routineId);
-    if (!slugs) continue;
-    for (const slug of slugs) {
-      const stats = statsBySlug.get(slug);
-      if (!stats) continue;
-      stats.sessions4w += 1;
-      stats.totalDistanceMi += log.distanceMi ?? 0;
-      stats.totalDurationSec += log.durationSec ?? 0;
-      stats.totalElevationFt += log.elevationGainFt ?? 0;
-      if (!stats.lastSession || log.performedAt > stats.lastSession) {
-        stats.lastSession = log.performedAt;
-      }
-      const seen = seenRoutinesBySlug.get(slug) ?? new Set<string>();
-      seen.add(log.routineId);
-      seenRoutinesBySlug.set(slug, seen);
-    }
-  }
-  for (const [slug, seen] of seenRoutinesBySlug) {
-    const stats = statsBySlug.get(slug);
-    if (stats) stats.activeRoutines = seen.size;
-  }
-
-  // Counts for the Strength / Body Work synthetic sections.
-  const strengthLogs4w = logs.filter((log) => effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype) === "strength");
-  const strengthRoutineIds = new Set(strengthLogs4w.map((log) => log.routineId));
-  const strengthActiveRoutines = routines.filter((r) => r.isActive && effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength").length;
-
-  const bodyWorkLogs4w = logs.filter((log) => {
-    const domain = effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype);
-    return domain === "mobility";
-  });
-  const bodyWorkActiveRoutines = routines.filter((r) => {
-    if (!r.isActive) return false;
-    return effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "mobility";
-  }).length;
-
-  // ── Endurance chart data (12w stacked bar by activity type) ──────────────────
-  // Promise was kicked off above immediately after we knew the routine ids,
-  // so this just awaits whatever already finished while groups + logs4w resolved.
-  const enduranceSlugs = enduranceSlugsPreview;
-  const enduranceRoutineIds = enduranceRoutineIdsPreview;
-  const enduranceLogs12w = await logs12wPromise;
-
-  // Endurance palette — one color per registered endurance activity. Uses the
-  // same rgba(R,G,B,0.9) format as climbOutcomeColor() and the routine domain
-  // palette in lib/routines.ts so the visual language stays consistent across
-  // every chart in the app. Hues are spaced so no two adjacent stacked
-  // segments collide (trail-running purple is intentionally not green so it
-  // never reads as hiking; mountain-biking is terracotta, not red, to stay
-  // out of rowing's lane).
-  const enduranceActivityColors: Record<string, string> = {
-    // Running family (cool blues + a violet jump for trail)
-    running:                "rgba(59,130,246,0.9)",   // bright blue
-    "road-running":         "rgba(30,64,175,0.9)",    // deep navy
-    "trail-running":        "rgba(168,85,247,0.9)",   // violet
-    walking:                "rgba(244,114,182,0.9)",  // soft pink — friendly & distinct from every other slot
-    // Cycling family (warm yellow → earth)
-    biking:                 "rgba(250,204,21,0.9)",   // amber yellow
-    cycling:                "rgba(250,204,21,0.9)",
-    "road-cycling":         "rgba(249,115,22,0.9)",   // orange
-    "mountain-biking":      "rgba(194,65,12,0.9)",    // terracotta
-    "gravel-cycling":       "rgba(214,188,138,0.9)",  // khaki / dust
-    // Swimming family (cyan → ocean)
-    swimming:               "rgba(6,182,212,0.9)",    // cyan
-    "pool-swimming":        "rgba(103,232,249,0.9)",  // pale chlorine cyan
-    "open-water-swimming":  "rgba(14,116,144,0.9)",   // deep ocean
-    // Other endurance
-    rowing:                 "rgba(239,68,68,0.9)",    // crimson
-    hiking:                 "rgba(34,197,94,0.9)",    // forest green
-    // Multi-discipline / legacy
-    golf:                   "rgba(40,212,160,0.9)",
-    triathlon:              "rgba(176,78,245,0.9)",
-  };
-  const enduranceFallbackColors = [
-    "rgba(236,72,153,0.9)",   // pink
-    "rgba(245,158,11,0.9)",   // amber
-    "rgba(167,139,250,0.9)",  // soft violet
-  ];
-
-  // For each routine, pick the MOST SPECIFIC endurance activity tag. Routines
-  // are typically tagged with both the generic parent (e.g. "running") and the
-  // specific child (e.g. "trail-running"), so we use the registry's sortHint
-  // as a specificity score — higher sortHint = more specific child activity.
-  const routineEnduranceLabel = new Map<string, string>();
-  for (const [routineId, slugs] of routineSlugs) {
-    const enduranceCandidates = [...slugs]
-      .filter((s) => enduranceSlugs.has(s))
-      .map((s) => ({ slug: s, entry: getActivityEntry(s) }))
-      .filter((c): c is { slug: string; entry: NonNullable<ReturnType<typeof getActivityEntry>> } => c.entry !== null)
-      .sort((a, b) => (b.entry.sortHint ?? 0) - (a.entry.sortHint ?? 0));
-    const chosen = enduranceCandidates[0];
-    if (chosen) routineEnduranceLabel.set(routineId, chosen.entry.label);
-  }
-
-  // Track which palette slug each chart series should pick. Stored as a
-  // sibling map to weeklyMilesPerActivity (keyed by series label) so the
-  // color lookup later doesn't have to scan logs again. Reuses
-  // typeSlugToRegistrySlug from above — registry slugs and palette keys
-  // share a namespace ("running", "trail-running", "walking", etc.).
-  const seriesPaletteSlug = new Map<string, string>();
-  const weeklyMilesPerActivity = new Map<string, Map<string, number>>();
-  const weeklyMinutesPerActivity = new Map<string, Map<string, number>>();
-  for (const log of enduranceLogs12w) {
-    // Prefer the log's activityType when present — that's the source of
-    // truth after an edit-form type switch and the only signal for typed
-    // logs against the synthetic Endurance routine. Fall back to the
-    // routine's metadata label for legacy un-typed logs.
-    let label: string | undefined;
-    let paletteSlug: string | undefined;
-    if (log.activityType) {
-      label = log.activityType.name;
-      paletteSlug = typeSlugToRegistrySlug[log.activityType.slug];
-    } else {
-      label = routineEnduranceLabel.get(log.routineId);
-    }
-    if (!label) continue;
-    if (paletteSlug) seriesPaletteSlug.set(label, paletteSlug);
-    if (!weeklyMilesPerActivity.has(label)) weeklyMilesPerActivity.set(label, new Map());
-    if (!weeklyMinutesPerActivity.has(label)) weeklyMinutesPerActivity.set(label, new Map());
-    incrementWeekMap(weeklyMilesPerActivity.get(label)!, log.performedAt, log.distanceMi ?? 0);
-    incrementWeekMap(weeklyMinutesPerActivity.get(label)!, log.performedAt, (log.durationSec ?? 0) / 60);
-  }
-
-  const enduranceWeekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
-  let enduranceFallbackIdx = 0;
-  const enduranceStackedSeries: StackedBarSeries[] = Array.from(weeklyMilesPerActivity.entries())
-    .map(([label, weekMap]) => ({ label, total: Array.from(weekMap.values()).reduce((a, b) => a + b, 0), weekMap }))
-    .filter((e) => e.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .map((e) => {
-      // Color resolution order: the activity-type slug's mapped palette
-      // key (set in the loop above for typed logs), then the legacy
-      // label-to-slug guess (for metadata-tagged logs), then a fallback.
-      const paletteSlug = seriesPaletteSlug.get(e.label);
-      const labelSlug = e.label.toLowerCase().replace(/\s+/g, "-");
-      const color =
-        (paletteSlug && enduranceActivityColors[paletteSlug]) ||
-        enduranceActivityColors[labelSlug] ||
-        enduranceFallbackColors[enduranceFallbackIdx++ % enduranceFallbackColors.length];
-      return {
-        label: e.label,
-        color,
-        weeklyValues: fillWeeklySeries(e.weekMap, "12w", now).map((p) => p.value),
-        weeklyMinutes: fillWeeklySeries(weeklyMinutesPerActivity.get(e.label) ?? new Map(), "12w", now).map((p) => p.value),
-      };
-    });
-
-  // Apply text query filter to activity entries (not the synthetic sections).
-  function matchesQuery(entry: ActivityRegistryEntry) {
-    if (!query) return true;
-    return entry.label.toLowerCase().includes(query) || entry.slug.includes(query);
-  }
-
-  const familiesToRender: ActivityFamily[] = familyFilter
-    ? ACTIVITY_FAMILY_ORDER.filter((f) => f === familyFilter)
-    : ACTIVITY_FAMILY_ORDER;
-
-  const totalSessions4w = logs.length;
+  const logs4w: LogForRanking[] = logs4wRaw.map((l) => ({
+    id: l.id,
+    routineId: l.routineId,
+    performedAt: l.performedAt,
+    distanceMi: l.distanceMi,
+    durationSec: l.durationSec,
+    // Forward activityType so the family-rankings helper can credit a
+    // retyped log to its current type (e.g. Long Run → Trail Run) instead
+    // of falling through to the routine's metadata. Required for typed
+    // logs against the synthetic Endurance routine, which has no metadata.
+    activityType: l.activityType
+      ? { slug: l.activityType.slug, familyId: l.activityType.family?.slug ?? null }
+      : null,
+  }));
 
   return (
-    <ActivitiesShell
-      title="Activities"
-      subtitle={`Your training worlds — browse by activity and dive into each one's recent volume, trends, and content. ${totalSessions4w} ${totalSessions4w === 1 ? "session" : "sessions"} logged in the last 4 weeks.`}
-      toolbar={
-        <div style={{ display: "grid", gap: 10 }}>
-          <Link
-            href="/activities/map"
-            style={{
-              alignSelf: "start",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 800,
-              padding: "7px 12px",
-              borderRadius: 10,
-              border: "1px solid rgba(74,222,128,0.32)",
-              background: "rgba(74,222,128,0.10)",
-              color: "rgba(187,247,208,0.95)",
-              textDecoration: "none",
-            }}
-          >
-            🗺 World Map
-          </Link>
-          <FilterBar query={query} familyFilter={familyFilter} />
-        </div>
-      }
-    >
-      {familiesToRender.map((family) => {
-        const meta = ACTIVITY_FAMILY_META[family];
+    <div style={pageStyle}>
+      <header style={headerStyle}>
+        <h1 style={titleStyle}>Activities</h1>
+        <Link href="/activities/map" style={mapLinkStyle}>
+          🗺 Map
+        </Link>
+      </header>
 
-        // Endurance & Sports: data-driven from the registry.
-        if (family === "endurance" || family === "sports") {
-          const entries = activitiesByFamily(family).filter(matchesQuery);
-          const familySessions = entries.reduce((sum, e) => sum + (statsBySlug.get(e.slug)?.sessions4w ?? 0), 0);
-          const familyActiveActivities = entries.filter((e) => (statsBySlug.get(e.slug)?.sessions4w ?? 0) > 0).length;
+      <div style={{ display: "grid", gap: 10 }}>
+        {ACTIVITY_FAMILY_ORDER.map((family) => {
+          const meta = ACTIVITY_FAMILY_META[family];
+          const stats = getFamilyStats(routines, logs4w, family);
+          const topRoutines = getTopRoutinesForFamily(routines, logs4w, family, 6);
 
-          // Hide entries with no activity by default — focus on what the user actually trains.
-          // Always show climbing because it's the deep one.
-          // Searching or ?show=all reveals every registered activity.
-          const visibleEntries = query || showAll
-            ? entries
-            : entries.filter((e) => (statsBySlug.get(e.slug)?.sessions4w ?? 0) > 0 || e.hasDeepWorld);
-
-          if (entries.length === 0 && query) return null;
+          // Endurance + Sports show "Top activities" stripe. Strength +
+          // Body Work skip it — they don't have activity granularity.
+          const topActivities =
+            family === "endurance" || family === "sports"
+              ? getTopActivitiesForFamily(routines, logs4w, family, 6)
+              : [];
 
           return (
             <FamilySection
               key={family}
-              family={family}
               label={meta.label}
-              description={meta.description}
+              sessionsLabel={`${stats.sessions4w} session${stats.sessions4w === 1 ? "" : "s"}`}
+              activeLabel={`${stats.activeRoutines} active`}
               accent={meta.accent}
-              totals={{
-                sessions: familySessions,
-                activeActivities: familyActiveActivities,
-              }}
+              dashboardHref={FAMILY_DASHBOARD_HREF[family]}
             >
-              {family === "endurance" && enduranceStackedSeries.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <StackedWeeklyBarChart
-                    title="Miles per Week by Activity — Last 12 Weeks"
-                    weekLabels={enduranceWeekLabels}
-                    series={enduranceStackedSeries}
-                    unit="mi"
-                    decimals={1}
-                  />
-                </div>
-              )}
-              {visibleEntries.length === 0 ? (
-                <ActivitiesEmpty message={`No ${meta.label.toLowerCase()} sessions yet. Log one to start populating this section.`} />
-              ) : (
-                <ActivityCardGrid>
-                  {visibleEntries.map((entry) => {
-                    const stats = statsBySlug.get(entry.slug)!;
-                    const hasActivity = stats.sessions4w > 0;
-                    const chips: string[] = [];
-                    if (stats.totalDistanceMi > 0) {
-                      chips.push(`${formatNumber(stats.totalDistanceMi)} mi 4w`);
-                    } else if (stats.totalDurationSec > 0) {
-                      chips.push(`${formatHoursMinutes(stats.totalDurationSec)} 4w`);
-                    }
-                    if (stats.activeRoutines > 0) {
-                      chips.push(`${stats.activeRoutines} routine${stats.activeRoutines === 1 ? "" : "s"}`);
-                    }
-                    chips.push(formatLastLabel(stats.lastSession));
+              {topActivities.length > 0 ? (
+                <SectionStrip label="Top activities">
+                  {topActivities.map((a) => (
+                    <Row
+                      key={a.entry.slug}
+                      href={`/activities/${a.entry.slug}`}
+                      label={a.entry.label}
+                      metric={formatActivityMetric(a)}
+                      accent={meta.accent}
+                    />
+                  ))}
+                </SectionStrip>
+              ) : null}
 
-                    return (
-                      <ActivityCard
-                        key={entry.slug}
-                        href={`/activities/${entry.slug}`}
-                        eyebrow={entry.eyebrow}
-                        label={entry.label}
-                        primaryStat={{
-                          value: String(stats.sessions4w),
-                          suffix: stats.sessions4w === 1 ? "session 4w" : "sessions 4w",
-                        }}
-                        chips={chips}
-                        highlight={hasActivity || entry.hasDeepWorld}
-                        accent={meta.accent}
-                      />
-                    );
-                  })}
-                  {!query && !showAll && hasMissingActivity(entries, statsBySlug) ? (
-                    <Link
-                      href={`/activities?show=all${familyFilter ? `&family=${familyFilter}` : ""}`}
-                      style={{
-                        display: "grid",
-                        placeItems: "center",
-                        minHeight: 120,
-                        padding: 14,
-                        borderRadius: 16,
-                        border: "1px dashed rgba(255,255,255,0.14)",
-                        background: "rgba(255,255,255,0.02)",
-                        textDecoration: "none",
-                        color: "rgba(255,255,255,0.7)",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        textAlign: "center",
-                      }}
-                    >
-                      + Browse all {meta.label.toLowerCase()}
-                    </Link>
-                  ) : null}
-                </ActivityCardGrid>
-              )}
+              {topRoutines.length > 0 ? (
+                <SectionStrip label="Top routines">
+                  {topRoutines.map((r) => (
+                    <Row
+                      key={r.id}
+                      href={`/routines/${r.id}`}
+                      label={r.name}
+                      metric={`${r.sessions4w}× 4w`}
+                      hint={r.lastSessionAt ? `Last ${formatShortDate(r.lastSessionAt)}` : undefined}
+                      accent={meta.accent}
+                    />
+                  ))}
+                </SectionStrip>
+              ) : null}
+
+              {topActivities.length === 0 && topRoutines.length === 0 ? (
+                <EmptyState message={`No ${meta.label.toLowerCase()} activity in the last 4 weeks.`} />
+              ) : null}
+
+              <DashboardLink href={FAMILY_DASHBOARD_HREF[family]} accent={meta.accent}>
+                More on {meta.label} Dashboard →
+              </DashboardLink>
             </FamilySection>
           );
-        }
-
-        // Strength — synthetic section, links to Log → Routines filtered to strength.
-        if (family === "strength") {
-          if (query) return null; // Don't include in text search results — it's a meta-tile.
-          return (
-            <FamilySection
-              key={family}
-              family={family}
-              label={meta.label}
-              description={meta.description}
-              accent={meta.accent}
-              totals={{ sessions: strengthLogs4w.length, activeActivities: strengthActiveRoutines }}
-            >
-              <ActivityCardGrid>
-                <ActivityCard
-                  href="/activities/strength"
-                  eyebrow="Activity world"
-                  label="Strength"
-                  primaryStat={{
-                    value: String(strengthLogs4w.length),
-                    suffix: strengthLogs4w.length === 1 ? "session 4w" : "sessions 4w",
-                  }}
-                  chips={[
-                    `${strengthActiveRoutines} active routine${strengthActiveRoutines === 1 ? "" : "s"}`,
-                    `${strengthRoutineIds.size} logged routine${strengthRoutineIds.size === 1 ? "" : "s"}`,
-                  ]}
-                  highlight={strengthLogs4w.length > 0}
-                  accent={meta.accent}
-                />
-                <ActivityCard
-                  href="/log?view=exercises"
-                  eyebrow="Library"
-                  label="Exercises"
-                  chips={["Browse and edit your exercise library"]}
-                  accent={meta.accent}
-                />
-              </ActivityCardGrid>
-            </FamilySection>
-          );
-        }
-
-        // Body Work — synthetic section linking into Body and mobility/recovery routines.
-        if (family === "body-work") {
-          if (query) return null;
-          return (
-            <FamilySection
-              key={family}
-              family={family}
-              label={meta.label}
-              description={meta.description}
-              accent={meta.accent}
-              totals={{ sessions: bodyWorkLogs4w.length, activeActivities: bodyWorkActiveRoutines }}
-            >
-              <ActivityCardGrid>
-                <ActivityCard
-                  href="/log?view=routines&domain=mobility"
-                  eyebrow="Mobility"
-                  label="Mobility Routines"
-                  chips={["Stretching, yoga, mobility flows"]}
-                  accent={meta.accent}
-                />
-                <ActivityCard
-                  href="/log?view=routines&domain=lifestyle"
-                  eyebrow="Daily Habits"
-                  label="Daily Routines"
-                  chips={["Cold plunge, sauna, breathwork, foam rolling"]}
-                  accent={meta.accent}
-                />
-                <ActivityCard
-                  href="/body"
-                  eyebrow="Status"
-                  label="Body Status"
-                  chips={["Body map · injuries · coverage"]}
-                  accent={meta.accent}
-                />
-              </ActivityCardGrid>
-            </FamilySection>
-          );
-        }
-
-        return null;
-      })}
-    </ActivitiesShell>
+        })}
+      </div>
+    </div>
   );
 }
 
-function hasMissingActivity(entries: ActivityRegistryEntry[], statsBySlug: Map<string, ActivityStats>) {
-  return entries.some((e) => (statsBySlug.get(e.slug)?.sessions4w ?? 0) === 0 && !e.hasDeepWorld);
-}
+// ─── Small inline UI bits used only here ─────────────────────────────────────
 
-function FilterBar({ query, familyFilter }: { query: string; familyFilter: string }) {
+function EmptyState({ message }: { message: string }) {
   return (
-    <form
-      action="/activities"
-      method="get"
+    <div
       style={{
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        alignItems: "center",
+        padding: "12px 10px",
+        borderRadius: 10,
+        border: "1px dashed rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.02)",
+        fontSize: 12,
+        opacity: 0.7,
+        lineHeight: 1.5,
       }}
     >
-      <input
-        name="q"
-        defaultValue={query}
-        placeholder="Search activities…"
-        style={{
-          flex: "1 1 240px",
-          minHeight: 38,
-          fontSize: 13,
-          padding: "8px 12px",
-          borderRadius: 12,
-        }}
-      />
-      <FamilyChip href="/activities" label="All" active={!familyFilter} />
-      {ACTIVITY_FAMILY_ORDER.map((family) => (
-        <FamilyChip
-          key={family}
-          href={`/activities?family=${family}`}
-          label={ACTIVITY_FAMILY_META[family].label}
-          active={familyFilter === family}
-          accent={ACTIVITY_FAMILY_META[family].accent}
-        />
-      ))}
-    </form>
+      {message}
+    </div>
   );
 }
 
-function FamilyChip({ href, label, active, accent }: { href: string; label: string; active: boolean; accent?: string }) {
+function DashboardLink({
+  href,
+  accent,
+  children,
+}: {
+  href: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
-      className="activityFamilyChip"
       style={{
-        padding: "6px 12px",
-        borderRadius: 999,
-        fontSize: 12,
+        display: "inline-flex",
+        alignSelf: "flex-start",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 11,
         fontWeight: 800,
         textDecoration: "none",
-        border: active
-          ? `1px solid ${(accent ?? "rgba(51,255,122,0.55)").replace("0.9)", "0.55)")}`
-          : "1px solid rgba(255,255,255,0.14)",
-        background: active
-          ? (accent ?? "rgba(51,255,122,0.18)").replace("0.9)", "0.18)")
-          : "rgba(255,255,255,0.04)",
-        color: "inherit",
-        whiteSpace: "nowrap",
+        color: accent,
+        padding: "6px 4px",
+        opacity: 0.9,
       }}
     >
-      {label}
+      {children}
     </Link>
   );
 }
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+function formatActivityMetric(a: { sessions4w: number; totalDistanceMi: number; totalDurationSec: number }) {
+  // Prefer distance for endurance activities; fall back to duration when
+  // distance is zero (e.g., climbing/sport sessions log time only).
+  if (a.totalDistanceMi > 0) {
+    const v = a.totalDistanceMi >= 100 ? a.totalDistanceMi.toFixed(0) : a.totalDistanceMi.toFixed(1);
+    return `${v} mi · ${a.sessions4w}×`;
+  }
+  if (a.totalDurationSec > 0) {
+    return `${formatHoursMinutes(a.totalDurationSec)} · ${a.sessions4w}×`;
+  }
+  return `${a.sessions4w}×`;
+}
+
+function formatShortDate(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const pageStyle: React.CSSProperties = {
+  maxWidth: 720,
+  margin: "0 auto",
+  padding: "18px 14px 60px",
+  display: "grid",
+  gap: 16,
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const titleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 26,
+  fontWeight: 900,
+  letterSpacing: -0.4,
+};
+
+const mapLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: "1px solid rgba(74,222,128,0.32)",
+  background: "rgba(74,222,128,0.10)",
+  color: "rgba(187,247,208,0.95)",
+  textDecoration: "none",
+};

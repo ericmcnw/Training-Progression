@@ -81,6 +81,15 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   }
 }
 
+/* Activities family-section dashboard pill: full label on wider phones
+   and up, arrow-only on the narrowest mobile widths so the chips on
+   its left don't push it off-screen. */
+.activityFamilyDashboardPillShort { display: none; }
+@media (max-width: 380px) {
+  .activityFamilyDashboardPillFull { display: none; }
+  .activityFamilyDashboardPillShort { display: inline; font-size: 16px; }
+}
+
 /* Global font-size floor for form controls — iOS Safari auto-zooms the
    viewport when focusing an input whose computed font-size is < 16px.
    `max(16px, 1em)` lets components legitimately go *bigger* (e.g. a
