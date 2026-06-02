@@ -73,6 +73,12 @@ export function buildStrengthChartData(
   for (const s of inWindow) {
     const wkIdx = weekIndexByKey.get(weekKey(s.date));
     if (wkIdx === undefined) continue;
+    // Append top-set detail when present so the user sees the actual
+    // heaviest lift from the session, not just aggregate set count +
+    // volume. e.g. "12 sets · 1.5k lb · top: 210×3 Bench".
+    const topSetSuffix = s.topSet && s.topSet.weight > 0
+      ? ` · top: ${s.topSet.weight}×${s.topSet.reps} ${s.topSet.exerciseName}`
+      : "";
     sessionsByWeek[wkIdx].push({
       id: s.id,
       performedAt: s.date,
@@ -82,7 +88,7 @@ export function buildStrengthChartData(
       // volume-amber. The panel's left stripe will reflect this.
       seriesLabel: "Strength",
       seriesColor: "rgba(84,203,130,0.92)",
-      metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}`,
+      metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}${topSetSuffix}`,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }

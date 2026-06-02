@@ -68,6 +68,11 @@ export type StrengthSessionStat = {
   sets: number;
   /** Total lb lifted in the session (sum of weight × reps over every set). */
   volume: number;
+  /** Heaviest single set in the session, surfaced in the chart-panel
+   *  row as "top: 210×3 Bench" so the user sees the actual lift detail,
+   *  not just aggregate sets+volume. Null if the session had no
+   *  weighted sets (e.g. timed/rep-only work). */
+  topSet: { exerciseName: string; weight: number; reps: number } | null;
 };
 
 export type StrengthWorldData = {
@@ -285,6 +290,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     date: s.date,
     sets: s.totalSets,
     volume: s.totalVolume,
+    topSet: s.topSet,
   }));
 
   const recentSessions = recentSessionList

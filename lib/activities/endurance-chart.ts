@@ -8,6 +8,7 @@ import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
+import { formatPace } from "@/lib/progress";
 
 // Builds the 12-week stacked-bar chart series for the endurance
 // dashboard. Two log sources roll into the same chart so an edited log
@@ -192,12 +193,21 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
     if (wkIdx !== undefined) {
       const distance = log.distanceMi ?? 0;
       const duration = log.durationSec ?? 0;
-      const metricFormatted =
-        distance > 0
-          ? `${distance >= 100 ? distance.toFixed(0) : distance.toFixed(1)} mi`
-          : duration > 0
-          ? formatDuration(duration)
-          : "—";
+      // Endurance sessions read richest with all three: distance,
+      // duration, pace. Pace is only meaningful when both are present
+      // (and distance > 0 to avoid div-by-zero). When only one signal
+      // exists, surface that one.
+      const parts: string[] = [];
+      if (distance > 0) {
+        parts.push(`${distance >= 100 ? distance.toFixed(0) : distance.toFixed(1)} mi`);
+      }
+      if (duration > 0) {
+        parts.push(formatDuration(duration));
+      }
+      if (distance > 0 && duration > 0) {
+        parts.push(`${formatPace(duration / distance)}/mi`);
+      }
+      const metricFormatted = parts.length > 0 ? parts.join(" · ") : "—";
       sessionsByWeek[wkIdx].push({
         id: log.id,
         performedAt: log.performedAt,
