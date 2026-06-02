@@ -126,7 +126,7 @@ export default async function StrengthWorldPage() {
         actions={<SectionLinkButton href="/activities" label="All Activities" />}
       />
 
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
         {/* Pulse strip */}
         <ActivityPulseStrip slots={pulseSlots} />
 

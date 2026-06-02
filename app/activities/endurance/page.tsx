@@ -196,7 +196,7 @@ export default async function EnduranceWorldPage(props: {
         }
       />
 
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
         {/* Interactive 12w stacked bar chart — always 12 weeks regardless
             of the page range filter below, since cadence trends need
             a stable window to compare against. */}

@@ -100,7 +100,18 @@ export default function WeeklyBarChartWithSessions({
   }, [series, sessionsByWeek]);
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div
+      style={{
+        display: "grid",
+        // Pin the single grid track to the container width — default
+        // `auto` tracks let a wide child (long session-row metric)
+        // push this grid wider than its parent, which is what was
+        // scrolling the whole strength page sideways on tap.
+        gridTemplateColumns: "minmax(0, 1fr)",
+        gap: 10,
+        minWidth: 0,
+      }}
+    >
       <StackedWeeklyBarChart
         title={title}
         weekLabels={weekLabels}
@@ -230,6 +241,7 @@ function SessionRow({ session }: { session: WeekSession }) {
 
 const panelStyle: CSSProperties = {
   display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: 10,
   padding: "12px 14px",
   borderRadius: 14,
@@ -237,6 +249,11 @@ const panelStyle: CSSProperties = {
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.025)",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 // Idle panel — same width and roughly same vertical footprint as a
@@ -339,7 +356,11 @@ const rowDateStyle: CSSProperties = {
 };
 
 const rowRoutineStyle: CSSProperties = {
-  flex: 1,
+  // Both routine name and metric can shrink. The metric used to be
+  // flexShrink: 0 — but long strings like "15 sets · 845 lb · top:
+  // 35×5 Pull-Up" then pushed the row past the panel/viewport and
+  // the whole page scrolled sideways on tap.
+  flex: "2 1 0",
   minWidth: 0,
   fontSize: 12.5,
   fontWeight: 800,
@@ -349,12 +370,16 @@ const rowRoutineStyle: CSSProperties = {
 };
 
 const rowMetricStyle: CSSProperties = {
+  flex: "1 1 0",
+  minWidth: 0,
   fontSize: 11.5,
   fontWeight: 800,
   opacity: 0.9,
   whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
   fontVariantNumeric: "tabular-nums",
-  flexShrink: 0,
+  textAlign: "right",
 };
 
 const rowCaretStyle: CSSProperties = {
