@@ -2,94 +2,75 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-// Pure HTML/CSS stacked bar chart — no SVG, no canvas. Mirrors the
-// architecture of /_home/DomainSparklines so iOS treats every
-// interactive element as a native <button> and never triggers
-// double-tap-zoom or the implicit "zoom to readable content" gesture
-// that SVG <rect> hit areas suffered from in the previous SVG-based
-// implementation.
+// Pure HTML/CSS bar chart, modeled on /_home/DomainSparklines.
+//
+// Each week is a native HTML <button> styled via a CSS class (not
+// inline styles). Bars are <div> elements with percentage heights.
+// No SVG anywhere. iOS treats these as standard interactive controls,
+// so tapping doesn't trigger zoom-to-fit.
 //
 // Layout:
-//   chart shell (div)
-//     ├── header (title + stat chips + time chips)
-//     ├── chart body (flex row)
-//     │    ├── y-axis (3 ticks: yMax, yMax/2, 0)
-//     │    └── bars track (flex row of <button>, one per week)
-//     │         └── each button: value label, bar cell with stacked
-//     │           series segments, x-axis week label
-//     └── legend (when multiple series)
+//   chartShell
+//     header (title + stat chips)
+//     chartRow (yAxis | barsTrack — buttons, one per week)
+//     xAxisRow (week labels under bars; thinned out at high counts)
+//     legend (only when 2+ active series)
 
 export type StackedBarSeries = {
   label: string;
   color: string;
   weeklyValues: number[];
   weeklyMinutes?: number[];
-  /** Pre-formatted "top session" detail per week index. Surfaced in
-   *  the optional hover popover when not suppressed via hideTooltip. */
+  /** Kept for type-compatibility with existing callers. */
   topSessionPerWeek?: Array<string | null>;
 };
 
-const enduranceChartPalette = [
+const seriesPalette = [
   "rgba(56,189,248,0.94)",
   "rgba(251,191,36,0.94)",
   "rgba(167,139,250,0.94)",
   "rgba(74,222,128,0.92)",
   "rgba(248,113,113,0.92)",
   "rgba(251,146,60,0.92)",
-  "rgba(244,114,182,0.90)",
-  "rgba(203,213,225,0.88)",
 ];
 
-function visualSeriesColor(index: number) {
-  return enduranceChartPalette[index % enduranceChartPalette.length];
+function seriesColor(idx: number) {
+  return seriesPalette[idx % seriesPalette.length];
 }
 
 function niceAxisMax(value: number) {
   if (value <= 0) return 1;
   const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-  const normalized = value / magnitude;
-  if (normalized <= 1) return 1 * magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 2.5) return 2.5 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
-  if (normalized <= 7.5) return 7.5 * magnitude;
+  const n = value / magnitude;
+  if (n <= 1) return magnitude;
+  if (n <= 2) return 2 * magnitude;
+  if (n <= 2.5) return 2.5 * magnitude;
+  if (n <= 5) return 5 * magnitude;
   return 10 * magnitude;
 }
 
-// Compact value-label formatter used above each bar. With 12 bars on
-// a 360px viewport each slot is ~22-24px, so a raw "40330" overflows.
-// Abbreviates 1k+ to "1.2k" / 12k / "1.2M" while still showing exact
-// digits in the chips above and the panel below.
-function compactNumber(value: number, decimals: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-  }
-  if (abs >= 1_000) {
-    return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
-  }
-  if (abs >= 10) return value.toFixed(0);
-  return value.toFixed(decimals);
-}
-
-function fmtMins(mins: number): string {
+function fmtMins(mins: number) {
   const m = Math.round(mins);
-  if (m <= 0) return "-";
+  if (m <= 0) return "—";
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   const rem = m % 60;
   return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
 }
 
+function fmtValue(v: number, decimals: number, unit?: string) {
+  return `${v.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+}
+
 export default function StackedWeeklyBarChart({
   title,
   weekLabels,
   series,
-  unit = "mi",
+  unit = "",
   decimals = 1,
   compact = false,
   onPinnedWeekChange,
-  hideTooltip = false,
+  hideTooltip: _hideTooltip,
 }: {
   title: string;
   weekLabels: string[];
@@ -98,11 +79,12 @@ export default function StackedWeeklyBarChart({
   decimals?: number;
   compact?: boolean;
   onPinnedWeekChange?: (weekIndex: number | null) => void;
+  /** Accepted for API compatibility — there is no in-chart tooltip
+   *  anymore; the sessions panel below the chart is the single source
+   *  of truth. */
   hideTooltip?: boolean;
 }) {
-  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [pinnedWeek, setPinnedWeek] = useState<number | null>(null);
-  const activeWeek = hoveredWeek ?? pinnedWeek;
 
   useEffect(() => {
     onPinnedWeekChange?.(pinnedWeek);
@@ -110,94 +92,68 @@ export default function StackedWeeklyBarChart({
   }, [pinnedWeek]);
 
   const weekTotals = useMemo(
-    () => weekLabels.map((_, wi) => series.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0)),
+    () => weekLabels.map((_, wi) => series.reduce((s, ser) => s + (ser.weeklyValues[wi] ?? 0), 0)),
     [weekLabels, series]
   );
-
   const weeklyMinutesTotals = useMemo(
-    () => weekLabels.map((_, wi) => series.reduce((sum, s) => sum + (s.weeklyMinutes?.[wi] ?? 0), 0)),
+    () => weekLabels.map((_, wi) => series.reduce((s, ser) => s + (ser.weeklyMinutes?.[wi] ?? 0), 0)),
     [weekLabels, series]
   );
 
-  const activeSeries = series.filter((s) => s.weeklyValues.some((v) => v > 0));
   const hasAnyTime = weeklyMinutesTotals.some((m) => m > 0);
-  const maxTotal = Math.max(0.001, ...weekTotals);
-  const yMax = niceAxisMax(maxTotal);
+  const activeSeries = series.filter((s) => s.weeklyValues.some((v) => v > 0));
+  const yMax = niceAxisMax(Math.max(0.001, ...weekTotals));
 
   const totalAll = weekTotals.reduce((a, b) => a + b, 0);
-  const maxWeek = Math.max(0, ...weekTotals);
+  const bestWeek = Math.max(0, ...weekTotals);
   const avgWeek = weekLabels.length > 0 ? totalAll / weekLabels.length : 0;
-  const totalMinutesAll = weeklyMinutesTotals.reduce((a, b) => a + b, 0);
-  const avgMinutes = weekLabels.length > 0 ? totalMinutesAll / weekLabels.length : 0;
-  const fmt = (v: number) => `${v.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+  const totalMins = weeklyMinutesTotals.reduce((a, b) => a + b, 0);
+  const avgMins = weekLabels.length > 0 ? totalMins / weekLabels.length : 0;
 
-  const chartHeight = compact ? 110 : 150;
+  const chartHeight = compact ? 96 : 132;
+
+  // Thin out week labels when there's no room — show every Nth label
+  // and the last one, always. With ~24px per bar slot, labels like
+  // "3/15-3/21" are too wide to show under every bar.
+  const labelStride = weekLabels.length > 10 ? 3 : weekLabels.length > 6 ? 2 : 1;
 
   return (
     <div style={chartShell}>
-      {/* Header — title + stat chips + optional time chips */}
       <div style={headerStack}>
         <div style={titleStyle}>{title}</div>
         <div style={chipRow}>
-          {[
-            { label: "Total", value: fmt(totalAll) },
-            { label: "Best wk", value: fmt(maxWeek) },
-            { label: "Avg / wk", value: fmt(avgWeek) },
-          ].map((chip) => (
-            <span key={chip.label} style={statChip}>
-              <span style={statChipLabel}>{chip.label}</span>
-              <span style={statChipValue}>{chip.value}</span>
-            </span>
-          ))}
-          {hasAnyTime &&
-            [
-              { label: "Total time", value: fmtMins(totalMinutesAll) },
-              { label: "Avg / wk", value: fmtMins(avgMinutes) },
-            ].map((chip) => (
-              <span key={`${chip.label}-time`} style={timeChip}>
-                <span style={timeChipLabel}>{chip.label}</span>
-                <span style={timeChipValue}>{chip.value}</span>
-              </span>
-            ))}
+          <Chip label="Total" value={fmtValue(totalAll, decimals, unit)} />
+          <Chip label="Best wk" value={fmtValue(bestWeek, decimals, unit)} />
+          <Chip label="Avg / wk" value={fmtValue(avgWeek, decimals, unit)} />
+          {hasAnyTime ? (
+            <>
+              <Chip label="Total time" value={fmtMins(totalMins)} accent="amber" />
+              <Chip label="Avg / wk" value={fmtMins(avgMins)} accent="amber" />
+            </>
+          ) : null}
         </div>
       </div>
 
-      {/* Chart body — y-axis on the left, bars track on the right */}
-      <div style={chartBody}>
+      <div style={chartRow}>
         <div style={yAxis} aria-hidden>
           <span style={yAxisTick}>{yMax.toFixed(decimals)}</span>
-          <span style={yAxisTick}>{(yMax / 2).toFixed(decimals)}</span>
           <span style={yAxisTick}>0</span>
         </div>
-
-        <div
-          style={{ ...barsTrack, height: chartHeight }}
-          onPointerLeave={() => setHoveredWeek(null)}
-        >
+        <div style={{ ...barsTrack, height: chartHeight }}>
           {weekLabels.map((wkLabel, wi) => {
-            const weekTotal = weekTotals[wi];
-            const isActive = activeWeek === wi;
             const isPinned = pinnedWeek === wi;
-            const isDimmed = activeWeek !== null && !isActive;
-
+            const isDimmed = pinnedWeek !== null && !isPinned;
+            const weekTotal = weekTotals[wi];
             return (
               <button
                 key={wi}
                 type="button"
-                aria-label={`Week ${wkLabel}: ${weekTotal.toFixed(decimals)}${unit ? ` ${unit}` : ""}`}
+                className="swbcBar"
+                aria-label={`Week ${wkLabel}: ${fmtValue(weekTotal, decimals, unit)}`}
                 aria-pressed={isPinned}
-                onPointerEnter={() => setHoveredWeek(wi)}
                 onClick={() => setPinnedWeek((p) => (p === wi ? null : wi))}
-                style={barButtonStyle}
               >
-                <span style={barValueLabel(isActive, weekTotal > 0)}>
-                  {weekTotal > 0 ? compactNumber(weekTotal, decimals) : ""}
-                </span>
-                <div style={barCellStyle(isActive)}>
-                  {/* Stack visible series segments from bottom to top.
-                      Each segment height = (val / yMax) * 100%; flex
-                      column with justifyContent: flex-end means they
-                      stack from the bottom up. */}
+                <div style={barCell(isPinned)}>
                   {series
                     .map((s, idx) => ({ s, idx, val: s.weeklyValues[wi] ?? 0 }))
                     .filter((seg) => seg.val > 0)
@@ -207,83 +163,94 @@ export default function StackedWeeklyBarChart({
                         style={{
                           width: "100%",
                           height: `${(seg.val / yMax) * 100}%`,
-                          background: visualSeriesColor(seg.idx),
-                          opacity: isDimmed ? 0.35 : 1,
+                          background: seriesColor(seg.idx),
+                          opacity: isDimmed ? 0.3 : 1,
                           borderRadius: 2,
                           marginTop: 1,
                         }}
                       />
                     ))}
                 </div>
-                <span style={barXLabel(isActive)}>{wkLabel}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Optional hover/pin tooltip — rendered as an HTML overlay
-          positioned absolutely over the chart. Most callers wrap
-          this component in WeeklyBarChartWithSessions which passes
-          hideTooltip=true (the panel below the chart replaces it),
-          so this code path is rarely hit. */}
-      {!hideTooltip && activeWeek !== null && weekTotals[activeWeek] > 0 ? (
-        <div style={tooltipOverlay} aria-live="polite">
-          <div style={tooltipHeader}>
-            <span style={tooltipWeekLabel}>{weekLabels[activeWeek]}</span>
-            <span style={tooltipHint}>
-              {pinnedWeek === activeWeek && hoveredWeek === null ? "tap to close" : "tap to pin"}
-            </span>
-          </div>
-          <div style={tooltipDivider} />
-          <div style={tooltipTotalRow}>
-            <span style={tooltipLabel}>Total</span>
-            <span style={tooltipValue}>
-              {weekTotals[activeWeek].toFixed(decimals)}
-              {unit ? ` ${unit}` : ""}
-            </span>
-            {hasAnyTime ? (
-              <span style={tooltipTimeValue}>{fmtMins(weeklyMinutesTotals[activeWeek] ?? 0)}</span>
-            ) : null}
-          </div>
-          {series
-            .map((s, idx) => ({ s, idx, val: s.weeklyValues[activeWeek] ?? 0 }))
-            .filter((seg) => seg.val > 0)
-            .map((seg) => {
-              const sessionDetail = seg.s.topSessionPerWeek?.[activeWeek] ?? null;
-              return (
-                <div key={seg.s.label} style={tooltipSeriesRow}>
-                  <span
-                    style={{
-                      ...tooltipColorDot,
-                      background: visualSeriesColor(seg.idx),
-                    }}
-                  />
-                  <span style={tooltipSeriesLabel}>{seg.s.label}</span>
-                  <span style={tooltipSeriesValue}>
-                    {seg.val.toFixed(decimals)}
-                    {unit ? ` ${unit}` : ""}
-                  </span>
-                  {sessionDetail ? <div style={tooltipDetailLine}>{sessionDetail}</div> : null}
-                </div>
-              );
-            })}
+      <div style={xAxisRow} aria-hidden>
+        <div style={xAxisGutter} />
+        <div style={xAxisLabels}>
+          {weekLabels.map((wkLabel, wi) => {
+            const isLast = wi === weekLabels.length - 1;
+            const show = wi % labelStride === 0 || isLast;
+            const isPinned = pinnedWeek === wi;
+            return (
+              <span key={wi} style={xAxisLabelSlot}>
+                {show ? (
+                  <span style={xAxisLabelText(isPinned)}>{shortWeekLabel(wkLabel)}</span>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
-      ) : null}
+      </div>
 
-      {/* Legend — only render when there's more than one active series */}
       {activeSeries.length > 1 ? (
         <div style={legend}>
           {activeSeries.map((s, idx) => (
             <span key={s.label} style={legendItem}>
-              <span style={{ ...legendSwatch, background: visualSeriesColor(idx) }} />
-              <span style={{ opacity: 0.7, fontWeight: 800 }}>{s.label}</span>
+              <span style={{ ...legendSwatch, background: seriesColor(idx) }} />
+              <span style={legendLabel}>{s.label}</span>
             </span>
           ))}
         </div>
       ) : null}
+
+      {/* All button styles live here so they apply via class on the
+          native <button> — matches the DomainSparklines approach,
+          which is what avoids iOS tap-zoom behavior in practice. */}
+      <style>{`
+        .swbcBar {
+          appearance: none;
+          -webkit-appearance: none;
+          margin: 0;
+          padding: 0;
+          background: transparent;
+          border: none;
+          color: inherit;
+          font: inherit;
+          flex: 1 1 0;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          align-items: stretch;
+          height: 100%;
+          cursor: pointer;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+      `}</style>
     </div>
   );
+}
+
+function Chip({ label, value, accent }: { label: string; value: string; accent?: "amber" }) {
+  const styleObj = accent === "amber" ? chipAmber : chipBase;
+  const labelStyle = accent === "amber" ? chipAmberLabel : chipLabel;
+  const valueStyle = accent === "amber" ? chipAmberValue : chipValue;
+  return (
+    <span style={styleObj}>
+      <span style={labelStyle}>{label}</span>
+      <span style={valueStyle}>{value}</span>
+    </span>
+  );
+}
+
+// "3/15-3/21" → "3/15". Keeps mobile x-axis legible.
+function shortWeekLabel(label: string): string {
+  const dashIdx = label.indexOf("-");
+  return dashIdx > 0 ? label.slice(0, dashIdx) : label;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -295,50 +262,38 @@ const chartShell: CSSProperties = {
   overflow: "hidden",
   background: "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.022))",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-  position: "relative",
   display: "grid",
-  // `minmax(0, 1fr)` is the critical bit — default `auto` track
-  // sizing lets children push the grid track (and the card) wider
-  // than the container if their min-content demands it. Without
-  // this, the bars track was getting its full 12-bar intrinsic
-  // width and the rightmost bars were being clipped off-card.
+  // Single column hard-capped to container width — otherwise default
+  // grid track sizing lets children push past the card on mobile.
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: 8,
-  // Hard-cap to parent so nothing inside can push the card past the
-  // viewport — defensive against long titles, wide chips, or stretchy
-  // legend text.
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",
-  // Disables iOS double-tap-zoom across the entire chart surface.
-  // Each bar button also sets this — belt-and-suspenders.
   touchAction: "manipulation",
+  position: "relative",
 };
 
 const headerStack: CSSProperties = { display: "grid", gap: 6, minWidth: 0 };
+
 const titleStyle: CSSProperties = {
   fontWeight: 900,
   fontSize: 13,
-  letterSpacing: 0,
   opacity: 0.92,
-  // Long titles like "Weekly Volume (lb) — Last 12 Weeks" otherwise
-  // demand their full min-content width and can push the card wider
-  // than the viewport on narrow mobile.
   minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
 };
+
 const chipRow: CSSProperties = {
   display: "flex",
   gap: 6,
   flexWrap: "wrap",
-  // Without this, the flex container's min-content equals the widest
-  // chip, which could prevent the parent card from shrinking on
-  // narrow viewports.
   minWidth: 0,
 };
-const statChip: CSSProperties = {
+
+const chipBase: CSSProperties = {
   display: "inline-flex",
   gap: 4,
   alignItems: "baseline",
@@ -349,30 +304,31 @@ const statChip: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
 };
-const statChipLabel: CSSProperties = {
+
+const chipLabel: CSSProperties = {
   opacity: 0.48,
   fontWeight: 800,
   textTransform: "uppercase",
   fontSize: 9,
-  letterSpacing: 0.6,
+  letterSpacing: 0.5,
 };
-const statChipValue: CSSProperties = { opacity: 0.9 };
-const timeChip: CSSProperties = {
-  ...statChip,
+
+const chipValue: CSSProperties = { opacity: 0.9 };
+
+const chipAmber: CSSProperties = {
+  ...chipBase,
   border: "1px solid rgba(251,199,92,0.18)",
   background: "rgba(251,199,92,0.05)",
 };
-const timeChipLabel: CSSProperties = { ...statChipLabel, color: "rgba(251,199,92,0.62)" };
-const timeChipValue: CSSProperties = { color: "rgba(251,220,120,0.95)" };
 
-const chartBody: CSSProperties = {
+const chipAmberLabel: CSSProperties = { ...chipLabel, color: "rgba(251,199,92,0.62)" };
+const chipAmberValue: CSSProperties = { color: "rgba(251,220,120,0.95)" };
+
+const chartRow: CSSProperties = {
   display: "flex",
   gap: 6,
   alignItems: "stretch",
-  marginTop: 4,
-  // Flex items default to `min-width: auto` = min-content. Without
-  // this, the bars-track flex item refuses to shrink below its
-  // 12-bar min-content width, overflowing the card on mobile.
+  marginTop: 2,
   minWidth: 0,
 };
 
@@ -381,10 +337,8 @@ const yAxis: CSSProperties = {
   flexDirection: "column",
   justifyContent: "space-between",
   alignItems: "flex-end",
-  paddingTop: 12, // matches barValueLabel height so y-axis "max" aligns with top of bars
-  paddingBottom: 18, // matches barXLabel height so "0" aligns with baseline
-  paddingRight: 6,
-  minWidth: 22,
+  minWidth: 18,
+  paddingRight: 4,
   borderRight: "1px dashed rgba(255,255,255,0.10)",
 };
 
@@ -401,213 +355,73 @@ const barsTrack: CSSProperties = {
   gap: 4,
   alignItems: "stretch",
   minWidth: 0,
-  // Clip any bar that somehow over-renders — keeps the chart from
-  // ever pushing horizontal page scroll.
-  overflow: "hidden",
 };
 
-// Per-bar HTML <button> — native button so iOS treats it as
-// interactive (no double-tap-zoom, no zoom-to-fit).
-const barButtonStyle: CSSProperties = {
-  flex: "1 1 0",
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "stretch",
-  gap: 0,
-  appearance: "none",
-  WebkitAppearance: "none",
-  margin: 0,
-  padding: 0,
-  background: "transparent",
-  border: "none",
-  color: "inherit",
-  font: "inherit",
-  cursor: "pointer",
-  touchAction: "manipulation",
-};
-
-function barValueLabel(isActive: boolean, hasValue: boolean): CSSProperties {
-  return {
-    display: "block",
-    width: "100%",
-    height: 12,
-    minHeight: 12,
-    lineHeight: 1,
-    fontSize: 9.5,
-    fontWeight: isActive ? 900 : 700,
-    fontVariantNumeric: "tabular-nums",
-    color: !hasValue
-      ? "transparent"
-      : isActive
-      ? "rgba(255,255,255,0.95)"
-      : "rgba(255,255,255,0.55)",
-    letterSpacing: 0.2,
-    textAlign: "center",
-    paddingBottom: 2,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "clip",
-  };
-}
-
-function barCellStyle(isActive: boolean): CSSProperties {
+function barCell(isPinned: boolean): CSSProperties {
   return {
     flex: 1,
+    width: "100%",
     display: "flex",
     flexDirection: "column",
     justifyContent: "flex-end",
     alignItems: "stretch",
     minHeight: 0,
-    // Inner horizontal padding makes the colored bar visibly slimmer
-    // than the (still-large) hit area — keeps tap targets generous on
-    // mobile without making the chart look like blocky bricks.
     padding: "0 3px",
     borderRadius: 4,
-    // Inset box-shadow has zero layout impact (vs. background changes
-    // which can momentarily reflow on iOS). Keeps the chart visually
-    // anchored on tap.
-    boxShadow: isActive ? "inset 0 0 0 1px rgba(255,255,255,0.2)" : "none",
+    boxShadow: isPinned ? "inset 0 0 0 1px rgba(255,255,255,0.28)" : "none",
     transition: "box-shadow 100ms ease",
   };
 }
 
-function barXLabel(isActive: boolean): CSSProperties {
+const xAxisRow: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  alignItems: "stretch",
+  minWidth: 0,
+};
+
+// Matches the y-axis column width so the x-labels start where the
+// bars-track starts.
+const xAxisGutter: CSSProperties = {
+  minWidth: 18,
+  paddingRight: 4,
+};
+
+const xAxisLabels: CSSProperties = {
+  flex: 1,
+  display: "flex",
+  gap: 4,
+  minWidth: 0,
+};
+
+const xAxisLabelSlot: CSSProperties = {
+  flex: "1 1 0",
+  minWidth: 0,
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "flex-start",
+  paddingTop: 4,
+};
+
+function xAxisLabelText(isPinned: boolean): CSSProperties {
   return {
-    display: "block",
-    width: "100%",
-    height: 16,
-    minHeight: 16,
-    lineHeight: 1.2,
-    fontSize: 8.5,
-    fontWeight: isActive ? 800 : 700,
+    fontSize: 9,
+    fontWeight: isPinned ? 800 : 700,
     fontVariantNumeric: "tabular-nums",
-    color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.42)",
-    textAlign: "center",
-    paddingTop: 3,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+    color: isPinned ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.42)",
     whiteSpace: "nowrap",
   };
 }
 
-// ─── Tooltip overlay styles ──────────────────────────────────────────────────
-
-const tooltipOverlay: CSSProperties = {
-  position: "absolute",
-  top: 4,
-  right: 4,
-  maxWidth: "min(260px, calc(100% - 8px))",
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(8,17,28,0.98)",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-  display: "grid",
-  gap: 6,
-  pointerEvents: "none",
-  zIndex: 10,
-};
-
-const tooltipHeader: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: 8,
-};
-
-const tooltipWeekLabel: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  color: "rgba(224,242,254,0.96)",
-};
-
-const tooltipHint: CSSProperties = {
-  fontSize: 9,
-  fontWeight: 700,
-  color: "rgba(255,255,255,0.36)",
-};
-
-const tooltipDivider: CSSProperties = {
-  height: 1,
-  background: "rgba(255,255,255,0.08)",
-};
-
-const tooltipTotalRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: 6,
-};
-
-const tooltipLabel: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  color: "rgba(255,255,255,0.45)",
-  textTransform: "uppercase",
-  letterSpacing: 0.4,
-};
-
-const tooltipValue: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  color: "rgba(255,255,255,0.92)",
-};
-
-const tooltipTimeValue: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 700,
-  color: "rgba(251,220,120,0.92)",
-  marginLeft: 6,
-};
-
-const tooltipSeriesRow: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "8px 1fr auto",
-  alignItems: "center",
-  columnGap: 6,
-  rowGap: 2,
-};
-
-const tooltipColorDot: CSSProperties = {
-  width: 7,
-  height: 7,
-  borderRadius: 2,
-};
-
-const tooltipSeriesLabel: CSSProperties = {
-  fontSize: 11,
-  color: "rgba(255,255,255,0.7)",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const tooltipSeriesValue: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "rgba(255,255,255,0.85)",
-  whiteSpace: "nowrap",
-};
-
-const tooltipDetailLine: CSSProperties = {
-  gridColumn: "2 / span 2",
-  fontSize: 9.5,
-  fontStyle: "italic",
-  color: "rgba(255,255,255,0.5)",
-  lineHeight: 1.3,
-};
-
-// ─── Legend styles ───────────────────────────────────────────────────────────
-
 const legend: CSSProperties = {
   display: "flex",
-  gap: 14,
+  gap: 12,
   flexWrap: "wrap",
   marginTop: 2,
   paddingTop: 8,
   borderTop: "1px solid rgba(255,255,255,0.07)",
 };
+
 const legendItem: CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 11 };
 const legendSwatch: CSSProperties = {
   display: "inline-block",
@@ -616,3 +430,4 @@ const legendSwatch: CSSProperties = {
   borderRadius: 3,
   flexShrink: 0,
 };
+const legendLabel: CSSProperties = { opacity: 0.7, fontWeight: 800 };
