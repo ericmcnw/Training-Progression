@@ -56,6 +56,22 @@ function niceAxisMax(value: number) {
   return 10 * magnitude;
 }
 
+// Compact value-label formatter used above each bar. With 12 bars on
+// a 360px viewport each slot is ~22-24px, so a raw "40330" overflows.
+// Abbreviates 1k+ to "1.2k" / 12k / "1.2M" while still showing exact
+// digits in the chips above and the panel below.
+function compactNumber(value: number, decimals: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+  }
+  if (abs >= 1_000) {
+    return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
+  }
+  if (abs >= 10) return value.toFixed(0);
+  return value.toFixed(decimals);
+}
+
 function fmtMins(mins: number): string {
   const m = Math.round(mins);
   if (m <= 0) return "-";
@@ -175,7 +191,7 @@ export default function StackedWeeklyBarChart({
                 style={barButtonStyle}
               >
                 <span style={barValueLabel(isActive, weekTotal > 0)}>
-                  {weekTotal > 0 ? weekTotal.toFixed(weekTotal >= 10 ? 0 : decimals) : ""}
+                  {weekTotal > 0 ? compactNumber(weekTotal, decimals) : ""}
                 </span>
                 <div style={barCellStyle(isActive)}>
                   {/* Stack visible series segments from bottom to top.
@@ -281,6 +297,12 @@ const chartShell: CSSProperties = {
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   position: "relative",
   display: "grid",
+  // `minmax(0, 1fr)` is the critical bit — default `auto` track
+  // sizing lets children push the grid track (and the card) wider
+  // than the container if their min-content demands it. Without
+  // this, the bars track was getting its full 12-bar intrinsic
+  // width and the rightmost bars were being clipped off-card.
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: 8,
   // Hard-cap to parent so nothing inside can push the card past the
   // viewport — defensive against long titles, wide chips, or stretchy
@@ -348,6 +370,10 @@ const chartBody: CSSProperties = {
   gap: 6,
   alignItems: "stretch",
   marginTop: 4,
+  // Flex items default to `min-width: auto` = min-content. Without
+  // this, the bars-track flex item refuses to shrink below its
+  // 12-bar min-content width, overflowing the card on mobile.
+  minWidth: 0,
 };
 
 const yAxis: CSSProperties = {
