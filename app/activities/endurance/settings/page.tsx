@@ -12,7 +12,7 @@
 //      Archive when they're ready.
 
 import { prisma } from "@/lib/prisma";
-import { TargetHeader, SectionCard, SectionLinkButton, EmptyState } from "@/app/progress/ui";
+import { TargetHeader, SectionCard, SectionLinkButton, SectionBackButton, EmptyState } from "@/app/progress/ui";
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import EnduranceSettingsClient, { type SettingsData } from "./EnduranceSettingsClient";
 
@@ -99,7 +99,7 @@ export default async function EnduranceSettingsPage() {
         hideRange
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton href="/activities/endurance" label="← Back to endurance" />
+            <SectionBackButton fallbackHref="/activities/endurance" label="← Back" />
           </div>
         }
       />

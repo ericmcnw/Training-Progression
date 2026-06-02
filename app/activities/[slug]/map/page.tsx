@@ -8,7 +8,7 @@
 
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { TargetHeader, SectionLinkButton } from "@/app/progress/ui";
+import { TargetHeader, SectionLinkButton, SectionBackButton } from "@/app/progress/ui";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
 import SpotMapView, { type MapSpot } from "./SpotMapView";
@@ -63,7 +63,7 @@ export default async function ActivitySpotsMapPage(props: {
         compact
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton href={`/activities/${slug}`} label={`Back to ${entry.label.toLowerCase()}`} />
+            <SectionBackButton fallbackHref={`/activities/${slug}`} label="← Back" />
           </div>
         }
       />

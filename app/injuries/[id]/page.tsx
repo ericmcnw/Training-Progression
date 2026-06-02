@@ -1,6 +1,7 @@
 import type React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
 import QuickInjuryPainLog from "@/app/components/injuries/QuickInjuryPainLog";
@@ -162,7 +163,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
       eyebrow="Injury"
       title={injury.name}
       subtitle={subtitle}
-      toolbar={<Link href="/injuries" style={linkStyle}>Back</Link>}
+      toolbar={<HistoryBackButton fallbackHref="/injuries" label="← Back" style={linkStyle} />}
     >
       {/* Quick log + summary stats */}
       {injury.status !== "RESOLVED" && (

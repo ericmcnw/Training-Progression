@@ -9,7 +9,7 @@
 // implemented inside ClimbingMapView (client).
 
 import { prisma } from "@/lib/prisma";
-import { TargetHeader, SectionLinkButton } from "@/app/progress/ui";
+import { TargetHeader, SectionLinkButton, SectionBackButton } from "@/app/progress/ui";
 import { gradeSort, SENT_OUTCOMES } from "@/lib/climb-types";
 import ClimbingMapView, { type MapLocation } from "./ClimbingMapView";
 
@@ -122,7 +122,7 @@ export default async function ClimbingMapPage() {
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities/climbing/climbs" label="📋 Climbs" />
             <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
-            <SectionLinkButton href="/activities/climbing" label="Back to climbing" />
+            <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
           </div>
         }
       />

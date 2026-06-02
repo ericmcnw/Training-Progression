@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ProgressRange, ProgressSection, ProgressTab } from "@/lib/progress-v2";
 import { progressRanges, progressSections, progressTabDescription, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 
 export function ProgressShell({
   section,
@@ -248,6 +249,14 @@ export function SectionLinkButton({ href, label }: { href: string; label: string
       {label}
     </Link>
   );
+}
+
+// History-aware back variant of SectionLinkButton — uses
+// router.back() when the page has prior history (so users land back
+// where they came from), falls back to `fallbackHref` otherwise.
+// Use this anywhere a page is reachable from multiple entry points.
+export function SectionBackButton({ fallbackHref, label }: { fallbackHref: string; label: string }) {
+  return <HistoryBackButton fallbackHref={fallbackHref} label={label} style={styles.linkBtn} />;
 }
 
 export function RangeBadge({ range }: { range: ProgressRange }) {

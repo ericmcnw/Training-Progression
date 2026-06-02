@@ -1,5 +1,6 @@
 import type React from "react";
 import Link from "next/link";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 import {
   exerciseLibraryWhereForKinds,
   isMissingExerciseLibraryKindError,
@@ -83,7 +84,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
         <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/exercises" style={linkBtn}>Exercises</Link>
           <Link href={`/routines/${routineId}/edit`} style={linkBtn}>Edit Routine</Link>
-          <Link href="/routines" style={linkBtn}>Back</Link>
+          <HistoryBackButton fallbackHref="/routines" label="← Back" style={linkBtn} />
         </div>
       </div>
 

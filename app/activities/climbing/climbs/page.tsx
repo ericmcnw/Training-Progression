@@ -11,7 +11,7 @@ import {
   type ClimbGradeSystem,
   type ClimbOutcome,
 } from "@/lib/climb-types";
-import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionBackButton, SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -240,7 +240,7 @@ export default async function ClimbsBrowsePage(props: {
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
             <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
-            <SectionLinkButton href="/activities/climbing" label="Back to climbing" />
+            <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
           </div>
         }
       />

@@ -29,7 +29,7 @@ import {
   summarizeAttempts,
   type PyramidRow,
 } from "@/lib/climb-stats";
-import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionBackButton, SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import MediaGallery, { type GalleryMediaItem } from "@/app/components/climbing/MediaGallery";
 import MediaUploader from "@/app/components/climbing/MediaUploader";
 import LocationDangerZone from "./LocationDangerZone";
@@ -300,7 +300,7 @@ export default async function ClimbLocationDetailPage(props: {
               label="📋 Browse climbs"
             />
             <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
-            <SectionLinkButton href="/activities/climbing" label="Back to climbing" />
+            <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
           </div>
         }
       />

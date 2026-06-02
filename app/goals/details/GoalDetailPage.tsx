@@ -1,6 +1,6 @@
 import Link from "next/link";
 import MetricLineChart from "@/app/progress/MetricLineChart";
-import { SectionCard, SectionLinkButton } from "@/app/progress/ui";
+import { SectionBackButton, SectionCard, SectionLinkButton } from "@/app/progress/ui";
 import { todayAppYmd } from "@/lib/dates";
 import { getGoalInsight, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
 import DeleteGoalButton from "../DeleteGoalButton";
@@ -50,7 +50,7 @@ export default async function GoalDetailPage(props: {
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{entry.summaryLabel}</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <SectionLinkButton href="/goals" label="Back to Goals" />
+          <SectionBackButton fallbackHref="/goals" label="← Back" />
           <EditGoalDrawerButton goalId={entry.goal.id} style={editGoalCtaStyle}>
             Edit Goal
           </EditGoalDrawerButton>

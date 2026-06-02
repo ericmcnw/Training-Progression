@@ -3,6 +3,7 @@
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetFields";
 import Link from "next/link";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateRoutine } from "../../actions";
@@ -291,7 +292,7 @@ export default function EditRoutineForm({
             Save + Open Template
           </button>
         )}
-        <Link href="/routines" style={styles.linkBtn}>Back</Link>
+        <HistoryBackButton fallbackHref="/routines" label="← Back" style={styles.linkBtn} />
         {isWorkoutKind(kind) && isWorkoutKind(routine.kind) && (
           <Link href={`/routines/${routine.id}/template`} style={styles.linkBtn}>Template</Link>
         )}
