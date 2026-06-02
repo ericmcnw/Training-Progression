@@ -110,10 +110,14 @@ export default function ExerciseMetricChart({
     );
   }
 
-  // Chart dimensions
-  const W = 600;
+  // Chart dimensions. Aspect ratio chosen to read well on both mobile
+  // (~360 wide) and desktop. SVG renders responsively via width="100%"
+  // with default xMidYMid meet (uniform scaling) — preserveAspectRatio
+  // was previously "none" which stretched text + dots horizontally on
+  // mobile, making the chart look distorted.
+  const W = 360;
   const H = 200;
-  const PAD_LEFT = view === "all" ? 8 : 44;
+  const PAD_LEFT = view === "all" ? 8 : 36;
   const PAD_RIGHT = 8;
   const PAD_TOP = 12;
   const PAD_BOTTOM = 28;
@@ -142,9 +146,18 @@ export default function ExerciseMetricChart({
     const s = series.find((sr) => sr.key === key);
     if (!s) return PAD_TOP + plotH;
     if (s.max === s.min) return PAD_TOP + plotH * 0.5;
-    if (val <= 0) return PAD_TOP + plotH; // pin zero/missing to baseline
+    // Zero values pin to the baseline so they're visually distinct
+    // (the only time a line should touch the x axis).
+    if (val <= 0) return PAD_TOP + plotH;
+    // Normalize within a [0.15, 0.9] vertical band of the plot so the
+    // min real value sits comfortably above the x-axis (was bottoming
+    // out at the axis, which read as "zero" even when it wasn't). Top
+    // headroom keeps the max from kissing the chart frame.
     const norm = (val - s.min) / (s.max - s.min);
-    return PAD_TOP + plotH - norm * plotH;
+    const Y_BOTTOM = 0.15;
+    const Y_TOP = 0.90;
+    const banded = Y_BOTTOM + norm * (Y_TOP - Y_BOTTOM);
+    return PAD_TOP + plotH - banded * plotH;
   }
   function ySingle(s: Series, val: number): number {
     if (s.max === 0) return PAD_TOP + plotH;
@@ -210,11 +223,20 @@ export default function ExerciseMetricChart({
         )}
       </div>
 
-      {/* Chart */}
+      {/* Chart — default xMidYMid meet (uniform scale) so it doesn't
+          stretch on mobile. width 100% lets it shrink horizontally;
+          touchAction: manipulation kills double-tap-zoom on the SVG. */}
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ width: "100%", height: 200, display: "block" }}
+        width="100%"
+        height={H}
+        style={{
+          display: "block",
+          overflow: "visible",
+          touchAction: "manipulation",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
         onPointerLeave={() => setHoverIdx(null)}
         onClick={() => setPinnedIdx(null)}
       >

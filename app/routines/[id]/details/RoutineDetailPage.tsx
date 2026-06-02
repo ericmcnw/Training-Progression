@@ -6,6 +6,7 @@ import { effectiveRoutineDomain, domainColor, formatRoutineSubtype, formatRoutin
 import { formatDuration, formatPace, getWorkoutSessionMetrics } from "@/lib/progress";
 import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
 import InteractiveSparkline from "@/app/activities/_shared/InteractiveSparkline";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 
 // Bare /routines/[id] content. The directory's [[...segments]]/page.tsx
 // dispatches the empty-segments case to this component (Next.js doesn't
@@ -148,7 +149,7 @@ export default async function RoutineDetailPage({ id }: { id: string }) {
       {/* ── Header ───────────────────────────────────────────────────── */}
       <header style={headerStyle(accent)}>
         <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-          <Link href="/log" style={backLinkStyle}>← All routines</Link>
+          <HistoryBackButton fallbackHref="/log" label="← Back" style={backLinkStyle} />
           <div style={eyebrowStyle}>
             {DOMAIN_LABEL[domain] ?? domain} · {typeLabel}
           </div>

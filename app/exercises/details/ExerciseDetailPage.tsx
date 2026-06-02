@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { exerciseUnitLabel } from "@/lib/exercises";
 import ExerciseMetricChart, { type ExerciseSessionPoint } from "./ExerciseMetricChart";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -142,7 +143,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
       {/* ── Header ───────────────────────────────────────────────────── */}
       <header style={headerStyle}>
         <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-          <Link href="/exercises" style={backLinkStyle}>← All exercises</Link>
+          <HistoryBackButton fallbackHref="/exercises" label="← Back" style={backLinkStyle} />
           <div style={eyebrowStyle}>
             {exerciseUnitLabel(exercise.unit)}
             {exercise.supportsWeight ? " · weighted" : ""}

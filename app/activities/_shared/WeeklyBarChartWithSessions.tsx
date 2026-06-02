@@ -91,6 +91,10 @@ export default function WeeklyBarChartWithSessions({
         // readable at the smaller height. Callers can opt back into
         // full-size by passing `compact={false}` explicitly.
         compact={compact ?? true}
+        // The panel below duplicates the chart's hover tooltip data
+        // (week label + per-series detail). Hide the tooltip so users
+        // get one source of truth — tap a bar to open the panel.
+        hideTooltip
         onPinnedWeekChange={setSelectedWeek}
       />
       {selectedWeek !== null ? (

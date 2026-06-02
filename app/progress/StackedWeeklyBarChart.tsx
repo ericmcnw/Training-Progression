@@ -60,6 +60,7 @@ export default function StackedWeeklyBarChart({
   decimals = 1,
   compact = false,
   onPinnedWeekChange,
+  hideTooltip = false,
 }: {
   title: string;
   weekLabels: string[];
@@ -71,6 +72,12 @@ export default function StackedWeeklyBarChart({
    *  to render a per-week detail panel underneath the chart. The chart
    *  still owns its own state; this is a one-way notification. */
   onPinnedWeekChange?: (weekIndex: number | null) => void;
+  /** Suppress the in-chart hover/pin tooltip entirely. Useful when the
+   *  chart is wrapped by something that renders its own detail panel
+   *  underneath (e.g. WeeklyBarChartWithSessions) and the tooltip would
+   *  duplicate the same data. The pin state + onPinnedWeekChange
+   *  callback still work — only the tooltip render is skipped. */
+  hideTooltip?: boolean;
 }) {
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [pinnedWeek, setPinnedWeek] = useState<number | null>(null);
@@ -146,7 +153,20 @@ export default function StackedWeeklyBarChart({
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         height={height}
-        style={{ marginTop: 8, display: "block", overflow: "visible" }}
+        style={{
+          marginTop: 8,
+          display: "block",
+          overflow: "visible",
+          // touchAction: manipulation tells mobile Safari/Chrome that
+          // this surface only needs single-tap handling — disables the
+          // implicit double-tap-to-zoom delay and prevents tapping a
+          // bar from triggering page zoom on iOS.
+          touchAction: "manipulation",
+          // No selectable text/visuals — long-press shouldn't trigger
+          // a text-selection menu either.
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
         onPointerLeave={() => setHoveredWeek(null)}
         onClick={() => setPinnedWeek(null)}
       >
@@ -256,7 +276,7 @@ export default function StackedWeeklyBarChart({
           );
         })}
 
-        {activeWeek !== null && weekTotals[activeWeek] > 0 ? (() => {
+        {!hideTooltip && activeWeek !== null && weekTotals[activeWeek] > 0 ? (() => {
           const wi = activeWeek;
           const isPinnedTooltip = pinnedWeek === wi && hoveredWeek === null;
           const cx = margin.left + wi * barStep + barStep / 2;
