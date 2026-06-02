@@ -1786,7 +1786,11 @@ const endurancePillRowStyle: React.CSSProperties = {
 const endurancePill: React.CSSProperties = {
   padding: "5px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.14)",
+  // Long-hand so `endurancePillActive` can override `borderColor`
+  // without React's mixed-shorthand rerender warning.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   fontSize: 11.5,

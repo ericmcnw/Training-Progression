@@ -446,7 +446,11 @@ const pillStyle: React.CSSProperties = {
   alignItems: "center",
   padding: "5px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Long-hand so `pillActiveStyle` can override `borderColor` without
+  // React's mixed-shorthand rerender warning.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   textDecoration: "none",

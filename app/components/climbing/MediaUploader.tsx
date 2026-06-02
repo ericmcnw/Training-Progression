@@ -169,7 +169,11 @@ const tabStyle: React.CSSProperties = {
   flex: "1 1 140px",
   padding: "8px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Long-hand so `tabActiveStyle` can override `borderColor` without
+  // React's mixed-shorthand rerender warning.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.03)",
   color: "rgba(255,255,255,0.75)",
   fontSize: 12,

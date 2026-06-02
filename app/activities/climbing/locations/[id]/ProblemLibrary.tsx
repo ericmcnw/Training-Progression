@@ -324,7 +324,12 @@ const tabRowStyle: React.CSSProperties = {
 const tabStyle: React.CSSProperties = {
   padding: "6px 11px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  // Split into long-hand so `tabActiveStyle` can override `borderColor`
+  // without React's "removing borderColor with shorthand border set"
+  // warning when toggling between active/inactive on the same button.
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "rgba(255,255,255,0.78)",
   fontSize: 11.5,
