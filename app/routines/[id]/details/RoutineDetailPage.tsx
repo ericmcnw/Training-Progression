@@ -5,6 +5,7 @@ import { todayAppYmd, formatAppDate } from "@/lib/dates";
 import { effectiveRoutineDomain, domainColor, formatRoutineSubtype, formatRoutineTypeLabel } from "@/lib/routines";
 import { formatDuration, formatPace, getWorkoutSessionMetrics } from "@/lib/progress";
 import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
+import InteractiveSparkline from "@/app/activities/_shared/InteractiveSparkline";
 
 // Bare /routines/[id] content. The directory's [[...segments]]/page.tsx
 // dispatches the empty-segments case to this component (Next.js doesn't
@@ -285,6 +286,7 @@ function ExerciseRow({
   accent,
 }: {
   ex: {
+    exerciseId: string;
     name: string;
     sessions: number;
     topWeightLb: number;
@@ -297,6 +299,10 @@ function ExerciseRow({
   accent: string;
 }) {
   const sparkPoints = [...ex.recentTopWeights].sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Row is a div (not a Link) so the InteractiveSparkline's hover/tap
+  // events don't compete with row-wide navigation. A small "View →"
+  // pill at the bottom of the row provides the navigation to
+  // /exercises/<id> when the user wants the full multi-metric chart.
   return (
     <div style={exerciseRowStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -317,47 +323,31 @@ function ExerciseRow({
       </div>
       {sparkPoints.length >= 2 ? (
         <div style={{ marginTop: 8 }}>
-          <Sparkline points={sparkPoints} accent={accent} />
+          <InteractiveSparkline
+            points={sparkPoints.map((p) => ({
+              date: p.date,
+              value: p.weight,
+              label: `${p.weight} lb top set`,
+            }))}
+            accent={accent}
+            height={32}
+          />
         </div>
       ) : null}
-      {ex.lastSet ? (
-        <div style={lastSetLineStyle}>
-          Last: {formatSet(ex.lastSet)} · {formatAppDate(ex.lastSet.date, { month: "short", day: "numeric" })}
-        </div>
-      ) : null}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
+        {ex.lastSet ? (
+          <div style={lastSetLineStyle}>
+            Last: {formatSet(ex.lastSet)} · {formatAppDate(ex.lastSet.date, { month: "short", day: "numeric" })}
+          </div>
+        ) : <span />}
+        <Link href={`/exercises/${ex.exerciseId}`} style={viewDetailLinkStyle(accent)}>
+          View →
+        </Link>
+      </div>
     </div>
   );
 }
 
-function Sparkline({ points, accent }: { points: Array<{ date: Date; weight: number }>; accent: string }) {
-  if (points.length < 2) return null;
-  const weights = points.map((p) => p.weight);
-  const min = Math.min(...weights);
-  const max = Math.max(...weights);
-  const range = Math.max(1, max - min);
-  const w = 100;
-  const h = 24;
-  const stepX = w / (points.length - 1);
-  const path = points
-    .map((p, i) => {
-      const x = i * stepX;
-      const y = h - ((p.weight - min) / range) * (h - 4) - 2;
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const fillColor = accent.replace("0.9)", "0.12)");
-  const lineColor = accent;
-  const lastIdx = points.length - 1;
-  const lastX = lastIdx * stepX;
-  const lastY = h - ((points[lastIdx].weight - min) / range) * (h - 4) - 2;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height: 24, overflow: "visible" }}>
-      <path d={`${path} L ${w} ${h} L 0 ${h} Z`} fill={fillColor} stroke="none" />
-      <path d={path} stroke={lineColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-      <circle cx={lastX} cy={lastY} r="2.2" fill={lineColor} />
-    </svg>
-  );
-}
 
 function SessionRow({
   log,
@@ -686,6 +676,30 @@ const exerciseRowStyle: React.CSSProperties = {
   borderColor: "rgba(255,255,255,0.06)",
   background: "rgba(255,255,255,0.025)",
 };
+
+// Small "View →" pill that takes the user from an exercise row on the
+// routine detail page to the full /exercises/<id> detail page. Lives
+// inside the row alongside the InteractiveSparkline so the row isn't
+// itself a Link (which would compete with the sparkline's hover/tap).
+function viewDetailLinkStyle(accent: string): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "4px 10px",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: accent.replace("0.9)", "0.32)"),
+    background: accent.replace("0.9)", "0.10)"),
+    color: accent,
+    fontSize: 10.5,
+    fontWeight: 800,
+    textDecoration: "none",
+    whiteSpace: "nowrap",
+    minHeight: 28,
+    letterSpacing: 0.3,
+  };
+}
 
 const exerciseNameStyle: React.CSSProperties = {
   fontSize: 13,
