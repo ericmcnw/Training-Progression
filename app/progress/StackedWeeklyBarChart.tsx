@@ -142,7 +142,6 @@ export default function StackedWeeklyBarChart({
         <div style={{ ...barsTrack, height: chartHeight }}>
           {weekLabels.map((wkLabel, wi) => {
             const isPinned = pinnedWeek === wi;
-            const isDimmed = pinnedWeek !== null && !isPinned;
             const weekTotal = weekTotals[wi];
             return (
               <button
@@ -164,7 +163,6 @@ export default function StackedWeeklyBarChart({
                           width: "100%",
                           height: `${(seg.val / yMax) * 100}%`,
                           background: seriesColor(seg.idx),
-                          opacity: isDimmed ? 0.3 : 1,
                           borderRadius: 2,
                           marginTop: 1,
                         }}
@@ -183,12 +181,13 @@ export default function StackedWeeklyBarChart({
           {weekLabels.map((wkLabel, wi) => {
             const isLast = wi === weekLabels.length - 1;
             const show = wi % labelStride === 0 || isLast;
-            const isPinned = pinnedWeek === wi;
+            // Intentionally NOT styling pinned labels differently —
+            // any change to font-weight or font-style here causes a
+            // subtle width recompute when the user taps a bar, which
+            // makes the whole chart appear to "wiggle".
             return (
               <span key={wi} style={xAxisLabelSlot}>
-                {show ? (
-                  <span style={xAxisLabelText(isPinned)}>{shortWeekLabel(wkLabel)}</span>
-                ) : null}
+                {show ? <span style={xAxisLabelText}>{shortWeekLabel(wkLabel)}</span> : null}
               </span>
             );
           })}
@@ -247,6 +246,9 @@ const chartShell: CSSProperties = {
   boxSizing: "border-box",
   touchAction: "manipulation",
   position: "relative",
+  // Isolate the chart card so internal state changes (active bar,
+  // hover, etc.) can't trigger reflow on anything outside the card.
+  contain: "layout paint",
 };
 
 const headerStack: CSSProperties = { display: "grid", gap: 6, minWidth: 0 };
@@ -377,15 +379,13 @@ const xAxisLabelSlot: CSSProperties = {
   paddingTop: 4,
 };
 
-function xAxisLabelText(isPinned: boolean): CSSProperties {
-  return {
-    fontSize: 9,
-    fontWeight: isPinned ? 800 : 700,
-    fontVariantNumeric: "tabular-nums",
-    color: isPinned ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.42)",
-    whiteSpace: "nowrap",
-  };
-}
+const xAxisLabelText: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  fontVariantNumeric: "tabular-nums",
+  color: "rgba(255,255,255,0.55)",
+  whiteSpace: "nowrap",
+};
 
 const legend: CSSProperties = {
   display: "flex",

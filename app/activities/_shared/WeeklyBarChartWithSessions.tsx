@@ -118,31 +118,40 @@ export default function WeeklyBarChartWithSessions({
         hideTooltip
         onPinnedWeekChange={setSelectedWeek}
       />
-      {selectedWeek !== null ? (
-        <WeekSessionsPanel
-          weekLabel={weekLabels[selectedWeek] ?? "Week"}
-          sessions={weekSessions ?? []}
-          weekTotal={weekTotalLabel}
-          onClear={() => setSelectedWeek(null)}
-        />
-      ) : null}
+      <WeekSessionsPanel
+        weekLabel={selectedWeek !== null ? (weekLabels[selectedWeek] ?? "Week") : null}
+        sessions={weekSessions ?? []}
+        weekTotal={weekTotalLabel}
+        onClear={() => setSelectedWeek(null)}
+      />
     </div>
   );
 }
 
 // ─── Sessions panel ──────────────────────────────────────────────────────────
 
+// The panel is always rendered, even with nothing selected, so
+// tapping a bar never pushes the chart card or the page around. With
+// a selection, it shows the week total + session rows. Without one,
+// it shows a short "tap a bar" prompt at the same approximate height.
 function WeekSessionsPanel({
   weekLabel,
   sessions,
   weekTotal,
   onClear,
 }: {
-  weekLabel: string;
+  weekLabel: string | null;
   sessions: WeekSession[];
   weekTotal: { total: string; mins: number | null } | null;
   onClear: () => void;
 }) {
+  if (weekLabel === null) {
+    return (
+      <section style={panelStyleIdle} aria-label="Sessions panel">
+        <span style={idleHint}>Tap a bar to see that week’s sessions.</span>
+      </section>
+    );
+  }
   return (
     <section style={panelStyle} aria-label={`Sessions for week of ${weekLabel}`}>
       <header style={panelHeaderStyle}>
@@ -228,6 +237,29 @@ const panelStyle: CSSProperties = {
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.025)",
+};
+
+// Idle panel — same width and roughly same vertical footprint as a
+// minimal selected-state, so tapping between selections doesn't
+// shift the layout below.
+const panelStyleIdle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 56,
+  padding: "10px 14px",
+  borderRadius: 14,
+  borderWidth: 1,
+  borderStyle: "dashed",
+  borderColor: "rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.015)",
+};
+
+const idleHint: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  opacity: 0.55,
+  textAlign: "center",
 };
 
 const panelHeaderStyle: CSSProperties = {

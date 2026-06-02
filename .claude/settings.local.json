@@ -31,7 +31,8 @@
       "Bash(tee /tmp/tsc-out.txt)",
       "Bash(echo \"EXIT $?\")",
       "Read(//tmp/**)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(curl -s \"http://localhost:3000/api/routines/cmmecqrm00011bvdgr2dg25k0/log-data\")"
     ]
   }
 }
