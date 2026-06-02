@@ -60,6 +60,27 @@ export default function WeeklyBarChartWithSessions({
     return sessionsByWeek[selectedWeek] ?? [];
   }, [selectedWeek, sessionsByWeek]);
 
+  // Week-total summary string shown above the session rows. Sums the
+  // active series for the selected week and formats with the chart's
+  // unit/decimals so the panel reads as one continuous breakdown of
+  // the bar that was tapped.
+  const weekTotalLabel = useMemo(() => {
+    if (selectedWeek === null) return null;
+    const dec = decimals ?? 1;
+    const total = series.reduce(
+      (sum, s) => sum + (s.weeklyValues[selectedWeek] ?? 0),
+      0
+    );
+    const totalMins = series.reduce(
+      (sum, s) => sum + (s.weeklyMinutes?.[selectedWeek] ?? 0),
+      0
+    );
+    return {
+      total: `${total.toFixed(dec)}${unit ? ` ${unit}` : ""}`,
+      mins: totalMins > 0 ? totalMins : null,
+    };
+  }, [selectedWeek, series, unit, decimals]);
+
   // Enrich each series with a per-week "top session" string so the
   // chart tooltip can render the week's top session for that series
   // as a small sub-line under the totals. Picks the latest session
@@ -101,6 +122,7 @@ export default function WeeklyBarChartWithSessions({
         <WeekSessionsPanel
           weekLabel={weekLabels[selectedWeek] ?? "Week"}
           sessions={weekSessions ?? []}
+          weekTotal={weekTotalLabel}
           onClear={() => setSelectedWeek(null)}
         />
       ) : null}
@@ -113,10 +135,12 @@ export default function WeeklyBarChartWithSessions({
 function WeekSessionsPanel({
   weekLabel,
   sessions,
+  weekTotal,
   onClear,
 }: {
   weekLabel: string;
   sessions: WeekSession[];
+  weekTotal: { total: string; mins: number | null } | null;
   onClear: () => void;
 }) {
   return (
@@ -132,10 +156,21 @@ function WeekSessionsPanel({
           Close
         </button>
       </header>
+
+      {weekTotal ? (
+        <div style={weekTotalRow}>
+          <span style={weekTotalLabel}>Week total</span>
+          <span style={weekTotalValue}>{weekTotal.total}</span>
+          {weekTotal.mins ? (
+            <span style={weekTotalMins}>· {formatMins(weekTotal.mins)}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       {sessions.length === 0 ? (
         <div style={emptyStateStyle}>No sessions logged this week.</div>
       ) : (
-        <div style={{ display: "grid", gap: 4 }}>
+        <div style={{ display: "grid", gap: 3 }}>
           {sessions.map((s) => (
             <SessionRow key={s.id} session={s} />
           ))}
@@ -145,23 +180,28 @@ function WeekSessionsPanel({
   );
 }
 
+function formatMins(mins: number) {
+  const m = Math.round(mins);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r === 0 ? `${h}h` : `${h}h ${r}m`;
+}
+
 function SessionRow({ session }: { session: WeekSession }) {
+  // Short day label: "Mon 5/26". Drops the long month name to keep
+  // each row to a single line on mobile.
   const dayLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
-    month: "short",
+    month: "numeric",
     day: "numeric",
   }).format(session.performedAt);
 
   const content = (
     <div style={rowStyle}>
       <span style={{ ...stripeStyle, background: session.seriesColor }} aria-hidden />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={rowTitleRowStyle}>
-          <span style={rowDateStyle}>{dayLabel}</span>
-          <span style={rowSeriesStyle}>{session.seriesLabel}</span>
-        </div>
-        <div style={rowRoutineStyle}>{session.routineName}</div>
-      </div>
+      <span style={rowDateStyle}>{dayLabel}</span>
+      <span style={rowRoutineStyle}>{session.routineName}</span>
       <span style={rowMetricStyle}>{session.metricFormatted}</span>
       {session.href ? <span style={rowCaretStyle}>›</span> : null}
     </div>
@@ -232,13 +272,16 @@ const emptyStateStyle: CSSProperties = {
   padding: "8px 4px",
 };
 
+// Single-line, dense row: stripe · date · routine name · metric ·
+// optional caret. Was a two-line layout with a 48px min-height —
+// half the panel was vertical padding on mobile.
 const rowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
-  minHeight: 48,
-  padding: "8px 10px 8px 0",
-  borderRadius: 10,
+  gap: 8,
+  minHeight: 30,
+  padding: "5px 8px 5px 0",
+  borderRadius: 8,
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.06)",
@@ -247,52 +290,82 @@ const rowStyle: CSSProperties = {
 };
 
 const stripeStyle: CSSProperties = {
-  width: 4,
+  width: 3,
   alignSelf: "stretch",
   flexShrink: 0,
-};
-
-const rowTitleRowStyle: CSSProperties = {
-  display: "flex",
-  gap: 8,
-  alignItems: "baseline",
-  flexWrap: "wrap",
 };
 
 const rowDateStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
-  opacity: 0.7,
+  opacity: 0.65,
   letterSpacing: 0.2,
-};
-
-const rowSeriesStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  opacity: 0.55,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+  marginLeft: 4,
 };
 
 const rowRoutineStyle: CSSProperties = {
-  fontSize: 13,
+  flex: 1,
+  minWidth: 0,
+  fontSize: 12.5,
   fontWeight: 800,
-  marginTop: 2,
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
 };
 
 const rowMetricStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 11.5,
   fontWeight: 800,
-  opacity: 0.85,
+  opacity: 0.9,
   whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
+  flexShrink: 0,
 };
 
 const rowCaretStyle: CSSProperties = {
-  fontSize: 16,
+  fontSize: 14,
   opacity: 0.4,
   fontWeight: 700,
-  paddingRight: 4,
+  paddingRight: 2,
+  flexShrink: 0,
+};
+
+// Week-total summary line — sits between the panel header and the
+// session rows. Pulls focus to "X mi this week" before the per-
+// session breakdown.
+const weekTotalRow: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 6,
+  padding: "8px 10px",
+  borderRadius: 9,
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.10)",
+  background: "rgba(56,189,248,0.05)",
+};
+
+const weekTotalLabel: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  opacity: 0.55,
+};
+
+const weekTotalValue: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 900,
+  letterSpacing: -0.2,
+  fontVariantNumeric: "tabular-nums",
+  color: "rgba(186,230,253,0.95)",
+};
+
+const weekTotalMins: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.7,
 };

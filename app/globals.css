@@ -124,6 +124,36 @@ body{
   touch-action: manipulation;
 }
 
+/* StackedWeeklyBarChart bar buttons. Lives in globals so the rules
+   exist once site-wide — earlier the component injected its own
+   <style> tag per instance, which on the strength page (two charts)
+   produced duplicate <style> nodes and seemed to confuse iOS Safari
+   into zooming on tap. */
+.swbcBar {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 100%;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.swbcBar:focus { outline: none; }
+
 *{
   box-sizing: border-box;
 }

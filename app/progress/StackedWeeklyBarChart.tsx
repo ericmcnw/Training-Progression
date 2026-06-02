@@ -205,39 +205,6 @@ export default function StackedWeeklyBarChart({
           ))}
         </div>
       ) : null}
-
-      {/* All button styles live here so they apply via class on the
-          native <button> — matches the DomainSparklines approach,
-          which is what avoids iOS tap-zoom behavior in practice. */}
-      <style>{`
-        .swbcBar {
-          appearance: none;
-          -webkit-appearance: none;
-          margin: 0;
-          padding: 0;
-          background: transparent;
-          border: none;
-          color: inherit;
-          font: inherit;
-          flex: 1 1 0;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-end;
-          align-items: stretch;
-          height: 100%;
-          cursor: pointer;
-          touch-action: manipulation;
-          -webkit-tap-highlight-color: transparent;
-          /* Prevents iOS from interpreting a tap as the start of a
-             text selection or long-press preview — both of those can
-             cause the page to visually shift on touch. */
-          user-select: none;
-          -webkit-user-select: none;
-          -webkit-touch-callout: none;
-        }
-        .swbcBar:focus { outline: none; }
-      `}</style>
     </div>
   );
 }
