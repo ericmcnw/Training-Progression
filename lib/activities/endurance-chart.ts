@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { fillWeeklySeries, incrementWeekMap } from "@/lib/progress-v2";
+import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import {
   activitiesByFamily,
   getActivityEntry,
 } from "@/lib/activity-families";
 import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
+import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import { getWeekBoundsSunday } from "@/lib/week";
+import { toAppYmd } from "@/lib/dates";
 
 // Builds the 12-week stacked-bar chart series for the endurance
 // dashboard. Two log sources roll into the same chart so an edited log
@@ -20,6 +23,9 @@ import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 export type EnduranceChartData = {
   weekLabels: string[];
   series: StackedBarSeries[];
+  /** Per-week session lists, aligned with `weekLabels` indices. Powers
+   *  the click-week-to-reveal session panel under the chart. */
+  sessionsByWeek: SessionsByWeek;
 };
 
 // Activity-type slug → registry slug, so typed logs against the
@@ -112,8 +118,24 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
       activityType: {
         select: { slug: true, name: true, family: { select: { slug: true } } },
       },
+      // Routine name powers the session-panel row label. Pulled in the
+      // same query — no extra roundtrip.
+      routine: { select: { name: true } },
     },
   });
+
+  // Build the ordered week-key list (oldest → newest, length 12) the
+  // chart will render. Used to bucket each log into the right week
+  // index for the sessions panel.
+  const weekKeys: string[] = [];
+  const cursor = getWeekBoundsSunday(now).start;
+  for (let i = 11; i >= 0; i -= 1) {
+    const date = new Date(cursor);
+    date.setDate(date.getDate() - i * 7);
+    weekKeys.push(toAppYmd(date));
+  }
+  const weekIndexByKey = new Map(weekKeys.map((k, i) => [k, i]));
+  const sessionsByWeek: WeekSession[][] = weekKeys.map(() => []);
 
   // For each tagged routine, pick the most specific endurance slug —
   // sortHint = higher specificity.
@@ -162,6 +184,30 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
 
     incrementWeekMap(weeklyMilesPerActivity.get(label)!, log.performedAt, log.distanceMi ?? 0);
     incrementWeekMap(weeklyMinutesPerActivity.get(label)!, log.performedAt, (log.durationSec ?? 0) / 60);
+
+    // Bucket the log into the right week index for the sessions panel.
+    // Color is resolved below when we finalize series; we revisit and
+    // backfill seriesColor on each session after the series array exists.
+    const wkIdx = weekIndexByKey.get(weekKey(log.performedAt));
+    if (wkIdx !== undefined) {
+      const distance = log.distanceMi ?? 0;
+      const duration = log.durationSec ?? 0;
+      const metricFormatted =
+        distance > 0
+          ? `${distance >= 100 ? distance.toFixed(0) : distance.toFixed(1)} mi`
+          : duration > 0
+          ? formatDuration(duration)
+          : "—";
+      sessionsByWeek[wkIdx].push({
+        id: log.id,
+        performedAt: log.performedAt,
+        routineName: log.routine?.name ?? "Untitled session",
+        seriesLabel: label,
+        seriesColor: "rgba(255,255,255,0.4)", // placeholder — resolved below
+        metricFormatted,
+        href: `/routines/${log.routineId}/logs/${log.id}/details`,
+      });
+    }
   }
 
   const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
@@ -190,5 +236,31 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
       };
     });
 
-  return { weekLabels, series };
+  // Backfill seriesColor on every captured session now that the series
+  // colors are resolved. Sessions whose label didn't make it into the
+  // series (filtered out because total === 0) keep the placeholder
+  // gray — those won't render in the panel anyway since their week
+  // bars don't exist either.
+  const colorByLabel = new Map(series.map((s) => [s.label, s.color]));
+  for (const weekSessions of sessionsByWeek) {
+    for (const ws of weekSessions) {
+      const color = colorByLabel.get(ws.seriesLabel);
+      if (color) ws.seriesColor = color;
+    }
+  }
+  // Sort sessions within each week by date (oldest → newest) so the
+  // panel reads top-down as the week unfolded.
+  for (const weekSessions of sessionsByWeek) {
+    weekSessions.sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime());
+  }
+
+  return { weekLabels, series, sessionsByWeek };
+}
+
+function formatDuration(sec: number): string {
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
 }

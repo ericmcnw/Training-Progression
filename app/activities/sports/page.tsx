@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ACTIVITY_FAMILY_META, activitiesByFamily } from "@/lib/activity-families";
 import { loadSportsChartData } from "@/lib/activities/sports-chart";
-import StackedWeeklyBarChart from "@/app/progress/StackedWeeklyBarChart";
+import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { formatHoursMinutes } from "@/lib/progress";
 
@@ -62,10 +62,11 @@ export default async function SportsDashboardPage() {
             sessions per week per sport so the user can scan cadence
             without doing math. */}
         {chartData.series.length > 0 ? (
-          <StackedWeeklyBarChart
+          <WeeklyBarChartWithSessions
             title="Sessions per Week by Sport — Last 12 Weeks"
             weekLabels={chartData.weekLabels}
             series={chartData.series}
+            sessionsByWeek={chartData.sessionsByWeek}
             unit="sess"
             decimals={0}
           />

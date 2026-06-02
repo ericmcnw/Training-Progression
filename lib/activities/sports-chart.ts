@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { fillWeeklySeries, incrementWeekMap } from "@/lib/progress-v2";
+import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import {
   activitiesByFamily,
   getActivityEntry,
   type ActivityRegistryEntry,
 } from "@/lib/activity-families";
 import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
+import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import { getWeekBoundsSunday } from "@/lib/week";
+import { toAppYmd } from "@/lib/dates";
 
 // 12-week sports chart + per-sport rollup. Mirrors the endurance
 // builder's shape so the rest of the dashboard code uses one chart
@@ -16,15 +19,16 @@ import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 export type SportsChartData = {
   weekLabels: string[];
   series: StackedBarSeries[];
-  /** Per-sport totals over the 12w window, sorted by session count desc.
-   *  Used to power the dashboard's "Top sports" tile grid alongside the
-   *  chart, with no second roundtrip. */
+  /** Per-sport totals over the 12w window, sorted by session count desc. */
   perSport: Array<{
     entry: ActivityRegistryEntry;
     sessions: number;
     totalDurationSec: number;
     lastSessionAt: Date | null;
   }>;
+  /** Per-week session lists, aligned with `weekLabels` indices. Powers
+   *  the click-week-to-reveal session panel under the chart. */
+  sessionsByWeek: SessionsByWeek;
 };
 
 // One color per registered sport. Hue families are spread so two
@@ -72,6 +76,7 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       weekLabels: fillWeeklySeries(new Map(), "12w", now).map((p) => p.label),
       series: [],
       perSport: [],
+      sessionsByWeek: Array.from({ length: 12 }, () => [] as WeekSession[]),
     };
   }
 
@@ -85,8 +90,23 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       routineId: true,
       performedAt: true,
       durationSec: true,
+      // Routine name powers the session-panel row label. Pulled in the
+      // same query — no extra roundtrip.
+      routine: { select: { name: true } },
     },
   });
+
+  // Ordered week-key list for bucketing each log into the right week
+  // index for the sessions panel. Mirrors the endurance chart helper.
+  const weekKeys: string[] = [];
+  const cursor = getWeekBoundsSunday(now).start;
+  for (let i = 11; i >= 0; i -= 1) {
+    const date = new Date(cursor);
+    date.setDate(date.getDate() - i * 7);
+    weekKeys.push(toAppYmd(date));
+  }
+  const weekIndexByKey = new Map(weekKeys.map((k, i) => [k, i]));
+  const sessionsByWeek: WeekSession[][] = weekKeys.map(() => []);
 
   // For each routine, choose the most specific sport slug — sortHint
   // higher = more specific. Mirrors the endurance helper's strategy.
@@ -138,6 +158,20 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
         lastSessionAt: log.performedAt,
       });
     }
+
+    // Bucket the log into the right week for the sessions panel.
+    const wkIdx = weekIndexByKey.get(weekKey(log.performedAt));
+    if (wkIdx !== undefined) {
+      sessionsByWeek[wkIdx].push({
+        id: log.id,
+        performedAt: log.performedAt,
+        routineName: log.routine?.name ?? "Untitled session",
+        seriesLabel: label,
+        seriesColor: "rgba(255,255,255,0.4)", // resolved below
+        metricFormatted: log.durationSec ? formatDuration(log.durationSec) : "1 session",
+        href: `/routines/${log.routineId}/logs/${log.id}/details`,
+      });
+    }
   }
 
   const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
@@ -171,5 +205,23 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       a.entry.label.localeCompare(b.entry.label)
     );
 
-  return { weekLabels, series, perSport };
+  // Backfill seriesColor on every captured session now that resolved.
+  const colorByLabel = new Map(series.map((s) => [s.label, s.color]));
+  for (const weekSessions of sessionsByWeek) {
+    for (const ws of weekSessions) {
+      const color = colorByLabel.get(ws.seriesLabel);
+      if (color) ws.seriesColor = color;
+    }
+    weekSessions.sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime());
+  }
+
+  return { weekLabels, series, perSport, sessionsByWeek };
+}
+
+function formatDuration(sec: number): string {
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
 }

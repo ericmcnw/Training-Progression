@@ -57,6 +57,13 @@ export type StrengthRecentSession = {
 };
 
 export type StrengthSessionStat = {
+  /** RoutineLog id — needed for the strength dashboard's click-week-
+   *  to-reveal session panel and for linking to the log detail page. */
+  id: string;
+  /** RoutineLog.routineId — used to build the session detail href. */
+  routineId: string;
+  /** Routine name — shown in the session panel rows. */
+  routineName: string;
   date: Date;
   sets: number;
   /** Total lb lifted in the session (sum of weight × reps over every set). */
@@ -272,6 +279,9 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
   );
 
   const sessionStats: StrengthSessionStat[] = recentSessionList.map((s) => ({
+    id: s.id,
+    routineId: s.routineId,
+    routineName: s.routineName,
     date: s.date,
     sets: s.totalSets,
     volume: s.totalVolume,

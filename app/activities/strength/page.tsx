@@ -10,7 +10,7 @@ import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
-import StackedWeeklyBarChart from "@/app/progress/StackedWeeklyBarChart";
+import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 
 export const dynamic = "force-dynamic";
 
@@ -133,17 +133,19 @@ export default async function StrengthWorldPage() {
             EmptyState branch above already handles that case. */}
         {hasChartData ? (
           <>
-            <StackedWeeklyBarChart
+            <WeeklyBarChartWithSessions
               title="Strength Sessions per Week — Last 12 Weeks"
               weekLabels={chartData.weekLabels}
               series={[chartData.sessionsSeries]}
+              sessionsByWeek={chartData.sessionsByWeek}
               unit="sess"
               decimals={0}
             />
-            <StackedWeeklyBarChart
+            <WeeklyBarChartWithSessions
               title="Weekly Volume (lb) — Last 12 Weeks"
               weekLabels={chartData.weekLabels}
               series={[chartData.volumeSeries]}
+              sessionsByWeek={chartData.sessionsByWeek}
               unit="lb"
               decimals={0}
             />

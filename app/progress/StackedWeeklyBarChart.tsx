@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export type StackedBarSeries = {
   label: string;
@@ -52,6 +52,7 @@ export default function StackedWeeklyBarChart({
   unit = "mi",
   decimals = 1,
   compact = false,
+  onPinnedWeekChange,
 }: {
   title: string;
   weekLabels: string[];
@@ -59,10 +60,22 @@ export default function StackedWeeklyBarChart({
   unit?: string;
   decimals?: number;
   compact?: boolean;
+  /** Fires whenever the user pins or unpins a week — wrappers use this
+   *  to render a per-week detail panel underneath the chart. The chart
+   *  still owns its own state; this is a one-way notification. */
+  onPinnedWeekChange?: (weekIndex: number | null) => void;
 }) {
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [pinnedWeek, setPinnedWeek] = useState<number | null>(null);
   const activeWeek = hoveredWeek ?? pinnedWeek;
+
+  useEffect(() => {
+    onPinnedWeekChange?.(pinnedWeek);
+    // intentionally omit onPinnedWeekChange from deps — callers are
+    // expected to pass a stable reference; we only want to fire when
+    // the pin index itself changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedWeek]);
 
   const weekTotals = useMemo(
     () => weekLabels.map((_, wi) => series.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0)),

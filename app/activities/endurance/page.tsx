@@ -15,7 +15,7 @@ import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { getLogDisplayName } from "@/lib/routine-display";
 import { loadEnduranceChartData } from "@/lib/activities/endurance-chart";
-import StackedWeeklyBarChart from "@/app/progress/StackedWeeklyBarChart";
+import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 
 export const dynamic = "force-dynamic";
 
@@ -200,10 +200,11 @@ export default async function EnduranceWorldPage(props: {
             of the page range filter below, since cadence trends need
             a stable window to compare against. */}
         {chartData.series.length > 0 ? (
-          <StackedWeeklyBarChart
+          <WeeklyBarChartWithSessions
             title="Miles per Week by Activity — Last 12 Weeks"
             weekLabels={chartData.weekLabels}
             series={chartData.series}
+            sessionsByWeek={chartData.sessionsByWeek}
             unit="mi"
             decimals={1}
           />
