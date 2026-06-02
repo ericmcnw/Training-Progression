@@ -14,16 +14,16 @@ export const metadata: Metadata = {
   description: "Personal training planning, logging, and progress tracking",
 };
 
-// Explicit viewport tells iOS not to auto-zoom on tap. Without
-// `initial-scale=1`, Safari assumes desktop sizing and zooms in on
-// tapped elements. `maximum-scale=1` blocks the implicit zoom-to-fit
-// gesture; users can still resize text via system accessibility
-// settings.
+// Standard mobile viewport. We deliberately do NOT set
+// `maximumScale` / `userScalable: false` — Apple flags those as
+// accessibility-hostile and may produce odd behavior near tappable
+// elements. The chart no longer relies on viewport flags to avoid
+// zoom; its tap targets are native HTML <button>s with
+// `touch-action: manipulation`, which is the supported way to opt
+// out of double-tap-zoom on iOS.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({

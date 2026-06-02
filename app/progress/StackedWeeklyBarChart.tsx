@@ -282,11 +282,40 @@ const chartShell: CSSProperties = {
   position: "relative",
   display: "grid",
   gap: 8,
+  // Hard-cap to parent so nothing inside can push the card past the
+  // viewport — defensive against long titles, wide chips, or stretchy
+  // legend text.
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  // Disables iOS double-tap-zoom across the entire chart surface.
+  // Each bar button also sets this — belt-and-suspenders.
+  touchAction: "manipulation",
 };
 
-const headerStack: CSSProperties = { display: "grid", gap: 6 };
-const titleStyle: CSSProperties = { fontWeight: 900, fontSize: 13, letterSpacing: 0, opacity: 0.92 };
-const chipRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
+const headerStack: CSSProperties = { display: "grid", gap: 6, minWidth: 0 };
+const titleStyle: CSSProperties = {
+  fontWeight: 900,
+  fontSize: 13,
+  letterSpacing: 0,
+  opacity: 0.92,
+  // Long titles like "Weekly Volume (lb) — Last 12 Weeks" otherwise
+  // demand their full min-content width and can push the card wider
+  // than the viewport on narrow mobile.
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+const chipRow: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+  // Without this, the flex container's min-content equals the widest
+  // chip, which could prevent the parent card from shrinking on
+  // narrow viewports.
+  minWidth: 0,
+};
 const statChip: CSSProperties = {
   display: "inline-flex",
   gap: 4,
@@ -343,9 +372,12 @@ const yAxisTick: CSSProperties = {
 const barsTrack: CSSProperties = {
   flex: 1,
   display: "flex",
-  gap: 3,
+  gap: 4,
   alignItems: "stretch",
   minWidth: 0,
+  // Clip any bar that somehow over-renders — keeps the chart from
+  // ever pushing horizontal page scroll.
+  overflow: "hidden",
 };
 
 // Per-bar HTML <button> — native button so iOS treats it as
@@ -371,11 +403,14 @@ const barButtonStyle: CSSProperties = {
 
 function barValueLabel(isActive: boolean, hasValue: boolean): CSSProperties {
   return {
+    display: "block",
+    width: "100%",
     height: 12,
     minHeight: 12,
     lineHeight: 1,
     fontSize: 9.5,
     fontWeight: isActive ? 900 : 700,
+    fontVariantNumeric: "tabular-nums",
     color: !hasValue
       ? "transparent"
       : isActive
@@ -384,6 +419,9 @@ function barValueLabel(isActive: boolean, hasValue: boolean): CSSProperties {
     letterSpacing: 0.2,
     textAlign: "center",
     paddingBottom: 2,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "clip",
   };
 }
 
@@ -395,20 +433,29 @@ function barCellStyle(isActive: boolean): CSSProperties {
     justifyContent: "flex-end",
     alignItems: "stretch",
     minHeight: 0,
-    padding: "0 1px",
+    // Inner horizontal padding makes the colored bar visibly slimmer
+    // than the (still-large) hit area — keeps tap targets generous on
+    // mobile without making the chart look like blocky bricks.
+    padding: "0 3px",
     borderRadius: 4,
-    background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
-    transition: "background 100ms ease",
+    // Inset box-shadow has zero layout impact (vs. background changes
+    // which can momentarily reflow on iOS). Keeps the chart visually
+    // anchored on tap.
+    boxShadow: isActive ? "inset 0 0 0 1px rgba(255,255,255,0.2)" : "none",
+    transition: "box-shadow 100ms ease",
   };
 }
 
 function barXLabel(isActive: boolean): CSSProperties {
   return {
+    display: "block",
+    width: "100%",
     height: 16,
     minHeight: 16,
     lineHeight: 1.2,
     fontSize: 8.5,
     fontWeight: isActive ? 800 : 700,
+    fontVariantNumeric: "tabular-nums",
     color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.42)",
     textAlign: "center",
     paddingTop: 3,
