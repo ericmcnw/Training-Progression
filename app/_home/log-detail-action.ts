@@ -6,6 +6,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { normalizeRoutineKind } from "@/lib/routines";
+import { getLogDisplayName } from "@/lib/routine-display";
 
 export type LogReportSet = {
   setNumber: number;
@@ -65,7 +66,18 @@ export async function getHomeLogReport(logId: string): Promise<LogReport | null>
   const log = await prisma.routineLog.findUnique({
     where: { id: logId },
     include: {
-      routine: { select: { id: true, name: true, kind: true } },
+      // Activity type on the log + routine so the popover title reflects an
+      // edited type ("Trail Run" after retyping a Long Run log) and synthetic
+      // Endurance logs render under their type, not the placeholder name.
+      activityType: { select: { name: true } },
+      routine: {
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          activityType: { select: { name: true } },
+        },
+      },
       exercises: {
         include: {
           exercise: { select: { id: true, name: true, unit: true } },
@@ -160,7 +172,7 @@ export async function getHomeLogReport(logId: string): Promise<LogReport | null>
   return {
     logId: log.id,
     routineId: log.routine.id,
-    routineName: log.routine.name,
+    routineName: getLogDisplayName(log),
     kind,
     performedAt: log.performedAt.toISOString(),
     performedDateLabel,
