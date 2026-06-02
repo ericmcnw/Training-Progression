@@ -1,0 +1,194 @@
+import { prisma } from "@/lib/prisma";
+import { fillWeeklySeries, incrementWeekMap } from "@/lib/progress-v2";
+import {
+  activitiesByFamily,
+  getActivityEntry,
+} from "@/lib/activity-families";
+import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
+
+// Builds the 12-week stacked-bar chart series for the endurance
+// dashboard. Two log sources roll into the same chart so an edited log
+// shows up in its *current* type bucket, not the routine's pre-edit
+// metadata bucket:
+//   1. Logs against legacy endurance-tagged routines (metadata-based).
+//   2. Any log carrying activityTypeId — covers typed quick-log logs
+//      against the synthetic Endurance routine AND legacy logs whose
+//      activityTypeId was overridden via the edit-log type switcher.
+//
+// Returns one series per active activity type (sorted desc by total
+// mileage), plus a parallel array of week labels.
+export type EnduranceChartData = {
+  weekLabels: string[];
+  series: StackedBarSeries[];
+};
+
+// Activity-type slug → registry slug, so typed logs against the
+// synthetic Endurance routine credit the same buckets the legacy
+// metadata-tagged routines already do.
+const TYPE_SLUG_TO_REGISTRY_SLUG: Record<string, string> = {
+  "run": "running",
+  "trail-run": "trail-running",
+  "long-run": "running",
+  "tempo-run": "running",
+  "easy-run": "running",
+  "interval-run": "running",
+  "sprint": "running",
+  "walk": "walking",
+  "hike": "hiking",
+  "bike": "biking",
+  "mtb": "mountain-biking",
+  "road-bike": "road-cycling",
+  "gravel-bike": "gravel-cycling",
+  "swim": "swimming",
+  "open-water-swim": "open-water-swimming",
+  "row": "rowing",
+  "erg-row": "rowing",
+};
+
+// One canonical color per registered endurance activity. Same palette
+// used elsewhere in the app so the visual language stays consistent.
+const ENDURANCE_ACTIVITY_COLORS: Record<string, string> = {
+  running:                "rgba(59,130,246,0.9)",
+  "road-running":         "rgba(30,64,175,0.9)",
+  "trail-running":        "rgba(168,85,247,0.9)",
+  walking:                "rgba(244,114,182,0.9)",
+  biking:                 "rgba(250,204,21,0.9)",
+  cycling:                "rgba(250,204,21,0.9)",
+  "road-cycling":         "rgba(249,115,22,0.9)",
+  "mountain-biking":      "rgba(194,65,12,0.9)",
+  "gravel-cycling":       "rgba(214,188,138,0.9)",
+  swimming:               "rgba(6,182,212,0.9)",
+  "pool-swimming":        "rgba(103,232,249,0.9)",
+  "open-water-swimming":  "rgba(14,116,144,0.9)",
+  rowing:                 "rgba(239,68,68,0.9)",
+  hiking:                 "rgba(34,197,94,0.9)",
+};
+
+const FALLBACK_COLORS = [
+  "rgba(236,72,153,0.9)",
+  "rgba(245,158,11,0.9)",
+  "rgba(167,139,250,0.9)",
+];
+
+export async function loadEnduranceChartData(now = new Date()): Promise<EnduranceChartData> {
+  const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+
+  // Resolve the endurance-tagged routine ids in a small first round-trip
+  // so the log query can filter on them.
+  const enduranceSlugs = new Set(activitiesByFamily("endurance").map((e) => e.slug));
+  const taggedRoutines = await prisma.routine.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: {
+      id: true,
+      metadataGroups: { select: { group: { select: { slug: true } } } },
+    },
+  });
+  const enduranceRoutineIds = taggedRoutines
+    .filter((r) =>
+      (r.metadataGroups ?? []).some((m) => {
+        const slug = m.group?.slug;
+        return slug ? enduranceSlugs.has(slug) : false;
+      })
+    )
+    .map((r) => r.id);
+
+  const logs = await prisma.routineLog.findMany({
+    where: {
+      performedAt: { gte: cutoff },
+      OR: [
+        ...(enduranceRoutineIds.length > 0
+          ? [{ routineId: { in: enduranceRoutineIds } }]
+          : []),
+        { activityTypeId: { not: null } },
+      ],
+    },
+    select: {
+      id: true,
+      routineId: true,
+      performedAt: true,
+      distanceMi: true,
+      durationSec: true,
+      activityTypeId: true,
+      activityType: {
+        select: { slug: true, name: true, family: { select: { slug: true } } },
+      },
+    },
+  });
+
+  // For each tagged routine, pick the most specific endurance slug —
+  // sortHint = higher specificity.
+  const routineEnduranceLabel = new Map<string, string>();
+  for (const r of taggedRoutines) {
+    const candidates = (r.metadataGroups ?? [])
+      .map((m) => m.group?.slug)
+      .filter((s): s is string => Boolean(s))
+      .filter((s) => enduranceSlugs.has(s))
+      .map((s) => ({ slug: s, entry: getActivityEntry(s) }))
+      .filter((c): c is { slug: string; entry: NonNullable<ReturnType<typeof getActivityEntry>> } => c.entry !== null)
+      .sort((a, b) => (b.entry.sortHint ?? 0) - (a.entry.sortHint ?? 0));
+    const chosen = candidates[0];
+    if (chosen) routineEnduranceLabel.set(r.id, chosen.entry.label);
+  }
+
+  // Build per-activity weekly miles + minutes maps. Label comes from the
+  // log's activityType when present; falls back to the routine's
+  // chosen-slug label for legacy un-typed logs.
+  const seriesPaletteSlug = new Map<string, string>();
+  const weeklyMilesPerActivity = new Map<string, Map<string, number>>();
+  const weeklyMinutesPerActivity = new Map<string, Map<string, number>>();
+
+  for (const log of logs) {
+    let label: string | undefined;
+    let paletteSlug: string | undefined;
+    if (log.activityType) {
+      // Only credit typed logs whose type is in the endurance family.
+      // Activity types in other families (none today, but future-proof)
+      // shouldn't contaminate the chart.
+      if (log.activityType.family?.slug !== "endurance") {
+        if (!enduranceRoutineIds.includes(log.routineId)) continue;
+        label = routineEnduranceLabel.get(log.routineId);
+      } else {
+        label = log.activityType.name;
+        paletteSlug = TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug];
+      }
+    } else {
+      label = routineEnduranceLabel.get(log.routineId);
+    }
+    if (!label) continue;
+
+    if (paletteSlug) seriesPaletteSlug.set(label, paletteSlug);
+    if (!weeklyMilesPerActivity.has(label)) weeklyMilesPerActivity.set(label, new Map());
+    if (!weeklyMinutesPerActivity.has(label)) weeklyMinutesPerActivity.set(label, new Map());
+
+    incrementWeekMap(weeklyMilesPerActivity.get(label)!, log.performedAt, log.distanceMi ?? 0);
+    incrementWeekMap(weeklyMinutesPerActivity.get(label)!, log.performedAt, (log.durationSec ?? 0) / 60);
+  }
+
+  const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
+
+  let fallbackIdx = 0;
+  const series: StackedBarSeries[] = Array.from(weeklyMilesPerActivity.entries())
+    .map(([label, weekMap]) => ({
+      label,
+      total: Array.from(weekMap.values()).reduce((a, b) => a + b, 0),
+      weekMap,
+    }))
+    .filter((e) => e.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .map((e) => {
+      const paletteSlug = seriesPaletteSlug.get(e.label);
+      const labelSlug = e.label.toLowerCase().replace(/\s+/g, "-");
+      const color =
+        (paletteSlug && ENDURANCE_ACTIVITY_COLORS[paletteSlug]) ||
+        ENDURANCE_ACTIVITY_COLORS[labelSlug] ||
+        FALLBACK_COLORS[fallbackIdx++ % FALLBACK_COLORS.length];
+      return {
+        label: e.label,
+        color,
+        weeklyValues: fillWeeklySeries(e.weekMap, "12w", now).map((p) => p.value),
+        weeklyMinutes: fillWeeklySeries(weeklyMinutesPerActivity.get(e.label) ?? new Map(), "12w", now).map((p) => p.value),
+      };
+    });
+
+  return { weekLabels, series };
+}

@@ -14,6 +14,8 @@ import { prisma } from "@/lib/prisma";
 import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { getLogDisplayName } from "@/lib/routine-display";
+import { loadEnduranceChartData } from "@/lib/activities/endurance-chart";
+import StackedWeeklyBarChart from "@/app/progress/StackedWeeklyBarChart";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +80,7 @@ export default async function EnduranceWorldPage(props: {
 
   const cutoff = cutoffForRange(range);
 
-  const [families, logs] = await Promise.all([
+  const [families, logs, chartData] = await Promise.all([
     prisma.enduranceFamily.findMany({
       orderBy: [{ sortOrder: "asc" }],
       include: {
@@ -118,6 +120,9 @@ export default async function EnduranceWorldPage(props: {
         },
       },
     }),
+    // 12w stacked-bar chart data, fetched in parallel — independent of
+    // the page's range filter, since the chart always shows 12 weeks.
+    loadEnduranceChartData(),
   ]);
 
   // Resolve each log's family — prefer log.activityType, fall back to
@@ -191,6 +196,19 @@ export default async function EnduranceWorldPage(props: {
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+        {/* Interactive 12w stacked bar chart — always 12 weeks regardless
+            of the page range filter below, since cadence trends need
+            a stable window to compare against. */}
+        {chartData.series.length > 0 ? (
+          <StackedWeeklyBarChart
+            title="Miles per Week by Activity — Last 12 Weeks"
+            weekLabels={chartData.weekLabels}
+            series={chartData.series}
+            unit="mi"
+            decimals={1}
+          />
+        ) : null}
+
         {/* Family tabs */}
         <div style={tabRowStyle}>
           <FamilyTab

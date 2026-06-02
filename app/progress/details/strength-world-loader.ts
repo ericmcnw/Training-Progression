@@ -59,6 +59,8 @@ export type StrengthRecentSession = {
 export type StrengthSessionStat = {
   date: Date;
   sets: number;
+  /** Total lb lifted in the session (sum of weight × reps over every set). */
+  volume: number;
 };
 
 export type StrengthWorldData = {
@@ -272,6 +274,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
   const sessionStats: StrengthSessionStat[] = recentSessionList.map((s) => ({
     date: s.date,
     sets: s.totalSets,
+    volume: s.totalVolume,
   }));
 
   const recentSessions = recentSessionList

@@ -9,6 +9,8 @@ import ActivityPulseStrip from "@/app/progress/details/ActivityPulseStrip";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { buildStrengthChartData } from "@/lib/activities/strength-chart";
+import StackedWeeklyBarChart from "@/app/progress/StackedWeeklyBarChart";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +103,12 @@ export default async function StrengthWorldPage() {
   );
   const pulseSlots = applyGoalsToPulseSlots(defaultSlots, strengthGoals);
 
+  // 12w sessions + volume series for the interactive bar charts.
+  // Pure derivation from the data already loaded by loadStrengthWorld
+  // (no extra Prisma roundtrip).
+  const chartData = buildStrengthChartData(strength.sessionStats, now);
+  const hasChartData = chartData.sessionsSeries.weeklyValues.some((v) => v > 0);
+
   return (
     <>
       <TargetHeader
@@ -119,6 +127,28 @@ export default async function StrengthWorldPage() {
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
         {/* Pulse strip */}
         <ActivityPulseStrip slots={pulseSlots} />
+
+        {/* Interactive 12w sessions + volume charts. Both fall back to
+            being hidden when there's no strength data yet — the
+            EmptyState branch above already handles that case. */}
+        {hasChartData ? (
+          <>
+            <StackedWeeklyBarChart
+              title="Strength Sessions per Week — Last 12 Weeks"
+              weekLabels={chartData.weekLabels}
+              series={[chartData.sessionsSeries]}
+              unit="sess"
+              decimals={0}
+            />
+            <StackedWeeklyBarChart
+              title="Weekly Volume (lb) — Last 12 Weeks"
+              weekLabels={chartData.weekLabels}
+              series={[chartData.volumeSeries]}
+              unit="lb"
+              decimals={0}
+            />
+          </>
+        ) : null}
 
         {/* Active goals */}
         <ActivityGoalsSection
