@@ -14,6 +14,8 @@ import {
   isWorkoutKind,
 } from "@/lib/routines";
 import DeleteLogButton from "./DeleteLogButton";
+import WeeklySummary from "./WeeklySummary";
+import MonthlySummary from "./MonthlySummary";
 
 export const dynamic = "force-dynamic";
 
@@ -82,11 +84,10 @@ export default async function ManualLogPage({
   }));
 
   // ── Stats ────────────────────────────────────────────────────────────────────
+  // Weekly / monthly aggregates now live inside WeeklySummary +
+  // MonthlySummary (richer modules); the bare session counts that used to
+  // be rendered here are gone.
   const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const weekSessions = enrichedLogs.filter((l) => l.performedAt >= weekAgo).length;
-  const monthSessions = enrichedLogs.filter((l) => l.performedAt >= monthStart).length;
 
   // ── Calendar (current month in app timezone) ─────────────────────────────────
   const todayYmd = toAppYmd(now);
@@ -190,16 +191,6 @@ export default async function ManualLogPage({
               </div>
             </div>
             <div style={summaryCard}>
-              <div style={summaryLabel}>This Week</div>
-              <div style={summaryValue}>{weekSessions}</div>
-              <div style={summaryMeta}>sessions</div>
-            </div>
-            <div style={summaryCard}>
-              <div style={summaryLabel}>This Month</div>
-              <div style={summaryValue}>{monthSessions}</div>
-              <div style={summaryMeta}>sessions</div>
-            </div>
-            <div style={summaryCard}>
               <div style={summaryLabel}>Active Goals</div>
               <div style={summaryValue}>{goalCount}</div>
               <div style={summaryMeta}>Current targets</div>
@@ -212,6 +203,13 @@ export default async function ManualLogPage({
           </div>
         </div>
       </section>
+
+      {/* Weekly + monthly summary modules. Replace the old "This Week / This
+          Month" single-number cards above with richer at-a-glance modules
+          (rhythm + composition + highlights for the week; heatmap + top
+          routines + composition for the month). */}
+      {!showHistory && <WeeklySummary logs={enrichedLogs} today={now} />}
+      {!showHistory && <MonthlySummary logs={enrichedLogs} today={now} />}
 
       {/* ── Recent Activity (profile view only) ── */}
       {!showHistory && (
