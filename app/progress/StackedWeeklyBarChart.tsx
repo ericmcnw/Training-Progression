@@ -257,7 +257,10 @@ export default function StackedWeeklyBarChart({
                 width={barWidth + 10}
                 height={innerH}
                 fill="transparent"
-                style={{ cursor: "pointer" }}
+                // touchAction: manipulation on the actual interactive
+                // hit element — applying it only to the parent SVG was
+                // not preventing iOS double-tap-zoom on the rect.
+                style={{ cursor: "pointer", touchAction: "manipulation" }}
                 onPointerEnter={() => setHoveredWeek(wi)}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -398,6 +401,13 @@ const chartShell: React.CSSProperties = {
   overflow: "hidden",
   background: "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.022))",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+  // Belt-and-suspenders: also disable double-tap-zoom + selection on
+  // the outer container. iOS doesn't always cascade touch-action from
+  // parent SVG to inner SVG children, and the chart's hit-area rects
+  // were still triggering page zoom on bar tap before this.
+  touchAction: "manipulation",
+  userSelect: "none",
+  WebkitUserSelect: "none",
 };
 
 const headerStack: React.CSSProperties = { display: "grid", gap: 6 };

@@ -379,7 +379,10 @@ export default function ExerciseMetricChart({
               width={slabW}
               height={plotH + 6}
               fill="transparent"
-              style={{ cursor: "pointer" }}
+              // touchAction: manipulation on the rect itself — iOS
+              // doesn't reliably cascade it from the parent SVG, so
+              // the bar tap was still triggering double-tap zoom.
+              style={{ cursor: "pointer", touchAction: "manipulation" }}
               onPointerEnter={() => setHoverIdx(i)}
               onClick={(e) => {
                 e.stopPropagation();
@@ -505,6 +508,12 @@ const shellStyle: React.CSSProperties = {
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.08)",
   background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+  // Belt-and-suspenders for iOS — block double-tap zoom + text
+  // selection at the container level too, in case the SVG-level
+  // touch-action doesn't cascade.
+  touchAction: "manipulation",
+  userSelect: "none",
+  WebkitUserSelect: "none",
 };
 
 const pillRowStyle: React.CSSProperties = {
