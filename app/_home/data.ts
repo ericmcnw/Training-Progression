@@ -140,6 +140,10 @@ export async function getHomeData(): Promise<HomeData> {
         // activity type name instead of literally "Endurance").
         activityTypeId: true,
         activityType: { select: { name: true, familyId: true } },
+        // distanceMi + durationSec power the "Last 7 days" snapshot strip
+        // — cheap to include here vs. a second roundtrip.
+        distanceMi: true,
+        durationSec: true,
         routine: {
           select: {
             id: true, name: true, kind: true, domain: true, subtype: true,
@@ -787,6 +791,20 @@ export async function getHomeData(): Promise<HomeData> {
       familyName: t.family.name,
     }));
 
+  // ── Last-7-days snapshot ────────────────────────────────────────────────
+  // Pure aggregation over allLogs; no extra Prisma roundtrip. Rolling
+  // 7-day window ending today (inclusive of today).
+  const sevenDaysAgoMs = new Date(`${today}T00:00:00.000Z`).getTime() - 6 * 24 * 60 * 60 * 1000;
+  let last7Sessions = 0;
+  let last7DurationSec = 0;
+  let last7CardioMi = 0;
+  for (const log of allLogs) {
+    if (log.performedAt.getTime() < sevenDaysAgoMs) continue;
+    last7Sessions += 1;
+    if (log.durationSec) last7DurationSec += log.durationSec;
+    if (log.distanceMi) last7CardioMi += log.distanceMi;
+  }
+
   return {
     today,
     currentWeekStart,
@@ -799,6 +817,11 @@ export async function getHomeData(): Promise<HomeData> {
     weekChip,
     quickPickRoutines,
     scheduleActivityTypes,
+    last7Days: {
+      sessions: last7Sessions,
+      totalDurationSec: last7DurationSec,
+      totalCardioMi: last7CardioMi,
+    },
   };
 }
 

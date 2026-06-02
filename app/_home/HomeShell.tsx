@@ -12,6 +12,7 @@ import DomainSparklines from "./DomainSparklines";
 import MovementPatternsCard from "./MovementPatternsCard";
 import Fab from "./Fab";
 import WeekAtGlance from "./WeekAtGlance";
+import Last7DaysStrip from "./Last7DaysStrip";
 
 export default function HomeShell({ data }: { data: HomeData }) {
   return (
@@ -21,6 +22,8 @@ export default function HomeShell({ data }: { data: HomeData }) {
         habit={data.habitChip}
         week={data.weekChip}
       />
+
+      <Last7DaysStrip stats={data.last7Days} />
 
       {/* Two columns side-by-side on desktop. Each column flows its cards
           top-to-bottom with no inter-card whitespace beyond the gap, so an

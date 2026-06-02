@@ -178,6 +178,14 @@ export type QuickPickRoutine = {
 };
 
 // Full props bag for the client-side HomeShell.
+/** Rolling 7-day snapshot used by the home page's "Last 7 days" strip.
+ *  Pure totals — no comparison vs prior period or breakdowns. */
+export type Last7DaysStats = {
+  sessions: number;
+  totalDurationSec: number;
+  totalCardioMi: number;
+};
+
 export type HomeData = {
   today: string;
   currentWeekStart: string;
@@ -189,6 +197,8 @@ export type HomeData = {
   habitChip: HabitChipStatus;
   weekChip: WeekChipStatus;
   quickPickRoutines: QuickPickRoutine[];
+  /** Last-7-days totals shown in a compact strip at the top of the dashboard. */
+  last7Days: Last7DaysStats;
   /** Enabled endurance activity types for the typed-endurance schedule
    *  shortcut in the schedule picker. */
   scheduleActivityTypes: Array<{
