@@ -31,15 +31,17 @@ export type SportsChartData = {
   sessionsByWeek: SessionsByWeek;
 };
 
-// One color per registered sport. Hue families are spread so two
-// neighboring stacked segments never collide visually.
+// One color per registered sport. Hue families are spread so no two
+// sports read as the same color on the chart. Previously climbing
+// (orange) + basketball (burnt orange) and snowboarding (violet) +
+// skiing (soft violet) were near-duplicates.
 const SPORT_ACTIVITY_COLORS: Record<string, string> = {
   climbing:       "rgba(251,146,60,0.9)",   // orange — the deep-world sport
   surfing:        "rgba(56,189,248,0.9)",   // cyan
   snowboarding:   "rgba(168,85,247,0.9)",   // violet
-  skiing:         "rgba(167,139,250,0.9)",  // soft violet
+  skiing:         "rgba(99,102,241,0.9)",   // indigo — clear blue-purple, distinct from violet + cyan
   skateboarding:  "rgba(244,114,182,0.9)",  // pink
-  basketball:     "rgba(249,115,22,0.9)",   // burnt orange
+  basketball:     "rgba(220,38,38,0.9)",    // red — moved off the orange family
   tennis:         "rgba(132,204,22,0.9)",   // chartreuse
   golf:           "rgba(40,212,160,0.9)",   // teal-green
 };
