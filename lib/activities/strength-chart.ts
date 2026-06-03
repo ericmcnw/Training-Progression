@@ -22,19 +22,22 @@ export type StrengthChartData = {
 };
 
 // Palette assigned in order of routine total-volume (heaviest first
-// gets the first color). Same hue family as the endurance/sports
-// palettes so the visual language stays consistent across activities.
+// gets the first color). Ordered for maximum hue contrast — each
+// adjacent pair is far apart on the color wheel — and de-duplicated
+// so there aren't two near-greens or two near-blues anywhere in the
+// list. Previously had green+emerald, sky+light-blue, amber+yellow,
+// which read as the same color from across the room.
 const ROUTINE_PALETTE = [
   "rgba(84,203,130,0.92)",   // green
-  "rgba(56,189,248,0.94)",   // sky
   "rgba(251,191,36,0.94)",   // amber
   "rgba(167,139,250,0.94)",  // violet
   "rgba(248,113,113,0.92)",  // red
-  "rgba(244,114,182,0.92)",  // pink
+  "rgba(56,189,248,0.94)",   // sky
   "rgba(251,146,60,0.92)",   // orange
-  "rgba(74,222,128,0.92)",   // emerald
-  "rgba(125,211,252,0.92)",  // light blue
-  "rgba(253,224,71,0.92)",   // yellow
+  "rgba(244,114,182,0.92)",  // pink
+  "rgba(163,230,53,0.92)",   // lime
+  "rgba(34,211,238,0.92)",   // teal
+  "rgba(217,70,239,0.92)",   // magenta
 ];
 
 export function buildStrengthChartData(
