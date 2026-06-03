@@ -525,6 +525,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
             gradeSystem: true,
             outcome: true,
             area: true,
+            areaId: true,
+            climbArea: { select: { name: true } },
             movesCompleted: true,
             totalMoves: true,
             triesCount: true,
@@ -540,7 +542,12 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       grade: row.grade,
       gradeSystem: row.gradeSystem,
       outcome: row.outcome,
-      area: row.area,
+      // Prefer the linked area's canonical name (so casing matches what
+      // the user sees in the picker); fall back to the legacy free-text
+      // for older rows that pre-date the FK.
+      area: row.climbArea?.name ?? row.area,
+      areaId: row.areaId,
+      newAreaName: null,
       movesCompleted: row.movesCompleted ?? undefined,
       totalMoves: row.totalMoves ?? undefined,
       triesCount: row.triesCount,

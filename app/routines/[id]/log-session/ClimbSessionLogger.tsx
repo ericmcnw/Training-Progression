@@ -13,6 +13,7 @@ import {
   climbNounForDiscipline,
   gradeSystemForDiscipline,
   gradeSystemForTemplateKey,
+  type ClimbAreaBasic,
   type ClimbAttemptDraft,
   type ClimbOutcome,
   type ClimbProblemBasic,
@@ -198,6 +199,8 @@ function AttemptRow({
   onUpdate,
   onRemove,
   savedProblems,
+  savedAreas,
+  areaDatalistId,
   onUpdateProblemNotes,
 }: {
   attempt: ClimbAttemptDraft;
@@ -206,6 +209,8 @@ function AttemptRow({
   onUpdate: (patch: Partial<ClimbAttemptDraft>) => void;
   onRemove: () => void;
   savedProblems: ClimbProblemBasic[];
+  savedAreas: ClimbAreaBasic[];
+  areaDatalistId: string;
   onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
   // Per-row discipline. Each climb logged in a mixed session keeps its own
@@ -400,9 +405,23 @@ function AttemptRow({
             <div style={expandLabelStyle}>Area / Wall (optional)</div>
             <input
               style={expandInputStyle}
+              list={areaDatalistId}
               placeholder="e.g. Cave Wall, Sector 3, Hidden Valley"
               value={attempt.area ?? ""}
-              onChange={(e) => onUpdate({ area: e.target.value || null })}
+              onChange={(e) => {
+                const next = e.target.value;
+                // Match against saved areas case-insensitively. Matching →
+                // link by areaId; new text → clear the id and let the
+                // server materialize the row on save via newAreaName.
+                const match = savedAreas.find(
+                  (a) => a.name.toLowerCase() === next.trim().toLowerCase()
+                );
+                onUpdate({
+                  area: next || null,
+                  areaId: match?.id ?? null,
+                  newAreaName: match ? null : next.trim() || null,
+                });
+              }}
             />
           </div>
 
@@ -527,8 +546,27 @@ export default function ClimbSessionLogger({
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [activeName, setActiveName] = useState("");
+  // Active area pair — text plus matched saved-area id. Text drives the
+  // input + datalist; the id is what we attach to the next ClimbAttempt
+  // (null = new name, server materializes it via `newAreaName` on save).
   const [activeArea, setActiveArea] = useState("");
+  const [activeAreaId, setActiveAreaId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Saved areas for this location — feeds the datalist on both the active
+  // climb panel and each expanded attempt row. Refetched when the parent
+  // location changes; cleared when the session has no saved location.
+  const [savedAreas, setSavedAreas] = useState<ClimbAreaBasic[]>([]);
+  useEffect(() => {
+    if (!climbLocationId) { setSavedAreas([]); return; }
+    let cancelled = false;
+    fetch(`/api/climb-areas?locationId=${climbLocationId}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { if (!cancelled) setSavedAreas(data); })
+      .catch(() => { if (!cancelled) setSavedAreas([]); });
+    return () => { cancelled = true; };
+  }, [climbLocationId]);
+  const areaDatalistId = "climb-areas-datalist";
 
   const gradeSystem = gradeSystemForDiscipline(activeDiscipline);
   const allGrades = climbingGradeOptionsForDiscipline(activeDiscipline);
@@ -568,6 +606,7 @@ export default function ClimbSessionLogger({
   // clear so the next climb starts fresh. Re-tap or re-pick to log another.
   function addAttempt(outcome: ClimbOutcome) {
     if (!selectedGrade) return;
+    const trimmedArea = activeArea.trim();
     const draft: ClimbAttemptDraft = {
       localId: nanoid(),
       discipline: activeDiscipline,
@@ -578,7 +617,11 @@ export default function ClimbSessionLogger({
       problemId: selectedProblemId ?? null,
       newProblemName:
         !selectedProblemId && activeName.trim() ? activeName.trim() : null,
-      area: activeArea.trim() || null,
+      area: trimmedArea || null,
+      areaId: activeAreaId,
+      // Only carry newAreaName when the typed text didn't match a saved
+      // area. The server materializes it into a ClimbArea row on save.
+      newAreaName: !activeAreaId && trimmedArea ? trimmedArea : null,
     };
     onAttemptsChange([draft, ...attempts]);
     onMarkDirty();
@@ -594,6 +637,7 @@ export default function ClimbSessionLogger({
     setSelectedProblemId(null);
     setActiveName("");
     setActiveArea("");
+    setActiveAreaId(null);
     // Keep activeDiscipline — it's the sticky choice for the session.
   }
 
@@ -714,6 +758,15 @@ export default function ClimbSessionLogger({
 
   return (
     <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+      {/* Shared area datalist — feeds both the active climb panel input
+          and every expanded attempt row. Only rendered once per logger
+          mount so duplicate ids don't pile up across attempts. */}
+      <datalist id={areaDatalistId}>
+        {savedAreas.map((a) => (
+          <option key={a.id} value={a.name} />
+        ))}
+      </datalist>
+
       {/* Mode toggle */}
       <div style={modeToggleStyle}>
         <button
@@ -862,9 +915,21 @@ export default function ClimbSessionLogger({
 
               <input
                 style={activeInputStyle}
+                list={areaDatalistId}
                 placeholder={isOutdoorTemplate(templateKey) ? "Area (optional, e.g. Hidden Valley)" : "Area / Wall (optional, e.g. Cave Wall)"}
                 value={activeArea}
-                onChange={(e) => { setActiveArea(e.target.value); onMarkDirty(); }}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setActiveArea(next);
+                  // Same matching trick used in AttemptRow — keeps the
+                  // active area paired with a saved-area id when the user
+                  // picks (or types) an existing area name.
+                  const match = savedAreas.find(
+                    (a) => a.name.toLowerCase() === next.trim().toLowerCase()
+                  );
+                  setActiveAreaId(match?.id ?? null);
+                  onMarkDirty();
+                }}
               />
 
               {activeProblem?.notes && (
@@ -916,6 +981,8 @@ export default function ClimbSessionLogger({
                   onUpdate={(patch) => updateAttempt(attempt.localId, patch)}
                   onRemove={() => removeAttempt(attempt.localId)}
                   savedProblems={savedProblems}
+                  savedAreas={savedAreas}
+                  areaDatalistId={areaDatalistId}
                   onUpdateProblemNotes={onUpdateProblemNotes}
                 />
               ))}

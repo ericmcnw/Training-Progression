@@ -26,6 +26,7 @@ import type {
   ActivitySpotConfig,
   SpotPickerItem,
 } from "@/lib/activity-spots";
+import { fuzzyDuplicateKey } from "@/lib/activity-spots";
 
 // Value shape lives in lib/spot-picker-types so log-draft can reference
 // it without depending on this React component module.
@@ -636,6 +637,40 @@ export default function SpotPicker({
             <div style={confirmMetaStyle}>{displayRegionOf(value)}</div>
           )}
 
+          {/* Dedup suggestion — when the user is naming a new spot and we
+              find an existing saved spot with the same fuzzy key (case /
+              punctuation / pluralization variants), nudge them to pick
+              the existing record. Saves an after-the-fact merge. */}
+          {value.kind === "new" && (() => {
+            const draftName = value.draft.name?.trim();
+            if (!draftName) return null;
+            const draftKey = fuzzyDuplicateKey(draftName);
+            if (!draftKey) return null;
+            const match = savedSpots.find(
+              (s) => fuzzyDuplicateKey(s.name) === draftKey && s.name.toLowerCase() !== draftName.toLowerCase()
+            );
+            if (!match) return null;
+            return (
+              <button
+                type="button"
+                style={similarMatchButtonStyle}
+                onClick={() => {
+                  onChange({
+                    kind: "saved",
+                    ref: { kind: match.kind, id: match.id },
+                    display: { name: match.name, region: match.region },
+                  });
+                }}
+                title={`Use the existing saved ${spotNoun} instead of creating a duplicate`}
+              >
+                <span aria-hidden="true">⚠️</span>
+                <span>
+                  Looks like <strong>{match.name}</strong>{match.region ? ` · ${match.region}` : ""} — tap to use that one instead
+                </span>
+              </button>
+            );
+          })()}
+
           {/* New-spot inline fields — type buttons, region, GPS coords */}
           {value.kind === "new" && showInlineExpand && (
             <div style={inlineFieldsStyle}>
@@ -1217,6 +1252,25 @@ const confirmMetaStyle: CSSProperties = {
   fontSize: 11.5,
   color: COLOR.textDim,
   fontWeight: 600,
+};
+
+// Inline "did you mean?" hint shown on the new-spot card when a fuzzy
+// match against an existing saved spot is detected. Amber accent so it
+// reads as a warning without being alarming.
+const similarMatchButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(251,191,36,0.45)",
+  background: "rgba(251,191,36,0.10)",
+  color: "rgba(254,243,199,0.95)",
+  fontSize: 12,
+  fontWeight: 700,
+  textAlign: "left" as const,
+  cursor: "pointer",
 };
 
 const inlineFieldsStyle: CSSProperties = {

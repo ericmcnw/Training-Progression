@@ -47,7 +47,7 @@ export default async function ClimbLocationDetailPage(props: {
 }) {
   const { id } = await Promise.resolve(props.params);
 
-  const [location, attempts, problems, mediaRows, problemMediaRows, siblings] = await Promise.all([
+  const [location, attempts, problems, mediaRows, problemMediaRows, siblings, areaRows] = await Promise.all([
     prisma.climbLocation.findUnique({
       where: { id },
       select: {
@@ -69,6 +69,8 @@ export default async function ClimbLocationDetailPage(props: {
         gradeSystem: true,
         outcome: true,
         area: true,
+        areaId: true,
+        climbArea: { select: { name: true } },
         notes: true,
         movesCompleted: true,
         totalMoves: true,
@@ -130,6 +132,13 @@ export default async function ClimbLocationDetailPage(props: {
       where: { id: { not: id } },
       orderBy: [{ type: "asc" }, { name: "asc" }],
       select: { id: true, name: true, type: true },
+    }),
+    // Named sub-areas at this location. Loaded separately so an area
+    // with zero attempts (just created via the picker) still shows.
+    prisma.climbArea.findMany({
+      where: { locationId: id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -264,6 +273,49 @@ export default async function ClimbLocationDetailPage(props: {
     (a, b) => b.performedAt.getTime() - a.performedAt.getTime()
   );
 
+  // ── Area rollup ────────────────────────────────────────────────────────────
+  // Counts come from `attempts`; legacy free-text rows fall back to their
+  // case-insensitive name match so they count toward the same bucket. Each
+  // area card links into My Climbs with the location + area filter pre-set.
+  type AreaRollup = {
+    id: string;
+    name: string;
+    climbCount: number;
+    sentCount: number;
+    lastVisit: Date | null;
+  };
+  const areaById = new Map<string, AreaRollup>();
+  const areaByNameLower = new Map<string, AreaRollup>();
+  for (const a of areaRows) {
+    const rollup: AreaRollup = {
+      id: a.id,
+      name: a.name,
+      climbCount: 0,
+      sentCount: 0,
+      lastVisit: null,
+    };
+    areaById.set(a.id, rollup);
+    areaByNameLower.set(a.name.toLowerCase(), rollup);
+  }
+  for (const a of attempts) {
+    const linked = a.areaId ? areaById.get(a.areaId) : null;
+    const fallback = !linked && a.area ? areaByNameLower.get(a.area.trim().toLowerCase()) : null;
+    const target = linked ?? fallback ?? null;
+    if (!target) continue;
+    target.climbCount += 1;
+    if (SENT_OUTCOMES.has(a.outcome)) target.sentCount += 1;
+    if (!target.lastVisit || a.sessionLog.performedAt > target.lastVisit) {
+      target.lastVisit = a.sessionLog.performedAt;
+    }
+  }
+  const areaSummaries = [...areaById.values()].sort((a, b) => {
+    // Areas with logs come first (descending by recency), then unused ones.
+    if (a.climbCount > 0 && b.climbCount === 0) return -1;
+    if (b.climbCount > 0 && a.climbCount === 0) return 1;
+    if (a.lastVisit && b.lastVisit) return b.lastVisit.getTime() - a.lastVisit.getTime();
+    return a.name.localeCompare(b.name);
+  });
+
   const media: GalleryMediaItem[] = mediaRows.map((m) => ({
     id: m.id,
     kind: m.kind,
@@ -363,6 +415,53 @@ export default async function ClimbLocationDetailPage(props: {
             <MediaGallery items={media} emptyHint="No photos yet — add one above." />
           </div>
         </SectionCard>
+
+        {/* Area rollup — quick links to the area-filtered climbs page,
+            with attempt/sent counts per area. Hidden when this location
+            has no named areas yet. */}
+        {areaSummaries.length > 0 && (
+          <SectionCard
+            title={`Areas (${areaSummaries.length})`}
+            subtitle="Sectors / walls inside this location. Tap to filter your climbs."
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: 8,
+              }}
+            >
+              {areaSummaries.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/activities/climbing/climbs?location=${encodeURIComponent(location.id)}&area=${encodeURIComponent(a.id)}`}
+                  style={{
+                    display: "grid",
+                    gap: 4,
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 900 }}>{a.name}</div>
+                  <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>
+                    {a.climbCount === 0
+                      ? "No climbs yet"
+                      : `${a.climbCount} climb${a.climbCount === 1 ? "" : "s"} · ${a.sentCount} sent`}
+                  </div>
+                  {a.lastVisit && (
+                    <div style={{ fontSize: 10, opacity: 0.55, fontWeight: 700 }}>
+                      Last: {formatAppDate(a.lastVisit, { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+        )}
 
         {/* Problem library */}
         <SectionCard

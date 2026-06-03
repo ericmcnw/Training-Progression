@@ -2314,6 +2314,43 @@ async function resolveClimbLocationId(input: {
   return created.id;
 }
 
+/** Walk a draft list and resolve any `newAreaName` strings into ClimbArea
+ *  rows scoped to `locationId`. Mutates `areaId` in place so the caller
+ *  can pass the same array straight into the ClimbAttempt createMany.
+ *  Areas dedup case-insensitively per location; an attempt without a
+ *  location keeps its free-text `area` value and skips the FK. */
+async function resolveAttemptAreas(
+  attempts: Array<{
+    area?: string | null;
+    areaId?: string | null;
+    newAreaName?: string | null;
+  }>,
+  locationId: string | null,
+): Promise<void> {
+  if (!locationId) return;
+  const nameToId = new Map<string, string>();
+  for (const attempt of attempts) {
+    if (attempt.areaId) continue;
+    const raw = attempt.newAreaName?.trim() || attempt.area?.trim();
+    if (!raw) continue;
+    const lookupKey = raw.toLowerCase();
+    if (nameToId.has(lookupKey)) {
+      attempt.areaId = nameToId.get(lookupKey)!;
+      continue;
+    }
+    const existing = await prisma.climbArea.findFirst({
+      where: { locationId, name: { equals: raw, mode: "insensitive" } },
+      select: { id: true },
+    });
+    const areaId = existing?.id ?? (await prisma.climbArea.create({
+      data: { locationId, name: raw },
+      select: { id: true },
+    })).id;
+    nameToId.set(lookupKey, areaId);
+    attempt.areaId = areaId;
+  }
+}
+
 export async function logSession(params: {
   routineId: string;
   durationSec?: number | null;
@@ -2329,6 +2366,8 @@ export async function logSession(params: {
     gradeSystem: "BOULDER_V" | "YOSEMITE";
     outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
     area?: string | null;
+    areaId?: string | null;
+    newAreaName?: string | null;
     movesCompleted?: number;
     totalMoves?: number;
     triesCount?: number | null;
@@ -2400,6 +2439,13 @@ export async function logSession(params: {
     attempt.problemId = problemId;
   }
 
+  // Resolve / create ClimbArea rows for attempts that named a new area.
+  // Areas only exist under a location, so attempts on a location-less log
+  // skip the lookup (the free-text `area` field still gets saved on the
+  // attempt so the value isn't lost). Areas dedup case-insensitively
+  // within a location.
+  await resolveAttemptAreas(resolvedAttempts, resolvedClimbLocationId ?? null);
+
   // Resolve generic ActivitySpot for non-climbing sport sessions. Climbing
   // uses ClimbLocation above and skips this path. If the resolver finds a
   // cross-table climb-location match it returns one instead — splitResolvedSpot
@@ -2461,6 +2507,7 @@ export async function logSession(params: {
           gradeSystem: attempt.gradeSystem,
           outcome: attempt.outcome,
           area: attempt.area?.trim() || null,
+          areaId: attempt.areaId ?? null,
           movesCompleted: attempt.movesCompleted ?? null,
           totalMoves: attempt.totalMoves ?? null,
           triesCount: attempt.triesCount ?? null,
@@ -2812,6 +2859,8 @@ export async function updateSessionLog(params: {
     gradeSystem: "BOULDER_V" | "YOSEMITE";
     outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
     area?: string | null;
+    areaId?: string | null;
+    newAreaName?: string | null;
     movesCompleted?: number;
     totalMoves?: number;
     triesCount?: number | null;
@@ -2920,6 +2969,10 @@ export async function updateSessionLog(params: {
       problemNameToId.set(key, problemId);
       attempt.problemId = problemId;
     }
+    // Mirror logSession's area resolution against the same location.
+    const areaLocationId =
+      hasSpotParams ? nextClimbLocationId ?? null : existing.climbLocationId ?? null;
+    await resolveAttemptAreas(resolvedAttempts, areaLocationId);
   }
 
   await prisma.$transaction(async (tx) => {
@@ -2983,6 +3036,7 @@ export async function updateSessionLog(params: {
             gradeSystem: attempt.gradeSystem,
             outcome: attempt.outcome,
             area: attempt.area?.trim() || null,
+            areaId: attempt.areaId ?? null,
             movesCompleted: attempt.movesCompleted ?? null,
             totalMoves: attempt.totalMoves ?? null,
             triesCount: attempt.triesCount ?? null,

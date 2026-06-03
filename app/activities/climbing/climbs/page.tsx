@@ -109,13 +109,17 @@ export default async function ClimbsBrowsePage(props: {
   const outcomeFilter = (getParam(searchParams, "outcome") ?? "all") as OutcomeFilter;
   const locationFilter = getParam(searchParams, "location") ?? "all";
   const gradeFilter = getParam(searchParams, "grade") ?? "all";
+  // Area filter only kicks in when a specific location is selected — areas
+  // are location-scoped, and "all locations · area=X" would mash unrelated
+  // sectors together. UI hides the row entirely until location is chosen.
+  const areaFilter = getParam(searchParams, "area") ?? "all";
   const range = parseRange(getParam(searchParams, "range"));
   const search = (getParam(searchParams, "q") ?? "").trim().toLowerCase();
 
   const now = new Date();
   const cutoff = cutoffForRange(range);
 
-  const [allAttempts, allLocations] = await Promise.all([
+  const [allAttempts, allLocations, locationAreas] = await Promise.all([
     prisma.climbAttempt.findMany({
       where: cutoff ? { sessionLog: { performedAt: { gte: cutoff } } } : undefined,
       orderBy: { sessionLog: { performedAt: "desc" } },
@@ -125,6 +129,8 @@ export default async function ClimbsBrowsePage(props: {
         gradeSystem: true,
         outcome: true,
         area: true,
+        areaId: true,
+        climbArea: { select: { name: true } },
         notes: true,
         sessionLogId: true,
         problem: { select: { name: true } },
@@ -147,6 +153,16 @@ export default async function ClimbsBrowsePage(props: {
       orderBy: [{ type: "asc" }, { name: "asc" }],
       select: { id: true, name: true, type: true },
     }),
+    // Areas for the currently-selected location only. Loaded eagerly so
+    // the pill row renders synchronously on first paint; empty array
+    // when no location is picked.
+    locationFilter !== "all"
+      ? prisma.climbArea.findMany({
+          where: { locationId: locationFilter },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([] as Array<{ id: string; name: string }>),
   ]);
 
   // Filter pipeline
@@ -156,6 +172,16 @@ export default async function ClimbsBrowsePage(props: {
     if (venueFilter === "outdoor" && v !== "CRAG") return false;
 
     if (locationFilter !== "all" && a.sessionLog.climbLocation?.id !== locationFilter) return false;
+
+    // Area filter — match either by linked areaId (new attempts) or by
+    // case-insensitive name on the legacy free-text column (so older rows
+    // still respond when the area row got materialized via the migration).
+    if (areaFilter !== "all") {
+      const matchedArea = locationAreas.find((x) => x.id === areaFilter);
+      const expectedName = matchedArea?.name?.toLowerCase() ?? null;
+      const attemptAreaName = a.climbArea?.name?.toLowerCase() ?? a.area?.trim().toLowerCase() ?? null;
+      if (a.areaId !== areaFilter && attemptAreaName !== expectedName) return false;
+    }
 
     if (gradeFilter !== "all" && a.grade !== gradeFilter) return false;
 
@@ -295,17 +321,47 @@ export default async function ClimbsBrowsePage(props: {
               <div style={{ display: "grid", gap: 6 }}>
                 <div style={filterLabelStyle}>Location</div>
                 <div style={pillRowStyle}>
-                  <Link href={buildHref(searchParams, { location: undefined })} style={locationFilter === "all" ? pillActiveStyle : pillStyle}>
+                  <Link
+                    href={buildHref(searchParams, { location: undefined, area: undefined })}
+                    style={locationFilter === "all" ? pillActiveStyle : pillStyle}
+                  >
                     All locations
                   </Link>
                   {allLocations.map((loc) => (
                     <Link
                       key={loc.id}
-                      href={buildHref(searchParams, { location: loc.id })}
+                      // Switching location clears any selected area —
+                      // areas only make sense scoped under one location.
+                      href={buildHref(searchParams, { location: loc.id, area: undefined })}
                       style={locationFilter === loc.id ? pillActiveStyle : pillStyle}
                     >
                       <span style={{ marginRight: 6, fontSize: 9, opacity: 0.7 }}>{loc.type === "GYM" ? "🏠" : "🪨"}</span>
                       {loc.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Area pill row — only when a location is selected. Saved areas
+                at that location feed the pills; "All areas" resets. */}
+            {locationFilter !== "all" && locationAreas.length > 0 && (
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={filterLabelStyle}>Area</div>
+                <div style={pillRowStyle}>
+                  <Link
+                    href={buildHref(searchParams, { area: undefined })}
+                    style={areaFilter === "all" ? pillActiveStyle : pillStyle}
+                  >
+                    All areas
+                  </Link>
+                  {locationAreas.map((a) => (
+                    <Link
+                      key={a.id}
+                      href={buildHref(searchParams, { area: a.id })}
+                      style={areaFilter === a.id ? pillActiveStyle : pillStyle}
+                    >
+                      {a.name}
                     </Link>
                   ))}
                 </div>
@@ -339,6 +395,7 @@ export default async function ClimbsBrowsePage(props: {
               {venueFilter !== "all" && <input type="hidden" name="venue" value={venueFilter} />}
               {outcomeFilter !== "all" && <input type="hidden" name="outcome" value={outcomeFilter} />}
               {locationFilter !== "all" && <input type="hidden" name="location" value={locationFilter} />}
+              {areaFilter !== "all" && <input type="hidden" name="area" value={areaFilter} />}
               {gradeFilter !== "all" && <input type="hidden" name="grade" value={gradeFilter} />}
               {range !== "1y" && <input type="hidden" name="range" value={range} />}
               <input
@@ -349,7 +406,7 @@ export default async function ClimbsBrowsePage(props: {
                 style={searchInputStyle}
               />
               <button type="submit" style={searchBtnStyle}>Search</button>
-              {(venueFilter !== "all" || outcomeFilter !== "all" || locationFilter !== "all" || gradeFilter !== "all" || range !== "1y" || search) && (
+              {(venueFilter !== "all" || outcomeFilter !== "all" || locationFilter !== "all" || areaFilter !== "all" || gradeFilter !== "all" || range !== "1y" || search) && (
                 <Link href="/activities/climbing/climbs" style={searchBtnStyle}>Reset</Link>
               )}
             </form>

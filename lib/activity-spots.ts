@@ -87,6 +87,25 @@ export function normalizeSpotName(name: string): string {
     .toLowerCase();
 }
 
+// Aggressively-normalized key for "did you mean?" duplicate detection in
+// the picker UI. Strips punctuation, all whitespace, and a trailing 's' so
+// pluralization, apostrophes, and spacing variants collapse to the same
+// key. Used ONLY for surfacing suggestions — the server still saves
+// exactly what the user typed.
+//   "Ward's Pond Ridge"   → "wardpondridge"
+//   "Wards Pond Ridge"    → "wardpondridge"  ← same → suggest the dupe
+//   "Ward Pond"           → "wardpond"
+//   "Wards Ponds"         → "wardpond"       ← same as above
+//   "Ward Pond Ridge"     → "wardpondridge"  ← same as "Wards Pond Ridge"
+// Trailing 's' strip is single-pass, after punctuation removal.
+export function fuzzyDuplicateKey(name: string): string {
+  const stripped = name
+    .replace(/[‘’ʼʹ'"`“”]/g, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+  return stripped.endsWith("s") ? stripped.slice(0, -1) : stripped;
+}
+
 export function getActivitySpotConfig(slug: string): ActivitySpotConfig | null {
   const entry = getActivityEntry(slug);
   if (!entry) return null;

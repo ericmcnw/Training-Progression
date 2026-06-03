@@ -38,6 +38,14 @@ export type ClimbProblemBasic = {
   priorSendCount?: number;
 };
 
+// Sub-region within a ClimbLocation. Mostly used in the picker dropdown
+// for the per-climb "Area" field — typing a known area links by id;
+// typing a new one creates a row on save.
+export type ClimbAreaBasic = {
+  id: string;
+  name: string;
+};
+
 export type ClimbAttemptInput = {
   /** Per-climb discipline. Drives the grade system + the outcome options
    *  available. Used to be derived from the session template; now stored
@@ -47,6 +55,12 @@ export type ClimbAttemptInput = {
   gradeSystem: ClimbGradeSystem;
   outcome: ClimbOutcome;
   area?: string | null;
+  /** Structured area link. Either an existing ClimbArea id (picked from
+   *  the dropdown) or null when the user typed a fresh name in
+   *  `newAreaName`. The server resolves new names into ClimbArea rows
+   *  scoped to the attempt's session location. */
+  areaId?: string | null;
+  newAreaName?: string | null;
   movesCompleted?: number;
   totalMoves?: number;
   /** Optional "how many tries it took to send." Only meaningful for

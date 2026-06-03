@@ -430,9 +430,30 @@ model ClimbLocation {
   routineLogs RoutineLog[]
   problems    ClimbProblem[]
   media       ClimbMedia[]
+  areas       ClimbArea[]
 
   @@index([type, name])
   @@index([osmType, osmId])
+}
+
+// Named sub-region of a ClimbLocation — sectors, walls, boulders within a
+// crag/gym. Lives under one location and is referenced by ClimbAttempt so
+// you can log multiple climbs at "Cave Wall" and filter by it later.
+// Names are case-insensitive within a location (the dedup runs on lower-
+// case in the resolver). The free-text ClimbAttempt.area column stays
+// alongside for legacy display fallback on rows that predate the FK.
+model ClimbArea {
+  id         String        @id @default(cuid())
+  locationId String
+  name       String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @default(now()) @updatedAt
+
+  location  ClimbLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  attempts  ClimbAttempt[]
+
+  @@unique([locationId, name])
+  @@index([locationId])
 }
 
 // Generic location pin for non-climbing activities (Phase 2 of the spots-map
@@ -528,7 +549,11 @@ model ClimbAttempt {
   grade          String
   gradeSystem    ClimbGradeSystem
   outcome        ClimbOutcome
+  // Free-text area kept alongside the structured FK for legacy rows that
+  // predate the migration. New rows populate `areaId` and may leave this
+  // null; lists prefer `climbArea.name` when present, else fall back here.
   area           String?
+  areaId         String?
   movesCompleted Int?
   totalMoves     Int?
   // Optional "how many tries" counter. Used for SEND/REDPOINT only —
@@ -541,10 +566,12 @@ model ClimbAttempt {
 
   sessionLog RoutineLog    @relation(fields: [sessionLogId], references: [id], onDelete: Cascade)
   problem    ClimbProblem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
+  climbArea  ClimbArea?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   @@index([sessionLogId, attemptOrder])
   @@index([gradeSystem, grade])
   @@index([problemId])
+  @@index([areaId])
 }
 
 model RoutineLog {
