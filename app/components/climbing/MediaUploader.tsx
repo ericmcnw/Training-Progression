@@ -5,9 +5,11 @@
 // inside problem rows). Renders inline — no modal — so the gallery
 // remains visible while uploading.
 //
-// Mobile: the file input passes capture="environment" so iOS/Android
-// surface the rear camera as one of the picker options. The link tab
-// uses a single-line input + Add button that wraps cleanly at 320px.
+// Mobile: the file input deliberately omits `capture` so iOS/Android
+// show the full chooser sheet (Take Photo + Photo Library + Choose
+// Files). With `capture="environment"` the OS jumps straight to the
+// camera and never offers a library pick — that broke uploading shots
+// you already took.
 
 import { useRef, useState, useTransition } from "react";
 import { addClimbLink, uploadClimbPhoto } from "@/app/activities/climbing/media/actions";
@@ -105,7 +107,6 @@ export default function MediaUploader({
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif"
-            capture="environment"
             multiple
             onChange={(e) => handleFiles(e.target.files)}
             disabled={isPending}
@@ -116,7 +117,7 @@ export default function MediaUploader({
             {isPending ? "Uploading…" : "Tap to add photos"}
           </span>
           <span style={{ fontSize: 11, opacity: 0.6, textAlign: "center" }}>
-            JPG · PNG · WebP · GIF · up to 20 MB
+            Camera or photo library · JPG · PNG · WebP · GIF · up to 20 MB
           </span>
         </label>
       ) : (

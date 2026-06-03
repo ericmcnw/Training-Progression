@@ -32,6 +32,10 @@ export type ClimbProblemBasic = {
   grade: string;
   gradeSystem: ClimbGradeSystem;
   notes: string | null;
+  /** Count of prior clean sends (FLASH/ONSIGHT/SEND/REDPOINT) on this
+   *  problem. Drives the ↻ repeat badge on saved-problem chips. Optional
+   *  for back-compat with consumers that don't populate it. */
+  priorSendCount?: number;
 };
 
 export type ClimbAttemptInput = {

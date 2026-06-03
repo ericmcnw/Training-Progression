@@ -107,6 +107,8 @@ export default async function EditRoutineLogPage(props: {
               savedSpots={data.savedSpots}
               savedClimbLocations={data.savedClimbLocations}
               initialSpot={data.initialSpot}
+              initialClimbAttempts={data.initialClimbAttempts}
+              climbDefaultDiscipline={data.climbDefaultDiscipline}
             />
           ) : (
             <EditCompletionLogForm

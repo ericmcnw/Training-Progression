@@ -2802,6 +2802,24 @@ export async function updateSessionLog(params: {
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
   preferredClimbingGrades?: string[];
+  // Per-climb attempts — same shape as logSession. When provided, the
+  // log's existing ClimbAttempt rows are replaced with these. Omit
+  // entirely (undefined) to leave attempts untouched (e.g. non-climbing
+  // session edits). Pass an empty array to clear all attempts.
+  climbAttempts?: Array<{
+    discipline: "BOULDER" | "TOP_ROPE" | "SPORT_LEAD";
+    grade: string;
+    gradeSystem: "BOULDER_V" | "YOSEMITE";
+    outcome: "FLASH" | "ONSIGHT" | "SEND" | "REDPOINT" | "FELL" | "PROJECT";
+    area?: string | null;
+    movesCompleted?: number;
+    totalMoves?: number;
+    triesCount?: number | null;
+    notes?: string;
+    attemptOrder: number;
+    problemId?: string | null;
+    newProblemName?: string | null;
+  }>;
   // Spot wiring: same shape as logSession. When `clearSpot` is true,
   // clears both climbLocationId and activitySpotId on the log.
   clearSpot?: boolean;
@@ -2829,9 +2847,12 @@ export async function updateSessionLog(params: {
     throw new Error("Duration must be > 0.");
   }
 
+  // Pull the existing log's climbLocationId so we can resolve new problem
+  // names even when the user didn't change the spot (the saved location is
+  // the parent FK for newly-added problems).
   const existing = await prisma.routineLog.findUnique({
     where: { id: params.logId },
-    select: { routineId: true },
+    select: { routineId: true, climbLocationId: true },
   });
   if (!existing || existing.routineId !== params.routineId) throw new Error("Log not found for routine.");
 
@@ -2855,6 +2876,49 @@ export async function updateSessionLog(params: {
       const split = splitResolvedSpot(resolvedSpot, { climbLocationId: resolvedClimb });
       nextClimbLocationId = split.climbLocationId;
       nextActivitySpotId = split.activitySpotId;
+    }
+  }
+
+  // Mirror logSession's problem resolution: any attempt with `newProblemName`
+  // gets either matched against an existing ClimbProblem at the same
+  // location/grade or one is created. Use the resolved-next location if
+  // the user changed the spot; otherwise fall back to whatever was saved on
+  // the log so additions still land on the right location.
+  const resolvedAttempts = params.climbAttempts ? [...params.climbAttempts] : null;
+  if (resolvedAttempts) {
+    const problemLocationId =
+      hasSpotParams ? nextClimbLocationId ?? null : existing.climbLocationId ?? null;
+    const newProblemKey = (name: string, grade: string) => `${name.toLowerCase().trim()}::${grade}`;
+    const problemNameToId = new Map<string, string>();
+    for (const attempt of resolvedAttempts) {
+      if (attempt.problemId || !attempt.newProblemName?.trim()) continue;
+      const name = attempt.newProblemName.trim();
+      const key = newProblemKey(name, attempt.grade);
+      if (problemNameToId.has(key)) {
+        attempt.problemId = problemNameToId.get(key)!;
+        continue;
+      }
+      const found = await prisma.climbProblem.findFirst({
+        where: {
+          name: { equals: name, mode: "insensitive" },
+          grade: attempt.grade,
+          gradeSystem: attempt.gradeSystem,
+          locationId: problemLocationId,
+        },
+        select: { id: true },
+      });
+      const problemId = found?.id ?? (await prisma.climbProblem.create({
+        data: {
+          name,
+          grade: attempt.grade,
+          gradeSystem: attempt.gradeSystem,
+          locationId: problemLocationId,
+          notes: attempt.notes?.trim() || null,
+        },
+        select: { id: true },
+      })).id;
+      problemNameToId.set(key, problemId);
+      attempt.problemId = problemId;
     }
   }
 
@@ -2902,6 +2966,31 @@ export async function updateSessionLog(params: {
           booleanValue: value.booleanValue ?? null,
         })),
       });
+    }
+
+    // Replace ClimbAttempt rows when the caller sent them. Omitting the
+    // field leaves existing attempts untouched (matches the no-change
+    // contract used by the spot params).
+    if (resolvedAttempts !== null) {
+      await tx.climbAttempt.deleteMany({ where: { sessionLogId: params.logId } });
+      if (resolvedAttempts.length > 0) {
+        await tx.climbAttempt.createMany({
+          data: resolvedAttempts.map((attempt) => ({
+            sessionLogId: params.logId,
+            problemId: attempt.problemId ?? null,
+            discipline: attempt.discipline,
+            grade: attempt.grade,
+            gradeSystem: attempt.gradeSystem,
+            outcome: attempt.outcome,
+            area: attempt.area?.trim() || null,
+            movesCompleted: attempt.movesCompleted ?? null,
+            totalMoves: attempt.totalMoves ?? null,
+            triesCount: attempt.triesCount ?? null,
+            notes: attempt.notes?.trim() || null,
+            attemptOrder: attempt.attemptOrder,
+          })),
+        });
+      }
     }
   });
   await recalculateRoutineLogStimulus(params.logId);

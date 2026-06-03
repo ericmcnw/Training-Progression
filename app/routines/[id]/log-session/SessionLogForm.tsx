@@ -44,87 +44,11 @@ import {
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
-import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, ClimbOutcome, QuickClimbRow } from "@/lib/climb-types";
-import { gradeSystemForDiscipline } from "@/lib/climb-types";
-import { nanoid } from "nanoid";
-
-// Synthesize SessionMetricValueInput from per-climb attempts (backward compat for progress queries)
-function synthesizeClimbingMetrics(
-  attempts: ClimbAttemptDraft[],
-  definitions: SessionMetricDefinitionWithConfig[]
-): Array<{ metricDefinitionId: string; numberValue?: number }> {
-  const gradeCounts = new Map<string, { flash: number; done: number }>();
-  for (const attempt of attempts) {
-    const current = gradeCounts.get(attempt.grade) ?? { flash: 0, done: 0 };
-    if (attempt.outcome === "FLASH" || attempt.outcome === "ONSIGHT") current.flash++;
-    else if (attempt.outcome === "SEND" || attempt.outcome === "REDPOINT") current.done++;
-    gradeCounts.set(attempt.grade, current);
-  }
-
-  const result: Array<{ metricDefinitionId: string; numberValue?: number }> = [];
-  for (const def of definitions) {
-    const config = def.config;
-    if (!config?.gradeBucket || !config?.climbingColumn) continue;
-    const grade = config.gradeBucket as string;
-    const column = config.climbingColumn as string;
-    const counts = gradeCounts.get(grade);
-    if (!counts) continue;
-    const value = column === "FLASHED" ? counts.flash : counts.done;
-    if (value > 0) result.push({ metricDefinitionId: def.id, numberValue: value });
-  }
-  return result;
-}
-
-// Synthesize ClimbAttempt list from the discipline-aware quick mode rows.
-// Each row carries its own discipline + grade + grade system, so a single
-// session can contain a mix freely. The flash outcome flips to ONSIGHT for
-// rope disciplines; send flips to REDPOINT for sport lead.
-function synthesizeAttemptsFromQuickRows(rows: QuickClimbRow[]): ClimbAttemptDraft[] {
-  const attempts: ClimbAttemptDraft[] = [];
-  let order = 0;
-  for (const row of rows) {
-    const flashOutcome: ClimbOutcome = row.discipline === "BOULDER" ? "FLASH" : "ONSIGHT";
-    const sendOutcome: ClimbOutcome = row.discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
-    const flashCount = parseInt(row.flashCount || "0") || 0;
-    const sendCount = parseInt(row.sendCount || "0") || 0;
-    const projectCount = parseInt(row.projectCount || "0") || 0;
-
-    for (let i = 0; i < flashCount; i++) {
-      attempts.push({
-        localId: `${row.localId}-flash-${i}`,
-        discipline: row.discipline,
-        grade: row.grade,
-        gradeSystem: row.gradeSystem,
-        outcome: flashOutcome,
-        attemptOrder: order++,
-      });
-    }
-    for (let i = 0; i < sendCount; i++) {
-      attempts.push({
-        localId: `${row.localId}-send-${i}`,
-        discipline: row.discipline,
-        grade: row.grade,
-        gradeSystem: row.gradeSystem,
-        outcome: sendOutcome,
-        attemptOrder: order++,
-      });
-    }
-    // Project column = climbs tried but not sent. Persisted as PROJECT,
-    // matching per-climb mode and the user's mental model that every
-    // non-send is a project they're working on.
-    for (let i = 0; i < projectCount; i++) {
-      attempts.push({
-        localId: `${row.localId}-project-${i}`,
-        discipline: row.discipline,
-        grade: row.grade,
-        gradeSystem: row.gradeSystem,
-        outcome: "PROJECT",
-        attemptOrder: order++,
-      });
-    }
-  }
-  return attempts;
-}
+import type { ClimbAttemptDraft, ClimbLocationBasic, ClimbLocationType, ClimbProblemBasic, QuickClimbRow } from "@/lib/climb-types";
+import {
+  synthesizeAttemptsFromQuickRows,
+  synthesizeClimbingMetrics,
+} from "@/lib/climb-session-synth";
 
 export default function SessionLogForm({
   routineId,

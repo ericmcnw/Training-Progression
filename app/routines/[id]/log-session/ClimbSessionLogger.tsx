@@ -217,6 +217,16 @@ function AttemptRow({
   const label = climbOutcomeLabel(attempt.outcome, discipline);
   const linkedProblem = savedProblems.find((p) => p.id === attempt.problemId);
   const gradeProblems = savedProblems.filter((p) => p.grade === attempt.grade);
+  // Repeat = a send-outcome attempt on a saved problem that already has at
+  // least one prior send. Shown inline next to the outcome chip so the row
+  // reads "Send · ↻ Repeat" at a glance.
+  const isRepeat =
+    !!linkedProblem &&
+    (linkedProblem.priorSendCount ?? 0) > 0 &&
+    (attempt.outcome === "SEND" ||
+      attempt.outcome === "REDPOINT" ||
+      attempt.outcome === "FLASH" ||
+      attempt.outcome === "ONSIGHT");
 
   const [history, setHistory] = useState<AttemptHistoryItem[] | null>(null);
   const [localBeta, setLocalBeta] = useState(linkedProblem?.notes ?? "");
@@ -262,6 +272,11 @@ function AttemptRow({
         <span style={{ fontSize: 11, fontWeight: 800, color, padding: "2px 7px", borderRadius: 999, background: bg, flexShrink: 0, whiteSpace: "nowrap" }}>
           {label}
         </span>
+        {isRepeat && (
+          <span style={repeatBadgeStyle} title={`Repeat — previously sent ${linkedProblem!.priorSendCount}×`}>
+            ↻ Repeat
+          </span>
+        )}
         {(linkedProblem || attempt.newProblemName) && (
           <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {linkedProblem?.name ?? attempt.newProblemName}
@@ -757,7 +772,9 @@ export default function ClimbSessionLogger({
           </div>
 
           {/* Saved problems at this location, filtered to the current
-              discipline's grade system. */}
+              discipline's grade system. A ↻ badge marks problems you've
+              already sent at least once — taps still log a fresh SEND, but
+              the badge makes "this is a repeat" obvious before you tap. */}
           {savedProblems.filter((p) => p.gradeSystem === gradeSystem).length > 0 && (
             <div>
               <div style={sectionLabelStyle}>Known {nounPlural} at this location</div>
@@ -766,15 +783,24 @@ export default function ClimbSessionLogger({
                   .filter((p) => p.gradeSystem === gradeSystem)
                   .map((problem) => {
                   const isSelected = selectedProblemId === problem.id;
+                  const priorSends = problem.priorSendCount ?? 0;
                   return (
                     <button
                       key={problem.id}
                       type="button"
                       onClick={() => selectSavedProblem(problem)}
                       style={problemChipStyle(isSelected)}
+                      title={priorSends > 0 ? `Sent ${priorSends}× before — tap to log a repeat` : undefined}
                     >
                       <span style={{ fontSize: 10, opacity: 0.7 }}>{problem.grade}</span>
-                      <span>{problem.name}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {problem.name}
+                        {priorSends > 0 && (
+                          <span style={repeatBadgeStyle}>
+                            ↻{priorSends > 1 ? `×${priorSends}` : ""}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -1366,3 +1392,18 @@ function summaryChipStyle(color: string, bg: string): React.CSSProperties {
     color,
   };
 }
+
+// Small ↻ marker shown on saved-problem chips (and per-climb attempt rows)
+// when the underlying problem has prior sends — visual cue that a tap on
+// this chip is logging a repeat send, not a first ascent.
+const repeatBadgeStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  padding: "1px 5px",
+  borderRadius: 6,
+  background: "rgba(74,222,128,0.12)",
+  border: "1px solid rgba(74,222,128,0.35)",
+  color: "rgba(74,222,128,0.95)",
+  whiteSpace: "nowrap",
+  lineHeight: 1,
+};

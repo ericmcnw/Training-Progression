@@ -38,7 +38,12 @@ import {
   type SpotPickerItem,
 } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
-import type { ClimbLocationBasic } from "@/lib/climb-types";
+import {
+  climbingDisciplineForTemplateKey,
+  type ClimbAttemptDraft,
+  type ClimbLocationBasic,
+  type ClimbingDiscipline,
+} from "@/lib/climb-types";
 
 // Mirror the page's inference — kind comes from what the log actually
 // carries, not just the routine's declared kind (legacy routines may have
@@ -168,6 +173,15 @@ export type EditSessionData = {
   savedSpots: SpotPickerItem[];
   savedClimbLocations: ClimbLocationBasic[];
   initialSpot: SpotPickerValue;
+  // Per-climb attempts that were saved alongside this session. Empty for
+  // legacy quick-only logs. Edit form opens in per-climb mode when this is
+  // non-empty so users see the actual climbs (with names/areas/notes), not
+  // a stripped-down grade-count grid.
+  initialClimbAttempts: ClimbAttemptDraft[];
+  // Template-derived default discipline. Used as the starting discipline
+  // for the per-climb stage when the form opens in per-climb mode but
+  // has no attempts to anchor on.
+  climbDefaultDiscipline: ClimbingDiscipline | null;
 };
 
 export type EditCompletionData = {
@@ -493,11 +507,54 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       )
     );
 
+    // Per-climb attempts saved for this log. Re-used as initial state in
+    // edit's per-climb mode. The DB id doubles as the localId — fresh nanoids
+    // are only needed for attempts the user adds in the editor.
+    const templateKey = routine.sessionDetails?.template?.key ?? null;
+    const climbDefaultDiscipline = isClimbingSession
+      ? climbingDisciplineForTemplateKey(templateKey)
+      : null;
+    const climbAttemptRows = isClimbingSession
+      ? await prisma.climbAttempt.findMany({
+          where: { sessionLogId: log.id },
+          orderBy: { attemptOrder: "asc" },
+          select: {
+            id: true,
+            discipline: true,
+            grade: true,
+            gradeSystem: true,
+            outcome: true,
+            area: true,
+            movesCompleted: true,
+            totalMoves: true,
+            triesCount: true,
+            notes: true,
+            attemptOrder: true,
+            problemId: true,
+          },
+        })
+      : [];
+    const initialClimbAttempts: ClimbAttemptDraft[] = climbAttemptRows.map((row) => ({
+      localId: row.id,
+      discipline: row.discipline,
+      grade: row.grade,
+      gradeSystem: row.gradeSystem,
+      outcome: row.outcome,
+      area: row.area,
+      movesCompleted: row.movesCompleted ?? undefined,
+      totalMoves: row.totalMoves ?? undefined,
+      triesCount: row.triesCount,
+      notes: row.notes ?? undefined,
+      attemptOrder: row.attemptOrder,
+      problemId: row.problemId,
+      newProblemName: null,
+    }));
+
     return {
       kind: "SESSION",
       ...base,
       initialDurationSec: log.durationSec ?? 0,
-      templateKey: routine.sessionDetails?.template?.key ?? null,
+      templateKey,
       templateName: routine.sessionDetails?.template?.name ?? null,
       definitions: sessionDefinitions,
       initialValues: initialSessionValues,
@@ -509,6 +566,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       savedSpots: editSavedSpots,
       savedClimbLocations: editSavedClimbLocations,
       initialSpot: initialEditSpot,
+      initialClimbAttempts,
+      climbDefaultDiscipline,
     };
   }
 

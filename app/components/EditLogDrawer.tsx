@@ -247,6 +247,8 @@ function FormForKind({
         savedSpots={data.savedSpots}
         savedClimbLocations={data.savedClimbLocations}
         initialSpot={data.initialSpot}
+        initialClimbAttempts={data.initialClimbAttempts}
+        climbDefaultDiscipline={data.climbDefaultDiscipline}
         onComplete={onComplete}
         onCancel={onCancel}
       />
