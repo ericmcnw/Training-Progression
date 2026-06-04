@@ -15,7 +15,9 @@ import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { getLogDisplayName } from "@/lib/routine-display";
 import { loadEnduranceChartData } from "@/lib/activities/endurance-chart";
+import { loadEndurancePaceChart } from "@/lib/activities/endurance-pace";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import PaceLineChart from "@/app/activities/_shared/PaceLineChart";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +82,7 @@ export default async function EnduranceWorldPage(props: {
 
   const cutoff = cutoffForRange(range);
 
-  const [families, logs, chartData] = await Promise.all([
+  const [families, logs, chartData, paceData] = await Promise.all([
     prisma.enduranceFamily.findMany({
       orderBy: [{ sortOrder: "asc" }],
       include: {
@@ -123,6 +125,9 @@ export default async function EnduranceWorldPage(props: {
     // 12w stacked-bar chart data, fetched in parallel — independent of
     // the page's range filter, since the chart always shows 12 weeks.
     loadEnduranceChartData(),
+    // 12w pace chart — multi-line by type on Overview / family tabs,
+    // switches to per-session points when a specific type is selected.
+    loadEndurancePaceChart({ familySlug, typeSlug }),
   ]);
 
   // Resolve each log's family — prefer log.activityType, fall back to
@@ -208,6 +213,30 @@ export default async function EnduranceWorldPage(props: {
             sessionsByWeek={chartData.sessionsByWeek}
             unit="mi"
             decimals={1}
+            // Opt out of compact mode — at 760px max-width the chart
+            // reads better with the taller (132px) bar track. Compact
+            // (96px) makes 12 bars look squat at desktop densities.
+            compact={false}
+          />
+        ) : null}
+
+        {/* Pace chart — also fixed at 12 weeks. Multi-line when the
+            page is unscoped or scoped to a family; switches to one
+            point per session when the user picks a specific type via
+            the sub-pill row below. */}
+        {paceData ? (
+          <PaceLineChart
+            title={
+              paceData.mode === "weekly"
+                ? "Average Pace per Week — Last 12 Weeks"
+                : `${paceData.typeName} · Pace per Session — Last 12 Weeks`
+            }
+            subtitle={
+              paceData.mode === "weekly"
+                ? "Mileage-weighted average per activity type. Faster paces sit higher on the chart."
+                : `${paceData.points.length} session${paceData.points.length === 1 ? "" : "s"} · dot size reflects distance.`
+            }
+            data={paceData}
           />
         ) : null}
 

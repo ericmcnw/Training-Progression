@@ -9,6 +9,11 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { formatPace } from "@/lib/progress";
+import {
+  TYPE_SLUG_TO_REGISTRY_SLUG,
+  ENDURANCE_ACTIVITY_COLORS,
+  ENDURANCE_FALLBACK_COLORS as FALLBACK_COLORS,
+} from "@/lib/activities/endurance-palette";
 
 // Builds the 12-week stacked-bar chart series for the endurance
 // dashboard. Two log sources roll into the same chart so an edited log
@@ -28,54 +33,6 @@ export type EnduranceChartData = {
    *  the click-week-to-reveal session panel under the chart. */
   sessionsByWeek: SessionsByWeek;
 };
-
-// Activity-type slug → registry slug, so typed logs against the
-// synthetic Endurance routine credit the same buckets the legacy
-// metadata-tagged routines already do.
-const TYPE_SLUG_TO_REGISTRY_SLUG: Record<string, string> = {
-  "run": "running",
-  "trail-run": "trail-running",
-  "long-run": "running",
-  "tempo-run": "running",
-  "easy-run": "running",
-  "interval-run": "running",
-  "sprint": "running",
-  "walk": "walking",
-  "hike": "hiking",
-  "bike": "biking",
-  "mtb": "mountain-biking",
-  "road-bike": "road-cycling",
-  "gravel-bike": "gravel-cycling",
-  "swim": "swimming",
-  "open-water-swim": "open-water-swimming",
-  "row": "rowing",
-  "erg-row": "rowing",
-};
-
-// One canonical color per registered endurance activity. Same palette
-// used elsewhere in the app so the visual language stays consistent.
-const ENDURANCE_ACTIVITY_COLORS: Record<string, string> = {
-  running:                "rgba(59,130,246,0.9)",
-  "road-running":         "rgba(30,64,175,0.9)",
-  "trail-running":        "rgba(168,85,247,0.9)",
-  walking:                "rgba(244,114,182,0.9)",
-  biking:                 "rgba(250,204,21,0.9)",
-  cycling:                "rgba(250,204,21,0.9)",
-  "road-cycling":         "rgba(249,115,22,0.9)",
-  "mountain-biking":      "rgba(194,65,12,0.9)",
-  "gravel-cycling":       "rgba(214,188,138,0.9)",
-  swimming:               "rgba(6,182,212,0.9)",
-  "pool-swimming":        "rgba(103,232,249,0.9)",
-  "open-water-swimming":  "rgba(14,116,144,0.9)",
-  rowing:                 "rgba(239,68,68,0.9)",
-  hiking:                 "rgba(34,197,94,0.9)",
-};
-
-const FALLBACK_COLORS = [
-  "rgba(236,72,153,0.9)",
-  "rgba(245,158,11,0.9)",
-  "rgba(167,139,250,0.9)",
-];
 
 export async function loadEnduranceChartData(now = new Date()): Promise<EnduranceChartData> {
   const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
@@ -205,7 +162,8 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
         parts.push(formatDuration(duration));
       }
       if (distance > 0 && duration > 0) {
-        parts.push(`${formatPace(duration / distance)}/mi`);
+        // formatPace already appends "/mi" — don't double-suffix.
+        parts.push(formatPace(duration / distance));
       }
       const metricFormatted = parts.length > 0 ? parts.join(" · ") : "—";
       sessionsByWeek[wkIdx].push({

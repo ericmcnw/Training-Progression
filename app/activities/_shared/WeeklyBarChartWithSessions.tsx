@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useMemo, type CSSProperties } from "react";
 import StackedWeeklyBarChart, { type StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
+import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
 
 // One per-week session entry shown in the panel under the chart when
 // the user clicks a week. Pre-formatted by the chart-data helper so
@@ -54,6 +54,9 @@ export default function WeeklyBarChartWithSessions({
   compact?: boolean;
 }) {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  // Clicked session row → opens the shared LogDetailPopover (same one
+  // the home dashboard uses) instead of navigating to a separate page.
+  const [openLog, setOpenLog] = useState<OpenLog>(null);
 
   const weekSessions = useMemo(() => {
     if (selectedWeek === null) return null;
@@ -110,6 +113,11 @@ export default function WeeklyBarChartWithSessions({
         gridTemplateColumns: "minmax(0, 1fr)",
         gap: 10,
         minWidth: 0,
+        // Desktop cap — keeps bars from going squat-and-wide at 1000px+
+        // column widths. Mobile sits below the cap and ignores it.
+        width: "100%",
+        maxWidth: 760,
+        margin: "0 auto",
       }}
     >
       <StackedWeeklyBarChart
@@ -135,10 +143,36 @@ export default function WeeklyBarChartWithSessions({
           sessions={weekSessions ?? []}
           weekTotal={weekTotalLabel}
           onClear={() => setSelectedWeek(null)}
+          onSelectSession={(session) => setOpenLog(buildOpenLogFromSession(session))}
         />
       ) : null}
+      <LogDetailPopover open={openLog} onClose={() => setOpenLog(null)} />
     </div>
   );
+}
+
+// Convert a chart session row into the OpenLog shape the popover wants.
+// The href carries the routineId in segment 2 (`/routines/<id>/...`);
+// performedAt is local-time formatted to match the home dashboard's
+// expectations.
+function buildOpenLogFromSession(session: WeekSession): OpenLog {
+  const routineId = session.href ? session.href.split("/")[2] ?? "" : "";
+  const ymd = session.performedAt.toISOString().slice(0, 10);
+  const timeLabel = session.performedAt.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return {
+    log: {
+      logId: session.id,
+      routineId,
+      routineName: session.routineName,
+      performedYmd: ymd,
+      performedTimeLabel: timeLabel,
+    },
+    accent: session.seriesColor,
+    label: session.seriesLabel,
+  };
 }
 
 // ─── Sessions panel ──────────────────────────────────────────────────────────
@@ -148,11 +182,13 @@ function WeekSessionsPanel({
   sessions,
   weekTotal,
   onClear,
+  onSelectSession,
 }: {
   weekLabel: string;
   sessions: WeekSession[];
   weekTotal: { total: string; mins: number | null } | null;
   onClear: () => void;
+  onSelectSession: (session: WeekSession) => void;
 }) {
   return (
     <section style={panelStyle} aria-label={`Sessions for week of ${weekLabel}`}>
@@ -183,7 +219,7 @@ function WeekSessionsPanel({
       ) : (
         <div style={{ display: "grid", gap: 3 }}>
           {sessions.map((s) => (
-            <SessionRow key={s.id} session={s} />
+            <SessionRow key={s.id} session={s} onSelect={() => onSelectSession(s)} />
           ))}
         </div>
       )}
@@ -199,33 +235,27 @@ function formatMins(mins: number) {
   return r === 0 ? `${h}h` : `${h}h ${r}m`;
 }
 
-function SessionRow({ session }: { session: WeekSession }) {
-  // Short day label: "Mon 5/26". Drops the long month name to keep
-  // each row to a single line on mobile.
-  const dayLabel = new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    month: "numeric",
-    day: "numeric",
-  }).format(session.performedAt);
+function SessionRow({ session, onSelect }: { session: WeekSession; onSelect: () => void }) {
+  // Short day label: "Mon 5/26". Locked to en-US so non-US locales
+  // don't flip into DD/MM (the default `undefined` locale was reading
+  // "24/05" for the user, who wants M/D).
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(session.performedAt);
+  const dayLabel = `${weekday} ${session.performedAt.getMonth() + 1}/${session.performedAt.getDate()}`;
 
-  const content = (
-    <div style={rowStyle}>
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      style={rowButtonStyle}
+      aria-label={`Open session: ${session.routineName} on ${dayLabel}`}
+    >
       <span style={{ ...stripeStyle, background: session.seriesColor }} aria-hidden />
       <span style={rowDateStyle}>{dayLabel}</span>
       <span style={rowRoutineStyle}>{session.routineName}</span>
       <span style={rowMetricStyle}>{session.metricFormatted}</span>
-      {session.href ? <span style={rowCaretStyle}>›</span> : null}
-    </div>
+      <span style={rowCaretStyle}>›</span>
+    </button>
   );
-
-  if (session.href) {
-    return (
-      <Link href={session.href} style={{ textDecoration: "none", color: "inherit" }}>
-        {content}
-      </Link>
-    );
-  }
-  return content;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -304,6 +334,18 @@ const rowStyle: CSSProperties = {
   borderColor: "rgba(255,255,255,0.06)",
   background: "rgba(255,255,255,0.02)",
   overflow: "hidden",
+};
+
+// Button variant — same chrome as rowStyle but clears native button
+// styles (font, alignment, padding) so the row reads the same as it
+// did when it was an anchor.
+const rowButtonStyle: CSSProperties = {
+  ...rowStyle,
+  width: "100%",
+  font: "inherit",
+  color: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
 };
 
 const stripeStyle: CSSProperties = {
