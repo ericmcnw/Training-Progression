@@ -15,6 +15,11 @@ export type LegacyGlanceDay = {
   label: string;
   dayNumber: string;
   planned: Array<{
+    /** Unique React key for this row. Equals `${routineId}::${activityTypeId}`
+     *  for typed endurance entries (Trail Run, Walk on the synthetic
+     *  Endurance routine — same routineId, different activity types
+     *  collide otherwise) and plain `routineId` for everything else. */
+    key: string;
     routineId: string;
     routineName: string;
     kind: string;

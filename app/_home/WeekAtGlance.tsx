@@ -335,17 +335,21 @@ type DotSpec = {
 
 function buildDots(day: LegacyGlanceDay): DotSpec[] {
   const result: DotSpec[] = [];
+  // Dedupe by the planned entry's unique key — so two typed endurance
+  // entries on the synthetic routine (Trail Run + Walk, both routineId
+  // = endurance-synthetic) each get their own dot.
   const seen = new Set<string>();
-  // Planned routines (filled if logged, hollow if not).
   for (const p of day.planned) {
-    if (seen.has(p.routineId)) continue;
-    seen.add(p.routineId);
+    if (seen.has(p.key)) continue;
+    seen.add(p.key);
     result.push({ domain: p.domain, logged: p.logged > 0, routineName: p.routineName });
   }
-  // Logged-but-not-planned routines (always filled).
+  // Logged-but-not-planned routines (always filled). day.logs has no
+  // composite key so fall back to routineId dedupe here.
+  const seenRoutines = new Set(day.planned.map((p) => p.routineId));
   for (const l of day.logs) {
-    if (seen.has(l.routineId)) continue;
-    seen.add(l.routineId);
+    if (seenRoutines.has(l.routineId)) continue;
+    seenRoutines.add(l.routineId);
     result.push({ domain: l.domain, logged: true, routineName: l.routineName });
   }
   return result;
@@ -424,7 +428,7 @@ function DetailPanel({
             const showLogButton = !isCompletion && !isFutureDay && !fullyLogged;
             const isLogged = item.logged > 0;
             return (
-              <div key={item.routineId} style={detailRow(isLogged)}>
+              <div key={item.key} style={detailRow(isLogged)}>
                 <span style={{ ...domainBar, background: domainAccent(item.domain) }} aria-hidden />
                 <div style={detailRowText}>
                   <span style={detailRowName}>{item.routineName}</span>

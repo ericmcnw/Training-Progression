@@ -323,7 +323,12 @@ export async function getHomeData(): Promise<HomeData> {
     const dayLogs = logsByYmd.get(ymd) ?? [];
 
     // Build planned list. For past/today days, also surface any logged-but-unplanned routine.
+    // The map key doubles as the React key downstream — `${routineId}::${activityTypeId}`
+    // for typed endurance entries (two typed slots on the same synthetic
+    // routine would otherwise collide on routineId) and plain routineId
+    // everywhere else.
     const plannedMap = new Map<string, {
+      key: string;
       routineId: string;
       routineName: string;
       kind: string;
@@ -336,6 +341,7 @@ export async function getHomeData(): Promise<HomeData> {
       const r = routineMap.get(rid);
       if (!r) continue;
       plannedMap.set(rid, {
+        key: rid,
         routineId: rid,
         routineName: r.name,
         kind: r.kind,
@@ -356,6 +362,7 @@ export async function getHomeData(): Promise<HomeData> {
       if (!typeInfo) continue; // type no longer exists — skip the slot
       const composite = `${slot.routineId}::${slot.activityTypeId}`;
       plannedMap.set(composite, {
+        key: composite,
         routineId: slot.routineId,
         routineName: typeInfo.name,
         kind: r.kind,
@@ -394,6 +401,7 @@ export async function getHomeData(): Promise<HomeData> {
             : null;
           const key = compositeKey ?? log.routineId;
           plannedMap.set(key, {
+            key,
             routineId: log.routineId,
             routineName: typeInfo?.name ?? r.name,
             kind: r.kind,
