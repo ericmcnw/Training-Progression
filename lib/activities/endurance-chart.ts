@@ -121,16 +121,12 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
     let label: string | undefined;
     let paletteSlug: string | undefined;
     if (log.activityType) {
-      // Only credit typed logs whose type is in the endurance family.
-      // Activity types in other families (none today, but future-proof)
-      // shouldn't contaminate the chart.
-      if (log.activityType.family?.slug !== "endurance") {
-        if (!enduranceRoutineIds.includes(log.routineId)) continue;
-        label = routineEnduranceLabel.get(log.routineId);
-      } else {
-        label = log.activityType.name;
-        paletteSlug = TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug];
-      }
+      // ActivityType rows only exist for endurance activities today
+      // (every row sits under an EnduranceFamily), so a typed log is
+      // already endurance — no need for a family check. Trust the
+      // user's per-log type over the routine's pre-edit metadata.
+      label = log.activityType.name;
+      paletteSlug = TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug];
     } else {
       label = routineEnduranceLabel.get(log.routineId);
     }

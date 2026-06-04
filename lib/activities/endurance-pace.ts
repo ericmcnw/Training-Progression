@@ -215,16 +215,11 @@ export async function loadEndurancePaceChart(input: {
     let typeSlug: string | null = null;
 
     if (log.activityType) {
-      if (log.activityType.family?.slug !== "endurance") {
-        // Activity types outside the endurance family shouldn't pollute
-        // the chart, even if the user somehow tagged a non-endurance
-        // type to an endurance-tagged routine.
-        if (!enduranceRoutineIds.includes(log.routineId)) continue;
-        label = routineEnduranceLabel.get(log.routineId);
-      } else {
-        label = log.activityType.name;
-        typeSlug = log.activityType.slug;
-      }
+      // Every ActivityType row sits under an EnduranceFamily — typed
+      // logs are inherently endurance, so trust the per-log type over
+      // the routine's pre-edit metadata.
+      label = log.activityType.name;
+      typeSlug = log.activityType.slug;
     } else {
       label = routineEnduranceLabel.get(log.routineId);
     }
