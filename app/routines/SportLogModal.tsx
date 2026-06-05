@@ -123,15 +123,16 @@ const minimizeBtn: CSSProperties = {
 const drawerBody: CSSProperties = {
   flex: 1,
   overflowY: "auto",
-  // Belt-and-suspenders against horizontal overflow. The body's
-  // grid track defaults to `auto` which grows to content min-content;
-  // pinning to minmax(0, 1fr) keeps it at the body's width. minWidth:
-  // 0 lets the body itself shrink inside the modal. overflow-x:
-  // hidden clips any residual subpixel overflow (e.g. native datetime
-  // input spinners) so iOS doesn't get a horizontal scrollbar.
-  overflowX: "hidden",
+  // `clip` instead of `hidden` because the CSS spec promotes
+  // `overflow-x: hidden` + `overflow-y: auto` to `overflow: auto auto`
+  // in some browsers — which restores the horizontal scrollbar we're
+  // trying to suppress. `clip` blocks horizontal overflow without
+  // creating a scroll container.
+  overflowX: "clip",
   padding: "18px 18px 22px",
   display: "grid",
+  // Pin the grid track to the body width so any wide child can't
+  // expand it beyond the modal. Same pattern as the chart fix.
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: 18,
   minWidth: 0,

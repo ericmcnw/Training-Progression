@@ -168,6 +168,15 @@ export function FormActions({
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
+  // iOS Safari renders <input type="datetime-local"> at the intrinsic
+  // width of its formatted value ("12/31/2024, 11:59 PM") and ignores
+  // `width: 100%` when that intrinsic width is larger. minWidth: 0
+  // lets the input shrink below intrinsic; maxWidth: 100% caps it at
+  // the parent. Both required — together they get datetime inputs to
+  // actually fit inside narrow modals.
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
   padding: "10px 12px",
   border: `1px solid ${inputBorderColor}`,
   borderRadius: 12,
