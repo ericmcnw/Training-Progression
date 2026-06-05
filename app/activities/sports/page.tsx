@@ -5,6 +5,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { formatHoursMinutes } from "@/lib/progress";
 import { prisma } from "@/lib/prisma";
+import SupportRow from "./SupportRow";
 
 export const dynamic = "force-dynamic";
 
@@ -145,10 +146,13 @@ export default async function SportsDashboardPage() {
                     </div>
                     <div style={{ display: "grid", gap: 4 }}>
                       {routines.map((r) => (
-                        <Link key={r.id} href={`/routines/${r.id}`} style={supportRow}>
-                          <span style={supportRowName}>{r.name}</span>
-                          <span style={supportRowArrow}>→</span>
-                        </Link>
+                        <SupportRow
+                          key={r.id}
+                          routineId={r.id}
+                          routineName={r.name}
+                          sportSlug={slug}
+                          sportLabel={entry?.label ?? slug}
+                        />
                       ))}
                     </div>
                   </div>
@@ -361,30 +365,6 @@ const supportGroupCount: React.CSSProperties = {
   letterSpacing: 0.4,
   textTransform: "uppercase",
   opacity: 0.55,
-};
-const supportRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.06)",
-  background: "rgba(255,255,255,0.025)",
-  color: "inherit",
-  textDecoration: "none",
-};
-const supportRowName: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 800,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-const supportRowArrow: React.CSSProperties = {
-  fontSize: 13,
-  opacity: 0.55,
-  fontWeight: 700,
 };
 
 const pageBody: React.CSSProperties = {
