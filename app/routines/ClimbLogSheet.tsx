@@ -1,0 +1,595 @@
+"use client";
+
+import { useEffect, useState, useTransition, type CSSProperties } from "react";
+import { listRecentClimbLocations, logClimbAction } from "@/app/log/climb-log-actions";
+import {
+  type ClimbingDiscipline,
+  type ClimbGradeSystem,
+  type ClimbOutcome,
+} from "@/lib/climb-types";
+
+// Rich climb-log sheet — replaces the generic SportQuickLogRow sheet
+// when the user taps the "Climbing" row. Per-attempt entry with
+// discipline + grade + outcome, plus session-level date / location /
+// duration / notes. Saves via logClimbAction → logSession (existing
+// server action handles location resolution + ClimbAttempt creation).
+
+type RecentLocation = {
+  id: string;
+  name: string;
+  type: "GYM" | "CRAG";
+  region: string | null;
+};
+
+type Attempt = {
+  localId: string;
+  discipline: ClimbingDiscipline;
+  grade: string;
+  outcome: ClimbOutcome;
+  notes: string;
+};
+
+const DISCIPLINE_OPTIONS: Array<{ value: ClimbingDiscipline; label: string }> = [
+  { value: "BOULDER", label: "Boulder" },
+  { value: "TOP_ROPE", label: "Top Rope" },
+  { value: "SPORT_LEAD", label: "Sport / Lead" },
+];
+
+const OUTCOMES_BY_DISCIPLINE: Record<ClimbingDiscipline, ClimbOutcome[]> = {
+  BOULDER: ["FLASH", "SEND", "PROJECT"],
+  TOP_ROPE: ["ONSIGHT", "FLASH", "SEND", "PROJECT"],
+  SPORT_LEAD: ["ONSIGHT", "FLASH", "REDPOINT", "PROJECT"],
+};
+
+const OUTCOME_LABEL: Record<ClimbOutcome, string> = {
+  FLASH: "Flash",
+  ONSIGHT: "Onsight",
+  SEND: "Send",
+  REDPOINT: "Redpoint",
+  FELL: "Fell",
+  PROJECT: "Project",
+};
+
+function gradeSystemFor(d: ClimbingDiscipline): ClimbGradeSystem {
+  return d === "BOULDER" ? "BOULDER_V" : "YOSEMITE";
+}
+
+function gradePlaceholder(d: ClimbingDiscipline): string {
+  return d === "BOULDER" ? "V4" : "5.10a";
+}
+
+function defaultOutcome(d: ClimbingDiscipline): ClimbOutcome {
+  return OUTCOMES_BY_DISCIPLINE[d][0];
+}
+
+function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
+  return {
+    localId: Math.random().toString(36).slice(2),
+    discipline: d,
+    grade: "",
+    outcome: defaultOutcome(d),
+    notes: "",
+  };
+}
+
+export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
+  const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
+  const [duration, setDuration] = useState("");
+  const [notes, setNotes] = useState("");
+  const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
+
+  // Location state — three modes:
+  //   • locationId set → user picked a recent location
+  //   • newName set + locationId null → user typed a fresh location
+  //   • both empty → no location attached (server allows null)
+  const [recent, setRecent] = useState<RecentLocation[]>([]);
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<"GYM" | "CRAG">("GYM");
+  const [showNewLocation, setShowNewLocation] = useState(false);
+
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Load the user's recent climb locations once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    listRecentClimbLocations()
+      .then((rows) => {
+        if (cancelled) return;
+        setRecent(rows);
+        // Auto-pick the most recent location if any — 95% of the
+        // time it's the right answer and saves a tap.
+        if (rows.length > 0) setLocationId(rows[0].id);
+      })
+      .catch(() => {
+        /* non-fatal — picker just won't show recents */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateAttempt(localId: string, patch: Partial<Attempt>) {
+    setAttempts((arr) =>
+      arr.map((a) => {
+        if (a.localId !== localId) return a;
+        const merged = { ...a, ...patch };
+        // When discipline changes, also flip the outcome to a valid
+        // option for the new discipline (BOULDER's FLASH isn't valid
+        // on SPORT_LEAD, etc.).
+        if (patch.discipline && patch.discipline !== a.discipline) {
+          merged.outcome = defaultOutcome(patch.discipline);
+        }
+        return merged;
+      })
+    );
+  }
+
+  function removeAttempt(localId: string) {
+    setAttempts((arr) => (arr.length === 1 ? arr : arr.filter((a) => a.localId !== localId)));
+  }
+
+  function addAttempt() {
+    // New attempts inherit the last attempt's discipline — most
+    // sessions are mono-discipline so this saves taps.
+    const last = attempts[attempts.length - 1];
+    setAttempts((arr) => [...arr, newAttempt(last?.discipline ?? "BOULDER")]);
+  }
+
+  function submit() {
+    setError(null);
+    const ms = Date.parse(performedAt);
+    if (Number.isNaN(ms)) {
+      setError("Invalid date/time.");
+      return;
+    }
+    const validAttempts = attempts.filter((a) => a.grade.trim().length > 0);
+    if (validAttempts.length === 0) {
+      setError("Add at least one climb with a grade.");
+      return;
+    }
+    const minutes = duration.trim() === "" ? undefined : Number(duration);
+    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
+      setError("Duration must be a positive number.");
+      return;
+    }
+    if (showNewLocation && !newName.trim()) {
+      setError("Name the new location, or pick one from the recent list.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await logClimbAction({
+          performedAtIso: new Date(ms).toISOString(),
+          durationMinutes: minutes,
+          notes: notes.trim() || undefined,
+          climbLocationId: showNewLocation ? undefined : locationId ?? undefined,
+          newLocationName: showNewLocation ? newName.trim() : undefined,
+          newLocationType: showNewLocation ? newType : undefined,
+          attempts: validAttempts.map((a) => ({
+            discipline: a.discipline,
+            grade: a.grade.trim(),
+            gradeSystem: gradeSystemFor(a.discipline),
+            outcome: a.outcome,
+            notes: a.notes.trim() || undefined,
+          })),
+        });
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save climb log.");
+      }
+    });
+  }
+
+  return (
+    <div style={overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label="Log climbing">
+      <div style={panel} onClick={(e) => e.stopPropagation()}>
+        <header style={header}>
+          <h3 style={title}>Log Climbing</h3>
+          <button type="button" onClick={onClose} style={closeBtn} aria-label="Close">✕</button>
+        </header>
+        <div style={body}>
+          {/* Session-level fields */}
+          <label style={fieldLabel}>
+            When
+            <input
+              type="datetime-local"
+              value={performedAt}
+              onChange={(e) => setPerformedAt(e.target.value)}
+              style={fieldInput}
+            />
+          </label>
+
+          <div style={fieldGroup}>
+            <span style={fieldGroupLabel}>Location</span>
+            {recent.length > 0 && !showNewLocation ? (
+              <div style={chipRow}>
+                {recent.map((loc) => {
+                  const active = locationId === loc.id;
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      style={active ? chipActive : chip}
+                      onClick={() => setLocationId(loc.id)}
+                    >
+                      <span style={chipDot(loc.type === "GYM" ? "rgba(56,189,248,0.9)" : "rgba(132,204,22,0.9)")} />
+                      {loc.name}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  style={chip}
+                  onClick={() => {
+                    setLocationId(null);
+                    setShowNewLocation(true);
+                  }}
+                >
+                  + New
+                </button>
+              </div>
+            ) : null}
+            {(showNewLocation || recent.length === 0) ? (
+              <div style={newLocationRow}>
+                <input
+                  type="text"
+                  placeholder="Location name (e.g. Movement Boulder)"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  style={{ ...fieldInput, flex: 1, minWidth: 0 }}
+                />
+                <div style={toggleRow}>
+                  <button
+                    type="button"
+                    style={newType === "GYM" ? toggleActive : toggleInactive}
+                    onClick={() => setNewType("GYM")}
+                  >
+                    Gym
+                  </button>
+                  <button
+                    type="button"
+                    style={newType === "CRAG" ? toggleActive : toggleInactive}
+                    onClick={() => setNewType("CRAG")}
+                  >
+                    Crag
+                  </button>
+                </div>
+                {recent.length > 0 ? (
+                  <button
+                    type="button"
+                    style={cancelInlineBtn}
+                    onClick={() => {
+                      setShowNewLocation(false);
+                      setNewName("");
+                      setLocationId(recent[0].id);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Climbs list */}
+          <div style={fieldGroup}>
+            <span style={fieldGroupLabel}>Climbs</span>
+            <div style={attemptStack}>
+              {attempts.map((a, idx) => {
+                const outcomes = OUTCOMES_BY_DISCIPLINE[a.discipline];
+                return (
+                  <div key={a.localId} style={attemptCard}>
+                    <div style={attemptHeader}>
+                      <span style={attemptIndex}>#{idx + 1}</span>
+                      {attempts.length > 1 ? (
+                        <button
+                          type="button"
+                          style={removeAttemptBtn}
+                          onClick={() => removeAttempt(a.localId)}
+                          aria-label={`Remove climb ${idx + 1}`}
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                    <div style={attemptRow}>
+                      <select
+                        value={a.discipline}
+                        onChange={(e) => updateAttempt(a.localId, { discipline: e.target.value as ClimbingDiscipline })}
+                        style={{ ...fieldInput, flex: "1 1 110px", minWidth: 0 }}
+                        aria-label="Discipline"
+                      >
+                        {DISCIPLINE_OPTIONS.map((d) => (
+                          <option key={d.value} value={d.value}>{d.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder={gradePlaceholder(a.discipline)}
+                        value={a.grade}
+                        onChange={(e) => updateAttempt(a.localId, { grade: e.target.value })}
+                        style={{ ...fieldInput, flex: "1 1 70px", minWidth: 0 }}
+                        aria-label="Grade"
+                      />
+                      <select
+                        value={a.outcome}
+                        onChange={(e) => updateAttempt(a.localId, { outcome: e.target.value as ClimbOutcome })}
+                        style={{ ...fieldInput, flex: "1 1 100px", minWidth: 0 }}
+                        aria-label="Outcome"
+                      >
+                        {outcomes.map((o) => (
+                          <option key={o} value={o}>{OUTCOME_LABEL[o]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Notes (optional)"
+                      value={a.notes}
+                      onChange={(e) => updateAttempt(a.localId, { notes: e.target.value })}
+                      style={{ ...fieldInput, width: "100%", marginTop: 6 }}
+                    />
+                  </div>
+                );
+              })}
+              <button type="button" style={addAttemptBtn} onClick={addAttempt}>
+                + Add climb
+              </button>
+            </div>
+          </div>
+
+          <div style={twoCol}>
+            <label style={fieldLabel}>
+              Duration (min)
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="optional"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                style={fieldInput}
+              />
+            </label>
+            <div />
+          </div>
+
+          <label style={fieldLabel}>
+            Session notes
+            <textarea
+              placeholder="How'd the session go?"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              style={{ ...fieldInput, minHeight: 70, resize: "vertical" as const }}
+            />
+          </label>
+
+          {error ? <div style={errorText}>{error}</div> : null}
+
+          <div style={btnRow}>
+            <button type="button" onClick={onClose} style={btnSecondary} disabled={pending}>
+              Cancel
+            </button>
+            <button type="button" onClick={submit} style={btnPrimary} disabled={pending}>
+              {pending ? "Saving…" : "Save session"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatLocalDateTime(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ─── Styles ─────────────────────────────────────────────────────────────────
+
+const overlay: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 200,
+  background: "rgba(4,8,16,0.66)",
+  backdropFilter: "blur(4px)",
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "center",
+  padding: "0 0 env(safe-area-inset-bottom)",
+};
+const panel: CSSProperties = {
+  width: "100%",
+  maxWidth: 520,
+  maxHeight: "90vh",
+  display: "grid",
+  gridTemplateRows: "auto 1fr",
+  background: "#0e1a2e",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: "16px 16px 0 0",
+  boxShadow: "0 -10px 30px rgba(0,0,0,0.45)",
+  overflow: "hidden",
+};
+const header: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "12px 14px",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+};
+const title: CSSProperties = { margin: 0, fontSize: 15, fontWeight: 900 };
+const closeBtn: CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 14,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+const body: CSSProperties = { padding: "14px 14px 18px", overflowY: "auto", display: "grid", gap: 14 };
+
+const fieldLabel: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  fontSize: 11,
+  fontWeight: 800,
+  opacity: 0.75,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+};
+const fieldGroup: CSSProperties = { display: "grid", gap: 6 };
+const fieldGroupLabel: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  opacity: 0.75,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+};
+const fieldInput: CSSProperties = {
+  padding: "9px 11px",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 15,
+  fontWeight: 600,
+  textTransform: "none",
+  letterSpacing: 0,
+  opacity: 1,
+};
+const twoCol: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
+
+const chipRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
+const chip: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+const chipActive: CSSProperties = {
+  ...chip,
+  borderColor: "rgba(51,255,122,0.45)",
+  background: "rgba(51,255,122,0.10)",
+  color: "rgba(51,255,122,0.95)",
+};
+function chipDot(bg: string): CSSProperties {
+  return { width: 7, height: 7, borderRadius: 999, background: bg, flexShrink: 0 };
+}
+
+const newLocationRow: CSSProperties = { display: "flex", gap: 6, alignItems: "stretch", flexWrap: "wrap" };
+const toggleRow: CSSProperties = { display: "flex", gap: 4 };
+const toggleInactive: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+const toggleActive: CSSProperties = {
+  ...toggleInactive,
+  borderColor: "rgba(51,255,122,0.45)",
+  background: "rgba(51,255,122,0.10)",
+  color: "rgba(51,255,122,0.95)",
+};
+const cancelInlineBtn: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "transparent",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const attemptStack: CSSProperties = { display: "grid", gap: 8 };
+const attemptCard: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.025)",
+};
+const attemptHeader: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 6,
+};
+const attemptIndex: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.55,
+};
+const removeAttemptBtn: CSSProperties = {
+  width: 26,
+  height: 26,
+  borderRadius: 999,
+  border: "1px solid rgba(248,113,113,0.32)",
+  background: "rgba(248,113,113,0.08)",
+  color: "rgba(248,113,113,0.95)",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+const attemptRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
+const addAttemptBtn: CSSProperties = {
+  padding: "10px",
+  borderRadius: 10,
+  border: "1px dashed rgba(255,255,255,0.18)",
+  background: "rgba(255,255,255,0.02)",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+  textAlign: "center",
+};
+
+const errorText: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(248,113,113,0.95)",
+  fontWeight: 700,
+};
+const btnRow: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+  marginTop: 4,
+};
+const btnPrimary: CSSProperties = {
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: "1px solid rgba(51,255,122,0.45)",
+  background: "rgba(51,255,122,0.10)",
+  color: "rgba(51,255,122,0.95)",
+  fontSize: 13,
+  fontWeight: 900,
+  cursor: "pointer",
+};
+const btnSecondary: CSSProperties = {
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
+};
