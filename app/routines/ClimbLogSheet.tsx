@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState, useTransition, type CSSProperties } from "react";
-import { listRecentClimbLocations, logClimbAction } from "@/app/log/climb-log-actions";
+import {
+  listAreasForClimbLocation,
+  listRecentClimbLocations,
+  logClimbAction,
+} from "@/app/log/climb-log-actions";
 import {
   climbOutcomeBg,
   climbOutcomeColor,
@@ -35,7 +39,10 @@ type Attempt = {
    *  ClimbProblem rows at the picked location, creates a new one
    *  otherwise. */
   name: string;
-  /** Area within the location (free-text). Server dedupes by name. */
+  /** Pick a saved area at the location. */
+  areaId: string;
+  /** OR type a fresh area name. If areaId is set the typed name
+   *  is ignored on save. */
   area: string;
   /** Tries-to-send. Only meaningful when outcome is SEND/REDPOINT;
    *  hidden in the UI otherwise. Stored as string so empty stays empty. */
@@ -83,6 +90,7 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
     grade: "",
     outcome: defaultOutcome(d),
     name: "",
+    areaId: "",
     area: "",
     triesCount: "",
     notes: "",
@@ -126,6 +134,26 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
       cancelled = true;
     };
   }, []);
+
+  // Saved areas for the picked location — fed into the per-attempt
+  // area picker as quick-tap chips. Re-fetches when locationId
+  // changes (different gym → different areas).
+  const [savedAreas, setSavedAreas] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (showNewLocation || !locationId) {
+      setSavedAreas([]);
+      return;
+    }
+    listAreasForClimbLocation(locationId)
+      .then((rows) => {
+        if (!cancelled) setSavedAreas(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [locationId, showNewLocation]);
 
   function updateAttempt(localId: string, patch: Partial<Attempt>) {
     setAttempts((arr) =>
@@ -196,7 +224,8 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               gradeSystem: gradeSystemFor(a.discipline),
               outcome: a.outcome,
               name: a.name.trim() || undefined,
-              area: a.area.trim() || undefined,
+              areaId: a.areaId || undefined,
+              area: a.areaId ? undefined : a.area.trim() || undefined,
               triesCount: Number.isFinite(triesNum) ? triesNum : undefined,
               notes: a.notes.trim() || undefined,
             };
@@ -410,12 +439,48 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                       />
                       <input
                         type="text"
-                        placeholder="Area (e.g. Cave Wall)"
+                        placeholder="New area name"
                         value={a.area}
-                        onChange={(e) => updateAttempt(a.localId, { area: e.target.value })}
-                        style={{ ...fieldInput, flex: "1 1 110px", minWidth: 0 }}
+                        onChange={(e) =>
+                          updateAttempt(a.localId, { area: e.target.value, areaId: "" })
+                        }
+                        disabled={Boolean(a.areaId)}
+                        style={{
+                          ...fieldInput,
+                          flex: "1 1 110px",
+                          minWidth: 0,
+                          opacity: a.areaId ? 0.45 : 1,
+                        }}
                       />
                     </div>
+
+                    {/* Saved-area chips — only when the user picked
+                        an existing location (not a fresh one). Tap a
+                        chip to attribute to that area; tap again to
+                        clear and free-type. */}
+                    {savedAreas.length > 0 ? (
+                      <div style={areaChipRow}>
+                        <span style={areaChipRowLabel}>Areas:</span>
+                        {savedAreas.map((area) => {
+                          const isOn = a.areaId === area.id;
+                          return (
+                            <button
+                              key={area.id}
+                              type="button"
+                              onClick={() =>
+                                updateAttempt(a.localId, {
+                                  areaId: isOn ? "" : area.id,
+                                  area: isOn ? a.area : "",
+                                })
+                              }
+                              style={isOn ? areaChipActive : areaChipInactive}
+                            >
+                              {area.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
 
                     <input
                       type="text"
@@ -587,6 +652,41 @@ const removeAttemptBtn: CSSProperties = {
   cursor: "pointer",
 };
 const attemptRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 };
+
+const areaChipRow: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+  alignItems: "center",
+  marginTop: 6,
+};
+
+const areaChipRowLabel: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 800,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.45,
+  marginRight: 2,
+};
+
+const areaChipInactive: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  color: "rgba(255,255,255,0.65)",
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const areaChipActive: CSSProperties = {
+  ...areaChipInactive,
+  borderColor: "rgba(51,255,122,0.45)",
+  background: "rgba(51,255,122,0.10)",
+  color: "rgba(51,255,122,0.95)",
+};
 
 const outcomeChipRow: CSSProperties = {
   display: "flex",

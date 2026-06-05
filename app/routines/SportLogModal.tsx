@@ -1,6 +1,7 @@
 "use client";
 
-import { type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 // Shared chrome for all sport-log sheets (Climb, Golf, generic).
 // Matches the existing LogDrawer look: full-screen modal, dark
@@ -26,7 +27,19 @@ export default function SportLogModal({
    *  reach when a long climb session pushes the form off-screen. */
   footer?: ReactNode;
 }) {
-  return (
+  // Portal to document.body so the modal escapes any transformed
+  // ancestor. The SportsAddButton renders inside RoutineSection's
+  // quickLogSlot wrapper which has `transform: translateY(-50%)` —
+  // that creates a containing block for `position: fixed`, so the
+  // sheet would otherwise render at the size/position of the tiny
+  // slot wrapper instead of the viewport. The portal escapes it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted) return null;
+
+  const content = (
     <>
       {/* Backdrop only visible on desktop via .logDrawerBackdrop's
           media query; mobile is full-screen so the backdrop is hidden
@@ -67,6 +80,8 @@ export default function SportLogModal({
       </div>
     </>
   );
+
+  return createPortal(content, document.body);
 }
 
 const drawerHeader: CSSProperties = {
