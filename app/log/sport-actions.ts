@@ -81,8 +81,13 @@ async function resolveSpotForLog(
     // Trust the picker's reference. Look up the display name so we
     // can also stamp RoutineLog.location for legacy log-list code.
     if (value.ref.kind === "activitySpot") {
-      const spot = await prisma.activitySpot.findUnique({
-        where: { id: value.ref.id },
+      // Defensive: only accept spots from compatible activities to
+      // prevent a corrupted client payload from cross-linking (e.g.
+      // attaching a basketball court to a surfing log).
+      const { compatibleActivitySlugs } = await import("@/lib/activity-spots");
+      const compatible = compatibleActivitySlugs(activitySlug);
+      const spot = await prisma.activitySpot.findFirst({
+        where: { id: value.ref.id, activitySlug: { in: compatible } },
         select: { id: true, name: true },
       });
       return {
@@ -395,6 +400,9 @@ export async function updateSportLogAction(input: {
       notes: input.notes?.trim() || null,
       location: spotResolved.displayLocation,
       activitySpotId: spotResolved.activitySpotId,
+      // Explicit (not undefined) so a previously-set link gets
+      // cleared on edit instead of orphaned. resolveSpotForLog
+      // returns null for non-climbing sports.
       climbLocationId: spotResolved.climbLocationId,
       sportData: sportData ?? undefined,
     },

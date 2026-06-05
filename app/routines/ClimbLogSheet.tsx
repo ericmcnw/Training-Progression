@@ -138,10 +138,14 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
 
   // Saved areas for the picked location — fed into the per-attempt
   // area picker as quick-tap chips. Re-fetches when locationId
-  // changes (different gym → different areas).
+  // changes (different gym → different areas). When the location
+  // changes, also clear any picked areaId on existing attempts so a
+  // chip for "Cave Wall @ Gym A" doesn't carry over and FK-violate
+  // when saving against Gym B (ClimbArea is scoped per-location).
   const [savedAreas, setSavedAreas] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     let cancelled = false;
+    setAttempts((arr) => arr.map((a) => (a.areaId ? { ...a, areaId: "" } : a)));
     if (showNewLocation || !locationId) {
       setSavedAreas([]);
       return;

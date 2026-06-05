@@ -182,6 +182,10 @@ export async function updateGolfLogAction(
       notes: input.notes?.trim() || null,
       location: spotResolved.displayLocation,
       activitySpotId: spotResolved.activitySpotId,
+      // Explicit null so a previously-set climbLocationId (e.g. the
+      // user picked a climbing crag for a golf log by mistake on
+      // an earlier save) gets cleared instead of orphaned.
+      climbLocationId: null,
       sportData,
     },
   });
@@ -205,8 +209,11 @@ async function resolveGolfSpot(
     if (value.ref.kind !== "activitySpot") {
       return { activitySpotId: null, displayLocation: value.display.name ?? null };
     }
-    const spot = await prisma.activitySpot.findUnique({
-      where: { id: value.ref.id },
+    // Defensive: only attach spots that actually belong to golf.
+    // Prevents a corrupted/forged client payload from linking a
+    // climbing or basketball spot to a golf log.
+    const spot = await prisma.activitySpot.findFirst({
+      where: { id: value.ref.id, activitySlug: "golf" },
       select: { id: true, name: true },
     });
     return {

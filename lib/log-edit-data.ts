@@ -522,13 +522,17 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       const { sportSlugFromRoutineId } = await import("@/lib/synthetic-sport-routines");
       const sportSlug = sportSlugFromRoutineId(log.routineId);
       if (sportSlug && sportSlug !== "climbing") {
+        // Synthetic sport routines have no metadata-group tags, so
+        // resolveRoutineActivitySlug returns null. Use the routine
+        // id's encoded slug instead so spot-picker compatibility
+        // (saved spots, cross-activity reuse) works correctly.
         return {
           kind: "SPORT",
           ...base,
           sportSlug,
           initialDurationSec: log.durationSec ?? 0,
           sportData: log.sportData,
-          activitySlug: editSpotActivitySlug,
+          activitySlug: sportSlug,
           savedSpots: editSavedSpots,
           initialSpot: initialEditSpot,
         };
