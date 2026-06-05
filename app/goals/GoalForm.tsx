@@ -572,41 +572,93 @@ export default function GoalForm({
           </div>
 
           <div style={detailCardStyle}>
-            <div style={stepLabelStyle}>Included routines</div>
-            <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked routine count toward this goal.</div>
-            <div style={routineCardGrid}>
-              {options.routines.map(r => (
-                <RoutineCheckboxCard
-                  key={`primary-${r.id}`}
-                  name="routineIds"
-                  value={r.id}
-                  label={r.label}
-                  subtitle={r.subtitle}
-                  defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
-                  tone="primary"
-                />
-              ))}
-            </div>
+            <div style={stepLabelStyle}>Included</div>
+            <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked sport or routine count toward this goal.</div>
+            {(options.sportTargets ?? []).length > 0 ? (
+              <div style={sectionStack}>
+                <div style={groupSubLabel}>Sports</div>
+                <div style={sportTileGrid}>
+                  {(options.sportTargets ?? []).map((s) => (
+                    <SportCheckboxTile
+                      key={`primary-${s.id}`}
+                      name="routineIds"
+                      value={s.id}
+                      label={s.label}
+                      eyebrow={s.eyebrow}
+                      color={s.color}
+                      defaultChecked={initial.groupFrequency?.routineIds.includes(s.id) ?? false}
+                      tone="primary"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {options.routines.length > 0 ? (
+              <div style={sectionStack}>
+                {(options.sportTargets ?? []).length > 0 ? (
+                  <div style={groupSubLabel}>Routines</div>
+                ) : null}
+                <div style={routineCardGrid}>
+                  {options.routines.map(r => (
+                    <RoutineCheckboxCard
+                      key={`primary-${r.id}`}
+                      name="routineIds"
+                      value={r.id}
+                      label={r.label}
+                      subtitle={r.subtitle}
+                      defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
+                      tone="primary"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div style={detailCardStyle}>
             <div style={stepLabelStyle}>Covered by</div>
             <div style={{ ...hintStyle, marginBottom: 10 }}>
-              Routines that <em>cover</em> this goal. Days where one of these fires (but no included routine does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another.
+              Days where one of these fires (but no included item does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another.
             </div>
-            <div style={routineCardGrid}>
-              {options.routines.map(r => (
-                <RoutineCheckboxCard
-                  key={`sub-${r.id}`}
-                  name="substituteRoutineIds"
-                  value={r.id}
-                  label={r.label}
-                  subtitle={r.subtitle}
-                  defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
-                  tone="substitute"
-                />
-              ))}
-            </div>
+            {(options.sportTargets ?? []).length > 0 ? (
+              <div style={sectionStack}>
+                <div style={groupSubLabel}>Sports</div>
+                <div style={sportTileGrid}>
+                  {(options.sportTargets ?? []).map((s) => (
+                    <SportCheckboxTile
+                      key={`sub-${s.id}`}
+                      name="substituteRoutineIds"
+                      value={s.id}
+                      label={s.label}
+                      eyebrow={s.eyebrow}
+                      color={s.color}
+                      defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(s.id) ?? false}
+                      tone="substitute"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {options.routines.length > 0 ? (
+              <div style={sectionStack}>
+                {(options.sportTargets ?? []).length > 0 ? (
+                  <div style={groupSubLabel}>Routines</div>
+                ) : null}
+                <div style={routineCardGrid}>
+                  {options.routines.map(r => (
+                    <RoutineCheckboxCard
+                      key={`sub-${r.id}`}
+                      name="substituteRoutineIds"
+                      value={r.id}
+                      label={r.label}
+                      subtitle={r.subtitle}
+                      defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
+                      tone="substitute"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <TriggerSection
@@ -1203,6 +1255,90 @@ function RoutineCheckboxCard({
         {subtitle ? (
           <span style={{ display: "block", fontSize: 11, opacity: 0.55, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</span>
         ) : null}
+      </span>
+    </label>
+  );
+}
+
+const sectionStack: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  marginBottom: 12,
+};
+
+const groupSubLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.55,
+  paddingLeft: 2,
+};
+
+const sportTileGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+  gap: 6,
+};
+
+// Sport-flavored variant of RoutineCheckboxCard — same checkbox
+// semantics (renders into routineIds / substituteRoutineIds form
+// fields), different visual treatment: sport accent stripe + label
+// in the sport's color so the picker reads like /log's SPORT tiles.
+function SportCheckboxTile({
+  name,
+  value,
+  label,
+  eyebrow,
+  color,
+  defaultChecked,
+  tone,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  eyebrow: string;
+  color: string;
+  defaultChecked: boolean;
+  tone: "primary" | "substitute";
+}) {
+  const [checked, setChecked] = useState(defaultChecked);
+  const palette = tone === "primary" ? primaryPalette : substitutePalette;
+  const tileStyle: React.CSSProperties = {
+    display: "grid",
+    gap: 3,
+    textAlign: "left",
+    padding: "10px 12px",
+    borderRadius: 10,
+    borderLeft: `3px solid ${color}`,
+    border: `1px solid ${checked ? palette.borderActive : "rgba(128,128,128,0.3)"}`,
+    borderLeftWidth: 3,
+    borderLeftColor: color,
+    background: checked ? palette.bgActive : "rgba(255,255,255,0.018)",
+    cursor: "pointer",
+    minWidth: 0,
+    minHeight: 54,
+  };
+  return (
+    <label style={tileStyle}>
+      <input
+        type="checkbox"
+        name={name}
+        value={value}
+        defaultChecked={defaultChecked}
+        onChange={(e) => setChecked(e.target.checked)}
+        style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+      />
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.6 }}>
+          {eyebrow}
+        </span>
+        {checked ? (
+          <span aria-hidden style={{ fontSize: 11, fontWeight: 900, color: palette.checkColor }}>✓</span>
+        ) : null}
+      </span>
+      <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
       </span>
     </label>
   );

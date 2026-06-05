@@ -1452,11 +1452,38 @@ function parseFrequencyGoalFields(formData: FormData) {
   };
 }
 
+// Before writing a join row that references a synthetic sport routine
+// (sports-{slug}-synthetic), make sure that routine actually exists.
+// The goal form lets users pick a sport they haven't added on /log
+// yet — opting in via the goal is itself an opt-in for the sport.
+async function ensureSyntheticSportRoutinesForGoal(routineIds: string[]) {
+  const { isSyntheticSportRoutineId, sportSlugFromRoutineId, ensureSportSelected } = await import(
+    "@/lib/synthetic-sport-routines"
+  );
+  const slugs = Array.from(
+    new Set(
+      routineIds
+        .filter(isSyntheticSportRoutineId)
+        .map(sportSlugFromRoutineId)
+        .filter((s): s is string => Boolean(s))
+    )
+  );
+  for (const slug of slugs) {
+    await ensureSportSelected(slug);
+  }
+}
+
 async function syncFrequencyGoalRoutines(
   goalId: string,
   routineIds: string[],
   substituteRoutineIds: string[] = []
 ) {
+  // Make sure any sport routines referenced exist (sports-{slug}-
+  // synthetic) before we try to write the FK rows. The goal can
+  // target a sport the user hasn't added on /log yet; we opt them
+  // in automatically.
+  await ensureSyntheticSportRoutinesForGoal([...routineIds, ...substituteRoutineIds]);
+
   await prisma.frequencyGoalRoutine.deleteMany({ where: { goalId } });
   const rows = [
     ...routineIds.map((routineId) => ({ goalId, routineId, role: "PRIMARY" as const })),

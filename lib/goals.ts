@@ -20,6 +20,7 @@ import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferGuidedStepMet
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
+import { getActivityEntry } from "@/lib/activity-families";
 import { formatRoutineTargetLabel, getRoutineFrequencyStatus, getRoutineTargetWindow, normalizeRoutineFrequencyTarget } from "@/lib/routine-frequency";
 import {
   sessionMetricGoalValueLabel,
@@ -54,8 +55,24 @@ export type GoalTargetOption = {
   gradeSystem?: "BOULDER_V" | "YOSEMITE";
 };
 
+// Sport-flavored target option — synthetic per-sport routines have
+// the same id semantics as regular routines (they go into the same
+// `routineIds` form field), but they carry an accent color + eyebrow
+// for the goal-form's Sports group rendering so they read visually
+// like the sport tiles on /log.
+export type GoalSportTargetOption = GoalTargetOption & {
+  slug: string;
+  eyebrow: string;
+  color: string;
+};
+
 export type GoalFormOptions = {
   routines: GoalTargetOption[];
+  /** Synthetic per-sport routines — surface as their own group in the
+   *  goal form so users can build "Basketball 2x/wk" goals without
+   *  the sport tiles getting lost in the strength/cardio routine
+   *  list. Submitted via the same `routineIds` form field. */
+  sportTargets: GoalSportTargetOption[];
   exercises: GoalTargetOption[];
   cardioTargets: GoalTargetOption[];
   groups: GoalTargetOption[];
@@ -1341,7 +1358,7 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
 }
 
 export async function getGoalFormOptions(): Promise<GoalFormOptions> {
-  const [routines, exercises, groups, sessionTemplates, enduranceFamilies] = await Promise.all([
+  const [routines, sportRoutines, exercises, groups, sessionTemplates, enduranceFamilies] = await Promise.all([
     prisma.routine.findMany({
       // Hide placeholder routines from goal target dropdowns — they exist
       // to host ad-hoc logs and were never meant to be picked by a user.
@@ -1363,6 +1380,23 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
           },
         },
       },
+    }),
+    // Synthetic sport routines — placeholder rows the user opts into
+    // via /log → SPORTS. Surfaced as their own group in the goal-form
+    // picker so a "Basketball 2x/wk" target is one tap. id pattern is
+    // sports-{slug}-synthetic.
+    prisma.routine.findMany({
+      where: {
+        isDeleted: false,
+        isPlaceholder: true,
+        kind: "SESSION",
+        domain: "sport",
+        // Filter by id pattern so we never accidentally surface other
+        // placeholder routines (e.g. endurance-synthetic) here.
+        id: { startsWith: "sports-", endsWith: "-synthetic" },
+      },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true, isActive: true },
     }),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },
@@ -1428,6 +1462,39 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
     ])
   );
 
+  // Shape sport routines into goal-target options with the same
+  // accent palette + eyebrow used on /log + the schedule picker so
+  // every surface refers to a given sport with the same color.
+  const SPORT_ACCENT: Record<string, string> = {
+    climbing: "rgba(251,146,60,0.9)",
+    surfing: "rgba(56,189,248,0.9)",
+    snowboarding: "rgba(168,85,247,0.9)",
+    skiing: "rgba(99,102,241,0.9)",
+    skateboarding: "rgba(244,114,182,0.9)",
+    basketball: "rgba(220,38,38,0.9)",
+    tennis: "rgba(132,204,22,0.9)",
+    golf: "rgba(40,212,160,0.9)",
+  };
+  const sportTargets: GoalSportTargetOption[] = sportRoutines.flatMap((r) => {
+    const slug = r.id.startsWith("sports-") && r.id.endsWith("-synthetic")
+      ? r.id.slice("sports-".length, -"-synthetic".length)
+      : null;
+    if (!slug) return [];
+    const entry = getActivityEntry(slug);
+    if (!entry) return [];
+    return [{
+      id: r.id,
+      slug,
+      label: entry.label,
+      subtitle: entry.eyebrow,
+      eyebrow: entry.eyebrow,
+      color: SPORT_ACCENT[slug] ?? "rgba(255,255,255,0.5)",
+      routineKind: "SESSION" as const,
+      sessionTemplateId: null,
+      sessionTemplateKey: null,
+    }];
+  });
+
   return {
     routines: routines.map((routine) => ({
       id: routine.id,
@@ -1437,6 +1504,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       sessionTemplateId: routine.sessionDetails?.templateId ?? null,
       sessionTemplateKey: routine.sessionDetails?.template?.key ?? null,
     })),
+    sportTargets,
     exercises: exercises.map((exercise) => ({
       id: exercise.id,
       label: exercise.name,
