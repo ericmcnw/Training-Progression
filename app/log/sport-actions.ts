@@ -19,6 +19,15 @@ import {
   unselectSport,
 } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
+import {
+  buildSpotPickerItems,
+  compatibleActivitySlugs,
+  getActivitySpotConfig,
+  normalizeSpotName,
+  type ActivitySpotConfig,
+  type SpotPickerItem,
+} from "@/lib/activity-spots";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 export async function addSportAction(slug: string): Promise<void> {
   await ensureSportSelected(slug);
@@ -35,14 +44,15 @@ export async function removeSportAction(slug: string): Promise<void> {
 export type LogSportInput = {
   sportSlug: string;
   performedAtIso: string;
-  /** Total session length in minutes. Optional — some sport types
-   *  (e.g. quick golf range stop) might not warrant a duration. */
+  /** Total session length in minutes. */
   durationMinutes?: number;
   notes?: string;
-  /** "Where" — free-text for now (spot/court/mountain/etc.).
-   *  Persisted on RoutineLog.location so it shows up in log lists
-   *  + the climbing-style location resolution path later. */
-  location?: string;
+  /** Structured location picked via SpotPicker — references an
+   *  existing ActivitySpot/ClimbLocation or creates one on save.
+   *  Resolved server-side into activitySpotId / climbLocationId
+   *  + a denormalized RoutineLog.location string for log-list
+   *  display. Pass null when no location was attached. */
+  spotValue?: SpotPickerValue;
   /** Sport-specific subtype dropdown — e.g. basketball: "Game" /
    *  "Pickup" / "Shoot around" / "Drills". Stored in sportData. */
   sessionType?: string;
@@ -51,6 +61,218 @@ export type LogSportInput = {
    *  inside RoutineLog.sportData under `extras`. */
   extras?: Record<string, string | number | undefined>;
 };
+
+// Server-side: resolve a SpotPickerValue into the right FK + display
+// string. For "saved" → returns the existing id by kind. For "new" →
+// upserts an ActivitySpot (or ClimbLocation when origin is climbing)
+// keyed on either OSM identity or normalized name within the activity,
+// so a fresh OSM pin shared between activities reuses one row.
+async function resolveSpotForLog(
+  value: SpotPickerValue | undefined,
+  activitySlug: string,
+): Promise<{
+  activitySpotId: string | null;
+  climbLocationId: string | null;
+  displayLocation: string | null;
+}> {
+  if (!value) return { activitySpotId: null, climbLocationId: null, displayLocation: null };
+
+  if (value.kind === "saved") {
+    // Trust the picker's reference. Look up the display name so we
+    // can also stamp RoutineLog.location for legacy log-list code.
+    if (value.ref.kind === "activitySpot") {
+      const spot = await prisma.activitySpot.findUnique({
+        where: { id: value.ref.id },
+        select: { id: true, name: true },
+      });
+      return {
+        activitySpotId: spot?.id ?? null,
+        climbLocationId: null,
+        displayLocation: spot?.name ?? value.display.name ?? null,
+      };
+    }
+    const climb = await prisma.climbLocation.findUnique({
+      where: { id: value.ref.id },
+      select: { id: true, name: true },
+    });
+    return {
+      activitySpotId: null,
+      climbLocationId: climb?.id ?? null,
+      displayLocation: climb?.name ?? value.display.name ?? null,
+    };
+  }
+
+  // kind === "new" — create or reuse an ActivitySpot. Generic sport
+  // logs don't go through ClimbLocation; climbing has its own path.
+  const draft = value.draft;
+  const cleanName = draft.name.trim();
+  if (!cleanName) {
+    return { activitySpotId: null, climbLocationId: null, displayLocation: null };
+  }
+
+  // OSM dedup: if this draft carries an osmType+osmId, prefer reusing
+  // any existing ActivitySpot with the same OSM identity (even across
+  // activities) — physical place, one row.
+  if (draft.osmType && draft.osmId) {
+    const existing = await prisma.activitySpot.findFirst({
+      where: { osmType: draft.osmType, osmId: draft.osmId },
+      select: { id: true, name: true },
+    });
+    if (existing) {
+      return {
+        activitySpotId: existing.id,
+        climbLocationId: null,
+        displayLocation: existing.name,
+      };
+    }
+  }
+
+  // Name dedup within the activity: avoids "Half Dome" + "Half-Dome"
+  // as two separate rows for the same place.
+  const normalized = normalizeSpotName(cleanName);
+  const sameNameSameActivity = await prisma.activitySpot.findFirst({
+    where: { activitySlug },
+    select: { id: true, name: true },
+  }).then(async () => {
+    // Prisma can't filter on a derived normalized-name in SQL without
+    // a generated column, so fetch the slug's spots and dedup in JS.
+    // The set is small (a single user's spots for one sport).
+    const candidates = await prisma.activitySpot.findMany({
+      where: { activitySlug },
+      select: { id: true, name: true },
+    });
+    return candidates.find((c) => normalizeSpotName(c.name) === normalized) ?? null;
+  });
+  if (sameNameSameActivity) {
+    return {
+      activitySpotId: sameNameSameActivity.id,
+      climbLocationId: null,
+      displayLocation: sameNameSameActivity.name,
+    };
+  }
+
+  const created = await prisma.activitySpot.create({
+    data: {
+      activitySlug,
+      name: cleanName,
+      type: draft.type,
+      region: draft.region,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      osmType: draft.osmType,
+      osmId: draft.osmId,
+    },
+    select: { id: true, name: true },
+  });
+  return {
+    activitySpotId: created.id,
+    climbLocationId: null,
+    displayLocation: created.name,
+  };
+}
+
+export type SportLogContext = {
+  config: ActivitySpotConfig | null;
+  spotNoun: string;
+  savedSpots: SpotPickerItem[];
+  recentSpots: Array<{
+    ref: { kind: "activitySpot" | "climbLocation"; id: string };
+    name: string;
+    region: string | null;
+  }>;
+};
+
+// Loads the SpotPicker context for a sport: spot config, the user's
+// saved spots (own + cross-activity), and the most-recently-used
+// chips. Called from the sport log sheets on open via a useEffect.
+// Returns config=null for sports without spot support — the form
+// can skip the picker entirely.
+export async function loadSportLogContext(sportSlug: string): Promise<SportLogContext> {
+  const config = getActivitySpotConfig(sportSlug);
+  if (!config) {
+    return { config: null, spotNoun: "spot", savedSpots: [], recentSpots: [] };
+  }
+  const compatible = compatibleActivitySlugs(sportSlug);
+  const includesClimbing = compatible.includes("climbing");
+
+  const [activitySpots, climbLocations, recentRows] = await Promise.all([
+    prisma.activitySpot.findMany({
+      where: { activitySlug: { in: compatible } },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        activitySlug: true,
+        name: true,
+        type: true,
+        region: true,
+        osmType: true,
+        osmId: true,
+      },
+    }),
+    includesClimbing
+      ? prisma.climbLocation.findMany({
+          orderBy: [{ name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            region: true,
+            osmType: true,
+            osmId: true,
+          },
+        })
+      : Promise.resolve([]),
+    // Recent chips — most-recent 5 spots used in the last 180 days.
+    prisma.routineLog.findMany({
+      where: {
+        performedAt: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { activitySpot: { activitySlug: { in: compatible } } },
+          ...(includesClimbing ? [{ climbLocationId: { not: null } }] : []),
+        ],
+      },
+      orderBy: { performedAt: "desc" },
+      take: 50,
+      select: {
+        activitySpot: { select: { id: true, name: true, region: true } },
+        climbLocation: { select: { id: true, name: true, region: true } },
+      },
+    }),
+  ]);
+
+  const savedSpots = buildSpotPickerItems({
+    ownActivitySlug: sportSlug,
+    activitySpots,
+    climbLocations,
+  });
+
+  // Build recent list — dedup by spot identity, top 5.
+  const recentSpots: SportLogContext["recentSpots"] = [];
+  const seenRecent = new Set<string>();
+  for (const row of recentRows) {
+    const r = row.activitySpot
+      ? {
+          ref: { kind: "activitySpot" as const, id: row.activitySpot.id },
+          name: row.activitySpot.name,
+          region: row.activitySpot.region,
+        }
+      : row.climbLocation
+      ? {
+          ref: { kind: "climbLocation" as const, id: row.climbLocation.id },
+          name: row.climbLocation.name,
+          region: row.climbLocation.region,
+        }
+      : null;
+    if (!r) continue;
+    const key = `${r.ref.kind}:${r.ref.id}`;
+    if (seenRecent.has(key)) continue;
+    seenRecent.add(key);
+    recentSpots.push(r);
+    if (recentSpots.length >= 5) break;
+  }
+
+  return { config, spotNoun: config.spotNoun, savedSpots, recentSpots };
+}
 
 export async function logSportAction(input: LogSportInput): Promise<{ logId: string }> {
   const entry = getActivityEntry(input.sportSlug);
@@ -95,13 +317,20 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
         }
       : undefined;
 
+  // Resolve the spot picker value into FK ids + a display string for
+  // the legacy RoutineLog.location column (still read by log-list UIs
+  // that don't yet know about activitySpot/climbLocation joins).
+  const spotResolved = await resolveSpotForLog(input.spotValue, input.sportSlug);
+
   const log = await prisma.routineLog.create({
     data: {
       routineId,
       performedAt,
       durationSec: durationSec ?? undefined,
       notes: input.notes?.trim() || undefined,
-      location: input.location?.trim() || undefined,
+      location: spotResolved.displayLocation ?? undefined,
+      activitySpotId: spotResolved.activitySpotId ?? undefined,
+      climbLocationId: spotResolved.climbLocationId ?? undefined,
       sportData,
     },
     select: { id: true },

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition, type CSSProperties } from "react";
-import { logSportAction } from "@/app/log/sport-actions";
+import { useEffect, useState, useTransition, type CSSProperties } from "react";
+import { loadSportLogContext, logSportAction, type SportLogContext } from "@/app/log/sport-actions";
 import ClimbLogSheet from "./ClimbLogSheet";
 import GolfLogSheet from "./GolfLogSheet";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
 import { getSportLogConfig, type ExtraFieldConfig } from "./sportLogConfig";
+import SpotPicker from "@/app/components/log/SpotPicker";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 // One row in the SPORT section, representing a user's selected sport.
 // Tap → log sheet. Each sport has its own rich form when one exists,
@@ -58,8 +60,8 @@ type GenericDraft = {
   performedAt: string;
   duration: string;
   notes: string;
-  location: string;
   sessionType: string;
+  spot: SpotPickerValue;
   /** Per-sport extra fields by key — strings to keep the draft
    *  serializable; coerced to numbers at submit time. */
   extras: Record<string, string>;
@@ -73,13 +75,31 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       performedAt: formatLocalDateTime(new Date()),
       duration: "",
       notes: "",
-      location: "",
       sessionType: "",
+      spot: null,
       extras: {},
     }
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Spot picker context (config + saved/recent spots) — loaded once
+  // when the sheet opens. Sport with no spot support (config null)
+  // skips the picker entirely.
+  const [spotCtx, setSpotCtx] = useState<SportLogContext | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadSportLogContext(sport.slug)
+      .then((ctx) => {
+        if (!cancelled) setSpotCtx(ctx);
+      })
+      .catch(() => {
+        /* non-fatal — picker just won't render */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sport.slug]);
 
   function setExtra(key: string, value: string) {
     setDraft((d) => ({ ...d, extras: { ...d.extras, [key]: value } }));
@@ -114,7 +134,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           performedAtIso: new Date(ms).toISOString(),
           durationMinutes: minutes,
           notes: draft.notes.trim() || undefined,
-          location: draft.location.trim() || undefined,
+          spotValue: draft.spot,
           sessionType: draft.sessionType.trim() || undefined,
           extras: extrasOut,
         });
@@ -171,16 +191,22 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
         </label>
       ) : null}
 
-      <label style={fieldLabel}>
-        Where
-        <input
-          type="text"
-          placeholder={config.locationPlaceholder ?? "Spot / venue (optional)"}
-          value={draft.location}
-          onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
-          style={fieldInput}
-        />
-      </label>
+      {/* Spot picker — same component cardio/climbing use. Falls
+          back gracefully to nothing if this sport has no spot
+          config (unlikely for registered sports today). */}
+      {spotCtx?.config ? (
+        <div style={fieldGroup}>
+          <span style={fieldLabelText}>Where</span>
+          <SpotPicker
+            config={spotCtx.config}
+            spotNoun={spotCtx.spotNoun}
+            savedSpots={spotCtx.savedSpots}
+            recentSpots={spotCtx.recentSpots}
+            value={draft.spot}
+            onChange={(next) => setDraft((d) => ({ ...d, spot: next }))}
+          />
+        </div>
+      ) : null}
 
       <label style={fieldLabel}>
         Duration (minutes)
@@ -303,7 +329,18 @@ const rowAction: CSSProperties = {
 
 const fieldLabel: CSSProperties = {
   display: "grid",
-  gap: 6,
+  gap: 8,
+  fontSize: 11,
+  fontWeight: 800,
+  opacity: 0.75,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+};
+const fieldGroup: CSSProperties = {
+  display: "grid",
+  gap: 8,
+};
+const fieldLabelText: CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
   opacity: 0.75,
@@ -311,7 +348,7 @@ const fieldLabel: CSSProperties = {
   textTransform: "uppercase",
 };
 const fieldInput: CSSProperties = {
-  padding: "10px 12px",
+  padding: "12px 14px",
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
@@ -321,6 +358,8 @@ const fieldInput: CSSProperties = {
   textTransform: "none",
   letterSpacing: 0,
   opacity: 1,
+  minHeight: 44,
+  boxSizing: "border-box",
 };
 const errorTextStyle: CSSProperties = {
   fontSize: 12,

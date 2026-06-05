@@ -108,9 +108,9 @@ const minimizeBtn: CSSProperties = {
 const drawerBody: CSSProperties = {
   flex: 1,
   overflowY: "auto",
-  padding: "16px 16px 18px",
+  padding: "18px 18px 22px",
   display: "grid",
-  gap: 14,
+  gap: 18,
 };
 
 const drawerFooter: CSSProperties = {

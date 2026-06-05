@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
 import { logGolfAction } from "@/app/log/golf-log-actions";
+import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import SportLogModal from "./SportLogModal";
+import SpotPicker from "@/app/components/log/SpotPicker";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 // Rich golf log sheet. Two modes — COURSE (per-hole detail) and
 // RANGE (per-club shot detail) — sharing the same session header
@@ -59,7 +62,22 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   const [sessionNotes, setSessionNotes] = useState("");
 
   // COURSE mode state
-  const [courseName, setCourseName] = useState("");
+  // Spot picker — replaces the prior free-text courseName field.
+  // Ties golf logs into the same map/recents infrastructure other
+  // sports use; same SpotPicker UX, "course" noun.
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [spotCtx, setSpotCtx] = useState<SportLogContext | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadSportLogContext("golf")
+      .then((ctx) => {
+        if (!cancelled) setSpotCtx(ctx);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [holeCount, setHoleCount] = useState<9 | 18>(18);
   const [holes, setHoles] = useState<Hole[]>(() => buildDefaultHoles(18));
   const [showHoleDetail, setShowHoleDetail] = useState(false);
@@ -131,7 +149,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             performedAtIso: new Date(ms).toISOString(),
             durationMinutes: minutes,
             notes: sessionNotes.trim() || undefined,
-            courseName: courseName.trim() || undefined,
+            spotValue,
             holes: holes.map((h) => ({
               number: h.number,
               par: h.par.trim() === "" ? undefined : Number(h.par),
@@ -147,6 +165,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             performedAtIso: new Date(ms).toISOString(),
             durationMinutes: minutes,
             notes: sessionNotes.trim() || undefined,
+            spotValue,
             ballCount: ballCount.trim() === "" ? undefined : Number(ballCount),
             shots: validShots.map((s) => ({
               club: s.club.trim(),
@@ -207,18 +226,25 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             />
           </label>
 
+          {/* Spot picker — applies to both COURSE and RANGE modes;
+              just a different noun ("course" / "range"). Same map +
+              recent-list infrastructure other sports use. */}
+          {spotCtx?.config ? (
+            <div style={fieldGroup}>
+              <span style={fieldGroupLabel}>{mode === "COURSE" ? "Course" : "Range"}</span>
+              <SpotPicker
+                config={spotCtx.config}
+                spotNoun={mode === "COURSE" ? "course" : "range"}
+                savedSpots={spotCtx.savedSpots}
+                recentSpots={spotCtx.recentSpots}
+                value={spotValue}
+                onChange={setSpotValue}
+              />
+            </div>
+          ) : null}
+
           {mode === "COURSE" ? (
             <>
-              <label style={fieldLabel}>
-                Course
-                <input
-                  type="text"
-                  placeholder="e.g. Pebble Beach"
-                  value={courseName}
-                  onChange={(e) => setCourseName(e.target.value)}
-                  style={fieldInput}
-                />
-              </label>
 
               <div style={fieldGroup}>
                 <span style={fieldGroupLabel}>Holes played</span>

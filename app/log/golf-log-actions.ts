@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { ensureSportSelected, getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
+import { normalizeSpotName } from "@/lib/activity-spots";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
 
 // Server action for golf logging. Persists session-level fields on
 // RoutineLog (performedAt, durationSec, notes) + the round detail as
@@ -29,10 +31,12 @@ export type GolfLogInput = {
   performedAtIso: string;
   durationMinutes?: number;
   notes?: string;
+  /** Spot picker value — tied to the ActivitySpot library for golf
+   *  ("course" noun). Same mapping/recents UX as other sports. */
+  spotValue?: SpotPickerValue;
 } & (
   | {
       mode: "COURSE";
-      courseName?: string;
       holes: GolfCourseHole[];
     }
   | {
@@ -55,6 +59,12 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
       ? Math.round(input.durationMinutes * 60)
       : null;
 
+  // Resolve the spot picker value into an ActivitySpot FK + display
+  // string. The course/range name still lands in sportData for the
+  // golf-specific JSON shape, but the link to ActivitySpot is what
+  // ties the log into the mapping/recents system.
+  const spotResolved = await resolveGolfSpot(input.spotValue);
+
   // Build the discriminated sportData JSON payload. Filter out empty
   // detail rows so a saved log doesn't carry meaningless blanks.
   const sportData =
@@ -63,7 +73,7 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
           sport: "golf" as const,
           mode: "COURSE" as const,
           course: {
-            location: input.courseName?.trim() || undefined,
+            location: spotResolved.displayLocation ?? undefined,
             holes: input.holes
               .filter((h) => h.par !== undefined || h.score !== undefined || h.club || h.notes)
               .map((h) => ({
@@ -97,6 +107,8 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
       performedAt,
       durationSec: durationSec ?? undefined,
       notes: input.notes?.trim() || undefined,
+      location: spotResolved.displayLocation ?? undefined,
+      activitySpotId: spotResolved.activitySpotId ?? undefined,
       sportData,
     },
     select: { id: true },
@@ -107,4 +119,65 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
   revalidatePath("/activities/golf");
 
   return { logId: log.id };
+}
+
+// Resolves a SpotPicker value into ActivitySpot FK + display string.
+// Golf always uses ActivitySpot (not ClimbLocation), activitySlug =
+// "golf". OSM-identity dedup + normalized-name dedup avoid duplicate
+// course rows.
+async function resolveGolfSpot(
+  value: SpotPickerValue | undefined
+): Promise<{ activitySpotId: string | null; displayLocation: string | null }> {
+  if (!value) return { activitySpotId: null, displayLocation: null };
+
+  if (value.kind === "saved") {
+    if (value.ref.kind !== "activitySpot") {
+      return { activitySpotId: null, displayLocation: value.display.name ?? null };
+    }
+    const spot = await prisma.activitySpot.findUnique({
+      where: { id: value.ref.id },
+      select: { id: true, name: true },
+    });
+    return {
+      activitySpotId: spot?.id ?? null,
+      displayLocation: spot?.name ?? value.display.name ?? null,
+    };
+  }
+
+  const draft = value.draft;
+  const cleanName = draft.name.trim();
+  if (!cleanName) return { activitySpotId: null, displayLocation: null };
+
+  if (draft.osmType && draft.osmId) {
+    const existing = await prisma.activitySpot.findFirst({
+      where: { osmType: draft.osmType, osmId: draft.osmId },
+      select: { id: true, name: true },
+    });
+    if (existing) {
+      return { activitySpotId: existing.id, displayLocation: existing.name };
+    }
+  }
+
+  const normalized = normalizeSpotName(cleanName);
+  const candidates = await prisma.activitySpot.findMany({
+    where: { activitySlug: "golf" },
+    select: { id: true, name: true },
+  });
+  const sameName = candidates.find((c) => normalizeSpotName(c.name) === normalized);
+  if (sameName) return { activitySpotId: sameName.id, displayLocation: sameName.name };
+
+  const created = await prisma.activitySpot.create({
+    data: {
+      activitySlug: "golf",
+      name: cleanName,
+      type: draft.type,
+      region: draft.region,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      osmType: draft.osmType,
+      osmId: draft.osmId,
+    },
+    select: { id: true, name: true },
+  });
+  return { activitySpotId: created.id, displayLocation: created.name };
 }
