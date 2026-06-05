@@ -35,14 +35,25 @@ Before introducing a "new" way to do something that already exists in the codeba
 
 ## 3. Form / font / style consistency — match the endurance log
 
-Every sport log form should look and behave like the endurance log (`app/routines/[id]/log-cardio/ui.tsx`). Same fonts, same input padding, same chrome via `SportLogModal`, same `SpotPicker` for location, same Apple-HIG 44px tap targets. If you're tempted to invent a new visual treatment for a sport form, stop — pull from endurance instead. Visual consistency across the sports family is non-negotiable.
+Every log form (sport, climbing, golf, anything new) must use the **same style tokens as the endurance form** — don't re-invent input styling. The shared module is `app/routines/[id]/log/form-ui.tsx`:
 
-Concrete defaults:
-- Input: `fontSize: 16` (prevents iOS auto-zoom), `padding: 12px 14px`, `minHeight: 44`, `borderRadius: 10`
-- Label: `fontSize: 11, fontWeight: 800, textTransform: uppercase, letterSpacing: 0.3`
-- Modal body gap: `18px`
-- Field stacking: `display: grid; gap: 8` inside each label
-- Modal: `SportLogModal` (full-screen on mobile via `.logDrawerSheet`, centered on desktop via the existing media query)
+- **`inputStyle`** — every `<input>` / `<select>` style prop. Same padding, border, dark background, `fontSize: 16`.
+- **`textareaStyle`** — every `<textarea>`. Same as inputStyle + minHeight + resize.
+- **`<Field label="..." hint="...">`** — wrap inputs in this for consistent label+hint+input vertical layout. Bold label, hint underneath.
+- **`<FormSection title="...">`** — bordered card grouping related fields (matches endurance's section cards).
+- **`<FormStack>`** — outer column container with maxWidth.
+
+If you're tempted to write a custom `fieldInput` const for a new form, stop — import from form-ui instead. Visual consistency across log forms is non-negotiable.
+
+Modal chrome (the sheet around the form) is separate and uses `SportLogModal` (which wraps `.logDrawerSheet` + portal). Don't write per-sheet drawer styles.
+
+---
+
+## 3a. iOS Safari focus-zoom — every input must be `fontSize >= 16`
+
+iOS Safari auto-zooms the viewport when a focused `<input>`, `<select>`, or `<textarea>` has `font-size < 16px`. **Every single input in the app must be ≥16px** or it triggers zoom — including small fields like grade inputs, hole-score grids, club distances, etc. The `inputStyle` from form-ui already enforces this; if you write a custom input style for a tight grid, **spread `...inputStyle`** to inherit the 16px instead of overriding to 14/15. Visually-smaller inputs (per-hole score boxes etc.) keep 16px font but tighten padding / textAlign instead.
+
+Concrete precedent — 2026-06-05: shipped Golf with `holesInput { fontSize: 14 }` and Climb/Golf `fieldInput { fontSize: 15 }`. Both zoomed on tap. Fixed by spreading inputStyle.
 
 ---
 

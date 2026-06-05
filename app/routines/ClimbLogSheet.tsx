@@ -16,6 +16,7 @@ import {
 } from "@/lib/climb-types";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
+import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 
 // Rich climb-log sheet — replaces the generic SportQuickLogRow sheet
 // when the user taps the "Climbing" row. Per-attempt entry with
@@ -519,7 +520,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               placeholder="How'd the session go?"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              style={{ ...fieldInput, minHeight: 70, resize: "vertical" as const }}
+              style={textareaStyle}
             />
           </label>
 
@@ -553,18 +554,9 @@ const fieldGroupLabel: CSSProperties = {
   letterSpacing: 0.3,
   textTransform: "uppercase",
 };
-const fieldInput: CSSProperties = {
-  padding: "9px 11px",
-  borderRadius: 9,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 15,
-  fontWeight: 600,
-  textTransform: "none",
-  letterSpacing: 0,
-  opacity: 1,
-};
+// Match the endurance/session form's input chrome (form-ui.tsx). 16px
+// font is required to block iOS Safari's focus-zoom behavior.
+const fieldInput: CSSProperties = inputStyle;
 const twoCol: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
 
 const chipRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };

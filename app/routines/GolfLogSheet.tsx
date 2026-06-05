@@ -6,6 +6,7 @@ import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actio
 import SportLogModal from "./SportLogModal";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 
 // Rich golf log sheet. Two modes — COURSE (per-hole detail) and
 // RANGE (per-club shot detail) — sharing the same session header
@@ -405,7 +406,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
               placeholder="How'd it go?"
               value={sessionNotes}
               onChange={(e) => setSessionNotes(e.target.value)}
-              style={{ ...fieldInput, minHeight: 70, resize: "vertical" as const }}
+              style={{ ...inputStyle, minHeight: 96, resize: "vertical" as const }}
             />
           </label>
 
@@ -517,18 +518,9 @@ const fieldGroupLabel: CSSProperties = {
   letterSpacing: 0.3,
   textTransform: "uppercase",
 };
-const fieldInput: CSSProperties = {
-  padding: "9px 11px",
-  borderRadius: 9,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 15,
-  fontWeight: 600,
-  textTransform: "none",
-  letterSpacing: 0,
-  opacity: 1,
-};
+// Match the endurance/session form's input chrome (form-ui.tsx). 16px
+// font is required to block iOS Safari's focus-zoom behavior.
+const fieldInput: CSSProperties = inputStyle;
 const twoCol: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
 
 const totalsRow: CSSProperties = {
@@ -579,12 +571,9 @@ const holesNumCell: CSSProperties = {
   opacity: 0.7,
 };
 const holesInput: CSSProperties = {
-  padding: "8px 8px",
+  ...inputStyle,
+  padding: "10px 8px",
   borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.03)",
-  color: "inherit",
-  fontSize: 14,
   fontWeight: 700,
   textAlign: "center",
   fontVariantNumeric: "tabular-nums",

@@ -9,6 +9,7 @@ import { useSportLogDraft } from "./useSportLogDraft";
 import { getSportLogConfig, type ExtraFieldConfig } from "./sportLogConfig";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 
 // One row in the SPORT section, representing a user's selected sport.
 // Tap → log sheet. Each sport has its own rich form when one exists,
@@ -241,7 +242,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           placeholder="How'd it go?"
           value={draft.notes}
           onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-          style={{ ...fieldInput, minHeight: 100, resize: "vertical" as const }}
+          style={textareaStyle}
         />
       </label>
       {error ? <div style={errorTextStyle}>{error}</div> : null}
@@ -266,7 +267,7 @@ function ExtraField({
           placeholder={field.placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{ ...fieldInput, minHeight: 70, resize: "vertical" as const }}
+          style={textareaStyle}
         />
       </label>
     );
@@ -347,20 +348,9 @@ const fieldLabelText: CSSProperties = {
   letterSpacing: 0.3,
   textTransform: "uppercase",
 };
-const fieldInput: CSSProperties = {
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 16,
-  fontWeight: 600,
-  textTransform: "none",
-  letterSpacing: 0,
-  opacity: 1,
-  minHeight: 44,
-  boxSizing: "border-box",
-};
+// Match the endurance/session form's input chrome (form-ui.tsx). 16px
+// font is required to block iOS Safari's focus-zoom behavior.
+const fieldInput: CSSProperties = inputStyle;
 const errorTextStyle: CSSProperties = {
   fontSize: 12,
   color: "rgba(248,113,113,0.95)",
