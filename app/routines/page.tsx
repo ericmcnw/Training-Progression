@@ -385,7 +385,7 @@ export default async function RoutinesPage(props: {
                     available={availableSports}
                   />
                 }
-                defaultOpen={!!domainFilter || sportRows.length > 0}
+                defaultOpen={!!domainFilter}
               >
                 {sportRows.map((sport) => (
                   <SportQuickLogRow key={sport.slug} sport={sport} />

@@ -92,13 +92,13 @@ export default function SchedulePicker({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Open/closed state per section. Default open: any section with
-  // content that's worth glancing at. Search overrides this — when
-  // a user types, every matching section auto-opens.
+  // All sections collapsed by default — matches /log's behavior so
+  // both surfaces read the same. Search auto-expands matching
+  // sections so the user can scan hits without manual tapping.
   const [openSections, setOpenSections] = useState<Record<Domain, boolean>>({
     strength: false,
-    cardio: true,
-    sport: true,
+    cardio: false,
+    sport: false,
     mobility: false,
     lifestyle: false,
   });
