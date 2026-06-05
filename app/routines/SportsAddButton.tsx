@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type CSSProperties } from "react";
 import { addSportAction, removeSportAction } from "@/app/log/sport-actions";
+import SportLogModal from "./SportLogModal";
 
 // The `+` pill that sits in the SPORT section's quickLogSlot. Opens
 // a bottom-sheet picker for adding/removing sports. Kept separate
@@ -90,15 +91,14 @@ function PickerSheet({
   }
 
   return (
-    <div style={sheetOverlay} onClick={onClose} role="dialog" aria-modal="true" aria-label="Your sports">
-      <div style={sheetPanel} onClick={(e) => e.stopPropagation()}>
-        <header style={sheetHeader}>
-          <h3 style={sheetTitle}>Your sports</h3>
-          <button type="button" onClick={onClose} style={sheetCloseBtn} aria-label="Close">
-            ✕
-          </button>
-        </header>
-        <div style={sheetBody}>
+    <SportLogModal
+      title="Your sports"
+      onClose={onClose}
+      footer={
+        <button type="button" onClick={onClose} style={btnPrimary}>Done</button>
+      }
+    >
+        <div>
           <div style={pickerStack}>
             <p style={pickerHint}>
               Sports you’ve added appear in the SPORT section for quick session logging. Remove anytime — past logs stay.
@@ -151,13 +151,9 @@ function PickerSheet({
                 })}
               </div>
             ) : null}
-            <div style={btnRowStyle}>
-              <button type="button" onClick={onClose} style={btnPrimary}>Done</button>
-            </div>
           </div>
         </div>
-      </div>
-    </div>
+    </SportLogModal>
   );
 }
 
@@ -181,51 +177,6 @@ const plusBtnStyle: CSSProperties = {
   position: "relative",
   zIndex: 2,
 };
-
-const sheetOverlay: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 200,
-  background: "rgba(4,8,16,0.66)",
-  backdropFilter: "blur(4px)",
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  padding: "0 0 env(safe-area-inset-bottom)",
-};
-const sheetPanel: CSSProperties = {
-  width: "100%",
-  maxWidth: 480,
-  maxHeight: "85vh",
-  display: "grid",
-  gridTemplateRows: "auto 1fr",
-  background: "#0e1a2e",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "16px 16px 0 0",
-  boxShadow: "0 -10px 30px rgba(0,0,0,0.45)",
-  overflow: "hidden",
-};
-const sheetHeader: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-  padding: "12px 14px",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-const sheetTitle: CSSProperties = { margin: 0, fontSize: 15, fontWeight: 900 };
-const sheetCloseBtn: CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 14,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-const sheetBody: CSSProperties = { padding: "14px 14px 18px", overflowY: "auto" };
 
 const pickerStack: CSSProperties = { display: "grid", gap: 14 };
 const pickerHint: CSSProperties = { fontSize: 12, opacity: 0.65, lineHeight: 1.5, margin: 0 };
@@ -279,12 +230,6 @@ const pickerRemoveHint: CSSProperties = {
   fontWeight: 800,
   opacity: 0.6,
   whiteSpace: "nowrap",
-};
-const btnRowStyle: CSSProperties = {
-  display: "flex",
-  gap: 8,
-  justifyContent: "flex-end",
-  marginTop: 4,
 };
 const btnPrimary: CSSProperties = {
   padding: "10px 16px",

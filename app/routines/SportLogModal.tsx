@@ -27,13 +27,19 @@ export default function SportLogModal({
   footer?: ReactNode;
 }) {
   return (
-    <div
-      className="logDrawerSheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div style={drawerHeader}>
+    <>
+      {/* Backdrop only visible on desktop via .logDrawerBackdrop's
+          media query; mobile is full-screen so the backdrop is hidden
+          to avoid double-rendering. Click closes (same pattern as the
+          existing LogDrawer). */}
+      <div className="logDrawerBackdrop" onClick={onClose} />
+      <div
+        className="logDrawerSheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div style={drawerHeader}>
         <span style={drawerTitle}>{title}</span>
         <button
           type="button"
@@ -56,9 +62,10 @@ export default function SportLogModal({
           Minimize
         </button>
       </div>
-      <div style={drawerBody}>{children}</div>
-      {footer ? <div style={drawerFooter}>{footer}</div> : null}
-    </div>
+        <div style={drawerBody}>{children}</div>
+        {footer ? <div style={drawerFooter}>{footer}</div> : null}
+      </div>
+    </>
   );
 }
 

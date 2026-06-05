@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 // Call clearDraft() on successful save to wipe the slot so the next
 // open starts blank instead of restoring the just-saved log.
 
-export function useSportLogDraft<T>(
+export function useSportLogDraft<T extends Record<string, unknown>>(
   key: string,
   initial: T
 ): [T, (next: T | ((prev: T) => T)) => void, () => void] {
@@ -20,7 +20,13 @@ export function useSportLogDraft<T>(
     try {
       const raw = window.localStorage.getItem(key);
       if (raw === null) return initial;
-      return JSON.parse(raw) as T;
+      const parsed = JSON.parse(raw) as Partial<T>;
+      // Merge over the initial so fields added in a later schema
+      // version (e.g. `location`, `extras`, `sessionType`) get
+      // sensible defaults instead of being `undefined`. Old drafts
+      // saved before those fields existed would otherwise crash the
+      // form on the first `.trim()` / property access.
+      return { ...initial, ...parsed };
     } catch {
       return initial;
     }
