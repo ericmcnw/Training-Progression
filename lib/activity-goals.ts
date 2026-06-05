@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { effectiveRoutineDomain } from "@/lib/routines";
+import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 
 /**
  * Active goals targeting a given activity slug — for use on activity-world
@@ -51,6 +52,43 @@ export const getActivityGoals = cache(async function getActivityGoals(
   const templateTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "SESSION_TEMPLATE").map((e) => e.goal.targetId));
   const exerciseTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "EXERCISE").map((e) => e.goal.targetId));
 
+  // Group-frequency goals store the FrequencyGoal record id (not a
+  // metadata-group id) in targetId. To match them to an activity we
+  // need to look up the goal's linked routines and check their
+  // metadata-group memberships — same join the matcher uses at log
+  // time. Sport-targeted goals also match here when one of their
+  // linked routines is the activity's synthetic sport routine.
+  const groupGoalIds = unique(
+    allInsights
+      .filter((e) => e.goal.targetType === "GROUP")
+      .map((e) => e.goal.targetId)
+  );
+  const groupGoalRoutineLinks =
+    groupGoalIds.length > 0
+      ? await prisma.frequencyGoalRoutine.findMany({
+          where: { goalId: { in: groupGoalIds } },
+          select: { goalId: true, routineId: true },
+        })
+      : [];
+  const groupGoalRoutineMap = new Map<string, string[]>();
+  for (const link of groupGoalRoutineLinks) {
+    const list = groupGoalRoutineMap.get(link.goalId) ?? [];
+    list.push(link.routineId);
+    groupGoalRoutineMap.set(link.goalId, list);
+  }
+  // Membership for every routine linked to a group-frequency goal —
+  // batched once, indexed by routineId for the activity check below.
+  const groupLinkedRoutineIds = unique(
+    Array.from(groupGoalRoutineMap.values()).flat()
+  );
+  const groupGoalRoutineMembership = await fetchGroupMembership(
+    groupLinkedRoutineIds,
+    "routine"
+  );
+  // Synthetic sport routine for THIS activity — if a group-frequency
+  // goal links it directly, the goal belongs to this activity.
+  const syntheticSportRoutineId = getSyntheticSportRoutineId(activitySlug);
+
   const [routineMembership, templateMembership, exerciseMembership] = await Promise.all([
     fetchGroupMembership(routineTargetIds, "routine"),
     fetchGroupMembership(templateTargetIds, "sessionTemplate"),
@@ -61,10 +99,22 @@ export const getActivityGoals = cache(async function getActivityGoals(
     const targetType = insight.goal.targetType;
     const targetId = insight.goal.targetId;
 
-    // GROUP and CARDIO both store a metadata-group id in targetId — CARDIO is
-    // just a labeling distinction for cardio-shaped activity groups.
-    if (targetType === "GROUP" || targetType === "CARDIO") {
+    if (targetType === "CARDIO") {
+      // CARDIO stores a metadata-group id in targetId.
       return activityGroupIds.has(targetId);
+    }
+    if (targetType === "GROUP") {
+      // GROUP-frequency goals carry the FrequencyGoal id (not a
+      // metadata-group id). Resolve via the goal's linked routines:
+      // the goal belongs to this activity if any linked routine is
+      // tagged with a matching metadata group OR is the synthetic
+      // sport routine for this activity.
+      const linkedRoutines = groupGoalRoutineMap.get(targetId) ?? [];
+      for (const routineId of linkedRoutines) {
+        if (routineId === syntheticSportRoutineId) return true;
+        if (intersectsActivity(groupGoalRoutineMembership.get(routineId), activityGroupIds)) return true;
+      }
+      return false;
     }
     if (targetType === "ROUTINE") {
       return intersectsActivity(routineMembership.get(targetId), activityGroupIds);

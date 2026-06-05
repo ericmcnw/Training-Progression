@@ -1456,6 +1456,15 @@ function parseFrequencyGoalFields(formData: FormData) {
 // (sports-{slug}-synthetic), make sure that routine actually exists.
 // The goal form lets users pick a sport they haven't added on /log
 // yet — opting in via the goal is itself an opt-in for the sport.
+//
+// Side-effect note: ensureSportSelected() upserts with isActive=true,
+// so creating a goal for a sport the user PREVIOUSLY removed from
+// /log will silently re-add it. This is intentional — a goal
+// targeting a non-existent / inactive sport routine would be
+// confusing dead state. The /log SPORT section already shows the
+// sport again on next render, no separate notification needed
+// because the goal form is itself the affirmative "I want this
+// sport tracked" action.
 async function ensureSyntheticSportRoutinesForGoal(routineIds: string[]) {
   const { isSyntheticSportRoutineId, sportSlugFromRoutineId, ensureSportSelected } = await import(
     "@/lib/synthetic-sport-routines"

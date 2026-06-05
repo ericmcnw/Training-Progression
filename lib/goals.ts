@@ -1384,10 +1384,12 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
     // Synthetic sport routines — placeholder rows the user opts into
     // via /log → SPORTS. Surfaced as their own group in the goal-form
     // picker so a "Basketball 2x/wk" target is one tap. id pattern is
-    // sports-{slug}-synthetic.
+    // sports-{slug}-synthetic. isActive=true matches what /log shows
+    // (soft-removed sports stay hidden until the user re-adds them).
     prisma.routine.findMany({
       where: {
         isDeleted: false,
+        isActive: true,
         isPlaceholder: true,
         kind: "SESSION",
         domain: "sport",
@@ -1396,7 +1398,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
         id: { startsWith: "sports-", endsWith: "-synthetic" },
       },
       orderBy: [{ name: "asc" }],
-      select: { id: true, name: true, isActive: true },
+      select: { id: true, name: true },
     }),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },

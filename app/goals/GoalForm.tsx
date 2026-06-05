@@ -1310,7 +1310,9 @@ function SportCheckboxTile({
     textAlign: "left",
     padding: "10px 12px",
     borderRadius: 10,
-    borderLeft: `3px solid ${color}`,
+    // Set the full border first, THEN override just the left side —
+    // otherwise the `border` shorthand resets `borderLeft` and the
+    // accent stripe disappears.
     border: `1px solid ${checked ? palette.borderActive : "rgba(128,128,128,0.3)"}`,
     borderLeftWidth: 3,
     borderLeftColor: color,
