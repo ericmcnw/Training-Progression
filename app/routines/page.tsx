@@ -11,6 +11,10 @@ import RoutineSection from "./RoutineSection";
 import QuickLogDrawerButton from "./QuickLogDrawerButton";
 import EnduranceQuickLogButton from "./EnduranceQuickLogButton";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
+import SportsAddButton from "./SportsAddButton";
+import SportQuickLogRow from "./SportQuickLogRow";
+import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
+import { getActivityEntry } from "@/lib/activity-families";
 
 export const dynamic = "force-dynamic";
 
@@ -90,10 +94,13 @@ export default async function RoutinesPage(props: {
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
-  const [rawRoutines, goalRoutines, routineFrequencyGoals] = await Promise.all([
+  const [rawRoutines, goalRoutines, routineFrequencyGoals, selectedSports, availableSports] = await Promise.all([
     prisma.routine.findMany({
       // Hide quick-log placeholder routines — they exist purely to host
       // ad-hoc logs and would clutter the routine list otherwise.
+      // Synthetic sport routines are also placeholders; they surface
+      // via the SPORT section's custom rendering below (see the
+      // `domain === "sport"` branch in the section loop).
       where: { isDeleted: false, isPlaceholder: false },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       include: {
@@ -138,7 +145,34 @@ export default async function RoutinesPage(props: {
         targetId: true,
       },
     }),
+    listSelectedSports(),
+    listUnselectedSports(),
   ]);
+
+  // Sport rows + accent colors for the SPORT section. Palette matches
+  // lib/activities/sports-chart.ts so the visual ties across log and
+  // stats stay consistent.
+  const SPORT_ACCENT: Record<string, string> = {
+    climbing: "rgba(251,146,60,0.9)",
+    surfing: "rgba(56,189,248,0.9)",
+    snowboarding: "rgba(168,85,247,0.9)",
+    skiing: "rgba(99,102,241,0.9)",
+    skateboarding: "rgba(244,114,182,0.9)",
+    basketball: "rgba(220,38,38,0.9)",
+    tennis: "rgba(132,204,22,0.9)",
+    golf: "rgba(40,212,160,0.9)",
+  };
+  const sportRows = selectedSports.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
+    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+  }));
+  const sportPickerSelected = selectedSports.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
+  }));
 
   // Flatten frequencyGoalRoutines into the legacy target shape for downstream
   // helpers (getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, etc.).
@@ -235,6 +269,13 @@ export default async function RoutinesPage(props: {
     groups.get(domain)!.push(routine);
   }
 
+  // The SPORT section is always shown when the user has selected
+  // sports — even if they have no legacy sport-domain routines. Seed
+  // an empty bucket so the section appears in the loop.
+  if (sportRows.length > 0 && !groups.has("sport")) {
+    groups.set("sport", []);
+  }
+
   const orderedDomains = domainOrder.filter((d) => groups.has(d));
 
   return (
@@ -325,6 +366,45 @@ export default async function RoutinesPage(props: {
           const list = groups.get(domain)!;
           const accent = domainColor(domain);
           const label = domainLabelMap[domain] ?? domain;
+
+          if (domain === "sport") {
+            // SPORT section combines (a) synthetic per-sport rows that
+            // tap to a quick-log sheet and (b) any legacy sport-domain
+            // routines the user already has. The "+" button in the
+            // section header opens the add/remove sport picker.
+            const totalCount = list.length + sportRows.length;
+            return (
+              <RoutineSection
+                key={domain}
+                title={label.toUpperCase()}
+                count={totalCount}
+                accentColor={accent}
+                quickLogSlot={
+                  <SportsAddButton
+                    selected={sportPickerSelected}
+                    available={availableSports}
+                  />
+                }
+                defaultOpen={!!domainFilter || sportRows.length > 0}
+              >
+                {sportRows.map((sport) => (
+                  <SportQuickLogRow key={sport.slug} sport={sport} />
+                ))}
+                {list.map((routine) => (
+                  <RoutineCard
+                    key={routine.id}
+                    routine={routine}
+                    lastCompletedMap={lastCompletedMap}
+                    allowLogging={true}
+                    frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+                    goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
+                    habitStats={habitStatsByRoutineId.get(routine.id)}
+                  />
+                ))}
+              </RoutineSection>
+            );
+          }
+
           return (
             <RoutineSection
               key={domain}

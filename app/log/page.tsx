@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import RoutinesPage from "@/app/routines/page";
-import SportsLogSection from "./SportsLogSection";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +34,6 @@ export default async function LogPage(props: {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <LogTabs current={view} />
-      {/* Sports section — type-based quick-log surface, parallel to
-          the routine-based logging the embed below covers. Lives above
-          the routines list so the user can drop a Climbing session in
-          without scrolling past their strength templates. */}
-      <SportsLogSection />
       <RoutinesPage searchParams={Promise.resolve(searchParams)} />
     </div>
   );

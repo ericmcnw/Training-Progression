@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget } from "../data";
 import type { VirtualSportCategory } from "../sports";
 import { buildWeeklyGrid, type HeatmapWeek, type SessionEventInput, type TrainingEventInput } from "./activity-coverage";
+import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 
 /** Slim per-session shape consumable by pulse builders without dragging the
  *  full RoutineLogWithRelations include into the pulse code. */
@@ -65,23 +66,56 @@ export const loadActivityCoverage = cache(async function loadActivityCoverage(
 ): Promise<ActivityCoverageData> {
   const trainingSlug = trainingTagSlugFor(sportSlug, virtualSport);
 
-  // Sport sessions (all-time) — virtual sports filter by subtype, group sports
-  // resolve via the metadata-group target.
+  // Sport sessions (all-time). Bilingual: legacy metadata-tagged
+  // routines AND new synthetic-per-sport routines both contribute.
+  //   • Virtual sports (board-sports rollup) — subtype-based legacy
+  //     match + synthetic-routine match for the specific sport slug
+  //   • Group sports — metadata-tagged routines + the synthetic
+  //     routine for the sport slug
+  // Both paths union so logging through the new sport-tile flow on
+  // /log surfaces in the activity coverage view the same as legacy
+  // logs do.
   const sportLogsPromise = (async () => {
-    if (virtualSport) {
-      const [routines, allLogs] = await Promise.all([
-        getRoutineIndex(),
-        getRoutineLogs("all"),
-      ]);
-      const ids = new Set(
-        routines
-          .filter((r) => r.isActive && r.kind === "SESSION" && r.subtype === virtualSport.subtype)
-          .map((r) => r.id)
-      );
-      return allLogs.filter((log) => ids.has(log.routineId));
+    const syntheticId = getSyntheticSportRoutineId(sportSlug);
+    const [allLogs, syntheticLogs] = await Promise.all([
+      // Legacy path
+      virtualSport
+        ? (async () => {
+            const [routines, all] = await Promise.all([
+              getRoutineIndex(),
+              getRoutineLogs("all"),
+            ]);
+            const ids = new Set(
+              routines
+                .filter(
+                  (r) => r.isActive && r.kind === "SESSION" && r.subtype === virtualSport.subtype
+                )
+                .map((r) => r.id)
+            );
+            return all.filter((log) => ids.has(log.routineId));
+          })()
+        : (async () => {
+            const target = await resolveGroupTarget(sportSlug, "all");
+            return target?.logs ?? [];
+          })(),
+      // Synthetic path — match by deterministic routine id.
+      (async () => {
+        const all = await getRoutineLogs("all");
+        return all.filter((log) => log.routineId === syntheticId);
+      })(),
+    ]);
+    // Dedupe by log id in case a log somehow ends up matched by both
+    // paths (shouldn't happen, but defensive).
+    const seen = new Set<string>();
+    const merged: typeof allLogs = [];
+    for (const log of [...allLogs, ...syntheticLogs]) {
+      if (seen.has(log.id)) continue;
+      seen.add(log.id);
+      merged.push(log);
     }
-    const target = await resolveGroupTarget(sportSlug, "all");
-    return target?.logs ?? [];
+    // Re-sort so consumers see most-recent first regardless of source.
+    merged.sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
+    return merged;
   })();
 
   // Supporting training (all-time) — workouts/guided/completion routines tagged
