@@ -121,6 +121,77 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
   return { logId: log.id };
 }
 
+// Update an existing golf log — same shape as logGolfAction but
+// patches rather than creates. Editable: when / duration / notes /
+// spot / mode / holes / shots / ballCount.
+export async function updateGolfLogAction(
+  input: { logId: string } & GolfLogInput
+): Promise<void> {
+  const performedAt = new Date(input.performedAtIso);
+  if (Number.isNaN(performedAt.getTime())) {
+    throw new Error("Invalid performedAt timestamp");
+  }
+  const durationSec =
+    input.durationMinutes && input.durationMinutes > 0
+      ? Math.round(input.durationMinutes * 60)
+      : null;
+
+  const spotResolved = await resolveGolfSpot(input.spotValue);
+
+  const sportData =
+    input.mode === "COURSE"
+      ? {
+          sport: "golf" as const,
+          mode: "COURSE" as const,
+          course: {
+            location: spotResolved.displayLocation ?? undefined,
+            holes: input.holes
+              .filter(
+                (h) => h.par !== undefined || h.score !== undefined || h.club || h.notes
+              )
+              .map((h) => ({
+                number: h.number,
+                par: h.par,
+                score: h.score,
+                club: h.club?.trim() || undefined,
+                notes: h.notes?.trim() || undefined,
+              })),
+          },
+        }
+      : {
+          sport: "golf" as const,
+          mode: "RANGE" as const,
+          range: {
+            ballCount: input.ballCount,
+            shots: input.shots
+              .filter((s) => s.club.trim().length > 0)
+              .map((s) => ({
+                club: s.club.trim(),
+                distanceYards: s.distanceYards,
+                ballCount: s.ballCount,
+                notes: s.notes?.trim() || undefined,
+              })),
+          },
+        };
+
+  await prisma.routineLog.update({
+    where: { id: input.logId },
+    data: {
+      performedAt,
+      durationSec,
+      notes: input.notes?.trim() || null,
+      location: spotResolved.displayLocation,
+      activitySpotId: spotResolved.activitySpotId,
+      sportData,
+    },
+  });
+
+  revalidatePath("/log");
+  revalidatePath("/activities/sports");
+  revalidatePath("/activities/golf");
+  revalidatePath(`/routines/${getSyntheticSportRoutineId("golf")}/logs/${input.logId}/details`);
+}
+
 // Resolves a SpotPicker value into ActivitySpot FK + display string.
 // Golf always uses ActivitySpot (not ClimbLocation), activitySlug =
 // "golf". OSM-identity dedup + normalized-name dedup avoid duplicate

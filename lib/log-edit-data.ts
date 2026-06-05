@@ -194,11 +194,36 @@ export type EditCompletionData = {
   initialPerformedAt: Date;
 };
 
+// Edit-time data for sport logs that go through the new sport-tile
+// flow (golf scorecard, basketball/surfing/snow/etc. with extras +
+// sessionType). Distinct from EditSessionData (which is climbing-
+// shaped) — these sports don't have ClimbAttempts.
+export type EditSportData = {
+  kind: "SPORT";
+  routineId: string;
+  routineName: string;
+  logId: string;
+  /** Sport slug — pulled from the synthetic routine id. Drives which
+   *  rich form to render. */
+  sportSlug: string;
+  initialDurationSec: number;
+  initialNotes: string;
+  initialPerformedAt: Date;
+  /** Raw sportData JSON from the log row — parsed and re-rendered by
+   *  the sport-specific edit form. */
+  sportData: unknown;
+  /** Existing spot link — passed through so the picker pre-fills. */
+  activitySlug: string | null;
+  savedSpots: SpotPickerItem[];
+  initialSpot: SpotPickerValue;
+};
+
 export type LogEditData =
   | EditWorkoutData
   | EditCardioData
   | EditGuidedData
   | EditSessionData
+  | EditSportData
   | EditCompletionData;
 
 // ── Fetcher ───────────────────────────────────────────────────────────
@@ -228,6 +253,9 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       activitySpot: {
         select: { id: true, activitySlug: true, name: true, region: true, type: true, osmType: true, osmId: true, latitude: true, longitude: true },
       },
+      // Sport-specific structured payload (golf scorecard, basketball
+      // mode/extras, etc.). Powers the edit-time per-sport panels.
+      sportData: true,
       metrics: { select: { id: true } },
       sessionMetricValues: {
         include: { metricDefinition: true },
@@ -483,6 +511,28 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         initialActivityTypeId: log.activityTypeId ?? null,
         initialIntervals: intervals,
       };
+    }
+
+    // Branch SESSION-shaped logs based on routine identity. Sport
+    // synthetic routines (sports-{slug}-synthetic) — except climbing,
+    // which keeps the rich ClimbAttempt editor in SessionLogForm —
+    // route to the sport-specific edit form. Everything else stays on
+    // EditSessionLogForm.
+    if (isSessionKind(logKind)) {
+      const { sportSlugFromRoutineId } = await import("@/lib/synthetic-sport-routines");
+      const sportSlug = sportSlugFromRoutineId(log.routineId);
+      if (sportSlug && sportSlug !== "climbing") {
+        return {
+          kind: "SPORT",
+          ...base,
+          sportSlug,
+          initialDurationSec: log.durationSec ?? 0,
+          sportData: log.sportData,
+          activitySlug: editSpotActivitySlug,
+          savedSpots: editSavedSpots,
+          initialSpot: initialEditSpot,
+        };
+      }
     }
 
     // SESSION

@@ -19,6 +19,7 @@ import EditWorkoutLogForm from "@/app/routines/[id]/log/[logId]/EditWorkoutLogFo
 import EditSessionLogForm from "@/app/routines/[id]/log-session/[logId]/EditSessionLogForm";
 import EditGuidedLogForm from "@/app/routines/[id]/log-guided/[logId]/EditGuidedLogForm";
 import EditCompletionLogForm from "@/app/routines/[id]/log-check/[logId]/EditCompletionLogForm";
+import EditSportLogForm from "@/app/routines/[id]/logs/[logId]/details/EditSportLogForm";
 import type { LogEditData } from "@/lib/log-edit-data";
 
 // API serializes Date → ISO string. Same shape otherwise, so this type alias
@@ -31,6 +32,7 @@ type WireLogEditData =
   | WireDate<Extract<LogEditData, { kind: "CARDIO" }>>
   | WireDate<Extract<LogEditData, { kind: "GUIDED" }>>
   | WireDate<Extract<LogEditData, { kind: "SESSION" }>>
+  | WireDate<Extract<LogEditData, { kind: "SPORT" }>>
   | WireDate<Extract<LogEditData, { kind: "COMPLETION" }>>;
 
 type FetchState =
@@ -249,6 +251,25 @@ function FormForKind({
         initialSpot={data.initialSpot}
         initialClimbAttempts={data.initialClimbAttempts}
         climbDefaultDiscipline={data.climbDefaultDiscipline}
+        onComplete={onComplete}
+        onCancel={onCancel}
+      />
+    );
+  }
+  if (data.kind === "SPORT") {
+    return (
+      <EditSportLogForm
+        routineId={data.routineId}
+        logId={data.logId}
+        sportSlug={data.sportSlug}
+        initialPerformedAt={data.initialPerformedAt}
+        initialDurationSec={data.initialDurationSec}
+        initialNotes={data.initialNotes}
+        initialSpot={data.initialSpot}
+        savedSpots={data.savedSpots}
+        activitySlug={data.activitySlug}
+        sportData={data.sportData}
+        returnTo={returnTo}
         onComplete={onComplete}
         onCancel={onCancel}
       />

@@ -343,6 +343,69 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
   return { logId: log.id };
 }
 
+// Update an existing sport log (the non-climbing, non-golf flavor).
+// Editable fields: when/duration/notes, spot (re-pickable), session
+// type, generic extras. Sport slug + routine binding don't change —
+// you can't migrate a basketball log into a surfing log via edit.
+export async function updateSportLogAction(input: {
+  logId: string;
+  performedAtIso: string;
+  durationMinutes?: number;
+  notes?: string;
+  spotValue?: SpotPickerValue;
+  sessionType?: string;
+  extras?: Record<string, string | number | undefined>;
+  sportSlug: string;
+}): Promise<void> {
+  const performedAt = new Date(input.performedAtIso);
+  if (Number.isNaN(performedAt.getTime())) {
+    throw new Error("Invalid performedAt timestamp");
+  }
+  const durationSec =
+    input.durationMinutes && input.durationMinutes > 0
+      ? Math.round(input.durationMinutes * 60)
+      : null;
+
+  const cleanExtras: Record<string, string | number> = {};
+  if (input.extras) {
+    for (const [k, v] of Object.entries(input.extras)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      if (typeof v === "number" && Number.isNaN(v)) continue;
+      cleanExtras[k] = typeof v === "string" ? v.trim() : v;
+    }
+  }
+  const sportType = input.sessionType?.trim();
+  const sportData =
+    sportType || Object.keys(cleanExtras).length > 0
+      ? {
+          sport: input.sportSlug,
+          ...(sportType ? { sessionType: sportType } : {}),
+          ...(Object.keys(cleanExtras).length > 0 ? { extras: cleanExtras } : {}),
+        }
+      : null;
+
+  const spotResolved = await resolveSpotForLog(input.spotValue, input.sportSlug);
+
+  await prisma.routineLog.update({
+    where: { id: input.logId },
+    data: {
+      performedAt,
+      durationSec,
+      notes: input.notes?.trim() || null,
+      location: spotResolved.displayLocation,
+      activitySpotId: spotResolved.activitySpotId,
+      climbLocationId: spotResolved.climbLocationId,
+      sportData: sportData ?? undefined,
+    },
+  });
+
+  revalidatePath("/log");
+  revalidatePath("/activities/sports");
+  revalidatePath(`/activities/${input.sportSlug}`);
+  revalidatePath(`/routines/${getSyntheticSportRoutineId(input.sportSlug)}/logs/${input.logId}/details`);
+}
+
 // Re-export the predicate for client code that needs to know if a
 // given routine id is a synthetic sport routine.
 export { isSyntheticSportRoutineId };
