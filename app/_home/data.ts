@@ -799,6 +799,27 @@ export async function getHomeData(): Promise<HomeData> {
       familyName: t.family.name,
     }));
 
+  // ── User's selected sports for the schedule picker's SPORTS tiles ────────
+  const { listSelectedSports } = await import("@/lib/synthetic-sport-routines");
+  const { getActivityEntry } = await import("@/lib/activity-families");
+  const SPORT_ACCENT: Record<string, string> = {
+    climbing: "rgba(251,146,60,0.9)",
+    surfing: "rgba(56,189,248,0.9)",
+    snowboarding: "rgba(168,85,247,0.9)",
+    skiing: "rgba(99,102,241,0.9)",
+    skateboarding: "rgba(244,114,182,0.9)",
+    basketball: "rgba(220,38,38,0.9)",
+    tennis: "rgba(132,204,22,0.9)",
+    golf: "rgba(40,212,160,0.9)",
+  };
+  const selectedSports = await listSelectedSports();
+  const scheduleSports = selectedSports.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
+    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+  }));
+
   // ── Last-7-days snapshot ────────────────────────────────────────────────
   // Pure aggregation over allLogs; no extra Prisma roundtrip. Rolling
   // 7-day window ending today (inclusive of today).
@@ -825,6 +846,7 @@ export async function getHomeData(): Promise<HomeData> {
     weekChip,
     quickPickRoutines,
     scheduleActivityTypes,
+    scheduleSports,
     last7Days: {
       sessions: last7Sessions,
       totalDurationSec: last7DurationSec,

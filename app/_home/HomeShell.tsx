@@ -36,6 +36,7 @@ export default function HomeShell({ data }: { data: HomeData }) {
             currentWeekStart={data.currentWeekStart}
             schedulableRoutines={data.quickPickRoutines}
             scheduleActivityTypes={data.scheduleActivityTypes}
+            scheduleSports={data.scheduleSports}
           />
           <div className="homeMovementPatterns">
             <MovementPatternsCard data={data.movementPatterns} />

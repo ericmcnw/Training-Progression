@@ -32,6 +32,9 @@ type Props = {
   /** Enabled endurance activity types — feeds the SchedulePicker's
    *  typed-endurance shortcut block. Empty hides the section cleanly. */
   scheduleActivityTypes?: import("./SchedulePicker").ScheduleActivityType[];
+  /** Sports the user has added — populates the SPORTS section in the
+   *  schedule picker with tappable sport tiles. */
+  scheduleSports?: import("./SchedulePicker").ScheduleSport[];
 };
 
 // Default fallbacks — actual day width is computed from viewport width so
@@ -47,7 +50,7 @@ const DAY_WIDTH_MOBILE_MIN = 56;
 const DAY_WIDTH_MOBILE_MAX = 76;
 const DAY_GAP = 6;
 
-export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines, scheduleActivityTypes }: Props) {
+export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedYmd, setSelectedYmd] = useState<string>(today);
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DESKTOP);
@@ -228,7 +231,7 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
       </div>
 
       {selectedDay ? (
-        <DetailPanel day={selectedDay} today={today} schedulableRoutines={schedulableRoutines} scheduleActivityTypes={scheduleActivityTypes} />
+        <DetailPanel day={selectedDay} today={today} schedulableRoutines={schedulableRoutines} scheduleActivityTypes={scheduleActivityTypes} scheduleSports={scheduleSports} />
       ) : null}
 
       <style>{`
@@ -374,11 +377,13 @@ function DetailPanel({
   today,
   schedulableRoutines,
   scheduleActivityTypes,
+  scheduleSports,
 }: {
   day: LegacyGlanceDay;
   today: string;
   schedulableRoutines?: QuickPickRoutine[];
   scheduleActivityTypes?: import("./SchedulePicker").ScheduleActivityType[];
+  scheduleSports?: import("./SchedulePicker").ScheduleSport[];
 }) {
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
   const sub = day.ymd === today ? "today" : day.ymd < today ? "past day" : "upcoming";
@@ -391,7 +396,14 @@ function DetailPanel({
   // Scheduling onto past days is meaningless — only show the button on today
   // and future days. Hides itself entirely if the parent didn't pass a
   // routine list.
-  const canSchedule = (schedulableRoutines?.length ?? 0) > 0 && day.ymd >= today;
+  // Schedulable when there's anything pickable — saved routines, sports
+  // tiles, or endurance types. Without sports/types, an empty-routine
+  // user would never see the +Add affordance.
+  const hasPickable =
+    (schedulableRoutines?.length ?? 0) > 0 ||
+    (scheduleSports?.length ?? 0) > 0 ||
+    (scheduleActivityTypes?.length ?? 0) > 0;
+  const canSchedule = hasPickable && day.ymd >= today;
 
   return (
     <div style={detailShell}>
@@ -510,14 +522,15 @@ function DetailPanel({
 
       <DayTodoList ymd={day.ymd} todos={day.todos ?? []} mode="panel" />
 
-      {canSchedule && schedulableRoutines ? (
+      {canSchedule ? (
         <SchedulePicker
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
           ymd={day.ymd}
           dateLabel={fullDate}
-          routines={schedulableRoutines}
+          routines={schedulableRoutines ?? []}
           activityTypes={scheduleActivityTypes}
+          sports={scheduleSports}
         />
       ) : null}
     </div>

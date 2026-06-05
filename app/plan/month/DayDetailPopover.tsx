@@ -23,15 +23,24 @@ type Props = {
   /** Enabled endurance activity types — feeds the schedule picker's
    *  typed-endurance shortcut. Empty array hides the shortcut cleanly. */
   scheduleActivityTypes?: import("@/app/_home/SchedulePicker").ScheduleActivityType[];
+  /** Sports the user has added on /log — populates the SPORTS section
+   *  in the schedule picker with tappable sport tiles. */
+  scheduleSports?: import("@/app/_home/SchedulePicker").ScheduleSport[];
   onClose: () => void;
 };
 
-export default function DayDetailPopover({ day, today, schedulableRoutines, scheduleActivityTypes, onClose }: Props) {
+export default function DayDetailPopover({ day, today, schedulableRoutines, scheduleActivityTypes, scheduleSports, onClose }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
   const sub = day.ymd === today ? "Today" : day.ymd < today ? "Past day" : "Upcoming";
   const isFuture = day.ymd > today;
-  const canSchedule = (schedulableRoutines?.length ?? 0) > 0 && day.ymd >= today;
+  // Schedulable if EITHER saved routines, sports, or endurance types
+  // are available — the picker shows whichever applies.
+  const hasPickable =
+    (schedulableRoutines?.length ?? 0) > 0 ||
+    (scheduleSports?.length ?? 0) > 0 ||
+    (scheduleActivityTypes?.length ?? 0) > 0;
+  const canSchedule = hasPickable && day.ymd >= today;
   const isEmpty = day.entries.length === 0;
 
   // Header pill mirrors WeekAtGlance — green + Add. Hidden for past days
@@ -68,14 +77,15 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
         )}
       </Popover>
 
-      {canSchedule && schedulableRoutines ? (
+      {canSchedule ? (
         <SchedulePicker
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
           ymd={day.ymd}
           dateLabel={fullDate}
-          routines={schedulableRoutines}
+          routines={schedulableRoutines ?? []}
           activityTypes={scheduleActivityTypes}
+          sports={scheduleSports}
         />
       ) : null}
     </>

@@ -26,6 +26,7 @@ type Props = {
   data: MonthData;
   schedulableRoutines?: QuickPickRoutine[];
   scheduleActivityTypes?: import("@/app/_home/SchedulePicker").ScheduleActivityType[];
+  scheduleSports?: import("@/app/_home/SchedulePicker").ScheduleSport[];
 };
 
 // Workout-dot caps. Lower than the original 6/10 because workouts are the
@@ -34,7 +35,7 @@ type Props = {
 const MAX_DOTS_MOBILE = 4;
 const MAX_DOTS_DESKTOP = 6;
 
-export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes }: Props) {
+export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
   const selectedDay = selectedYmd ? data.days.find((d) => d.ymd === selectedYmd) ?? null : null;
 
@@ -76,6 +77,7 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
           today={data.today}
           schedulableRoutines={schedulableRoutines}
           scheduleActivityTypes={scheduleActivityTypes}
+          scheduleSports={scheduleSports}
           onClose={() => setSelectedYmd(null)}
         />
       ) : null}

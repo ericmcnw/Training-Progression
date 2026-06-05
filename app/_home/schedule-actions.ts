@@ -82,3 +82,19 @@ export async function scheduleEnduranceTypeForDay(input: { activityTypeId: strin
     ymd: input.ymd,
   });
 }
+
+// Schedule a sport for a day. Same shape as the endurance shortcut —
+// resolves the sport's synthetic routine id (sports-{slug}-synthetic)
+// and writes a ScheduleManualEntry. Auto-creates the synthetic routine
+// if it doesn't exist yet (user can schedule a sport they haven't
+// added via /log first; this opts them in).
+export async function scheduleSportForDay(input: { sportSlug: string; ymd: string }) {
+  const { ensureSportSelected, getSyntheticSportRoutineId } = await import(
+    "@/lib/synthetic-sport-routines"
+  );
+  await ensureSportSelected(input.sportSlug);
+  return scheduleRoutineForDay({
+    routineId: getSyntheticSportRoutineId(input.sportSlug),
+    ymd: input.ymd,
+  });
+}

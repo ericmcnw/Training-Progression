@@ -9,6 +9,21 @@ import { getMonthData } from "./data";
 import { prisma } from "@/lib/prisma";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import type { QuickPickRoutine } from "@/app/_home/types";
+import { listSelectedSports } from "@/lib/synthetic-sport-routines";
+import { getActivityEntry } from "@/lib/activity-families";
+
+// Same sport accent palette used on /log + /activities/sports so the
+// visual identity carries across surfaces.
+const SPORT_ACCENT: Record<string, string> = {
+  climbing: "rgba(251,146,60,0.9)",
+  surfing: "rgba(56,189,248,0.9)",
+  snowboarding: "rgba(168,85,247,0.9)",
+  skiing: "rgba(99,102,241,0.9)",
+  skateboarding: "rgba(244,114,182,0.9)",
+  basketball: "rgba(220,38,38,0.9)",
+  tennis: "rgba(132,204,22,0.9)",
+  golf: "rgba(40,212,160,0.9)",
+};
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -20,7 +35,7 @@ function getParam(params: SearchParams, key: string) {
 export default async function MonthTab({ searchParams }: { searchParams: SearchParams }) {
   const requestedMonth = getParam(searchParams, "month");
 
-  const [monthData, routineRows, activityTypeRows] = await Promise.all([
+  const [monthData, routineRows, activityTypeRows, selectedSports] = await Promise.all([
     getMonthData(requestedMonth),
     prisma.routine.findMany({
       where: { isActive: true, isDeleted: false, isPlaceholder: false },
@@ -37,6 +52,10 @@ export default async function MonthTab({ searchParams }: { searchParams: SearchP
       },
       orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
     }),
+    // User's selected sports — populates the SPORTS tile row in the
+    // schedule picker so tapping "Climbing" schedules a session for the
+    // chosen day (instant; details get filled in when the user logs).
+    listSelectedSports(),
   ]);
 
   // Picker list is identical to what Home builds via data.ts:quickPickRoutines.
@@ -55,6 +74,12 @@ export default async function MonthTab({ searchParams }: { searchParams: SearchP
       familyId: t.familyId,
       familyName: t.family.name,
     }));
+  const scheduleSports = selectedSports.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
+    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+  }));
 
   return (
     <section style={shell} aria-label="Month view">
@@ -63,6 +88,7 @@ export default async function MonthTab({ searchParams }: { searchParams: SearchP
         data={monthData}
         schedulableRoutines={schedulableRoutines}
         scheduleActivityTypes={scheduleActivityTypes}
+        scheduleSports={scheduleSports}
       />
     </section>
   );

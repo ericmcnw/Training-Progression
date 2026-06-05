@@ -213,4 +213,12 @@ export type HomeData = {
     familyId: string;
     familyName: string;
   }>;
+  /** Sports the user has added — populates the SPORTS section in the
+   *  schedule picker with tappable sport tiles. */
+  scheduleSports: Array<{
+    slug: string;
+    label: string;
+    eyebrow: string;
+    color: string;
+  }>;
 };
