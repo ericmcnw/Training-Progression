@@ -25,7 +25,16 @@ export default function SportsAddButton({
       <button
         type="button"
         aria-label="Add a sport"
-        onClick={() => setOpen(true)}
+        onClick={(e) => {
+          // The button sits visually on top of RoutineSection's
+          // collapsible header (which is itself a <button>). On mobile
+          // taps were leaking through to the parent toggle — explicit
+          // stopPropagation + a z-index higher than the header lock
+          // the tap to this button.
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
         style={plusBtnStyle}
       >
         +
@@ -147,6 +156,10 @@ const plusBtnStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+  // Ensure this paints + receives taps above RoutineSection's
+  // collapsible header button which occupies the same row.
+  position: "relative",
+  zIndex: 2,
 };
 
 const sheetOverlay: CSSProperties = {

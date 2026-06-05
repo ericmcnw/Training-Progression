@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition, type CSSProperties } from "react";
 import { logGolfAction } from "@/app/log/golf-log-actions";
+import SportLogModal from "./SportLogModal";
 
 // Rich golf log sheet. Two modes — COURSE (per-hole detail) and
 // RANGE (per-club shot detail) — sharing the same session header
@@ -163,13 +164,21 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div style={overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label="Log golf">
-      <div style={panel} onClick={(e) => e.stopPropagation()}>
-        <header style={header}>
-          <h3 style={title}>Log Golf</h3>
-          <button type="button" onClick={onClose} style={closeBtn} aria-label="Close">✕</button>
-        </header>
-        <div style={body}>
+    <SportLogModal
+      title="Log Golf"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} style={btnSecondary} disabled={pending}>
+            Cancel
+          </button>
+          <button type="button" onClick={submit} style={btnPrimary} disabled={pending}>
+            {pending ? "Saving…" : "Save round"}
+          </button>
+        </>
+      }
+    >
+      <>
           {/* Mode toggle */}
           <div style={modeRow}>
             <button
@@ -375,18 +384,8 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
           </label>
 
           {error ? <div style={errorText}>{error}</div> : null}
-
-          <div style={btnRow}>
-            <button type="button" onClick={onClose} style={btnSecondary} disabled={pending}>
-              Cancel
-            </button>
-            <button type="button" onClick={submit} style={btnPrimary} disabled={pending}>
-              {pending ? "Saving…" : "Save round"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </>
+    </SportLogModal>
   );
 }
 
@@ -455,51 +454,6 @@ function formatLocalDateTime(d: Date): string {
 }
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
-
-const overlay: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 200,
-  background: "rgba(4,8,16,0.66)",
-  backdropFilter: "blur(4px)",
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  padding: "0 0 env(safe-area-inset-bottom)",
-};
-const panel: CSSProperties = {
-  width: "100%",
-  maxWidth: 520,
-  maxHeight: "92vh",
-  display: "grid",
-  gridTemplateRows: "auto 1fr",
-  background: "#0e1a2e",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "16px 16px 0 0",
-  boxShadow: "0 -10px 30px rgba(0,0,0,0.45)",
-  overflow: "hidden",
-};
-const header: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-  padding: "12px 14px",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-const title: CSSProperties = { margin: 0, fontSize: 15, fontWeight: 900 };
-const closeBtn: CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 14,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-const body: CSSProperties = { padding: "14px 14px 18px", overflowY: "auto", display: "grid", gap: 14 };
 
 const modeRow: CSSProperties = { display: "flex", gap: 6 };
 const modeInactive: CSSProperties = {
@@ -676,12 +630,6 @@ const errorText: CSSProperties = {
   fontSize: 12,
   color: "rgba(248,113,113,0.95)",
   fontWeight: 700,
-};
-const btnRow: CSSProperties = {
-  display: "flex",
-  gap: 8,
-  justifyContent: "flex-end",
-  marginTop: 4,
 };
 const btnPrimary: CSSProperties = {
   padding: "10px 16px",
