@@ -9,6 +9,7 @@ import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
+import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 
 // 12-week sports chart + per-sport rollup. Mirrors the endurance
 // builder's shape so the rest of the dashboard code uses one chart
@@ -55,16 +56,30 @@ const FALLBACK_COLORS = [
 export async function loadSportsChartData(now = new Date()): Promise<SportsChartData> {
   const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
 
-  // Resolve sport-tagged routines so the log query can scope by id.
+  // Resolve the two routine populations this chart reads from:
+  //   1. LEGACY: routines tagged with a sports-family metadata group
+  //      (e.g. an old "Bouldering" SESSION routine tagged with the
+  //      `climbing` slug). Pre-Phase-1 logging path.
+  //   2. SYNTHETIC: per-sport placeholder routines created by the
+  //      new "Log Sports" surface on /log. Their id encodes the sport
+  //      slug (sports-{slug}-synthetic) so no metadata lookup is
+  //      needed to attribute the log.
+  // Both populations contribute to the same chart and per-sport rollup
+  // — chart code is the "bilingual loader" that lets the user migrate
+  // from legacy → synthetic without losing history.
   const sportSlugs = new Set(activitiesByFamily("sports").map((s) => s.slug));
   const taggedRoutines = await prisma.routine.findMany({
-    where: { isActive: true, isDeleted: false },
+    where: {
+      isActive: true,
+      isDeleted: false,
+      isPlaceholder: false, // exclude synthetic — handled below
+    },
     select: {
       id: true,
       metadataGroups: { select: { group: { select: { slug: true } } } },
     },
   });
-  const sportRoutineIds = taggedRoutines
+  const legacyRoutineIds = taggedRoutines
     .filter((r) =>
       (r.metadataGroups ?? []).some((m) => {
         const slug = m.group?.slug;
@@ -73,19 +88,17 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
     )
     .map((r) => r.id);
 
-  if (sportRoutineIds.length === 0) {
-    return {
-      weekLabels: fillWeeklySeries(new Map(), "12w", now).map((p) => p.label),
-      series: [],
-      perSport: [],
-      sessionsByWeek: Array.from({ length: 12 }, () => [] as WeekSession[]),
-    };
-  }
-
   const logs = await prisma.routineLog.findMany({
     where: {
       performedAt: { gte: cutoff },
-      routineId: { in: sportRoutineIds },
+      OR: [
+        ...(legacyRoutineIds.length > 0
+          ? [{ routineId: { in: legacyRoutineIds } }]
+          : []),
+        // Synthetic sport routines are auto-detectable by their id
+        // pattern — no need to query for them up-front.
+        { routineId: { startsWith: "sports-", endsWith: "-synthetic" } },
+      ],
     },
     select: {
       id: true,
@@ -97,6 +110,15 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       routine: { select: { name: true } },
     },
   });
+
+  if (logs.length === 0) {
+    return {
+      weekLabels: fillWeeklySeries(new Map(), "12w", now).map((p) => p.label),
+      series: [],
+      perSport: [],
+      sessionsByWeek: Array.from({ length: 12 }, () => [] as WeekSession[]),
+    };
+  }
 
   // Ordered week-key list for bucketing each log into the right week
   // index for the sessions panel. Mirrors the endurance chart helper.
@@ -110,8 +132,11 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
   const weekIndexByKey = new Map(weekKeys.map((k, i) => [k, i]));
   const sessionsByWeek: WeekSession[][] = weekKeys.map(() => []);
 
-  // For each routine, choose the most specific sport slug — sortHint
-  // higher = more specific. Mirrors the endurance helper's strategy.
+  // Build a routineId → sport entry map.
+  //   • Legacy routines: pick the most-specific sport slug from their
+  //     metadata groups (higher sortHint = more specific).
+  //   • Synthetic routines: slug is encoded in the routine id and
+  //     resolves to its activity-registry entry directly.
   const routineSportEntry = new Map<string, ActivityRegistryEntry>();
   for (const r of taggedRoutines) {
     const candidates = (r.metadataGroups ?? [])
@@ -124,6 +149,15 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       .sort((a, b) => (b.entry.sortHint ?? 0) - (a.entry.sortHint ?? 0));
     const chosen = candidates[0];
     if (chosen) routineSportEntry.set(r.id, chosen.entry);
+  }
+  for (const log of logs) {
+    if (routineSportEntry.has(log.routineId)) continue;
+    const slug = sportSlugFromRoutineId(log.routineId);
+    if (!slug) continue;
+    const entry = getActivityEntry(slug);
+    if (entry && entry.family === "sports") {
+      routineSportEntry.set(log.routineId, entry);
+    }
   }
 
   // Weekly session-count maps per sport.
