@@ -32,17 +32,17 @@ export default async function SportsLogSection() {
   );
 }
 
-// Tile background tint per sport. Kept in sync with the chart palette
-// in lib/activities/sports-chart.ts so the visual identity is stable
-// across logging and stats views.
+// Accent color per sport — used as the 3px left stripe on each row.
+// Mirrors the chart palette in lib/activities/sports-chart.ts so the
+// visual identity is stable across logging and stats views.
 const SPORT_TILE_COLOR: Record<string, string> = {
-  climbing: "rgba(251,146,60,0.18)",
-  surfing: "rgba(56,189,248,0.18)",
-  snowboarding: "rgba(168,85,247,0.18)",
-  skiing: "rgba(99,102,241,0.18)",
-  skateboarding: "rgba(244,114,182,0.18)",
-  basketball: "rgba(220,38,38,0.18)",
-  tennis: "rgba(132,204,22,0.20)",
-  golf: "rgba(40,212,160,0.18)",
-  default: "rgba(255,255,255,0.05)",
+  climbing: "rgba(251,146,60,0.9)",
+  surfing: "rgba(56,189,248,0.9)",
+  snowboarding: "rgba(168,85,247,0.9)",
+  skiing: "rgba(99,102,241,0.9)",
+  skateboarding: "rgba(244,114,182,0.9)",
+  basketball: "rgba(220,38,38,0.9)",
+  tennis: "rgba(132,204,22,0.9)",
+  golf: "rgba(40,212,160,0.9)",
+  default: "rgba(255,255,255,0.5)",
 };

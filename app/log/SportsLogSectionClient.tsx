@@ -1,16 +1,13 @@
 "use client";
 
 import { useState, useTransition, type CSSProperties } from "react";
+import RoutineSection from "@/app/routines/RoutineSection";
 import { addSportAction, logSportAction, removeSportAction } from "./sport-actions";
 
-// Single client component that owns:
-//   • The tile grid (one per selected sport, plus an "Add" tile)
-//   • An overlay sheet for logging against a selected sport
-//   • An overlay sheet for adding/removing sports
-//
-// All visual styles match the dark-panel language used elsewhere
-// (cardSurface, chips, etc.) so the section reads as part of /log,
-// not a separate widget.
+// Sports group, rendered as a collapsible RoutineSection so it sits
+// visually alongside Strength / Endurance / etc. on /log. The "+"
+// next to the section title opens a sheet to add/remove sports;
+// tapping any sport row opens a quick-log sheet.
 
 type SelectedSport = {
   slug: string;
@@ -39,49 +36,48 @@ export default function SportsLogSectionClient({
 }) {
   const [sheet, setSheet] = useState<SheetState>({ kind: "closed" });
 
-  return (
-    <section style={sectionStyle} aria-label="Sports">
-      <header style={headerStyle}>
-        <div style={titleColStyle}>
-          <span style={eyebrowStyle}>Log</span>
-          <h2 style={titleStyle}>Sports</h2>
-        </div>
-        <button
-          type="button"
-          style={addBtnStyle}
-          onClick={() => setSheet({ kind: "picker" })}
-        >
-          + Add sport
-        </button>
-      </header>
+  const addButton = (
+    <button
+      type="button"
+      aria-label="Add a sport"
+      onClick={() => setSheet({ kind: "picker" })}
+      style={plusBtnStyle}
+    >
+      +
+    </button>
+  );
 
-      {selected.length === 0 ? (
-        <button
-          type="button"
-          style={emptyStateBtn}
-          onClick={() => setSheet({ kind: "picker" })}
-        >
-          <span style={emptyTitle}>Pick the sports you do</span>
-          <span style={emptySub}>
-            Climbing, surfing, snowboarding, basketball, golf… anything you want quick-log access to.
-          </span>
-        </button>
-      ) : (
-        <div style={tileGridStyle}>
-          {selected.map((sport) => (
+  return (
+    <>
+      <RoutineSection
+        title="SPORTS"
+        count={selected.length}
+        accentColor="rgba(251,146,60,0.9)"
+        defaultOpen={selected.length > 0}
+        quickLogSlot={addButton}
+      >
+        {selected.length === 0 ? (
+          <button type="button" style={emptyRowStyle} onClick={() => setSheet({ kind: "picker" })}>
+            <span style={emptyRowTitle}>Add a sport to start logging</span>
+            <span style={emptyRowHint}>Climbing, surfing, snowboarding, basketball, golf…</span>
+          </button>
+        ) : (
+          selected.map((sport) => (
             <button
               key={sport.slug}
               type="button"
-              style={{ ...tileStyle, background: sport.color }}
+              style={{ ...sportRowStyle, borderLeft: `3px solid ${sport.color}` }}
               onClick={() => setSheet({ kind: "log", sport })}
             >
-              <span style={tileEyebrow}>{sport.eyebrow}</span>
-              <span style={tileLabel}>{sport.label}</span>
-              <span style={tileHint}>tap to log</span>
+              <span style={rowTextCol}>
+                <span style={rowLabel}>{sport.label}</span>
+                <span style={rowEyebrow}>{sport.eyebrow}</span>
+              </span>
+              <span style={rowAction}>Log →</span>
             </button>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </RoutineSection>
 
       {sheet.kind === "log" ? (
         <LogSheet sport={sheet.sport} onClose={() => setSheet({ kind: "closed" })} />
@@ -94,7 +90,7 @@ export default function SportsLogSectionClient({
           onClose={() => setSheet({ kind: "closed" })}
         />
       ) : null}
-    </section>
+    </>
   );
 }
 
@@ -213,7 +209,7 @@ function PickerSheet({
     <Sheet onClose={onClose} title="Your sports">
       <div style={pickerStack}>
         <p style={pickerHint}>
-          Sports you’ve added show up as tiles on the log page for quick session logging.
+          Sports you’ve added appear in the SPORTS section on the log page for quick session logging.
         </p>
 
         {selected.length > 0 ? (
@@ -296,9 +292,6 @@ function Sheet({
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-// Formats a Date as the value an <input type="datetime-local"> expects:
-// YYYY-MM-DDTHH:mm in local time (NOT UTC). The native input ignores
-// timezone offsets, so we have to hand it local components.
 function formatLocalDateTime(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -306,98 +299,71 @@ function formatLocalDateTime(d: Date): string {
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
-const sectionStyle: CSSProperties = {
-  display: "grid",
-  gap: 10,
-  padding: "14px 14px 16px",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-};
-
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-end",
-  gap: 10,
-  minWidth: 0,
-};
-
-const titleColStyle: CSSProperties = { display: "grid", gap: 1, minWidth: 0 };
-
-const eyebrowStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: 0.7,
-  textTransform: "uppercase",
-  opacity: 0.5,
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 18,
-  fontWeight: 900,
-  letterSpacing: -0.2,
-};
-
-const addBtnStyle: CSSProperties = {
-  padding: "7px 12px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.05)",
+// Section-header "+" button — matches the visual weight of the quick-log
+// pill used for Strength/Endurance sections without the wider text label.
+const plusBtnStyle: CSSProperties = {
+  minHeight: 28,
+  minWidth: 28,
+  padding: "0 8px",
+  border: "1px solid rgba(128,128,128,0.7)",
+  borderRadius: 8,
   color: "inherit",
-  fontSize: 12,
-  fontWeight: 800,
+  background: "rgba(255,255,255,0.06)",
+  fontWeight: 900,
+  fontSize: 16,
+  lineHeight: 1,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   cursor: "pointer",
+};
+
+const sportRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.28)",
+  background: "rgba(128,128,128,0.05)",
+  color: "inherit",
+  cursor: "pointer",
+  textAlign: "left",
+  minHeight: 52,
+};
+
+const rowTextCol: CSSProperties = { display: "grid", gap: 2, minWidth: 0 };
+const rowLabel: CSSProperties = { fontSize: 14, fontWeight: 900, lineHeight: 1.2 };
+const rowEyebrow: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  opacity: 0.55,
+};
+const rowAction: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  opacity: 0.7,
   whiteSpace: "nowrap",
 };
 
-const emptyStateBtn: CSSProperties = {
+const emptyRowStyle: CSSProperties = {
   display: "grid",
-  gap: 4,
+  gap: 3,
   textAlign: "left",
-  padding: "14px 16px",
-  borderRadius: 12,
+  padding: "12px 14px",
+  borderRadius: 10,
   border: "1px dashed rgba(255,255,255,0.16)",
   background: "rgba(255,255,255,0.025)",
   color: "inherit",
   cursor: "pointer",
 };
-const emptyTitle: CSSProperties = { fontSize: 14, fontWeight: 900 };
-const emptySub: CSSProperties = { fontSize: 12, opacity: 0.65, lineHeight: 1.4 };
+const emptyRowTitle: CSSProperties = { fontSize: 13, fontWeight: 900 };
+const emptyRowHint: CSSProperties = { fontSize: 11, opacity: 0.6, lineHeight: 1.4 };
 
-const tileGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-  gap: 8,
-};
-
-const tileStyle: CSSProperties = {
-  display: "grid",
-  gap: 4,
-  textAlign: "left",
-  padding: "12px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.10)",
-  color: "inherit",
-  cursor: "pointer",
-  minHeight: 76,
-  transition: "transform 80ms ease",
-};
-
-const tileEyebrow: CSSProperties = {
-  fontSize: 9,
-  fontWeight: 900,
-  letterSpacing: 0.7,
-  textTransform: "uppercase",
-  opacity: 0.65,
-};
-const tileLabel: CSSProperties = { fontSize: 15, fontWeight: 900, letterSpacing: -0.2 };
-const tileHint: CSSProperties = { fontSize: 10, fontWeight: 700, opacity: 0.55, marginTop: 2 };
-
-// Sheet overlay — full-screen scrim with a centered panel on desktop
-// and a bottom sheet feel on mobile (caps height, hugs the bottom).
+// Sheet overlay — full-screen scrim with a bottom-anchored panel.
 const sheetOverlay: CSSProperties = {
   position: "fixed",
   inset: 0,
