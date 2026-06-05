@@ -3,11 +3,15 @@
 import { useState, useTransition, type CSSProperties } from "react";
 import { logSportAction } from "@/app/log/sport-actions";
 import ClimbLogSheet from "./ClimbLogSheet";
+import GolfLogSheet from "./GolfLogSheet";
 
 // One row in the SPORT section, representing a user's selected sport.
-// Tap → log sheet. Climbing gets the rich ClimbLogSheet (per-attempt
-// entry); other sports use the minimal date / duration / notes form
-// for now. Each sport's rich form lands in its own phase.
+// Tap → log sheet. Each sport has its own rich form when one exists,
+// otherwise falls back to the minimal date / duration / notes form:
+//   • Climbing → ClimbLogSheet (per-attempt discipline/grade/outcome)
+//   • Golf     → GolfLogSheet (COURSE/RANGE mode with per-hole or per-club detail)
+//   • Others   → LogSheet (basketball, snowboarding, surfing, etc.)
+// Per-sport rich forms get added as each sport graduates.
 
 export type SportRowData = {
   slug: string;
@@ -37,6 +41,8 @@ export default function SportQuickLogRow({ sport }: { sport: SportRowData }) {
       {open ? (
         sport.slug === "climbing" ? (
           <ClimbLogSheet onClose={() => setOpen(false)} />
+        ) : sport.slug === "golf" ? (
+          <GolfLogSheet onClose={() => setOpen(false)} />
         ) : (
           <LogSheet sport={sport} onClose={() => setOpen(false)} />
         )

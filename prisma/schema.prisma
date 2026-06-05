@@ -598,6 +598,18 @@ model RoutineLog {
   // targetPaceSecPerMi?: number }. Null for non-interval logs and for
   // interval logs created before this field landed.
   intervalsConfig Json?
+  // Sport-specific structured data — shape varies by sport, all of
+  // them discriminated by the leading `sport` field. Today used by
+  // golf (round mode + per-hole or per-club detail); future sports
+  // populate this with their own discriminated shape. Null for
+  // sports without a rich schema yet (basketball, snowboarding,
+  // surfing — they keep using the minimal duration+notes log form).
+  //   Golf: { sport: "golf", mode: "COURSE" | "RANGE",
+  //     course?: { location?, holes: Array<{ number, par, score,
+  //       club?, notes? }> },
+  //     range?: { ballCount?, shots: Array<{ club, distanceYards?,
+  //       ballCount?, notes? }> } }
+  sportData Json?
 
   routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
   climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)
