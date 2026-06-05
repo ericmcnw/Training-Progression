@@ -58,6 +58,16 @@ export type ClimbLogInput = {
     grade: string;
     gradeSystem: ClimbGradeSystem;
     outcome: ClimbOutcome;
+    /** Optional climb/route name. Resolved server-side: if a problem
+     *  with this name+grade already exists at this location, link by
+     *  id; otherwise create a new ClimbProblem row. */
+    name?: string;
+    /** Optional area within the location (e.g. "Cave Wall"). Server
+     *  dedupes against ClimbArea by name and creates as needed. */
+    area?: string;
+    /** Only meaningful for SEND/REDPOINT — how many tries to send.
+     *  Implicitly 1 for FLASH/ONSIGHT, irrelevant for PROJECT. */
+    triesCount?: number;
     notes?: string;
   }>;
 };
@@ -94,6 +104,9 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
       grade: a.grade.trim(),
       gradeSystem: a.gradeSystem,
       outcome: a.outcome,
+      newProblemName: a.name?.trim() || undefined,
+      newAreaName: a.area?.trim() || undefined,
+      triesCount: a.triesCount,
       notes: a.notes?.trim() || undefined,
       attemptOrder: idx,
     })),

@@ -3,6 +3,9 @@
 import { useEffect, useState, useTransition, type CSSProperties } from "react";
 import { listRecentClimbLocations, logClimbAction } from "@/app/log/climb-log-actions";
 import {
+  climbOutcomeBg,
+  climbOutcomeColor,
+  outcomeUsesTriesCount,
   type ClimbingDiscipline,
   type ClimbGradeSystem,
   type ClimbOutcome,
@@ -26,6 +29,15 @@ type Attempt = {
   discipline: ClimbingDiscipline;
   grade: string;
   outcome: ClimbOutcome;
+  /** Climb / route / problem name. Server resolves against existing
+   *  ClimbProblem rows at the picked location, creates a new one
+   *  otherwise. */
+  name: string;
+  /** Area within the location (free-text). Server dedupes by name. */
+  area: string;
+  /** Tries-to-send. Only meaningful when outcome is SEND/REDPOINT;
+   *  hidden in the UI otherwise. Stored as string so empty stays empty. */
+  triesCount: string;
   notes: string;
 };
 
@@ -68,6 +80,9 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
     discipline: d,
     grade: "",
     outcome: defaultOutcome(d),
+    name: "",
+    area: "",
+    triesCount: "",
     notes: "",
   };
 }
@@ -168,13 +183,22 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
           climbLocationId: showNewLocation ? undefined : locationId ?? undefined,
           newLocationName: showNewLocation ? newName.trim() : undefined,
           newLocationType: showNewLocation ? newType : undefined,
-          attempts: validAttempts.map((a) => ({
-            discipline: a.discipline,
-            grade: a.grade.trim(),
-            gradeSystem: gradeSystemFor(a.discipline),
-            outcome: a.outcome,
-            notes: a.notes.trim() || undefined,
-          })),
+          attempts: validAttempts.map((a) => {
+            const triesNum =
+              outcomeUsesTriesCount(a.outcome) && a.triesCount.trim() !== ""
+                ? Math.max(1, Math.round(Number(a.triesCount)))
+                : undefined;
+            return {
+              discipline: a.discipline,
+              grade: a.grade.trim(),
+              gradeSystem: gradeSystemFor(a.discipline),
+              outcome: a.outcome,
+              name: a.name.trim() || undefined,
+              area: a.area.trim() || undefined,
+              triesCount: Number.isFinite(triesNum) ? triesNum : undefined,
+              notes: a.notes.trim() || undefined,
+            };
+          }),
         });
         onClose();
       } catch (err) {
@@ -280,8 +304,17 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
             <div style={attemptStack}>
               {attempts.map((a, idx) => {
                 const outcomes = OUTCOMES_BY_DISCIPLINE[a.discipline];
+                const showTries = outcomeUsesTriesCount(a.outcome);
                 return (
-                  <div key={a.localId} style={attemptCard}>
+                  <div
+                    key={a.localId}
+                    style={{
+                      ...attemptCard,
+                      // Subtle tint per outcome so the card itself
+                      // reads as flash/send/project at a glance.
+                      borderLeft: `3px solid ${climbOutcomeColor(a.outcome)}`,
+                    }}
+                  >
                     <div style={attemptHeader}>
                       <span style={attemptIndex}>#{idx + 1}</span>
                       {attempts.length > 1 ? (
@@ -295,6 +328,8 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                         </button>
                       ) : null}
                     </div>
+
+                    {/* Discipline + grade (+ tries when SEND/REDPOINT) */}
                     <div style={attemptRow}>
                       <select
                         value={a.discipline}
@@ -314,17 +349,64 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                         style={{ ...fieldInput, flex: "1 1 70px", minWidth: 0 }}
                         aria-label="Grade"
                       />
-                      <select
-                        value={a.outcome}
-                        onChange={(e) => updateAttempt(a.localId, { outcome: e.target.value as ClimbOutcome })}
-                        style={{ ...fieldInput, flex: "1 1 100px", minWidth: 0 }}
-                        aria-label="Outcome"
-                      >
-                        {outcomes.map((o) => (
-                          <option key={o} value={o}>{OUTCOME_LABEL[o]}</option>
-                        ))}
-                      </select>
+                      {showTries ? (
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="Tries"
+                          value={a.triesCount}
+                          onChange={(e) => updateAttempt(a.localId, { triesCount: e.target.value })}
+                          style={{ ...fieldInput, flex: "0 0 70px", minWidth: 0 }}
+                          aria-label="Tries to send"
+                        />
+                      ) : null}
                     </div>
+
+                    {/* Outcome chips — color-coded so flash/send/project read
+                        instantly. Selected chip uses the full outcome color;
+                        unselected chips stay neutral. */}
+                    <div style={outcomeChipRow}>
+                      {outcomes.map((o) => {
+                        const isOn = a.outcome === o;
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => updateAttempt(a.localId, { outcome: o })}
+                            style={
+                              isOn
+                                ? outcomeChipActive(climbOutcomeColor(o), climbOutcomeBg(o))
+                                : outcomeChipInactive
+                            }
+                            aria-pressed={isOn}
+                          >
+                            {OUTCOME_LABEL[o]}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Climb identity — name + area. Optional but
+                        recommended; the server resolves them into
+                        ClimbProblem / ClimbArea rows so a future "this
+                        route again" picker can find them. */}
+                    <div style={attemptRow}>
+                      <input
+                        type="text"
+                        placeholder="Climb / route name (optional)"
+                        value={a.name}
+                        onChange={(e) => updateAttempt(a.localId, { name: e.target.value })}
+                        style={{ ...fieldInput, flex: "2 1 160px", minWidth: 0 }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Area (e.g. Cave Wall)"
+                        value={a.area}
+                        onChange={(e) => updateAttempt(a.localId, { area: e.target.value })}
+                        style={{ ...fieldInput, flex: "1 1 110px", minWidth: 0 }}
+                      />
+                    </div>
+
                     <input
                       type="text"
                       placeholder="Notes (optional)"
@@ -549,7 +631,35 @@ const removeAttemptBtn: CSSProperties = {
   fontWeight: 800,
   cursor: "pointer",
 };
-const attemptRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
+const attemptRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 };
+
+const outcomeChipRow: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+  marginTop: 8,
+};
+
+const outcomeChipInactive: CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  color: "rgba(255,255,255,0.65)",
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  cursor: "pointer",
+};
+
+function outcomeChipActive(color: string, bg: string): CSSProperties {
+  return {
+    ...outcomeChipInactive,
+    borderColor: color.replace("0.9", "0.55"),
+    background: bg,
+    color,
+  };
+}
 const addAttemptBtn: CSSProperties = {
   padding: "10px",
   borderRadius: 10,
