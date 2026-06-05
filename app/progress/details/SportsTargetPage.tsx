@@ -188,8 +188,25 @@ export default async function SportsTargetPage(props: {
     title = target.group.label;
     subtitle = `${target.group.label} sessions, trends, and workload in one sport-specific view.`;
     eyebrow = target.group.slug === "climbing" ? "Climbing" : target.group.kind === "CARDIO_ACTIVITY" ? "Cardio sport" : "Sport group";
-    logs = target.logs;
-    routineCount = target.routineIds.length;
+
+    // Bilingual: also pull in logs against the synthetic per-sport
+    // routine (sports-{slug}-synthetic). Sports logged via the new
+    // sport-tile flow on /log land there instead of any legacy
+    // metadata-tagged routine, so resolveGroupTarget alone misses
+    // them. Merge + dedupe by log id.
+    const { getSyntheticSportRoutineId } = await import("@/lib/synthetic-sport-routines");
+    const syntheticId = getSyntheticSportRoutineId(params.slug);
+    const allLogs = await getRoutineLogs(range);
+    const syntheticLogs = allLogs.filter((l) => l.routineId === syntheticId);
+    const seen = new Set<string>(target.logs.map((l) => l.id));
+    const mergedLogs = [
+      ...target.logs,
+      ...syntheticLogs.filter((l) => !seen.has(l.id)),
+    ].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
+
+    logs = mergedLogs;
+    routineCount =
+      target.routineIds.length + (syntheticLogs.length > 0 ? 1 : 0);
   }
 
   if (!virtualSport && isVirtualSportSlug(params.slug)) {

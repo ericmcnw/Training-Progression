@@ -81,12 +81,34 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
                 <div style={statLabel}>Duration</div>
                 <div style={statValue}>{formatSeconds(data.durationSec)}</div>
               </div>
-              {data.location && (
+              {data.spot ? (
+                <div style={statCard}>
+                  <div style={statLabel}>Location</div>
+                  <div style={statValue}>{data.spot.name}</div>
+                  {data.spot.region ? (
+                    <div style={statSub}>{data.spot.region}</div>
+                  ) : null}
+                </div>
+              ) : data.location ? (
                 <div style={statCard}>
                   <div style={statLabel}>Location</div>
                   <div style={statValue}>{data.location}</div>
                 </div>
-              )}
+              ) : null}
+              {data.sportData?.kind === "golf" ? (
+                <div style={statCard}>
+                  <div style={statLabel}>Mode</div>
+                  <div style={statValue}>
+                    {data.sportData.mode === "COURSE" ? "Course" : "Range"}
+                  </div>
+                </div>
+              ) : null}
+              {data.sportData?.kind === "generic-sport" && data.sportData.sessionType ? (
+                <div style={statCard}>
+                  <div style={statLabel}>Type</div>
+                  <div style={statValue}>{prettifySessionType(data.sportData.sessionType)}</div>
+                </div>
+              ) : null}
               {data.climbAttempts.length > 0 && (
                 <>
                   <div style={statCard}>
@@ -127,6 +149,26 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
           )}
         </div>
       </section>
+
+      {/* Golf scorecard — appears on COURSE-mode logs with at least
+          one hole row. Shows total par, total score, vs-par + the
+          hole-by-hole grid the user filled in. RANGE mode renders a
+          per-club list instead. */}
+      {data.sportData?.kind === "golf" && data.sportData.mode === "COURSE" && data.sportData.course ? (
+        <GolfCoursePanel course={data.sportData.course} />
+      ) : null}
+      {data.sportData?.kind === "golf" && data.sportData.mode === "RANGE" && data.sportData.range ? (
+        <GolfRangePanel range={data.sportData.range} />
+      ) : null}
+
+      {/* Generic-sport extras grid — basketball points, surfing wave
+          count, snowboarding runs, etc. Each value renders as a
+          labeled chip; empty extras hides the panel. */}
+      {data.sportData?.kind === "generic-sport" &&
+      data.sportData.extras &&
+      Object.keys(data.sportData.extras).length > 0 ? (
+        <SportExtrasPanel extras={data.sportData.extras} />
+      ) : null}
 
       {/* Interval breakdown — only shown when the log has structured
           interval data (Sprint, Interval Run, or future structured
@@ -350,6 +392,13 @@ const statValue: React.CSSProperties = {
   fontWeight: 900,
 };
 
+const statSub: React.CSSProperties = {
+  marginTop: 2,
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.65,
+};
+
 const itemCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.3)",
   borderRadius: 10,
@@ -364,4 +413,228 @@ const setRow: React.CSSProperties = {
   flexWrap: "wrap",
   borderTop: "1px solid rgba(255,255,255,0.08)",
   paddingTop: 6,
+};
+
+// ─── Sport-specific render panels ─────────────────────────────────────────
+
+function prettifySessionType(slug: string): string {
+  return slug
+    .split(/[-_\s]+/)
+    .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+function GolfCoursePanel({
+  course,
+}: {
+  course: NonNullable<Extract<LogSummaryData["sportData"], { kind: "golf" }>["course"]>;
+}) {
+  if (!course.holes || course.holes.length === 0) return null;
+  const totalPar = course.holes.reduce((sum, h) => sum + (h.par ?? 0), 0);
+  const totalScore = course.holes.reduce((sum, h) => sum + (h.score ?? 0), 0);
+  const diff = totalScore - totalPar;
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>GOLF · {course.location ? course.location.toUpperCase() : "ROUND"}</div>
+      <div style={contentPad}>
+        <div style={golfTotalsRow}>
+          <div style={golfTotalCell}>
+            <span style={golfTotalLabel}>Par</span>
+            <span style={golfTotalValue}>{totalPar || "—"}</span>
+          </div>
+          <div style={golfTotalCell}>
+            <span style={golfTotalLabel}>Score</span>
+            <span style={golfTotalValue}>{totalScore || "—"}</span>
+          </div>
+          <div style={golfTotalCell}>
+            <span style={golfTotalLabel}>vs Par</span>
+            <span
+              style={{
+                ...golfTotalValue,
+                color:
+                  totalScore && totalPar
+                    ? diff > 0
+                      ? "rgba(248,113,113,0.95)"
+                      : "rgba(51,255,122,0.95)"
+                    : undefined,
+              }}
+            >
+              {totalScore && totalPar
+                ? diff > 0
+                  ? `+${diff}`
+                  : diff === 0
+                  ? "E"
+                  : `${diff}`
+                : "—"}
+            </span>
+          </div>
+        </div>
+        <div style={golfHolesGrid}>
+          <div style={golfHolesHeader}>
+            <span>Hole</span>
+            <span>Par</span>
+            <span>You</span>
+            <span>Club</span>
+          </div>
+          {course.holes.map((h) => (
+            <div key={h.number} style={golfHoleRow}>
+              <span style={golfHoleNum}>{h.number}</span>
+              <span>{h.par ?? "—"}</span>
+              <span
+                style={{
+                  fontWeight: 800,
+                  color:
+                    h.par != null && h.score != null
+                      ? h.score < h.par
+                        ? "rgba(51,255,122,0.95)"
+                        : h.score > h.par
+                        ? "rgba(248,113,113,0.95)"
+                        : "inherit"
+                      : "inherit",
+                }}
+              >
+                {h.score ?? "—"}
+              </span>
+              <span style={golfHoleClub}>{h.club ?? "—"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GolfRangePanel({
+  range,
+}: {
+  range: NonNullable<Extract<LogSummaryData["sportData"], { kind: "golf" }>["range"]>;
+}) {
+  if (!range.shots || range.shots.length === 0) return null;
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>GOLF · RANGE</div>
+      <div style={contentPad}>
+        {range.ballCount ? (
+          <div style={{ marginBottom: 10, fontSize: 13, opacity: 0.78 }}>
+            <strong style={{ fontWeight: 900 }}>{range.ballCount}</strong> balls hit
+          </div>
+        ) : null}
+        <div style={{ display: "grid", gap: 6 }}>
+          {range.shots.map((s, idx) => (
+            <div key={`${s.club}-${idx}`} style={itemCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontWeight: 900 }}>{s.club}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.78 }}>
+                  {s.distanceYards != null ? `${s.distanceYards} yds` : null}
+                  {s.distanceYards != null && s.ballCount ? " · " : ""}
+                  {s.ballCount ? `${s.ballCount} balls` : null}
+                </span>
+              </div>
+              {s.notes ? (
+                <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>{s.notes}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SportExtrasPanel({ extras }: { extras: Record<string, string | number> }) {
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>DETAILS</div>
+      <div style={contentPad}>
+        <div style={extrasGrid}>
+          {Object.entries(extras).map(([key, value]) => (
+            <div key={key} style={statCard}>
+              <div style={statLabel}>{prettifyExtraKey(key)}</div>
+              <div style={statValue}>{String(value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function prettifyExtraKey(key: string): string {
+  // camelCase → Title Case With Spaces
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const golfTotalsRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: 8,
+  padding: 10,
+  borderRadius: 10,
+  border: "1px solid rgba(40,212,160,0.18)",
+  background: "rgba(40,212,160,0.06)",
+  marginBottom: 12,
+};
+const golfTotalCell: React.CSSProperties = {
+  display: "grid",
+  gap: 2,
+  textAlign: "center",
+};
+const golfTotalLabel: React.CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.6,
+};
+const golfTotalValue: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 900,
+  fontVariantNumeric: "tabular-nums",
+};
+
+const golfHolesGrid: React.CSSProperties = {
+  display: "grid",
+  gap: 2,
+};
+const golfHolesHeader: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "44px 60px 60px 1fr",
+  gap: 6,
+  padding: "6px 8px",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  opacity: 0.5,
+};
+const golfHoleRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "44px 60px 60px 1fr",
+  gap: 6,
+  padding: "8px",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  fontSize: 13,
+  fontVariantNumeric: "tabular-nums",
+  alignItems: "center",
+};
+const golfHoleNum: React.CSSProperties = {
+  fontWeight: 900,
+  opacity: 0.7,
+};
+const golfHoleClub: React.CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 600,
+  opacity: 0.7,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const extrasGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 8,
 };

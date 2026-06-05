@@ -75,6 +75,53 @@ export type LogSummaryIntervals = {
   restSec: number | null;
 };
 
+// Linked spot (ActivitySpot) for sport / cardio / session logs — the
+// new Spot-Picker writes here. Detail page renders this above the
+// legacy free-text `location` if both exist.
+export type LogSummarySpot = {
+  id: string;
+  name: string;
+  region: string | null;
+  type: string | null;
+};
+
+// Discriminated sport-specific payload off RoutineLog.sportData. Only
+// the shapes the detail page knows how to render are normalized here;
+// unknown shapes pass through as `kind: "unknown"` so the detail page
+// can render a graceful fallback (or hide them entirely).
+export type LogSummarySportData =
+  | {
+      kind: "golf";
+      mode: "COURSE" | "RANGE";
+      sessionType?: string;
+      course?: {
+        location?: string;
+        holes: Array<{
+          number: number;
+          par?: number;
+          score?: number;
+          club?: string;
+          notes?: string;
+        }>;
+      };
+      range?: {
+        ballCount?: number;
+        shots: Array<{
+          club: string;
+          distanceYards?: number;
+          ballCount?: number;
+          notes?: string;
+        }>;
+      };
+    }
+  | {
+      kind: "generic-sport";
+      sport: string;
+      sessionType?: string;
+      extras?: Record<string, string | number>;
+    }
+  | { kind: "unknown" };
+
 export type LogSummaryData = {
   id: string;
   routineId: string;
@@ -90,6 +137,12 @@ export type LogSummaryData = {
   // Structured intervals payload — present when the activity type uses
   // intervals (Sprint, Interval Run). null for all other logs.
   intervals: LogSummaryIntervals | null;
+  /** Sport-specific structured data (golf scorecard, basketball mode,
+   *  surfing extras, etc.). null when the log isn't a sport log. */
+  sportData: LogSummarySportData | null;
+  /** ActivitySpot link — name + region for the detail-page heading
+   *  when the Spot Picker was used at log time. */
+  spot: LogSummarySpot | null;
   metrics: LogSummaryMetric[];
   hasSessionMetricValues: boolean;
   climbAttempts: LogSummaryClimbAttempt[];
@@ -134,6 +187,64 @@ function parseIntervalsConfig(raw: unknown): LogSummaryIntervals | null {
   return out;
 }
 
+// Coerce RoutineLog.sportData JSON into a known discriminated shape.
+// Unknown payloads fall through to `kind: "unknown"` so callers can
+// hide / skip rendering instead of crashing on a malformed blob.
+function parseSportData(raw: unknown): LogSummarySportData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const sport = typeof obj.sport === "string" ? obj.sport : null;
+  if (!sport) return { kind: "unknown" };
+
+  if (sport === "golf") {
+    const mode = obj.mode === "RANGE" ? "RANGE" : "COURSE";
+    const out: LogSummarySportData = { kind: "golf", mode };
+    if (typeof obj.sessionType === "string") out.sessionType = obj.sessionType;
+    const course = obj.course as Record<string, unknown> | undefined;
+    if (course && Array.isArray(course.holes)) {
+      out.course = {
+        location: typeof course.location === "string" ? course.location : undefined,
+        holes: (course.holes as Array<Record<string, unknown>>).map((h) => ({
+          number: typeof h.number === "number" ? h.number : 0,
+          par: typeof h.par === "number" ? h.par : undefined,
+          score: typeof h.score === "number" ? h.score : undefined,
+          club: typeof h.club === "string" ? h.club : undefined,
+          notes: typeof h.notes === "string" ? h.notes : undefined,
+        })),
+      };
+    }
+    const range = obj.range as Record<string, unknown> | undefined;
+    if (range && Array.isArray(range.shots)) {
+      out.range = {
+        ballCount: typeof range.ballCount === "number" ? range.ballCount : undefined,
+        shots: (range.shots as Array<Record<string, unknown>>).map((s) => ({
+          club: typeof s.club === "string" ? s.club : "",
+          distanceYards: typeof s.distanceYards === "number" ? s.distanceYards : undefined,
+          ballCount: typeof s.ballCount === "number" ? s.ballCount : undefined,
+          notes: typeof s.notes === "string" ? s.notes : undefined,
+        })),
+      };
+    }
+    return out;
+  }
+
+  // Generic sport — basketball/surfing/snowboarding/etc. carry sessionType
+  // + extras under the same sport: "<slug>" discriminator.
+  const extrasRaw = obj.extras as Record<string, unknown> | undefined;
+  const extras: Record<string, string | number> = {};
+  if (extrasRaw && typeof extrasRaw === "object") {
+    for (const [k, v] of Object.entries(extrasRaw)) {
+      if (typeof v === "string" || typeof v === "number") extras[k] = v;
+    }
+  }
+  return {
+    kind: "generic-sport",
+    sport,
+    sessionType: typeof obj.sessionType === "string" ? obj.sessionType : undefined,
+    extras: Object.keys(extras).length > 0 ? extras : undefined,
+  };
+}
+
 // Logs predate the strict-kind era — a routine flagged WORKOUT in the schema
 // can still hold cardio data if it was migrated, so we infer the kind from
 // what fields are populated. This mirrors the previous in-page logic.
@@ -169,6 +280,16 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       activityType: { select: { name: true } },
       // Structured interval payload for Sprint / Interval Run logs.
       intervalsConfig: true,
+      // Sport-specific structured payload (golf scorecard, basketball
+      // mode, surfing wave count, etc.). Discriminated by `sport`.
+      // See RoutineLog.sportData in prisma/schema.prisma for shape.
+      sportData: true,
+      // ActivitySpot link — sport / endurance logs that picked a spot
+      // get the spot name + region rendered alongside the legacy
+      // free-text location field.
+      activitySpot: {
+        select: { id: true, name: true, region: true, type: true },
+      },
       routine: {
         select: {
           id: true, name: true, kind: true,
@@ -251,6 +372,15 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     logKind,
     routine: { ...log.routine, name: displayName },
     intervals: parseIntervalsConfig(log.intervalsConfig),
+    sportData: parseSportData(log.sportData),
+    spot: log.activitySpot
+      ? {
+          id: log.activitySpot.id,
+          name: log.activitySpot.name,
+          region: log.activitySpot.region,
+          type: log.activitySpot.type,
+        }
+      : null,
     metrics: log.metrics,
     hasSessionMetricValues: log.sessionMetricValues.length > 0,
     climbAttempts: log.climbAttempts.map((a) => ({
