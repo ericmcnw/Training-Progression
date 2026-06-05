@@ -38,6 +38,7 @@ type RoutineFormData =
         sessionTemplateId: string | null;
         selectedMetadataGroupIds: string[];
         tags: string[];
+        supportsSports?: string[];
       };
       metadataGroups: Array<{ id: string; slug: string; label: string; kind: MetadataGroupKind }>;
       sessionTemplates: Array<{

@@ -30,6 +30,7 @@ export async function GET(req: Request) {
         domain: true,
         kind: true,
         isActive: true,
+        supportsSports: true,
         frequencyGoalRoutines: {
           include: { goal: true },
         },
@@ -115,6 +116,7 @@ export async function GET(req: Request) {
           ])
         ),
         tags: withTarget.tagAssignments.map((entry) => entry.tag.name),
+        supportsSports: withTarget.supportsSports ?? [],
       },
       metadataGroups,
       sessionTemplates,

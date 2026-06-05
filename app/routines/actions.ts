@@ -2,6 +2,18 @@
 
 import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/lib/exercise-library";
 import { inferExerciseMetadataSlugs, parseTagNames, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
+import { activitiesByFamily } from "@/lib/activity-families";
+
+// Validate the supportsSports submitted by the routine form against
+// the activity registry — only sport-family slugs are allowed, dedup
+// + lexsort for stable storage.
+const VALID_SPORT_SLUGS = new Set(activitiesByFamily("sports").map((s) => s.slug));
+function parseSupportsSports(raw: string[]): string[] {
+  const filtered = raw
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && VALID_SPORT_SLUGS.has(s));
+  return Array.from(new Set(filtered)).sort();
+}
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
@@ -1080,6 +1092,7 @@ export async function createRoutine(formData: FormData) {
   const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
+  const supportsSports = parseSupportsSports(formData.getAll("supportsSports").map(String));
 
   if (!name) throw new Error("Name is required.");
 
@@ -1093,6 +1106,7 @@ export async function createRoutine(formData: FormData) {
       isActive: true,
       isDeleted: false,
       deletedAt: null,
+      supportsSports,
     },
     select: { id: true },
   });
@@ -1186,6 +1200,7 @@ export async function updateRoutine(formData: FormData) {
   const sessionTemplateId = await getValidSessionTemplateId(formData.get("sessionTemplateId"));
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
+  const supportsSports = parseSupportsSports(formData.getAll("supportsSports").map(String));
 
   if (!id) throw new Error("Missing routine id.");
   if (!name) throw new Error("Name is required.");
@@ -1217,6 +1232,7 @@ export async function updateRoutine(formData: FormData) {
         kind,
         subtype,
         timesPerWeek: suggestedTimesPerWeekForRoutineTarget(frequencyTarget),
+        supportsSports,
       },
     });
   });

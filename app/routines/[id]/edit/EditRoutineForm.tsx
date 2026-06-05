@@ -2,6 +2,8 @@
 
 import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "@/app/routines/RoutineFrequencyTargetFields";
+import SupportsSportsField from "@/app/routines/SupportsSportsField";
+import { activitiesByFamily } from "@/lib/activity-families";
 import Link from "next/link";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -21,6 +23,22 @@ import {
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import { inferRoutinePreset } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
+
+const SPORT_ACCENT: Record<string, string> = {
+  climbing: "rgba(251,146,60,0.9)",
+  surfing: "rgba(56,189,248,0.9)",
+  snowboarding: "rgba(168,85,247,0.9)",
+  skiing: "rgba(99,102,241,0.9)",
+  skateboarding: "rgba(244,114,182,0.9)",
+  basketball: "rgba(220,38,38,0.9)",
+  tennis: "rgba(132,204,22,0.9)",
+  golf: "rgba(40,212,160,0.9)",
+};
+const SUPPORT_SPORT_OPTIONS = activitiesByFamily("sports").map((s) => ({
+  slug: s.slug,
+  label: s.label,
+  accent: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+}));
 
 export default function EditRoutineForm({
   routine,
@@ -44,6 +62,7 @@ export default function EditRoutineForm({
     sessionTemplateId: string | null;
     selectedMetadataGroupIds: string[];
     tags: string[];
+    supportsSports?: string[];
   };
   metadataGroups: Array<{
     id: string;
@@ -262,6 +281,11 @@ export default function EditRoutineForm({
             />
             <div style={styles.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
           </div>
+
+          <SupportsSportsField
+            options={SUPPORT_SPORT_OPTIONS}
+            initialSelected={routine.supportsSports ?? []}
+          />
 
           <details style={styles.advancedCard}>
             <summary style={styles.advancedSummary}>Advanced metadata</summary>

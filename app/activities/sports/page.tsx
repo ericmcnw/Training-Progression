@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ACTIVITY_FAMILY_META, activitiesByFamily } from "@/lib/activity-families";
+import { ACTIVITY_FAMILY_META, activitiesByFamily, getActivityEntry } from "@/lib/activity-families";
 import { loadSportsChartData } from "@/lib/activities/sports-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { formatHoursMinutes } from "@/lib/progress";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,28 @@ export default async function SportsDashboardPage() {
   const meta = ACTIVITY_FAMILY_META["sports"];
   const chartData = await loadSportsChartData();
   const allSports = activitiesByFamily("sports");
+
+  // Supporting training — routines tagged with supportsSports (the
+  // Fingers/hangboard → climbing pattern). Grouped by sport for the
+  // "Supporting Training" section below the chart.
+  const trainingRoutines = await prisma.routine.findMany({
+    where: {
+      isActive: true,
+      isDeleted: false,
+      isPlaceholder: false,
+      supportsSports: { isEmpty: false },
+    },
+    select: { id: true, name: true, kind: true, subtype: true, supportsSports: true },
+    orderBy: [{ name: "asc" }],
+  });
+  const supportBySlug = new Map<string, Array<{ id: string; name: string }>>();
+  for (const r of trainingRoutines) {
+    for (const slug of r.supportsSports ?? []) {
+      const list = supportBySlug.get(slug) ?? [];
+      list.push({ id: r.id, name: r.name });
+      supportBySlug.set(slug, list);
+    }
+  }
 
   // Index per-sport stats so we can render every registered sport tile
   // (including ones with no recent sessions) without losing the data
@@ -96,6 +119,41 @@ export default async function SportsDashboardPage() {
                   accent={meta.accent}
                 />
               ))}
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {/* Supporting training — routines users have tagged via
+            "Supports which sports?" in the routine editor (the Fingers
+            hangboard → climbing pattern). Grouped by sport. Each row
+            opens the routine's detail/edit. */}
+        {supportBySlug.size > 0 ? (
+          <SectionCard
+            title="Supporting training"
+            subtitle="Routines you've tagged as supporting a sport — these aren't sport sessions themselves, just training that feeds them."
+          >
+            <div style={{ display: "grid", gap: 10 }}>
+              {Array.from(supportBySlug.entries()).map(([slug, routines]) => {
+                const entry = getActivityEntry(slug);
+                const accent = SPORT_SUPPORT_ACCENT[slug] ?? "rgba(255,255,255,0.5)";
+                return (
+                  <div key={slug} style={supportGroup}>
+                    <div style={supportGroupHeader}>
+                      <span style={{ ...supportDot, background: accent }} />
+                      <span style={supportGroupLabel}>{entry?.label ?? slug}</span>
+                      <span style={supportGroupCount}>{routines.length} routine{routines.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div style={{ display: "grid", gap: 4 }}>
+                      {routines.map((r) => (
+                        <Link key={r.id} href={`/routines/${r.id}`} style={supportRow}>
+                          <span style={supportRowName}>{r.name}</span>
+                          <span style={supportRowArrow}>→</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </SectionCard>
         ) : null}
@@ -257,6 +315,77 @@ function SportTile({
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
+
+// Accent colors for "Supporting training" sport groupings. Mirrors
+// the chart palette so a hangboard routine tagged climbing reads as
+// the same orange wherever it appears.
+const SPORT_SUPPORT_ACCENT: Record<string, string> = {
+  climbing: "rgba(251,146,60,0.9)",
+  surfing: "rgba(56,189,248,0.9)",
+  snowboarding: "rgba(168,85,247,0.9)",
+  skiing: "rgba(99,102,241,0.9)",
+  skateboarding: "rgba(244,114,182,0.9)",
+  basketball: "rgba(220,38,38,0.9)",
+  tennis: "rgba(132,204,22,0.9)",
+  golf: "rgba(40,212,160,0.9)",
+};
+
+const supportGroup: React.CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.02)",
+  display: "grid",
+  gap: 6,
+};
+const supportGroupHeader: React.CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 8,
+};
+const supportDot: React.CSSProperties = {
+  width: 9,
+  height: 9,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+const supportGroupLabel: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  letterSpacing: -0.1,
+};
+const supportGroupCount: React.CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 10.5,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  opacity: 0.55,
+};
+const supportRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.06)",
+  background: "rgba(255,255,255,0.025)",
+  color: "inherit",
+  textDecoration: "none",
+};
+const supportRowName: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 800,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+const supportRowArrow: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.55,
+  fontWeight: 700,
+};
 
 const pageBody: React.CSSProperties = {
   maxWidth: 1120,

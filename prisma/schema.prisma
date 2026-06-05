@@ -287,6 +287,16 @@ model Routine {
   // the new create form. Null for non-endurance routines.
   activityTypeId String?
 
+  // Sports this routine SUPPORTS but isn't a session of — the "Fingers
+  // (hangboard) supports climbing" pattern. Distinct from the routine
+  // BEING climbing (synthetic sports-climbing-synthetic routine or
+  // legacy SESSION-kind routine with the climbing metadata tag).
+  // Per-sport activity world pages read this to populate a "Training"
+  // section alongside actual sport sessions. Slugs reference the
+  // activity registry (lib/activity-families.ts) — typically "climbing",
+  // "surfing", etc.
+  supportsSports String[] @default([])
+
   // Placeholder routines are auto-created hosts for ad-hoc logs (e.g. one per
   // (domain, subtype) combo for Quick Workouts). They participate in Training
   // Balance and trigger-exercise goal matching, but are filtered out of every
