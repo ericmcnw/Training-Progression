@@ -39,6 +39,17 @@ export type LogSportInput = {
    *  (e.g. quick golf range stop) might not warrant a duration. */
   durationMinutes?: number;
   notes?: string;
+  /** "Where" — free-text for now (spot/court/mountain/etc.).
+   *  Persisted on RoutineLog.location so it shows up in log lists
+   *  + the climbing-style location resolution path later. */
+  location?: string;
+  /** Sport-specific subtype dropdown — e.g. basketball: "Game" /
+   *  "Pickup" / "Shoot around" / "Drills". Stored in sportData. */
+  sessionType?: string;
+  /** Free-form per-sport extras (wave count, runs, opponent,
+   *  conditions, etc.). Shape varies per sport. Stored verbatim
+   *  inside RoutineLog.sportData under `extras`. */
+  extras?: Record<string, string | number | undefined>;
 };
 
 export async function logSportAction(input: LogSportInput): Promise<{ logId: string }> {
@@ -62,12 +73,36 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
       ? Math.round(input.durationMinutes * 60)
       : null;
 
+  // Strip empty extras so the JSON blob only carries fields the user
+  // actually filled in.
+  const cleanExtras: Record<string, string | number> = {};
+  if (input.extras) {
+    for (const [k, v] of Object.entries(input.extras)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      if (typeof v === "number" && Number.isNaN(v)) continue;
+      cleanExtras[k] = typeof v === "string" ? v.trim() : v;
+    }
+  }
+
+  const sportType = input.sessionType?.trim();
+  const sportData =
+    sportType || Object.keys(cleanExtras).length > 0
+      ? {
+          sport: input.sportSlug,
+          ...(sportType ? { sessionType: sportType } : {}),
+          ...(Object.keys(cleanExtras).length > 0 ? { extras: cleanExtras } : {}),
+        }
+      : undefined;
+
   const log = await prisma.routineLog.create({
     data: {
       routineId,
       performedAt,
       durationSec: durationSec ?? undefined,
       notes: input.notes?.trim() || undefined,
+      location: input.location?.trim() || undefined,
+      sportData,
     },
     select: { id: true },
   });

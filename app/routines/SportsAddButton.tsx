@@ -61,16 +61,28 @@ function PickerSheet({
 }) {
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Two-tap confirm on Available: first tap highlights the chip,
+  // second tap actually adds. Stops accidental skateboarding-in-the-
+  // list bugs from a casual swipe.
+  const [confirmingAdd, setConfirmingAdd] = useState<string | null>(null);
 
-  function toggle(slug: string, currentlySelected: boolean) {
+  function add(slug: string) {
+    setPendingSlug(slug);
+    setConfirmingAdd(null);
+    startTransition(async () => {
+      try {
+        await addSportAction(slug);
+      } finally {
+        setPendingSlug(null);
+      }
+    });
+  }
+
+  function remove(slug: string) {
     setPendingSlug(slug);
     startTransition(async () => {
       try {
-        if (currentlySelected) {
-          await removeSportAction(slug);
-        } else {
-          await addSportAction(slug);
-        }
+        await removeSportAction(slug);
       } finally {
         setPendingSlug(null);
       }
@@ -99,7 +111,7 @@ function PickerSheet({
                     key={s.slug}
                     type="button"
                     style={pickerRowSelected}
-                    onClick={() => toggle(s.slug, true)}
+                    onClick={() => remove(s.slug)}
                     disabled={pendingSlug === s.slug}
                   >
                     <span style={pickerRowText}>
@@ -114,21 +126,29 @@ function PickerSheet({
             {available.length > 0 ? (
               <div style={pickerGroup}>
                 <div style={pickerGroupLabel}>Available</div>
-                {available.map((s) => (
-                  <button
-                    key={s.slug}
-                    type="button"
-                    style={pickerRowAvailable}
-                    onClick={() => toggle(s.slug, false)}
-                    disabled={pendingSlug === s.slug}
-                  >
-                    <span style={pickerRowText}>
-                      <span style={pickerRowLabel}>{s.label}</span>
-                      <span style={pickerRowEyebrow}>{s.eyebrow}</span>
-                    </span>
-                    <span style={pickerAddHint}>{pendingSlug === s.slug ? "…" : "+ Add"}</span>
-                  </button>
-                ))}
+                {available.map((s) => {
+                  const isConfirming = confirmingAdd === s.slug;
+                  return (
+                    <button
+                      key={s.slug}
+                      type="button"
+                      style={isConfirming ? pickerRowConfirm : pickerRowAvailable}
+                      onClick={() => {
+                        if (isConfirming) add(s.slug);
+                        else setConfirmingAdd(s.slug);
+                      }}
+                      disabled={pendingSlug === s.slug}
+                    >
+                      <span style={pickerRowText}>
+                        <span style={pickerRowLabel}>{s.label}</span>
+                        <span style={pickerRowEyebrow}>{s.eyebrow}</span>
+                      </span>
+                      <span style={isConfirming ? pickerConfirmHint : pickerAddHint}>
+                        {pendingSlug === s.slug ? "…" : isConfirming ? "Tap again to add" : "Add?"}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
             <div style={btnRowStyle}>
@@ -233,6 +253,17 @@ const pickerRowSelected: CSSProperties = {
   ...pickerRowAvailable,
   background: "rgba(51,255,122,0.06)",
   borderColor: "rgba(51,255,122,0.25)",
+};
+const pickerRowConfirm: CSSProperties = {
+  ...pickerRowAvailable,
+  background: "rgba(56,189,248,0.10)",
+  borderColor: "rgba(56,189,248,0.5)",
+};
+const pickerConfirmHint: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "rgba(125,211,252,0.95)",
+  whiteSpace: "nowrap",
 };
 const pickerRowText: CSSProperties = { display: "grid", gap: 1, textAlign: "left", minWidth: 0 };
 const pickerRowLabel: CSSProperties = { fontSize: 13, fontWeight: 800 };

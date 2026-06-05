@@ -6,6 +6,7 @@ import ClimbLogSheet from "./ClimbLogSheet";
 import GolfLogSheet from "./GolfLogSheet";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
+import { getSportLogConfig, type ExtraFieldConfig } from "./sportLogConfig";
 
 // One row in the SPORT section, representing a user's selected sport.
 // Tap → log sheet. Each sport has its own rich form when one exists,
@@ -57,15 +58,32 @@ type GenericDraft = {
   performedAt: string;
   duration: string;
   notes: string;
+  location: string;
+  sessionType: string;
+  /** Per-sport extra fields by key — strings to keep the draft
+   *  serializable; coerced to numbers at submit time. */
+  extras: Record<string, string>;
 };
 
 function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void }) {
+  const config = getSportLogConfig(sport.slug);
   const [draft, setDraft, clearDraft] = useSportLogDraft<GenericDraft>(
     `sport-log-draft-${sport.slug}`,
-    { performedAt: formatLocalDateTime(new Date()), duration: "", notes: "" }
+    {
+      performedAt: formatLocalDateTime(new Date()),
+      duration: "",
+      notes: "",
+      location: "",
+      sessionType: "",
+      extras: {},
+    }
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function setExtra(key: string, value: string) {
+    setDraft((d) => ({ ...d, extras: { ...d.extras, [key]: value } }));
+  }
 
   function submit() {
     setError(null);
@@ -79,6 +97,16 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       setError("Duration must be a positive number.");
       return;
     }
+
+    // Coerce number-typed extras from string state. Empty stays
+    // undefined so the field isn't persisted at all.
+    const extrasOut: Record<string, string | number | undefined> = {};
+    for (const f of config.extras ?? []) {
+      const raw = (draft.extras[f.key] ?? "").trim();
+      if (raw === "") continue;
+      extrasOut[f.key] = f.type === "number" ? Number(raw) : raw;
+    }
+
     startTransition(async () => {
       try {
         await logSportAction({
@@ -86,6 +114,9 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           performedAtIso: new Date(ms).toISOString(),
           durationMinutes: minutes,
           notes: draft.notes.trim() || undefined,
+          location: draft.location.trim() || undefined,
+          sessionType: draft.sessionType.trim() || undefined,
+          extras: extrasOut,
         });
         clearDraft();
         onClose();
@@ -119,6 +150,38 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           style={fieldInput}
         />
       </label>
+
+      {/* Per-sport "Mode" / "Type" / "Terrain" dropdown if the config
+          defines options. */}
+      {config.sessionTypeOptions && config.sessionTypeOptions.length > 0 ? (
+        <label style={fieldLabel}>
+          {config.sessionTypeLabel ?? "Type"}
+          <select
+            value={draft.sessionType}
+            onChange={(e) => setDraft((d) => ({ ...d, sessionType: e.target.value }))}
+            style={fieldInput}
+          >
+            <option value="">— select —</option>
+            {config.sessionTypeOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      <label style={fieldLabel}>
+        Where
+        <input
+          type="text"
+          placeholder={config.locationPlaceholder ?? "Spot / venue (optional)"}
+          value={draft.location}
+          onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
+          style={fieldInput}
+        />
+      </label>
+
       <label style={fieldLabel}>
         Duration (minutes)
         <input
@@ -130,6 +193,22 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           style={fieldInput}
         />
       </label>
+
+      {/* Per-sport extra fields — surfing wave count, basketball
+          score, snowboarding runs, etc. */}
+      {config.extras && config.extras.length > 0 ? (
+        <div style={extrasGrid}>
+          {config.extras.map((f) => (
+            <ExtraField
+              key={f.key}
+              field={f}
+              value={draft.extras[f.key] ?? ""}
+              onChange={(v) => setExtra(f.key, v)}
+            />
+          ))}
+        </div>
+      ) : null}
+
       <label style={fieldLabel}>
         Notes
         <textarea
@@ -141,6 +220,49 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       </label>
       {error ? <div style={errorTextStyle}>{error}</div> : null}
     </SportLogModal>
+  );
+}
+
+function ExtraField({
+  field,
+  value,
+  onChange,
+}: {
+  field: ExtraFieldConfig;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (field.type === "textarea") {
+    return (
+      <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
+        {field.label}
+        <textarea
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ ...fieldInput, minHeight: 70, resize: "vertical" as const }}
+        />
+      </label>
+    );
+  }
+  return (
+    <label style={fieldLabel}>
+      {field.label}
+      <input
+        type={field.type === "number" ? "number" : "text"}
+        inputMode={
+          field.type === "number"
+            ? field.numericHint === "decimal"
+              ? "decimal"
+              : "numeric"
+            : undefined
+        }
+        placeholder={field.placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={fieldInput}
+      />
+    </label>
   );
 }
 
@@ -204,6 +326,15 @@ const errorTextStyle: CSSProperties = {
   fontSize: 12,
   color: "rgba(248,113,113,0.95)",
   fontWeight: 700,
+};
+
+// Two-column grid for per-sport extras so paired numeric fields
+// (basketball points-for/against, snow runs + conditions) sit side
+// by side on wider screens and stack on narrow mobile.
+const extrasGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 10,
 };
 const btnPrimary: CSSProperties = {
   padding: "10px 16px",

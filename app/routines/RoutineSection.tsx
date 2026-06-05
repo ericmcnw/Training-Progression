@@ -75,6 +75,13 @@ export default function RoutineSection({
               left: 34,
               top: "50%",
               transform: "translateY(-50%)",
+              // The slot sits on top of the section header button.
+              // Without explicit z-index, mobile Safari can route the
+              // tap to the header button underneath even though the
+              // slot is later in DOM order. zIndex + auto pointer
+              // events lock the tap to the slot.
+              zIndex: 5,
+              pointerEvents: "auto",
             }}
           >
             {quickLogSlot}
