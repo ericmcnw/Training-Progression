@@ -104,29 +104,20 @@ function logBelongsToRoutineInFamily(
   routinesById: Map<string, RoutineForRanking>,
   family: ActivityFamily
 ): boolean {
-  // First check the log's own activityType. This is the post-edit source of
-  // truth for typed logs against the synthetic Endurance routine (which
-  // has no metadata of its own). Verify the type's family matches the
-  // requested family — don't blindly credit all typed logs to endurance
-  // in case the activity-type system ever expands beyond endurance.
-  if (log.activityType?.familyId) {
-    return mapTypeFamilyToActivityFamily(log.activityType.familyId) === family;
+  // First check the log's own activityType — post-edit source of truth
+  // for typed logs against the synthetic Endurance routine (which has
+  // no metadata of its own). Every ActivityType row sits under an
+  // EnduranceFamily (slugs like "running" / "walking" / "cycling"),
+  // so a typed log is inherently endurance — we don't need to compare
+  // against the type's familyId. If the activity-type system ever
+  // expands beyond endurance this collapses to a slug check.
+  if (log.activityType) {
+    return family === "endurance";
   }
   // Otherwise look up via the routine.
   const routine = routinesById.get(log.routineId);
   if (!routine) return false;
   return routineBelongsToFamily(routine, family);
-}
-
-// The ActivityType model uses its own family slug ("endurance", "sports",
-// etc.) which today aligns with our ActivityFamily union. If a divergence
-// ever appears, map it here in one place.
-function mapTypeFamilyToActivityFamily(familySlug: string): ActivityFamily | null {
-  if (familySlug === "endurance") return "endurance";
-  if (familySlug === "sports") return "sports";
-  if (familySlug === "strength") return "strength";
-  if (familySlug === "body-work") return "body-work";
-  return null;
 }
 
 // ─── Family stats (the collapsed-section right-side chips) ───────────────────
