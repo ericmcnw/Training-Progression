@@ -203,6 +203,47 @@ export default async function EnduranceWorldPage(props: {
       />
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+        {/* Family tabs — lifted above the charts so the user sees the
+            cause (filter pills) above the effect (charts narrowing). */}
+        <div style={tabRowStyle}>
+          <FamilyTab
+            label="Overview"
+            href={buildHref(searchParams, { family: "overview", type: undefined })}
+            active={familySlug === "overview"}
+          />
+          {rollups.map((r) => (
+            <FamilyTab
+              key={r.id}
+              label={`${r.name}${r.sessions > 0 ? ` (${r.sessions})` : ""}`}
+              href={buildHref(searchParams, { family: r.slug, type: undefined })}
+              active={familySlug === r.slug}
+            />
+          ))}
+        </div>
+
+        {/* Type sub-filter — only visible when a family is active.
+            Sits right under the family tabs so the cascade reads
+            top-to-bottom: family → type → charts. */}
+        {activeFamily && activeFamily.types.length > 0 && (
+          <div style={subFilterRowStyle}>
+            <Link
+              href={buildHref(searchParams, { type: undefined })}
+              style={!activeType ? subFilterPillActive : subFilterPill}
+            >
+              All {activeFamily.name}
+            </Link>
+            {activeFamily.types.map((t) => (
+              <Link
+                key={t.id}
+                href={buildHref(searchParams, { type: t.slug })}
+                style={activeType?.slug === t.slug ? subFilterPillActive : subFilterPill}
+              >
+                {t.name}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {/* Interactive 12w stacked bar chart — always 12 weeks regardless
             of the page range filter below, since cadence trends need
             a stable window to compare against. */}
@@ -248,23 +289,6 @@ export default async function EnduranceWorldPage(props: {
             data={paceData}
           />
         ) : null}
-
-        {/* Family tabs */}
-        <div style={tabRowStyle}>
-          <FamilyTab
-            label="Overview"
-            href={buildHref(searchParams, { family: "overview", type: undefined })}
-            active={familySlug === "overview"}
-          />
-          {rollups.map((r) => (
-            <FamilyTab
-              key={r.id}
-              label={`${r.name}${r.sessions > 0 ? ` (${r.sessions})` : ""}`}
-              href={buildHref(searchParams, { family: r.slug, type: undefined })}
-              active={familySlug === r.slug}
-            />
-          ))}
-        </div>
 
         {/* Range pill row */}
         <div style={rangeRowStyle}>
@@ -402,31 +426,14 @@ function FamilyDetailView({
 
   void rollup; // family-level rollup is the unfiltered version — kept for future use
 
+  // activeTypeSlug + searchParams are now consumed only by the page-level
+  // type sub-filter above; keep them in the props for parity with the
+  // FamilyDetailView contract.
+  void activeTypeSlug;
+  void searchParams;
+
   return (
     <>
-      {/* Type sub-filter */}
-      {family.types.length > 0 && (
-        <SectionCard title="Activity type" subtitle="Narrow this family to a specific type, or leave at All to roll up everything.">
-          <div style={subFilterRowStyle}>
-            <Link
-              href={buildHref(searchParams, { type: undefined })}
-              style={!activeTypeSlug ? subFilterPillActive : subFilterPill}
-            >
-              All {family.name}
-            </Link>
-            {family.types.map((t) => (
-              <Link
-                key={t.id}
-                href={buildHref(searchParams, { type: t.slug })}
-                style={activeTypeSlug === t.slug ? subFilterPillActive : subFilterPill}
-              >
-                {t.name}
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
       {/* Stats */}
       <SectionCard
         title={activeTypeId ? `Stats · ${family.types.find((t) => t.id === activeTypeId)?.name ?? ""}` : `Stats · All ${family.name}`}
