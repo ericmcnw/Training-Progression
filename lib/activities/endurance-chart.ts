@@ -34,7 +34,14 @@ export type EnduranceChartData = {
   sessionsByWeek: SessionsByWeek;
 };
 
-export async function loadEnduranceChartData(now = new Date()): Promise<EnduranceChartData> {
+export async function loadEnduranceChartData(input?: {
+  familySlug?: string;
+  typeSlug?: string | null;
+  now?: Date;
+}): Promise<EnduranceChartData> {
+  const now = input?.now ?? new Date();
+  const familySlug = input?.familySlug ?? "overview";
+  const typeSlug = input?.typeSlug ?? null;
   const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
 
   // Resolve the endurance-tagged routine ids in a small first round-trip
@@ -56,6 +63,23 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
     )
     .map((r) => r.id);
 
+  // Resolve the active family + type so we can narrow the log query at
+  // the SQL layer. Both are optional — Overview keeps the multi-line
+  // view across every family.
+  const families = await prisma.enduranceFamily.findMany({
+    select: {
+      id: true,
+      slug: true,
+      types: { select: { id: true, slug: true } },
+    },
+  });
+  const activeFamily =
+    familySlug === "overview" ? null : families.find((f) => f.slug === familySlug) ?? null;
+  const activeType =
+    activeFamily && typeSlug
+      ? activeFamily.types.find((t) => t.slug === typeSlug) ?? null
+      : null;
+
   const logs = await prisma.routineLog.findMany({
     where: {
       performedAt: { gte: cutoff },
@@ -65,6 +89,18 @@ export async function loadEnduranceChartData(now = new Date()): Promise<Enduranc
           : []),
         { activityTypeId: { not: null } },
       ],
+      // Family/type narrowing — only when the user has scoped down via
+      // the family tabs / type sub-pills. Legacy un-typed logs against
+      // metadata-tagged routines don't survive a type filter (they have
+      // no activityType to match) — that's intended; the Overview tab
+      // remains the single source of truth for un-typed data.
+      ...(activeFamily
+        ? {
+            activityType: activeType
+              ? { id: activeType.id }
+              : { familyId: activeFamily.id },
+          }
+        : {}),
     },
     select: {
       id: true,

@@ -122,9 +122,10 @@ export default async function EnduranceWorldPage(props: {
         },
       },
     }),
-    // 12w stacked-bar chart data, fetched in parallel — independent of
-    // the page's range filter, since the chart always shows 12 weeks.
-    loadEnduranceChartData(),
+    // 12w stacked-bar chart data, fetched in parallel — always 12 weeks
+    // regardless of the page range filter, but narrows by the active
+    // family/type filter so the chart matches what's below it.
+    loadEnduranceChartData({ familySlug, typeSlug }),
     // 12w pace chart — multi-line by type on Overview / family tabs,
     // switches to per-session points when a specific type is selected.
     loadEndurancePaceChart({ familySlug, typeSlug }),
@@ -207,7 +208,13 @@ export default async function EnduranceWorldPage(props: {
             a stable window to compare against. */}
         {chartData.series.length > 0 ? (
           <WeeklyBarChartWithSessions
-            title="Miles per Week by Activity — Last 12 Weeks"
+            title={
+              activeType
+                ? `Miles per Week — ${activeType.name} · Last 12 Weeks`
+                : activeFamily
+                ? `Miles per Week — ${activeFamily.name} · Last 12 Weeks`
+                : "Miles per Week by Activity — Last 12 Weeks"
+            }
             weekLabels={chartData.weekLabels}
             series={chartData.series}
             sessionsByWeek={chartData.sessionsByWeek}
@@ -228,12 +235,14 @@ export default async function EnduranceWorldPage(props: {
           <PaceLineChart
             title={
               paceData.mode === "weekly"
-                ? "Average Pace per Week — Last 12 Weeks"
+                ? activeFamily
+                  ? `Average Pace per Week — ${activeFamily.name} · Last 12 Weeks`
+                  : "Average Pace per Week — Last 12 Weeks"
                 : `${paceData.typeName} · Pace per Session — Last 12 Weeks`
             }
             subtitle={
               paceData.mode === "weekly"
-                ? "Mileage-weighted average per activity type. Faster paces sit higher on the chart."
+                ? "Mileage-weighted average per activity type. Lower on the chart = faster."
                 : `${paceData.points.length} session${paceData.points.length === 1 ? "" : "s"} · dot size reflects distance.`
             }
             data={paceData}
