@@ -68,6 +68,13 @@ type GenericDraft = {
   extras: Record<string, string>;
 };
 
+// Exported so other surfaces (the home FAB, future quick-actions)
+// can mount the generic sport log sheet directly without going
+// through the SportQuickLogRow tile button.
+export function GenericSportLogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void }) {
+  return <LogSheet sport={sport} onClose={onClose} />;
+}
+
 function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void }) {
   const config = getSportLogConfig(sport.slug);
   const [draft, setDraft, clearDraft] = useSportLogDraft<GenericDraft>(

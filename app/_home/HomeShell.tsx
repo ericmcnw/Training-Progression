@@ -51,7 +51,12 @@ export default function HomeShell({ data }: { data: HomeData }) {
         </div>
       </div>
 
-      <Fab routines={data.quickPickRoutines} today={data.today} />
+      <Fab
+        routines={data.quickPickRoutines}
+        activityTypes={data.scheduleActivityTypes}
+        sports={data.scheduleSports}
+        today={data.today}
+      />
 
       <style>{`
         .homeRoot {

@@ -6,16 +6,28 @@
 
 import { useState, type CSSProperties } from "react";
 import type { QuickPickRoutine } from "./types";
-import { COLOR, RADIUS, SHADOW } from "./tokens";
+import { SHADOW } from "./tokens";
 import QuickAddMenu from "./QuickAddMenu";
+import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
+import ClimbLogSheet from "@/app/routines/ClimbLogSheet";
+import GolfLogSheet from "@/app/routines/GolfLogSheet";
+import { GenericSportLogSheet } from "@/app/routines/SportQuickLogRow";
 
 type Props = {
   routines: QuickPickRoutine[];
+  activityTypes?: ScheduleActivityType[];
+  sports?: ScheduleSport[];
   today: string;
 };
 
-export default function Fab({ routines, today }: Props) {
+export default function Fab({ routines, activityTypes, sports, today }: Props) {
   const [open, setOpen] = useState(false);
+  // Active sport sheet — set when the user picks a sport tile in the
+  // FAB menu. Renders the right sport-specific log form (climbing,
+  // golf, or the generic per-sport sheet). Same sheets the /log SPORT
+  // section uses — single source of truth for sport logging UX.
+  const [activeSport, setActiveSport] = useState<ScheduleSport | null>(null);
+
   return (
     <>
       <button
@@ -30,7 +42,26 @@ export default function Fab({ routines, today }: Props) {
         </svg>
       </button>
 
-      <QuickAddMenu open={open} onClose={() => setOpen(false)} routines={routines} today={today} />
+      <QuickAddMenu
+        open={open}
+        onClose={() => setOpen(false)}
+        routines={routines}
+        activityTypes={activityTypes}
+        sports={sports}
+        onSportSelected={(sport) => setActiveSport(sport)}
+        today={today}
+      />
+
+      {/* Sport log sheets mount at the FAB level so they portal to
+          document.body and overlay correctly. Each sheet handles its
+          own form chrome via SportLogModal. */}
+      {activeSport?.slug === "climbing" ? (
+        <ClimbLogSheet onClose={() => setActiveSport(null)} />
+      ) : activeSport?.slug === "golf" ? (
+        <GolfLogSheet onClose={() => setActiveSport(null)} />
+      ) : activeSport ? (
+        <GenericSportLogSheet sport={activeSport} onClose={() => setActiveSport(null)} />
+      ) : null}
 
       <style>{`
         .homeV2Fab {
@@ -50,6 +81,7 @@ export default function Fab({ routines, today }: Props) {
     </>
   );
 }
+
 
 const fabButton: CSSProperties = {
   width: 56,

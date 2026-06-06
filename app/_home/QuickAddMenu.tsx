@@ -10,19 +10,33 @@ import { useState, useTransition, type CSSProperties } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { QUICK_LOG_ROUTINE_ID } from "@/app/components/LogDrawer";
 import type { QuickPickRoutine } from "./types";
-import { COLOR, RADIUS } from "./tokens";
-import { domainAccent } from "./client-utils";
+import { COLOR } from "./tokens";
 import Popover from "./Popover";
 import { createDayTodo } from "@/app/components/dashboard/day-todo-actions";
+import QuickLogPicker from "./QuickLogPicker";
+import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   routines: QuickPickRoutine[];
+  activityTypes?: ScheduleActivityType[];
+  sports?: ScheduleSport[];
+  /** Bubbled up to the Fab so it can mount the right sport log
+   *  sheet (climbing / golf / generic). */
+  onSportSelected: (sport: ScheduleSport) => void;
   today: string;
 };
 
-export default function QuickAddMenu({ open, onClose, routines, today }: Props) {
+export default function QuickAddMenu({
+  open,
+  onClose,
+  routines,
+  activityTypes,
+  sports,
+  onSportSelected,
+  today,
+}: Props) {
   const { openDrawer } = useLogDrawer();
   const [picker, setPicker] = useState(false);
   const [todoLabel, setTodoLabel] = useState("");
@@ -119,80 +133,30 @@ export default function QuickAddMenu({ open, onClose, routines, today }: Props) 
           </div>
         </>
       ) : (
-        <RoutinePicker
-          routines={routines}
-          today={today}
-          filter={filter}
-          onFilter={setFilter}
-          onBack={() => { setPicker(false); setFilter(""); }}
-          onClose={onClose}
-        />
+        <div style={section}>
+          <div style={pickerHeader}>
+            <button type="button" onClick={() => { setPicker(false); setFilter(""); }} style={backButton}>
+              ‹ back
+            </button>
+          </div>
+          <QuickLogPicker
+            routines={routines}
+            activityTypes={activityTypes}
+            sports={sports}
+            onSportSelected={(sport) => {
+              onSportSelected(sport);
+              onClose();
+            }}
+            onClose={onClose}
+            filter={filter}
+            onFilter={setFilter}
+          />
+        </div>
       )}
     </Popover>
   );
 }
 
-function RoutinePicker({
-  routines,
-  today,
-  filter,
-  onFilter,
-  onBack,
-  onClose,
-}: {
-  routines: QuickPickRoutine[];
-  today: string;
-  filter: string;
-  onFilter: (next: string) => void;
-  onBack: () => void;
-  onClose: () => void;
-}) {
-  const { openDrawer } = useLogDrawer();
-  const norm = filter.trim().toLowerCase();
-  const filtered = norm
-    ? routines.filter((r) => r.routineName.toLowerCase().includes(norm))
-    : routines;
-
-  return (
-    <div style={section}>
-      <div style={pickerHeader}>
-        <button type="button" onClick={onBack} style={backButton}>‹ back</button>
-        {/* No autoFocus — opening the picker shouldn't pop the soft
-            keyboard. Users can scroll the list first and tap into search
-            only when they want to filter. */}
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => onFilter(e.target.value)}
-          placeholder="Search routines…"
-          style={searchInput}
-        />
-      </div>
-      {filtered.length === 0 ? (
-        <div style={emptyState}>No routines match.</div>
-      ) : (
-        <ul style={pickerList}>
-          {filtered.slice(0, 50).map((r) => (
-            <li key={r.routineId}>
-              <button
-                type="button"
-                style={{ ...pickerItem, background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
-                onClick={() => {
-                  openDrawer(r.routineId, { defaultDate: today });
-                  onClose();
-                }}
-              >
-                <span style={{ ...pickerDot, background: domainAccent(r.domain) }} aria-hidden />
-                <span style={pickerItemText}>{r.routineName}</span>
-                <span style={pickerKind}>{r.kind.toLowerCase()}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 // ───────────────────────── styles
 
@@ -298,68 +262,3 @@ const backButton: CSSProperties = {
   cursor: "pointer",
 };
 
-// No inline fontSize — globals.css floors inputs to 16px to prevent iOS
-// Safari from auto-zooming the viewport when this input takes focus.
-const searchInput: CSSProperties = {
-  flex: 1,
-  minHeight: 36,
-  padding: "6px 10px",
-  borderRadius: 10,
-  border: `1px solid ${COLOR.border}`,
-  background: "rgba(255,255,255,0.04)",
-  color: COLOR.text,
-};
-
-const pickerList: CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: 0,
-  display: "grid",
-  gap: 4,
-  maxHeight: "55vh",
-  overflowY: "auto",
-};
-
-const pickerItem: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: `1px solid ${COLOR.border}`,
-  background: "rgba(255,255,255,0.02)",
-  color: COLOR.text,
-  textDecoration: "none",
-  minHeight: 40,
-};
-
-const pickerDot: CSSProperties = {
-  width: 8,
-  height: 8,
-  borderRadius: 999,
-  flexShrink: 0,
-};
-
-const pickerItemText: CSSProperties = {
-  flex: 1,
-  fontSize: 13,
-  fontWeight: 700,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const pickerKind: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.4,
-  color: COLOR.textFaint,
-  textTransform: "uppercase",
-};
-
-const emptyState: CSSProperties = {
-  fontSize: 12,
-  color: COLOR.textFaint,
-  padding: "12px 6px",
-  fontStyle: "italic",
-};

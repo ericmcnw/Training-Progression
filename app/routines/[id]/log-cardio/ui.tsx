@@ -28,6 +28,8 @@ import {
   type SpotPickerItem,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
+import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
+import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import type { ActivityTypeOption } from "@/app/components/LogDrawer";
 
 export default function LogRunForm({
@@ -96,8 +98,48 @@ export default function LogRunForm({
   );
   const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
 
-  const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
-  const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
+  // For the synthetic Endurance routine the prop `activitySlug` is null
+  // (the routine has no metadata tags or subtype, so the server can't
+  // resolve a single slug at load time). Derive it dynamically from
+  // the selected activity type — picking "Trail Run" yields slug
+  // "trail-running", which the SpotPicker reads to surface the right
+  // saved spots + map. Legacy routines pre-resolve via the prop, so
+  // we prefer the prop when it's set.
+  const derivedActivitySlug = useMemo(() => {
+    if (activitySlug) return activitySlug;
+    if (activeType?.slug) {
+      return TYPE_SLUG_TO_REGISTRY_SLUG[activeType.slug] ?? null;
+    }
+    return null;
+  }, [activitySlug, activeType?.slug]);
+  const spotConfig = derivedActivitySlug ? getActivitySpotConfig(derivedActivitySlug) : null;
+  const showSpotPicker = derivedActivitySlug != null && spotConfig?.supportsMap === true;
+
+  // When the resolved activity slug changes — either because the
+  // form mounted on a legacy routine OR the user just picked a type
+  // on the synthetic routine — fetch saved/recent spots for THAT
+  // slug. The prop `savedSpots` is the initial pool from the server
+  // (legacy routines pre-fill it); dynamicSavedSpots overrides when
+  // we've fetched fresh context for a different slug.
+  const [dynamicSavedSpots, setDynamicSavedSpots] = useState<SpotPickerItem[] | null>(null);
+  useEffect(() => {
+    if (!derivedActivitySlug || activitySlug) {
+      // Legacy routine path — keep the prop savedSpots, no extra fetch.
+      setDynamicSavedSpots(null);
+      return;
+    }
+    let cancelled = false;
+    loadSportLogContext(derivedActivitySlug)
+      .then((ctx: SportLogContext) => {
+        if (cancelled) return;
+        setDynamicSavedSpots(ctx.savedSpots);
+        setRecentSpots(ctx.recentSpots);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [derivedActivitySlug, activitySlug]);
 
   useEffect(() => {
     if (!activitySlug) { setRecentSpots([]); return; }
@@ -458,7 +500,7 @@ export default function LogRunForm({
           <SpotPicker
             config={spotConfig}
             spotNoun={spotConfig.spotNoun}
-            savedSpots={savedSpots}
+            savedSpots={dynamicSavedSpots ?? savedSpots}
             recentSpots={recentSpots}
             value={spotValue}
             onChange={(next) => { markDirty(); setSpotValue(next); }}
