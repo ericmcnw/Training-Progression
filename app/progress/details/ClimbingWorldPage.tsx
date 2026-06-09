@@ -729,7 +729,7 @@ export default async function ClimbingWorldPage() {
           subtitle="Strength, conditioning, and habit work tagged to climbing."
           actions={
             <Link
-              href="/manual-log"
+              href="/profile"
               style={{
                 fontSize: 12,
                 fontWeight: 800,

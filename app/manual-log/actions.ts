@@ -40,7 +40,7 @@ export async function saveStimulusPresetSelection(formData: FormData) {
     }
   }
 
-  revalidatePath("/manual-log");
+  revalidatePath("/profile");
   revalidatePath("/progress");
 }
 
@@ -66,6 +66,6 @@ export async function resetStimulusPresetSelection() {
     }
   }
 
-  revalidatePath("/manual-log");
+  revalidatePath("/profile");
   revalidatePath("/progress");
 }

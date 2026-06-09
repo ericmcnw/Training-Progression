@@ -23,7 +23,7 @@ export function revalidateActivityWorlds() {
 // `routineId` adds the per-routine progress + detail surfaces.
 export function revalidateAllLogSurfaces(routineId?: string) {
   revalidatePath("/");
-  revalidatePath("/manual-log");
+  revalidatePath("/profile");
   revalidatePath("/log");
   revalidatePath("/log");
   revalidatePath("/plan");

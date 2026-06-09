@@ -134,7 +134,7 @@ export default async function WeeklyReportPage({
       <div style={{ display: "grid", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/" style={backLink}>← Dashboard</Link>
-          <Link href="/manual-log" style={backLink}>Profile</Link>
+          <Link href="/profile" style={backLink}>Profile</Link>
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

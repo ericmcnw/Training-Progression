@@ -335,7 +335,7 @@ export default async function SportsTargetPage(props: {
             subtitle={`Strength, conditioning, and habit work tagged to ${title.toLowerCase()}.`}
             actions={
               <Link
-                href="/manual-log"
+                href="/profile"
                 style={{
                   fontSize: 12,
                   fontWeight: 800,
