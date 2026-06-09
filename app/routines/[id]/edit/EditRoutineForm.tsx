@@ -340,18 +340,22 @@ export default function EditRoutineForm({
 }
 
 const styles = {
-  label: { display: "block", fontWeight: 700 as const, marginBottom: 5, fontSize: 14 },
+  // Tuned to match the log-form `form-ui.tsx` shared tokens so the routine
+  // builder visually aligns with the log forms. See NewRoutineForm for the
+  // same token alignment.
+  label: { display: "block", fontWeight: 900 as const, marginBottom: 5, fontSize: 14 },
   optional: { fontWeight: 400 as const, opacity: 0.6, fontSize: 12 },
   input: {
     width: "100%",
-    padding: "11px 12px",
+    minWidth: 0,
+    maxWidth: "100%",
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "#111827",
     color: "#ffffff",
     boxSizing: "border-box" as const,
-    fontSize: 16, // dodge iOS Safari auto-zoom on focus
-    fontFamily: "inherit" as const,
+    fontSize: 16,
   },
   btn: {
     padding: "10px 14px",
@@ -394,5 +398,5 @@ const styles = {
     background: "rgba(128,128,128,0.03)",
   },
   advancedSummary: { cursor: "pointer", fontWeight: 600 as const, fontSize: 13 },
-  help: { marginTop: 6, opacity: 0.65, fontSize: 12, lineHeight: 1.4 as const },
+  help: { marginTop: 6, opacity: 0.72, fontSize: 12, lineHeight: 1.4 as const },
 };

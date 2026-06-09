@@ -800,9 +800,14 @@ const s = {
     textAlign: "left" as const,
   } as React.CSSProperties,
 
+  // Label / input / help tokens kept locally for now but tuned to match the
+  // log-form `form-ui.tsx` shared tokens (inputStyle, labelStyle, hintStyle)
+  // so the routine builder visually aligns with the log forms. If we ever
+  // refactor away from the local `s` object, importing form-ui directly is
+  // the right next step.
   label: {
     display: "block",
-    fontWeight: 700,
+    fontWeight: 900,
     marginBottom: 5,
     fontSize: 14,
   } as React.CSSProperties,
@@ -815,14 +820,19 @@ const s = {
 
   input: {
     width: "100%",
-    padding: "11px 12px",
+    // minWidth/maxWidth fix iOS Safari's datetime-local intrinsic-width
+    // behavior; matches form-ui.tsx's inputStyle.
+    minWidth: 0,
+    maxWidth: "100%",
+    padding: "10px 12px",
     border: "1px solid rgba(128,128,128,0.6)",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "#111827",
     color: "#ffffff",
     boxSizing: "border-box",
-    fontSize: 16, // dodge iOS Safari auto-zoom on focus
-    fontFamily: "inherit",
+    // 16px+ avoids iOS Safari auto-zooming the viewport on focus. Required
+    // for any input shown in a drawer/modal where zoom would crop the chrome.
+    fontSize: 16,
   } as React.CSSProperties,
 
   btn: {
@@ -871,7 +881,7 @@ const s = {
 
   help: {
     marginTop: 6,
-    opacity: 0.65,
+    opacity: 0.72,
     fontSize: 12,
     lineHeight: 1.4,
   } as React.CSSProperties,
