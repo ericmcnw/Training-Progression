@@ -6,6 +6,7 @@ import SupportsSportsField from "../SupportsSportsField";
 import { activitiesByFamily } from "@/lib/activity-families";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createRoutine } from "../actions";
 import {
   ROUTINE_SUBTYPE_OPTIONS,
@@ -258,9 +259,9 @@ export default function NewRoutineForm({
               Endurance is logged directly by activity type (Run, Hike, Bike, …) — no
               routine setup needed. Pick a type and go.
             </div>
-            <a href="/activities/endurance" style={primaryRedirectLinkStyle}>
+            <Link href="/activities/endurance" style={primaryRedirectLinkStyle}>
               Go to Endurance →
-            </a>
+            </Link>
           </div>
         )}
 
@@ -277,9 +278,9 @@ export default function NewRoutineForm({
               Sports are enabled from the sport picker — each gets a session shape
               automatically. Pick one and start logging.
             </div>
-            <a href="/activities/sports" style={primaryRedirectLinkStyleSport}>
+            <Link href="/activities/sports" style={primaryRedirectLinkStyleSport}>
               Go to Sports →
-            </a>
+            </Link>
           </div>
         )}
 
@@ -435,6 +436,13 @@ export default function NewRoutineForm({
           {isExpressHabitPreset ? "How often?" : <>Frequency goal <span style={s.optional}>(optional)</span></>}
         </label>
         <RoutineFrequencyTargetFields
+          // `key` forces a remount when the user navigates back to the
+          // activity picker and chooses a different preset. Without it,
+          // RoutineFrequencyTargetFields keeps the freq state from the
+          // first preset (its `useState(initialEnabled)` only runs once),
+          // so picking "Cold Plunge" after "Daily Habit" would inherit the
+          // daily-on defaults instead of resetting to off.
+          key={selectedPreset?.key ?? "custom"}
           initialCount={freqGoalInitialCount}
           initialUnit={freqGoalInitialUnit}
           initialInterval={1}
@@ -680,7 +688,6 @@ const legacyPresetSummaryStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
   opacity: 0.75,
-  listStyle: "none",
 };
 
 const s = {
