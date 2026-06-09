@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import RoutinesPage from "@/app/routines/page";
+import RoutinesPageContent from "@/app/routines/RoutinesPageContent";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,12 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-// Phase 2: the new Log tab. Today's routines list lives at /routines and is
-// already the user's primary log surface. Rather than fork it, /log embeds
-// /routines and adds a tab strip for switching between Routines / Exercises /
-// Quick Log views. Phase 3 will rebuild the page natively as the canonical
-// Log surface and redirect /routines → /log.
+// /log is the canonical log surface — the routines list (now hosted here)
+// plus the tab strip for switching to the exercise library. The actual
+// routines-list implementation lives in app/routines/RoutinesPageContent.tsx
+// alongside its helper components (RoutineCard, RoutineSection, etc.) so
+// the detail routes under /routines/[id]/* can still import those helpers.
+// /routines as a top-level URL now redirects here.
 export default async function LogPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
@@ -23,18 +24,16 @@ export default async function LogPage(props: {
   const view = (getParam(searchParams, "view") ?? "routines").toLowerCase();
 
   if (view === "exercises") {
-    // The exercise library has its own home at /exercises now (no
-    // /progress hop). Phase 3 may rebuild this as a tab embed inside
-    // /log; for now we just forward.
+    // The exercise library has its own home at /exercises (no /progress
+    // hop). The tab strip exposes it as a destination; clicking forwards
+    // the user there.
     redirect("/exercises");
   }
 
-  // The embedded RoutinesPage renders its own "Routines" heading, so /log
-  // surfaces a thin tab strip above the embed instead of duplicating the title.
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <LogTabs current={view} />
-      <RoutinesPage searchParams={Promise.resolve(searchParams)} />
+      <RoutinesPageContent searchParams={Promise.resolve(searchParams)} />
     </div>
   );
 }

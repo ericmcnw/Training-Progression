@@ -34,7 +34,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
   if (routine.kind !== "WORKOUT") {
     return (
       <div style={{ padding: 20 }}>
-        This page is for WORKOUT routines only. <Link href="/routines">Back</Link>
+        This page is for WORKOUT routines only. <Link href="/log">Back</Link>
       </div>
     );
   }
@@ -84,7 +84,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
         <div className="mobileRoutineTemplateActions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/exercises" style={linkBtn}>Exercises</Link>
           <Link href={`/routines/${routineId}/edit`} style={linkBtn}>Edit Routine</Link>
-          <HistoryBackButton fallbackHref="/routines" label="← Back" style={linkBtn} />
+          <HistoryBackButton fallbackHref="/log" label="← Back" style={linkBtn} />
         </div>
       </div>
 

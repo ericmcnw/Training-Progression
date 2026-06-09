@@ -16,7 +16,7 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
     setQuickSaving(true);
     try {
       await createCompletionLog({ routineId, completionCount: null, notes: "", performedAtLocal: undefined });
-      window.location.href = "/routines";
+      window.location.href = "/log";
     } finally {
       setQuickSaving(false);
     }
@@ -37,7 +37,7 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
         notes,
         performedAtLocal: performedAtLocal || undefined,
       });
-      window.location.href = "/routines";
+      window.location.href = "/log";
     } finally {
       setSaving(false);
     }
@@ -81,7 +81,7 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
         primaryPendingLabel="Saving..."
         saving={saving}
         onPrimary={onSave}
-        backHref="/routines"
+        backHref="/log"
       />
     </FormStack>
   );

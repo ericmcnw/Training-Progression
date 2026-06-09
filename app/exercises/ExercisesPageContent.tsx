@@ -104,7 +104,7 @@ export default async function ExercisesPage({
         </div>
 
         <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/routines" style={styles.linkBtn}>
+          <Link href="/log" style={styles.linkBtn}>
             Back to Routines
           </Link>
         </div>

@@ -1124,7 +1124,7 @@ export async function createRoutine(formData: FormData) {
     redirect(`/routines/${created.id}/template`);
   }
   if (formData.get("noRedirect") === "1") return;
-  redirect("/routines");
+  redirect("/log");
 }
 
 export async function createStarterPack(formData: FormData) {
@@ -1186,7 +1186,7 @@ export async function createStarterPack(formData: FormData) {
   }
 
   revalidateRoutineSurfaces();
-  redirect("/routines");
+  redirect("/log");
 }
 
 export async function updateRoutine(formData: FormData) {
@@ -1212,7 +1212,7 @@ export async function updateRoutine(formData: FormData) {
   if (!existing) throw new Error("Routine not found.");
   if (existing.isDeleted) {
     revalidateRoutineSurfaces();
-    redirect("/routines");
+    redirect("/log");
   }
 
   const currentKind = normalizeRoutineKind(existing.kind);
@@ -1253,7 +1253,7 @@ export async function updateRoutine(formData: FormData) {
     redirect(`/routines/${id}/template`);
   }
   if (formData.get("noRedirect") === "1") return;
-  redirect("/routines");
+  redirect("/log");
 }
 
 export async function updateRoutineFrequencyTarget(formData: FormData) {
@@ -1330,7 +1330,7 @@ export async function toggleArchiveRoutine(id: string) {
   if (!routine) throw new Error("Routine not found.");
   if (routine.isDeleted) {
     revalidateRoutineSurfaces();
-    redirect("/routines");
+    redirect("/log");
   }
 
   await prisma.routine.update({
@@ -1339,7 +1339,7 @@ export async function toggleArchiveRoutine(id: string) {
   });
 
   revalidateRoutineSurfaces(id);
-  redirect("/routines");
+  redirect("/log");
 }
 
 export async function deleteRoutine(id: string) {
@@ -1362,7 +1362,7 @@ export async function deleteRoutine(id: string) {
   ]);
 
   revalidateRoutineSurfaces(id);
-  redirect("/routines");
+  redirect("/log");
 }
 
 // --- FrequencyGoal CRUD ---
@@ -1552,7 +1552,7 @@ export async function createFrequencyGoal(formData: FormData) {
   await syncFrequencyGoalRoutines(goal.id, routineIds, substituteRoutineIds);
   await syncFrequencyGoalTriggerExercises(goal.id, triggerExerciseIds);
 
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/goals");
   if (formData.get("noRedirect") === "1") return;
   redirect("/goals");
@@ -1593,7 +1593,7 @@ export async function updateFrequencyGoal(formData: FormData) {
   await syncFrequencyGoalRoutines(id, routineIds, substituteRoutineIds);
   await syncFrequencyGoalTriggerExercises(id, triggerExerciseIds);
 
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/goals");
   if (formData.get("noRedirect") === "1") return;
   redirect("/goals");
@@ -1602,7 +1602,7 @@ export async function updateFrequencyGoal(formData: FormData) {
 export async function deleteFrequencyGoal(id: string) {
   if (!id) throw new Error("Missing goal id.");
   await prisma.frequencyGoal.delete({ where: { id } });
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/goals");
 }
 

@@ -23,7 +23,7 @@ export default function QuickWorkoutLogForm({
   subtypeOptions,
   onComplete,
   onBack,
-  backHref = "/routines",
+  backHref = "/log",
 }: {
   availableExercises: ExerciseOption[];
   initialBlocks: WorkoutBlock[];

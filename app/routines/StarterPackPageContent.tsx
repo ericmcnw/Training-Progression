@@ -29,7 +29,7 @@ export default function StarterPackPageContent() {
           <div style={styles.sub}>Create an 80% right starting setup, then customize routines individually after.</div>
         </div>
 
-        <Link href="/routines" style={styles.linkBtn}>
+        <Link href="/log" style={styles.linkBtn}>
           Back
         </Link>
       </div>

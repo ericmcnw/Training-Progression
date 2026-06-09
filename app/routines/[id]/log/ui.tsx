@@ -32,7 +32,7 @@ export default function LogWorkoutForm({
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
 }) {
-  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+  const finish = onComplete ?? (() => { window.location.href = "/log"; });
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
   );
@@ -51,7 +51,7 @@ export default function LogWorkoutForm({
       onExpandedIdChange={onExpandedIdChange}
       saveLabel="Save Workout"
       savingLabel="Saving…"
-      backHref="/routines"
+      backHref="/log"
       onBack={onBack}
       createExerciseOption={createWorkoutExerciseOption}
       bottomSlot={

@@ -173,7 +173,7 @@ export default async function ManualLogPage({
                 Log History
               </Link>
               <Link href="/activities" style={linkBtn}>Activities</Link>
-              <Link href="/routines" style={linkBtn}>Routines</Link>
+              <Link href="/log" style={linkBtn}>Routines</Link>
               <Link href="/goals" style={linkBtn}>Goals</Link>
               <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>
             </div>

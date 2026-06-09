@@ -264,8 +264,8 @@ export async function saveAllGuidedStepsAndExit(formData: FormData) {
 
   revalidatePath(routeFor(routineId));
   revalidatePath(`/routines/${routineId}/log`);
-  revalidatePath("/routines");
-  redirect("/routines");
+  revalidatePath("/log");
+  redirect("/log");
 }
 
 export async function moveGuidedStep(direction: "UP" | "DOWN", formData: FormData) {

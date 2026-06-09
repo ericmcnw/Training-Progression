@@ -212,7 +212,7 @@ async function parseGoalInput(formData: FormData) {
 function revalidateGoals() {
   revalidatePath("/goals");
   revalidatePath("/progress");
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/");
 }
 

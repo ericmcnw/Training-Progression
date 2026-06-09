@@ -227,7 +227,7 @@ export default function LogRunForm({
     return `${paceMins}:${String(paceSecs).padStart(2, "0")} /mi`;
   }, [distanceMi, minutes, seconds]);
 
-  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+  const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
   function markDirty() {
     isDirtyRef.current = true;
@@ -539,7 +539,7 @@ export default function LogRunForm({
         primaryPendingLabel="Saving..."
         saving={saving}
         onPrimary={onSave}
-        backHref="/routines"
+        backHref="/log"
         onBack={onBack}
       />
     </FormStack>

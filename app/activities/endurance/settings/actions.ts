@@ -47,7 +47,7 @@ export async function archiveLegacyEnduranceRoutine(input: { routineId: string }
   // picker, and any goal-builder routine list. Layout-scoped
   // revalidation across /activities catches the settings page plus
   // any world-page surface that ever surfaced it.
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/log");
   revalidateActivityWorlds();
 }
@@ -59,7 +59,7 @@ export async function restoreLegacyEnduranceRoutine(input: { routineId: string }
     where: { id: input.routineId },
     data: { isDeleted: false, deletedAt: null },
   });
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/log");
   revalidateActivityWorlds();
 }

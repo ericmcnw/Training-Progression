@@ -450,7 +450,7 @@ export default async function LogRoutinePage(props: {
           </h1>
           <div className="mobilePageSubtitle" style={styles.sub}>{formatRoutineTypeLabel(routine.kind)}{routine.subtype ? ` | ${formatRoutineSubtype(routine.subtype)}` : ""}</div>
         </div>
-        <Link href="/routines" style={styles.linkBtn}>
+        <Link href="/log" style={styles.linkBtn}>
           Back
         </Link>
       </div>

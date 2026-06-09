@@ -85,7 +85,7 @@ export default function SessionLogForm({
 }) {
   const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
   const drawer = useOptionalLogDrawer();
-  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+  const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
   const isClimbing = isClimbingTemplateKey(templateKey);
   const isBasketball = isBasketballTemplateKey(templateKey);
@@ -555,7 +555,7 @@ export default function SessionLogForm({
         primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
-        backHref="/routines"
+        backHref="/log"
         onBack={onBack}
       />
     </FormStack>

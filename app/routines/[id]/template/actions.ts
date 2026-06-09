@@ -154,10 +154,10 @@ export async function saveRoutineTemplate(formData: FormData) {
   }
 
   revalidatePath(`/routines/${routineId}/template`);
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/exercises");
   revalidatePath("/progress");
-  redirect("/routines");
+  redirect("/log");
 }
 
 export async function addExerciseToRoutine(formData: FormData) {

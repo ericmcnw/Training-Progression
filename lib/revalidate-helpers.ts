@@ -24,7 +24,7 @@ export function revalidateActivityWorlds() {
 export function revalidateAllLogSurfaces(routineId?: string) {
   revalidatePath("/");
   revalidatePath("/manual-log");
-  revalidatePath("/routines");
+  revalidatePath("/log");
   revalidatePath("/log");
   revalidatePath("/plan");
   revalidatePath("/progress");

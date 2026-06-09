@@ -109,7 +109,7 @@ export default function GuidedLogForm({
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
   );
   const [painContext, setPainContext] = useState<PainContext>("AFTER_ACTIVITY");
-  const finish = onComplete ?? (() => { window.location.href = "/routines"; });
+  const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
   const draftStartedAtRef = useRef<string>(restoredDraft?.startedAt ?? new Date().toISOString());
   const isDirtyRef = useRef(restoredDraft !== null);
@@ -282,7 +282,7 @@ export default function GuidedLogForm({
         onAutoPlayChange={setAutoPlay}
         onGuideMe={startPlayer}
         onLogAfter={startLogAfter}
-        backHref="/routines"
+        backHref="/log"
         onBack={onBack}
       />
     );

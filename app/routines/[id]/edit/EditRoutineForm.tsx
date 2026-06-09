@@ -327,7 +327,7 @@ export default function EditRoutineForm({
             Save + Open Template
           </button>
         )}
-        <HistoryBackButton fallbackHref="/routines" label="← Back" style={styles.linkBtn} />
+        <HistoryBackButton fallbackHref="/log" label="← Back" style={styles.linkBtn} />
         {isWorkoutKind(kind) && isWorkoutKind(routine.kind) && (
           <Link href={`/routines/${routine.id}/template`} style={styles.linkBtn}>Template</Link>
         )}
