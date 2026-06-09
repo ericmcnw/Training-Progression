@@ -121,12 +121,24 @@ export const loadActivityCoverage = cache(async function loadActivityCoverage(
   // Supporting training (all-time) — workouts/guided/completion routines tagged
   // to this activity. Excludes raw sport sessions and pure cardio so we don't
   // double-count.
+  //
+  // Bilingual: matches legacy metadata-group-tagged routines AND routines
+  // tagged via the newer `supportsSports` field (migration 20260605112209).
+  // The metadata path uses `trainingSlug` (rollup-aware via
+  // `trainingTagSlugFor`), the supportsSports path uses the concrete
+  // `sportSlug` since users tag specific sports there. Prisma returns each
+  // row once even when both legs of the OR would match, so no double-counting.
+  // Virtual sports (board-sports rollup) only get the metadata path —
+  // supportsSports lives at the specific-sport level (surfing, snowboarding).
   const trainingLogsPromise = prisma.routineLog.findMany({
     where: {
       routine: {
         isDeleted: false,
         kind: { notIn: ["SESSION", "CARDIO"] },
-        metadataGroups: { some: { group: { slug: trainingSlug } } },
+        OR: [
+          { metadataGroups: { some: { group: { slug: trainingSlug } } } },
+          { supportsSports: { has: sportSlug } },
+        ],
       },
     },
     orderBy: { performedAt: "desc" },
