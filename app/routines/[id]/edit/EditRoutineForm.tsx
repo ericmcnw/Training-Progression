@@ -282,10 +282,21 @@ export default function EditRoutineForm({
             <div style={styles.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
           </div>
 
-          <SupportsSportsField
-            options={SUPPORT_SPORT_OPTIONS}
-            initialSelected={routine.supportsSports ?? []}
-          />
+          {/* "Supports sports" only renders for training domains (Strength,
+              Mobility). For Sport/Cardio/Lifestyle it's conceptually
+              irrelevant — BUT if a routine already has a saved value, we
+              still render the field so the user can see and clear it. The
+              action reads supportsSports inputs to overwrite the column, so
+              hiding the field on a routine with existing values would silently
+              wipe them. */}
+          {(effectiveDomainValue === "strength" ||
+            effectiveDomainValue === "mobility" ||
+            (routine.supportsSports?.length ?? 0) > 0) && (
+            <SupportsSportsField
+              options={SUPPORT_SPORT_OPTIONS}
+              initialSelected={routine.supportsSports ?? []}
+            />
+          )}
 
           <details style={styles.advancedCard}>
             <summary style={styles.advancedSummary}>Advanced metadata</summary>

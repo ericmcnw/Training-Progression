@@ -24,7 +24,7 @@ import {
   type ActivityPreset,
   type DomainMeta,
 } from "@/lib/routine-presets";
-import type { MetadataGroupKind, RoutineKind } from "@/generated/prisma";
+import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
 
 // Sport options for the SupportsSportsField. Pulled from the activity
 // registry so adding a new sport there auto-includes it in the picker.
@@ -61,6 +61,7 @@ export default function NewRoutineForm({
   availableSubstituteRoutines = [],
   inDrawer = false,
   onSuccess,
+  presetDomain,
 }: {
   metadataGroups: MetadataGroupOption[];
   sessionTemplates: Array<{
@@ -75,6 +76,10 @@ export default function NewRoutineForm({
    *  redirecting and onSuccess is called so the host can close the drawer. */
   inDrawer?: boolean;
   onSuccess?: () => void;
+  /** When set, skip Step 1 (domain picker) and land on the activity picker
+   *  for that domain. Used by domain-scoped "+ New routine" entry points
+   *  on /activities/strength, /activities/mobility, etc. */
+  presetDomain?: Exclude<RoutineDomain, "skill" | "general" | "habit" | "recovery">;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -88,8 +93,10 @@ export default function NewRoutineForm({
         });
       }
     : undefined;
-  const [step, setStep] = useState<Step>("domain");
-  const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | null>(null);
+  const [step, setStep] = useState<Step>(presetDomain ? "activity" : "domain");
+  const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | null>(
+    presetDomain ?? null
+  );
   const [selectedPreset, setSelectedPreset] = useState<ActivityPreset | null>(null);
 
   // Form state — populated from the preset selection
@@ -99,6 +106,19 @@ export default function NewRoutineForm({
 
   const derivedDomain = deriveRoutineDomain(kind, subtype);
   const effectiveDomain = domainOverride || derivedDomain;
+
+  // Domain-aware field visibility. Hides irrelevant fields per the three-axis
+  // model: Sport/Cardio/Lifestyle don't need supportsSports (not training that
+  // supports a sport). Daily-habit-style Lifestyle presets lock format + domain
+  // + default the frequency goal to "daily, on" — the express habit flow.
+  const isExpressHabitPreset =
+    selectedPreset?.key === "DAILY_HABIT" || selectedPreset?.key === "HEALTH_CHECKIN";
+  const showSupportsSports = effectiveDomain === "strength" || effectiveDomain === "mobility";
+  const showTrainingCategory = !isExpressHabitPreset;
+  const showFormatAndSubtype = !selectedPreset && !isExpressHabitPreset;
+  const freqGoalInitialEnabled = isExpressHabitPreset;
+  const freqGoalInitialCount = isExpressHabitPreset ? 1 : 3;
+  const freqGoalInitialUnit: RoutineFrequencyUnit = isExpressHabitPreset ? "DAY" : "WEEK";
 
   const subtypeOptions = useMemo(() => ROUTINE_SUBTYPE_OPTIONS[kind], [kind]);
 
@@ -162,6 +182,12 @@ export default function NewRoutineForm({
       // Custom path (no domain selected) goes straight back to domain picker
       setStep(selectedDomain ? "activity" : "domain");
     } else if (step === "activity") {
+      // With a presetDomain, the activity picker IS the entry — there's no
+      // domain picker to go back to. Closing the drawer is the natural undo.
+      if (presetDomain) {
+        onSuccess?.();
+        return;
+      }
       setSelectedDomain(null);
       setStep("domain");
     }
@@ -217,28 +243,68 @@ export default function NewRoutineForm({
         <div style={s.pageTitle}>Choose an activity</div>
         <div style={s.pageSubtitle}>{domainMeta.description}</div>
 
-        {/* Soft nudge for endurance: the new flow logs by activity type
-            without needing a saved routine. Users can still create one
-            below for scheduled recurring sessions or saved structures. */}
+        {/* Cardio doesn't use the routine builder — endurance is logged by
+            activity type via /activities/endurance. The activity-type picker
+            sits at that surface; coming through the routine builder is the
+            wrong path. Show a clear redirect with the legacy preset list
+            collapsed below for users who still want to create a saved cardio
+            routine (rare; scheduled recurring sessions). */}
         {selectedDomain === "cardio" && (
           <div style={enduranceNudgeStyle}>
             <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
               💡 No routine needed
             </div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.85 }}>
-              You can log endurance directly by activity type (Run, Hike, Bike, …) from
-              the Endurance section on the routines page — no setup. Create a routine
-              here only if you want a scheduled recurring slot or a saved label for a
-              specific workout.
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.85, marginBottom: 12 }}>
+              Endurance is logged directly by activity type (Run, Hike, Bike, …) — no
+              routine setup needed. Pick a type and go.
             </div>
+            <a href="/activities/endurance" style={primaryRedirectLinkStyle}>
+              Go to Endurance →
+            </a>
           </div>
         )}
 
-        <div style={s.activityList}>
-          {activityList.map((preset) => (
-            <ActivityCard key={preset.key} preset={preset} domainMeta={domainMeta} onSelect={chooseActivity} />
-          ))}
-        </div>
+        {/* Sport: each sport is enabled via the sport picker. Picking a sport
+            auto-creates its synthetic routine. Coming through the routine
+            builder is the wrong path. Show the redirect; legacy per-sport
+            presets remain below as the manual escape. */}
+        {selectedDomain === "sport" && (
+          <div style={sportNudgeStyle}>
+            <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
+              💡 Enable a sport instead
+            </div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.85, marginBottom: 12 }}>
+              Sports are enabled from the sport picker — each gets a session shape
+              automatically. Pick one and start logging.
+            </div>
+            <a href="/activities/sports" style={primaryRedirectLinkStyleSport}>
+              Go to Sports →
+            </a>
+          </div>
+        )}
+
+        {(selectedDomain === "cardio" || selectedDomain === "sport") && (
+          <details style={legacyPresetCardStyle}>
+            <summary style={legacyPresetSummaryStyle}>
+              Create a {domainMeta.label.toLowerCase()} routine manually (advanced)
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <div style={s.activityList}>
+                {activityList.map((preset) => (
+                  <ActivityCard key={preset.key} preset={preset} domainMeta={domainMeta} onSelect={chooseActivity} />
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
+
+        {selectedDomain !== "cardio" && selectedDomain !== "sport" && (
+          <div style={s.activityList}>
+            {activityList.map((preset) => (
+              <ActivityCard key={preset.key} preset={preset} domainMeta={domainMeta} onSelect={chooseActivity} />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -274,8 +340,10 @@ export default function NewRoutineForm({
         </div>
       )}
 
-      {/* Custom path: show format + activity type selectors */}
-      {!selectedPreset && (
+      {/* Custom path: show format + activity type selectors. Hidden when an
+          express-habit Lifestyle preset is locked — those routines are
+          kind=COMPLETION + lifestyle by construction. */}
+      {showFormatAndSubtype && (
         <>
           <div style={s.twoCol}>
             <div>
@@ -359,16 +427,18 @@ export default function NewRoutineForm({
         </div>
       )}
 
-      {/* Frequency goal */}
+      {/* Frequency goal. Defaults to ON + daily for express-habit Lifestyle
+          presets (Daily Habit, Health Check-in) so the most common case is one
+          tap less. */}
       <div>
         <label style={s.label}>
-          Frequency goal <span style={s.optional}>(optional)</span>
+          {isExpressHabitPreset ? "How often?" : <>Frequency goal <span style={s.optional}>(optional)</span></>}
         </label>
         <RoutineFrequencyTargetFields
-          initialCount={3}
-          initialUnit="WEEK"
+          initialCount={freqGoalInitialCount}
+          initialUnit={freqGoalInitialUnit}
           initialInterval={1}
-          initialEnabled={false}
+          initialEnabled={freqGoalInitialEnabled}
           // Substitutes work for any frequency goal — covered-by makes sense
           // for groups (e.g. a climb covers a Pull Day in a 3×/week strength
           // goal) just as much as for daily habits.
@@ -376,25 +446,30 @@ export default function NewRoutineForm({
         />
       </div>
 
-      {/* Training category — drives the Training Balance bars on the dashboard */}
-      <div>
-        <label style={s.label}>Training category</label>
-        <select
-          style={s.input as React.CSSProperties}
-          value={effectiveDomain}
-          onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general" | "habit">)}
-        >
-          {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}{opt.value === derivedDomain && !domainOverride ? " (auto)" : ""}
-            </option>
-          ))}
-        </select>
-        <div style={s.help}>
-          Which Training Balance bar this routine fills (Strength, Mobility, Endurance, Climb, Lifestyle, etc.).
-          Auto-set from your activity — only override if it&apos;s wrong.
+      {/* Training category — drives the Training Balance bars on the dashboard.
+          Hidden when an express-habit Lifestyle preset is locked (domain is
+          fixed to lifestyle by the preset). The hidden `domain` input above
+          still submits the effective value. */}
+      {showTrainingCategory && (
+        <div>
+          <label style={s.label}>Training category</label>
+          <select
+            style={s.input as React.CSSProperties}
+            value={effectiveDomain}
+            onChange={(e) => setDomainOverride(e.target.value as Exclude<RoutineDomain, "skill" | "general" | "habit">)}
+          >
+            {ROUTINE_DOMAIN_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}{opt.value === derivedDomain && !domainOverride ? " (auto)" : ""}
+              </option>
+            ))}
+          </select>
+          <div style={s.help}>
+            Which Training Balance bar this routine fills (Strength, Mobility, Endurance, Climb, Lifestyle, etc.).
+            Auto-set from your activity — only override if it&apos;s wrong.
+          </div>
         </div>
-      </div>
+      )}
 
       {/* More options */}
       <details style={s.moreCard}>
@@ -412,7 +487,11 @@ export default function NewRoutineForm({
             <div style={s.help}>Comma-separated. Tags matching a known activity also update training coverage.</div>
           </div>
 
-          <SupportsSportsField options={SUPPORT_SPORT_OPTIONS} />
+          {/* "Supports sports" is for training routines that train you FOR a
+              sport (hangboard → climbing). Doesn't make sense for sport
+              sessions themselves, cardio (already endurance-typed), or
+              lifestyle (not training). */}
+          {showSupportsSports && <SupportsSportsField options={SUPPORT_SPORT_OPTIONS} />}
 
           <details style={s.advancedCard}>
             <summary style={s.advancedSummary}>Advanced metadata</summary>
@@ -548,14 +627,60 @@ function ActivityCard({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-// Soft-nudge card shown on the endurance activity picker. Same chrome as
-// the existing info banners — borderless, soft tint, modest padding.
+// Soft-nudge cards shown on the cardio + sport activity pickers. Both
+// domains are "redirect tiles" — the routine builder isn't the right entry
+// point for them. Accent color matches the domain (cardio = blue,
+// sport = orange) so the redirect feels on-theme.
 const enduranceNudgeStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  borderRadius: 12,
+  padding: "14px 16px",
+  borderRadius: 14,
   background: "rgba(78,148,255,0.08)",
   border: "1px solid rgba(78,148,255,0.28)",
   color: "rgba(191,219,254,0.95)",
+};
+
+const sportNudgeStyle: React.CSSProperties = {
+  padding: "14px 16px",
+  borderRadius: 14,
+  background: "rgba(251,146,60,0.08)",
+  border: "1px solid rgba(251,146,60,0.28)",
+  color: "rgba(254,215,170,0.95)",
+};
+
+const primaryRedirectLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: "1px solid rgba(78,148,255,0.5)",
+  background: "rgba(78,148,255,0.18)",
+  color: "rgba(191,219,254,1)",
+  fontSize: 13,
+  fontWeight: 900,
+  textDecoration: "none",
+  minHeight: 44,
+};
+
+const primaryRedirectLinkStyleSport: React.CSSProperties = {
+  ...primaryRedirectLinkStyle,
+  border: "1px solid rgba(251,146,60,0.5)",
+  background: "rgba(251,146,60,0.18)",
+  color: "rgba(254,215,170,1)",
+};
+
+const legacyPresetCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(128,128,128,0.25)",
+  borderRadius: 12,
+  padding: "10px 14px",
+  background: "rgba(128,128,128,0.04)",
+};
+
+const legacyPresetSummaryStyle: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.75,
+  listStyle: "none",
 };
 
 const s = {

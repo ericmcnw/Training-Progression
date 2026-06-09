@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
+import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,11 @@ export default async function MobilityWorldPage() {
         <div style={eyebrowStyle}>Activity world</div>
         <h1 style={{ ...titleStyle, color: ACCENT }}>Mobility</h1>
         <p style={subtitleStyle}>Stretching, yoga, warmups, breathwork, rehab.</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+          <NewRoutineDrawerButton presetDomain="mobility" style={primaryCtaStyle}>
+            + New mobility routine
+          </NewRoutineDrawerButton>
+        </div>
       </header>
 
       <div style={pulseRowStyle}>
@@ -330,5 +336,19 @@ const quickLinkStyle: React.CSSProperties = {
   fontWeight: 800,
   textDecoration: "none",
   color: "inherit",
+  minHeight: 44,
+};
+
+const primaryCtaStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: `1px solid ${ACCENT_BORDER}`,
+  background: ACCENT_BG,
+  color: ACCENT_TEXT,
+  fontSize: 13,
+  fontWeight: 900,
+  cursor: "pointer",
   minHeight: 44,
 };

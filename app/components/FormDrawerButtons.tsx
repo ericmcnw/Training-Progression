@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormDrawer } from "@/app/contexts/FormDrawerContext";
+import { useFormDrawer, type RoutineCreatorPresetDomain } from "@/app/contexts/FormDrawerContext";
 
 // Lightweight click handlers for opening the floating routine/goal forms.
 // Pages render these instead of <Link href="/routines/new"> etc. so the form
@@ -12,10 +12,14 @@ import { useFormDrawer } from "@/app/contexts/FormDrawerContext";
 
 type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "type">;
 
-export function NewRoutineDrawerButton({ children, ...props }: ButtonProps & { children: React.ReactNode }) {
+export function NewRoutineDrawerButton({
+  presetDomain,
+  children,
+  ...props
+}: ButtonProps & { presetDomain?: RoutineCreatorPresetDomain; children: React.ReactNode }) {
   const { openRoutineNew } = useFormDrawer();
   return (
-    <button type="button" {...props} onClick={() => openRoutineNew()}>
+    <button type="button" {...props} onClick={() => openRoutineNew(presetDomain)}>
       {children}
     </button>
   );

@@ -170,8 +170,10 @@ export default function FormDrawer() {
       <div className="logDrawerSheet">
         <div style={drawerHeaderStyle}>
           <span style={drawerTitleStyle}>{title}</span>
-          <button type="button" onClick={close} style={closeBtnStyle} aria-label="Close form">
-            Close
+          <button type="button" onClick={handleBackdropClose} style={closeBtnStyle} aria-label="Close form">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
         <div
@@ -205,6 +207,7 @@ export default function FormDrawer() {
                   availableSubstituteRoutines={routineData.availableSubstituteRoutines}
                   inDrawer
                   onSuccess={handleSuccess}
+                  presetDomain={mode.presetDomain}
                 />
               )}
               {mode.kind === "edit-routine" && routineData?.mode === "edit" && (
@@ -281,14 +284,14 @@ const drawerTitleStyle: React.CSSProperties = {
 const closeBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 5,
-  padding: "6px 12px",
+  justifyContent: "center",
+  width: 32,
+  height: 32,
+  padding: 0,
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 10,
-  color: "rgba(255,255,255,0.7)",
-  fontSize: 12,
-  fontWeight: 700,
+  borderRadius: 999,
+  color: "rgba(255,255,255,0.75)",
   cursor: "pointer",
   flexShrink: 0,
 };
