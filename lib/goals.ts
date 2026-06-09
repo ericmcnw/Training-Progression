@@ -1681,14 +1681,7 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
     batchBuildRoutineFrequencyGoalInsights(routineFrequencyRows),
     batchBuildGroupFrequencyGoalInsights(groupFrequencyRows),
   ]);
-  const manualRoutineFrequencyTargetIds = new Set(
-    manualInsights
-      .filter((entry) => isRoutineFrequencyGoalLike(entry.goal))
-      .map((entry) => entry.goal.targetId)
-  );
-
   const filteredRoutineInsights = routineInsights.filter((entry) => {
-    if (manualRoutineFrequencyTargetIds.has(entry.goal.targetId)) return false;
     if (filters.active === "active") return entry.goal.isActive;
     if (filters.active === "inactive") return !entry.goal.isActive;
     return true;

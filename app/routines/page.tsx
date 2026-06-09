@@ -219,13 +219,16 @@ export default async function RoutinesPage(props: {
     now,
   });
 
-  // Habit streak computation. Picks up COMPLETION-kind routines with the
-  // habit-shaped subtypes — same set that derives to domain=lifestyle. Future
-  // work: formalize "habit" rendering as "any routine with a daily-shape
-  // FrequencyGoal," independent of domain or subtype.
-  const HABIT_COMPLETION_SUBTYPES = new Set(["HABIT", "HEALTH", "OTHER"]);
+  // Habit streak computation. Picks up active COMPLETION-kind routines whose
+  // effective domain is lifestyle — the new canonical "habit" classification.
+  // Render mode (daily-grid vs weekly-bars) still derives from FrequencyGoal
+  // target shape, not from this filter.
   const habitRoutineIds = routines
-    .filter((r) => r.isActive && r.kind === "COMPLETION" && HABIT_COMPLETION_SUBTYPES.has(String(r.subtype ?? "").toUpperCase()))
+    .filter((r) =>
+      r.isActive &&
+      r.kind === "COMPLETION" &&
+      effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle"
+    )
     .map((r) => r.id);
   const habitLogs = habitRoutineIds.length > 0
     ? await prisma.routineLog.findMany({

@@ -1,0 +1,13 @@
+-- Drop COMPLETION/HABIT subtype usage.
+--
+-- HABIT was a cosmetic label that carried zero behavior. Habit classification
+-- now uses domain=lifestyle (see lib/routines.ts effectiveRoutineDomain), and
+-- daily-grid rendering derives from FrequencyGoal target shape (see
+-- lib/frequency-state.ts getFrequencyRenderMode).
+--
+-- This backfill renames any existing HABIT subtype to OTHER (the catch-all
+-- COMPLETION subtype). The Recovery domain tile was also dropped from the
+-- routine creator UI in the same change; recovery-domain rows are left alone
+-- because effectiveRoutineDomain already remaps them on read (COMPLETION
+-- recovery -> lifestyle, GUIDED recovery -> mobility).
+UPDATE "Routine" SET "subtype" = 'OTHER' WHERE "subtype" = 'HABIT';

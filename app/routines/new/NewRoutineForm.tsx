@@ -94,7 +94,7 @@ export default function NewRoutineForm({
 
   // Form state — populated from the preset selection
   const [kind, setKind] = useState<RoutineKind>("COMPLETION");
-  const [subtype, setSubtype] = useState<string>("HABIT");
+  const [subtype, setSubtype] = useState<string>("OTHER");
   const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | "">("");
 
   const derivedDomain = deriveRoutineDomain(kind, subtype);
@@ -191,7 +191,7 @@ export default function NewRoutineForm({
           onClick={() => {
             setSelectedPreset(null);
             setKind("COMPLETION");
-            setSubtype("HABIT");
+            setSubtype("OTHER");
             setDomainOverride("");
             setStep("form");
           }}
