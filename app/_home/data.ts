@@ -15,7 +15,7 @@ import {
   isExpectedDay,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
-import { classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
+import { buildFrequencyGoalMembership, classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 import { getLogDisplayName } from "@/lib/routine-display";
 import {
   routineWithFrequencyTarget,
@@ -481,7 +481,7 @@ export async function getHomeData(): Promise<HomeData> {
     include: {
       routines: {
         include: {
-          routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true, isActive: true, isDeleted: true } },
+          routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true, isActive: true, isDeleted: true, activityTypeId: true } },
         },
       },
       // Trigger-exercise links — used below to broaden which logs count
@@ -505,6 +505,7 @@ export async function getHomeData(): Promise<HomeData> {
         id: rel.routine!.id,
         name: rel.routine!.name,
         domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
+        activityTypeId: rel.routine!.activityTypeId ?? null,
       }));
       const substituteRoutines = subLinks.map((rel) => ({
         id: rel.routine!.id,
@@ -532,15 +533,17 @@ export async function getHomeData(): Promise<HomeData> {
       // count as primary completions. Dedupe by log id so a routine that's
       // both a primary member AND contains a trigger exercise isn't double-
       // counted.
-      const membership = {
-        primaryRoutineIds: new Set(primaryRoutines.map((r) => r.id)),
-        substituteRoutineIds: new Set(substituteRoutines.map((r) => r.id)),
-        triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
-        triggerActivityTypeIds: new Set(goal.triggerActivityTypeIds ?? []),
-        triggerActivityFamilyIds: new Set(goal.triggerActivityFamilyIds ?? []),
-        triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
-        triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
-      };
+      const membership = buildFrequencyGoalMembership({
+        primaryRoutines,
+        substituteRoutineIds: substituteRoutines.map((r) => r.id),
+        explicit: {
+          triggerSubtypes: goal.triggerSubtypes,
+          triggerActivityTypeIds: goal.triggerActivityTypeIds,
+          triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
+          triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
+          triggerMinSets: goal.triggerMinSets,
+        },
+      });
 
       type MatchedLog = {
         logId: string;

@@ -31,7 +31,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
       where: { id },
       include: {
         routines: {
-          include: { routine: { select: { id: true, name: true, isDeleted: true } } },
+          include: { routine: { select: { id: true, name: true, isDeleted: true, activityTypeId: true } } },
         },
         triggerExercises: { select: { exerciseId: true } },
       },
@@ -60,7 +60,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
       where: { id: goalId },
       include: {
         routines: {
-          include: { routine: { select: { id: true, name: true, isDeleted: true } } },
+          include: { routine: { select: { id: true, name: true, isDeleted: true, activityTypeId: true } } },
         },
       },
     });
@@ -100,7 +100,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         targetUnit: true,
         weekdayMask: true,
         routines: {
-          include: { routine: { select: { id: true, name: true, isDeleted: true } } },
+          include: { routine: { select: { id: true, name: true, isDeleted: true, activityTypeId: true } } },
         },
       },
     }),
@@ -124,7 +124,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
 
 async function loadAndCompute(params: {
   target: FrequencyTarget;
-  routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE" }>;
+  routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE"; activityTypeId?: string | null }>;
   today: string;
   /** Activity-type subtypes that broaden matching beyond the routine roster
    *  (group frequency goals only — per-routine goals don't expose triggers). */
@@ -148,7 +148,24 @@ async function loadAndCompute(params: {
   const triggerSubtypes = (params.triggerSubtypes ?? []).map((s) => s.toUpperCase());
   const triggerExerciseIds = params.triggerExerciseIds ?? [];
   const triggerMinSets = Math.max(1, params.triggerMinSets ?? 1);
-  const hasTriggers = triggerSubtypes.length > 0 || triggerExerciseIds.length > 0;
+  // Bilingual fix: PRIMARY routines that carry an activityTypeId (legacy
+  // per-type endurance routines like "Easy Run") propagate it into the
+  // trigger set, so synthetic-Endurance logs carrying the same activityType
+  // also count. Same logic as buildFrequencyGoalMembership but inlined
+  // because this file does its own lighter-weight match loop instead of
+  // going through classifyLogAgainstFrequencyGoal.
+  const triggerActivityTypeIds = Array.from(
+    new Set(
+      primaryRoutines
+        .map((r) => r.activityTypeId)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const triggerActivityTypeIdSet = new Set(triggerActivityTypeIds);
+  const hasTriggers =
+    triggerSubtypes.length > 0 ||
+    triggerExerciseIds.length > 0 ||
+    triggerActivityTypeIds.length > 0;
 
   const since = new Date(Date.now() - HEATMAP_DAYS * 24 * 60 * 60 * 1000);
   // Widen the query when triggers are present so trigger-matched logs are
@@ -165,6 +182,9 @@ async function loadAndCompute(params: {
           ...(triggerExerciseIds.length > 0
             ? [{ exercises: { some: { exerciseId: { in: triggerExerciseIds } } } }]
             : []),
+          ...(triggerActivityTypeIds.length > 0
+            ? [{ activityTypeId: { in: triggerActivityTypeIds } }]
+            : []),
         ],
       }
     : {
@@ -178,6 +198,10 @@ async function loadAndCompute(params: {
       id: true,
       performedAt: true,
       routineId: true,
+      // activityTypeId carries through so synthetic-Endurance logs can be
+      // matched to the trigger set built from primary-routine
+      // activityTypeIds (the bilingual matcher fix).
+      activityTypeId: true,
       routine: { select: { subtype: true } },
       // Always include the per-exercise set counts — small payload (one int
       // per exercise row) and keeps the typed shape stable regardless of
@@ -214,6 +238,14 @@ async function loadAndCompute(params: {
     if (!hasTriggers) continue;
     const subtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
     if (subtype && triggerSubtypeSet.has(subtype)) {
+      seen.add(log.id);
+      stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+      continue;
+    }
+    // ActivityType trigger — catches synthetic-Endurance logs that didn't
+    // match a roster routineId but carry one of the primary routines'
+    // activityTypeIds.
+    if (log.activityTypeId && triggerActivityTypeIdSet.has(log.activityTypeId)) {
       seen.add(log.id);
       stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
       continue;

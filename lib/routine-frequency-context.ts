@@ -8,7 +8,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
-import { classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
+import { buildFrequencyGoalMembership, classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 
 export type RoutineGoalContribution = {
   goalId: string;
@@ -83,7 +83,12 @@ export async function getRoutineGoalContributions(
     include: {
       routines: {
         include: {
-          routine: { select: { id: true, name: true, isActive: true, isDeleted: true } },
+          // activityTypeId is required for the bilingual matcher fix —
+          // PRIMARY routines that carry one propagate it into the
+          // trigger set so logs against the synthetic Endurance routine
+          // (which carry activityTypeId but don't appear in the goal's
+          // routine roster) also match.
+          routine: { select: { id: true, name: true, isActive: true, isDeleted: true, activityTypeId: true } },
         },
       },
       triggerExercises: { select: { exerciseId: true } },
@@ -109,7 +114,19 @@ export async function getRoutineGoalContributions(
     new Set(goals.flatMap((g) => (g.triggerSubtypes ?? []).map((s) => s.toUpperCase())))
   );
   const allTriggerActivityTypeIds = Array.from(
-    new Set(goals.flatMap((g) => g.triggerActivityTypeIds ?? []))
+    new Set([
+      ...goals.flatMap((g) => g.triggerActivityTypeIds ?? []),
+      // Bilingual fix: propagate activityTypeIds of every PRIMARY routine
+      // member so the log query catches synthetic-Endurance logs of the
+      // same type. Without this, the OR clause below would miss them
+      // even though the matcher (via buildFrequencyGoalMembership) is
+      // expecting to claim them.
+      ...goals.flatMap((g) =>
+        g.routines
+          .filter((rel) => rel.role !== "SUBSTITUTE" && rel.routine?.activityTypeId)
+          .map((rel) => rel.routine!.activityTypeId!)
+      ),
+    ])
   );
   const allTriggerActivityFamilyIds = Array.from(
     new Set(goals.flatMap((g) => g.triggerActivityFamilyIds ?? []))
@@ -177,17 +194,22 @@ export async function getRoutineGoalContributions(
       // Trigger-only goals may have no member routines yet — that's still
       // a valid contribution shape, render with the goal name only.
 
-      const membership = {
-        primaryRoutineIds: new Set(primaryLinks.map((rel) => rel.routineId)),
-        substituteRoutineIds: new Set(
-          liveLinks.filter((rel) => rel.role === "SUBSTITUTE").map((rel) => rel.routineId)
-        ),
-        triggerSubtypes: new Set((goal.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
-        triggerActivityTypeIds: new Set(goal.triggerActivityTypeIds ?? []),
-        triggerActivityFamilyIds: new Set(goal.triggerActivityFamilyIds ?? []),
-        triggerExerciseIds: new Set(goal.triggerExercises.map((e) => e.exerciseId)),
-        triggerMinSets: Math.max(1, goal.triggerMinSets ?? 1),
-      };
+      const membership = buildFrequencyGoalMembership({
+        primaryRoutines: primaryLinks.map((rel) => ({
+          id: rel.routineId,
+          activityTypeId: rel.routine?.activityTypeId ?? null,
+        })),
+        substituteRoutineIds: liveLinks
+          .filter((rel) => rel.role === "SUBSTITUTE")
+          .map((rel) => rel.routineId),
+        explicit: {
+          triggerSubtypes: goal.triggerSubtypes,
+          triggerActivityTypeIds: goal.triggerActivityTypeIds,
+          triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
+          triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
+          triggerMinSets: goal.triggerMinSets,
+        },
+      });
 
       // Dedupe by log id and classify each match as primary/covered so the
       // streak/window-progress numbers stay correct when a log qualifies

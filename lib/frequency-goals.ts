@@ -223,6 +223,51 @@ export type FrequencyGoalMembership = {
   triggerMinSets: number;
 };
 
+// Centralized membership builder. Three surfaces — home data, routine-frequency
+// context, and goal-detail frequency-consistency — used to inline this shape
+// independently. Folding them through here keeps them in sync, and crucially
+// it's where the post-T2 endurance fix lives: PRIMARY routines that carry an
+// `activityTypeId` (the legacy per-type endurance routines like "Easy Run"
+// with activityType=easy-run) propagate that id into `triggerActivityTypeIds`
+// so the matcher claims logs against the synthetic Endurance routine that
+// carry the same activityType.
+//
+// Why only PRIMARY: substitute matches resolve to a "covered" state in the
+// matcher, but a trigger-path match returns `isPrimary: true`. Folding
+// substitute routine activityTypeIds in here would silently upgrade their
+// matches to primary completions — semantically wrong.
+//
+// Why only activityTypeId (not family): exact-type propagation is unambiguous —
+// the user explicitly added "Walk" as a routine member, so Walk logs count.
+// Family propagation would broaden "Walk" into "anything walking-family" which
+// the user can already express with explicit `triggerActivityFamilyIds` once
+// the goal-form exposes that UI (Phase 3).
+export function buildFrequencyGoalMembership(input: {
+  primaryRoutines: ReadonlyArray<{ id: string; activityTypeId?: string | null }>;
+  substituteRoutineIds: ReadonlyArray<string>;
+  explicit: {
+    triggerSubtypes?: ReadonlyArray<string> | null;
+    triggerActivityTypeIds?: ReadonlyArray<string> | null;
+    triggerActivityFamilyIds?: ReadonlyArray<string> | null;
+    triggerExerciseIds?: ReadonlyArray<string> | null;
+    triggerMinSets?: number | null;
+  };
+}): FrequencyGoalMembership {
+  const triggerActivityTypeIds = new Set<string>(input.explicit.triggerActivityTypeIds ?? []);
+  for (const r of input.primaryRoutines) {
+    if (r.activityTypeId) triggerActivityTypeIds.add(r.activityTypeId);
+  }
+  return {
+    primaryRoutineIds: new Set(input.primaryRoutines.map((r) => r.id)),
+    substituteRoutineIds: new Set(input.substituteRoutineIds),
+    triggerSubtypes: new Set((input.explicit.triggerSubtypes ?? []).map((s) => s.toUpperCase())),
+    triggerActivityTypeIds,
+    triggerActivityFamilyIds: new Set(input.explicit.triggerActivityFamilyIds ?? []),
+    triggerExerciseIds: new Set(input.explicit.triggerExerciseIds ?? []),
+    triggerMinSets: Math.max(1, input.explicit.triggerMinSets ?? 1),
+  };
+}
+
 export function classifyLogAgainstFrequencyGoal(
   log: FrequencyGoalLogShape,
   goal: FrequencyGoalMembership
