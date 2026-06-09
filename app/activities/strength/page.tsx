@@ -11,8 +11,28 @@ import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeat
 import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
+
+// ── Style tokens ─────────────────────────────────────────────────────────────
+
+// Matches SectionLinkButton roughly so the two header actions sit visually
+// alongside each other. Accent uses the strength domain color.
+const strengthCtaStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "8px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(84,203,130,0.5)",
+  background: "rgba(84,203,130,0.14)",
+  color: "rgba(134,239,172,0.95)",
+  fontSize: 12,
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  minHeight: 36,
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +64,14 @@ export default async function StrengthWorldPage() {
           hideTabs
           hideRange
           hideSections
-          actions={<SectionLinkButton href="/activities" label="All Activities" />}
+          actions={
+            <>
+              <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
+                + New Strength Routine
+              </NewRoutineDrawerButton>
+              <SectionLinkButton href="/activities" label="All Activities" />
+            </>
+          }
         />
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px" }}>
           <SectionCard title="No strength data yet" subtitle="Log a workout to start seeing your strength world here.">

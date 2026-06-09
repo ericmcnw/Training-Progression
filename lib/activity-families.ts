@@ -11,7 +11,7 @@
 // This file is the single source of truth — keep it aligned with
 // METADATA_GROUP_SEEDS in lib/metadata.ts.
 
-export type ActivityFamily = "endurance" | "sports" | "strength" | "body-work";
+export type ActivityFamily = "endurance" | "sports" | "strength" | "body-work" | "mobility" | "lifestyle";
 
 export type ActivityRegistryEntry = {
   /** Metadata slug (matches MetadataGroup.slug). */
@@ -108,6 +108,28 @@ export const ACTIVITY_FAMILY_META: Record<ActivityFamily, { label: string; eyebr
     description: "Mobility and recovery — stretching, breathwork, active recovery.",
     accent: "rgba(192,132,252,0.9)",
   },
+  mobility: {
+    label: "Mobility",
+    eyebrow: "Mobility",
+    description: "Stretching, yoga, warmups, breathwork, rehab.",
+    accent: "rgba(192,132,252,0.9)",
+  },
+  lifestyle: {
+    label: "Lifestyle",
+    eyebrow: "Lifestyle",
+    description: "Daily habits, recovery, supplements, journaling — anything outside training.",
+    accent: "rgba(251,191,36,0.9)",
+  },
 };
 
-export const ACTIVITY_FAMILY_ORDER: ActivityFamily[] = ["endurance", "sports", "strength", "body-work"];
+// /activities index iterates this list. body-work is intentionally OUT — its
+// scope (injuries + body-zone status) is distinct from the new mobility +
+// lifestyle world pages. /activities/body-work still works as a direct URL
+// and keeps its meta entry above for that page's own use.
+export const ACTIVITY_FAMILY_ORDER: ActivityFamily[] = [
+  "endurance",
+  "sports",
+  "strength",
+  "mobility",
+  "lifestyle",
+];

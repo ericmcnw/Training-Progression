@@ -83,9 +83,20 @@ function isStrengthRoutine(r: RoutineForRanking): boolean {
   return effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength";
 }
 
+// Body-work is no longer iterated on /activities (mobility + lifestyle have
+// their own families now). The classifier kept matching mobility for any
+// direct callers that still ask "is this body-work shaped?" — but most code
+// should switch to the dedicated mobility/lifestyle classifiers below.
 function isBodyWorkRoutine(r: RoutineForRanking): boolean {
-  const d = effectiveRoutineDomain(r.domain, r.kind, r.subtype);
-  return d === "mobility" || d === "lifestyle";
+  return isMobilityRoutine(r);
+}
+
+function isMobilityRoutine(r: RoutineForRanking): boolean {
+  return effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "mobility";
+}
+
+function isLifestyleRoutine(r: RoutineForRanking): boolean {
+  return effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle";
 }
 
 export function routineBelongsToFamily(r: RoutineForRanking, family: ActivityFamily): boolean {
@@ -94,6 +105,8 @@ export function routineBelongsToFamily(r: RoutineForRanking, family: ActivityFam
     case "sports":    return isSportRoutine(r);
     case "strength":  return isStrengthRoutine(r);
     case "body-work": return isBodyWorkRoutine(r);
+    case "mobility":  return isMobilityRoutine(r);
+    case "lifestyle": return isLifestyleRoutine(r);
   }
 }
 

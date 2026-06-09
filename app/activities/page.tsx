@@ -27,6 +27,8 @@ const FAMILY_DASHBOARD_HREF: Record<ActivityFamily, string> = {
   sports: "/activities/sports",
   strength: "/activities/strength",
   "body-work": "/activities/body-work",
+  mobility: "/activities/mobility",
+  lifestyle: "/activities/lifestyle",
 };
 
 export default async function ActivitiesPage() {
