@@ -16,6 +16,7 @@ import {
   shouldAutoScheduleRoutine,
   isRoutineAutoScheduledOnDay,
 } from "@/lib/routine-frequency";
+import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 
 export type DayEntryStatus = "done" | "partial" | "planned" | "missed" | "future" | "loggedExtra";
 
@@ -114,8 +115,14 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
 
   // ── Queries ─────────────────────────────────────────────────────────────
   const [rawRoutines, manualRaw, logsRaw, planEntriesRaw, activeCyclesRaw] = await Promise.all([
+    // NOTE: isPlaceholder filter intentionally removed. Synthetic-endurance
+    // and synthetic-sport routines carry isPlaceholder=true (see
+    // lib/synthetic-sport-routines.ts + lib/activity-types.ts). They're
+    // never user-schedulable but every cardio/sport log lives under them,
+    // so they need to land in routineMap or those logs get dropped during
+    // entry construction.
     prisma.routine.findMany({
-      where: { isDeleted: false, isPlaceholder: false, isActive: true },
+      where: { isDeleted: false, isActive: true },
       include: {
         frequencyGoalRoutines: {
           include: {
@@ -156,6 +163,9 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         routineId: true,
         performedAt: true,
         routine: { select: { name: true, domain: true, kind: true, subtype: true } },
+        // For endurance logs the displayed name comes from the activityType
+        // (Run / Bike / Swim), not the synthetic routine ("Endurance").
+        activityType: { select: { name: true } },
       },
     }),
     prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; startDate: Date; cycleLengthDays: number }>>(
@@ -185,8 +195,10 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     cycleLengthDays: Number(entry.cycleLengthDays),
   }));
 
-  // logs grouped: per-day map of routineId → { count, latestLogId }
-  type LogBucket = { count: number; latestLogId: string };
+  // logs grouped: per-day map of routineId → { count, latestLogId, latestActivityTypeName }.
+  // latestActivityTypeName surfaces "Run"/"Bike"/"Swim" for endurance days
+  // instead of the generic synthetic routine name "Endurance".
+  type LogBucket = { count: number; latestLogId: string; latestActivityTypeName: string | null };
   const logsByDayByRoutine = new Map<string, Map<string, LogBucket>>();
   const totalsByDomain = new Map<string, number>();
   const daysLoggedSet = new Set<string>();
@@ -205,8 +217,16 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     if (existing) {
       existing.count += 1;
       existing.latestLogId = log.id;
+      // Keep the latest activity-type name — logs are oldest→newest so the
+      // last write wins. Falls back to the previous name if this log has
+      // no type (legacy log).
+      existing.latestActivityTypeName = log.activityType?.name ?? existing.latestActivityTypeName;
     } else {
-      dayBuckets.set(log.routineId, { count: 1, latestLogId: log.id });
+      dayBuckets.set(log.routineId, {
+        count: 1,
+        latestLogId: log.id,
+        latestActivityTypeName: log.activityType?.name ?? null,
+      });
     }
   }
 
@@ -257,19 +277,26 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       const loggedCount = bucket?.count ?? 0;
       const latestLogId = bucket?.latestLogId ?? null;
       const status: DayEntryStatus = computeStatus(plannedCount, loggedCount, isPast, isFuture);
+      // Display name resolution:
+      //   • synthetic endurance routine → activityType name ("Run", "Bike"…)
+      //     so the user can tell what they actually did; falls back to
+      //     the literal routine name when no logs exist yet (scheduled
+      //     future days).
+      //   • synthetic sport routine → routine.name already IS the sport
+      //     ("Climbing", "Surfing") so it's meaningful as-is.
+      //   • everything else → routine.name.
+      const displayName =
+        routineId === SYNTHETIC_ENDURANCE_ROUTINE_ID && bucket?.latestActivityTypeName
+          ? bucket.latestActivityTypeName
+          : r.name;
       entries.push({
         routineId,
-        routineName: r.name,
+        routineName: displayName,
         domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
         planned: plannedCount,
         logged: loggedCount,
         status,
         latestLogId,
-        // shouldAutoScheduleRoutine returns true exactly when this routine
-        // has a DAY/1, WEEK/7, or weekday-mask frequency goal — i.e. it
-        // fires (or is expected to fire) every day. That's the lens that
-        // matches the user's "daily habit" intuition for the calendar
-        // pill, regardless of domain.
         isHabit: shouldAutoScheduleRoutine(r),
       });
     }
