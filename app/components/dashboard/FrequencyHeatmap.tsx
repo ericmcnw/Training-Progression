@@ -93,8 +93,26 @@ export default function FrequencyHeatmap({
       : `${target.targetCount}× / ${target.targetInterval} ${targetUnitLabel}s`;
   const maskLabel = weekdayMask ? formatMaskLabel(weekdayMask) : null;
 
-  // Tick spacing scales with range — every tick for short ranges, every 2 or 4 for longer.
-  const tickEvery = WEEKS <= 12 ? 1 : WEEKS <= 26 ? 2 : 4;
+  // Month-boundary ticks: each week starts on Sunday; we label only the
+  // weeks that begin a new month (compared to the previous week's month).
+  // Sparse + naturally spaced ~4 weeks apart, so labels can't overlap each
+  // other regardless of cell size. Always show the first week too so the
+  // user has a starting anchor.
+  const monthTicks: Array<{ idx: number; label: string }> = [];
+  let prevMonth = -1;
+  for (let i = 0; i < weeksGrid.length; i++) {
+    const week = weeksGrid[i];
+    const monthIdx = new Date(`${week.weekStartYmd}T00:00:00.000Z`).getUTCMonth();
+    if (i === 0 || monthIdx !== prevMonth) {
+      monthTicks.push({
+        idx: i,
+        label: formatUtcDateLabel(week.weekStartYmd, { month: "short" }),
+      });
+      prevMonth = monthIdx;
+    }
+  }
+  const COLUMN_PX = CELL_SIZE + CELL_GAP;
+  const tickRowWidth = weeksGrid.length * COLUMN_PX - CELL_GAP;
 
   return (
     <div style={shell}>
@@ -170,16 +188,18 @@ export default function FrequencyHeatmap({
             ))}
           </div>
 
-          <div style={{ ...weekTickRow, gridAutoColumns: `${CELL_SIZE}px`, gap: CELL_GAP }}>
-            {weeksGrid.map((week, idx) => {
-              const isLast = idx === weeksGrid.length - 1;
-              const showLabel = idx === 0 || isLast || idx % tickEvery === 0;
-              return (
-                <div key={week.weekStartYmd} style={weekTickCell}>
-                  {showLabel ? formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" }) : ""}
-                </div>
-              );
-            })}
+          <div style={{ ...weekTickRow, width: tickRowWidth }}>
+            {monthTicks.map((tick) => (
+              <span
+                key={tick.idx}
+                style={{
+                  ...monthTickLabel,
+                  left: tick.idx * COLUMN_PX,
+                }}
+              >
+                {tick.label}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -314,18 +334,24 @@ const weekColumn: CSSProperties = {
 };
 
 const weekTickRow: CSSProperties = {
-  display: "grid",
-  gridAutoFlow: "column",
+  position: "relative",
   gridColumn: 2,
   gridRow: 2,
-  paddingTop: 4,
+  height: 14,
+  marginTop: 4,
 };
 
-const weekTickCell: CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  opacity: 0.45,
-  textAlign: "center",
+// Month-boundary ticks are absolutely positioned at left = weekIdx *
+// (CELL_SIZE + CELL_GAP). They never overlap each other because there's
+// always at least ~4 weeks between two month boundaries — so they have
+// natural horizontal breathing room regardless of cell size.
+const monthTickLabel: CSSProperties = {
+  position: "absolute",
+  top: 0,
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  opacity: 0.55,
   whiteSpace: "nowrap",
 };
 
@@ -335,10 +361,15 @@ const legendRow: CSSProperties = {
   flexWrap: "wrap",
 };
 
+// Legend swatches match cell shape — same width:height ratio (square),
+// same border-radius, so the legend reads as a literal key for the grid
+// above. Sized to match the 12px cell-mode for visual consistency at any
+// range without being too small to see.
+const SWATCH_SIZE = 12;
 function swatchStyle({ background, border }: { background: string; border: string }): CSSProperties {
   return {
-    width: 14,
-    height: 10,
+    width: SWATCH_SIZE,
+    height: SWATCH_SIZE,
     borderRadius: 3,
     background,
     border: `1px solid ${border}`,
@@ -361,8 +392,8 @@ const swatchRest: CSSProperties = swatchStyle({
 });
 
 const swatchFuture: CSSProperties = {
-  width: 14,
-  height: 10,
+  width: SWATCH_SIZE,
+  height: SWATCH_SIZE,
   borderRadius: 3,
   background: "transparent",
   border: "1px dashed rgba(255,255,255,0.13)",
