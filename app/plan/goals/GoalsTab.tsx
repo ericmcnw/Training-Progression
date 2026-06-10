@@ -1,32 +1,25 @@
-// Goals tab — consolidated Goals surface. Frequency goals render using
-// Home's HabitGrid (in bare mode, no card chrome) so the two surfaces
-// share one visual language. Non-frequency goals (Performance, Volume,
-// Completion) currently support two parallel layouts so you can pick:
-//   • "cards" — type-tailored cards (Performance shows current → target
-//     with delta; Volume/Completion show progress bars/dots).
-//   • "rows" — unified compact rows, matches frequency-goal styling.
-// Driven by the `goalLayout` query param + a small chip toggle near the
-// section header. Once one is picked we delete the other and drop the
-// toggle.
+// Goals tab — unified tile/row list surface. Replaces the split frequency-
+// heatmap + non-frequency-cards rendering with a single visual language:
+// each goal is a horizontal row with a type-aware progress visual. Per the
+// locked "habit lens = gentle visibility" feedback, behind-pace state is
+// subtle amber on the left edge — not red, no alarm language.
 //
-// Filter: single chip row combining goal type + an Inactive toggle.
-// Default is active-only; pressing Inactive expands to show inactive goals.
+// Sorted by status within each section so user immediately sees what
+// needs attention without aggressive call-outs.
 //
-// Note on data: this tab calls getHomeData() to pick up the precomputed
-// HabitRow[] (same shape Home uses). That's wasteful — getHomeData
-// computes things like movement patterns we don't need here — but
-// extracting computeHabitRows() into a shared lib is a follow-up.
+// Filter: single chip row for goal type + an Inactive toggle. Active-only
+// by default.
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ProgressShell, SectionCard } from "@/app/progress/ui";
 import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
-import { getGoalsOverview } from "@/lib/goals";
+import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { getHomeData } from "@/app/_home/data";
-import HabitGrid from "@/app/_home/HabitGrid";
+import type { HabitRow } from "@/app/_home/types";
 import { subtleTextStyle } from "@/app/goals/ui";
-import NonFreqGoals, { type NonFreqLayout } from "./NonFreqGoals";
+import GoalRow from "./GoalRow";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -35,12 +28,11 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function buildGoalsHref(params: { type?: string; active?: string; goalLayout?: string }) {
+function buildGoalsHref(params: { type?: string; active?: string }) {
   const search = new URLSearchParams();
   search.set("tab", "goals");
   if (params.type && params.type !== "all") search.set("type", params.type);
   if (params.active && params.active !== "active") search.set("active", params.active);
-  if (params.goalLayout && params.goalLayout !== "cards") search.set("goalLayout", params.goalLayout);
   return `/plan?${search.toString()}`;
 }
 
@@ -52,19 +44,26 @@ const TYPE_CHIPS = [
   { value: "COMPLETION", label: "Completion" },
 ] as const;
 
-const LAYOUT_CHIPS: Array<{ value: NonFreqLayout; label: string }> = [
-  { value: "cards", label: "Cards" },
-  { value: "rows", label: "Rows" },
-];
+// Sort goals by attention need so behind / at-risk surface first without
+// any "Needs Attention" callout — the gentle-lens decision rules out the
+// aggressive variant.
+const STATUS_ORDER: Record<string, number> = {
+  at_risk: 0,
+  behind: 1,
+  on_track: 2,
+  ahead: 3,
+  complete: 4,
+};
 
-function parseLayout(raw: string | undefined): NonFreqLayout {
-  return raw === "rows" ? "rows" : "cards";
-}
+type GoalRowEntry = {
+  insight: GoalInsight;
+  habitRow?: HabitRow;
+  sortKey: number;
+};
 
 export default async function GoalsTab({ searchParams }: { searchParams: SearchParams }) {
   const type = getParam(searchParams, "type") ?? "all";
   const active = getParam(searchParams, "active") ?? "active";
-  const goalLayout = parseLayout(getParam(searchParams, "goalLayout"));
   const showInactive = active === "all" || active === "inactive";
 
   const [allGoals, homeData] = await Promise.all([
@@ -72,11 +71,38 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
     getHomeData(),
   ]);
 
-  const otherGoals = allGoals.filter((e) => e.goal.goalType !== "FREQUENCY");
-  const frequencyRows = homeData.habitRows;
+  // Map habit rows by goal id so each FREQUENCY GoalInsight gets paired
+  // with its dailyState data for the week-strip visual. Non-frequency
+  // goals render through the scalar progress visual using
+  // GoalInsight.actualDisplay / targetDisplay / fractionComplete only.
+  const habitByGoalId = new Map<string, HabitRow>();
+  for (const row of homeData.habitRows) {
+    habitByGoalId.set(row.goalId, row);
+  }
 
-  const showFrequency = (type === "all" || type === "FREQUENCY") && frequencyRows.length > 0;
-  const showOthers = (type === "all" || type !== "FREQUENCY") && otherGoals.length > 0;
+  const entries: GoalRowEntry[] = allGoals.map((insight) => {
+    const habitRow = insight.goal.goalType === "FREQUENCY"
+      ? habitByGoalId.get(insight.goal.id)
+      : undefined;
+    const statusKey = habitRow
+      ? habitRow.status
+      : insight.isAchieved
+        ? "complete"
+        : insight.fractionComplete >= 0.6
+          ? "on_track"
+          : insight.fractionComplete >= 0.3
+            ? "behind"
+            : "at_risk";
+    return {
+      insight,
+      habitRow,
+      sortKey: (STATUS_ORDER[statusKey] ?? 99) * 1000 + (1 - insight.fractionComplete) * 10,
+    };
+  });
+
+  entries.sort((a, b) => a.sortKey - b.sortKey);
+
+  const hasEntries = entries.length > 0;
 
   return (
     <ProgressShell
@@ -87,7 +113,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
       navLabel="Filter"
       navHint="Filter by goal type."
       navItems={TYPE_CHIPS.map((chip) => ({
-        href: buildGoalsHref({ type: chip.value, active, goalLayout }),
+        href: buildGoalsHref({ type: chip.value, active }),
         label: chip.label,
         active: chip.value === type,
       }))}
@@ -100,7 +126,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
       <SectionCard title="Goals">
         <div style={topRowStyle}>
           <Link
-            href={buildGoalsHref({ type, active: showInactive ? "active" : "all", goalLayout })}
+            href={buildGoalsHref({ type, active: showInactive ? "active" : "all" })}
             style={{
               ...inactivePillStyle,
               ...(showInactive ? inactivePillActiveStyle : {}),
@@ -110,53 +136,19 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
           </Link>
         </div>
 
-        {!showFrequency && !showOthers ? (
+        {!hasEntries ? (
           <div style={subtleTextStyle}>No goals match the current filters.</div>
         ) : (
-          <>
-            {showFrequency ? (
-              <>
-                {showOthers ? <div style={sectionSubheadStyle}>Frequency</div> : null}
-                <HabitGrid rows={frequencyRows} today={homeData.today} chrome="bare" />
-              </>
-            ) : null}
-
-            {showFrequency && showOthers ? <div style={sectionDividerStyle} /> : null}
-
-            {showOthers ? (
-              <>
-                {/* Layout toggle — only shown while we're A/B-ing the two
-                    designs. Once one is picked, remove this chip pair and
-                    the parseLayout/layout-aware code. */}
-                <div style={layoutToggleRow}>
-                  {showFrequency ? (
-                    <div style={sectionSubheadStyle}>Performance &amp; Other</div>
-                  ) : <div />}
-                  <div style={layoutToggleGroup} role="group" aria-label="Goal card layout">
-                    <span style={layoutToggleLabel}>Layout:</span>
-                    {LAYOUT_CHIPS.map((chip) => {
-                      const isActive = chip.value === goalLayout;
-                      return (
-                        <Link
-                          key={chip.value}
-                          href={buildGoalsHref({ type, active, goalLayout: chip.value })}
-                          replace
-                          style={{
-                            ...layoutChipStyle,
-                            ...(isActive ? layoutChipActiveStyle : {}),
-                          }}
-                        >
-                          {chip.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <NonFreqGoals entries={otherGoals} layout={goalLayout} />
-              </>
-            ) : null}
-          </>
+          <div style={listStyle}>
+            {entries.map((entry) => (
+              <GoalRow
+                key={entry.insight.goal.id}
+                insight={entry.insight}
+                habitRow={entry.habitRow}
+                today={homeData.today}
+              />
+            ))}
+          </div>
         )}
       </SectionCard>
     </ProgressShell>
@@ -188,18 +180,9 @@ const inactivePillActiveStyle: CSSProperties = {
   fontWeight: 900,
 };
 
-const sectionSubheadStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  opacity: 0.45,
-  textTransform: "uppercase",
-  letterSpacing: 0.6,
-};
-
-const sectionDividerStyle: CSSProperties = {
-  height: 1,
-  background: "rgba(128,128,128,0.16)",
-  margin: "16px 0",
+const listStyle: CSSProperties = {
+  display: "grid",
+  gap: 8,
 };
 
 const drawerCtaStyle: CSSProperties = {
@@ -212,48 +195,3 @@ const drawerCtaStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const layoutToggleRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 10,
-  flexWrap: "wrap",
-  marginBottom: 8,
-};
-
-const layoutToggleGroup: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  padding: 3,
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-};
-
-const layoutToggleLabel: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.4,
-  textTransform: "uppercase",
-  color: "rgba(255,255,255,0.45)",
-  paddingInline: 6,
-};
-
-const layoutChipStyle: CSSProperties = {
-  padding: "4px 12px",
-  borderRadius: 999,
-  textDecoration: "none",
-  color: "rgba(255,255,255,0.65)",
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: 0.2,
-  background: "transparent",
-  border: "1px solid transparent",
-};
-
-const layoutChipActiveStyle: CSSProperties = {
-  background: "rgba(51,255,122,0.12)",
-  color: "rgba(51,255,122,0.95)",
-  border: "1px solid rgba(51,255,122,0.40)",
-};
