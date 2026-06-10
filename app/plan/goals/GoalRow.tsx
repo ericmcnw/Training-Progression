@@ -246,9 +246,9 @@ function iconBlockStyle(accent: typeof TYPE_ACCENT[string]): CSSProperties {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     background: accent.bg,
     border: `1px solid ${accent.border}`,
     flexShrink: 0,
@@ -257,7 +257,7 @@ function iconBlockStyle(accent: typeof TYPE_ACCENT[string]): CSSProperties {
 
 function iconGlyphStyle(accent: typeof TYPE_ACCENT[string]): CSSProperties {
   return {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 900,
     color: accent.color,
     lineHeight: 1,

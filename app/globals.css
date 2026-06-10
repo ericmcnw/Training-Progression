@@ -1817,8 +1817,9 @@ input.ghostInput::placeholder {
     padding: 10px 12px !important;
   }
   .goalRowIcon {
-    width: 32px !important;
-    height: 32px !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
   }
   .goalRowName {
     font-size: 13px !important;
