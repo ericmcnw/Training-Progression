@@ -740,6 +740,7 @@ const starterExercises = [
   { name: "Skull Crusher", unit: "REPS", supportsWeight: true, metadata: ["triceps", "push", "upper-body"] },
   { name: "Lateral Raise", unit: "REPS", supportsWeight: true, metadata: ["shoulders", "push", "upper-body"] },
   { name: "Dumbbell Lateral Raise", unit: "REPS", supportsWeight: true, metadata: ["shoulders", "push", "upper-body"] },
+  { name: "Dumbbell Front Raise", unit: "REPS", supportsWeight: true, metadata: ["shoulders", "push", "upper-body"] },
   { name: "Rear Delt Fly", unit: "REPS", supportsWeight: true, metadata: ["shoulders", "back", "pull", "upper-body"] },
   { name: "Dumbbell Romanian Deadlift", unit: "REPS", supportsWeight: true, metadata: ["hamstrings", "glutes", "legs", "lower-body", "hinge"] },
   { name: "Dumbbell Front Squat", unit: "REPS", supportsWeight: true, metadata: ["quads", "core", "legs", "lower-body", "squat"] },
