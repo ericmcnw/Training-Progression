@@ -149,6 +149,21 @@ export default function FormDrawer() {
     close();
   }, [close]);
 
+  // Escape-key close — mobile sheets hide the backdrop, so without this the
+  // user is one mis-tap on the X button away from being stuck. Re-checks
+  // the dirty prompt the same as the X button / backdrop.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleBackdropClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, handleBackdropClose]);
+
   function markDirty() {
     dirtyRef.current = true;
   }
@@ -180,12 +195,6 @@ export default function FormDrawer() {
           style={drawerBodyStyle}
           onInput={markDirty}
           onChange={markDirty}
-          onPointerDown={(e) => {
-            // Treat any direct interaction inside the form area as dirty —
-            // covers toggles, custom widgets, and checkboxes that don't fire
-            // `input`/`change` reliably.
-            if (e.target !== e.currentTarget) markDirty();
-          }}
         >
           {loading && <FormSkeleton />}
           {error && (
@@ -266,8 +275,8 @@ const drawerHeaderStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: 12,
-  padding: "0 16px",
-  height: 52,
+  padding: "8px 12px 8px 16px",
+  minHeight: 56,
   borderBottom: "1px solid rgba(255,255,255,0.09)",
   background: "rgba(255,255,255,0.03)",
   flexShrink: 0,
@@ -285,15 +294,16 @@ const closeBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 32,
-  height: 32,
+  width: 44,
+  height: 44,
   padding: 0,
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 999,
-  color: "rgba(255,255,255,0.75)",
+  color: "rgba(255,255,255,0.85)",
   cursor: "pointer",
   flexShrink: 0,
+  touchAction: "manipulation",
 };
 
 const drawerBodyStyle: React.CSSProperties = {

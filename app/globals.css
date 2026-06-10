@@ -1804,3 +1804,39 @@ input.ghostInput::placeholder {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
+
+/* ── Plan/Goals row — mobile tightening ──────────────────────────────────
+   At 360-414px viewport widths the fixed 140px scalar block + status
+   label crowded the goal name into 2-line wrap. On mobile: shrink the
+   scalar block, tighten the dot row, hide the verbose status label
+   (the colored dot still conveys state, aria-label preserves it for AT). */
+@media (max-width: 720px) {
+  .goalRow {
+    grid-template-columns: auto minmax(0, 1fr) auto auto !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+  }
+  .goalRowIcon {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .goalRowName {
+    font-size: 13px !important;
+  }
+  .goalRowMeta {
+    font-size: 10px !important;
+  }
+  .goalRowScalar {
+    width: 96px !important;
+  }
+  .goalRowDotRow {
+    gap: 3px !important;
+  }
+  .goalRowDot {
+    width: 10px !important;
+    height: 10px !important;
+  }
+  .goalRowStatusLabel {
+    display: none !important;
+  }
+}

@@ -80,24 +80,24 @@ export default function GoalRow({
   const detailHref = insight.detailHref ?? `/plan/goals/${encodeURIComponent(insight.goal.id)}`;
 
   return (
-    <Link href={detailHref} style={rowStyle(accent, statusKey)}>
-      <div style={iconBlockStyle(accent)} aria-hidden>
+    <Link href={detailHref} className="goalRow" style={rowStyle(accent, statusKey)}>
+      <div className="goalRowIcon" style={iconBlockStyle(accent)} aria-hidden>
         <span style={iconGlyphStyle(accent)}>{icon}</span>
       </div>
 
       <div style={textBlockStyle}>
         <div style={nameLineStyle}>
-          <span style={nameStyle}>{insight.goal.name}</span>
+          <span className="goalRowName" style={nameStyle}>{insight.goal.name}</span>
           {!insight.goal.isActive ? <span style={inactiveChipStyle}>Inactive</span> : null}
         </div>
-        <div style={metaLineStyle}>
+        <div className="goalRowMeta" style={metaLineStyle}>
           <span>{insight.timeframeLabel}</span>
           <span style={metaDotStyle} aria-hidden>·</span>
           <span style={{ opacity: 0.85 }}>{insight.targetKindLabel}</span>
         </div>
       </div>
 
-      <div style={progressBlockStyle}>
+      <div className="goalRowProgress" style={progressBlockStyle}>
         {insight.goal.goalType === "FREQUENCY" && habitRow ? (
           <FrequencyVisual habitRow={habitRow} today={today} accent={accent} />
         ) : (
@@ -105,7 +105,7 @@ export default function GoalRow({
         )}
       </div>
 
-      <div style={statusBlockStyle}>
+      <div className="goalRowStatus" style={statusBlockStyle}>
         <span
           aria-hidden
           style={{
@@ -113,9 +113,16 @@ export default function GoalRow({
             height: 8,
             borderRadius: 999,
             background: STATUS_COLOR[statusKey],
+            flexShrink: 0,
           }}
         />
-        <span style={statusLabelStyle}>{STATUS_LABEL[statusKey]}</span>
+        <span
+          className="goalRowStatusLabel"
+          style={statusLabelStyle}
+          aria-label={STATUS_LABEL[statusKey]}
+        >
+          {STATUS_LABEL[statusKey]}
+        </span>
       </div>
     </Link>
   );
@@ -139,7 +146,7 @@ function FrequencyVisual({
   const todayIndex = last7.findIndex((d) => d.ymd === today);
   return (
     <div style={frequencyBlockStyle}>
-      <div style={dotRowStyle}>
+      <div className="goalRowDotRow" style={dotRowStyle}>
         {last7.map((day, i) => {
           const isToday = i === todayIndex;
           return <DayDot key={day.ymd} state={day.state} isToday={isToday} accent={accent} />;
@@ -173,6 +180,7 @@ function DayDot({
       : { background: "transparent", border: "1px dashed rgba(255,255,255,0.10)" };
   return (
     <span
+      className="goalRowDot"
       aria-label={state}
       style={{
         width: 12,
@@ -195,7 +203,7 @@ function ScalarVisual({
 }) {
   const pct = Math.min(100, Math.max(0, Math.round(insight.fractionComplete * 100)));
   return (
-    <div style={scalarBlockStyle}>
+    <div className="goalRowScalar" style={scalarBlockStyle}>
       <div style={scalarLineStyle}>
         <span style={scalarValueStyle}>{insight.actualDisplay}</span>
         <span style={scalarTargetStyle}>/ {insight.targetDisplay}</span>
