@@ -112,6 +112,21 @@ const TYPE_ACCENT: Record<GoalTypeValue, { color: string; bg: string; border: st
   COMPLETION:  { color: "rgb(74,222,128)",  bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.5)"  },
 };
 
+// Icons for each scope value. Match the activity-first mental model — what
+// is this goal *about*. Sport uses the same lightning bolt the Sport domain
+// uses elsewhere; endurance uses the runner; routine + group + exercise use
+// neutral shapes; sessionType + grade carry climbing-leaning glyphs since
+// those scopes are the climbing-detail paths in practice today.
+const SCOPE_ICON: Record<string, string> = {
+  routine:     "📋",
+  sport:       "⚡",
+  endurance:   "🏃",
+  exercise:    "💪",
+  group:       "🔗",
+  sessionType: "🎯",
+  grade:       "🧗",
+};
+
 type ScopeOption = { value: string; label: string; hint: string };
 
 // Activity-first scope model — what are you setting the goal for? Routine,
@@ -509,10 +524,10 @@ export default function GoalForm({
         </div>
       </div>
 
-      {/* ── Step 2: Scope ────────────────────────────────────────── */}
+      {/* ── Step 2: Scope (activity-first tile picker) ──────────── */}
       <div>
-        <div style={stepLabelStyle}>Scope</div>
-        <div style={pillRowStyle}>
+        <div style={stepLabelStyle}>What are you tracking?</div>
+        <div style={scopeGridStyle}>
           {visibleScopes.map(s => {
             const isActive = scope === s.value;
             return (
@@ -521,19 +536,22 @@ export default function GoalForm({
                 type="button"
                 onClick={() => handleScopeChange(s.value)}
                 style={{
-                  ...scopePillStyle,
-                  borderColor: isActive ? accent.border : "rgba(128,128,128,0.28)",
-                  background:  isActive ? accent.bg     : "transparent",
-                  fontWeight:  isActive ? 900 : 700,
-                  color:       isActive ? accent.color  : "inherit",
+                  ...scopeCardStyle,
+                  borderColor: isActive ? accent.border : "rgba(128,128,128,0.22)",
+                  background:  isActive ? accent.bg     : "rgba(128,128,128,0.04)",
                 }}
               >
-                {s.label}
+                <div style={{ fontSize: 20, lineHeight: 1, opacity: isActive ? 1 : 0.55 }}>
+                  {SCOPE_ICON[s.value] ?? "•"}
+                </div>
+                <div style={{ fontWeight: 900, fontSize: 12, marginTop: 6, color: isActive ? accent.color : "inherit" }}>
+                  {s.label}
+                </div>
               </button>
             );
           })}
         </div>
-        <div style={{ ...hintStyle, marginTop: 7 }}>
+        <div style={{ ...hintStyle, marginTop: 8 }}>
           {visibleScopes.find(s => s.value === scope)?.hint}
         </div>
       </div>
@@ -604,16 +622,48 @@ export default function GoalForm({
             </div>
           </div>
 
-          <div style={detailCardStyle}>
-            <div style={stepLabelStyle}>Included</div>
-            <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked sport or routine count toward this goal.</div>
-            {(options.sportTargets ?? []).length > 0 ? (
-              <div style={sectionStack}>
-                <div style={groupSubLabel}>Sports</div>
+          {/* Target picker — branches per scope so each shape gets the
+              right primary UI.
+              - endurance: EndurancePicker (family/type triggers) is THE
+                target. No routine roster needed — the matcher matches via
+                triggers alone.
+              - sport: single-sport tile picker; the chosen sport's
+                synthetic routine becomes the PRIMARY routine link.
+              - group: existing multi-select sport tiles + routine cards. */}
+          {scope === "endurance" ? (
+            <div style={detailCardStyle}>
+              <div style={stepLabelStyle}>Endurance target</div>
+              <div style={{ ...hintStyle, marginBottom: 10 }}>
+                Pick a family (any activity in it counts) or specific types. Logs against the synthetic Endurance routine carrying these activity types fire the goal.
+              </div>
+              {/* Hidden inputs so the EndurancePicker's selected ids submit
+                  even though the standard TriggerSection isn't rendered. */}
+              {triggerActivityTypeIds.map((id) => (
+                <input key={`endurance-tat-${id}`} type="hidden" name="triggerActivityTypeIds" value={id} />
+              ))}
+              {triggerActivityFamilyIds.map((id) => (
+                <input key={`endurance-taf-${id}`} type="hidden" name="triggerActivityFamilyIds" value={id} />
+              ))}
+              <EndurancePicker
+                typeOptions={options.activityTypes ?? []}
+                familyOptions={options.activityFamilies ?? []}
+                selectedTypeIds={triggerActivityTypeIds}
+                selectedFamilyIds={triggerActivityFamilyIds}
+                onChangeTypes={setTriggerActivityTypeIds}
+                onChangeFamilies={setTriggerActivityFamilyIds}
+              />
+            </div>
+          ) : scope === "sport" ? (
+            <div style={detailCardStyle}>
+              <div style={stepLabelStyle}>Sport</div>
+              <div style={{ ...hintStyle, marginBottom: 10 }}>
+                Pick the sport you&apos;re tracking. Any session logged for that sport counts toward this goal.
+              </div>
+              {(options.sportTargets ?? []).length > 0 ? (
                 <div style={sportTileGrid}>
                   {(options.sportTargets ?? []).map((s) => (
                     <SportCheckboxTile
-                      key={`primary-${s.id}`}
+                      key={`sport-${s.id}`}
                       name="routineIds"
                       value={s.id}
                       label={s.label}
@@ -624,91 +674,137 @@ export default function GoalForm({
                     />
                   ))}
                 </div>
-              </div>
-            ) : null}
-            {options.routines.length > 0 ? (
-              <div style={sectionStack}>
-                {(options.sportTargets ?? []).length > 0 ? (
-                  <div style={groupSubLabel}>Routines</div>
-                ) : null}
-                <div style={routineCardGrid}>
-                  {options.routines.map(r => (
-                    <RoutineCheckboxCard
-                      key={`primary-${r.id}`}
-                      name="routineIds"
-                      value={r.id}
-                      label={r.label}
-                      subtitle={r.subtitle}
-                      defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
-                      tone="primary"
-                    />
-                  ))}
+              ) : (
+                <div style={hintStyle}>
+                  No sports enabled yet. Add a sport from <strong>/activities/sports</strong> first, then come back.
                 </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div style={detailCardStyle}>
-            <div style={stepLabelStyle}>Covered by</div>
-            <div style={{ ...hintStyle, marginBottom: 10 }}>
-              Days where one of these fires (but no included item does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another.
+              )}
             </div>
-            {(options.sportTargets ?? []).length > 0 ? (
-              <div style={sectionStack}>
-                <div style={groupSubLabel}>Sports</div>
-                <div style={sportTileGrid}>
-                  {(options.sportTargets ?? []).map((s) => (
-                    <SportCheckboxTile
-                      key={`sub-${s.id}`}
-                      name="substituteRoutineIds"
-                      value={s.id}
-                      label={s.label}
-                      eyebrow={s.eyebrow}
-                      color={s.color}
-                      defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(s.id) ?? false}
-                      tone="substitute"
-                    />
-                  ))}
+          ) : (
+            <div style={detailCardStyle}>
+              <div style={stepLabelStyle}>Included</div>
+              <div style={{ ...hintStyle, marginBottom: 10 }}>Sessions from any checked sport or routine count toward this goal.</div>
+              {(options.sportTargets ?? []).length > 0 ? (
+                <div style={sectionStack}>
+                  <div style={groupSubLabel}>Sports</div>
+                  <div style={sportTileGrid}>
+                    {(options.sportTargets ?? []).map((s) => (
+                      <SportCheckboxTile
+                        key={`primary-${s.id}`}
+                        name="routineIds"
+                        value={s.id}
+                        label={s.label}
+                        eyebrow={s.eyebrow}
+                        color={s.color}
+                        defaultChecked={initial.groupFrequency?.routineIds.includes(s.id) ?? false}
+                        tone="primary"
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            {options.routines.length > 0 ? (
-              <div style={sectionStack}>
-                {(options.sportTargets ?? []).length > 0 ? (
-                  <div style={groupSubLabel}>Routines</div>
-                ) : null}
-                <div style={routineCardGrid}>
-                  {options.routines.map(r => (
-                    <RoutineCheckboxCard
-                      key={`sub-${r.id}`}
-                      name="substituteRoutineIds"
-                      value={r.id}
-                      label={r.label}
-                      subtitle={r.subtitle}
-                      defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
-                      tone="substitute"
-                    />
-                  ))}
+              ) : null}
+              {options.routines.length > 0 ? (
+                <div style={sectionStack}>
+                  {(options.sportTargets ?? []).length > 0 ? (
+                    <div style={groupSubLabel}>Routines</div>
+                  ) : null}
+                  <div style={routineCardGrid}>
+                    {options.routines.map(r => (
+                      <RoutineCheckboxCard
+                        key={`primary-${r.id}`}
+                        name="routineIds"
+                        value={r.id}
+                        label={r.label}
+                        subtitle={r.subtitle}
+                        defaultChecked={initial.groupFrequency?.routineIds.includes(r.id) ?? false}
+                        tone="primary"
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          )}
 
-          <TriggerSection
-            exerciseOptions={options.exercises}
-            activityTypeOptions={options.activityTypes ?? []}
-            activityFamilyOptions={options.activityFamilies ?? []}
-            triggerExerciseIds={triggerExerciseIds}
-            setTriggerExerciseIds={setTriggerExerciseIds}
-            triggerSubtypes={triggerSubtypes}
-            setTriggerSubtypes={setTriggerSubtypes}
-            triggerActivityTypeIds={triggerActivityTypeIds}
-            setTriggerActivityTypeIds={setTriggerActivityTypeIds}
-            triggerActivityFamilyIds={triggerActivityFamilyIds}
-            setTriggerActivityFamilyIds={setTriggerActivityFamilyIds}
-            triggerMinSets={triggerMinSets}
-            setTriggerMinSets={setTriggerMinSets}
-          />
+          {/* "Covered by" — substitute routines.
+              - endurance: hidden. Substitutes don't make sense for activity-
+                type targets (you can't "stand in for running" with another
+                activity — pick the family if you want broader matching).
+              - sport + group: shown. e.g. a strength routine can cover a
+                climb day, or a hike can cover a run for "Cardio". */}
+          {scope !== "endurance" ? (
+            <div style={detailCardStyle}>
+              <div style={stepLabelStyle}>Covered by</div>
+              <div style={{ ...hintStyle, marginBottom: 10 }}>
+                Days where one of these fires (but no included item does) render as <strong>covered</strong> instead of missed and keep the streak alive — useful when one activity stands in for another.
+              </div>
+              {(options.sportTargets ?? []).length > 0 ? (
+                <div style={sectionStack}>
+                  <div style={groupSubLabel}>Sports</div>
+                  <div style={sportTileGrid}>
+                    {(options.sportTargets ?? []).map((s) => (
+                      <SportCheckboxTile
+                        key={`sub-${s.id}`}
+                        name="substituteRoutineIds"
+                        value={s.id}
+                        label={s.label}
+                        eyebrow={s.eyebrow}
+                        color={s.color}
+                        defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(s.id) ?? false}
+                        tone="substitute"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {options.routines.length > 0 ? (
+                <div style={sectionStack}>
+                  {(options.sportTargets ?? []).length > 0 ? (
+                    <div style={groupSubLabel}>Routines</div>
+                  ) : null}
+                  <div style={routineCardGrid}>
+                    {options.routines.map(r => (
+                      <RoutineCheckboxCard
+                        key={`sub-${r.id}`}
+                        name="substituteRoutineIds"
+                        value={r.id}
+                        label={r.label}
+                        subtitle={r.subtitle}
+                        defaultChecked={initial.groupFrequency?.substituteRoutineIds?.includes(r.id) ?? false}
+                        tone="substitute"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* TriggerSection — power-user broadeners.
+              - endurance: hidden. EndurancePicker is THE target, not a
+                trigger; no extra triggers needed.
+              - sport: shown but the nested EndurancePicker is hidden
+                (`hideEndurancePicker`) since family/type triggers don't
+                conceptually fit a sport-scoped goal.
+              - group: full TriggerSection. */}
+          {scope !== "endurance" ? (
+            <TriggerSection
+              exerciseOptions={options.exercises}
+              activityTypeOptions={options.activityTypes ?? []}
+              activityFamilyOptions={options.activityFamilies ?? []}
+              triggerExerciseIds={triggerExerciseIds}
+              setTriggerExerciseIds={setTriggerExerciseIds}
+              triggerSubtypes={triggerSubtypes}
+              setTriggerSubtypes={setTriggerSubtypes}
+              triggerActivityTypeIds={triggerActivityTypeIds}
+              setTriggerActivityTypeIds={setTriggerActivityTypeIds}
+              triggerActivityFamilyIds={triggerActivityFamilyIds}
+              setTriggerActivityFamilyIds={setTriggerActivityFamilyIds}
+              triggerMinSets={triggerMinSets}
+              setTriggerMinSets={setTriggerMinSets}
+              hideEndurancePicker={scope === "sport"}
+            />
+          ) : null}
         </>
       ) : (
         /* ── Step 3b: Standard detail fields ───────────────────── */
@@ -1101,6 +1197,29 @@ const scopePillStyle: React.CSSProperties = {
   borderRadius: 999,
   fontSize: 13,
   cursor: "pointer",
+};
+
+// Activity-first scope tiles — same visual language as the goal-type tiles
+// up top (typeCardStyle / typeGridStyle), just sized down a bit since there
+// are more of them and they share a row.
+const scopeGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))",
+  gap: 8,
+};
+
+const scopeCardStyle: React.CSSProperties = {
+  padding: "12px 8px",
+  border: "1px solid",
+  borderRadius: 12,
+  textAlign: "center",
+  cursor: "pointer",
+  color: "inherit",
+  minHeight: 76,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const hintStyle: React.CSSProperties = {
@@ -1601,6 +1720,7 @@ function TriggerSection({
   setTriggerActivityFamilyIds,
   triggerMinSets,
   setTriggerMinSets,
+  hideEndurancePicker = false,
 }: {
   exerciseOptions: TriggerExerciseOption[];
   activityTypeOptions: GoalActivityTypeOption[];
@@ -1615,6 +1735,11 @@ function TriggerSection({
   setTriggerActivityFamilyIds: (ids: string[]) => void;
   triggerMinSets: string;
   setTriggerMinSets: (value: string) => void;
+  /** When true, suppress the EndurancePicker block inside this section.
+   *  Used when EndurancePicker is rendered as the primary target elsewhere
+   *  (endurance scope) or when family/type triggers don't conceptually fit
+   *  the scope (sport scope). */
+  hideEndurancePicker?: boolean;
 }) {
   const totalCount =
     triggerExerciseIds.length +
@@ -1673,8 +1798,11 @@ function TriggerSection({
         {/* Endurance type + family picker — present whenever the seed has
             run (activity families exist). Lets the user create
             "Run 3x/wk" (family) or "Trail Run 2x/wk" (specific type)
-            goals without having to wire them to a routine first. */}
-        {activityFamilyOptions.length > 0 && (
+            goals without having to wire them to a routine first.
+            Suppressed via `hideEndurancePicker` when the parent scope
+            already renders it as the primary target (endurance) or
+            when it conceptually doesn't fit (sport). */}
+        {!hideEndurancePicker && activityFamilyOptions.length > 0 && (
           <EndurancePicker
             typeOptions={activityTypeOptions}
             familyOptions={activityFamilyOptions}
