@@ -141,13 +141,13 @@ function DayCell({
       <div style={workoutLane}>
         {workouts.length > 0 ? (
           <>
-            <div className="planMonthDots planMonthDotsMobile" style={dotsRow}>
+            <div className="planMonthDots planMonthDotsMobile" style={dotsRowBase}>
               {mobileWorkouts.map((entry) => (
                 <Dot key={entry.routineId} entry={entry} />
               ))}
               {mobileWorkoutOverflow > 0 ? <Overflow count={mobileWorkoutOverflow} /> : null}
             </div>
-            <div className="planMonthDots planMonthDotsDesktop" style={dotsRow}>
+            <div className="planMonthDots planMonthDotsDesktop" style={dotsRowBase}>
               {desktopWorkouts.map((entry) => (
                 <Dot key={entry.routineId} entry={entry} />
               ))}
@@ -161,7 +161,13 @@ function DayCell({
           frequency goals for the day. */}
       {habitsTotal > 0 ? <HabitPill done={habitsDone} total={habitsTotal} isPast={cell.isPast} /> : null}
 
+      {/* IMPORTANT: `display` is set in CSS (not inline) so the media-
+          query rules can actually toggle it. With `display: flex` set
+          inline, the .planMonthDotsDesktop { display: none } rule loses
+          on specificity and BOTH dot rows render at every viewport,
+          which appeared as doubled dots on each day. */}
       <style>{`
+        .planMonthDotsMobile { display: flex; }
         .planMonthDotsDesktop { display: none; }
         @media (min-width: 720px) {
           .planMonthDotsMobile { display: none; }
@@ -300,8 +306,11 @@ const workoutLane: CSSProperties = {
   alignItems: "flex-start",
 };
 
-const dotsRow: CSSProperties = {
-  display: "flex",
+// NOTE: `display` is intentionally NOT set here. It's controlled by the
+// CSS rules + media query above so .planMonthDotsMobile and
+// .planMonthDotsDesktop can be toggled per viewport. Setting display
+// inline would defeat the media query (inline beats class selectors).
+const dotsRowBase: CSSProperties = {
   flexWrap: "wrap",
   gap: 3,
   alignItems: "center",
