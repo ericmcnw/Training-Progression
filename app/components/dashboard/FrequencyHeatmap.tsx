@@ -1,38 +1,56 @@
 "use client";
 
-// Frequency heatmap — 8-week consistency calendar for the goal detail page.
+// Frequency heatmap — N-week consistency calendar for the goal detail page.
 // Renders a Sun→Sat × N-weeks grid where each cell is colored by daily state
-// (done / missed / rest / future). Today is highlighted with a subtle ring.
+// (done / covered / missed / rest / future).
 //
 // All math comes from lib/frequency-state.ts — this component is purely
-// presentational. The header shows current/longest streak chips and the
-// running window progress.
+// presentational. The parent SectionCard provides title + subtitle now;
+// the streak/window stats moved up to TypeHighlights so this surface stays
+// focused on the calendar itself.
+//
+// Gentle-lens colors (per feedback_habit_lens): "done" uses the goal's
+// type accent (default soft amber for back-compat callers), "missed" is a
+// dim neutral outline — no red anywhere. "Covered" stays cool-blue so the
+// "another routine took care of this day" cue reads as helpful, not as
+// the same as "done".
 //
 // Marked "use client" so the missed-cell back-date affordance can launch
-// the floating log drawer (instead of full-page navigating away from the
-// goal detail). Has no server-only deps so the boundary is cheap.
+// the floating log drawer.
 
 import type { CSSProperties } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
   formatMaskLabel,
-  frequencyStatusColor,
-  frequencyStatusLabel,
   type FrequencyState,
   type FrequencyTarget,
 } from "@/lib/frequency-state";
 
 type WeekRow = { weekStartYmd: string; cells: Array<{ ymd: string }> };
 
-const WEEKS = 8;
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun-first
+
+// Scale cell size to the requested range so longer ranges still fit
+// reasonably — 52 weeks at 16px = ~990px wide, which overflows mobile.
+// The wrapper still allows horizontal scroll for the densest case.
+function cellSizeForWeeks(weeks: number): number {
+  if (weeks <= 12) return 16;
+  if (weeks <= 26) return 12;
+  return 9;
+}
 
 export default function FrequencyHeatmap({
   target,
   state,
   today,
   weekdayMask,
+  // Defaults preserve the legacy "last 8 weeks" view for any non-detail caller.
+  weeks: weeksProp = 8,
+  // Goal-type accent (gentle-lens). Falls back to a soft amber for callers
+  // that don't pass a color so the visual still feels intentional.
+  accentColor = "rgb(251,191,36)",
+  accentBorderColor = "rgba(251,191,36,0.55)",
   // When provided, "missed" cells become clickable links to back-date a log
   // for that exact date+routine. Only single-routine goals supply this —
   // group goals span multiple routines and can't pick one to log against.
@@ -42,25 +60,29 @@ export default function FrequencyHeatmap({
   state: FrequencyState;
   today: string;
   weekdayMask?: number | null;
+  weeks?: number;
+  accentColor?: string;
+  accentBorderColor?: string;
   retroactiveLogRoutineId?: string;
 }) {
   const { openDrawer } = useLogDrawer();
+  const WEEKS = Math.max(4, Math.min(52, Math.floor(weeksProp)));
+  const CELL_SIZE = cellSizeForWeeks(WEEKS);
+  const CELL_GAP = WEEKS > 26 ? 2 : 3;
+
   // Anchor the grid on the most recent Sunday (≤ today). Walk back WEEKS rows.
   const todayDate = new Date(`${today}T00:00:00.000Z`);
   const todayDow = todayDate.getUTCDay();
   const lastWeekStart = addDaysYmd(today, -todayDow);
   const firstWeekStart = addDaysYmd(lastWeekStart, -(WEEKS - 1) * 7);
 
-  const weeks: WeekRow[] = [];
+  const weeksGrid: WeekRow[] = [];
   for (let w = 0; w < WEEKS; w++) {
     const weekStartYmd = addDaysYmd(firstWeekStart, w * 7);
     const cells = Array.from({ length: 7 }, (_, d) => ({ ymd: addDaysYmd(weekStartYmd, d) }));
-    weeks.push({ weekStartYmd, cells });
+    weeksGrid.push({ weekStartYmd, cells });
   }
 
-  const accent = frequencyStatusColor(state.currentWindow.status);
-  const statusLabel = frequencyStatusLabel(state.currentWindow.status);
-  const progressLabel = `${state.currentWindow.progress} / ${state.currentWindow.target}`;
   const targetUnitLabel = target.targetUnit === "DAY" ? "day" : target.targetUnit === "WEEK" ? "week" : "month";
   const cadenceLabel =
     target.targetInterval === 1
@@ -68,96 +90,81 @@ export default function FrequencyHeatmap({
       : `${target.targetCount}× / ${target.targetInterval} ${targetUnitLabel}s`;
   const maskLabel = weekdayMask ? formatMaskLabel(weekdayMask) : null;
 
+  // Tick spacing scales with range — every tick for short ranges, every 2 or 4 for longer.
+  const tickEvery = WEEKS <= 12 ? 1 : WEEKS <= 26 ? 2 : 4;
+
   return (
     <div style={shell}>
-      <div style={headerRow}>
-        <div style={titleBlock}>
-          <div style={titleLine}>Consistency · last 8 weeks</div>
-          <div style={subLine}>
-            <span>{cadenceLabel}</span>
-            {maskLabel ? <span style={subLineDot}>· {maskLabel}</span> : null}
-          </div>
-        </div>
-        <div style={statsRow}>
-          <Stat label="This window" value={progressLabel} accent={accent} />
-          <Stat label="Status" value={statusLabel} accent={accent} />
-          <Stat label="Streak" value={String(Math.max(state.windowStreak, state.currentDayStreak))} accent="rgba(251,146,60,0.95)" />
-          <Stat label="Best" value={String(Math.max(state.longestWindowStreak, state.longestDayStreak))} accent="rgba(132,204,255,0.95)" />
-        </div>
+      <div style={subLine}>
+        <span>{cadenceLabel}</span>
+        {maskLabel ? <span style={subLineDot}>· {maskLabel}</span> : null}
       </div>
 
-      <div style={gridWrap}>
-        <div style={dayLabelCol}>
-          {DAY_LABELS.map((d, i) => (
-            <div key={i} style={dayLabelText}>{d}</div>
-          ))}
-        </div>
+      <div style={scrollWrap}>
+        <div style={gridWrap}>
+          <div style={{ ...dayLabelCol, gap: CELL_GAP }}>
+            {DAY_LABELS.map((d, i) => (
+              <div key={i} style={{ ...dayLabelText, height: CELL_SIZE }}>{d}</div>
+            ))}
+          </div>
 
-        <div style={cellsGrid}>
-          {weeks.map((week) => (
-            <div key={week.weekStartYmd} style={weekColumn}>
-              {week.cells.map(({ ymd }) => {
-                const cellState = state.dailyState[ymd] ?? "rest";
-                const isToday = ymd === today;
-                const isFuture = ymd > today;
-                const dateLabel = formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
-                const cellSx: CSSProperties = { ...cellStyle(cellState, isFuture), ...(isToday ? todayRing : null) };
-                // Missed cells become quick-confirm log links when the goal
-                // is single-routine (group goals can't disambiguate which
-                // routine to back-date for).
-                if (cellState === "missed" && retroactiveLogRoutineId) {
+          <div style={{ ...cellsGrid, gridAutoColumns: `${CELL_SIZE}px`, gap: CELL_GAP }}>
+            {weeksGrid.map((week) => (
+              <div key={week.weekStartYmd} style={{ ...weekColumn, gap: CELL_GAP }}>
+                {week.cells.map(({ ymd }) => {
+                  const cellState = state.dailyState[ymd] ?? "rest";
+                  const isToday = ymd === today;
+                  const isFuture = ymd > today;
+                  const dateLabel = formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
+                  const cellSx: CSSProperties = {
+                    ...cellStyle(cellState, isFuture, CELL_SIZE, accentColor, accentBorderColor),
+                    ...(isToday ? todayRing : null),
+                  };
+                  if (cellState === "missed" && retroactiveLogRoutineId) {
+                    return (
+                      <button
+                        key={ymd}
+                        type="button"
+                        onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
+                        title={`${dateLabel} — missed · tap to log`}
+                        style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, border: cellSx.border ?? "none" }}
+                        aria-label={`Back-date a log for ${dateLabel}`}
+                      />
+                    );
+                  }
                   return (
-                    <button
+                    <div
                       key={ymd}
-                      type="button"
-                      onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
-                      title={`${dateLabel} — missed · tap to log`}
-                      style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, border: "none" }}
-                      aria-label={`Back-date a log for ${dateLabel}`}
+                      title={`${dateLabel} — ${cellState}`}
+                      style={cellSx}
                     />
                   );
-                }
-                return (
-                  <div
-                    key={ymd}
-                    title={`${dateLabel} — ${cellState}`}
-                    style={cellSx}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </div>
-
-        <div style={weekTickRow}>
-          {weeks.map((week, idx) => {
-            const isLast = idx === weeks.length - 1;
-            const showLabel = idx === 0 || isLast || idx % 2 === 0;
-            return (
-              <div key={week.weekStartYmd} style={weekTickCell}>
-                {showLabel ? formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" }) : ""}
+                })}
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          <div style={{ ...weekTickRow, gridAutoColumns: `${CELL_SIZE}px`, gap: CELL_GAP }}>
+            {weeksGrid.map((week, idx) => {
+              const isLast = idx === weeksGrid.length - 1;
+              const showLabel = idx === 0 || isLast || idx % tickEvery === 0;
+              return (
+                <div key={week.weekStartYmd} style={weekTickCell}>
+                  {showLabel ? formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" }) : ""}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       <div style={legendRow}>
-        <Legend swatch={swatchDone} label="Done" />
+        <Legend swatch={swatchStyle({ background: accentColor, border: accentBorderColor })} label="Done" />
         <Legend swatch={swatchCovered} label="Covered by another routine" />
-        <Legend swatch={swatchMissed} label="Missed expected day" />
+        <Legend swatch={swatchMissed} label="Missed" />
         <Legend swatch={swatchRest} label="No expectation" />
         <Legend swatch={swatchFuture} label="Upcoming" />
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return (
-    <div style={statBlock}>
-      <div style={statLabelStyle}>{label}</div>
-      <div style={{ ...statValueStyle, color: accent }}>{value}</div>
     </div>
   );
 }
@@ -171,50 +178,46 @@ function Legend({ swatch, label }: { swatch: CSSProperties; label: string }) {
   );
 }
 
-function cellStyle(state: "done" | "covered" | "missed" | "rest" | "future", isFuture: boolean): CSSProperties {
-  if (isFuture) return { ...cellBase, background: "transparent", border: "1px dashed rgba(255,255,255,0.13)" };
+function cellStyle(
+  state: "done" | "covered" | "missed" | "rest" | "future",
+  isFuture: boolean,
+  size: number,
+  accentColor: string,
+  accentBorderColor: string,
+): CSSProperties {
+  const base: CSSProperties = { width: size, height: size, borderRadius: size <= 10 ? 2 : 3 };
+  if (isFuture) return { ...base, background: "transparent", border: "1px dashed rgba(255,255,255,0.12)" };
   switch (state) {
     case "done":
       return {
-        ...cellBase,
-        background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
-        border: "1px solid rgba(251,191,36,0.55)",
+        ...base,
+        background: accentColor,
+        border: `1px solid ${accentBorderColor}`,
       };
     case "covered":
       return {
-        ...cellBase,
-        background: "linear-gradient(180deg, rgba(132,204,255,0.85), rgba(96,165,250,0.75))",
-        border: "1px solid rgba(132,204,255,0.55)",
+        ...base,
+        background: "rgba(132,204,255,0.55)",
+        border: "1px solid rgba(132,204,255,0.45)",
       };
     case "missed":
+      // Gentle-lens: no red. A dim hollow outline reads as "you intended to
+      // train this day and didn't" without alarm.
       return {
-        ...cellBase,
-        background: "rgba(248,113,113,0.10)",
-        border: "1px solid rgba(248,113,113,0.55)",
+        ...base,
+        background: "transparent",
+        border: "1px solid rgba(255,255,255,0.18)",
       };
     case "rest":
       return {
-        ...cellBase,
-        background: "rgba(255,255,255,0.04)",
+        ...base,
+        background: "rgba(255,255,255,0.035)",
         border: "1px solid rgba(255,255,255,0.06)",
       };
     case "future":
-      return {
-        ...cellBase,
-        background: "transparent",
-        border: "1px dashed rgba(255,255,255,0.13)",
-      };
+      return { ...base, background: "transparent", border: "1px dashed rgba(255,255,255,0.13)" };
   }
 }
-
-const CELL_SIZE = 16;
-const CELL_GAP = 3;
-
-const cellBase: CSSProperties = {
-  width: CELL_SIZE,
-  height: CELL_SIZE,
-  borderRadius: 3,
-};
 
 const todayRing: CSSProperties = {
   outline: "1.5px solid rgba(255,255,255,0.55)",
@@ -223,28 +226,7 @@ const todayRing: CSSProperties = {
 
 const shell: CSSProperties = {
   display: "grid",
-  gap: 12,
-};
-
-const headerRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-  alignItems: "flex-end",
-};
-
-const titleBlock: CSSProperties = {
-  display: "grid",
-  gap: 2,
-};
-
-const titleLine: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.6,
-  textTransform: "uppercase",
-  opacity: 0.7,
+  gap: 10,
 };
 
 const subLine: CSSProperties = {
@@ -259,43 +241,22 @@ const subLineDot: CSSProperties = {
   opacity: 0.8,
 };
 
-const statsRow: CSSProperties = {
-  display: "flex",
-  gap: 14,
-  flexWrap: "wrap",
-};
-
-const statBlock: CSSProperties = {
-  display: "grid",
-  gap: 2,
-  minWidth: 60,
-};
-
-const statLabelStyle: CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 800,
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  opacity: 0.55,
-};
-
-const statValueStyle: CSSProperties = {
-  fontSize: 16,
-  fontWeight: 900,
-  lineHeight: 1.1,
+const scrollWrap: CSSProperties = {
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  paddingBottom: 2,
 };
 
 const gridWrap: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "auto 1fr",
   gridTemplateRows: "auto auto",
-  gap: 8,
+  gap: 6,
   alignItems: "start",
 };
 
 const dayLabelCol: CSSProperties = {
   display: "grid",
-  gap: CELL_GAP,
   paddingTop: 0,
   gridRow: 1,
 };
@@ -306,7 +267,6 @@ const dayLabelText: CSSProperties = {
   textAlign: "right",
   width: 12,
   opacity: 0.55,
-  height: CELL_SIZE,
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-end",
@@ -315,21 +275,16 @@ const dayLabelText: CSSProperties = {
 const cellsGrid: CSSProperties = {
   display: "grid",
   gridAutoFlow: "column",
-  gridAutoColumns: `${CELL_SIZE}px`,
-  gap: CELL_GAP,
   gridRow: 1,
 };
 
 const weekColumn: CSSProperties = {
   display: "grid",
-  gap: CELL_GAP,
 };
 
 const weekTickRow: CSSProperties = {
   display: "grid",
   gridAutoFlow: "column",
-  gridAutoColumns: `${CELL_SIZE}px`,
-  gap: CELL_GAP,
   gridColumn: 2,
   gridRow: 2,
   paddingTop: 4,
@@ -349,38 +304,35 @@ const legendRow: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const swatchBase: CSSProperties = {
+function swatchStyle({ background, border }: { background: string; border: string }): CSSProperties {
+  return {
+    width: 14,
+    height: 10,
+    borderRadius: 3,
+    background,
+    border: `1px solid ${border}`,
+  };
+}
+
+const swatchCovered: CSSProperties = swatchStyle({
+  background: "rgba(132,204,255,0.55)",
+  border: "rgba(132,204,255,0.45)",
+});
+
+const swatchMissed: CSSProperties = swatchStyle({
+  background: "transparent",
+  border: "rgba(255,255,255,0.18)",
+});
+
+const swatchRest: CSSProperties = swatchStyle({
+  background: "rgba(255,255,255,0.035)",
+  border: "rgba(255,255,255,0.06)",
+});
+
+const swatchFuture: CSSProperties = {
   width: 14,
   height: 10,
   borderRadius: 3,
-};
-
-const swatchDone: CSSProperties = {
-  ...swatchBase,
-  background: "linear-gradient(180deg, rgba(251,191,36,0.95), rgba(245,158,11,0.85))",
-  border: "1px solid rgba(251,191,36,0.55)",
-};
-
-const swatchCovered: CSSProperties = {
-  ...swatchBase,
-  background: "linear-gradient(180deg, rgba(132,204,255,0.85), rgba(96,165,250,0.75))",
-  border: "1px solid rgba(132,204,255,0.55)",
-};
-
-const swatchMissed: CSSProperties = {
-  ...swatchBase,
-  background: "rgba(248,113,113,0.10)",
-  border: "1px solid rgba(248,113,113,0.55)",
-};
-
-const swatchRest: CSSProperties = {
-  ...swatchBase,
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.06)",
-};
-
-const swatchFuture: CSSProperties = {
-  ...swatchBase,
   background: "transparent",
   border: "1px dashed rgba(255,255,255,0.13)",
 };

@@ -14,23 +14,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { GoalInsight } from "@/lib/goals";
 import type { HabitRow } from "@/app/_home/types";
-
-// Type accents match the goal-form tile picker so a user picking
-// FREQUENCY in the drawer and then seeing FREQUENCY goals here gets the
-// same purple cue across surfaces.
-const TYPE_ACCENT: Record<string, { color: string; bg: string; border: string; weak: string }> = {
-  FREQUENCY:   { color: "rgb(129,140,248)", bg: "rgba(129,140,248,0.10)", border: "rgba(129,140,248,0.45)", weak: "rgba(129,140,248,0.18)" },
-  VOLUME:      { color: "rgb(34,211,238)",  bg: "rgba(34,211,238,0.10)",  border: "rgba(34,211,238,0.45)",  weak: "rgba(34,211,238,0.18)"  },
-  PERFORMANCE: { color: "rgb(251,191,36)",  bg: "rgba(251,191,36,0.10)",  border: "rgba(251,191,36,0.45)",  weak: "rgba(251,191,36,0.18)"  },
-  COMPLETION:  { color: "rgb(74,222,128)",  bg: "rgba(74,222,128,0.10)",  border: "rgba(74,222,128,0.45)",  weak: "rgba(74,222,128,0.18)"  },
-};
-
-const TYPE_ICON: Record<string, string> = {
-  FREQUENCY: "↻",
-  VOLUME: "∑",
-  PERFORMANCE: "◆",
-  COMPLETION: "✓",
-};
+import { TYPE_ACCENT, TYPE_ICON } from "./goal-type-accent";
 
 // Status colors are intentionally muted — see feedback_habit_lens.
 const STATUS_COLOR: Record<HabitRow["status"], string> = {

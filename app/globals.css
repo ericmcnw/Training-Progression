@@ -1805,6 +1805,49 @@ input.ghostInput::placeholder {
   -webkit-backdrop-filter: blur(8px);
 }
 
+/* ── Goal detail page — mobile tightening ────────────────────────────────
+   The detail surface uses an "arc left, content right" hero on desktop,
+   stat cells, and a header that fits actions inline. On mobile (<=720),
+   the hero stacks, the title shrinks, header actions go below the title,
+   and stat-cell values dial back so they don't dominate the card. */
+@media (max-width: 720px) {
+  .goalDetailPage {
+    padding: 14px !important;
+    gap: 14px !important;
+  }
+  .goalDetailHeader {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .goalDetailTitle {
+    font-size: 22px !important;
+  }
+  .goalDetailActions {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+  .goalDetailHero {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .goalDetailArc {
+    justify-self: center;
+  }
+  .goalDetailInfoGrid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .goalDetailStatRow {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .goalDetailStatCell {
+    padding: 10px 12px !important;
+  }
+  .goalDetailRangeRow {
+    gap: 4px !important;
+  }
+}
+
 /* ── Plan/Goals row — mobile tightening ──────────────────────────────────
    At 360-414px viewport widths the fixed 140px scalar block + status
    label crowded the goal name into 2-line wrap. On mobile: shrink the
