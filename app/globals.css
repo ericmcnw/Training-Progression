@@ -1806,10 +1806,10 @@ input.ghostInput::placeholder {
 }
 
 /* ── Goal detail page — mobile tightening ────────────────────────────────
-   The detail surface uses an "arc left, content right" hero on desktop,
-   stat cells, and a header that fits actions inline. On mobile (<=720),
-   the hero stacks, the title shrinks, header actions go below the title,
-   and stat-cell values dial back so they don't dominate the card. */
+   The detail surface uses a flat horizontal hero + thin progress bar +
+   info cells. On mobile (<=720) the header stacks (actions go under the
+   title), the title shrinks, info cells force 2-col, and stat row forces
+   2-col. Hero primary numbers stay readable but trim 26 -> 22. */
 @media (max-width: 720px) {
   .goalDetailPage {
     padding: 14px !important;
@@ -1821,7 +1821,7 @@ input.ghostInput::placeholder {
     gap: 10px !important;
   }
   .goalDetailTitle {
-    font-size: 22px !important;
+    font-size: 21px !important;
   }
   .goalDetailActions {
     width: 100%;
@@ -1829,6 +1829,7 @@ input.ghostInput::placeholder {
   }
   .goalDetailInfoGrid {
     grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
   }
   .goalDetailStatRow {
     grid-template-columns: 1fr 1fr !important;
@@ -1838,6 +1839,17 @@ input.ghostInput::placeholder {
   }
   .goalDetailRangeRow {
     gap: 4px !important;
+  }
+  /* Hero shrinks slightly on mobile so the big numbers don't dominate
+     the screen on long goal names + status pills wrap cleanly. */
+  .goalDetailHeroActual {
+    font-size: 22px !important;
+  }
+  .goalDetailHeroSeparator {
+    font-size: 18px !important;
+  }
+  .goalDetailHeroTarget {
+    font-size: 16px !important;
   }
 }
 

@@ -45,16 +45,16 @@ export default function FrequencyHeatmap({
   state,
   today,
   weekdayMask,
-  // Defaults preserve the legacy "last 8 weeks" view for any non-detail caller.
   weeks: weeksProp = 8,
-  // Goal-type accent (gentle-lens). Falls back to a soft amber for callers
-  // that don't pass a color so the visual still feels intentional.
   accentColor = "rgb(251,191,36)",
   accentBorderColor = "rgba(251,191,36,0.55)",
-  // When provided, "missed" cells become clickable links to back-date a log
-  // for that exact date+routine. Only single-routine goals supply this —
-  // group goals span multiple routines and can't pick one to log against.
   retroactiveLogRoutineId,
+  // When provided, done/covered cells with logs become clickable. Parent
+  // owns the popover / day-expansion state — heatmap just emits the ymd
+  // when a logged day is tapped.
+  logsByDay,
+  onDayClick,
+  openDayYmd,
 }: {
   target: FrequencyTarget;
   state: FrequencyState;
@@ -64,6 +64,9 @@ export default function FrequencyHeatmap({
   accentColor?: string;
   accentBorderColor?: string;
   retroactiveLogRoutineId?: string;
+  logsByDay?: Map<string, unknown[]>;
+  onDayClick?: (ymd: string) => void;
+  openDayYmd?: string | null;
 }) {
   const { openDrawer } = useLogDrawer();
   const WEEKS = Math.max(4, Math.min(52, Math.floor(weeksProp)));
@@ -129,6 +132,29 @@ export default function FrequencyHeatmap({
                         title={`${dateLabel} — missed · tap to log`}
                         style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, border: cellSx.border ?? "none" }}
                         aria-label={`Back-date a log for ${dateLabel}`}
+                      />
+                    );
+                  }
+                  const dayLogs = logsByDay?.get(ymd);
+                  const hasDayLogs = dayLogs && dayLogs.length > 0;
+                  if (hasDayLogs && onDayClick) {
+                    const isOpen = openDayYmd === ymd;
+                    return (
+                      <button
+                        key={ymd}
+                        type="button"
+                        onClick={() => onDayClick(ymd)}
+                        title={`${dateLabel} — ${cellState} (${dayLogs.length} log${dayLogs.length > 1 ? "s" : ""}) · tap to view`}
+                        style={{
+                          ...cellSx,
+                          cursor: "pointer",
+                          display: "block",
+                          padding: 0,
+                          border: cellSx.border ?? "none",
+                          ...(isOpen ? openCellRing : null),
+                        }}
+                        aria-pressed={isOpen}
+                        aria-label={`View logs for ${dateLabel}`}
                       />
                     );
                   }
@@ -221,6 +247,11 @@ function cellStyle(
 
 const todayRing: CSSProperties = {
   outline: "1.5px solid rgba(255,255,255,0.55)",
+  outlineOffset: 1,
+};
+
+const openCellRing: CSSProperties = {
+  outline: "2px solid rgba(255,255,255,0.85)",
   outlineOffset: 1,
 };
 

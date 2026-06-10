@@ -19,10 +19,13 @@ import DeleteGoalButton from "../DeleteGoalButton";
 import { EditGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { subtleTextStyle } from "../ui";
 import { getFrequencyConsistency } from "@/lib/frequency-consistency";
-import FrequencyHeatmap from "@/app/components/dashboard/FrequencyHeatmap";
-import WeeklyFrequencyBars from "@/app/components/dashboard/WeeklyFrequencyBars";
-import { getFrequencyRenderMode } from "@/lib/frequency-state";
+import GoalConsistencyPanel from "./GoalConsistencyPanel";
+import { getFrequencyRenderMode, type FrequencyTarget } from "@/lib/frequency-state";
 import { getTypeAccent, TYPE_ICON, type GoalTypeAccent } from "@/app/plan/goals/goal-type-accent";
+
+function getFrequencyRenderModeLabel(target: FrequencyTarget): string {
+  return getFrequencyRenderMode(target) === "daily-grid" ? "day" : "week";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -131,63 +134,27 @@ export default async function GoalDetailPage(props: {
       <RangeFilterRow goalId={normalizedGoalId} current={range} />
 
       <SectionCard title="Current Progress">
-        <div style={heroStyle}>
-          <div style={heroPrimaryRowStyle}>
-            <span style={{ ...heroActualStyle, color: accent.color }}>{entry.actualDisplay}</span>
-            <span style={heroOfStyle}>of {entry.targetDisplay}</span>
-            <span style={{ ...heroStatusChipStyle, borderColor: accent.border, background: accent.bg, color: accent.color }}>
-              {entry.timeframeStatusLabel}
-            </span>
-          </div>
-          <div style={progressBarTrackStyle}>
-            <div
-              style={{
-                ...progressBarFillStyle,
-                width: `${Math.min(100, Math.max(0, Math.round(entry.fractionComplete * 100)))}%`,
-                background: accent.color,
-              }}
-            />
-          </div>
-          <div className="goalDetailInfoGrid" style={infoGridStyle}>
-            <InfoCell label="Target" value={entry.targetLabel} />
-            <InfoCell label="Window" value={entry.timeframeWindowLabel} />
-            <InfoCell label="Start" value={formatGoalDate(entry.goal.startDate)} />
-            {entry.goal.endDate ? <InfoCell label="End" value={formatGoalDate(entry.goal.endDate)} /> : null}
-          </div>
-          {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
-          {entry.targetHref ? (
-            <Link href={entry.targetHref} style={metaLinkStyle}>
-              Open related progress target →
-            </Link>
-          ) : null}
-        </div>
+        <Hero entry={entry} accent={accent} />
       </SectionCard>
 
       <TypeHighlights entry={entry} consistency={consistency} accent={accent} />
 
       {consistency ? (
-        <SectionCard title="Consistency" subtitle={`Last ${RANGE_LABEL[range].toLowerCase()}.`}>
-          {getFrequencyRenderMode(consistency.target) === "daily-grid" ? (
-            <FrequencyHeatmap
-              target={consistency.target}
-              state={consistency.state}
-              today={todayAppYmd()}
-              weekdayMask={consistency.weekdayMask}
-              weeks={RANGE_WEEKS[range]}
-              accentColor={accent.color}
-              accentBorderColor={accent.border}
-              retroactiveLogRoutineId={
-                consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
-              }
-            />
-          ) : (
-            <WeeklyFrequencyBars
-              target={consistency.target}
-              state={consistency.state}
-              today={todayAppYmd()}
-              weeks={RANGE_WEEKS[range]}
-            />
-          )}
+        <SectionCard title="Consistency" subtitle={`Last ${RANGE_LABEL[range].toLowerCase()}. Tap a ${getFrequencyRenderModeLabel(consistency.target)} to see what was done.`}>
+          <GoalConsistencyPanel
+            target={consistency.target}
+            state={consistency.state}
+            today={todayAppYmd()}
+            weekdayMask={consistency.weekdayMask}
+            weeks={RANGE_WEEKS[range]}
+            accentColor={accent.color}
+            accentBorderColor={accent.border}
+            retroactiveLogRoutineId={
+              consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
+            }
+            contributingLogs={consistency.contributingLogs}
+            goalName={entry.goal.name}
+          />
         </SectionCard>
       ) : null}
 
@@ -275,6 +242,102 @@ function RangeFilterRow({ goalId, current }: { goalId: string; current: RangeOpt
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+// ── Hero — type-specific framing ──────────────────────────────────────────
+
+function Hero({
+  entry,
+  accent,
+}: {
+  entry: NonNullable<Awaited<ReturnType<typeof getGoalInsight>>>;
+  accent: GoalTypeAccent;
+}) {
+  const type = entry.goal.goalType;
+  const pctComplete = Math.min(100, Math.max(0, Math.round(entry.fractionComplete * 100)));
+
+  // Cadence label for FREQUENCY goals — the trailing segment of summaryLabel
+  // (e.g., "Pull Day | session | 3× per week" → "3× per week").
+  const cadenceLabel =
+    type === "FREQUENCY" && entry.summaryLabel.includes("|")
+      ? entry.summaryLabel.split("|").pop()?.trim() ?? null
+      : null;
+
+  let bigPrefix: string | null = null;
+  let tinyLine: string | null = null;
+
+  if (type === "VOLUME") {
+    const remaining = Math.max(0, entry.targetValue - entry.actualValue);
+    tinyLine =
+      remaining > 0
+        ? `${formatRemainingMetric(entry.goal.metricType, remaining)} to go · ${pctComplete}% logged`
+        : "Goal hit ✓";
+  } else if (type === "PERFORMANCE") {
+    const gap = Math.max(0, entry.targetValue - entry.actualValue);
+    bigPrefix = "Best";
+    tinyLine =
+      gap > 0
+        ? `${formatRemainingMetric(entry.goal.metricType, gap)} to target`
+        : "Target reached ✓";
+  } else if (type === "COMPLETION") {
+    const remaining = Math.max(0, entry.targetValue - entry.actualValue);
+    tinyLine =
+      remaining > 0
+        ? `${remaining} ${remaining === 1 ? "session" : "sessions"} to go`
+        : "All sessions complete ✓";
+  } else if (type === "FREQUENCY" && cadenceLabel) {
+    tinyLine = `${cadenceLabel} · ${entry.timeframeWindowLabel}`;
+  }
+
+  return (
+    <div style={heroStyle}>
+      <div style={heroPrimaryRowStyle}>
+        <div style={heroValueGroupStyle}>
+          {bigPrefix ? <span style={heroPrefixStyle}>{bigPrefix}</span> : null}
+          <span className="goalDetailHeroActual" style={{ ...heroActualStyle, color: accent.color }}>{entry.actualDisplay}</span>
+          <span className="goalDetailHeroSeparator" style={heroSeparatorStyle}>/</span>
+          <span className="goalDetailHeroTarget" style={heroTargetStyle}>{entry.targetDisplay}</span>
+        </div>
+        <span
+          style={{
+            ...heroStatusChipStyle,
+            borderColor: accent.border,
+            background: accent.bg,
+            color: accent.color,
+          }}
+        >
+          {entry.timeframeStatusLabel}
+        </span>
+      </div>
+
+      <div style={progressBarTrackStyle}>
+        <div
+          style={{
+            ...progressBarFillStyle,
+            width: `${pctComplete}%`,
+            background: accent.color,
+          }}
+        />
+      </div>
+
+      {tinyLine ? <div style={heroTinyLineStyle}>{tinyLine}</div> : null}
+
+      <div className="goalDetailInfoGrid" style={infoGridStyle}>
+        <InfoCell label="Target" value={entry.targetLabel} />
+        {type === "FREQUENCY" && cadenceLabel ? <InfoCell label="Cadence" value={cadenceLabel} /> : null}
+        <InfoCell label="Window" value={entry.timeframeWindowLabel} />
+        <InfoCell label="Start" value={formatGoalDate(entry.goal.startDate)} />
+        {entry.goal.endDate ? <InfoCell label="End" value={formatGoalDate(entry.goal.endDate)} /> : null}
+      </div>
+
+      {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
+      {entry.targetHref ? (
+        <Link href={entry.targetHref} style={metaLinkStyle}>
+          Open related progress target →
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -486,9 +549,34 @@ const heroStyle: CSSProperties = {
 
 const heroPrimaryRowStyle: CSSProperties = {
   display: "flex",
-  alignItems: "baseline",
+  alignItems: "center",
+  justifyContent: "space-between",
   gap: 10,
   flexWrap: "wrap",
+};
+
+const heroValueGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 8,
+  flexWrap: "wrap",
+  minWidth: 0,
+};
+
+const heroPrefixStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  opacity: 0.55,
+  marginRight: -2,
+};
+
+const heroTinyLineStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  opacity: 0.75,
+  marginTop: 2,
 };
 
 const heroActualStyle: CSSProperties = {
@@ -497,10 +585,17 @@ const heroActualStyle: CSSProperties = {
   lineHeight: 1,
 };
 
-const heroOfStyle: CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  opacity: 0.65,
+const heroSeparatorStyle: CSSProperties = {
+  fontSize: 22,
+  fontWeight: 600,
+  opacity: 0.32,
+  margin: "0 2px",
+};
+
+const heroTargetStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  opacity: 0.7,
 };
 
 const heroStatusChipStyle: CSSProperties = {

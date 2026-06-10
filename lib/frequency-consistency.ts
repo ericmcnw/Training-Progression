@@ -7,8 +7,17 @@
 // goal detail page just skips rendering the consistency section in that case.
 
 import { prisma } from "@/lib/prisma";
-import { todayAppYmd } from "@/lib/dates";
+import { todayAppYmd, toAppYmd as toAppYmdShared } from "@/lib/dates";
 import { computeFrequencyState, type FrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
+
+export type FrequencyContributionLog = {
+  logId: string;
+  routineId: string;
+  routineName: string;
+  performedYmd: string;
+  performedTimeLabel: string;
+  isPrimary: boolean;
+};
 
 export type FrequencyConsistency = {
   target: FrequencyTarget;
@@ -16,6 +25,11 @@ export type FrequencyConsistency = {
   weekdayMask: number | null;
   routineIds: string[];
   routineNames: string[];
+  /** All contributing logs in the heatmap window, oldest → newest. Used by
+   *  the goal detail page for interactive heatmap + weekly-bars expansion
+   *  (clicking a day/week opens the log report popover, same pattern as
+   *  the home page). Empty for missed days. */
+  contributingLogs: FrequencyContributionLog[];
 };
 
 // Default — 8 weeks of grid + a week of buffer so streak math handles edge
@@ -214,14 +228,11 @@ async function loadAndCompute(params: {
       id: true,
       performedAt: true,
       routineId: true,
-      // activityTypeId carries through so synthetic-Endurance logs can be
-      // matched to the trigger set built from primary-routine
-      // activityTypeIds (the bilingual matcher fix).
       activityTypeId: true,
-      routine: { select: { subtype: true } },
-      // Always include the per-exercise set counts — small payload (one int
-      // per exercise row) and keeps the typed shape stable regardless of
-      // whether `hasTriggers` is true at runtime.
+      // routine.name + subtype: name powers the contributingLogs surface
+      // (week-expansion popovers, day-cell click), subtype is used by the
+      // trigger matcher below.
+      routine: { select: { name: true, subtype: true } },
       exercises: {
         select: {
           exerciseId: true,
@@ -235,35 +246,41 @@ async function loadAndCompute(params: {
   const triggerSubtypeSet = new Set(triggerSubtypes);
   const triggerExerciseIdSet = new Set(triggerExerciseIds);
   const routineIdSet = new Set(allRoutineIds);
-  // Tag each log as primary / substitute / trigger so the day classifier
-  // can decide between "done" (primary or trigger) vs "covered" (substitute
-  // only). Dedupe by log id so the same log can't claim two roles.
-  type StateLog = { performedAt: Date; isPrimary: boolean };
-  const stateLogs: StateLog[] = [];
+  // Each matched log carries enough data both for state computation and
+  // for the interactive popover surfaces (week expansion, day-cell click).
+  type EnrichedLog = {
+    logId: string;
+    routineId: string;
+    routineName: string;
+    performedAt: Date;
+    isPrimary: boolean;
+  };
+  const matched: EnrichedLog[] = [];
   const seen = new Set<string>();
+  const enrich = (raw: typeof logs[number], isPrimary: boolean): EnrichedLog => ({
+    logId: raw.id,
+    routineId: raw.routineId,
+    routineName: raw.routine?.name ?? "Session",
+    performedAt: raw.performedAt,
+    isPrimary,
+  });
   for (const log of logs) {
     if (seen.has(log.id)) continue;
     if (routineIdSet.has(log.routineId)) {
       seen.add(log.id);
-      stateLogs.push({
-        performedAt: log.performedAt,
-        isPrimary: primaryRoutineIds.has(log.routineId),
-      });
+      matched.push(enrich(log, primaryRoutineIds.has(log.routineId)));
       continue;
     }
     if (!hasTriggers) continue;
     const subtype = log.routine?.subtype ? log.routine.subtype.toUpperCase() : null;
     if (subtype && triggerSubtypeSet.has(subtype)) {
       seen.add(log.id);
-      stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+      matched.push(enrich(log, true));
       continue;
     }
-    // ActivityType trigger — catches synthetic-Endurance logs that didn't
-    // match a roster routineId but carry one of the primary routines'
-    // activityTypeIds.
     if (log.activityTypeId && triggerActivityTypeIdSet.has(log.activityTypeId)) {
       seen.add(log.id);
-      stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+      matched.push(enrich(log, true));
       continue;
     }
     if (triggerExerciseIdSet.size > 0 && log.exercises) {
@@ -274,20 +291,26 @@ async function loadAndCompute(params: {
       }
       if (matchingSets >= triggerMinSets) {
         seen.add(log.id);
-        stateLogs.push({ performedAt: log.performedAt, isPrimary: true });
+        matched.push(enrich(log, true));
       }
     }
   }
 
   const state = computeFrequencyState({
     target,
-    logs: stateLogs,
+    logs: matched.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary })),
     today,
-    // Match the heatmap window so the daily-state map covers the full
-    // requested range. Subtract the week-of-buffer that the loader adds
-    // for streak-edge math — that buffer is for fetching, not display.
     trailingDays: Math.max(8 * 7, windowDays - 7),
   });
+
+  const contributingLogs: FrequencyContributionLog[] = matched.map((m) => ({
+    logId: m.logId,
+    routineId: m.routineId,
+    routineName: m.routineName,
+    performedYmd: toAppYmd(m.performedAt),
+    performedTimeLabel: timeLabel(m.performedAt),
+    isPrimary: m.isPrimary,
+  }));
 
   return {
     target,
@@ -295,5 +318,14 @@ async function loadAndCompute(params: {
     weekdayMask: target.weekdayMask ?? null,
     routineIds: primaryRoutines.map((r) => r.id),
     routineNames: primaryRoutines.map((r) => r.name),
+    contributingLogs,
   };
+}
+
+function toAppYmd(d: Date): string {
+  return toAppYmdShared(d);
+}
+
+function timeLabel(d: Date): string {
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
