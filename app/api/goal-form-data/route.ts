@@ -48,6 +48,7 @@ export async function GET(req: Request) {
         benchmarkLabel: "",
         sessionMetricDefinitionId: "",
         sessionMetricTarget: "",
+        minReps: "",
         groupFrequencyGoalId: goal.id,
         groupFrequency: {
           targetCount: goal.targetCount,
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
       benchmarkLabel: goal.config?.benchmarkLabel ?? "",
       sessionMetricDefinitionId: goal.config?.sessionMetricDefinitionId ?? "",
       sessionMetricTarget: goal.config?.sessionMetricTargetText ?? "",
+      minReps: goal.config?.minReps ? String(goal.config.minReps) : "",
     };
     return NextResponse.json({ mode: "edit" as const, options, initial });
   }
@@ -118,6 +120,7 @@ export async function GET(req: Request) {
     benchmarkLabel: "5K",
     sessionMetricDefinitionId: "",
     sessionMetricTarget: "",
+    minReps: "",
   };
   return NextResponse.json({ mode: "new" as const, options, initial });
 }

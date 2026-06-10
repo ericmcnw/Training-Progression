@@ -143,16 +143,31 @@ async function parseConfig(formData: FormData, metricType: string, targetType: s
     };
   }
 
-  if (metricType !== "PACE") return undefined;
-  const benchmarkDistanceMi = Number(formData.get("benchmarkDistanceMi"));
-  if (!Number.isFinite(benchmarkDistanceMi) || benchmarkDistanceMi <= 0) {
-    throw new Error("Benchmark distance is required for pace goals.");
+  if (metricType === "PACE") {
+    const benchmarkDistanceMi = Number(formData.get("benchmarkDistanceMi"));
+    if (!Number.isFinite(benchmarkDistanceMi) || benchmarkDistanceMi <= 0) {
+      throw new Error("Benchmark distance is required for pace goals.");
+    }
+    const benchmarkLabel = String(formData.get("benchmarkLabel") ?? "").trim();
+    return {
+      benchmarkDistanceMi,
+      ...(benchmarkLabel ? { benchmarkLabel } : {}),
+    };
   }
-  const benchmarkLabel = String(formData.get("benchmarkLabel") ?? "").trim();
-  return {
-    benchmarkDistanceMi,
-    ...(benchmarkLabel ? { benchmarkLabel } : {}),
-  };
+
+  // Rep-PR: PERFORMANCE/MAX_WEIGHT goals targeting an exercise can carry
+  // an optional minReps floor — only sets hitting at least minReps reps
+  // count toward the peak weight. Blank / 0 / 1 = any rep (legacy
+  // behavior). Storing in config keeps the existing Goal schema unchanged.
+  if (metricType === "MAX_WEIGHT" && targetType === "EXERCISE") {
+    const raw = String(formData.get("minReps") ?? "").trim();
+    if (!raw) return undefined;
+    const minReps = Math.floor(Number(raw));
+    if (!Number.isFinite(minReps) || minReps < 1) return undefined;
+    return { minReps };
+  }
+
+  return undefined;
 }
 
 async function parseGoalInput(formData: FormData) {

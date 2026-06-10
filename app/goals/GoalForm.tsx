@@ -34,6 +34,9 @@ export type GoalFormInitial = {
   benchmarkLabel: string;
   sessionMetricDefinitionId: string;
   sessionMetricTarget: string;
+  /** Optional minimum-reps floor for PERFORMANCE/MAX_WEIGHT goals (rep PRs).
+   *  Empty string = any rep counts; "5" = only sets with reps >= 5 count. */
+  minReps: string;
   groupFrequencyGoalId?: string;
   groupFrequency?: {
     targetCount: number;
@@ -298,6 +301,7 @@ export default function GoalForm({
   const [benchmarkLabel, setBenchmarkLabel]     = useState(initial.benchmarkLabel);
   const [sessionMetricDefinitionId, setSessionMetricDefinitionId] = useState(initial.sessionMetricDefinitionId);
   const [sessionMetricTarget, setSessionMetricTarget] = useState(initial.sessionMetricTarget);
+  const [minReps, setMinReps] = useState(initial.minReps);
 
   const [gfTargetCount, setGfTargetCount]   = useState(String(initial.groupFrequency?.targetCount ?? 3));
   const [gfTargetInterval, setGfTargetInterval] = useState(String(initial.groupFrequency?.targetInterval ?? 1));
@@ -1094,6 +1098,41 @@ export default function GoalForm({
                       </label>
                     </>
                   ) : null}
+                </div>
+              ) : effectiveMetricType === "MAX_WEIGHT" && goalType === "PERFORMANCE" && effectiveTargetType === "EXERCISE" ? (
+                /* Rep-PR goal: "Bench 200 lb for 5 reps". The minReps input
+                   is a partner to the target weight — only sets hitting at
+                   least minReps count toward the peak. Leave minReps blank
+                   for an any-rep PR (e.g., "Squat 315 for a single").
+                   Stored in Goal.config.minReps; matcher in lib/goals.ts
+                   filters sets accordingly. */
+                <div style={fieldGridStyle}>
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>{numMeta.label}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step={numMeta.step}
+                      value={rawTargetValue}
+                      onChange={e => setRawTargetValue(e.target.value)}
+                      style={formInputStyle}
+                      placeholder={numMeta.placeholder}
+                    />
+                  </label>
+                  <label style={fieldStyle}>
+                    <span style={fieldLabelStyle}>For reps <span style={{ opacity: 0.55, fontWeight: 600 }}>(optional)</span></span>
+                    <input
+                      name="minReps"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={minReps}
+                      onChange={e => setMinReps(e.target.value)}
+                      style={formInputStyle}
+                      placeholder="5"
+                      inputMode="numeric"
+                    />
+                  </label>
                 </div>
               ) : (
                 <label style={fieldStyle}>

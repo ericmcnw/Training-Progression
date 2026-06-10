@@ -35,6 +35,12 @@ type GoalConfig = {
   sessionMetricDefinitionId?: string;
   sessionMetricDefinitionLabel?: string;
   sessionMetricTargetText?: string;
+  /** Minimum reps a set must have to count toward a MAX_WEIGHT goal.
+   *  Lets users set rep-PR goals like "Bench press 200 lb for 5 reps" —
+   *  only sets with reps >= minReps are considered when finding the peak
+   *  weight. Undefined / 0 / 1 mean "any single rep counts", matching the
+   *  previous behavior. */
+  minReps?: number;
 };
 
 type GoalWithConfig = Omit<Goal, "config"> & {
@@ -254,12 +260,15 @@ function asGoalConfig(value: Goal["config"]): GoalConfig | null {
     typeof record.sessionMetricTargetText === "string" && record.sessionMetricTargetText.trim().length > 0
       ? record.sessionMetricTargetText.trim()
       : undefined;
+  const minRepsRaw = typeof record.minReps === "number" ? record.minReps : Number(record.minReps);
+  const minReps = Number.isFinite(minRepsRaw) && minRepsRaw >= 1 ? Math.floor(minRepsRaw) : undefined;
   return {
     ...(benchmarkDistanceMi ? { benchmarkDistanceMi } : {}),
     ...(benchmarkLabel ? { benchmarkLabel } : {}),
     ...(sessionMetricDefinitionId ? { sessionMetricDefinitionId } : {}),
     ...(sessionMetricDefinitionLabel ? { sessionMetricDefinitionLabel } : {}),
     ...(sessionMetricTargetText ? { sessionMetricTargetText } : {}),
+    ...(minReps ? { minReps } : {}),
   };
 }
 
@@ -396,6 +405,8 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
         routineIds: routine ? [routine.id] : [],
         exerciseIds: [],
         sessionTemplateIds: [],
+        activityTypeIds: [],
+        activityFamilyIds: [],
       },
     };
   }
@@ -413,6 +424,8 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
         routineIds: [],
         exerciseIds: exercise ? [exercise.id] : [],
         sessionTemplateIds: [],
+        activityTypeIds: [],
+        activityFamilyIds: [],
       },
     };
   }
@@ -430,6 +443,8 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
         routineIds: [],
         exerciseIds: [],
         sessionTemplateIds: template ? [template.id] : [],
+        activityTypeIds: [],
+        activityFamilyIds: [],
       },
     };
   }
@@ -514,11 +529,39 @@ async function getTargetDescriptor(goal: GoalWithConfig) {
   const exerciseIds = Array.from(new Set([...exerciseAssignments.map((item) => item.exerciseId), ...inferredExerciseIds]));
   const sessionTemplateIds = Array.from(new Set(templateAssignments.map((item) => item.templateId)));
 
+  // Bilingual fix for post-T2 endurance: when the resolved metadata group is
+  // CARDIO_ACTIVITY (the legacy way of identifying cardio sessions), also
+  // collect any ActivityFamily and ActivityType ids whose slug matches the
+  // group's slug or any descendant group slugs. The matcher below then ORs
+  // these into the log query so synthetic-Endurance logs carrying the same
+  // activityType (which don't have metadata tags) are counted toward the
+  // goal. Without this, VOLUME / PERFORMANCE / COMPLETION cardio goals
+  // would silently miss any log made through the post-T2 endurance section.
+  let activityFamilyIds: string[] = [];
+  let activityTypeIds: string[] = [];
+  if (group && group.kind === "CARDIO_ACTIVITY") {
+    const slugsToMatch = Array.from(relevantSlugs);
+    if (slugsToMatch.length > 0) {
+      const [families, types] = await Promise.all([
+        prisma.enduranceFamily.findMany({
+          where: { slug: { in: slugsToMatch } },
+          select: { id: true },
+        }),
+        prisma.activityType.findMany({
+          where: { slug: { in: slugsToMatch } },
+          select: { id: true },
+        }),
+      ]);
+      activityFamilyIds = families.map((f) => f.id);
+      activityTypeIds = types.map((t) => t.id);
+    }
+  }
+
   return {
     label: group?.label ?? "Unknown group",
     kindLabel: goal.targetType === "CARDIO" ? GOAL_TARGET_TYPE_LABELS.CARDIO : GOAL_TARGET_TYPE_LABELS.GROUP,
     href: group ? `/progress/groups/${group.slug}?tab=overview&range=4w` : null,
-    filter: { routineIds, exerciseIds, sessionTemplateIds },
+    filter: { routineIds, exerciseIds, sessionTemplateIds, activityTypeIds, activityFamilyIds },
   };
 }
 
@@ -526,12 +569,21 @@ async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnTy
   const routineIds = descriptor.filter.routineIds;
   const exerciseIds = descriptor.filter.exerciseIds;
   const sessionTemplateIds = descriptor.filter.sessionTemplateIds;
+  const activityTypeIds = descriptor.filter.activityTypeIds;
+  const activityFamilyIds = descriptor.filter.activityFamilyIds;
   const targetFilters = [
     ...(routineIds.length > 0 ? [{ routineId: { in: routineIds } }] : []),
     ...(exerciseIds.length > 0 ? [{ exercises: { some: { exerciseId: { in: exerciseIds } } } }] : []),
     ...(sessionTemplateIds.length > 0
       ? [{ routine: { sessionDetails: { templateId: { in: sessionTemplateIds } } } }]
       : []),
+    // Bilingual fix (Phase 3b): catch post-T2 synthetic-Endurance logs that
+    // don't have a metadata-tagged routine but carry an activityType matching
+    // the goal's CARDIO_ACTIVITY group slug. Family + Type are ORed as
+    // separate clauses so a goal targeting metadata "running" picks up both
+    // family-level matches (any running type) and direct type matches.
+    ...(activityTypeIds.length > 0 ? [{ activityTypeId: { in: activityTypeIds } }] : []),
+    ...(activityFamilyIds.length > 0 ? [{ activityType: { familyId: { in: activityFamilyIds } } }] : []),
   ];
 
   const logs = await prisma.routineLog.findMany({
@@ -595,7 +647,14 @@ function metricForExerciseEntry(goal: GoalWithConfig, entry: GoalExerciseEntry) 
     return entry.sets.reduce((sum, set) => sum + (set.reps ?? 0) * (set.weightLb ?? 0), 0);
   }
   if (goal.metricType === "MAX_WEIGHT") {
-    return Math.max(0, ...entry.sets.map((set) => set.weightLb ?? 0));
+    // Optional rep-PR floor: e.g. a "Bench 200 for 5" goal sets minReps=5
+    // and only sets with reps >= 5 count toward the peak. Sets with fewer
+    // reps (or no rep count) are excluded. Undefined / <= 1 = any rep counts.
+    const minReps = goal.config?.minReps ?? 0;
+    const eligibleSets = minReps > 1
+      ? entry.sets.filter((set) => (set.reps ?? 0) >= minReps)
+      : entry.sets;
+    return Math.max(0, ...eligibleSets.map((set) => set.weightLb ?? 0));
   }
   if (goal.metricType === "MAX_DURATION") {
     return Math.max(0, ...entry.sets.map((set) => set.seconds ?? 0));
@@ -801,7 +860,13 @@ function formatMetricValue(goal: GoalWithConfig, value: number) {
     const label = goal.config?.benchmarkLabel ?? (goal.config?.benchmarkDistanceMi ? `${goal.config.benchmarkDistanceMi.toFixed(2)} mi` : null);
     return label ? `${formatSeconds(value)} (${label})` : formatSeconds(value);
   }
-  if (goal.metricType === "MAX_WEIGHT") return `${value.toFixed(1)} lb`;
+  if (goal.metricType === "MAX_WEIGHT") {
+    // Rep-PR: append "× N+ reps" when minReps is set, so users see the full
+    // shape of the goal ("200 lb × 5+ reps") instead of just the weight.
+    const minReps = goal.config?.minReps ?? 0;
+    const suffix = minReps > 1 ? ` × ${minReps}+ reps` : "";
+    return `${value.toFixed(1)} lb${suffix}`;
+  }
   if (goal.metricType === "VOLUME") return `${value.toFixed(0)} lb`;
   if (goal.metricType === "REPS" || goal.metricType === "SETS" || goal.metricType === "SESSIONS" || goal.metricType === "COMPLETED") {
     return value.toFixed(0);
@@ -1000,7 +1065,7 @@ async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> 
           label: routine?.name ?? "Unknown routine",
           kindLabel: GOAL_TARGET_TYPE_LABELS.ROUTINE,
           href: routine ? `/progress/routines/${routine.id}?tab=overview&range=4w` : null,
-          filter: { routineIds: routine ? [routine.id] : [], exerciseIds: [], sessionTemplateIds: [] },
+          filter: { routineIds: routine ? [routine.id] : [], exerciseIds: [], sessionTemplateIds: [], activityTypeIds: [], activityFamilyIds: [] },
         };
       } else if (parsedGoal.targetType === "EXERCISE") {
         const exercise = exerciseMap.get(parsedGoal.targetId) ?? null;
@@ -1008,7 +1073,7 @@ async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> 
           label: exercise?.name ?? "Unknown exercise",
           kindLabel: GOAL_TARGET_TYPE_LABELS.EXERCISE,
           href: exercise ? `/progress/exercises/${exercise.id}?tab=overview&range=4w` : null,
-          filter: { routineIds: [], exerciseIds: exercise ? [exercise.id] : [], sessionTemplateIds: [] },
+          filter: { routineIds: [], exerciseIds: exercise ? [exercise.id] : [], sessionTemplateIds: [], activityTypeIds: [], activityFamilyIds: [] },
         };
       } else if (parsedGoal.targetType === "SESSION_TEMPLATE") {
         const template = templateMap.get(parsedGoal.targetId) ?? null;
@@ -1016,7 +1081,7 @@ async function batchBuildGoalInsights(rawGoals: Goal[]): Promise<GoalInsight[]> 
           label: template?.name ?? "Unknown session template",
           kindLabel: GOAL_TARGET_TYPE_LABELS.SESSION_TEMPLATE,
           href: null,
-          filter: { routineIds: [], exerciseIds: [], sessionTemplateIds: template ? [template.id] : [] },
+          filter: { routineIds: [], exerciseIds: [], sessionTemplateIds: template ? [template.id] : [], activityTypeIds: [], activityFamilyIds: [] },
         };
       } else {
         // GROUP / CARDIO: hierarchical resolution still needs its own queries
