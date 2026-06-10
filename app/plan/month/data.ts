@@ -16,7 +16,6 @@ import {
   shouldAutoScheduleRoutine,
   isRoutineAutoScheduledOnDay,
 } from "@/lib/routine-frequency";
-import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 
 export type DayEntryStatus = "done" | "partial" | "planned" | "missed" | "future" | "loggedExtra";
 
@@ -114,7 +113,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   const monthEnd = addDaysYmd(monthEndExclusive, -1);
 
   // ── Queries ─────────────────────────────────────────────────────────────
-  const [rawRoutines, manualRaw, logsRaw, planEntriesRaw, activeCyclesRaw] = await Promise.all([
+  const [rawRoutines, manualRaw, logsRaw, planEntriesRaw, activeCyclesRaw, activityTypesRaw] = await Promise.all([
     // NOTE: isPlaceholder filter intentionally removed. Synthetic-endurance
     // and synthetic-sport routines carry isPlaceholder=true (see
     // lib/synthetic-sport-routines.ts + lib/activity-types.ts). They're
@@ -148,7 +147,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         },
       },
       orderBy: [{ scheduledDate: "asc" }, { sortOrder: "asc" }],
-      select: { id: true, routineId: true, scheduledDate: true, sortOrder: true },
+      select: { id: true, routineId: true, scheduledDate: true, sortOrder: true, activityTypeId: true },
     }),
     prisma.routineLog.findMany({
       where: {
@@ -162,44 +161,71 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         id: true,
         routineId: true,
         performedAt: true,
+        // activityTypeId is the per-log type (Run / Trail Run / Hike / Bike).
+        // Without it, two endurance logs on the same day (a trail run and a
+        // hike) would collapse into a single dot keyed only by routineId
+        // (both share the synthetic endurance routine).
+        activityTypeId: true,
         routine: { select: { name: true, domain: true, kind: true, subtype: true } },
-        // For endurance logs the displayed name comes from the activityType
-        // (Run / Bike / Swim), not the synthetic routine ("Endurance").
         activityType: { select: { name: true } },
       },
     }),
-    prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; startDate: Date; cycleLengthDays: number }>>(
-      'SELECT e."routineId", e."dayOffset", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
+    prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; startDate: Date; cycleLengthDays: number; activityTypeId: string | null }>>(
+      'SELECT e."routineId", e."dayOffset", a."startDate", p."cycleLengthDays", e."activityTypeId" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
     ),
     prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
       'SELECT COUNT(*) as count FROM "SchedulePlanActivation" WHERE "isEnabled" = true'
     ),
+    // Resolves activity type ids → names so scheduled-but-unlogged typed
+    // slots ("Trail Run on Tuesday") can render with their type label.
+    prisma.activityType.findMany({ select: { id: true, name: true } }),
   ]);
 
   // ── Build maps ──────────────────────────────────────────────────────────
   const routines = rawRoutines.map(routineWithFrequencyTarget);
   const routineMap = new Map(routines.map((r) => [r.id, r]));
   const autoScheduledRoutines = routines.filter((r) => shouldAutoScheduleRoutine(r));
+  const activityTypeNameById = new Map(activityTypesRaw.map((t) => [t.id, t.name]));
 
-  const manualByDay = new Map<string, string[]>();
+  // Composite key — `${routineId}::${activityTypeId}` for typed entries
+  // (so two endurance logs with different types stay distinct), plain
+  // routineId for everything else. Mirrors the home page WaaG model.
+  function entryKey(routineId: string, activityTypeId: string | null | undefined): string {
+    return activityTypeId ? `${routineId}::${activityTypeId}` : routineId;
+  }
+
+  type ScheduledSlot = { routineId: string; activityTypeId: string | null };
+  const manualByDay = new Map<string, ScheduledSlot[]>();
   for (const entry of manualRaw) {
     const ymd = toAppYmd(entry.scheduledDate);
     if (!manualByDay.has(ymd)) manualByDay.set(ymd, []);
-    manualByDay.get(ymd)!.push(entry.routineId);
+    manualByDay.get(ymd)!.push({
+      routineId: entry.routineId,
+      activityTypeId: entry.activityTypeId,
+    });
   }
 
   const cycleEntries = planEntriesRaw.map((entry) => ({
     routineId: entry.routineId,
+    activityTypeId: entry.activityTypeId,
     dayOffset: Number(entry.dayOffset),
     startDate: toAppYmd(new Date(entry.startDate)),
     cycleLengthDays: Number(entry.cycleLengthDays),
   }));
 
-  // logs grouped: per-day map of routineId → { count, latestLogId, latestActivityTypeName }.
-  // latestActivityTypeName surfaces "Run"/"Bike"/"Swim" for endurance days
-  // instead of the generic synthetic routine name "Endurance".
-  type LogBucket = { count: number; latestLogId: string; latestActivityTypeName: string | null };
-  const logsByDayByRoutine = new Map<string, Map<string, LogBucket>>();
+  // Per-day buckets keyed by entryKey so "trail run on synthetic" and
+  // "hike on synthetic" stay distinct. Each bucket carries enough info to
+  // build a DayEntry: log count, latest log id, the routineId behind the
+  // composite key (for routineMap lookup), and the activityTypeId/name
+  // (for displayName resolution).
+  type LogBucket = {
+    routineId: string;
+    activityTypeId: string | null;
+    activityTypeName: string | null;
+    count: number;
+    latestLogId: string;
+  };
+  const logsByDayByKey = new Map<string, Map<string, LogBucket>>();
   const totalsByDomain = new Map<string, number>();
   const daysLoggedSet = new Set<string>();
   let totalSessions = 0;
@@ -211,21 +237,20 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     const domain = effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype);
     totalsByDomain.set(domain, (totalsByDomain.get(domain) ?? 0) + 1);
 
-    if (!logsByDayByRoutine.has(ymd)) logsByDayByRoutine.set(ymd, new Map());
-    const dayBuckets = logsByDayByRoutine.get(ymd)!;
-    const existing = dayBuckets.get(log.routineId);
+    if (!logsByDayByKey.has(ymd)) logsByDayByKey.set(ymd, new Map());
+    const dayBuckets = logsByDayByKey.get(ymd)!;
+    const key = entryKey(log.routineId, log.activityTypeId);
+    const existing = dayBuckets.get(key);
     if (existing) {
       existing.count += 1;
       existing.latestLogId = log.id;
-      // Keep the latest activity-type name — logs are oldest→newest so the
-      // last write wins. Falls back to the previous name if this log has
-      // no type (legacy log).
-      existing.latestActivityTypeName = log.activityType?.name ?? existing.latestActivityTypeName;
     } else {
-      dayBuckets.set(log.routineId, {
+      dayBuckets.set(key, {
+        routineId: log.routineId,
+        activityTypeId: log.activityTypeId,
+        activityTypeName: log.activityType?.name ?? null,
         count: 1,
         latestLogId: log.id,
-        latestActivityTypeName: log.activityType?.name ?? null,
       });
     }
   }
@@ -239,12 +264,27 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     const isToday = ymd === today;
     const isPast = ymd < today;
     const isFuture = ymd > today;
-    const dayLogs = logsByDayByRoutine.get(ymd) ?? new Map<string, LogBucket>();
+    const dayLogs = logsByDayByKey.get(ymd) ?? new Map<string, LogBucket>();
 
-    // Build plannedCounts: union of manual, cycle, auto-scheduled.
-    const plannedCounts = new Map<string, number>();
-    for (const rid of manualByDay.get(ymd) ?? []) {
-      plannedCounts.set(rid, (plannedCounts.get(rid) ?? 0) + 1);
+    // plannedSlots: composite-key → { routineId, activityTypeId, plannedCount }.
+    // Mirrors the home-page WaaG approach so typed manual/cycle entries
+    // (e.g., a "Trail Run on Tuesday" scheduled against the synthetic
+    // endurance routine) stay distinct from a "Hike" scheduled the same
+    // day.
+    type Slot = { routineId: string; activityTypeId: string | null; planned: number };
+    const plannedSlots = new Map<string, Slot>();
+    const bumpSlot = (routineId: string, activityTypeId: string | null, inc: number) => {
+      const key = entryKey(routineId, activityTypeId);
+      const existing = plannedSlots.get(key);
+      if (existing) {
+        existing.planned = Math.max(existing.planned, existing.planned + inc);
+      } else {
+        plannedSlots.set(key, { routineId, activityTypeId, planned: inc });
+      }
+    };
+
+    for (const slot of manualByDay.get(ymd) ?? []) {
+      bumpSlot(slot.routineId, slot.activityTypeId, 1);
     }
     for (const cycle of cycleEntries) {
       if (cycle.cycleLengthDays <= 0) continue;
@@ -254,46 +294,59 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       );
       if (diff < 0) continue;
       if (diff % cycle.cycleLengthDays === cycle.dayOffset) {
-        plannedCounts.set(cycle.routineId, Math.max(1, plannedCounts.get(cycle.routineId) ?? 0));
+        const key = entryKey(cycle.routineId, cycle.activityTypeId);
+        if (!plannedSlots.has(key)) {
+          plannedSlots.set(key, { routineId: cycle.routineId, activityTypeId: cycle.activityTypeId, planned: 1 });
+        }
       }
     }
     for (const r of autoScheduledRoutines) {
       if (isRoutineAutoScheduledOnDay(r, ymd, null)) {
-        plannedCounts.set(r.id, Math.max(1, plannedCounts.get(r.id) ?? 0));
+        const key = entryKey(r.id, null);
+        if (!plannedSlots.has(key)) {
+          plannedSlots.set(key, { routineId: r.id, activityTypeId: null, planned: 1 });
+        }
       }
     }
-    // Surface logged-but-unplanned routines on past/today days.
+    // Surface logged-but-unplanned slots on past/today days. Use the same
+    // composite key the bucket was built under so a typed log (trail run)
+    // and a different typed log (hike) on the same day each get their
+    // own slot rather than collapsing into one.
     if (!isFuture) {
-      for (const rid of dayLogs.keys()) {
-        if (!plannedCounts.has(rid)) plannedCounts.set(rid, 0);
+      for (const [key, bucket] of dayLogs.entries()) {
+        if (!plannedSlots.has(key)) {
+          plannedSlots.set(key, {
+            routineId: bucket.routineId,
+            activityTypeId: bucket.activityTypeId,
+            planned: 0,
+          });
+        }
       }
     }
 
     const entries: DayEntry[] = [];
-    for (const [routineId, plannedCount] of plannedCounts.entries()) {
-      const r = routineMap.get(routineId);
+    for (const [key, slot] of plannedSlots.entries()) {
+      const r = routineMap.get(slot.routineId);
       if (!r) continue;
-      const bucket = dayLogs.get(routineId);
+      const bucket = dayLogs.get(key);
       const loggedCount = bucket?.count ?? 0;
       const latestLogId = bucket?.latestLogId ?? null;
-      const status: DayEntryStatus = computeStatus(plannedCount, loggedCount, isPast, isFuture);
+      const status: DayEntryStatus = computeStatus(slot.planned, loggedCount, isPast, isFuture);
       // Display name resolution:
-      //   • synthetic endurance routine → activityType name ("Run", "Bike"…)
-      //     so the user can tell what they actually did; falls back to
-      //     the literal routine name when no logs exist yet (scheduled
-      //     future days).
-      //   • synthetic sport routine → routine.name already IS the sport
-      //     ("Climbing", "Surfing") so it's meaningful as-is.
+      //   • typed slot (any routine + activityTypeId) → the activity-type
+      //     name from the bucket or the activityTypeNameById map (for
+      //     scheduled-but-unlogged future days).
+      //   • synthetic sport routine → routine.name IS the sport name.
       //   • everything else → routine.name.
-      const displayName =
-        routineId === SYNTHETIC_ENDURANCE_ROUTINE_ID && bucket?.latestActivityTypeName
-          ? bucket.latestActivityTypeName
-          : r.name;
+      const typeName =
+        bucket?.activityTypeName ??
+        (slot.activityTypeId ? activityTypeNameById.get(slot.activityTypeId) ?? null : null);
+      const displayName = typeName ?? r.name;
       entries.push({
-        routineId,
+        routineId: slot.routineId,
         routineName: displayName,
         domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
-        planned: plannedCount,
+        planned: slot.planned,
         logged: loggedCount,
         status,
         latestLogId,
