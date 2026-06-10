@@ -1827,13 +1827,6 @@ input.ghostInput::placeholder {
     width: 100%;
     justify-content: flex-start !important;
   }
-  .goalDetailHero {
-    grid-template-columns: 1fr !important;
-    gap: 14px !important;
-  }
-  .goalDetailArc {
-    justify-self: center;
-  }
   .goalDetailInfoGrid {
     grid-template-columns: 1fr 1fr !important;
   }

@@ -131,28 +131,35 @@ export default async function GoalDetailPage(props: {
       <RangeFilterRow goalId={normalizedGoalId} current={range} />
 
       <SectionCard title="Current Progress">
-        <div className="goalDetailHero" style={heroLayoutStyle}>
-          <ProgressArc fraction={entry.fractionComplete} accent={accent} />
-          <div style={heroNumbersStyle}>
-            <div style={heroPrimaryRowStyle}>
-              <span style={{ ...heroActualStyle, color: accent.color }}>{entry.actualDisplay}</span>
-              <span style={heroDividerStyle}>/</span>
-              <span style={heroTargetStyle}>{entry.targetDisplay}</span>
-            </div>
-            <div style={heroStatusLabelStyle}>{entry.timeframeStatusLabel}</div>
-            <div className="goalDetailInfoGrid" style={infoGridStyle}>
-              <InfoCell label="Target" value={entry.targetLabel} />
-              <InfoCell label="Window" value={entry.timeframeWindowLabel} />
-              <InfoCell label="Start" value={formatGoalDate(entry.goal.startDate)} />
-              {entry.goal.endDate ? <InfoCell label="End" value={formatGoalDate(entry.goal.endDate)} /> : null}
-            </div>
-            {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
-            {entry.targetHref ? (
-              <Link href={entry.targetHref} style={metaLinkStyle}>
-                Open related progress target →
-              </Link>
-            ) : null}
+        <div style={heroStyle}>
+          <div style={heroPrimaryRowStyle}>
+            <span style={{ ...heroActualStyle, color: accent.color }}>{entry.actualDisplay}</span>
+            <span style={heroOfStyle}>of {entry.targetDisplay}</span>
+            <span style={{ ...heroStatusChipStyle, borderColor: accent.border, background: accent.bg, color: accent.color }}>
+              {entry.timeframeStatusLabel}
+            </span>
           </div>
+          <div style={progressBarTrackStyle}>
+            <div
+              style={{
+                ...progressBarFillStyle,
+                width: `${Math.min(100, Math.max(0, Math.round(entry.fractionComplete * 100)))}%`,
+                background: accent.color,
+              }}
+            />
+          </div>
+          <div className="goalDetailInfoGrid" style={infoGridStyle}>
+            <InfoCell label="Target" value={entry.targetLabel} />
+            <InfoCell label="Window" value={entry.timeframeWindowLabel} />
+            <InfoCell label="Start" value={formatGoalDate(entry.goal.startDate)} />
+            {entry.goal.endDate ? <InfoCell label="End" value={formatGoalDate(entry.goal.endDate)} /> : null}
+          </div>
+          {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
+          {entry.targetHref ? (
+            <Link href={entry.targetHref} style={metaLinkStyle}>
+              Open related progress target →
+            </Link>
+          ) : null}
         </div>
       </SectionCard>
 
@@ -386,60 +393,6 @@ function formatRemainingMetric(metric: string, value: number): string {
   return Math.round(value).toString();
 }
 
-// ── Progress arc ──────────────────────────────────────────────────────────
-
-function ProgressArc({ fraction, accent }: { fraction: number; accent: GoalTypeAccent }) {
-  const size = 132;
-  const stroke = 11;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(1, fraction));
-  const dashOffset = circumference * (1 - clamped);
-  const pct = Math.round(clamped * 100);
-
-  return (
-    <div className="goalDetailArc" style={{ width: size, height: size, position: "relative", flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth={stroke}
-          fill="none"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={accent.color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          fill="none"
-        />
-      </svg>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "grid",
-          placeItems: "center",
-          textAlign: "center",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1, color: accent.color }}>{pct}%</div>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.55, marginTop: 4 }}>
-            of target
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function InfoCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="goalDetailInfoCell" style={infoCellStyle}>
@@ -525,14 +478,7 @@ const headerActionsStyle: CSSProperties = {
   flexShrink: 0,
 };
 
-const heroLayoutStyle: CSSProperties = {
-  display: "grid",
-  gap: 16,
-  gridTemplateColumns: "auto 1fr",
-  alignItems: "start",
-};
-
-const heroNumbersStyle: CSSProperties = {
+const heroStyle: CSSProperties = {
   display: "grid",
   gap: 10,
   minWidth: 0,
@@ -541,40 +487,55 @@ const heroNumbersStyle: CSSProperties = {
 const heroPrimaryRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "baseline",
-  gap: 8,
+  gap: 10,
   flexWrap: "wrap",
 };
 
 const heroActualStyle: CSSProperties = {
-  fontSize: 28,
+  fontSize: 26,
   fontWeight: 900,
   lineHeight: 1,
 };
 
-const heroDividerStyle: CSSProperties = {
-  fontSize: 20,
+const heroOfStyle: CSSProperties = {
+  fontSize: 14,
   fontWeight: 700,
-  opacity: 0.4,
+  opacity: 0.65,
 };
 
-const heroTargetStyle: CSSProperties = {
-  fontSize: 18,
+const heroStatusChipStyle: CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 11,
   fontWeight: 800,
-  opacity: 0.75,
-};
-
-const heroStatusLabelStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.7,
   letterSpacing: 0.3,
   textTransform: "uppercase",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid",
+  display: "inline-flex",
+  alignItems: "center",
+  whiteSpace: "nowrap",
 };
 
+const progressBarTrackStyle: CSSProperties = {
+  height: 6,
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.06)",
+  overflow: "hidden",
+};
+
+const progressBarFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  transition: "width 200ms ease",
+};
+
+// 3-column cap on desktop so cells don't sprawl across the hero — at
+// 4 cells (End present), the 4th wraps to a second row in a balanced 2x2.
 const infoGridStyle: CSSProperties = {
   display: "grid",
   gap: 8,
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   marginTop: 4,
 };
 
@@ -684,7 +645,7 @@ const statValueRowStyle: CSSProperties = {
 };
 
 const statValueStyle: CSSProperties = {
-  fontSize: 22,
+  fontSize: 18,
   fontWeight: 900,
   lineHeight: 1,
 };
