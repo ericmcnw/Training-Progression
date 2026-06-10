@@ -1806,22 +1806,22 @@ input.ghostInput::placeholder {
 }
 
 /* ── Goal detail page — mobile tightening ────────────────────────────────
-   The detail surface uses a flat horizontal hero + thin progress bar +
-   info cells. On mobile (<=720) the header stacks (actions go under the
-   title), the title shrinks, info cells force 2-col, and stat row forces
-   2-col. Hero primary numbers stay readable but trim 26 -> 22. */
+   Flat horizontal hero + thin progress bar + info cells. On mobile
+   (<=720): header stacks, info cells force 2-col, stat row forces
+   2-col, hero shrinks, status pill drops below numbers, range chips
+   trim. */
 @media (max-width: 720px) {
   .goalDetailPage {
-    padding: 14px !important;
-    gap: 14px !important;
+    padding: 12px !important;
+    gap: 12px !important;
   }
   .goalDetailHeader {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
+    gap: 8px !important;
   }
   .goalDetailTitle {
-    font-size: 21px !important;
+    font-size: 20px !important;
   }
   .goalDetailActions {
     width: 100%;
@@ -1838,10 +1838,27 @@ input.ghostInput::placeholder {
     padding: 10px 12px !important;
   }
   .goalDetailRangeRow {
-    gap: 4px !important;
+    gap: 3px !important;
   }
-  /* Hero shrinks slightly on mobile so the big numbers don't dominate
-     the screen on long goal names + status pills wrap cleanly. */
+  .goalDetailRangeChip {
+    padding: 5px 9px !important;
+    font-size: 11px !important;
+    min-height: 28px !important;
+  }
+  .goalDetailRangeLabel {
+    display: none !important;
+  }
+  /* Hero — shrink type sizes and put status pill on its own line
+     below the value group so the value never has to compete with the
+     pill for horizontal space. */
+  .goalDetailHeroRow {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  .goalDetailHeroStatus {
+    margin-left: 0 !important;
+  }
   .goalDetailHeroActual {
     font-size: 22px !important;
   }
@@ -1850,6 +1867,17 @@ input.ghostInput::placeholder {
   }
   .goalDetailHeroTarget {
     font-size: 16px !important;
+  }
+  /* Recent sessions — stack contribution label under the name+date so
+     wide labels (e.g. "84 reps · 12 sets") never get clipped against
+     the routine name column. */
+  .goalDetailSessionTop {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+  }
+  .goalDetailSessionContrib {
+    align-self: flex-start;
   }
 }
 

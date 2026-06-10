@@ -14,12 +14,13 @@ import type { CSSProperties } from "react";
 import MetricLineChart from "@/app/progress/MetricLineChart";
 import { SectionBackButton, SectionCard } from "@/app/progress/ui";
 import { todayAppYmd } from "@/lib/dates";
-import { getGoalInsight, formatGoalDate, formatGoalDateTime } from "@/lib/goals";
+import { getGoalInsight, formatGoalDate } from "@/lib/goals";
 import DeleteGoalButton from "../DeleteGoalButton";
 import { EditGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { subtleTextStyle } from "../ui";
 import { getFrequencyConsistency } from "@/lib/frequency-consistency";
 import GoalConsistencyPanel from "./GoalConsistencyPanel";
+import GoalRecentSessions from "./GoalRecentSessions";
 import { getFrequencyRenderMode, type FrequencyTarget } from "@/lib/frequency-state";
 import { getTypeAccent, TYPE_ICON, type GoalTypeAccent } from "@/app/plan/goals/goal-type-accent";
 
@@ -180,37 +181,7 @@ export default async function GoalDetailPage(props: {
       </SectionCard>
 
       <SectionCard title="Recent Contributing Sessions">
-        {entry.recentItems.length === 0 ? (
-          <div style={subtleTextStyle}>No logs in the current timeframe yet.</div>
-        ) : (
-          <div style={sessionListStyle}>
-            {entry.recentItems.map((item) => (
-              <Link
-                key={item.id}
-                href={`/log/${item.routineId}/logs/${item.id}`}
-                className="goalDetailSessionCard"
-                style={sessionCardStyle(accent)}
-              >
-                <div style={sessionTopRowStyle}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={sessionTitleStyle}>{item.routineName}</div>
-                    <div style={sessionDateStyle}>{formatGoalDateTime(item.performedAt)}</div>
-                  </div>
-                  <div style={{ ...sessionContributionStyle, color: accent.color }}>
-                    {item.contributionLabel}
-                  </div>
-                </div>
-                {item.detailLines && item.detailLines.length > 0 ? (
-                  <div style={detailLinesBlockStyle}>
-                    {item.detailLines.map((line, i) => (
-                      <span key={i} style={detailLineChipStyle}>{line}</span>
-                    ))}
-                  </div>
-                ) : null}
-              </Link>
-            ))}
-          </div>
-        )}
+        <GoalRecentSessions items={entry.recentItems} accent={accent} goalName={entry.goal.name} />
       </SectionCard>
 
       <SectionCard title="Manage Goal">
@@ -229,13 +200,14 @@ function RangeFilterRow({ goalId, current }: { goalId: string; current: RangeOpt
   const options: RangeOption[] = ["4w", "12w", "6mo", "1y", "all"];
   return (
     <div className="goalDetailRangeRow" style={rangeRowStyle}>
-      <span style={rangeLabelStyle}>Show</span>
+      <span className="goalDetailRangeLabel" style={rangeLabelStyle}>Show</span>
       {options.map((opt) => {
         const isActive = opt === current;
         return (
           <Link
             key={opt}
             href={opt === "12w" ? `/plan/goals/${encodeURIComponent(goalId)}` : `/plan/goals/${encodeURIComponent(goalId)}?range=${opt}`}
+            className="goalDetailRangeChip"
             style={{ ...rangeChipStyle, ...(isActive ? rangeChipActiveStyle : {}) }}
           >
             {RANGE_LABEL[opt]}
@@ -293,7 +265,7 @@ function Hero({
 
   return (
     <div style={heroStyle}>
-      <div style={heroPrimaryRowStyle}>
+      <div className="goalDetailHeroRow" style={heroPrimaryRowStyle}>
         <div style={heroValueGroupStyle}>
           {bigPrefix ? <span style={heroPrefixStyle}>{bigPrefix}</span> : null}
           <span className="goalDetailHeroActual" style={{ ...heroActualStyle, color: accent.color }}>{entry.actualDisplay}</span>
@@ -301,6 +273,7 @@ function Hero({
           <span className="goalDetailHeroTarget" style={heroTargetStyle}>{entry.targetDisplay}</span>
         </div>
         <span
+          className="goalDetailHeroStatus"
           style={{
             ...heroStatusChipStyle,
             borderColor: accent.border,
@@ -749,70 +722,6 @@ const statSuffixStyle: CSSProperties = {
   fontSize: 11,
   opacity: 0.65,
   fontWeight: 700,
-};
-
-const sessionListStyle: CSSProperties = {
-  display: "grid",
-  gap: 8,
-};
-
-function sessionCardStyle(accent: GoalTypeAccent): CSSProperties {
-  return {
-    display: "grid",
-    gap: 8,
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(128,128,128,0.20)",
-    borderLeft: `3px solid ${accent.border}`,
-    background: "rgba(255,255,255,0.02)",
-    textDecoration: "none",
-    color: "inherit",
-  };
-}
-
-const sessionTopRowStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  minWidth: 0,
-};
-
-const sessionTitleStyle: CSSProperties = {
-  fontWeight: 800,
-  fontSize: 14,
-  lineHeight: 1.25,
-  overflowWrap: "break-word",
-};
-
-const sessionDateStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  opacity: 0.65,
-  marginTop: 2,
-};
-
-const sessionContributionStyle: CSSProperties = {
-  fontWeight: 900,
-  fontSize: 13,
-  whiteSpace: "nowrap",
-  flexShrink: 0,
-};
-
-const detailLinesBlockStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 5,
-};
-
-const detailLineChipStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  padding: "3px 9px",
-  borderRadius: 999,
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  opacity: 0.88,
 };
 
 const manageRowStyle: CSSProperties = {
