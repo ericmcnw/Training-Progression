@@ -114,29 +114,41 @@ const TYPE_ACCENT: Record<GoalTypeValue, { color: string; bg: string; border: st
 
 type ScopeOption = { value: string; label: string; hint: string };
 
+// Activity-first scope model — what are you setting the goal for? Routine,
+// Sport, Endurance, Exercise, or a Group (cross-cutting combination).
+//
+// Internal scope values are stable; labels can change. "endurance" replaces
+// the legacy "cardio" value — it routes to FrequencyGoal with activity-type/
+// family triggers for FREQUENCY goals and to Goal/CARDIO for the other types
+// (current behavior). "sport" is new; for FREQUENCY it routes to
+// FrequencyGoal with the sport's synthetic routine as PRIMARY plus optional
+// subtype triggers.
+//
+// The matrix below filters which scopes a given goal type offers. Endurance
+// PERFORMANCE on non-climbing sports is gated separately (climbing-only
+// today until other sports add session metric definitions).
 const SCOPES: Record<GoalTypeValue, ScopeOption[]> = {
   FREQUENCY: [
-    // Per-routine frequency is set on the routine itself now (Edit Routine →
-    // Frequency goal block). The /goals form only handles multi-routine
-    // shapes: groups and session-type aggregates.
+    { value: "endurance",   label: "Endurance",    hint: "Run, walk, bike, swim — match by family (\"any running\") or specific type (\"trail run only\")" },
+    { value: "sport",       label: "Sport",        hint: "Climbing, surfing, tennis, golf — count sessions for a chosen sport" },
     { value: "group",       label: "Group",        hint: "Mix of routines counted together — e.g. \"Strength 3× per week\" across Push/Pull/Legs" },
-    { value: "sessionType", label: "Session type", hint: "Count logs by sport or activity type — e.g. \"Climb 2× per week\" across any climbing session" },
+    { value: "sessionType", label: "Session type", hint: "Count logs by session template — for sport detail goals not covered above" },
   ],
   VOLUME: [
-    { value: "routine",  label: "Routine",  hint: "Total output from a single routine" },
-    { value: "exercise", label: "Exercise", hint: "Reps, sets, or volume on a lift" },
-    { value: "cardio",   label: "Endurance", hint: "Distance, elevation, or duration" },
-    { value: "group",    label: "Group",    hint: "Combined workload across a training group" },
+    { value: "routine",   label: "Routine",   hint: "Total output from a single routine" },
+    { value: "exercise",  label: "Exercise",  hint: "Reps, sets, or volume on a lift" },
+    { value: "endurance", label: "Endurance", hint: "Distance, elevation, or duration" },
+    { value: "group",     label: "Group",     hint: "Combined workload across a training group" },
   ],
   PERFORMANCE: [
-    { value: "exercise", label: "Lift / movement",  hint: "Best weight or best-set duration for a lift" },
-    { value: "cardio",   label: "Endurance benchmark", hint: "Pace, distance, or elevation milestone" },
-    { value: "grade",    label: "Grade / metric",   hint: "Climbing grade, session score, or sport metric" },
+    { value: "exercise",  label: "Lift / movement",     hint: "Best weight or best-set duration for a lift" },
+    { value: "endurance", label: "Endurance benchmark", hint: "Pace, distance, or elevation milestone" },
+    { value: "grade",     label: "Grade / metric",      hint: "Climbing grade, session score, or sport metric" },
   ],
   COMPLETION: [
-    { value: "routine", label: "Routine", hint: "Complete a routine N times" },
-    { value: "cardio",  label: "Endurance",  hint: "Log endurance sessions" },
-    { value: "group",   label: "Group",   hint: "Complete any session in a group" },
+    { value: "routine",   label: "Routine",   hint: "Complete a routine N times" },
+    { value: "endurance", label: "Endurance", hint: "Log endurance sessions" },
+    { value: "group",     label: "Group",     hint: "Complete any session in a group" },
   ],
 };
 
@@ -145,47 +157,58 @@ const SCOPES: Record<GoalTypeValue, ScopeOption[]> = {
 function scopeToTargetType(goalType: GoalTypeValue, scope: string): GoalTargetTypeValue {
   if (goalType === "FREQUENCY") {
     if (scope === "sessionType") return "SESSION_TEMPLATE";
+    // endurance/sport route through the FrequencyGoal table — they don't
+    // strictly need a Goal-table targetType but we report ROUTINE here for
+    // consistency with the existing form expectations.
     return "ROUTINE";
   }
   if (goalType === "VOLUME") {
-    if (scope === "exercise") return "EXERCISE";
-    if (scope === "cardio")   return "CARDIO";
-    if (scope === "group")    return "GROUP";
+    if (scope === "exercise")  return "EXERCISE";
+    if (scope === "endurance") return "CARDIO"; // legacy enum, retained
+    if (scope === "group")     return "GROUP";
     return "ROUTINE";
   }
   if (goalType === "PERFORMANCE") {
-    if (scope === "exercise") return "EXERCISE";
-    if (scope === "cardio")   return "CARDIO";
+    if (scope === "exercise")  return "EXERCISE";
+    if (scope === "endurance") return "CARDIO";
     return "ROUTINE"; // grade — overridden if template selected
   }
   // COMPLETION
-  if (scope === "cardio") return "CARDIO";
-  if (scope === "group")  return "GROUP";
+  if (scope === "endurance") return "CARDIO";
+  if (scope === "group")     return "GROUP";
   return "ROUTINE";
 }
 
 function deriveInitialScope(initial: GoalFormInitial): string {
-  const isGroupFreq = !!initial.groupFrequency || !!initial.groupFrequencyGoalId;
   const { goalType, targetType } = initial;
   if (goalType === "FREQUENCY") {
     // Per-routine FREQUENCY no longer has a scope here — those live on the
-    // routine. Default to group for new goals; existing single-routine
-    // legacy values fall through to group too.
+    // routine. For group-frequency goals we look at the trigger shape to
+    // decide between "endurance" (family/type triggers), "sport" (subtype
+    // triggers covering a sport), or plain "group".
     if (targetType === "SESSION_TEMPLATE") return "sessionType";
+    const gf = initial.groupFrequency;
+    if (gf) {
+      if ((gf.triggerActivityFamilyIds ?? []).length > 0 || (gf.triggerActivityTypeIds ?? []).length > 0) return "endurance";
+      // Sport detection: single subtype that matches a known sport. This is
+      // a conservative heuristic — multi-subtype goals stay "group" so the
+      // existing UI doesn't strand them.
+      if ((gf.triggerSubtypes ?? []).length === 1) return "sport";
+    }
     return "group";
   }
   if (goalType === "VOLUME") {
     if (targetType === "EXERCISE") return "exercise";
-    if (targetType === "CARDIO")   return "cardio";
+    if (targetType === "CARDIO")   return "endurance";
     if (targetType === "GROUP")    return "group";
     return "routine";
   }
   if (goalType === "PERFORMANCE") {
     if (targetType === "EXERCISE") return "exercise";
-    if (targetType === "CARDIO")   return "cardio";
+    if (targetType === "CARDIO")   return "endurance";
     return "grade";
   }
-  if (targetType === "CARDIO") return "cardio";
+  if (targetType === "CARDIO") return "endurance";
   if (targetType === "GROUP")  return "group";
   return "routine";
 }
@@ -198,8 +221,8 @@ function defaultMetricForScope(goalType: GoalTypeValue, scope: string): GoalMetr
   if (goalType === "FREQUENCY") return "SESSIONS";
   if (goalType === "COMPLETION") return "COMPLETED";
   if (goalType === "PERFORMANCE") {
-    if (scope === "exercise") return "MAX_WEIGHT";
-    if (scope === "cardio")   return "PACE";
+    if (scope === "exercise")  return "MAX_WEIGHT";
+    if (scope === "endurance") return "PACE";
     return "SESSION_METRIC";
   }
   if (scope === "exercise") return "VOLUME";
@@ -291,6 +314,16 @@ export default function GoalForm({
   );
 
   const isEditMode       = !!initial.id;
+  // FREQUENCY goals with these scopes save through createFrequencyGoal (the
+  // FrequencyGoal table with primary/substitute routine links + activity-type
+  // and family triggers). Group is the legacy multi-routine path; endurance
+  // uses activity-type/family triggers; sport uses a sport's synthetic
+  // routine as PRIMARY + optional subtype triggers. All three flow through
+  // the same `groupFrequencyAction`.
+  const isFrequencyGoalFlow =
+    goalType === "FREQUENCY" && (scope === "group" || scope === "endurance" || scope === "sport");
+  // Kept as a separate flag because some rendering branches (the group-
+  // frequency routine picker UI specifically) are group-only.
   const isGroupFrequency = goalType === "FREQUENCY" && scope === "group";
   const isGradeScope     = goalType === "PERFORMANCE" && scope === "grade";
 
@@ -401,7 +434,7 @@ export default function GoalForm({
 
   const perfMetricPills: Array<[GoalMetricTypeValue, string]> =
     scope === "exercise" ? [["MAX_WEIGHT", "Top weight"], ["MAX_DURATION", "Best time"]] :
-    scope === "cardio"   ? [["PACE", "Pace"], ["DISTANCE", "Distance"], ["ELEVATION_GAIN", "Elevation"]] :
+    scope === "endurance" ? [["PACE", "Pace"], ["DISTANCE", "Distance"], ["ELEVATION_GAIN", "Elevation"]] :
     [];
 
   const timeframeOpts: Array<[GoalTimeframeValue, string]> =
@@ -417,7 +450,7 @@ export default function GoalForm({
     effectiveTargetType === "SESSION_TEMPLATE"? "Session type" :
     effectiveTargetType === "GROUP"           ? "Group" : "Routine";
 
-  const baseAction = isGroupFrequency && groupFrequencyAction ? groupFrequencyAction : action;
+  const baseAction = isFrequencyGoalFlow && groupFrequencyAction ? groupFrequencyAction : action;
   const formAction = inDrawer
     ? (formData: FormData) => {
         formData.set("noRedirect", "1");
@@ -432,13 +465,13 @@ export default function GoalForm({
   return (
     <form action={formAction} style={{ display: "grid", gap: 22 }}>
       {/* ── Hidden submission fields ─────────────────────────────── */}
-      {isGroupFrequency && initial.groupFrequencyGoalId
+      {isFrequencyGoalFlow && initial.groupFrequencyGoalId
         ? <input type="hidden" name="id" value={initial.groupFrequencyGoalId} />
         : null}
-      {!isGroupFrequency && initial.id
+      {!isFrequencyGoalFlow && initial.id
         ? <input type="hidden" name="goalId" value={initial.id} />
         : null}
-      {!isGroupFrequency && <>
+      {!isFrequencyGoalFlow && <>
         <input type="hidden" name="goalType"   value={goalType} />
         <input type="hidden" name="targetType" value={effectiveTargetType} />
         <input type="hidden" name="metricType" value={effectiveMetricType} />
@@ -506,7 +539,7 @@ export default function GoalForm({
       </div>
 
       {/* ── Step 3a: Group frequency (special path) ──────────────── */}
-      {isGroupFrequency ? (
+      {isFrequencyGoalFlow ? (
         <>
           <div style={detailCardStyle}>
             <div style={fieldGridStyle}>
