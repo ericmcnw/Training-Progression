@@ -299,7 +299,9 @@ function Hero({
 
       <InfoList
         items={[
-          { label: "Target", value: entry.targetLabel },
+          entry.targetHref
+            ? { label: "Target", value: entry.targetLabel, href: entry.targetHref, accentColor: accent.color }
+            : { label: "Target", value: entry.targetLabel },
           type === "FREQUENCY" && cadenceLabel ? { label: "Cadence", value: cadenceLabel } : null,
           { label: "Window", value: entry.timeframeWindowLabel },
           { label: "Start", value: formatGoalDate(entry.goal.startDate) },
@@ -308,11 +310,6 @@ function Hero({
       />
 
       {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
-      {entry.targetHref ? (
-        <Link href={entry.targetHref} style={metaLinkStyle}>
-          Open related progress target →
-        </Link>
-      ) : null}
     </div>
   );
 }
@@ -446,25 +443,37 @@ function formatRemainingMetric(metric: string, value: number): string {
 }
 
 // Definition-list info block — used in the Hero. Each row is a label-left,
-// value-right pair separated by a thin divider. The grid layout keeps the
-// label column a fixed width so the values left-align cleanly across rows,
-// and long values wrap inside their column instead of pushing the layout.
-function InfoList({ items }: { items: Array<{ label: string; value: string } | null | false> }) {
-  const filtered = items.filter(
-    (item): item is { label: string; value: string } => Boolean(item),
-  );
+// value-right pair separated by a thin divider. Rows can optionally carry
+// an href (and accent for the link arrow); when present the row becomes
+// the link target and the value reads as a click affordance.
+type InfoItem =
+  | { label: string; value: string; href?: undefined }
+  | { label: string; value: string; href: string; accentColor: string };
+
+function InfoList({ items }: { items: Array<InfoItem | null | false> }) {
+  const filtered = items.filter((item): item is InfoItem => Boolean(item));
   if (filtered.length === 0) return null;
   return (
     <dl className="goalDetailInfoList" style={infoListStyle}>
       {filtered.map((item, idx) => {
         const isLast = idx === filtered.length - 1;
+        const rowStyle = { ...infoRowStyle, ...(isLast ? infoRowLastStyle : {}) };
         return (
-          <div
-            key={item.label}
-            style={{ ...infoRowStyle, ...(isLast ? infoRowLastStyle : {}) }}
-          >
+          <div key={item.label} style={rowStyle}>
             <dt style={infoRowLabelStyle}>{item.label}</dt>
-            <dd style={infoRowValueStyle}>{item.value}</dd>
+            <dd style={infoRowValueStyle}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  style={{ ...infoRowValueLinkStyle, color: item.accentColor }}
+                >
+                  {item.value}
+                  <span aria-hidden style={infoRowArrowStyle}> →</span>
+                </Link>
+              ) : (
+                item.value
+              )}
+            </dd>
           </div>
         );
       })}
@@ -673,6 +682,23 @@ const infoRowValueStyle: CSSProperties = {
   overflowWrap: "break-word",
 };
 
+// Clickable target value — accent-colored text + arrow glyph signal the
+// link affordance. Only the value text is the hit target (not the entire
+// row) so the row remains a clean dl/dt/dd semantic structure.
+const infoRowValueLinkStyle: CSSProperties = {
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  fontWeight: 800,
+};
+
+const infoRowArrowStyle: CSSProperties = {
+  opacity: 0.65,
+  fontSize: 12,
+  fontWeight: 800,
+};
+
 const notesStyle: CSSProperties = {
   fontSize: 13,
   opacity: 0.85,
@@ -680,11 +706,6 @@ const notesStyle: CSSProperties = {
   borderLeft: "2px solid rgba(255,255,255,0.12)",
   paddingLeft: 10,
   marginTop: 2,
-};
-
-const metaLinkStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
 };
 
 const rangeRowStyle: CSSProperties = {
