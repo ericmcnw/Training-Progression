@@ -18,11 +18,20 @@ export type FrequencyConsistency = {
   routineNames: string[];
 };
 
-const HEATMAP_DAYS = 8 * 7 + 7; // 8 weeks of grid + a week of buffer for streak math
+// Default — 8 weeks of grid + a week of buffer so streak math handles edge
+// transitions at the leading edge cleanly. The detail page can override
+// with a wider window so users see the full requested range.
+const HEATMAP_DAYS_DEFAULT = 8 * 7 + 7;
 
-export async function getFrequencyConsistency(rawGoalId: string): Promise<FrequencyConsistency | null> {
+export async function getFrequencyConsistency(
+  rawGoalId: string,
+  options?: { windowDays?: number }
+): Promise<FrequencyConsistency | null> {
   const goalId = decodeURIComponent(rawGoalId);
   const today = todayAppYmd();
+  const windowDays = options?.windowDays && options.windowDays > 0
+    ? Math.max(14, Math.floor(options.windowDays))
+    : HEATMAP_DAYS_DEFAULT;
 
   // Group-frequency goals carry a `group-frequency:<id>` URL prefix.
   if (goalId.startsWith("group-frequency:")) {
@@ -48,6 +57,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
         .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
+      windowDays,
       triggerSubtypes: goal.triggerSubtypes,
       triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
       triggerMinSets: goal.triggerMinSets,
@@ -76,6 +86,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
         .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
         .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
+      windowDays,
     });
   }
 
@@ -119,6 +130,7 @@ export async function getFrequencyConsistency(rawGoalId: string): Promise<Freque
       .filter((rel) => Boolean(rel.routine) && !rel.routine!.isDeleted)
       .map((rel) => ({ ...rel.routine!, role: rel.role })),
     today,
+    windowDays,
   });
 }
 
@@ -126,6 +138,10 @@ async function loadAndCompute(params: {
   target: FrequencyTarget;
   routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE"; activityTypeId?: string | null }>;
   today: string;
+  /** Heatmap window in days. The detail-page time-range filter passes this
+   *  in to widen / narrow the consistency view; falls back to the default
+   *  (~9 weeks) when omitted. */
+  windowDays: number;
   /** Activity-type subtypes that broaden matching beyond the routine roster
    *  (group frequency goals only — per-routine goals don't expose triggers). */
   triggerSubtypes?: string[];
@@ -136,7 +152,7 @@ async function loadAndCompute(params: {
    *  match. Defaults to 1 (any set counts). */
   triggerMinSets?: number;
 }): Promise<FrequencyConsistency | null> {
-  const { target, routines, today } = params;
+  const { target, routines, today, windowDays } = params;
   if (routines.length === 0) return null;
 
   // Only PRIMARY routines count for the visible "this is what the goal tracks"
@@ -167,7 +183,7 @@ async function loadAndCompute(params: {
     triggerExerciseIds.length > 0 ||
     triggerActivityTypeIds.length > 0;
 
-  const since = new Date(Date.now() - HEATMAP_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
   // Widen the query when triggers are present so trigger-matched logs are
   // included in the in-memory matcher below. Without this, the heatmap
   // shows trigger-matched days as missed.
@@ -267,7 +283,10 @@ async function loadAndCompute(params: {
     target,
     logs: stateLogs,
     today,
-    trailingDays: 8 * 7,
+    // Match the heatmap window so the daily-state map covers the full
+    // requested range. Subtract the week-of-buffer that the loader adds
+    // for streak-edge math — that buffer is for fetching, not display.
+    trailingDays: Math.max(8 * 7, windowDays - 7),
   });
 
   return {

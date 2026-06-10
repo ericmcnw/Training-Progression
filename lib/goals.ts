@@ -117,6 +117,10 @@ export type GoalRecentItem = {
   routineName: string;
   performedAt: Date;
   contributionLabel: string;
+  /** Optional per-type detail lines shown under the session row on the goal
+   *  detail page. Each entry is a self-contained label like "5.2 mi · 42 min"
+   *  or "Best set: 200 lb × 5 reps". Empty / undefined renders nothing. */
+  detailLines?: string[];
 };
 
 export type GoalInsight = {
@@ -927,6 +931,83 @@ function recentContributionLabel(goal: GoalWithConfig, log: GoalLog, exerciseIds
   return formatMetricValue(goal, metricForLog(goal, log, exerciseIds));
 }
 
+// Per-type session detail lines — shown under each row on the goal detail
+// page. Empty array means "nothing to show beyond the contribution label."
+// We're conservative: only the data we actually have on the log enters
+// here; missing fields are silently dropped (no "—" placeholders).
+function recentContributionDetails(
+  goal: GoalWithConfig,
+  log: GoalLog,
+  exerciseIds: Set<string>
+): string[] {
+  const lines: string[] = [];
+
+  // Endurance-flavored goals — distance / time / elevation summary.
+  if (
+    goal.metricType === "DISTANCE" ||
+    goal.metricType === "DURATION" ||
+    goal.metricType === "ELEVATION_GAIN" ||
+    goal.metricType === "PACE"
+  ) {
+    const parts: string[] = [];
+    if (log.distanceMi && log.distanceMi > 0) parts.push(`${log.distanceMi.toFixed(1)} mi`);
+    if (log.durationSec && log.durationSec > 0) parts.push(formatSeconds(log.durationSec));
+    if (log.elevationGainFt && log.elevationGainFt > 0) parts.push(`${Math.round(log.elevationGainFt)} ft elev`);
+    if (parts.length > 0) lines.push(parts.join(" · "));
+    if (log.distanceMi && log.durationSec && log.distanceMi > 0) {
+      const pacePerMi = log.durationSec / log.distanceMi;
+      lines.push(`Pace ${formatSeconds(pacePerMi)} / mi`);
+    }
+    return lines;
+  }
+
+  // Strength-flavored exercise goals — show the best matching set for the
+  // tracked exercise(s). Single line: "Best: 200 lb × 5 · 4 sets".
+  if (exerciseIds.size > 0 && (goal.metricType === "MAX_WEIGHT" || goal.metricType === "VOLUME" || goal.metricType === "REPS" || goal.metricType === "SETS")) {
+    const relevant = log.exercises.filter((entry) => exerciseIds.has(entry.exerciseId));
+    if (relevant.length === 0) return lines;
+
+    const minReps = goal.config?.minReps ?? 0;
+    if (goal.metricType === "MAX_WEIGHT") {
+      let bestWeight = 0;
+      let bestReps = 0;
+      for (const entry of relevant) {
+        for (const set of entry.sets) {
+          const w = set.weightLb ?? 0;
+          const r = set.reps ?? 0;
+          if (minReps > 1 && r < minReps) continue;
+          if (w > bestWeight) {
+            bestWeight = w;
+            bestReps = r;
+          }
+        }
+      }
+      if (bestWeight > 0) {
+        lines.push(bestReps > 0 ? `Best set ${bestWeight} lb × ${bestReps}` : `Best set ${bestWeight} lb`);
+      }
+    } else if (goal.metricType === "VOLUME") {
+      const vol = relevant.reduce(
+        (sum, entry) => sum + entry.sets.reduce((s, set) => s + (set.reps ?? 0) * (set.weightLb ?? 0), 0),
+        0
+      );
+      const totalSets = relevant.reduce((sum, entry) => sum + entry.sets.length, 0);
+      if (vol > 0) lines.push(`${vol.toFixed(0)} lb volume · ${totalSets} sets`);
+    } else if (goal.metricType === "REPS") {
+      const reps = relevant.reduce((sum, entry) => sum + entry.sets.reduce((s, set) => s + (set.reps ?? 0), 0), 0);
+      const setCount = relevant.reduce((sum, entry) => sum + entry.sets.length, 0);
+      if (reps > 0) lines.push(`${reps} reps · ${setCount} sets`);
+    } else if (goal.metricType === "SETS") {
+      const setCount = relevant.reduce((sum, entry) => sum + entry.sets.length, 0);
+      if (setCount > 0) lines.push(`${setCount} sets`);
+    }
+    return lines;
+  }
+
+  // Completion / Frequency — no extra detail, the contribution label
+  // ("1 completed" / a session count) already says what happened.
+  return lines;
+}
+
 async function buildGoalInsightCore(
   parsedGoal: GoalWithConfig,
   descriptor: Awaited<ReturnType<typeof getTargetDescriptor>>,
@@ -950,6 +1031,7 @@ async function buildGoalInsightCore(
     routineName: log.routine.name,
     performedAt: log.performedAt,
     contributionLabel: recentContributionLabel(parsedGoal, log, exerciseIds),
+    detailLines: recentContributionDetails(parsedGoal, log, exerciseIds),
   }));
 
   return {
