@@ -121,6 +121,7 @@ export default function GoalConsistencyPanel({
           weeks={weeks}
           weeklyContributions={weeklyContributions}
           onLogClick={onLogClick}
+          compact
         />
       )}
 

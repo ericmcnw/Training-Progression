@@ -57,19 +57,20 @@ export default function WeeklyFrequencyBars({
   weeklyContributions,
   onLogClick,
   weeks: weeksProp = 8,
+  compact = false,
 }: {
   target: FrequencyTarget;
   state: FrequencyState;
   today: string;
-  // Per-week contributing logs, oldest → newest, length matches the
-  // requested weeks. When provided, bars become clickable.
   weeklyContributions?: WeekContribution[];
-  // Fires when a date pill in the expansion is tapped. Parent renders the
-  // floating popover with the full log report.
   onLogClick?: (log: ContributionLog) => void;
   /** How many trailing weeks to render. Defaults to 8 for back-compat with
    *  the home page; goal detail page passes the range-filter value. */
   weeks?: number;
+  /** When true (goal detail page), hides the internal header — the parent
+   *  SectionCard already provides the title and TypeHighlights renders the
+   *  same streak/window stats above this surface. */
+  compact?: boolean;
 }) {
   const WEEKS = Math.max(4, Math.min(52, Math.floor(weeksProp)));
   const targetCount = Math.max(1, target.targetCount);
@@ -109,22 +110,24 @@ export default function WeeklyFrequencyBars({
 
   return (
     <div style={shell}>
-      <div style={headerRow}>
-        <div style={titleBlock}>
-          <div style={titleLine}>Last {WEEKS} weeks</div>
-          <div style={subLine}>{cadenceLabel}</div>
+      {!compact ? (
+        <div style={headerRow}>
+          <div style={titleBlock}>
+            <div style={titleLine}>Last {WEEKS} weeks</div>
+            <div style={subLine}>{cadenceLabel}</div>
+          </div>
+          <div style={statsRow}>
+            <Stat label="This week" value={`${state.currentWindow.progress} / ${targetCount}`} accent={accent} />
+            <Stat label="Status" value={statusLabel} accent={accent} />
+            <Stat label="Hit" value={`${weeksHit} / ${WEEKS}`} accent="rgba(132,204,255,0.95)" />
+            <Stat
+              label="Streak"
+              value={String(Math.max(state.windowStreak, state.currentDayStreak))}
+              accent="rgba(251,146,60,0.95)"
+            />
+          </div>
         </div>
-        <div style={statsRow}>
-          <Stat label="This week" value={`${state.currentWindow.progress} / ${targetCount}`} accent={accent} />
-          <Stat label="Status" value={statusLabel} accent={accent} />
-          <Stat label="Hit" value={`${weeksHit} / ${WEEKS}`} accent="rgba(132,204,255,0.95)" />
-          <Stat
-            label="Streak"
-            value={String(Math.max(state.windowStreak, state.currentDayStreak))}
-            accent="rgba(251,146,60,0.95)"
-          />
-        </div>
-      </div>
+      ) : null}
 
       <div style={{ ...barsRowBase, gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
         {weeks.map((week) => {

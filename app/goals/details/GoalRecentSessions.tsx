@@ -7,9 +7,28 @@
 
 import { useState, type CSSProperties } from "react";
 import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
-import { formatGoalDateTime } from "@/lib/goals";
 import type { GoalRecentItem } from "@/lib/goals";
 import type { GoalTypeAccent } from "@/app/plan/goals/goal-type-accent";
+
+// Compact "Aug 15 · 6:30 PM" formatter — drops the year for current-year
+// dates (the goal detail context is "recent", year is implied), drops
+// the seconds the locale default includes, and uses a middle-dot separator
+// so the date+time read as a single unit instead of two stamps. Older
+// dates fall back to including the year so it's still clear.
+function formatRecentSessionDate(date: Date): string {
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const dateLabel = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const timeLabel = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${dateLabel} · ${timeLabel}`;
+}
 
 export default function GoalRecentSessions({
   items,
@@ -52,7 +71,7 @@ export default function GoalRecentSessions({
           <div className="goalDetailSessionTop" style={topRowStyle}>
             <div style={textBlockStyle}>
               <div style={routineNameStyle}>{item.routineName}</div>
-              <div style={dateStyle}>{formatGoalDateTime(item.performedAt)}</div>
+              <div style={dateStyle}>{formatRecentSessionDate(item.performedAt)}</div>
             </div>
             <div className="goalDetailSessionContrib" style={{ ...contribStyle, color: accent.color }}>
               {item.contributionLabel}

@@ -259,9 +259,9 @@ function Hero({
       remaining > 0
         ? `${remaining} ${remaining === 1 ? "session" : "sessions"} to go`
         : "All sessions complete ✓";
-  } else if (type === "FREQUENCY" && cadenceLabel) {
-    tinyLine = `${cadenceLabel} · ${entry.timeframeWindowLabel}`;
   }
+  // FREQUENCY skips tinyLine — the cadence + window appear as InfoList rows
+  // below, so duplicating them as a tinyLine creates noise.
 
   return (
     <div style={heroStyle}>
@@ -297,13 +297,15 @@ function Hero({
 
       {tinyLine ? <div style={heroTinyLineStyle}>{tinyLine}</div> : null}
 
-      <div className="goalDetailInfoGrid" style={infoGridStyle}>
-        <InfoCell label="Target" value={entry.targetLabel} />
-        {type === "FREQUENCY" && cadenceLabel ? <InfoCell label="Cadence" value={cadenceLabel} /> : null}
-        <InfoCell label="Window" value={entry.timeframeWindowLabel} />
-        <InfoCell label="Start" value={formatGoalDate(entry.goal.startDate)} />
-        {entry.goal.endDate ? <InfoCell label="End" value={formatGoalDate(entry.goal.endDate)} /> : null}
-      </div>
+      <InfoList
+        items={[
+          { label: "Target", value: entry.targetLabel },
+          type === "FREQUENCY" && cadenceLabel ? { label: "Cadence", value: cadenceLabel } : null,
+          { label: "Window", value: entry.timeframeWindowLabel },
+          { label: "Start", value: formatGoalDate(entry.goal.startDate) },
+          entry.goal.endDate ? { label: "End", value: formatGoalDate(entry.goal.endDate) } : null,
+        ]}
+      />
 
       {entry.goal.notes ? <div style={notesStyle}>{entry.goal.notes}</div> : null}
       {entry.targetHref ? (
@@ -334,16 +336,16 @@ function TypeHighlights({
     const longestStreak = Math.max(state.longestDayStreak, state.longestWindowStreak);
     return (
       <SectionCard title="Streaks">
-        <div className="goalDetailStatRow" style={statRowStyle}>
-          <Stat label="Current streak" value={`${currentStreak}`} suffix={currentStreak === 1 ? "day" : "days"} accent={accent} />
-          <Stat label="Longest streak" value={`${longestStreak}`} suffix={longestStreak === 1 ? "day" : "days"} accent={accent} />
+        <StatRow cols={3}>
+          <Stat label="Current" value={`${currentStreak}`} suffix={currentStreak === 1 ? "day" : "days"} accent={accent} />
+          <Stat label="Longest" value={`${longestStreak}`} suffix={longestStreak === 1 ? "day" : "days"} accent={accent} />
           <Stat
             label="This window"
             value={`${state.currentWindow.progress}`}
             suffix={`of ${state.currentWindow.target}`}
             accent={accent}
           />
-        </div>
+        </StatRow>
       </SectionCard>
     );
   }
@@ -353,11 +355,11 @@ function TypeHighlights({
     const pctPace = Math.round(entry.fractionComplete * 100);
     return (
       <SectionCard title="Accumulation">
-        <div className="goalDetailStatRow" style={statRowStyle}>
+        <StatRow cols={3}>
           <Stat label="Logged" value={entry.actualDisplay} accent={accent} />
           <Stat label="Remaining" value={formatRemainingMetric(entry.goal.metricType, remaining)} accent={accent} />
           <Stat label="Pace" value={`${pctPace}%`} suffix="of target" accent={accent} />
-        </div>
+        </StatRow>
       </SectionCard>
     );
   }
@@ -366,7 +368,7 @@ function TypeHighlights({
     const gap = Math.max(0, entry.targetValue - entry.actualValue);
     return (
       <SectionCard title="Performance">
-        <div className="goalDetailStatRow" style={statRowStyle}>
+        <StatRow cols={3}>
           <Stat label="Best so far" value={entry.actualDisplay} accent={accent} />
           <Stat label="Target" value={entry.targetDisplay} accent={accent} />
           <Stat
@@ -374,7 +376,7 @@ function TypeHighlights({
             value={gap > 0 ? formatRemainingMetric(entry.goal.metricType, gap) : "Hit ✓"}
             accent={accent}
           />
-        </div>
+        </StatRow>
       </SectionCard>
     );
   }
@@ -383,15 +385,29 @@ function TypeHighlights({
     const remaining = Math.max(0, entry.targetValue - entry.actualValue);
     return (
       <SectionCard title="Completion">
-        <div className="goalDetailStatRow" style={statRowStyle}>
+        <StatRow cols={2}>
           <Stat label="Completed" value={`${entry.actualValue}`} suffix={`of ${entry.targetValue}`} accent={accent} />
           <Stat label="To go" value={remaining > 0 ? `${remaining}` : "Done ✓"} accent={accent} />
-        </div>
+        </StatRow>
       </SectionCard>
     );
   }
 
   return null;
+}
+
+function StatRow({ children, cols = 3 }: { children: React.ReactNode; cols?: 2 | 3 }) {
+  return (
+    <div
+      className="goalDetailStatRow"
+      style={{
+        ...statRowStyle,
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Stat({
@@ -409,7 +425,7 @@ function Stat({
     <div className="goalDetailStatCell" style={{ ...statCellStyle, borderColor: accent.border, background: accent.bg }}>
       <div style={statLabelStyle}>{label}</div>
       <div style={statValueRowStyle}>
-        <span style={{ ...statValueStyle, color: accent.color }}>{value}</span>
+        <span className="goalDetailStatValue" style={{ ...statValueStyle, color: accent.color }}>{value}</span>
         {suffix ? <span style={statSuffixStyle}>{suffix}</span> : null}
       </div>
     </div>
@@ -429,12 +445,30 @@ function formatRemainingMetric(metric: string, value: number): string {
   return Math.round(value).toString();
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
+// Definition-list info block — used in the Hero. Each row is a label-left,
+// value-right pair separated by a thin divider. The grid layout keeps the
+// label column a fixed width so the values left-align cleanly across rows,
+// and long values wrap inside their column instead of pushing the layout.
+function InfoList({ items }: { items: Array<{ label: string; value: string } | null | false> }) {
+  const filtered = items.filter(
+    (item): item is { label: string; value: string } => Boolean(item),
+  );
+  if (filtered.length === 0) return null;
   return (
-    <div className="goalDetailInfoCell" style={infoCellStyle}>
-      <div style={infoCellLabelStyle}>{label}</div>
-      <div style={infoCellValueStyle}>{value}</div>
-    </div>
+    <dl className="goalDetailInfoList" style={infoListStyle}>
+      {filtered.map((item, idx) => {
+        const isLast = idx === filtered.length - 1;
+        return (
+          <div
+            key={item.label}
+            style={{ ...infoRowStyle, ...(isLast ? infoRowLastStyle : {}) }}
+          >
+            <dt style={infoRowLabelStyle}>{item.label}</dt>
+            <dd style={infoRowValueStyle}>{item.value}</dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -598,37 +632,44 @@ const progressBarFillStyle: CSSProperties = {
   transition: "width 200ms ease",
 };
 
-// 3-column cap on desktop so cells don't sprawl across the hero — at
-// 4 cells (End present), the 4th wraps to a second row in a balanced 2x2.
-const infoGridStyle: CSSProperties = {
+// Definition-list info block — flat label-value rows with thin dividers.
+// No boxes (the SectionCard already provides the container), so row
+// heights stay consistent regardless of value length. Long values wrap
+// inside the value column instead of pushing the layout off-grid.
+const infoListStyle: CSSProperties = {
   display: "grid",
-  gap: 8,
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  marginTop: 4,
+  gap: 0,
+  margin: "4px 0 0",
 };
 
-const infoCellStyle: CSSProperties = {
+const infoRowStyle: CSSProperties = {
   display: "grid",
-  gap: 2,
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(255,255,255,0.025)",
-  minWidth: 0,
+  gridTemplateColumns: "90px minmax(0, 1fr)",
+  gap: 14,
+  padding: "10px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  alignItems: "baseline",
 };
 
-const infoCellLabelStyle: CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 800,
-  letterSpacing: 0.5,
+const infoRowLastStyle: CSSProperties = {
+  borderBottom: "none",
+  paddingBottom: 2,
+};
+
+const infoRowLabelStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.6,
   textTransform: "uppercase",
   opacity: 0.55,
 };
 
-const infoCellValueStyle: CSSProperties = {
+const infoRowValueStyle: CSSProperties = {
+  margin: 0,
   fontSize: 13,
   fontWeight: 700,
-  lineHeight: 1.25,
+  lineHeight: 1.35,
   overflowWrap: "break-word",
 };
 
@@ -682,45 +723,55 @@ const rangeChipActiveStyle: CSSProperties = {
   color: "rgb(199,210,254)",
 };
 
+// Stat row — N equal columns (set by --stat-cols), uniform cell heights
+// via auto-fit child `align-items: stretch`. Each cell is a tile with
+// label on top and value below (consistent baseline across cells).
 const statRowStyle: CSSProperties = {
   display: "grid",
-  gap: 10,
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 8,
+  gridTemplateColumns: "var(--stat-cols, repeat(3, minmax(0, 1fr)))",
 };
 
 const statCellStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
   gap: 6,
-  padding: "12px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(128,128,128,0.22)",
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.18)",
   background: "rgba(255,255,255,0.02)",
+  minHeight: 64,
+  minWidth: 0,
 };
 
 const statLabelStyle: CSSProperties = {
-  fontSize: 10,
+  fontSize: 9.5,
   fontWeight: 900,
   letterSpacing: 0.5,
   textTransform: "uppercase",
-  opacity: 0.65,
+  opacity: 0.6,
+  lineHeight: 1.2,
 };
 
 const statValueRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "baseline",
-  gap: 5,
+  gap: 4,
   flexWrap: "wrap",
+  minWidth: 0,
 };
 
 const statValueStyle: CSSProperties = {
   fontSize: 18,
   fontWeight: 900,
-  lineHeight: 1,
+  lineHeight: 1.1,
+  overflowWrap: "break-word",
 };
 
 const statSuffixStyle: CSSProperties = {
-  fontSize: 11,
-  opacity: 0.65,
+  fontSize: 10,
+  opacity: 0.6,
   fontWeight: 700,
 };
 

@@ -1827,15 +1827,23 @@ input.ghostInput::placeholder {
     width: 100%;
     justify-content: flex-start !important;
   }
-  .goalDetailInfoGrid {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 6px !important;
+  /* Info-list rows are responsive by default — label col 90px, value col
+     fills. Just slightly tighter row padding on mobile. */
+  .goalDetailInfoList > div {
+    padding: 8px 0 !important;
   }
-  .goalDetailStatRow {
-    grid-template-columns: 1fr 1fr !important;
-  }
+  /* Stat row keeps its column count from the type wrapper (StatRow cols=).
+     On mobile, shrink padding + value font so 3 cells fit at 360px. */
   .goalDetailStatCell {
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
+    min-height: 56px !important;
+  }
+  .goalDetailStatCell > div:first-child {
+    font-size: 9px !important;
+    letter-spacing: 0.4 !important;
+  }
+  .goalDetailStatCell .goalDetailStatValue {
+    font-size: 16px !important;
   }
   .goalDetailRangeRow {
     gap: 3px !important;
