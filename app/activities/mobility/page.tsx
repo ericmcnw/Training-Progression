@@ -64,7 +64,15 @@ export default async function MobilityWorldPage(props: {
   // need a stable window). Stats + recent-sessions list use the filter.
   const chartCutoff = new Date(now.getTime() - 84 * 24 * 60 * 60 * 1000);
   const rangeCutoff = range === "all" ? null : new Date(now.getTime() - RANGE_DAYS[range] * 24 * 60 * 60 * 1000);
-  const widestCutoff = rangeCutoff && rangeCutoff < chartCutoff ? rangeCutoff : chartCutoff;
+  // widestCutoff = the OLDER of (chart window, stats window). null = unbounded
+  // when range=all so the Recent Sessions list actually surfaces all time
+  // instead of silently capping at 12 weeks.
+  const widestCutoff: Date | null =
+    range === "all"
+      ? null
+      : rangeCutoff && rangeCutoff < chartCutoff
+        ? rangeCutoff
+        : chartCutoff;
 
   // Parallel: routines list + every log within the widest window. The log
   // query uses an OR over routine-domain candidates so we don't have to
@@ -79,7 +87,7 @@ export default async function MobilityWorldPage(props: {
     }),
     prisma.routineLog.findMany({
       where: {
-        performedAt: { gte: widestCutoff },
+        ...(widestCutoff ? { performedAt: { gte: widestCutoff } } : {}),
         routine: {
           isPlaceholder: false,
           OR: [
