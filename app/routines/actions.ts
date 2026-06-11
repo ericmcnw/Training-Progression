@@ -2369,8 +2369,10 @@ async function resolveClimbLocationId(input: {
 /** Walk a draft list and resolve any `newAreaName` strings into ClimbArea
  *  rows scoped to `locationId`. Mutates `areaId` in place so the caller
  *  can pass the same array straight into the ClimbAttempt createMany.
- *  Areas dedup case-insensitively per location; an attempt without a
- *  location keeps its free-text `area` value and skips the FK. */
+ *  Areas dedup fuzzily per location — punctuation / whitespace / case /
+ *  trailing-s variants reuse the existing row ("Warm-up Wall" typed when
+ *  "Warmup Wall" exists links instead of duplicating). An attempt without
+ *  a location keeps its free-text `area` value and skips the FK. */
 async function resolveAttemptAreas(
   attempts: Array<{
     area?: string | null;
@@ -2380,25 +2382,35 @@ async function resolveAttemptAreas(
   locationId: string | null,
 ): Promise<void> {
   if (!locationId) return;
-  const nameToId = new Map<string, string>();
+  const needsResolution = attempts.some(
+    (a) => !a.areaId && (a.newAreaName?.trim() || a.area?.trim())
+  );
+  if (!needsResolution) return;
+
+  // One fetch for the location's areas; fuzzy-match in memory. Area counts
+  // per location are tiny (sectors at a crag), so this beats per-name
+  // queries and lets us normalize harder than SQL `mode: insensitive`.
+  const { fuzzyDuplicateKey } = await import("@/lib/activity-spots");
+  const existingAreas = await prisma.climbArea.findMany({
+    where: { locationId },
+    select: { id: true, name: true },
+  });
+  const keyToId = new Map(existingAreas.map((a) => [fuzzyDuplicateKey(a.name), a.id]));
+
   for (const attempt of attempts) {
     if (attempt.areaId) continue;
     const raw = attempt.newAreaName?.trim() || attempt.area?.trim();
     if (!raw) continue;
-    const lookupKey = raw.toLowerCase();
-    if (nameToId.has(lookupKey)) {
-      attempt.areaId = nameToId.get(lookupKey)!;
-      continue;
+    const key = fuzzyDuplicateKey(raw);
+    if (!key) continue;
+    let areaId = keyToId.get(key);
+    if (!areaId) {
+      areaId = (await prisma.climbArea.create({
+        data: { locationId, name: raw },
+        select: { id: true },
+      })).id;
+      keyToId.set(key, areaId);
     }
-    const existing = await prisma.climbArea.findFirst({
-      where: { locationId, name: { equals: raw, mode: "insensitive" } },
-      select: { id: true },
-    });
-    const areaId = existing?.id ?? (await prisma.climbArea.create({
-      data: { locationId, name: raw },
-      select: { id: true },
-    })).id;
-    nameToId.set(lookupKey, areaId);
     attempt.areaId = areaId;
   }
 }

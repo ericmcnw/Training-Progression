@@ -176,8 +176,29 @@ export async function mergeClimbLocations(input: { sourceId: string; targetId: s
       await tx.climbProblem.delete({ where: { id: c.sourceProblemId } });
     }
 
-    // 5) Finally, delete the source location. By this point it has no logs,
-    //    no problems, and no media — the cascade rules are no-ops.
+    // 5) Carry areas over. Without this, the source's ClimbArea rows
+    //    cascade-delete with the location and their attempts' areaId goes
+    //    null — silent data loss. Same-named areas at the target absorb
+    //    the source area's attempts; everything else re-parents.
+    const sourceAreas = await tx.climbArea.findMany({
+      where: { locationId: input.sourceId },
+      select: { id: true, name: true },
+    });
+    for (const area of sourceAreas) {
+      const clash = await tx.climbArea.findFirst({
+        where: { locationId: input.targetId, name: { equals: area.name, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (clash) {
+        await tx.climbAttempt.updateMany({ where: { areaId: area.id }, data: { areaId: clash.id } });
+        await tx.climbArea.delete({ where: { id: area.id } });
+      } else {
+        await tx.climbArea.update({ where: { id: area.id }, data: { locationId: input.targetId } });
+      }
+    }
+
+    // 6) Finally, delete the source location. By this point it has no logs,
+    //    no problems, no media, and no areas — the cascade rules are no-ops.
     await tx.climbLocation.delete({ where: { id: input.sourceId } });
   });
 

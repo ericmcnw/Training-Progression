@@ -106,6 +106,21 @@ export function fuzzyDuplicateKey(name: string): string {
   return stripped.endsWith("s") ? stripped.slice(0, -1) : stripped;
 }
 
+// True when two spot names look like the same place. Exact fuzzy-key
+// match, OR one key contains the other ("Ward Pound Ridge" vs "Ward
+// Pound Ridge Reservation" — exact equality missed that real duplicate).
+// Containment requires ≥6 chars on the shorter key so "rock" doesn't
+// match every crag with "rock" in the name. Suggestion-only — callers
+// surface a nudge, never auto-merge.
+export function isFuzzySpotMatch(nameA: string, nameB: string): boolean {
+  const a = fuzzyDuplicateKey(nameA);
+  const b = fuzzyDuplicateKey(nameB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= 6 && long.includes(short);
+}
+
 export function getActivitySpotConfig(slug: string): ActivitySpotConfig | null {
   const entry = getActivityEntry(slug);
   if (!entry) return null;

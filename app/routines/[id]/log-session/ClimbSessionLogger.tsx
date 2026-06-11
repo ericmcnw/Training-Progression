@@ -870,7 +870,15 @@ export default function ClimbSessionLogger({
               return false;
             };
 
+            const showFilter =
+              systemProblems.length > 6 &&
+              (flashedProblems.length > 0 || sentProblems.length > 0 || projectProblems.length > 0);
+
+            // Filter only applies while its pills are visible — a stale
+            // filter from a bigger location must not silently empty the
+            // chip list at a location too small to render the pills.
             const bucketProblems =
+              !showFilter ? systemProblems :
               problemFilter === "flashed" ? flashedProblems :
               problemFilter === "sent" ? sentProblems :
               problemFilter === "projects" ? projectProblems :
@@ -880,10 +888,6 @@ export default function ClimbSessionLogger({
             const visibleProblems = areaFallback ? bucketProblems : areaScoped;
             // Show per-chip area tags whenever the list spans areas.
             const showAreaTags = !areaFilterOn || areaFallback;
-
-            const showFilter =
-              systemProblems.length > 6 &&
-              (flashedProblems.length > 0 || sentProblems.length > 0 || projectProblems.length > 0);
 
             return (
               <div>
@@ -1667,6 +1671,5 @@ function problemFilterPillStyle(active: boolean): React.CSSProperties {
     fontWeight: 800,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    minHeight: 30,
   };
 }

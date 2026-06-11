@@ -26,7 +26,7 @@ import type {
   ActivitySpotConfig,
   SpotPickerItem,
 } from "@/lib/activity-spots";
-import { fuzzyDuplicateKey } from "@/lib/activity-spots";
+import { isFuzzySpotMatch } from "@/lib/activity-spots";
 
 // Value shape lives in lib/spot-picker-types so log-draft can reference
 // it without depending on this React component module.
@@ -638,16 +638,16 @@ export default function SpotPicker({
           )}
 
           {/* Dedup suggestion — when the user is naming a new spot and we
-              find an existing saved spot with the same fuzzy key (case /
-              punctuation / pluralization variants), nudge them to pick
-              the existing record. Saves an after-the-fact merge. */}
+              find an existing saved spot that fuzzy-matches (case /
+              punctuation / pluralization variants, OR one name containing
+              the other — "Ward Pound Ridge" vs "Ward Pound Ridge
+              Reservation"), nudge them to pick the existing record.
+              Saves an after-the-fact merge. */}
           {value.kind === "new" && (() => {
             const draftName = value.draft.name?.trim();
             if (!draftName) return null;
-            const draftKey = fuzzyDuplicateKey(draftName);
-            if (!draftKey) return null;
             const match = savedSpots.find(
-              (s) => fuzzyDuplicateKey(s.name) === draftKey && s.name.toLowerCase() !== draftName.toLowerCase()
+              (s) => isFuzzySpotMatch(s.name, draftName) && s.name.toLowerCase() !== draftName.toLowerCase()
             );
             if (!match) return null;
             return (

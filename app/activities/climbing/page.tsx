@@ -34,7 +34,7 @@
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate, relativeFromNow, toAppYmd } from "@/lib/dates";
+import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
@@ -52,14 +52,12 @@ import {
 } from "@/lib/climb-types";
 import {
   buildPyramidRows,
-  hardestGrade,
   buildProjectRollup,
   type PyramidRow,
 } from "@/lib/climb-stats";
 import {
   buildClimbingChartData,
   DISCIPLINE_LABEL,
-  DISCIPLINE_COLOR,
   DISCIPLINE_ORDER,
   type ClimbingChartWeeks,
 } from "@/lib/activities/climbing-chart";
@@ -241,10 +239,18 @@ export default async function ClimbingHubPage(props: {
     s.disciplineCounts[a.discipline] += 1;
     if (SENT_OUTCOMES.has(a.outcome)) {
       s.sends += 1;
-      // Track hardest send within the session for the recent-sessions row label
-      if (!s.hardestSend || gradeSort(a.grade, a.gradeSystem) > gradeSort(s.hardestSend, s.hardestSendSystem ?? a.gradeSystem)) {
+      // Track hardest send within the session for the recent-sessions row
+      // label. gradeSort indices are only comparable within one grade
+      // system — for mixed-discipline sessions, keep the first system
+      // encountered and only compare same-system sends against it.
+      if (!s.hardestSend) {
         s.hardestSend = a.grade;
         s.hardestSendSystem = a.gradeSystem;
+      } else if (
+        s.hardestSendSystem === a.gradeSystem &&
+        gradeSort(a.grade, a.gradeSystem) > gradeSort(s.hardestSend, a.gradeSystem)
+      ) {
+        s.hardestSend = a.grade;
       }
     }
   }
@@ -363,9 +369,18 @@ export default async function ClimbingHubPage(props: {
     row.sessions += 1;
     if (s.performedAt > row.lastVisit) row.lastVisit = s.performedAt;
     row.sends += s.sends;
-    if (s.hardestSend && (!row.hardestSend || gradeSort(s.hardestSend, s.hardestSendSystem ?? "BOULDER_V") > gradeSort(row.hardestSend, row.hardestSendSystem ?? "BOULDER_V"))) {
-      row.hardestSend = s.hardestSend;
-      row.hardestSendSystem = s.hardestSendSystem;
+    // Same-system comparison only — gradeSort indices aren't comparable
+    // across V-scale and YDS.
+    if (s.hardestSend) {
+      if (!row.hardestSend) {
+        row.hardestSend = s.hardestSend;
+        row.hardestSendSystem = s.hardestSendSystem;
+      } else if (
+        s.hardestSendSystem === row.hardestSendSystem &&
+        gradeSort(s.hardestSend, s.hardestSendSystem!) > gradeSort(row.hardestSend, row.hardestSendSystem!)
+      ) {
+        row.hardestSend = s.hardestSend;
+      }
     }
   }
   const recentLocations = [...locationMap.values()]
@@ -430,7 +445,6 @@ export default async function ClimbingHubPage(props: {
         <HubTile href="/activities/climbing/climbs" label="Climbs" stat={`${tileTotals.climbs} logged`} icon="📋" />
         <HubTile href="/activities/climbing/projects" label="Projects" stat={`${tileTotals.projects} active`} icon="🎯" />
         <HubTile href="/activities/climbing/map" label="Map" stat={`${tileTotals.locations} location${tileTotals.locations === 1 ? "" : "s"}`} icon="🗺" />
-        <HubTile href="/activities/climbing/map" label="Locations" stat="Browse all" icon="📍" />
       </div>
 
       {/* ── Per-chart range pill ─────────────────────────────────── */}
