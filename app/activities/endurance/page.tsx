@@ -12,7 +12,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate, relativeFromNow } from "@/lib/dates";
-import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionCard, SectionLinkButton, EmptyState } from "@/app/progress/ui";
+import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
+import { domainColor } from "@/lib/routines";
 import { getLogDisplayName } from "@/lib/routine-display";
 import { loadEnduranceChartData } from "@/lib/activities/endurance-chart";
 import { loadEndurancePaceChart } from "@/lib/activities/endurance-pace";
@@ -182,27 +184,17 @@ export default async function EnduranceWorldPage(props: {
 
   return (
     <>
-      <TargetHeader
-        section="sports"
-        title="Endurance"
-        eyebrow="Cardio"
-        subtitle="Pace, distance, time."
-        basePath="/activities/endurance"
-        tab="overview"
-        range="all"
-        hideTabs
-        hideRange
-        hideSections
-        actions={
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton href="/log" label="📋 Log endurance" />
-            <SectionLinkButton href="/activities/endurance/settings" label="⚙ Settings" />
-            <SectionLinkButton href="/activities" label="All activities" />
-          </div>
-        }
-      />
-
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+        <ActivityHeader
+          title="Endurance"
+          accent={domainColor("cardio")}
+          actions={
+            <>
+              <SectionLinkButton href="/log" label="📋 Log" />
+              <SectionLinkButton href="/activities/endurance/settings" label="⚙ Settings" />
+            </>
+          }
+        />
         {/* Family tabs — lifted above the charts so the user sees the
             cause (filter pills) above the effect (charts narrowing). */}
         <div style={tabRowStyle}>

@@ -8,7 +8,9 @@ import { applyGoalsToPulseSlots } from "@/app/progress/details/pulse-goal-slots"
 import ActivityPulseStrip from "@/app/progress/details/ActivityPulseStrip";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
-import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionCard, SectionLinkButton, EmptyState } from "@/app/progress/ui";
+import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
+import { domainColor } from "@/lib/routines";
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
@@ -58,27 +60,16 @@ export default async function StrengthWorldPage() {
   if (strength.totalSessions === 0) {
     return (
       <>
-        <TargetHeader
-          section="routines"
-          title="Strength"
-          eyebrow="Activity world"
-          subtitle="Sets, reps, weight, progression."
-          basePath="/activities/strength"
-          tab="overview"
-          range="all"
-          hideTabs
-          hideRange
-          hideSections
-          actions={
-            <>
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gap: 16 }}>
+          <ActivityHeader
+            title="Strength"
+            accent={domainColor("strength")}
+            actions={
               <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
-                + New Strength Routine
+                + New routine
               </NewRoutineDrawerButton>
-              <SectionLinkButton href="/activities" label="All Activities" />
-            </>
-          }
-        />
-        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px" }}>
+            }
+          />
           <SectionCard title="No strength data yet" subtitle="Log a workout to start seeing your strength world here.">
             <EmptyState message="Log a workout routine with sets/reps/weight to populate this view." />
           </SectionCard>
@@ -146,21 +137,17 @@ export default async function StrengthWorldPage() {
 
   return (
     <>
-      <TargetHeader
-        section="routines"
-        title="Strength"
-        eyebrow="Activity world"
-        subtitle="Sets, reps, weight, progression."
-        basePath="/activities/strength"
-        tab="overview"
-        range="all"
-        hideTabs
-        hideRange
-        hideSections
-        actions={<SectionLinkButton href="/activities" label="All Activities" />}
-      />
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+        <ActivityHeader
+          title="Strength"
+          accent={domainColor("strength")}
+          actions={
+            <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
+              + New routine
+            </NewRoutineDrawerButton>
+          }
+        />
 
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
         {/* Pulse strip */}
         <ActivityPulseStrip slots={pulseSlots} />
 

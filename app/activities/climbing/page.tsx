@@ -63,6 +63,7 @@ import {
 } from "@/lib/activities/climbing-chart";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { sportAccent } from "@/lib/sport-accent";
+import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import TrainingTagsPanel from "./TrainingTagsPanel";
 import { startOfWeekMonday } from "@/lib/week";
 
@@ -202,12 +203,7 @@ export default async function ClimbingHubPage(props: {
   if (attempts.length === 0) {
     return (
       <div style={pageStyle}>
-        <Link href="/activities" style={backLinkStyle}>← Activities</Link>
-        <header style={{ display: "grid", gap: 6 }}>
-          <div style={eyebrowStyle}>Activity world</div>
-          <h1 style={{ ...titleStyle, color: ACCENT }}>Climbing</h1>
-          <p style={subtitleStyle}>Bouldering, sport, top rope — your sends and projects.</p>
-        </header>
+        <ActivityHeader title="Climbing" accent={ACCENT} />
         <SectionCard title="No climbs yet" subtitle="Log a climbing session to start seeing pyramids, projects, and locations here.">
           <EmptyState message="Tap log to record your first session." />
         </SectionCard>
@@ -486,17 +482,15 @@ export default async function ClimbingHubPage(props: {
 
   return (
     <div style={pageStyle}>
-      <Link href="/activities" style={backLinkStyle}>← Activities</Link>
-      <header style={{ display: "grid", gap: 6 }}>
-        <div style={eyebrowStyle}>Activity world</div>
-        <h1 style={{ ...titleStyle, color: ACCENT }}>Climbing</h1>
-        <p style={subtitleStyle}>Bouldering, sport, top rope — your sends, projects, and locations.</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+      <ActivityHeader
+        title="Climbing"
+        accent={ACCENT}
+        actions={
           <NewRoutineDrawerButton presetDomain="sport" style={primaryCtaStyle}>
-            + New climbing session
+            + Log session
           </NewRoutineDrawerButton>
-        </div>
-      </header>
+        }
+      />
 
       {/* ── Pulse strip — single compact row, not four padded cards.
           Sessions counts read left-to-right from most recent window to
@@ -904,36 +898,6 @@ const pageStyle: React.CSSProperties = {
   padding: "18px 14px 60px",
   display: "grid",
   gap: 18,
-};
-
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.6,
-  textTransform: "uppercase",
-  opacity: 0.55,
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 26,
-  fontWeight: 900,
-  letterSpacing: -0.4,
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 13,
-  opacity: 0.72,
-  lineHeight: 1.5,
 };
 
 // Compact pulse strip — one bordered row, four inline stats with thin

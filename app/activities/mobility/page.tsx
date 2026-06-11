@@ -17,6 +17,7 @@ import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 
 export const dynamic = "force-dynamic";
@@ -160,19 +161,15 @@ export default async function MobilityWorldPage(props: {
 
   return (
     <div style={pageStyle}>
-      <Link href="/activities" style={backLinkStyle}>
-        ← Activities
-      </Link>
-      <header style={{ display: "grid", gap: 6 }}>
-        <div style={eyebrowStyle}>Activity world</div>
-        <h1 style={{ ...titleStyle, color: ACCENT }}>Mobility</h1>
-        <p style={subtitleStyle}>Stretching, yoga, warmups, breathwork, rehab.</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+      <ActivityHeader
+        title="Mobility"
+        accent={ACCENT}
+        actions={
           <NewRoutineDrawerButton presetDomain="mobility" style={primaryCtaStyle}>
-            + New mobility routine
+            + New routine
           </NewRoutineDrawerButton>
-        </div>
-      </header>
+        }
+      />
 
       <div style={pulseRowStyle}>
         <PulseStat label="This week" value={sessionsThisWeek} sublabel="sessions" />
@@ -356,36 +353,6 @@ const pageStyle: React.CSSProperties = {
   padding: "18px 14px 60px",
   display: "grid",
   gap: 18,
-};
-
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.6,
-  textTransform: "uppercase",
-  opacity: 0.55,
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 26,
-  fontWeight: 900,
-  letterSpacing: -0.4,
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 13,
-  opacity: 0.72,
-  lineHeight: 1.5,
 };
 
 const pulseRowStyle: React.CSSProperties = {
