@@ -51,13 +51,16 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
   const trendBorder =
     trend?.tone === "up" ? "rgba(74,222,128,0.28)" : trend?.tone === "down" ? "rgba(251,113,133,0.28)" : "rgba(255,255,255,0.10)";
 
+  // Condensed sizing (2026-06-11): padding 16/18 → 10/12, value font
+  // 32 → 22 max. The cards keep their trend chips / sub-lines / goal
+  // progress bars but stop dominating the first mobile screen.
   const baseStyle: React.CSSProperties = {
-    flex: "1 1 160px",
+    flex: "1 1 140px",
     minWidth: 0,
     display: "grid",
-    gap: 6,
-    padding: "16px 18px",
-    borderRadius: 18,
+    gap: 4,
+    padding: "10px 12px",
+    borderRadius: 12,
     border: `1px solid ${accentBorder}`,
     background: `radial-gradient(circle at top left, ${accentSoft}, transparent 55%), linear-gradient(180deg, ${accentGlow}, rgba(255,255,255,0.02))`,
     position: "relative",
@@ -139,13 +142,13 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
       <div
         style={{
           // Auto-scale value font based on string length so long values
-          // like "35.0 lb/50.0 lb" don't wrap to 3 lines at 32px. Goal
-          // cards typically need the smaller size; flat values stay big.
-          fontSize: value.length > 12 ? 22 : value.length > 8 ? 26 : 32,
+          // like "35.0 lb/50.0 lb" don't wrap to 3 lines. Goal cards
+          // typically need the smaller size; flat values stay biggest.
+          fontSize: value.length > 12 ? 15 : value.length > 8 ? 18 : 22,
           fontWeight: 950,
           lineHeight: 1.05,
           color: accent,
-          letterSpacing: -0.5,
+          letterSpacing: -0.4,
           // wrap is allowed if needed but the auto-scale above usually
           // keeps things on one line.
           wordBreak: "break-word",
@@ -153,7 +156,7 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
       >
         {value}
       </div>
-      {sub ? <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>{sub}</div> : null}
+      {sub ? <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>{sub}</div> : null}
       {goal ? (
         <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
           <div
@@ -195,7 +198,7 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
 export default function ActivityPulseStrip({ slots }: { slots: PulseSlot[] }) {
   if (slots.length === 0) return null;
   return (
-    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+    <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(136px, 1fr))" }}>
       {slots.map((slot) => (
         <PulseCard key={slot.label} {...slot} />
       ))}

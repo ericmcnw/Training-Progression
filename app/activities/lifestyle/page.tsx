@@ -187,11 +187,14 @@ export default async function LifestyleWorldPage(props: {
         }
       />
 
-      <div style={pulseRowStyle}>
-        <PulseStat label="This week" value={completionsThisWeek} sublabel="completions" />
-        <PulseStat label="Last 4 weeks" value={completions4w} sublabel="completions" />
-        <PulseStat label="Last 12 weeks" value={completions12w} sublabel="completions" />
-        <PulseStat label="All time" value={completionsAllTime} sublabel="completions" />
+      <div style={pulseStripStyle}>
+        <PulseStat label="This wk" value={completionsThisWeek} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="4 wks" value={completions4w} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="12 wks" value={completions12w} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="All time" value={completionsAllTime} />
       </div>
 
       {/* Per-chart range pill — only this chart responds. */}
@@ -309,12 +312,11 @@ function startOfWeekMonday(d: Date) {
   return date;
 }
 
-function PulseStat({ label, value, sublabel }: { label: string; value: number; sublabel: string }) {
+function PulseStat({ label, value }: { label: string; value: number }) {
   return (
     <div style={pulseStatStyle}>
-      <div style={pulseLabelStyle}>{label}</div>
       <div style={{ ...pulseValueStyle, color: ACCENT_TEXT }}>{value}</div>
-      <div style={pulseSubStyle}>{sublabel}</div>
+      <div style={pulseLabelStyle}>{label}</div>
     </div>
   );
 }
@@ -399,40 +401,48 @@ const pageStyle: React.CSSProperties = {
   gap: 18,
 };
 
-const pulseRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
-  gap: 8,
+// Compact pulse strip — one bordered row, four inline stats with thin
+// dividers (same treatment as the climbing hub). Replaces the previous
+// four padded cards that wrapped 2x2 and ate ~76px on mobile.
+const pulseStripStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 4,
+  padding: "8px 12px",
+  borderRadius: 12,
+  border: `1px solid ${ACCENT_BORDER}`,
+  background: `linear-gradient(180deg, ${ACCENT_BG}, rgba(255,255,255,0.02))`,
+};
+
+const pulseDividerStyle: React.CSSProperties = {
+  width: 1,
+  alignSelf: "stretch",
+  background: "rgba(255,255,255,0.08)",
+  flexShrink: 0,
 };
 
 const pulseStatStyle: React.CSSProperties = {
   display: "grid",
-  gap: 4,
-  padding: "12px 10px",
-  borderRadius: 12,
-  border: `1px solid ${ACCENT_BORDER}`,
-  background: `linear-gradient(180deg, ${ACCENT_BG}, rgba(255,255,255,0.02))`,
+  gap: 2,
   textAlign: "center",
+  flex: 1,
+  minWidth: 0,
 };
 
 const pulseLabelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 900,
-  letterSpacing: 0.5,
+  letterSpacing: 0.4,
   textTransform: "uppercase",
-  opacity: 0.62,
+  opacity: 0.6,
+  whiteSpace: "nowrap",
 };
 
 const pulseValueStyle: React.CSSProperties = {
-  fontSize: 22,
+  fontSize: 18,
   fontWeight: 900,
   lineHeight: 1,
-};
-
-const pulseSubStyle: React.CSSProperties = {
-  fontSize: 10,
-  opacity: 0.55,
-  fontWeight: 700,
 };
 
 const chartPillRowStyle: React.CSSProperties = {
