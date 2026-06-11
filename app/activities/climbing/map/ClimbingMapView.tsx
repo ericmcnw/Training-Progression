@@ -102,7 +102,17 @@ export default function ClimbingMapView({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [styleMode, setStyleMode] = useState<"base" | "satellite">("base");
+  // Satellite by default — crags and gym roofs read far better from
+  // imagery than from the abstract vector base.
+  const [styleMode, setStyleMode] = useState<"base" | "satellite">("satellite");
+  // Spot creation is an explicit armed mode ("+ Add spot" → tap the map)
+  // instead of every stray map tap dropping a create pin — that was the
+  // main source of accidental noise on mobile.
+  const [armedAdd, setArmedAdd] = useState(false);
+  const armedAddRef = useRef(false);
+  useEffect(() => { armedAddRef.current = armedAdd; }, [armedAdd]);
+  const pendingPinRef = useRef<PendingPin | null>(null);
+  useEffect(() => { pendingPinRef.current = pendingPin; }, [pendingPin]);
   const [isPending, startTransition] = useTransition();
 
   // ── Init map (once) ────────────────────────────────────────────────────────
@@ -110,7 +120,8 @@ export default function ClimbingMapView({
     if (!mapContainerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: getBaseStyle(DEFAULT_BASE_STYLE_ID),
+      // Match the default styleMode ("satellite") so there's no swap on mount.
+      style: getSatelliteStyle(),
       center: [0, 20],
       zoom: 1.4,
     });
@@ -120,26 +131,32 @@ export default function ClimbingMapView({
     // it explicitly after style load.
     map.once("load", () => map.setProjection({ type: "globe" }));
 
-    // Click empty map → drop a temp pin for creation. We check that the
-    // click didn't originate on an existing marker (those have stopPropagation
-    // baked in via the Marker class).
+    // Map taps:
+    //   place-existing armed → tap sets that spot's coords
+    //   "+ Add spot" armed   → tap drops the create pin + opens the form
+    //   otherwise            → tap just dismisses the selected-spot card
+    // (No more accidental "New spot" pins from stray taps while panning.)
     map.on("click", (e) => {
       setError(null);
-      setPendingPin((current) => {
-        // If we're in "place-existing" mode, the click resolves coords for
-        // that already-named location instead of creating a new one.
-        if (current?.mode === "place-existing") {
-          return { ...current, lat: e.lngLat.lat, lng: e.lngLat.lng };
-        }
-        return {
+      const current = pendingPinRef.current;
+      if (current?.mode === "place-existing") {
+        setPendingPin({ ...current, lat: e.lngLat.lat, lng: e.lngLat.lng });
+        setSheetOpen(true);
+        return;
+      }
+      if (armedAddRef.current) {
+        setPendingPin({
           mode: "create",
           lat: e.lngLat.lat,
           lng: e.lngLat.lng,
           name: current?.mode === "create" ? current.name : "",
           type: current?.mode === "create" ? current.type : "GYM",
-        };
-      });
-      setSheetOpen(true);
+        });
+        setArmedAdd(false);
+        setSheetOpen(true);
+        return;
+      }
+      setSelectedId(null);
     });
 
     mapRef.current = map;
@@ -206,7 +223,9 @@ export default function ClimbingMapView({
         el.addEventListener("click", (e) => {
           e.stopPropagation();
           setSelectedId(loc.id);
-          setSheetOpen(true);
+          // Close the sheet so the floating spot card isn't buried under
+          // the full list — pin tap shows JUST that spot's card.
+          setSheetOpen(false);
           // Read current coords from the marker, not the captured loc props
           // — those go stale after a drag, leaving flyTo stuck on the
           // original position.
@@ -323,12 +342,16 @@ export default function ClimbingMapView({
     setSelectedId(loc.id);
     if (loc.latitude != null && loc.longitude != null) {
       flyTo(loc.latitude, loc.longitude, Math.max(mapRef.current?.getZoom() ?? 1, 10));
+      // Close the sheet so the floating card (and the pin it points at)
+      // is actually visible after picking from the list.
+      setSheetOpen(false);
     } else {
       // No coords — start the place-existing flow so a click on the map
-      // assigns coords to this spot.
+      // assigns coords to this spot. Sheet stays open: its form hosts the
+      // confirm button.
       setPendingPin({ mode: "place-existing", locationId: loc.id, lat: 0, lng: 0 });
+      setSheetOpen(true);
     }
-    setSheetOpen(true);
   }
 
   function handleNominatimPick(result: NominatimResult) {
@@ -465,6 +488,24 @@ export default function ClimbingMapView({
           {styleMode === "satellite" ? "🗺 Map" : "🛰 Satellite"}
         </button>
       )}
+
+      {/* Explicit add mode — arms the next map tap to drop the create pin. */}
+      <button
+        type="button"
+        className={`spotsMapAddBtn${armedAdd ? " is-armed" : ""}`}
+        onClick={() => {
+          if (armedAdd) {
+            setArmedAdd(false);
+          } else {
+            setArmedAdd(true);
+            setPendingPin(null);
+            setSelectedId(null);
+          }
+        }}
+        aria-pressed={armedAdd}
+      >
+        {armedAdd ? "Tap map to place · ✕" : "➕ Add spot"}
+      </button>
 
       {/* Mobile bottom-sheet handle (visible <= 720px via CSS class) */}
       <button
@@ -651,35 +692,45 @@ export default function ClimbingMapView({
           )}
         </div>
 
-        {/* Selected pin actions (extra context that's redundant for keyboard
-            users — visible only when a pin is selected and on coords).
-            Two CTAs: detail page is the summary view, browse-climbs is the
-            full attempt list filtered to this spot. Stat chips above the
-            buttons preview what's at this spot so the user doesn't have to
-            navigate just to find out. */}
-        {selected && selected.latitude != null && selected.longitude != null && (
-          <div style={selectedFooter}>
-            <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>
-              {selected.name}
-            </div>
-            <SelectionStats loc={selected} />
-            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
-              <Link
-                href={`/activities/climbing/locations/${encodeURIComponent(selected.id)}`}
-                style={primaryLink}
-              >
-                View details →
-              </Link>
-              <Link
-                href={`/activities/climbing/climbs?location=${encodeURIComponent(selected.id)}`}
-                style={secondaryLink}
-              >
-                📋 Browse climbs here
-              </Link>
-            </div>
-          </div>
-        )}
       </aside>
+
+      {/* Floating spot card — what a pin tap shows. Compact: name + type,
+          stat chips, two CTAs side-by-side. Dismiss = map tap or ✕. The
+          old version buried this at the BOTTOM of the full sidebar sheet,
+          so seeing what you tapped meant scrolling past search, filters,
+          and the whole spot list. */}
+      {selected && selected.latitude != null && selected.longitude != null && !sheetOpen && (
+        <div className="spotsMapSpotCard">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {selected.type === "GYM" ? "🏠 " : "🪨 "}{selected.name}
+            </span>
+            <button type="button" onClick={() => renameSpot(selected)} style={cardIconBtn} title="Rename" aria-label="Rename spot">
+              ✎
+            </button>
+            <button type="button" onClick={() => setSelectedId(null)} style={cardIconBtn} aria-label="Close spot card">
+              ✕
+            </button>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <SelectionStats loc={selected} />
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            <Link
+              href={`/activities/climbing/locations/${encodeURIComponent(selected.id)}`}
+              style={{ ...primaryLink, flex: 1 }}
+            >
+              Details →
+            </Link>
+            <Link
+              href={`/activities/climbing/climbs?location=${encodeURIComponent(selected.id)}`}
+              style={{ ...secondaryLink, flex: 1 }}
+            >
+              📋 Climbs
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -841,15 +892,16 @@ function FilterChip({
 
 function buildMarkerElement(color: string, type: ClimbLocationType, selected: boolean, pulsing = false): HTMLDivElement {
   const wrapper = document.createElement("div");
+  // Sized via width/height (CSS bumps these on coarse pointers for thumb
+  // targets) — NEVER via transform, which MapLibre owns for positioning.
+  wrapper.className = "climbMapPin";
   wrapper.style.cssText = `
-    width: 22px; height: 28px; cursor: pointer;
+    width: 24px; height: 31px; cursor: pointer;
     display: flex; align-items: flex-start; justify-content: center;
-    transform-origin: bottom center;
-    transition: transform 120ms ease;
   `;
   // Inline SVG teardrop pin so we don't need any image assets.
   wrapper.innerHTML = `
-    <svg width="22" height="28" viewBox="0 0 22 28" xmlns="http://www.w3.org/2000/svg">
+    <svg width="100%" height="100%" viewBox="0 0 22 28" xmlns="http://www.w3.org/2000/svg">
       <path d="M11 1 C5 1, 1 5, 1 11 C1 18, 11 27, 11 27 C11 27, 21 18, 21 11 C21 5, 17 1, 11 1 Z"
         fill="${color}"
         stroke="${selected ? SELECTED_RING : "rgba(0,0,0,0.45)"}"
@@ -943,6 +995,8 @@ const sidebarSection: React.CSSProperties = {
   gap: 6,
 };
 
+// fontSize 16 — iOS Safari auto-zoom guard (CLAUDE.md rule 3a). Was 13
+// and zoomed the whole map page on focus.
 const searchInputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 12px",
@@ -950,7 +1004,7 @@ const searchInputStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 600,
   outline: "none",
 };
@@ -1178,9 +1232,20 @@ const iconBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const selectedFooter: React.CSSProperties = {
-  paddingTop: 6,
-  borderTop: "1px solid rgba(255,255,255,0.06)",
+const cardIconBtn: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  minHeight: 0,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 8,
+  color: "rgba(255,255,255,0.7)",
+  fontSize: 12,
+  cursor: "pointer",
+  padding: 0,
+  flexShrink: 0,
 };
 
 const primaryLink: React.CSSProperties = {
