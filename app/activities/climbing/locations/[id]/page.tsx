@@ -29,7 +29,8 @@ import {
   summarizeAttempts,
   type PyramidRow,
 } from "@/lib/climb-stats";
-import { SectionBackButton, SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionCard, EmptyState } from "@/app/progress/ui";
+import { sportAccent } from "@/lib/sport-accent";
 import MediaGallery, { type GalleryMediaItem } from "@/app/components/climbing/MediaGallery";
 import MediaUploader from "@/app/components/climbing/MediaUploader";
 import LocationDangerZone from "./LocationDangerZone";
@@ -331,31 +332,27 @@ export default async function ClimbLocationDetailPage(props: {
 
   return (
     <>
-      <TargetHeader
-        section="sports"
-        title={location.name}
-        eyebrow={locationLabel}
-        subtitle={
-          [location.region, hasCoords ? `${location.latitude!.toFixed(4)}, ${location.longitude!.toFixed(4)}` : null]
-            .filter(Boolean)
-            .join(" · ") || undefined
-        }
-        basePath={`/activities/climbing/locations/${location.id}`}
-        tab="overview"
-        range="all"
-        hideTabs
-        hideRange
-        actions={
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton
-              href={`/activities/climbing/climbs?location=${encodeURIComponent(location.id)}`}
-              label="📋 Browse climbs"
-            />
-            <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
-            <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
+      {/* Slim hub-style header — replaces TargetHeader + its section-nav
+          chips, which were noise on a leaf detail page. */}
+      <div style={slimHeaderShellStyle}>
+        <Link href="/activities/climbing" style={slimBackLinkStyle}>← Climbing</Link>
+        <header style={{ display: "grid", gap: 4 }}>
+          <div style={slimEyebrowStyle}>
+            {location.type === "GYM" ? "🏠" : "🪨"} {locationLabel}
+            {location.region ? ` · ${location.region}` : ""}
           </div>
-        }
-      />
+          <h1 style={slimTitleStyle}>{location.name}</h1>
+        </header>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <Link
+            href={`/activities/climbing/climbs?location=${encodeURIComponent(location.id)}`}
+            style={slimPillStyle}
+          >
+            📋 Browse climbs
+          </Link>
+          <Link href="/activities/climbing/map" style={slimPillStyle}>🗺 Map</Link>
+        </div>
+      </div>
 
       <div
         style={{
@@ -735,4 +732,51 @@ const inlineLinkStyle: React.CSSProperties = {
   fontWeight: 800,
   color: "rgba(160,200,255,0.95)",
   textDecoration: "none",
+};
+
+const slimHeaderShellStyle: React.CSSProperties = {
+  maxWidth: 1120,
+  margin: "0 auto",
+  padding: "16px 14px 12px",
+  display: "grid",
+  gap: 8,
+};
+
+const slimBackLinkStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.65,
+  textDecoration: "none",
+  color: "inherit",
+};
+
+const slimEyebrowStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  opacity: 0.55,
+};
+
+const slimTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 24,
+  fontWeight: 900,
+  letterSpacing: -0.4,
+  color: sportAccent("climbing"),
+};
+
+const slimPillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "7px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  textDecoration: "none",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  minHeight: 34,
 };

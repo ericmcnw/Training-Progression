@@ -21,17 +21,22 @@ import {
   climbOutcomeBg,
   climbOutcomeColor,
   climbOutcomeLabel,
+  climbOutcomesForDiscipline,
   gradeSort,
   type ClimbGradeSystem,
   type ClimbOutcome,
+  type ClimbingDiscipline,
 } from "@/lib/climb-types";
+import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
 import { buildProjectRollup } from "@/lib/climb-stats";
+import { updateClimbAttempt } from "./actions";
 
 export type BrowserAttempt = {
   id: string;
   grade: string;
   gradeSystem: ClimbGradeSystem;
   outcome: ClimbOutcome;
+  discipline: ClimbingDiscipline;
   areaId: string | null;
   areaName: string | null;
   notes: string | null;
@@ -90,6 +95,12 @@ export default function ClimbsBrowser({
   areas: BrowserArea[];
   initial: ClimbsBrowserInitial;
 }) {
+  // Local copy of the attempt list so inline edits land without a reload.
+  const [rows, setRows] = useState(attempts);
+  function applyEdit(updated: { id: string; grade: string; outcome: ClimbOutcome; notes: string | null; areaId: string | null; areaName: string | null }) {
+    setRows((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+  }
+
   const [q, setQ] = useState(initial.q ?? "");
   const [venue, setVenue] = useState<VenueFilter>(initial.venue ?? "all");
   const [outcome, setOutcome] = useState<OutcomeFilter>(
@@ -134,7 +145,7 @@ export default function ClimbsBrowser({
   // than the range window silently vanishing would read as data loss).
   const baseFiltered = useMemo(() => {
     const search = q.trim().toLowerCase();
-    return attempts.filter((a) => {
+    return rows.filter((a) => {
       if (venue === "indoor" && a.venue !== "GYM") return false;
       if (venue === "outdoor" && a.venue !== "CRAG") return false;
       if (locationId !== "all" && a.locationId !== locationId) return false;
@@ -152,7 +163,7 @@ export default function ClimbsBrowser({
       }
       return true;
     });
-  }, [attempts, venue, locationId, areaId, grade, q, locationAreas]);
+  }, [rows, venue, locationId, areaId, grade, q, locationAreas]);
 
   const filtered = useMemo(() => {
     return baseFiltered.filter((a) => {
@@ -209,22 +220,22 @@ export default function ClimbsBrowser({
   // climbs actually exist, so retired outcomes (FELL) don't leave a
   // permanently-empty filter sitting in the UI. ─────────────────────────
   const outcomeOptions = useMemo(() => {
-    const hasFlash = attempts.some((a) => FLASH_OUTCOMES.has(a.outcome));
-    const hasSent = attempts.some((a) => SEND_OUTCOMES_ONLY.has(a.outcome));
-    const hasProject = attempts.some((a) => a.outcome === "PROJECT" || (a.problemId && !CLEAN_OUTCOMES.has(a.outcome)));
-    const hasFalls = attempts.some((a) => a.outcome === "FELL");
+    const hasFlash = rows.some((a) => FLASH_OUTCOMES.has(a.outcome));
+    const hasSent = rows.some((a) => SEND_OUTCOMES_ONLY.has(a.outcome));
+    const hasProject = rows.some((a) => a.outcome === "PROJECT" || (a.problemId && !CLEAN_OUTCOMES.has(a.outcome)));
+    const hasFalls = rows.some((a) => a.outcome === "FELL");
     const options: Array<[string, string]> = [["all", "All"]];
     if (hasFlash) options.push(["flashed", "⚡ Flashed"]);
     if (hasSent) options.push(["sent", "Sent"]);
     if (hasProject) options.push(["project", "Projects"]);
     if (hasFalls) options.push(["falls", "Falls"]);
     return options;
-  }, [attempts]);
+  }, [rows]);
 
   // Grade options follow the venue+location+range slice so switching grade
   // never strands you on an empty list.
   const gradeOptions = useMemo(() => {
-    const candidates = attempts.filter((a) => {
+    const candidates = rows.filter((a) => {
       if (cutoff && a.performedAt < cutoff) return false;
       if (venue === "indoor" && a.venue !== "GYM") return false;
       if (venue === "outdoor" && a.venue !== "CRAG") return false;
@@ -234,7 +245,7 @@ export default function ClimbsBrowser({
     return Array.from(
       new Map(candidates.map((a) => [`${a.gradeSystem}::${a.grade}`, { grade: a.grade, system: a.gradeSystem }])).values()
     ).sort((a, b) => gradeSort(b.grade, b.system) - gradeSort(a.grade, a.system));
-  }, [attempts, cutoff, venue, locationId]);
+  }, [rows, cutoff, venue, locationId]);
 
   // Group by location, most-recent first; date sub-groups inside.
   const groups = useMemo(() => {
@@ -383,7 +394,11 @@ export default function ClimbsBrowser({
                 </Link>
               ) : null}
             </div>
-            <ClimbList attempts={group.attempts} />
+            <ClimbList
+              attempts={group.attempts}
+              areaOptions={areas.filter((a) => a.locationId === group.locationId).map((a) => a.name)}
+              onSaved={applyEdit}
+            />
           </section>
         ))
       )}
@@ -419,7 +434,17 @@ function Segmented({
   );
 }
 
-function ClimbList({ attempts }: { attempts: BrowserAttempt[] }) {
+type EditResult = { id: string; grade: string; outcome: ClimbOutcome; notes: string | null; areaId: string | null; areaName: string | null };
+
+function ClimbList({
+  attempts,
+  areaOptions,
+  onSaved,
+}: {
+  attempts: BrowserAttempt[];
+  areaOptions: string[];
+  onSaved: (updated: EditResult) => void;
+}) {
   const byDate = new Map<string, BrowserAttempt[]>();
   for (const a of attempts) {
     const key = a.performedAt.toISOString().slice(0, 10);
@@ -451,7 +476,7 @@ function ClimbList({ attempts }: { attempts: BrowserAttempt[] }) {
             </div>
             <div style={{ display: "grid", gap: 5 }}>
               {dateAttempts.map((a) => (
-                <ClimbRow key={a.id} attempt={a} />
+                <ClimbRow key={a.id} attempt={a} areaOptions={areaOptions} onSaved={onSaved} />
               ))}
             </div>
           </div>
@@ -592,9 +617,131 @@ function ProjectMiniCard({ project, now }: { project: DecoratedProject; now: Dat
   );
 }
 
-function ClimbRow({ attempt }: { attempt: BrowserAttempt }) {
+function ClimbRow({
+  attempt,
+  areaOptions,
+  onSaved,
+}: {
+  attempt: BrowserAttempt;
+  areaOptions: string[];
+  onSaved: (updated: EditResult) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [draftGrade, setDraftGrade] = useState(attempt.grade);
+  const [draftOutcome, setDraftOutcome] = useState<ClimbOutcome>(attempt.outcome);
+  const [draftArea, setDraftArea] = useState(attempt.areaName ?? "");
+  const [draftNotes, setDraftNotes] = useState(attempt.notes ?? "");
+
   const color = climbOutcomeColor(attempt.outcome);
   const bg = climbOutcomeBg(attempt.outcome);
+
+  function startEdit() {
+    setDraftGrade(attempt.grade);
+    setDraftOutcome(attempt.outcome);
+    setDraftArea(attempt.areaName ?? "");
+    setDraftNotes(attempt.notes ?? "");
+    setError(null);
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateClimbAttempt({
+        id: attempt.id,
+        grade: draftGrade,
+        outcome: draftOutcome,
+        notes: draftNotes.trim() || null,
+        areaName: draftArea.trim() || null,
+      });
+      onSaved(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    // Grade options for the attempt's discipline; current grade kept even
+    // if it's somehow off-list (legacy data).
+    const grades = climbingGradeOptionsForDiscipline(attempt.discipline);
+    const gradeList = grades.includes(draftGrade) ? grades : [draftGrade, ...grades];
+    const outcomes = climbOutcomesForDiscipline(attempt.discipline);
+    const datalistId = `climb-edit-areas-${attempt.id}`;
+    return (
+      <div style={{ ...climbRowStyle, display: "grid", gap: 8, alignItems: "stretch" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={draftGrade} onChange={(e) => setDraftGrade(e.target.value)} style={editSelectStyle} aria-label="Grade">
+            {gradeList.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          {outcomes.map((o) => {
+            const oc = climbOutcomeColor(o);
+            const active = draftOutcome === o;
+            return (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setDraftOutcome(o)}
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderStyle: "solid",
+                  borderColor: active ? oc : "rgba(255,255,255,0.12)",
+                  background: active ? climbOutcomeBg(o) : "rgba(255,255,255,0.04)",
+                  color: active ? oc : "rgba(255,255,255,0.75)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+                aria-pressed={active}
+              >
+                {climbOutcomeLabel(o, attempt.gradeSystem)}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          value={draftArea}
+          onChange={(e) => setDraftArea(e.target.value)}
+          list={datalistId}
+          placeholder="Area (optional)"
+          style={editInputStyle}
+          aria-label="Area"
+        />
+        <datalist id={datalistId}>
+          {areaOptions.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+        <input
+          value={draftNotes}
+          onChange={(e) => setDraftNotes(e.target.value)}
+          placeholder="Notes (optional)"
+          style={editInputStyle}
+          aria-label="Notes"
+        />
+        {error ? <div style={editErrorStyle}>{error}</div> : null}
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+          <button type="button" onClick={() => setEditing(false)} style={editGhostBtnStyle} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" onClick={save} style={editSaveBtnStyle} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={climbRowStyle}>
       <span
@@ -627,6 +774,9 @@ function ClimbRow({ attempt }: { attempt: BrowserAttempt }) {
           ) : null}
         </div>
       </div>
+      <button type="button" onClick={startEdit} style={rowEditBtnStyle} title="Edit climb" aria-label="Edit climb">
+        ✎
+      </button>
     </div>
   );
 }
@@ -775,6 +925,78 @@ const climbRowStyle: CSSProperties = {
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(255,255,255,0.02)",
+};
+
+const rowEditBtnStyle: CSSProperties = {
+  width: 30,
+  height: 30,
+  minHeight: 0,
+  display: "grid",
+  placeItems: "center",
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 8,
+  color: "rgba(255,255,255,0.5)",
+  fontSize: 12,
+  cursor: "pointer",
+  padding: 0,
+  flexShrink: 0,
+};
+
+// Editor inputs — fontSize 16 (iOS zoom guard, rule 3a).
+const editInputStyle: CSSProperties = {
+  width: "100%",
+  padding: "9px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 16,
+  fontWeight: 600,
+  outline: "none",
+};
+
+const editSelectStyle: CSSProperties = {
+  padding: "7px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(15,23,42,0.85)",
+  color: "inherit",
+  fontSize: 16,
+  fontWeight: 700,
+  outline: "none",
+  cursor: "pointer",
+};
+
+const editGhostBtnStyle: CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "transparent",
+  color: "rgba(255,255,255,0.75)",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const editSaveBtnStyle: CSSProperties = {
+  padding: "8px 16px",
+  borderRadius: 10,
+  border: "1px solid rgba(120,190,255,0.45)",
+  background: "rgba(120,190,255,0.18)",
+  color: "rgba(191,219,254,0.98)",
+  fontSize: 12,
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const editErrorStyle: CSSProperties = {
+  fontSize: 11.5,
+  padding: "7px 10px",
+  borderRadius: 8,
+  background: "rgba(248,113,113,0.10)",
+  border: "1px solid rgba(248,113,113,0.32)",
+  color: "rgba(248,113,113,0.95)",
 };
 
 const projectGradeChipStyle: CSSProperties = {
