@@ -77,7 +77,11 @@ export default async function GoalDetailPage(props: {
 }) {
   const params = await Promise.resolve(props.params);
   const searchParams = await Promise.resolve(props.searchParams ?? {});
-  const range = parseRange(getParam(searchParams, "range"));
+  // Per-graphic range filters. Each section (heatmap, history) owns its
+  // own URL param so the user can scope each independently — e.g. show
+  // the last 4 weeks of consistency next to the last year of history.
+  const heatmapRange = parseRange(getParam(searchParams, "heatmap"));
+  const historyRange = parseRange(getParam(searchParams, "history"));
   const normalizedGoalId = decodeURIComponent(params.goalId);
 
   const entry = await getGoalInsight(normalizedGoalId);
@@ -95,8 +99,13 @@ export default async function GoalDetailPage(props: {
   // span (4w → 4 weeks of grid; 1y → 52 weeks; etc.).
   const consistency =
     entry.goal.goalType === "FREQUENCY"
-      ? await getFrequencyConsistency(normalizedGoalId, { windowDays: RANGE_DAYS[range] })
+      ? await getFrequencyConsistency(normalizedGoalId, { windowDays: RANGE_DAYS[heatmapRange] })
       : null;
+
+  // Filter history points to the selected history range, client-side
+  // slicing the entry.history array by date cutoff. Points are kept in
+  // their original order; "all" passes through unchanged.
+  const historyCutoff = sliceHistoryByRange(entry.history, historyRange);
 
   const isSessionBasedExerciseTopWeight =
     entry.goal.goalType === "PERFORMANCE" &&
@@ -132,8 +141,6 @@ export default async function GoalDetailPage(props: {
         </div>
       </div>
 
-      <RangeFilterRow goalId={normalizedGoalId} current={range} />
-
       <SectionCard title="Current Progress">
         <Hero entry={entry} accent={accent} />
       </SectionCard>
@@ -141,13 +148,14 @@ export default async function GoalDetailPage(props: {
       <TypeHighlights entry={entry} consistency={consistency} accent={accent} />
 
       {consistency ? (
-        <SectionCard title="Consistency" subtitle={`Last ${RANGE_LABEL[range].toLowerCase()}. Tap a ${getFrequencyRenderModeLabel(consistency.target)} to see what was done.`}>
+        <SectionCard title="Consistency" subtitle={`Tap a ${getFrequencyRenderModeLabel(consistency.target)} to see what was done.`}>
+          <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="heatmap" current={heatmapRange} searchParams={searchParams} />
           <GoalConsistencyPanel
             target={consistency.target}
             state={consistency.state}
             today={todayAppYmd()}
             weekdayMask={consistency.weekdayMask}
-            weeks={RANGE_WEEKS[range]}
+            weeks={RANGE_WEEKS[heatmapRange]}
             accentColor={accent.color}
             accentBorderColor={accent.border}
             retroactiveLogRoutineId={
@@ -160,11 +168,12 @@ export default async function GoalDetailPage(props: {
       ) : null}
 
       <SectionCard title="History">
+        <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="history" current={historyRange} searchParams={searchParams} />
         <MetricLineChart
           title={isSessionBasedExerciseTopWeight ? `${entry.goal.name}: top weight vs session` : `${entry.goal.name}: recent history`}
           yLabel={entry.metricLabel}
           xLabel={isSessionBasedExerciseTopWeight ? "Session" : entry.goal.timeframe === "MONTH" ? "Month" : entry.goal.timeframe === "DAY" ? "Day" : "Week"}
-          points={entry.history}
+          points={historyCutoff}
           decimals={entry.goal.metricType === "DISTANCE" ? 1 : entry.goal.metricType === "MAX_WEIGHT" ? 1 : 0}
           unit={
             entry.goal.metricType === "DISTANCE"
@@ -196,17 +205,61 @@ export default async function GoalDetailPage(props: {
 
 // ── Range filter ──────────────────────────────────────────────────────────
 
-function RangeFilterRow({ goalId, current }: { goalId: string; current: RangeOption }) {
+// Slices entry.history to the points within the selected window. Points
+// are tagged by label (e.g. "Aug 15" for daily, "W5" for weekly) and a
+// matching index — we filter by counting backwards from the most recent
+// point so the cutoff is consistent regardless of label format.
+function sliceHistoryByRange<T extends { label: string }>(
+  history: T[],
+  range: RangeOption,
+): T[] {
+  if (range === "all") return history;
+  // Approximate point counts per range — history points are bucket-shaped
+  // (weekly for WEEK timeframe goals, monthly for MONTH, daily for DAY).
+  // We don't know the bucket interval here, so cap by an upper-bound point
+  // count and rely on the chart to render whatever's left.
+  const POINT_CAP: Record<Exclude<RangeOption, "all">, number> = {
+    "4w": 8,    // 4 weeks ≈ 4 weekly points or up to ~30 daily
+    "12w": 16,  // 12 weeks ≈ 12 weekly points
+    "6mo": 28,  // 26 weeks ≈ 26 weekly points or 6 monthly
+    "1y": 56,   // 52 weeks ≈ 52 weekly points or 12 monthly
+  };
+  const cap = POINT_CAP[range];
+  if (history.length <= cap) return history;
+  return history.slice(history.length - cap);
+}
+
+function PerGraphicRangeFilter({
+  goalId,
+  paramKey,
+  current,
+  searchParams,
+}: {
+  goalId: string;
+  paramKey: "heatmap" | "history";
+  current: RangeOption;
+  searchParams: SearchParams;
+}) {
   const options: RangeOption[] = ["4w", "12w", "6mo", "1y", "all"];
+  // Build hrefs that preserve the OTHER section's range param so toggling
+  // one filter doesn't reset the other.
+  const otherKey = paramKey === "heatmap" ? "history" : "heatmap";
+  const otherValue = getParam(searchParams, otherKey);
+  const buildHref = (opt: RangeOption) => {
+    const params = new URLSearchParams();
+    if (opt !== "12w") params.set(paramKey, opt);
+    if (otherValue && otherValue !== "12w") params.set(otherKey, otherValue);
+    const qs = params.toString();
+    return qs ? `/plan/goals/${encodeURIComponent(goalId)}?${qs}` : `/plan/goals/${encodeURIComponent(goalId)}`;
+  };
   return (
-    <div className="goalDetailRangeRow" style={rangeRowStyle}>
-      <span className="goalDetailRangeLabel" style={rangeLabelStyle}>Show</span>
+    <div className="goalDetailRangeRow" style={perSectionRangeRowStyle}>
       {options.map((opt) => {
         const isActive = opt === current;
         return (
           <Link
             key={opt}
-            href={opt === "12w" ? `/plan/goals/${encodeURIComponent(goalId)}` : `/plan/goals/${encodeURIComponent(goalId)}?range=${opt}`}
+            href={buildHref(opt)}
             className="goalDetailRangeChip"
             style={{ ...rangeChipStyle, ...(isActive ? rangeChipActiveStyle : {}) }}
           >
@@ -715,13 +768,15 @@ const rangeRowStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const rangeLabelStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  opacity: 0.55,
-  marginRight: 4,
+// Per-section range filter sits inside a SectionCard above its chart.
+// Slightly tighter than the (removed) page-level row and includes a
+// bottom margin so it visually separates from the chart below.
+const perSectionRangeRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  flexWrap: "wrap",
+  marginBottom: 10,
 };
 
 const rangeChipStyle: CSSProperties = {

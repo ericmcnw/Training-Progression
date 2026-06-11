@@ -1,24 +1,26 @@
 "use client";
 
 // Frequency heatmap — N-week consistency calendar for the goal detail page.
-// Renders a Sun→Sat × N-weeks grid where each cell is colored by daily state
-// (done / covered / missed / rest / future).
+// Calendar layout: day-of-week labels go HORIZONTALLY across the top,
+// each week is a VERTICAL row stacked top-to-bottom (oldest first).
+// Week-start date labels run down the left side at month boundaries +
+// every Nth week for context.
 //
-// All math comes from lib/frequency-state.ts — this component is purely
-// presentational. The parent SectionCard provides title + subtitle now;
-// the streak/window stats moved up to TypeHighlights so this surface stays
-// focused on the calendar itself.
+// This is the standard "calendar grid" layout the user requested instead
+// of the GitHub-contributions horizontal-time orientation. Reads more
+// naturally on mobile because it grows vertically (scroll-friendly)
+// instead of horizontally (overflow-scroll).
 //
-// Gentle-lens colors (per feedback_habit_lens): "done" uses the goal's
-// type accent (default soft amber for back-compat callers), "missed" is a
-// dim neutral outline — no red anywhere. "Covered" stays cool-blue so the
-// "another routine took care of this day" cue reads as helpful, not as
-// the same as "done".
+// Cell coloring rules (gentle lens): "done" uses the goal's type accent,
+// "covered" stays cool-blue (another routine handled it), "missed" is a
+// dim hollow outline (no red anywhere), "rest" is a quiet placeholder,
+// "future" is a dashed empty cell.
 //
-// Marked "use client" so the missed-cell back-date affordance can launch
-// the floating log drawer.
+// Marked "use client" because:
+//   1. missed-cell back-date affordance launches the floating LogDrawer
+//   2. matchMedia hook bumps cell size on desktop viewports
 
-import type { CSSProperties } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { addDaysYmd, formatUtcDateLabel } from "@/lib/dates";
 import {
@@ -31,13 +33,27 @@ type WeekRow = { weekStartYmd: string; cells: Array<{ ymd: string }> };
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun-first
 
-// Scale cell size to the requested range so longer ranges still fit
-// reasonably — 52 weeks at 16px = ~990px wide, which overflows mobile.
-// The wrapper still allows horizontal scroll for the densest case.
-function cellSizeForWeeks(weeks: number): number {
-  if (weeks <= 12) return 16;
-  if (weeks <= 26) return 12;
-  return 9;
+// Cell size scales with range AND viewport. Desktop gets ~70% larger
+// cells so the heatmap actually fills the width of the detail card.
+function cellSizeForWeeks(weeks: number, isDesktop: boolean): number {
+  if (isDesktop) {
+    if (weeks <= 12) return 28;
+    if (weeks <= 26) return 22;
+    return 16;
+  }
+  if (weeks <= 12) return 22;
+  if (weeks <= 26) return 16;
+  return 11;
+}
+
+// Week-label tick density — every Nth week gets a date label on the left.
+// Always show the first week + every month boundary so the user has
+// anchors.
+function tickEveryForWeeks(weeks: number): number {
+  if (weeks <= 6) return 1;
+  if (weeks <= 14) return 2;
+  if (weeks <= 28) return 4;
+  return 8;
 }
 
 export default function FrequencyHeatmap({
@@ -49,9 +65,6 @@ export default function FrequencyHeatmap({
   accentColor = "rgb(251,191,36)",
   accentBorderColor = "rgba(251,191,36,0.55)",
   retroactiveLogRoutineId,
-  // When provided, done/covered cells with logs become clickable. Parent
-  // owns the popover / day-expansion state — heatmap just emits the ymd
-  // when a logged day is tapped.
   logsByDay,
   onDayClick,
   openDayYmd,
@@ -70,8 +83,23 @@ export default function FrequencyHeatmap({
 }) {
   const { openDrawer } = useLogDrawer();
   const WEEKS = Math.max(4, Math.min(52, Math.floor(weeksProp)));
-  const CELL_SIZE = cellSizeForWeeks(WEEKS);
+
+  // Desktop detection — bumps cell size up. SSR safe: we render with
+  // mobile sizes by default and re-render on mount if we're on desktop.
+  // No layout shift on the same device, only a brief mobile-shaped paint
+  // on a fresh desktop load.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 720px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const CELL_SIZE = cellSizeForWeeks(WEEKS, isDesktop);
   const CELL_GAP = WEEKS > 26 ? 2 : 3;
+  const LABEL_COL_PX = isDesktop ? 56 : 44;
 
   // Anchor the grid on the most recent Sunday (≤ today). Walk back WEEKS rows.
   const todayDate = new Date(`${today}T00:00:00.000Z`);
@@ -86,6 +114,22 @@ export default function FrequencyHeatmap({
     weeksGrid.push({ weekStartYmd, cells });
   }
 
+  // Decide which weeks get a left-side date label.
+  //  - Always label week 0 + last week
+  //  - Always label first week of each new month
+  //  - Beyond that, fall back to every-Nth-week density
+  const tickEvery = tickEveryForWeeks(WEEKS);
+  const weekShouldLabel = (idx: number) => {
+    if (idx === 0 || idx === weeksGrid.length - 1) return true;
+    const prev = weeksGrid[idx - 1];
+    const curr = weeksGrid[idx];
+    if (!prev) return true;
+    const prevMonth = new Date(`${prev.weekStartYmd}T00:00:00.000Z`).getUTCMonth();
+    const currMonth = new Date(`${curr.weekStartYmd}T00:00:00.000Z`).getUTCMonth();
+    if (prevMonth !== currMonth) return true;
+    return idx % tickEvery === 0;
+  };
+
   const targetUnitLabel = target.targetUnit === "DAY" ? "day" : target.targetUnit === "WEEK" ? "week" : "month";
   const cadenceLabel =
     target.targetInterval === 1
@@ -93,127 +137,125 @@ export default function FrequencyHeatmap({
       : `${target.targetCount}× / ${target.targetInterval} ${targetUnitLabel}s`;
   const maskLabel = weekdayMask ? formatMaskLabel(weekdayMask) : null;
 
-  // Month-boundary ticks: each week starts on Sunday; we label only the
-  // weeks that begin a new month (compared to the previous week's month).
-  // Sparse + naturally spaced ~4 weeks apart, so labels can't overlap each
-  // other regardless of cell size. Always show the first week too so the
-  // user has a starting anchor.
-  const monthTicks: Array<{ idx: number; label: string }> = [];
-  let prevMonth = -1;
-  for (let i = 0; i < weeksGrid.length; i++) {
-    const week = weeksGrid[i];
-    const monthIdx = new Date(`${week.weekStartYmd}T00:00:00.000Z`).getUTCMonth();
-    if (i === 0 || monthIdx !== prevMonth) {
-      monthTicks.push({
-        idx: i,
-        label: formatUtcDateLabel(week.weekStartYmd, { month: "short" }),
-      });
-      prevMonth = monthIdx;
-    }
-  }
-  const COLUMN_PX = CELL_SIZE + CELL_GAP;
-  const tickRowWidth = weeksGrid.length * COLUMN_PX - CELL_GAP;
+  // Grid template: 1 label column + 7 day columns
+  const gridTemplateColumns = `${LABEL_COL_PX}px repeat(7, ${CELL_SIZE}px)`;
 
   return (
-    <div style={shell}>
-      <div style={subLine}>
+    <div style={shellStyle}>
+      <div style={subLineStyle}>
         <span>{cadenceLabel}</span>
-        {maskLabel ? <span style={subLineDot}>· {maskLabel}</span> : null}
+        {maskLabel ? <span style={subLineDotStyle}>· {maskLabel}</span> : null}
       </div>
 
-      <div style={scrollWrap}>
-        <div style={gridWrap}>
-          <div style={{ ...dayLabelCol, gap: CELL_GAP }}>
-            {DAY_LABELS.map((d, i) => (
-              <div key={i} style={{ ...dayLabelText, height: CELL_SIZE }}>{d}</div>
-            ))}
+      <div
+        style={{
+          ...gridStyle,
+          gridTemplateColumns,
+          gap: CELL_GAP,
+        }}
+      >
+        {/* Header row: empty corner + 7 day-of-week labels */}
+        <div aria-hidden />
+        {DAY_LABELS.map((d, i) => (
+          <div
+            key={`hdr-${i}`}
+            style={{
+              ...dayHeaderStyle,
+              height: CELL_SIZE,
+              fontSize: CELL_SIZE >= 22 ? 11 : 9,
+            }}
+          >
+            {d}
           </div>
+        ))}
 
-          <div style={{ ...cellsGrid, gridAutoColumns: `${CELL_SIZE}px`, gap: CELL_GAP }}>
-            {weeksGrid.map((week) => (
-              <div key={week.weekStartYmd} style={{ ...weekColumn, gap: CELL_GAP }}>
-                {week.cells.map(({ ymd }) => {
-                  const cellState = state.dailyState[ymd] ?? "rest";
-                  const isToday = ymd === today;
-                  const isFuture = ymd > today;
-                  const dateLabel = formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
-                  const cellSx: CSSProperties = {
-                    ...cellStyle(cellState, isFuture, CELL_SIZE, accentColor, accentBorderColor),
-                    ...(isToday ? todayRing : null),
-                  };
-                  // NOTE: minHeight: 0 + font: inherit on the button styles
-                  // below — global CSS in globals.css sets `button { min-height:
-                  // 44px; padding: 10px 14px; font-weight: 700; }` for tap-
-                  // target safety, which would stretch cells from 16x16 into
-                  // ~46x16 bars. The className `freqHeatmapCell` also tames
-                  // the global :hover green outline.
-                  if (cellState === "missed" && retroactiveLogRoutineId) {
-                    return (
-                      <button
-                        key={ymd}
-                        type="button"
-                        className="freqHeatmapCell"
-                        onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
-                        title={`${dateLabel} — missed · tap to log`}
-                        style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, minHeight: 0, border: cellSx.border ?? "none" }}
-                        aria-label={`Back-date a log for ${dateLabel}`}
-                      />
-                    );
-                  }
-                  const dayLogs = logsByDay?.get(ymd);
-                  const hasDayLogs = dayLogs && dayLogs.length > 0;
-                  if (hasDayLogs && onDayClick) {
-                    const isOpen = openDayYmd === ymd;
-                    return (
-                      <button
-                        key={ymd}
-                        type="button"
-                        className="freqHeatmapCell"
-                        onClick={() => onDayClick(ymd)}
-                        title={`${dateLabel} — ${cellState} (${dayLogs.length} log${dayLogs.length > 1 ? "s" : ""}) · tap to view`}
-                        style={{
-                          ...cellSx,
-                          cursor: "pointer",
-                          display: "block",
-                          padding: 0,
-                          minHeight: 0,
-                          border: cellSx.border ?? "none",
-                          ...(isOpen ? openCellRing : null),
-                        }}
-                        aria-pressed={isOpen}
-                        aria-label={`View logs for ${dateLabel}`}
-                      />
-                    );
-                  }
-                  return (
-                    <div
-                      key={ymd}
-                      title={`${dateLabel} — ${cellState}`}
-                      style={cellSx}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ ...weekTickRow, width: tickRowWidth }}>
-            {monthTicks.map((tick) => (
-              <span
-                key={tick.idx}
+        {/* One row per week */}
+        {weeksGrid.map((week, weekIdx) => {
+          const showLabel = weekShouldLabel(weekIdx);
+          const dateLabel = showLabel
+            ? formatUtcDateLabel(week.weekStartYmd, { month: "short", day: "numeric" })
+            : "";
+          return (
+            <Fragment key={week.weekStartYmd}>
+              <div
                 style={{
-                  ...monthTickLabel,
-                  left: tick.idx * COLUMN_PX,
+                  ...weekLabelStyle,
+                  height: CELL_SIZE,
+                  fontSize: CELL_SIZE >= 22 ? 11 : 9.5,
+                  visibility: showLabel ? "visible" : "hidden",
                 }}
               >
-                {tick.label}
-              </span>
-            ))}
-          </div>
-        </div>
+                {dateLabel}
+              </div>
+              {week.cells.map(({ ymd }) => {
+                const cellState = state.dailyState[ymd] ?? "rest";
+                const isToday = ymd === today;
+                const isFuture = ymd > today;
+                const dateTitle = formatUtcDateLabel(ymd, { weekday: "short", month: "short", day: "numeric" });
+                const cellSx: CSSProperties = {
+                  ...cellStyle(cellState, isFuture, CELL_SIZE, accentColor, accentBorderColor),
+                  ...(isToday ? todayRing : null),
+                };
+
+                if (cellState === "missed" && retroactiveLogRoutineId) {
+                  return (
+                    <button
+                      key={ymd}
+                      type="button"
+                      className="freqHeatmapCell"
+                      onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
+                      title={`${dateTitle} — missed · tap to log`}
+                      style={{
+                        ...cellSx,
+                        cursor: "pointer",
+                        display: "block",
+                        padding: 0,
+                        minHeight: 0,
+                        border: cellSx.border ?? "none",
+                      }}
+                      aria-label={`Back-date a log for ${dateTitle}`}
+                    />
+                  );
+                }
+                const dayLogs = logsByDay?.get(ymd);
+                const hasDayLogs = dayLogs && dayLogs.length > 0;
+                if (hasDayLogs && onDayClick) {
+                  const isOpen = openDayYmd === ymd;
+                  return (
+                    <button
+                      key={ymd}
+                      type="button"
+                      className="freqHeatmapCell"
+                      onClick={() => onDayClick(ymd)}
+                      title={`${dateTitle} — ${cellState} (${dayLogs.length} log${dayLogs.length > 1 ? "s" : ""}) · tap to view`}
+                      style={{
+                        ...cellSx,
+                        cursor: "pointer",
+                        display: "block",
+                        padding: 0,
+                        minHeight: 0,
+                        border: cellSx.border ?? "none",
+                        ...(isOpen ? openCellRing : null),
+                      }}
+                      aria-pressed={isOpen}
+                      aria-label={`View logs for ${dateTitle}`}
+                    />
+                  );
+                }
+                return (
+                  <div
+                    key={ymd}
+                    title={`${dateTitle} — ${cellState}`}
+                    style={cellSx}
+                  />
+                );
+              })}
+            </Fragment>
+          );
+        })}
       </div>
 
-      <div style={legendRow}>
+      <div style={legendRowStyle}>
         <Legend swatch={swatchStyle({ background: accentColor, border: accentBorderColor })} label="Done" />
         <Legend swatch={swatchCovered} label="Covered by another routine" />
         <Legend swatch={swatchMissed} label="Missed" />
@@ -240,7 +282,7 @@ function cellStyle(
   accentColor: string,
   accentBorderColor: string,
 ): CSSProperties {
-  const base: CSSProperties = { width: size, height: size, borderRadius: size <= 10 ? 2 : 3 };
+  const base: CSSProperties = { width: size, height: size, borderRadius: size <= 12 ? 3 : 4 };
   if (isFuture) return { ...base, background: "transparent", border: "1px dashed rgba(255,255,255,0.12)" };
   switch (state) {
     case "done":
@@ -256,8 +298,6 @@ function cellStyle(
         border: "1px solid rgba(132,204,255,0.45)",
       };
     case "missed":
-      // Gentle-lens: no red. A dim hollow outline reads as "you intended to
-      // train this day and didn't" without alarm.
       return {
         ...base,
         background: "transparent",
@@ -284,12 +324,12 @@ const openCellRing: CSSProperties = {
   outlineOffset: 1,
 };
 
-const shell: CSSProperties = {
+const shellStyle: CSSProperties = {
   display: "grid",
-  gap: 10,
+  gap: 12,
 };
 
-const subLine: CSSProperties = {
+const subLineStyle: CSSProperties = {
   fontSize: 12,
   opacity: 0.65,
   display: "flex",
@@ -297,83 +337,42 @@ const subLine: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const subLineDot: CSSProperties = {
+const subLineDotStyle: CSSProperties = {
   opacity: 0.8,
 };
 
-const scrollWrap: CSSProperties = {
-  overflowX: "auto",
-  WebkitOverflowScrolling: "touch",
-  paddingBottom: 2,
-};
-
-const gridWrap: CSSProperties = {
+const gridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "auto 1fr",
-  gridTemplateRows: "auto auto",
-  gap: 6,
-  alignItems: "start",
+  alignItems: "center",
+  justifyContent: "start",
 };
 
-const dayLabelCol: CSSProperties = {
-  display: "grid",
-  paddingTop: 0,
-  gridRow: 1,
-};
-
-const dayLabelText: CSSProperties = {
-  fontSize: 9,
+const dayHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   fontWeight: 800,
-  textAlign: "right",
-  width: 12,
-  opacity: 0.55,
+  opacity: 0.5,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+};
+
+const weekLabelStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-end",
-};
-
-const cellsGrid: CSSProperties = {
-  display: "grid",
-  gridAutoFlow: "column",
-  gridRow: 1,
-};
-
-const weekColumn: CSSProperties = {
-  display: "grid",
-};
-
-const weekTickRow: CSSProperties = {
-  position: "relative",
-  gridColumn: 2,
-  gridRow: 2,
-  height: 14,
-  marginTop: 4,
-};
-
-// Month-boundary ticks are absolutely positioned at left = weekIdx *
-// (CELL_SIZE + CELL_GAP). They never overlap each other because there's
-// always at least ~4 weeks between two month boundaries — so they have
-// natural horizontal breathing room regardless of cell size.
-const monthTickLabel: CSSProperties = {
-  position: "absolute",
-  top: 0,
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.3,
+  paddingRight: 6,
+  fontWeight: 700,
   opacity: 0.55,
   whiteSpace: "nowrap",
 };
 
-const legendRow: CSSProperties = {
+const legendRowStyle: CSSProperties = {
   display: "flex",
   gap: 14,
   flexWrap: "wrap",
 };
 
-// Legend swatches match cell shape — same width:height ratio (square),
-// same border-radius, so the legend reads as a literal key for the grid
-// above. Sized to match the 12px cell-mode for visual consistency at any
-// range without being too small to see.
 const SWATCH_SIZE = 12;
 function swatchStyle({ background, border }: { background: string; border: string }): CSSProperties {
   return {
