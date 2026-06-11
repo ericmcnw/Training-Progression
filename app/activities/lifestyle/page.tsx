@@ -1,7 +1,13 @@
 // Lifestyle world page — Phase 2.
-// Layout mirrors mobility but adds a per-habit consistency strip below
-// the chart so each routine shows its hit/miss pattern across 12 weeks
-// — the "habit consistency heatmap" promised in the previous stub.
+//
+// Same structural model as /activities/mobility:
+//   - Pulse strip: recent windows + all-time
+//   - Per-chart range pill (no page-level filter)
+//   - Recent Completions defaults to 10 with ?recent=all expansion
+//
+// Adds a per-habit 12-week consistency strip on each habit row so hit
+// and miss patterns read at a glance — the original stub's promised
+// "habit consistency heatmap."
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
@@ -10,7 +16,7 @@ import { effectiveRoutineDomain } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
-import { buildSessionsChartData } from "@/lib/activities/sessions-chart";
+import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -19,65 +25,50 @@ const ACCENT_BG = "rgba(251,191,36,0.08)";
 const ACCENT_BORDER = "rgba(251,191,36,0.28)";
 const ACCENT_TEXT = "rgba(253,224,71,0.95)";
 
+const PILL_SELECT_BG = "rgba(120,190,255,0.15)";
+const PILL_SELECT_BORDER = "rgba(120,190,255,0.45)";
+const PILL_SELECT_TEXT = "rgba(191,219,254,0.98)";
+
 const STRIP_DAYS = 84;
+const RECENT_DEFAULT = 10;
+const RECENT_MAX = 100;
 
 type SearchParams = Record<string, string | string[] | undefined>;
-type RangeFilter = "4w" | "12w" | "1y" | "all";
-
-const RANGE_DAYS: Record<Exclude<RangeFilter, "all">, number> = {
-  "4w": 28,
-  "12w": 84,
-  "1y": 365,
-};
 
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseRange(value: string | undefined): RangeFilter {
-  if (value === "4w" || value === "12w" || value === "1y" || value === "all") return value;
-  return "12w";
+function parseChartWeeks(value: string | undefined): SessionChartWeeks {
+  return value === "4w" ? 4 : 12;
 }
 
-function rangeLabel(range: RangeFilter): string {
-  if (range === "4w") return "last 4 weeks";
-  if (range === "12w") return "last 12 weeks";
-  if (range === "1y") return "last year";
-  return "all time";
-}
-
-function buildHref(overrides: Record<string, string | undefined>): string {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(overrides)) {
-    if (v !== undefined && v !== "") qs.set(k, v);
+function buildHref(searchParams: SearchParams, overrides: Record<string, string | undefined>): string {
+  const next: Record<string, string> = {};
+  for (const [k, v] of Object.entries(searchParams)) {
+    if (typeof v === "string") next[k] = v;
   }
-  const s = qs.toString();
-  return `/activities/lifestyle${s ? `?${s}` : ""}`;
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === undefined || v === "") delete next[k];
+    else next[k] = v;
+  }
+  const qs = new URLSearchParams(next).toString();
+  return `/activities/lifestyle${qs ? `?${qs}` : ""}`;
 }
 
 export default async function LifestyleWorldPage(props: {
   searchParams?: Promise<SearchParams>;
 }) {
   const searchParams = (await props.searchParams) ?? {};
-  const range = parseRange(getParam(searchParams, "range"));
+  const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
+  const recentExpanded = getParam(searchParams, "recent") === "all";
 
   const now = new Date();
-  const chartCutoff = new Date(now.getTime() - 84 * 24 * 60 * 60 * 1000);
-  const rangeCutoff = range === "all" ? null : new Date(now.getTime() - RANGE_DAYS[range] * 24 * 60 * 60 * 1000);
-  // widestCutoff = the OLDER of (chart window, stats window). null = unbounded
-  // when range=all so the Recent Completions list actually surfaces all time.
-  const widestCutoff: Date | null =
-    range === "all"
-      ? null
-      : rangeCutoff && rangeCutoff < chartCutoff
-        ? rangeCutoff
-        : chartCutoff;
 
-  // Parallel: routines + candidate logs. Lifestyle's candidate filter is
-  // narrower than mobility's — only `domain = lifestyle | habit` and the
-  // COMPLETION default. Post-filtered through effectiveRoutineDomain for
-  // correctness.
+  // Parallel: routines + ALL lifestyle logs (unbounded). The pulse's
+  // all-time stat and the recent-sessions expansion both need every
+  // log; at single-user scale this is small enough to JS-filter.
   const [allActiveRoutines, candidateLogs] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true, isDeleted: false, isPlaceholder: false },
@@ -86,7 +77,6 @@ export default async function LifestyleWorldPage(props: {
     }),
     prisma.routineLog.findMany({
       where: {
-        ...(widestCutoff ? { performedAt: { gte: widestCutoff } } : {}),
         routine: {
           isPlaceholder: false,
           OR: [
@@ -114,24 +104,16 @@ export default async function LifestyleWorldPage(props: {
     effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype) === "lifestyle"
   );
 
-  const statsCutoff = rangeCutoff;
-  const logsInRange = statsCutoff
-    ? allLogs.filter((l) => l.performedAt >= statsCutoff)
-    : allLogs;
-
   // Pulse rollups
   const thisWeekStart = startOfWeekMonday(now);
-  const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
   const twelveWeeksAgo = new Date(now.getTime() - 84 * 24 * 60 * 60 * 1000);
 
   const completionsThisWeek = allLogs.filter((l) => l.performedAt >= thisWeekStart).length;
-  const completionsLastWeek = allLogs.filter(
-    (l) => l.performedAt >= lastWeekStart && l.performedAt < thisWeekStart
-  ).length;
   const completions4w = allLogs.filter((l) => l.performedAt >= fourWeeksAgo).length;
   const completions12w = allLogs.filter((l) => l.performedAt >= twelveWeeksAgo).length;
+  const completionsAllTime = allLogs.length;
 
   // Per-routine state — last log, 7-day count, and the 84-day hit set
   // used to render the consistency strip.
@@ -160,7 +142,8 @@ export default async function LifestyleWorldPage(props: {
     return a.name.localeCompare(b.name);
   });
 
-  // Chart data — always 12 weeks
+  // Chart — bounded by the chart's own pill.
+  const chartCutoff = new Date(now.getTime() - chartWeeks * 7 * 24 * 60 * 60 * 1000);
   const chartData = buildSessionsChartData(
     allLogs
       .filter((l) => l.performedAt >= chartCutoff)
@@ -170,23 +153,23 @@ export default async function LifestyleWorldPage(props: {
         routineId: l.routineId,
         routineName: l.routine.name,
       })),
-    { accentFirst: ACCENT, now }
+    { accentFirst: ACCENT, now, weeks: chartWeeks }
   );
   const chartHasData = chartData.series.some((s) =>
     s.weeklyValues.some((v) => v > 0)
   );
 
   // Build the per-day labels for the consistency strip — 84 days oldest
-  // → newest. Each routine's strip uses the same date axis. Marking
-  // Sundays here so the renderer can draw week dividers without redoing
-  // the date math per cell.
+  // → newest. Marking Sundays for the week-divider lines.
   const stripDays: Array<{ ymd: string; isSunday: boolean }> = [];
   for (let i = STRIP_DAYS - 1; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
     stripDays.push({ ymd: toAppYmd(d), isSunday: d.getDay() === 0 });
   }
 
-  const recentLogs = logsInRange.slice(0, 12);
+  const recentCount = recentExpanded ? RECENT_MAX : RECENT_DEFAULT;
+  const recentLogs = allLogs.slice(0, recentCount);
+  const recentHasMore = !recentExpanded && allLogs.length > RECENT_DEFAULT;
 
   return (
     <div style={pageStyle}>
@@ -208,14 +191,28 @@ export default async function LifestyleWorldPage(props: {
 
       <div style={pulseRowStyle}>
         <PulseStat label="This week" value={completionsThisWeek} sublabel="completions" />
-        <PulseStat label="Last week" value={completionsLastWeek} sublabel="completions" />
-        <PulseStat label="4 weeks" value={completions4w} sublabel="total" />
-        <PulseStat label="12 weeks" value={completions12w} sublabel="total" />
+        <PulseStat label="Last 4 weeks" value={completions4w} sublabel="completions" />
+        <PulseStat label="Last 12 weeks" value={completions12w} sublabel="completions" />
+        <PulseStat label="All time" value={completionsAllTime} sublabel="completions" />
+      </div>
+
+      {/* Per-chart range pill — only this chart responds. */}
+      <div style={chartPillRowStyle}>
+        <span style={chartPillLabelStyle}>Chart range</span>
+        {(["4w", "12w"] as const).map((w) => (
+          <Link
+            key={w}
+            href={buildHref(searchParams, { chart: w === "12w" ? undefined : w })}
+            style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
+          >
+            {w}
+          </Link>
+        ))}
       </div>
 
       {chartHasData ? (
         <WeeklyBarChartWithSessions
-          title="Completions per Week — Last 12 Weeks"
+          title={`Completions per Week — Last ${chartWeeks} Weeks`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}
@@ -224,19 +221,6 @@ export default async function LifestyleWorldPage(props: {
           compact={false}
         />
       ) : null}
-
-      <div style={rangeRowStyle}>
-        <span style={rangeLabelStyle}>Range</span>
-        {(["4w", "12w", "1y", "all"] as const).map((r) => (
-          <Link
-            key={r}
-            href={buildHref({ range: r === "12w" ? undefined : r })}
-            style={range === r ? rangePillActive : rangePill}
-          >
-            {r === "all" ? "All" : r}
-          </Link>
-        ))}
-      </div>
 
       <SectionCard
         title="Your Habits"
@@ -264,7 +248,13 @@ export default async function LifestyleWorldPage(props: {
 
       <SectionCard
         title="Recent Completions"
-        subtitle={recentLogs.length === 0 ? `Nothing logged in the ${rangeLabel(range)}.` : `Last ${recentLogs.length} of ${logsInRange.length} · ${rangeLabel(range)}.`}
+        subtitle={
+          recentLogs.length === 0
+            ? undefined
+            : recentExpanded
+              ? `Showing ${recentLogs.length} of ${allLogs.length}.`
+              : `Last ${recentLogs.length} of ${allLogs.length}.`
+        }
       >
         {recentLogs.length === 0 ? (
           <EmptyState message="Log a habit to start the timeline." />
@@ -278,6 +268,27 @@ export default async function LifestyleWorldPage(props: {
                 date={s.performedAt}
               />
             ))}
+            {recentHasMore ? (
+              <Link
+                href={buildHref(searchParams, { recent: "all" })}
+                style={viewAllLinkStyle}
+              >
+                View all {allLogs.length} completions →
+              </Link>
+            ) : null}
+            {recentExpanded && allLogs.length > RECENT_DEFAULT ? (
+              <Link
+                href={buildHref(searchParams, { recent: undefined })}
+                style={viewAllLinkStyle}
+              >
+                Show fewer ↑
+              </Link>
+            ) : null}
+            {recentExpanded && allLogs.length > RECENT_MAX ? (
+              <div style={{ fontSize: 11, opacity: 0.55, textAlign: "center", paddingTop: 4 }}>
+                Showing the {RECENT_MAX} most recent. Older completions are still in the all-time count.
+              </div>
+            ) : null}
           </div>
         )}
       </SectionCard>
@@ -352,9 +363,6 @@ function HabitRow({
               ...stripCellStyle,
               background: hits.has(day.ymd) ? ACCENT : "rgba(255,255,255,0.05)",
               opacity: hits.has(day.ymd) ? 1 : 0.6,
-              // Week divider — sits on the Sunday boundary so the strip
-              // visually breaks into 12 weeks. Skip index 0 (no leading
-              // edge inside the strip).
               ...(day.isSunday && idx > 0 ? stripWeekDividerStyle : {}),
             }}
           />
@@ -459,14 +467,14 @@ const pulseSubStyle: React.CSSProperties = {
   fontWeight: 700,
 };
 
-const rangeRowStyle: React.CSSProperties = {
+const chartPillRowStyle: React.CSSProperties = {
   display: "flex",
   gap: 6,
   alignItems: "center",
   flexWrap: "wrap",
 };
 
-const rangeLabelStyle: React.CSSProperties = {
+const chartPillLabelStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 900,
   letterSpacing: 0.5,
@@ -475,7 +483,7 @@ const rangeLabelStyle: React.CSSProperties = {
   marginRight: 4,
 };
 
-const rangePill: React.CSSProperties = {
+const pillStyle: React.CSSProperties = {
   padding: "5px 10px",
   borderRadius: 999,
   borderWidth: 1,
@@ -489,11 +497,11 @@ const rangePill: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const rangePillActive: React.CSSProperties = {
-  ...rangePill,
-  background: ACCENT_BG,
-  borderColor: ACCENT_BORDER,
-  color: ACCENT_TEXT,
+const pillSelectStyle: React.CSSProperties = {
+  ...pillStyle,
+  background: PILL_SELECT_BG,
+  borderColor: PILL_SELECT_BORDER,
+  color: PILL_SELECT_TEXT,
 };
 
 const habitRowStyle: React.CSSProperties = {
@@ -527,12 +535,6 @@ const weekBadgeStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-// Per-habit 12-week consistency strip. 84 cells in one flexbox row that
-// scales to its container — each cell is `flex: 1` so a wider container
-// produces wider cells, no horizontal scroll required. Cells sit edge-to-
-// edge (no inter-cell gap) so they don't shrink to 2-3px wide on small
-// phones; week boundaries are drawn by a 1px inset divider every 7th cell
-// instead of by gap.
 const consistencyStripStyle: React.CSSProperties = {
   display: "flex",
   gap: 0,
@@ -546,9 +548,6 @@ const stripCellStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
-// Faint divider on the left edge of every Sunday-anchored cell so the
-// reader can still see 12 weeks of structure without the 1px gap that
-// destroyed mobile legibility.
 const stripWeekDividerStyle: React.CSSProperties = {
   boxShadow: "inset 1px 0 0 rgba(0,0,0,0.25)",
 };
@@ -565,6 +564,20 @@ const logRowStyle: React.CSSProperties = {
   textDecoration: "none",
   color: "inherit",
   minHeight: 44,
+};
+
+const viewAllLinkStyle: React.CSSProperties = {
+  display: "block",
+  textAlign: "center",
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px dashed rgba(255,255,255,0.14)",
+  background: "transparent",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  textDecoration: "none",
+  marginTop: 4,
 };
 
 const quickLinkStyle: React.CSSProperties = {

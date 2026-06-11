@@ -39,12 +39,15 @@ const ROUTINE_PALETTE = [
   "rgba(217,70,239,0.92)",   // magenta
 ];
 
+export type SessionChartWeeks = 4 | 12;
+
 export function buildSessionsChartData(
   sessions: SessionChartInput[],
-  options: { accentFirst?: string; now?: Date } = {}
+  options: { accentFirst?: string; now?: Date; weeks?: SessionChartWeeks } = {}
 ): SessionChartData {
   const now = options.now ?? new Date();
-  const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  const weeks: SessionChartWeeks = options.weeks ?? 12;
+  const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
   const inWindow = sessions.filter((s) => s.date >= cutoff);
 
   const byRoutine = new Map<string, {
@@ -85,17 +88,18 @@ export function buildSessionsChartData(
     colorByRoutineId.set(r.routineId, palette[idx % palette.length]);
   });
 
-  const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
+  const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
+  const weekLabels = fillWeeklySeries(new Map(), range, now).map((p) => p.label);
 
   const series: StackedBarSeries[] = rankedRoutines.map((r) => ({
     label: r.routineName,
     color: colorByRoutineId.get(r.routineId)!,
-    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, "12w", now).map((p) => p.value),
+    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, range, now).map((p) => p.value),
   }));
 
   const weekKeys: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
-  for (let i = 11; i >= 0; i -= 1) {
+  for (let i = weeks - 1; i >= 0; i -= 1) {
     const date = new Date(cursor);
     date.setDate(date.getDate() - i * 7);
     weekKeys.push(toAppYmd(date));
@@ -112,7 +116,10 @@ export function buildSessionsChartData(
       routineName: s.routineName,
       seriesLabel: s.routineName,
       seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
-      metricFormatted: "1 session",
+      // No useful per-session metric on these surfaces (one mobility /
+      // lifestyle log = one session, no volume/distance/pace). Empty
+      // string suppresses the metric column in the chart panel rows.
+      metricFormatted: "",
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }
