@@ -119,7 +119,10 @@ export function TargetHeader({
           {!hideRange && (
             <>
               {(!hideSections || !hideTabs) && <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.12)", flexShrink: 0 }} />}
-              <CompactSegmentedNav items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))} />
+              <CompactSegmentedNav
+                items={progressRanges(basePath, tab).map((item) => ({ ...item, active: item.key === range }))}
+                replace
+              />
             </>
           )}
         </div>
@@ -315,13 +318,25 @@ export function FilterSubmitButton({ label = "Apply" }: { label?: string }) {
   );
 }
 
-function CompactSegmentedNav({ items }: { items: Array<{ href: string; label: string; active?: boolean }> }) {
+function CompactSegmentedNav({
+  items,
+  replace = false,
+}: {
+  items: Array<{ href: string; label: string; active?: boolean }>;
+  /** When true, navigation replaces the current history entry instead of
+   *  pushing a new one. Pass for range filters (time-frame toggles) so
+   *  Back doesn't reverse the user's filter changes one at a time. Do
+   *  NOT pass for section/tab navigation — those should remain in
+   *  history. */
+  replace?: boolean;
+}) {
   return (
     <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
       {items.map((item) => (
         <Link
           key={`${item.href}-${item.label}`}
           href={item.href}
+          replace={replace}
           scroll={false}
           prefetch={true}
           style={{

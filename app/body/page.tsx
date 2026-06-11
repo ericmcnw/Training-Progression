@@ -124,6 +124,10 @@ export default async function BodyPage(props: {
               <Link
                 key={item.key}
                 href={coverageHref(lens, item.key)}
+                // Range toggle = filter change, not navigation. `replace`
+                // so the browser Back button takes the user off /body
+                // instead of cycling back through every range tap.
+                replace
                 scroll={false}
                 style={{ ...pillStyle, ...(range === item.key ? pillActiveStyle : {}) }}
               >

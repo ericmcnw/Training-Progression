@@ -265,6 +265,12 @@ function PerGraphicRangeFilter({
           <Link
             key={opt}
             href={buildHref(opt)}
+            // `replace` so toggling the range filter doesn't push a new
+            // history entry. Otherwise hitting Back after a couple of
+            // range toggles undoes each one instead of returning to the
+            // goals list.
+            replace
+            scroll={false}
             className="goalDetailRangeChip"
             style={{ ...rangeChipStyle, ...(isActive ? rangeChipActiveStyle : {}) }}
           >
