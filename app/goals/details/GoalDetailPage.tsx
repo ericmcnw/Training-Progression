@@ -141,31 +141,37 @@ export default async function GoalDetailPage(props: {
         </div>
       </div>
 
-      <SectionCard title="Current Progress">
-        <Hero entry={entry} accent={accent} />
-      </SectionCard>
+      {/* Top row: Current Progress + Consistency side-by-side on desktop,
+          stacked on mobile. Auto-fit minmax means a one-child case (no
+          consistency for non-FREQUENCY goals) gracefully fills the full
+          width, two-child case splits 50/50 on viewports >= ~720px. */}
+      <div className="goalDetailTopRow" style={topRowStyle}>
+        <SectionCard title="Current Progress">
+          <Hero entry={entry} accent={accent} />
+        </SectionCard>
+
+        {consistency ? (
+          <SectionCard title="Consistency" subtitle={`Tap a ${getFrequencyRenderModeLabel(consistency.target)} to see what was done.`}>
+            <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="heatmap" current={heatmapRange} searchParams={searchParams} />
+            <GoalConsistencyPanel
+              target={consistency.target}
+              state={consistency.state}
+              today={todayAppYmd()}
+              weekdayMask={consistency.weekdayMask}
+              weeks={RANGE_WEEKS[heatmapRange]}
+              accentColor={accent.color}
+              accentBorderColor={accent.border}
+              retroactiveLogRoutineId={
+                consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
+              }
+              contributingLogs={consistency.contributingLogs}
+              goalName={entry.goal.name}
+            />
+          </SectionCard>
+        ) : null}
+      </div>
 
       <TypeHighlights entry={entry} consistency={consistency} accent={accent} />
-
-      {consistency ? (
-        <SectionCard title="Consistency" subtitle={`Tap a ${getFrequencyRenderModeLabel(consistency.target)} to see what was done.`}>
-          <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="heatmap" current={heatmapRange} searchParams={searchParams} />
-          <GoalConsistencyPanel
-            target={consistency.target}
-            state={consistency.state}
-            today={todayAppYmd()}
-            weekdayMask={consistency.weekdayMask}
-            weeks={RANGE_WEEKS[heatmapRange]}
-            accentColor={accent.color}
-            accentBorderColor={accent.border}
-            retroactiveLogRoutineId={
-              consistency.routineIds.length === 1 ? consistency.routineIds[0] : undefined
-            }
-            contributingLogs={consistency.contributingLogs}
-            goalName={entry.goal.name}
-          />
-        </SectionCard>
-      ) : null}
 
       <SectionCard title="History">
         <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="history" current={historyRange} searchParams={searchParams} />
@@ -550,6 +556,19 @@ const headerRowStyle: CSSProperties = {
   gap: 12,
   flexWrap: "wrap",
   alignItems: "flex-start",
+};
+
+// Top row: Current Progress hero + Consistency heatmap side-by-side on
+// desktop. Uses auto-fit so the layout adapts to child count — one card
+// (non-FREQUENCY goals with no heatmap) fills the row; two cards split
+// 50/50 when viewport width allows. align-items: start keeps the cards
+// from stretching to match the tallest one (heatmap is usually taller
+// than hero).
+const topRowStyle: CSSProperties = {
+  display: "grid",
+  gap: 14,
+  gridTemplateColumns: "1fr",
+  alignItems: "start",
 };
 
 const headerTextBlockStyle: CSSProperties = {

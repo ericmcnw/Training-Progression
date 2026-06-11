@@ -1792,6 +1792,17 @@ input.ghostInput::placeholder {
   border-radius: 12px;
 }
 
+/* Goal detail top row — Current Progress + Consistency heatmap go
+   side-by-side on desktop (>= 720px) so the now-taller calendar layout
+   uses screen real estate well. On mobile / narrow viewports the row
+   stays stacked. auto-fit-minmax handles the "1 card vs 2 cards" case
+   gracefully (non-FREQUENCY goals only have Current Progress). */
+@media (min-width: 720px) {
+  .goalDetailTopRow {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+  }
+}
+
 /* Frequency heatmap cells are rendered as buttons when interactive
    (back-date missed days, view a day's logs). The global `button { ... }`
    rule above adds min-height: 44px + green hover outline + box-shadow
