@@ -21,13 +21,16 @@
 //   - Activity coverage heatmap (52 weeks)
 //   - Quick links
 //
-// Session 2 expansion notes (intentional gaps):
-//   - Active projects card could surface moves-completed bars per project
-//     using ClimbAttempt.movesCompleted / totalMoves — collected today but
-//     not visualized anywhere. See ProjectRollupRow.bestMoves.
-//   - Send-rate trend chart (sends per attempts, weekly).
+// Shipped in session 2: send rate folded into the pyramid subtitle (gated
+// ≥10 attempts so two climbs don't show a meaningless 100%), and moves-
+// completed bars on Active Projects rows (render only when the project
+// actually has moves data — no noise for climbers who skip those fields).
+//
+// Still-open expansion notes:
+//   - Send-rate TREND chart (sends per attempts, weekly).
 //   - Time-on-wall stat from RoutineLog.durationSec.
 //   - Tries-to-send average from ClimbAttempt.triesCount.
+//   - Area aggregation rollup (most-climbed areas per location).
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
@@ -290,6 +293,16 @@ export default async function ClimbingHubPage(props: {
   const hasBoulder = pyramidRows.boulderRows.length > 0;
   const hasYosemite = pyramidRows.yosemiteRows.length > 0;
 
+  // Send rate — quiet stat folded into the pyramid subtitle. Gated behind
+  // a minimum attempt count so it doesn't show a meaningless "100%" after
+  // two climbs. Respects the discipline filter so "Boulder only" shows the
+  // boulder send rate.
+  const SEND_RATE_MIN_ATTEMPTS = 10;
+  const pyramidSendCount = pyramidAttempts.filter((a) => SENT_OUTCOMES.has(a.outcome)).length;
+  const sendRatePct = pyramidAttempts.length >= SEND_RATE_MIN_ATTEMPTS
+    ? Math.round((pyramidSendCount / pyramidAttempts.length) * 100)
+    : null;
+
   // ── Indoor / Outdoor split ──────────────────────────────────────────────
   const gymSessions = sessions.filter((s) => s.venue === "GYM");
   const cragSessions = sessions.filter((s) => s.venue === "CRAG");
@@ -450,9 +463,10 @@ export default async function ClimbingHubPage(props: {
       <SectionCard
         title="Grade Pyramid"
         subtitle={
-          disciplineFilter === "all"
+          (disciplineFilter === "all"
             ? "All sends and falls by grade · all time."
-            : `${DISCIPLINE_LABEL[disciplineFilter]} only · all time.`
+            : `${DISCIPLINE_LABEL[disciplineFilter]} only · all time.`) +
+          (sendRatePct !== null ? ` ${sendRatePct}% send rate.` : "")
         }
       >
         {/* Discipline filter pill row — only shows pills for disciplines
@@ -509,9 +523,6 @@ export default async function ClimbingHubPage(props: {
             : `Top ${Math.min(ACTIVE_PROJECTS_LIMIT, activeProjects.length)} of ${activeProjects.length} touched in the last 60 days.`
         }
       >
-        {/* TODO(session 2): surface movesCompleted/totalMoves as a small
-            progress bar per project (e.g., "8/10 moves · last attempt 3d
-            ago"). ProjectRollupRow.bestMoves already carries the data. */}
         {topProjects.length === 0 ? (
           <EmptyState message="No active projects. Tag an attempt PROJECT or FELL on a named problem to start tracking." />
         ) : (
@@ -522,6 +533,12 @@ export default async function ClimbingHubPage(props: {
               const href = locationId
                 ? `/activities/climbing/locations/${locationId}`
                 : "/activities/climbing/projects";
+              // Moves progress bar only renders when the user actually
+              // tracked moves on this project — no bar, no noise for
+              // climbers who don't use the moves fields.
+              const movesPct = p.bestMoves && p.bestMoves.total > 0
+                ? Math.min(100, Math.round((p.bestMoves.completed / p.bestMoves.total) * 100))
+                : null;
               return (
                 <Link key={p.problemId} href={href} style={projectRowStyle}>
                   <div style={{ display: "grid", gap: 3, minWidth: 0, flex: 1 }}>
@@ -533,6 +550,11 @@ export default async function ClimbingHubPage(props: {
                       {p.attemptCount} attempt{p.attemptCount === 1 ? "" : "s"} · last {relativeFromNow(p.lastAttempt)}
                       {p.bestMoves ? ` · ${p.bestMoves.completed}/${p.bestMoves.total} moves` : ""}
                     </span>
+                    {movesPct !== null ? (
+                      <div style={movesTrackStyle} aria-hidden>
+                        <div style={{ ...movesFillStyle, width: `${movesPct}%` }} />
+                      </div>
+                    ) : null}
                   </div>
                 </Link>
               );
@@ -966,6 +988,20 @@ const projectRowStyle: React.CSSProperties = {
   textDecoration: "none",
   color: "inherit",
   minHeight: 44,
+};
+
+const movesTrackStyle: React.CSSProperties = {
+  height: 5,
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.06)",
+  overflow: "hidden",
+  marginTop: 3,
+};
+
+const movesFillStyle: React.CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: ACCENT,
 };
 
 const locationRowStyle: React.CSSProperties = {

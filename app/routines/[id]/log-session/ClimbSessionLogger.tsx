@@ -552,6 +552,11 @@ export default function ClimbSessionLogger({
   const [activeArea, setActiveArea] = useState("");
   const [activeAreaId, setActiveAreaId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Known-problems chip filter. Disjoint buckets by best outcome:
+  // "flashed" (⚡ FLASH/ONSIGHT), "sent" (↻ clean send, never flashed),
+  // "projects" (◌ attempted, never cleanly sent). Only rendered when the
+  // location has enough problems that scrolling the chip strip gets slow.
+  const [problemFilter, setProblemFilter] = useState<"all" | "flashed" | "sent" | "projects">("all");
 
   // Saved areas for this location — feeds the datalist on both the active
   // climb panel and each expanded attempt row. Refetched when the parent
@@ -661,6 +666,13 @@ export default function ClimbSessionLogger({
     setSelectedProblemId(problem.id);
     setSelectedGrade(problem.grade);
     setActiveName(problem.name);
+    // Picking a known problem carries its area along — the next attempt
+    // lands in the right sector without retyping. Only when the problem
+    // actually has area history; otherwise keep whatever the user picked.
+    if (problem.areaId || problem.areaName) {
+      setActiveArea(problem.areaName ?? "");
+      setActiveAreaId(problem.areaId ?? null);
+    }
   }
 
   function selectGrade(grade: string) {
@@ -825,41 +837,129 @@ export default function ClimbSessionLogger({
           </div>
 
           {/* Saved problems at this location, filtered to the current
-              discipline's grade system. A ↻ badge marks problems you've
-              already sent at least once — taps still log a fresh SEND, but
-              the badge makes "this is a repeat" obvious before you tap. */}
-          {savedProblems.filter((p) => p.gradeSystem === gradeSystem).length > 0 && (
-            <div>
-              <div style={sectionLabelStyle}>Known {nounPlural} at this location</div>
-              <div style={gradeChipsScrollStyle}>
-                {savedProblems
-                  .filter((p) => p.gradeSystem === gradeSystem)
-                  .map((problem) => {
-                  const isSelected = selectedProblemId === problem.id;
-                  const priorSends = problem.priorSendCount ?? 0;
-                  return (
-                    <button
-                      key={problem.id}
-                      type="button"
-                      onClick={() => selectSavedProblem(problem)}
-                      style={problemChipStyle(isSelected)}
-                      title={priorSends > 0 ? `Sent ${priorSends}× before — tap to log a repeat` : undefined}
-                    >
-                      <span style={{ fontSize: 10, opacity: 0.7 }}>{problem.grade}</span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        {problem.name}
-                        {priorSends > 0 && (
-                          <span style={repeatBadgeStyle}>
-                            ↻{priorSends > 1 ? `×${priorSends}` : ""}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+              discipline's grade system. Each chip carries an outcome badge
+              (⚡ flashed · ↻ sent · ◌ project) colored from the climb-
+              outcome palette so what-you-did-on-it reads at a glance.
+              Filter pills (gated behind >6 problems so small lists stay
+              clean) bucket by outcome. Area-aware: when the active climb
+              panel has an area picked, the list narrows to that area's
+              problems; with no area, each chip shows a dim area tag. */}
+          {(() => {
+            const systemProblems = savedProblems.filter((p) => p.gradeSystem === gradeSystem);
+            if (systemProblems.length === 0) return null;
+
+            const isFlashed = (p: ClimbProblemBasic) =>
+              p.bestOutcome === "FLASH" || p.bestOutcome === "ONSIGHT";
+            const isSent = (p: ClimbProblemBasic) =>
+              p.bestOutcome === "SEND" || p.bestOutcome === "REDPOINT";
+            const isProject = (p: ClimbProblemBasic) =>
+              (p.priorSendCount ?? 0) === 0 && (p.priorAttemptCount ?? 0) > 0;
+
+            const flashedProblems = systemProblems.filter(isFlashed);
+            const sentProblems = systemProblems.filter(isSent);
+            const projectProblems = systemProblems.filter(isProject);
+
+            // Area narrowing — matches by structured id first, then by the
+            // typed text (legacy free-text areas). Falls back to all areas
+            // when nothing matches so the list never strands the user.
+            const areaText = activeArea.trim().toLowerCase();
+            const areaFilterOn = !!activeAreaId || areaText.length > 0;
+            const matchesArea = (p: ClimbProblemBasic) => {
+              if (activeAreaId && p.areaId === activeAreaId) return true;
+              if (areaText && (p.areaName ?? "").trim().toLowerCase() === areaText) return true;
+              return false;
+            };
+
+            const bucketProblems =
+              problemFilter === "flashed" ? flashedProblems :
+              problemFilter === "sent" ? sentProblems :
+              problemFilter === "projects" ? projectProblems :
+              systemProblems;
+            const areaScoped = areaFilterOn ? bucketProblems.filter(matchesArea) : bucketProblems;
+            const areaFallback = areaFilterOn && areaScoped.length === 0;
+            const visibleProblems = areaFallback ? bucketProblems : areaScoped;
+            // Show per-chip area tags whenever the list spans areas.
+            const showAreaTags = !areaFilterOn || areaFallback;
+
+            const showFilter =
+              systemProblems.length > 6 &&
+              (flashedProblems.length > 0 || sentProblems.length > 0 || projectProblems.length > 0);
+
+            return (
+              <div>
+                <div style={sectionLabelStyle}>
+                  Known {nounPlural}
+                  {areaFilterOn && !areaFallback ? ` · ${activeArea.trim() || "this area"}` : " at this location"}
+                </div>
+                {showFilter && (
+                  <div style={problemFilterRowStyle}>
+                    {([
+                      { value: "all" as const, label: `All (${systemProblems.length})` },
+                      ...(flashedProblems.length > 0
+                        ? [{ value: "flashed" as const, label: `⚡ Flashed (${flashedProblems.length})` }]
+                        : []),
+                      ...(sentProblems.length > 0
+                        ? [{ value: "sent" as const, label: `↻ Sent (${sentProblems.length})` }]
+                        : []),
+                      ...(projectProblems.length > 0
+                        ? [{ value: "projects" as const, label: `◌ Projects (${projectProblems.length})` }]
+                        : []),
+                    ]).map((tab) => (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setProblemFilter(tab.value)}
+                        style={problemFilterPillStyle(problemFilter === tab.value)}
+                        aria-pressed={problemFilter === tab.value}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {areaFallback && (
+                  <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 6 }}>
+                    Nothing recorded in {activeArea.trim() || "this area"} yet — showing all areas.
+                  </div>
+                )}
+                <div style={gradeChipsScrollStyle}>
+                  {visibleProblems.map((problem) => {
+                    const isSelected = selectedProblemId === problem.id;
+                    const priorSends = problem.priorSendCount ?? 0;
+                    const badge = problemOutcomeBadge(problem);
+                    return (
+                      <button
+                        key={problem.id}
+                        type="button"
+                        onClick={() => selectSavedProblem(problem)}
+                        style={problemChipStyle(isSelected)}
+                        title={badge?.title}
+                      >
+                        <span style={{ fontSize: 10, opacity: 0.7 }}>{problem.grade}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                          {problem.name}
+                          {badge && (
+                            <span style={outcomeBadgeStyle(badge.color, badge.bg)}>
+                              {badge.glyph}
+                              {priorSends > 1 ? `×${priorSends}` : ""}
+                            </span>
+                          )}
+                          {showAreaTags && problem.areaName ? (
+                            <span style={chipAreaTagStyle}>{problem.areaName}</span>
+                          ) : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {visibleProblems.length === 0 && (
+                    <span style={{ fontSize: 11, opacity: 0.5, padding: "6px 2px" }}>
+                      Nothing in this bucket yet.
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Grade chip row */}
           <div>
@@ -886,7 +986,11 @@ export default function ClimbSessionLogger({
                   <span style={activeClimbGradePillStyle}>{selectedGrade}</span>
                   <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.65, letterSpacing: 0.3 }}>
                     {selectedProblemId
-                      ? `${activeProblemName} · ${activeAttemptCount} attempt${activeAttemptCount !== 1 ? "s" : ""}`
+                      ? `${activeProblemName} · ${activeAttemptCount} attempt${activeAttemptCount !== 1 ? "s" : ""}${
+                          (activeProblem?.priorSendCount ?? 0) > 0
+                            ? ` · ↻ sent ${activeProblem!.priorSendCount}× before`
+                            : ""
+                        }`
                       : activeName.trim()
                         ? `${activeName.trim()} · ${activeAttemptCount} attempt${activeAttemptCount !== 1 ? "s" : ""}`
                         : "Tap an outcome to log a quick climb"}
@@ -1474,3 +1578,95 @@ const repeatBadgeStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
   lineHeight: 1,
 };
+
+// Outcome badge for known-problem chips. Colors come from the canonical
+// climb-outcome palette (lib/climb-types) so flash amber / send green /
+// project violet match every other climbing surface.
+function problemOutcomeBadge(problem: ClimbProblemBasic): {
+  glyph: string;
+  color: string;
+  bg: string;
+  title: string;
+} | null {
+  const best = problem.bestOutcome ?? null;
+  const sends = problem.priorSendCount ?? 0;
+  const attemptsCount = problem.priorAttemptCount ?? 0;
+  if (best === "FLASH" || best === "ONSIGHT") {
+    return {
+      glyph: "⚡",
+      color: climbOutcomeColor(best),
+      bg: climbOutcomeBg(best),
+      title: `${best === "FLASH" ? "Flashed" : "Onsighted"}${sends > 1 ? ` · ${sends} clean sends total` : ""} — tap to log a repeat`,
+    };
+  }
+  if (best === "SEND" || best === "REDPOINT") {
+    return {
+      glyph: "↻",
+      color: climbOutcomeColor(best),
+      bg: climbOutcomeBg(best),
+      title: `Sent ${sends}× before — tap to log a repeat`,
+    };
+  }
+  if (attemptsCount > 0) {
+    return {
+      glyph: "◌",
+      color: climbOutcomeColor("PROJECT"),
+      bg: climbOutcomeBg("PROJECT"),
+      title: `Project — ${attemptsCount} attempt${attemptsCount === 1 ? "" : "s"}, no clean send yet`,
+    };
+  }
+  return null;
+}
+
+function outcomeBadgeStyle(color: string, bg: string): React.CSSProperties {
+  return {
+    fontSize: 10,
+    fontWeight: 900,
+    padding: "1px 5px",
+    borderRadius: 6,
+    background: bg,
+    border: `1px solid ${color}`,
+    color,
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+    flexShrink: 0,
+  };
+}
+
+const chipAreaTagStyle: React.CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  opacity: 0.5,
+  padding: "1px 5px",
+  borderRadius: 5,
+  background: "rgba(255,255,255,0.05)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: 90,
+  flexShrink: 0,
+};
+
+const problemFilterRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+  marginBottom: 8,
+};
+
+function problemFilterPillStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "5px 10px",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: active ? "rgba(120,190,255,0.45)" : "rgba(255,255,255,0.12)",
+    background: active ? "rgba(120,190,255,0.15)" : "rgba(255,255,255,0.04)",
+    color: active ? "rgba(191,219,254,0.98)" : "rgba(255,255,255,0.78)",
+    fontSize: 11.5,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    minHeight: 30,
+  };
+}

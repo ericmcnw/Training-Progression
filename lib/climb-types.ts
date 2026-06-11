@@ -36,6 +36,19 @@ export type ClimbProblemBasic = {
    *  problem. Drives the ↻ repeat badge on saved-problem chips. Optional
    *  for back-compat with consumers that don't populate it. */
   priorSendCount?: number;
+  /** Total prior attempts (any outcome). With priorSendCount this lets
+   *  the logger classify chips: sent (sends > 0), project (attempts > 0,
+   *  sends = 0), or fresh (attempts = 0). Optional for back-compat. */
+  priorAttemptCount?: number;
+  /** Best outcome across all prior attempts (FLASH > ONSIGHT > SEND >
+   *  REDPOINT > PROJECT). Drives the outcome-colored chip badge in the
+   *  live logger. Null when never attempted. */
+  bestOutcome?: ClimbOutcome | null;
+  /** Area of the most recent attempt that recorded one. Lets the logger
+   *  filter known-problem chips by the active area and tag chips with
+   *  their area when no area filter is set. */
+  areaId?: string | null;
+  areaName?: string | null;
 };
 
 // Sub-region within a ClimbLocation. Mostly used in the picker dropdown
