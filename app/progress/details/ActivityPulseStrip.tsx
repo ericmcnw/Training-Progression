@@ -133,11 +133,6 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
             {label}
           </span>
         </div>
-        {/* In goal mode, the trend (Behind / On track / Ahead / Done) status drops
-            to the bottom row alongside the progress bar — a goal name + GOAL badge
-            already crowds the top row, and the progress bar carries the
-            "how am I doing" signal more visually anyway. */}
-        {!goal && trendChip}
       </div>
       <div
         style={{
@@ -157,6 +152,10 @@ export function PulseCard({ label, value, sub, trend, accent, goal }: PulseSlot)
         {value}
       </div>
       {sub ? <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>{sub}</div> : null}
+      {/* Trend chip gets its own row at the bottom (same as goal mode) —
+          sharing the label row made the nowrap chip crush the label and
+          spill over neighbors at condensed card widths. */}
+      {!goal && trendChip ? <div style={{ justifySelf: "start" }}>{trendChip}</div> : null}
       {goal ? (
         <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
           <div
