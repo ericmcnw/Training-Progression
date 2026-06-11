@@ -805,22 +805,13 @@ export async function getHomeData(): Promise<HomeData> {
   // ── User's selected sports for the schedule picker's SPORTS tiles ────────
   const { listSelectedSports } = await import("@/lib/synthetic-sport-routines");
   const { getActivityEntry } = await import("@/lib/activity-families");
-  const SPORT_ACCENT: Record<string, string> = {
-    climbing: "rgba(251,146,60,0.9)",
-    surfing: "rgba(56,189,248,0.9)",
-    snowboarding: "rgba(168,85,247,0.9)",
-    skiing: "rgba(99,102,241,0.9)",
-    skateboarding: "rgba(244,114,182,0.9)",
-    basketball: "rgba(220,38,38,0.9)",
-    tennis: "rgba(132,204,22,0.9)",
-    golf: "rgba(40,212,160,0.9)",
-  };
+  const { sportAccent } = await import("@/lib/sport-accent");
   const selectedSports = await listSelectedSports();
   const scheduleSports = selectedSports.map((s) => ({
     slug: s.slug,
     label: s.label,
     eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
-    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+    color: sportAccent(s.slug),
   }));
 
   // ── Last-7-days snapshot ────────────────────────────────────────────────
@@ -856,6 +847,218 @@ export async function getHomeData(): Promise<HomeData> {
       totalCardioMi: last7CardioMi,
     },
   };
+}
+
+// Narrow loader for callers that only need habit-row data (the GoalsTab on
+// /plan, for instance). Avoids the routine/schedule/zone/movement-pattern
+// fan-out of getHomeData(). Returns the same HabitRow[] shape so consumers
+// don't need to change their downstream code.
+export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekStart: string; habitRows: HabitRow[] }> {
+  const today = todayAppYmd();
+  const habitWindowStart = addDaysYmd(today, -(HABIT_GRID_DAYS - 1));
+  const weekBounds = getWeekBoundsSunday(new Date());
+  const currentWeekStart = weekBounds.startYmd;
+  // 8 weeks ending in the current week — same window WeeklyFrequencyBars renders.
+  const sparkStart = addDaysYmd(currentWeekStart, -(DOMAIN_WEEKS - 1) * 7);
+  const widestStart = [sparkStart, habitWindowStart].sort()[0];
+  const windowEnd = addDaysYmd(currentWeekStart, 6);
+
+  const [allFrequencyGoals, allLogs] = await Promise.all([
+    prisma.frequencyGoal.findMany({
+      where: { isActive: true },
+      include: {
+        routines: {
+          include: {
+            routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true, isActive: true, isDeleted: true, activityTypeId: true } },
+          },
+        },
+        triggerExercises: { select: { exerciseId: true } },
+      },
+    }),
+    prisma.routineLog.findMany({
+      where: {
+        performedAt: {
+          gte: new Date(`${widestStart}T00:00:00.000Z`),
+          lt: new Date(`${addDaysYmd(windowEnd, 1)}T00:00:00.000Z`),
+        },
+      },
+      orderBy: { performedAt: "asc" },
+      select: {
+        id: true,
+        routineId: true,
+        performedAt: true,
+        activityTypeId: true,
+        activityType: { select: { name: true, familyId: true } },
+        routine: {
+          select: {
+            id: true, name: true, kind: true, domain: true, subtype: true,
+            activityType: { select: { name: true } },
+          },
+        },
+        exercises: {
+          select: {
+            exerciseId: true,
+            _count: { select: { sets: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const habitRows: HabitRow[] = allFrequencyGoals
+    .map((goal): HabitRow | null => {
+      const liveLinks = goal.routines.filter(
+        (rel) => rel.routine && rel.routine.isActive && !rel.routine.isDeleted
+      );
+      const primaryLinks = liveLinks.filter((rel) => rel.role !== "SUBSTITUTE");
+      const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
+      if (primaryLinks.length === 0) return null;
+
+      const primaryRoutines = primaryLinks.map((rel) => ({
+        id: rel.routine!.id,
+        name: rel.routine!.name,
+        domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
+        activityTypeId: rel.routine!.activityTypeId ?? null,
+      }));
+      const substituteRoutines = subLinks.map((rel) => ({
+        id: rel.routine!.id,
+        name: rel.routine!.name,
+        domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
+      }));
+      const isGroup = primaryRoutines.length > 1;
+      const isPerRoutine = goal.id.startsWith("fg_");
+      const displayName = isPerRoutine ? primaryRoutines[0].name : goal.name;
+
+      const target: FrequencyTarget = {
+        targetCount: goal.targetCount,
+        targetInterval: goal.targetInterval,
+        targetUnit: goal.targetUnit,
+        weekdayMask: goal.weekdayMask ?? null,
+      };
+
+      const membership = buildFrequencyGoalMembership({
+        primaryRoutines,
+        substituteRoutineIds: substituteRoutines.map((r) => r.id),
+        explicit: {
+          triggerSubtypes: goal.triggerSubtypes,
+          triggerActivityTypeIds: goal.triggerActivityTypeIds,
+          triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
+          triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
+          triggerMinSets: goal.triggerMinSets,
+        },
+      });
+
+      type MatchedLog = {
+        logId: string;
+        performedAt: Date;
+        isPrimary: boolean;
+        routineId: string;
+        routineName: string;
+      };
+      const matched = new Map<string, MatchedLog>();
+      for (const log of allLogs) {
+        if (matched.has(log.id)) continue;
+        const result = classifyLogAgainstFrequencyGoal(
+          {
+            id: log.id,
+            routineId: log.routineId,
+            performedAt: log.performedAt,
+            routineSubtype: log.routine?.subtype ?? null,
+            activityTypeId: log.activityTypeId ?? null,
+            activityFamilyId: log.activityType?.familyId ?? null,
+            exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+          },
+          membership
+        );
+        if (!result) continue;
+        matched.set(log.id, {
+          logId: log.id,
+          performedAt: log.performedAt,
+          isPrimary: result.isPrimary,
+          routineId: log.routineId,
+          routineName: getLogDisplayName(log),
+        });
+      }
+      const matchedList = Array.from(matched.values());
+      const logs = matchedList.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary }));
+      const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
+
+      const weeklyContributions: HabitRow["weeklyContributions"] = [];
+      for (let w = 0; w < DOMAIN_WEEKS; w++) {
+        const weekStartYmd = addDaysYmd(currentWeekStart, -(DOMAIN_WEEKS - 1 - w) * 7);
+        const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+        const weekLogs = matchedList
+          .filter((m) => {
+            const ymd = toAppYmd(m.performedAt);
+            return ymd >= weekStartYmd && ymd <= weekEndYmd;
+          })
+          .sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime())
+          .map((m) => ({
+            logId: m.logId,
+            routineId: m.routineId,
+            routineName: m.routineName,
+            performedYmd: toAppYmd(m.performedAt),
+            performedTimeLabel: timeLabel(m.performedAt),
+            isPrimary: m.isPrimary,
+          }));
+        weeklyContributions.push({ weekStartYmd, weekEndYmd, logs: weekLogs });
+      }
+
+      const trailing30: HabitRow["trailing30"] = [];
+      for (let i = 0; i < HABIT_GRID_DAYS; i++) {
+        const ymd = addDaysYmd(habitWindowStart, i);
+        trailing30.push({ ymd, state: state.dailyState[ymd] ?? (ymd > today ? "future" : "rest") });
+      }
+      let weekTarget = 0;
+      let weekProgress = 0;
+      for (let i = 0; i < 7; i++) {
+        const ymd = addDaysYmd(currentWeekStart, i);
+        if (ymd > today) continue;
+        const expected = isExpectedDay(target, ymd);
+        if (expected) weekTarget++;
+        if (expected && (state.dailyState[ymd] === "done" || state.dailyState[ymd] === "covered")) {
+          weekProgress++;
+        }
+      }
+      if (weekTarget === 0) {
+        weekTarget = target.targetCount;
+        weekProgress = state.currentWindow.progress;
+      }
+
+      return {
+        goalId: goal.id,
+        goalName: displayName,
+        isGroup,
+        routineId: primaryRoutines[0].id,
+        routineName: displayName,
+        primaryRoutines,
+        substituteRoutines,
+        domain: primaryRoutines[0].domain,
+        state,
+        target,
+        trailing30,
+        currentStreak: state.currentDayStreak || state.windowStreak,
+        longestStreak: Math.max(state.longestDayStreak, state.longestWindowStreak),
+        weekFraction: { progress: weekProgress, target: Math.max(weekTarget, 0) },
+        status: state.currentWindow.status,
+        weeklyContributions,
+      };
+    })
+    .filter((r): r is HabitRow => r !== null);
+
+  const statusRank: Record<HabitRow["status"], number> = {
+    at_risk: 0, behind: 1, on_track: 2, ahead: 3, complete: 4,
+  };
+  habitRows.sort((a, b) => {
+    const aMode = getFrequencyRenderMode(a.target);
+    const bMode = getFrequencyRenderMode(b.target);
+    if (aMode !== bMode) return aMode === "daily-grid" ? -1 : 1;
+    if (statusRank[a.status] !== statusRank[b.status]) return statusRank[a.status] - statusRank[b.status];
+    if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
+    return a.goalName.localeCompare(b.goalName);
+  });
+
+  return { today, currentWeekStart, habitRows };
 }
 
 // Re-export for callers that want to filter by domain.

@@ -16,7 +16,7 @@ import { ProgressShell, SectionCard } from "@/app/progress/ui";
 import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
-import { getHomeData } from "@/app/_home/data";
+import { getHabitRowsOnly } from "@/app/_home/data";
 import type { HabitRow } from "@/app/_home/types";
 import { subtleTextStyle } from "@/app/goals/ui";
 import GoalRow from "./GoalRow";
@@ -66,9 +66,9 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
   const active = getParam(searchParams, "active") ?? "active";
   const showInactive = active === "all" || active === "inactive";
 
-  const [allGoals, homeData] = await Promise.all([
+  const [allGoals, habitData] = await Promise.all([
     getGoalsOverview({ type, active }),
-    getHomeData(),
+    getHabitRowsOnly(),
   ]);
 
   // Map habit rows by goal id so each FREQUENCY GoalInsight gets paired
@@ -76,7 +76,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
   // goals render through the scalar progress visual using
   // GoalInsight.actualDisplay / targetDisplay / fractionComplete only.
   const habitByGoalId = new Map<string, HabitRow>();
-  for (const row of homeData.habitRows) {
+  for (const row of habitData.habitRows) {
     habitByGoalId.set(row.goalId, row);
   }
 
@@ -145,7 +145,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
                 key={entry.insight.goal.id}
                 insight={entry.insight}
                 habitRow={entry.habitRow}
-                today={homeData.today}
+                today={habitData.today}
               />
             ))}
           </div>

@@ -15,6 +15,7 @@ import SportsAddButton from "./SportsAddButton";
 import SportQuickLogRow from "./SportQuickLogRow";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
+import { sportAccent } from "@/lib/sport-accent";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,7 @@ export default async function RoutinesPageContent(props: {
   const now = new Date();
   const { start, end } = getWeekBoundsSunday(now);
 
-  const [rawRoutines, goalRoutines, routineFrequencyGoals, selectedSports, availableSports] = await Promise.all([
+  const [rawRoutines, goalRoutines, selectedSports, availableSports] = await Promise.all([
     prisma.routine.findMany({
       // Hide quick-log placeholder routines — they exist purely to host
       // ad-hoc logs and would clutter the routine list otherwise.
@@ -128,45 +129,25 @@ export default async function RoutinesPageContent(props: {
         },
       },
     }),
-    // Fetch all active goal memberships so each card knows which goals it contributes to
+    // All active goal memberships so each card knows which goals it
+    // contributes to. FrequencyGoalRoutine is the single source of truth
+    // post-Phase-4 migration; the legacy `Goal { type=FREQUENCY,
+    // target=ROUTINE }` shape was cleared and parseGoalInput rejects new
+    // ones, so we don't have to merge a second source anymore.
     prisma.frequencyGoalRoutine.findMany({
       where: { goal: { isActive: true } },
       select: { routineId: true, goal: { select: { name: true } } },
-    }),
-    prisma.goal.findMany({
-      where: {
-        isActive: true,
-        goalType: "FREQUENCY",
-        targetType: "ROUTINE",
-        metricType: "SESSIONS",
-      },
-      select: {
-        name: true,
-        targetId: true,
-      },
     }),
     listSelectedSports(),
     listUnselectedSports(),
   ]);
 
-  // Sport rows + accent colors for the SPORT section. Palette matches
-  // lib/activities/sports-chart.ts so the visual ties across log and
-  // stats stay consistent.
-  const SPORT_ACCENT: Record<string, string> = {
-    climbing: "rgba(251,146,60,0.9)",
-    surfing: "rgba(56,189,248,0.9)",
-    snowboarding: "rgba(168,85,247,0.9)",
-    skiing: "rgba(99,102,241,0.9)",
-    skateboarding: "rgba(244,114,182,0.9)",
-    basketball: "rgba(220,38,38,0.9)",
-    tennis: "rgba(132,204,22,0.9)",
-    golf: "rgba(40,212,160,0.9)",
-  };
+  // Sport rows + accent colors for the SPORT section.
   const sportRows = selectedSports.map((s) => ({
     slug: s.slug,
     label: s.label,
     eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
-    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+    color: sportAccent(s.slug),
   }));
   const sportPickerSelected = selectedSports.map((s) => ({
     slug: s.slug,
@@ -178,19 +159,12 @@ export default async function RoutinesPageContent(props: {
   // helpers (getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, etc.).
   const routines = rawRoutines.map(routineWithFrequencyTarget);
 
-  // Build routineId → goal name list
+  // Build routineId → sorted, unique goal names.
   const goalContributionsByRoutineId = new Map<string, string[]>();
   for (const row of goalRoutines) {
-    const current = goalContributionsByRoutineId.get(row.routineId) ?? [];
-    current.push(row.goal.name);
-    goalContributionsByRoutineId.set(row.routineId, current);
-  }
-  for (const goal of routineFrequencyGoals) {
-    const routineId = goal.targetId.trim();
-    if (!routineId) continue;
-    const current = goalContributionsByRoutineId.get(routineId) ?? [];
-    current.push(goal.name);
-    goalContributionsByRoutineId.set(routineId, current);
+    const current = goalContributionsByRoutineId.get(row.routineId);
+    if (current) current.push(row.goal.name);
+    else goalContributionsByRoutineId.set(row.routineId, [row.goal.name]);
   }
   for (const [routineId, names] of goalContributionsByRoutineId) {
     goalContributionsByRoutineId.set(routineId, Array.from(new Set(names)).sort((a, b) => a.localeCompare(b)));

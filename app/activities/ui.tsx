@@ -106,7 +106,7 @@ export function FamilySection({
               fontWeight: 900,
             }}
           >
-            {family === "body-work" ? "Body Work" : label.toUpperCase()}
+            {label.toUpperCase()}
           </div>
           <div style={{ fontSize: 17, fontWeight: 900, marginTop: 2 }}>{label}</div>
           {description ? (

@@ -21,6 +21,7 @@ import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
 import { getActivityEntry } from "@/lib/activity-families";
+import { sportAccent } from "@/lib/sport-accent";
 import { formatRoutineTargetLabel, getRoutineFrequencyStatus, getRoutineTargetWindow, normalizeRoutineFrequencyTarget } from "@/lib/routine-frequency";
 import {
   sessionMetricGoalValueLabel,
@@ -1614,16 +1615,6 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
   // Shape sport routines into goal-target options with the same
   // accent palette + eyebrow used on /log + the schedule picker so
   // every surface refers to a given sport with the same color.
-  const SPORT_ACCENT: Record<string, string> = {
-    climbing: "rgba(251,146,60,0.9)",
-    surfing: "rgba(56,189,248,0.9)",
-    snowboarding: "rgba(168,85,247,0.9)",
-    skiing: "rgba(99,102,241,0.9)",
-    skateboarding: "rgba(244,114,182,0.9)",
-    basketball: "rgba(220,38,38,0.9)",
-    tennis: "rgba(132,204,22,0.9)",
-    golf: "rgba(40,212,160,0.9)",
-  };
   const sportTargets: GoalSportTargetOption[] = sportRoutines.flatMap((r) => {
     const slug = r.id.startsWith("sports-") && r.id.endsWith("-synthetic")
       ? r.id.slice("sports-".length, -"-synthetic".length)
@@ -1637,7 +1628,7 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       label: entry.label,
       subtitle: entry.eyebrow,
       eyebrow: entry.eyebrow,
-      color: SPORT_ACCENT[slug] ?? "rgba(255,255,255,0.5)",
+      color: sportAccent(slug),
       routineKind: "SESSION" as const,
       sessionTemplateId: null,
       sessionTemplateKey: null,

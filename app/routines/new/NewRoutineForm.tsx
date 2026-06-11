@@ -4,6 +4,7 @@ import MetadataGroupPicker from "@/app/components/MetadataGroupPicker";
 import RoutineFrequencyTargetFields from "../RoutineFrequencyTargetFields";
 import SupportsSportsField from "../SupportsSportsField";
 import { activitiesByFamily } from "@/lib/activity-families";
+import { sportAccent } from "@/lib/sport-accent";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -29,22 +30,10 @@ import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/gen
 
 // Sport options for the SupportsSportsField. Pulled from the activity
 // registry so adding a new sport there auto-includes it in the picker.
-// Accent colors mirror the sports-chart palette so the chip color
-// matches the chart segment on /activities/sports.
-const SPORT_ACCENT: Record<string, string> = {
-  climbing: "rgba(251,146,60,0.9)",
-  surfing: "rgba(56,189,248,0.9)",
-  snowboarding: "rgba(168,85,247,0.9)",
-  skiing: "rgba(99,102,241,0.9)",
-  skateboarding: "rgba(244,114,182,0.9)",
-  basketball: "rgba(220,38,38,0.9)",
-  tennis: "rgba(132,204,22,0.9)",
-  golf: "rgba(40,212,160,0.9)",
-};
 const SUPPORT_SPORT_OPTIONS = activitiesByFamily("sports").map((s) => ({
   slug: s.slug,
   label: s.label,
-  accent: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+  accent: sportAccent(s.slug),
 }));
 
 type MetadataGroupOption = {

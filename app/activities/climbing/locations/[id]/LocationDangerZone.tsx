@@ -294,6 +294,7 @@ const labelStyle: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
+// fontSize: 16 — iOS Safari auto-zooms on focus when < 16; see CLAUDE.md rule 3a.
 const inputStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
@@ -302,7 +303,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 600,
   outline: "none",
 };
@@ -314,7 +315,7 @@ const selectStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(15,23,42,0.85)",
   color: "inherit",
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 600,
   outline: "none",
   cursor: "pointer",

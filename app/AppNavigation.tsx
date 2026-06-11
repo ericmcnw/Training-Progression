@@ -121,18 +121,6 @@ function LogIcon() {
   );
 }
 
-function ProgressIcon() {
-  return (
-    <MobileNavIcon>
-      <path d="M4 18.5h16" />
-      <path d="M6.5 16V12.5" />
-      <path d="M10.5 16V9.5" />
-      <path d="M14.5 16V6.5" />
-      <path d="M18.5 16V11" />
-    </MobileNavIcon>
-  );
-}
-
 function ActivitiesIcon() {
   // A compass / target glyph — evokes "where do I want to train today"
   return (
@@ -152,16 +140,6 @@ function BodyIcon() {
       <path d="M7.5 10h9" />
       <path d="m12 13.5-4 6" />
       <path d="m12 13.5 4 6" />
-    </MobileNavIcon>
-  );
-}
-
-function GoalsIcon() {
-  return (
-    <MobileNavIcon>
-      <circle cx="12" cy="12" r="8.5" />
-      <circle cx="12" cy="12" r="4.5" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </MobileNavIcon>
   );
 }

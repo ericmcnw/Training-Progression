@@ -11,19 +11,7 @@ import { effectiveRoutineDomain } from "@/lib/routines";
 import type { QuickPickRoutine } from "@/app/_home/types";
 import { listSelectedSports } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
-
-// Same sport accent palette used on /log + /activities/sports so the
-// visual identity carries across surfaces.
-const SPORT_ACCENT: Record<string, string> = {
-  climbing: "rgba(251,146,60,0.9)",
-  surfing: "rgba(56,189,248,0.9)",
-  snowboarding: "rgba(168,85,247,0.9)",
-  skiing: "rgba(99,102,241,0.9)",
-  skateboarding: "rgba(244,114,182,0.9)",
-  basketball: "rgba(220,38,38,0.9)",
-  tennis: "rgba(132,204,22,0.9)",
-  golf: "rgba(40,212,160,0.9)",
-};
+import { sportAccent } from "@/lib/sport-accent";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -78,7 +66,7 @@ export default async function MonthTab({ searchParams }: { searchParams: SearchP
     slug: s.slug,
     label: s.label,
     eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "Sport",
-    color: SPORT_ACCENT[s.slug] ?? "rgba(255,255,255,0.5)",
+    color: sportAccent(s.slug),
   }));
 
   return (
