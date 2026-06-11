@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate } from "@/lib/dates";
-import { effectiveRoutineDomain } from "@/lib/routines";
+import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
@@ -21,7 +21,10 @@ import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities
 
 export const dynamic = "force-dynamic";
 
-const ACCENT = "rgba(192,132,252,0.9)";
+// Canonical mobility purple — single source of truth in lib/routines.
+// The soft BG / BORDER / TEXT variants are tuned for the card chrome
+// and stay local.
+const ACCENT = domainColor("mobility");
 const ACCENT_BG = "rgba(192,132,252,0.08)";
 const ACCENT_BORDER = "rgba(192,132,252,0.28)";
 const ACCENT_TEXT = "rgba(216,180,254,0.95)";

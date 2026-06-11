@@ -60,17 +60,6 @@ type Props = {
 const DOMAIN_ORDER = ["strength", "cardio", "sport", "mobility", "lifestyle"] as const;
 type Domain = (typeof DOMAIN_ORDER)[number];
 
-// Per-domain accent colors for the section header. Match the
-// /log domain colors + sports-chart palette so the visual ties
-// across the app.
-const DOMAIN_ACCENT: Record<Domain, string> = {
-  strength: "rgba(74,222,128,0.9)",
-  cardio: "rgba(78,148,255,0.9)",
-  sport: "rgba(251,146,60,0.9)",
-  mobility: "rgba(167,139,250,0.9)",
-  lifestyle: "rgba(244,114,182,0.9)",
-};
-
 const DOMAIN_DISPLAY_LABEL: Record<Domain, string> = {
   strength: "Strength",
   cardio: "Endurance",
@@ -258,7 +247,7 @@ export default function SchedulePicker({
         {DOMAIN_ORDER.map((domain) => {
           if (!sectionHasContent(domain)) return null;
           const isOpen = effectiveOpen[domain];
-          const accent = DOMAIN_ACCENT[domain];
+          const accent = domainAccent(domain);
           const label = DOMAIN_DISPLAY_LABEL[domain];
           const sectionRoutines = routinesByDomain.get(domain) ?? [];
           const norm = filter.trim().toLowerCase();

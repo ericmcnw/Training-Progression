@@ -12,21 +12,26 @@ import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
+import { domainRgb } from "@/lib/routines";
 
 export const dynamic = "force-dynamic";
 
 // ── Style tokens ─────────────────────────────────────────────────────────────
 
-// Matches SectionLinkButton roughly so the two header actions sit visually
-// alongside each other. Accent uses the strength domain color.
+// All strength-tinted chrome on this page derives from the canonical
+// strength domain color via domainRgb — so a future palette tweak in
+// lib/routines propagates to every soft variant without a sweep.
+const STRENGTH_RGB = domainRgb("strength");
+const STRENGTH_TEXT = "rgba(134,239,172,0.95)";
+
 const strengthCtaStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   padding: "8px 14px",
   borderRadius: 10,
-  border: "1px solid rgba(84,203,130,0.5)",
-  background: "rgba(84,203,130,0.14)",
-  color: "rgba(134,239,172,0.95)",
+  border: `1px solid rgba(${STRENGTH_RGB},0.5)`,
+  background: `rgba(${STRENGTH_RGB},0.14)`,
+  color: STRENGTH_TEXT,
   fontSize: 12,
   fontWeight: 900,
   textDecoration: "none",
@@ -278,8 +283,8 @@ function ExerciseCard({ exercise }: { exercise: import("@/app/progress/details/s
         gap: 10,
         padding: "14px 16px",
         borderRadius: 14,
-        border: "1px solid rgba(84,203,130,0.18)",
-        background: "linear-gradient(180deg, rgba(84,203,130,0.06), rgba(255,255,255,0.02))",
+        border: `1px solid rgba(${STRENGTH_RGB},0.18)`,
+        background: `linear-gradient(180deg, rgba(${STRENGTH_RGB},0.06), rgba(255,255,255,0.02))`,
         textDecoration: "none",
         color: "inherit",
         transition: "border-color 120ms ease",
@@ -316,7 +321,7 @@ function ExerciseCard({ exercise }: { exercise: import("@/app/progress/details/s
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
           <div style={{ display: "grid", gap: 2 }}>
             <span style={{ fontSize: 9, opacity: 0.55, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase" }}>Top set</span>
-            <span style={{ fontSize: 18, fontWeight: 900, lineHeight: 1, color: "rgba(84,203,130,0.95)" }}>
+            <span style={{ fontSize: 18, fontWeight: 900, lineHeight: 1, color: `rgba(${STRENGTH_RGB},0.95)` }}>
               {exercise.allTimePR.weightLb} lb
             </span>
             <span style={{ fontSize: 11, opacity: 0.65 }}>
@@ -367,11 +372,11 @@ function Sparkline({
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: "visible", flexShrink: 0 }} aria-hidden="true">
       <path
         d={`${path} L ${(points.length - 1) * stepX} ${h} L 0 ${h} Z`}
-        fill="rgba(84,203,130,0.12)"
+        fill={`rgba(${STRENGTH_RGB},0.12)`}
         stroke="none"
       />
-      <path d={path} stroke="rgba(84,203,130,0.85)" strokeWidth={1.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={lastX} cy={lastY} r={2.4} fill="rgba(84,203,130,1)" />
+      <path d={path} stroke={`rgba(${STRENGTH_RGB},0.85)`} strokeWidth={1.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r={2.4} fill={`rgba(${STRENGTH_RGB},1)`} />
     </svg>
   );
 }
@@ -419,8 +424,8 @@ function SessionCard({ session }: { session: import("@/app/progress/details/stre
         gap: 8,
         padding: "12px 14px",
         borderRadius: 14,
-        border: "1px solid rgba(84,203,130,0.18)",
-        background: "linear-gradient(180deg, rgba(84,203,130,0.05), rgba(255,255,255,0.02))",
+        border: `1px solid rgba(${STRENGTH_RGB},0.18)`,
+        background: `linear-gradient(180deg, rgba(${STRENGTH_RGB},0.05), rgba(255,255,255,0.02))`,
         textDecoration: "none",
         color: "inherit",
       }}
@@ -444,9 +449,9 @@ function SessionCard({ session }: { session: import("@/app/progress/details/stre
             style={{
               padding: "4px 8px",
               borderRadius: 9,
-              background: "rgba(84,203,130,0.14)",
-              border: "1px solid rgba(84,203,130,0.32)",
-              color: "rgba(134,239,172,0.95)",
+              background: `rgba(${STRENGTH_RGB},0.14)`,
+              border: `1px solid rgba(${STRENGTH_RGB},0.32)`,
+              color: STRENGTH_TEXT,
               fontWeight: 900,
               fontSize: 12,
               lineHeight: 1.1,

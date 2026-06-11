@@ -12,7 +12,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate, toAppYmd } from "@/lib/dates";
-import { effectiveRoutineDomain } from "@/lib/routines";
+import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
@@ -20,7 +20,10 @@ import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities
 
 export const dynamic = "force-dynamic";
 
-const ACCENT = "rgba(251,191,36,0.9)";
+// Canonical lifestyle amber — single source of truth in lib/routines.
+// The soft BG / BORDER / TEXT variants are tuned for the card chrome
+// and stay local.
+const ACCENT = domainColor("lifestyle");
 const ACCENT_BG = "rgba(251,191,36,0.08)";
 const ACCENT_BORDER = "rgba(251,191,36,0.28)";
 const ACCENT_TEXT = "rgba(253,224,71,0.95)";

@@ -197,3 +197,12 @@ export function domainColor(domain: RoutineDomain | string): string {
     default:          return "rgba(148,163,184,0.7)";
   }
 }
+
+// Extract the "r,g,b" triplet from a canonical domainColor() result so
+// callers can build soft variants without re-hardcoding the RGB. The
+// next time we tweak the canonical palette, every `rgba(${domainRgb(d)},
+// 0.18)` call updates automatically.
+export function domainRgb(domain: RoutineDomain | string): string {
+  const c = domainColor(domain);
+  return c.slice(c.indexOf("(") + 1, c.lastIndexOf(","));
+}
