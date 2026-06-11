@@ -8,9 +8,10 @@
 // search, click empty map, drag existing pin, manual lat/lng paste — all
 // implemented inside ClimbingMapView (client).
 
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { TargetHeader, SectionLinkButton, SectionBackButton } from "@/app/progress/ui";
 import { gradeSort, SENT_OUTCOMES } from "@/lib/climb-types";
+import { sportAccent } from "@/lib/sport-accent";
 import ClimbingMapView, { type MapLocation } from "./ClimbingMapView";
 
 export const dynamic = "force-dynamic";
@@ -106,27 +107,63 @@ export default async function ClimbingMapPage() {
   });
 
   return (
-    <>
-      <TargetHeader
-        section="sports"
-        title="Climbing Map"
-        eyebrow="Climbing"
-        subtitle="Every gym and crag you've logged. Click the map to add, drag pins to adjust, or search OpenStreetMap."
-        basePath="/activities/climbing/map"
-        tab="overview"
-        range="all"
-        hideTabs
-        hideRange
-        compact
-        actions={
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton href="/activities/climbing/climbs" label="📋 Climbs" />
-            <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
-          </div>
-        }
-      />
+    <div style={pageStyle}>
+      {/* One-line header — every vertical pixel saved here is map. */}
+      <div style={headerRowStyle}>
+        <Link href="/activities/climbing" style={backLinkStyle}>← Climbing</Link>
+        <h1 style={titleStyle}>🗺 Map</h1>
+        <Link href="/activities/climbing/climbs" style={siblingPillStyle}>📋 Climbs</Link>
+      </div>
 
       <ClimbingMapView initialLocations={locations} />
-    </>
+    </div>
   );
 }
+
+const pageStyle: React.CSSProperties = {
+  maxWidth: 1120,
+  margin: "0 auto",
+  padding: "10px 14px 12px",
+  display: "grid",
+  gap: 10,
+};
+
+const headerRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  minHeight: 34,
+};
+
+const backLinkStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  opacity: 0.65,
+  textDecoration: "none",
+  color: "inherit",
+  whiteSpace: "nowrap",
+};
+
+const titleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 17,
+  fontWeight: 900,
+  letterSpacing: -0.2,
+  flex: 1,
+  color: sportAccent("climbing"),
+};
+
+const siblingPillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "6px 11px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  textDecoration: "none",
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};

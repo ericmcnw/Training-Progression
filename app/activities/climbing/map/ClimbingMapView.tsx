@@ -140,8 +140,9 @@ export default function ClimbingMapView({
       setError(null);
       const current = pendingPinRef.current;
       if (current?.mode === "place-existing") {
+        // Coords land in the floating placement bar — the sheet stays
+        // closed so the map being tapped is actually visible.
         setPendingPin({ ...current, lat: e.lngLat.lat, lng: e.lngLat.lng });
-        setSheetOpen(true);
         return;
       }
       if (armedAddRef.current) {
@@ -346,11 +347,11 @@ export default function ClimbingMapView({
       // is actually visible after picking from the list.
       setSheetOpen(false);
     } else {
-      // No coords — start the place-existing flow so a click on the map
-      // assigns coords to this spot. Sheet stays open: its form hosts the
+      // No coords — arm the place-existing flow. Sheet CLOSES so the map
+      // is tappable; the floating placement bar carries the hint +
       // confirm button.
       setPendingPin({ mode: "place-existing", locationId: loc.id, lat: 0, lng: 0 });
-      setSheetOpen(true);
+      setSheetOpen(false);
     }
   }
 
@@ -526,36 +527,11 @@ export default function ClimbingMapView({
         className={`spotsMapSidebar ${sheetOpen ? "is-open" : ""}`}
         style={sidebarStyle}
       >
-        {/* Search */}
-        <div style={sidebarSection}>
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search OpenStreetMap (e.g. Smith Rock)"
-            style={searchInputStyle}
-          />
-          {searching && <div style={hintStyle}>Searching…</div>}
-          {searchResults.length > 0 && (
-            <div style={searchResultsStyle}>
-              {searchResults.map((r) => (
-                <button
-                  key={r.place_id}
-                  type="button"
-                  onClick={() => handleNominatimPick(r)}
-                  style={searchResultBtn}
-                  title={r.display_name}
-                >
-                  {r.display_name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pending pin form */}
-        {pendingPin && (
+        {/* Pending create form — active flow, always first when present.
+            The place-existing flow renders as a floating bar ON the map
+            instead (the sheet used to cover the map being tapped). */}
+        {pendingPin?.mode === "create" && (
           <div style={pendingCardStyle}>
-            {pendingPin.mode === "create" ? (
               <>
                 <div style={pendingHeader}>New spot</div>
                 <div style={pendingMeta}>
@@ -596,31 +572,6 @@ export default function ClimbingMapView({
                   </button>
                 </div>
               </>
-            ) : (
-              <>
-                <div style={pendingHeader}>
-                  Place {locations.find((l) => l.id === pendingPin.locationId)?.name ?? "spot"}
-                </div>
-                <div style={pendingMeta}>
-                  {pendingPin.lat === 0 && pendingPin.lng === 0
-                    ? "Click anywhere on the map to set coords."
-                    : `${pendingPin.lat.toFixed(4)}, ${pendingPin.lng.toFixed(4)} · click again or drag pin to adjust`}
-                </div>
-                <div style={pendingActionsRow}>
-                  <button type="button" onClick={cancelPending} style={ghostBtn}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={commitPlaceExisting}
-                    disabled={isPending || (pendingPin.lat === 0 && pendingPin.lng === 0)}
-                    style={primaryBtn}
-                  >
-                    {isPending ? "Saving…" : "Confirm location"}
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         )}
 
@@ -641,8 +592,56 @@ export default function ClimbingMapView({
           </div>
         </div>
 
-        {/* Manual coord paste */}
+        {error && <div style={errorBanner}>{error}</div>}
+
+        {/* Spot list */}
+        <div style={listStyle}>
+          {sidebarList.length === 0 ? (
+            <div style={emptyStyle}>
+              {filter === "all"
+                ? "No climbing spots yet. Use ➕ Add spot or search below."
+                : "No spots match this filter."}
+            </div>
+          ) : (
+            sidebarList.map((loc) => (
+              <SpotRow
+                key={loc.id}
+                loc={loc}
+                selected={loc.id === selectedId}
+                onFocus={() => focusLocation(loc)}
+                onRename={() => renameSpot(loc)}
+                onClearCoords={() => clearCoords(loc)}
+              />
+            ))
+          )}
+        </div>
+
+        {/* New-spot tools — below the list since browsing YOUR spots is the
+            sheet's everyday job; finding new places is occasional. */}
+        <div style={toolsDividerStyle}>Find a new spot</div>
         <div style={sidebarSection}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search OpenStreetMap (e.g. Smith Rock)"
+            style={searchInputStyle}
+          />
+          {searching && <div style={hintStyle}>Searching…</div>}
+          {searchResults.length > 0 && (
+            <div style={searchResultsStyle}>
+              {searchResults.map((r) => (
+                <button
+                  key={r.place_id}
+                  type="button"
+                  onClick={() => handleNominatimPick(r)}
+                  style={searchResultBtn}
+                  title={r.display_name}
+                >
+                  {r.display_name}
+                </button>
+              ))}
+            </div>
+          )}
           {!pasteOpen ? (
             <button type="button" onClick={() => setPasteOpen(true)} style={subtleLinkBtn}>
               Paste coords or Google Maps URL
@@ -667,39 +666,43 @@ export default function ClimbingMapView({
             </div>
           )}
         </div>
-
-        {error && <div style={errorBanner}>{error}</div>}
-
-        {/* Spot list */}
-        <div style={listStyle}>
-          {sidebarList.length === 0 ? (
-            <div style={emptyStyle}>
-              {filter === "all"
-                ? "No climbing spots yet. Click the map or search for one to add your first."
-                : "No spots match this filter."}
-            </div>
-          ) : (
-            sidebarList.map((loc) => (
-              <SpotRow
-                key={loc.id}
-                loc={loc}
-                selected={loc.id === selectedId}
-                onFocus={() => focusLocation(loc)}
-                onRename={() => renameSpot(loc)}
-                onClearCoords={() => clearCoords(loc)}
-              />
-            ))
-          )}
-        </div>
-
       </aside>
+
+      {/* Floating placement bar — the place-existing flow lives ON the map
+          instead of inside the sheet that used to cover the map being
+          tapped. */}
+      {pendingPin?.mode === "place-existing" && (
+        <div className="spotsMapSpotCard">
+          <div style={{ fontSize: 12, fontWeight: 900, color: PENDING_COLOR }}>
+            Placing {locations.find((l) => l.id === pendingPin.locationId)?.name ?? "spot"}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>
+            {pendingPin.lat === 0 && pendingPin.lng === 0
+              ? "Tap the map where this spot is."
+              : `${pendingPin.lat.toFixed(4)}, ${pendingPin.lng.toFixed(4)} · tap again or drag pin to adjust`}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            <button type="button" onClick={cancelPending} style={{ ...ghostBtn, flex: 1 }}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={commitPlaceExisting}
+              disabled={isPending || (pendingPin.lat === 0 && pendingPin.lng === 0)}
+              style={{ ...primaryBtn, flex: 1 }}
+            >
+              {isPending ? "Saving…" : "Confirm"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Floating spot card — what a pin tap shows. Compact: name + type,
           stat chips, two CTAs side-by-side. Dismiss = map tap or ✕. The
           old version buried this at the BOTTOM of the full sidebar sheet,
           so seeing what you tapped meant scrolling past search, filters,
           and the whole spot list. */}
-      {selected && selected.latitude != null && selected.longitude != null && !sheetOpen && (
+      {selected && selected.latitude != null && selected.longitude != null && !sheetOpen && !pendingPin && (
         <div className="spotsMapSpotCard">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -955,11 +958,13 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
 const layoutShell: React.CSSProperties = {
   position: "relative",
   width: "100%",
-  // 100dvh handles iOS Safari's collapsing chrome; the offset accounts for
-  // the compact header above + bottom nav below.
-  height: "calc(100dvh - 230px)",
-  minHeight: 420,
+  // 100dvh handles iOS Safari's collapsing chrome; the offset covers the
+  // slim one-line header above + bottom nav below. Was 230px under the
+  // old TargetHeader — the slimmer header gives ~80px back to the map.
+  height: "calc(100dvh - 150px)",
+  minHeight: 460,
   overflow: "hidden",
+  borderRadius: 14,
 };
 
 const mapStyle: React.CSSProperties = {
@@ -993,6 +998,16 @@ const sheetGrip: React.CSSProperties = {
 const sidebarSection: React.CSSProperties = {
   display: "grid",
   gap: 6,
+};
+
+const toolsDividerStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  opacity: 0.5,
+  paddingTop: 8,
+  borderTop: "1px solid rgba(255,255,255,0.08)",
 };
 
 // fontSize 16 — iOS Safari auto-zoom guard (CLAUDE.md rule 3a). Was 13
