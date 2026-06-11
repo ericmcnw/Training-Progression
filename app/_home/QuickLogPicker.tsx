@@ -310,12 +310,13 @@ const searchInput: CSSProperties = {
   color: COLOR.text,
 };
 
+// No inner maxHeight/overflow — the Popover body is the single scroll
+// container. The old nested 60vh scroll area fought the sheet's own
+// scrolling on iOS and the expanded sections ended up unscrollable.
 const sectionStack: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: 8,
-  maxHeight: "60vh",
-  overflowY: "auto",
   overflowX: "clip",
   minWidth: 0,
 };

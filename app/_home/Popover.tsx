@@ -273,4 +273,11 @@ const body: CSSProperties = {
   overflowY: "auto",
   display: "grid",
   gap: 12,
+  // Flex children default to min-height:auto, which stops this body from
+  // shrinking below its content — so it could never actually scroll; long
+  // content just got clipped by the sheet's overflow:hidden. minHeight 0
+  // lets the flex column compress it and the overflowY kick in.
+  flex: "1 1 auto",
+  minHeight: 0,
+  WebkitOverflowScrolling: "touch",
 };
