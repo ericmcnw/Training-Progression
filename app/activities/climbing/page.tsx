@@ -59,10 +59,9 @@ import {
   DISCIPLINE_LABEL,
   DISCIPLINE_ORDER,
   type ClimbingChartWeeks,
+  type ClimbingStackBy,
 } from "@/lib/activities/climbing-chart";
 import { sportAccent } from "@/lib/sport-accent";
-import ClimbingCoverageStrip from "./ClimbingCoverageStrip";
-import { buildWeeklyGrid, type SessionEventInput } from "@/app/progress/details/activity-coverage";
 import { startOfWeekMonday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -119,6 +118,7 @@ export default async function ClimbingHubPage(props: {
 }) {
   const searchParams = (await props.searchParams) ?? {};
   const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
+  const chartStackBy: ClimbingStackBy = getParam(searchParams, "stack") === "venue" ? "venue" : "discipline";
   const recentExpanded = getParam(searchParams, "recent") === "all";
   const disciplineFilterParam = getParam(searchParams, "discipline");
 
@@ -126,7 +126,7 @@ export default async function ClimbingHubPage(props: {
 
   // ── Data loading ────────────────────────────────────────────────────────
   // Parallel: all attempts + named-problem rows (for project rollup) +
-  // training-log overlay (for the 52-week coverage heatmap).
+  // supporting-training logs (violet series on the weekly chart).
   const [attempts, problems, trainingLogs] = await Promise.all([
     prisma.climbAttempt.findMany({
       orderBy: { sessionLog: { performedAt: "desc" } },
@@ -276,7 +276,7 @@ export default async function ClimbingHubPage(props: {
   }
   const disciplineFilter = parseDisciplineFilter(disciplineFilterParam, activeDisciplinesAllTime);
 
-  // ── Chart data ──────────────────────────────────────────────────────────
+  // ── Chart data — climbing (stacked by discipline or venue) + training ───
   const chartData = buildClimbingChartData(
     sessions.map((s) => ({
       id: s.id,
@@ -285,8 +285,19 @@ export default async function ClimbingHubPage(props: {
       routineName: s.routineName,
       locationName: s.locationName,
       disciplineCounts: s.disciplineCounts,
+      venue: s.venue,
     })),
-    { weeks: chartWeeks, now }
+    {
+      weeks: chartWeeks,
+      now,
+      stackBy: chartStackBy,
+      trainingSessions: trainingLogs.map((l) => ({
+        id: l.id,
+        date: l.performedAt,
+        routineId: l.routineId,
+        routineName: l.routine.name,
+      })),
+    }
   );
   const chartHasData = chartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
 
@@ -402,25 +413,6 @@ export default async function ClimbingHubPage(props: {
   const recentSessions = sessions.slice(0, recentCount);
   const recentHasMore = !recentExpanded && sessions.length > RECENT_DEFAULT;
 
-  // ── Coverage heatmap (52 weeks) ─────────────────────────────────────────
-  const sessionEvents: SessionEventInput[] = sessions.map((s) => ({
-    id: s.id,
-    routineId: s.routineId,
-    performedAt: s.performedAt,
-    routineName: s.routineName,
-    venueLabel: s.venue === "GYM" ? "Indoor" : s.venue === "CRAG" ? "Outdoor" : null,
-  }));
-  const heatmapWeeks = buildWeeklyGrid(
-    sessionEvents,
-    trainingLogs.map((l) => ({
-      id: l.id,
-      routineId: l.routineId,
-      performedAt: l.performedAt,
-      routineName: l.routine.name,
-    })),
-    now
-  );
-
   // ── Hub-tile counts ─────────────────────────────────────────────────────
   const tileTotals = {
     climbs: attempts.length,
@@ -462,9 +454,9 @@ export default async function ClimbingHubPage(props: {
         <HubTile href="/activities/climbing/map" label="Map" stat={`${tileTotals.locations} location${tileTotals.locations === 1 ? "" : "s"}`} icon="🗺" />
       </div>
 
-      {/* ── Per-chart range pill ─────────────────────────────────── */}
+      {/* ── Chart controls — range + stack-color toggle ──────────── */}
       <div style={chartPillRowStyle}>
-        <span style={chartPillLabelStyle}>Chart range</span>
+        <span style={chartPillLabelStyle}>Range</span>
         {(["4w", "12w"] as const).map((w) => (
           <Link
             key={w}
@@ -474,11 +466,29 @@ export default async function ClimbingHubPage(props: {
             {w}
           </Link>
         ))}
+        <span style={{ ...chartPillLabelStyle, marginLeft: 8 }}>Color by</span>
+        <Link
+          href={buildHref(searchParams, { stack: undefined })}
+          style={chartStackBy === "discipline" ? pillSelectStyle : pillStyle}
+        >
+          Discipline
+        </Link>
+        <Link
+          href={buildHref(searchParams, { stack: "venue" })}
+          style={chartStackBy === "venue" ? pillSelectStyle : pillStyle}
+        >
+          Indoor/Outdoor
+        </Link>
       </div>
 
+      {/* Climbing + supporting-training per week in one stacked chart.
+          Training rides the top of each bar in violet; tapping a week
+          opens the panel with that week's climbs AND training logs in
+          date order — this replaced the separate Activity Coverage
+          heatmap, which duplicated the same data less readably. */}
       {chartHasData ? (
         <WeeklyBarChartWithSessions
-          title={`Sessions per Week — Last ${chartWeeks} Weeks`}
+          title={`Climbing & Training per Week — Last ${chartWeeks} Weeks`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}
@@ -552,14 +562,6 @@ export default async function ClimbingHubPage(props: {
           </div>
         )}
       </SectionCard>
-
-      {/* ── Activity coverage — above projects so the rhythm story reads
-          before the working list. ── */}
-      {heatmapWeeks.length > 1 ? (
-        <SectionCard title="Activity Coverage" subtitle="Climbing sessions + supporting training · last 26 weeks. Tap a week to expand.">
-          <ClimbingCoverageStrip weeks={heatmapWeeks} />
-        </SectionCard>
-      ) : null}
 
       {/* ── Active projects ───────────────────────────────────────── */}
       <SectionCard
