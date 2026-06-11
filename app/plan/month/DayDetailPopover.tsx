@@ -71,7 +71,7 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
         ) : (
           <div style={list}>
             {day.entries.map((entry) => (
-              <DayEntryRow key={entry.routineId} entry={entry} day={day} isFuture={isFuture} />
+              <DayEntryRow key={entry.key} entry={entry} day={day} isFuture={isFuture} />
             ))}
           </div>
         )}

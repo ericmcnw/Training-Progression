@@ -143,13 +143,13 @@ function DayCell({
           <>
             <div className="planMonthDots planMonthDotsMobile" style={dotsRowBase}>
               {mobileWorkouts.map((entry) => (
-                <Dot key={entry.routineId} entry={entry} />
+                <Dot key={entry.key} entry={entry} />
               ))}
               {mobileWorkoutOverflow > 0 ? <Overflow count={mobileWorkoutOverflow} /> : null}
             </div>
             <div className="planMonthDots planMonthDotsDesktop" style={dotsRowBase}>
               {desktopWorkouts.map((entry) => (
-                <Dot key={entry.routineId} entry={entry} />
+                <Dot key={entry.key} entry={entry} />
               ))}
               {desktopWorkoutOverflow > 0 ? <Overflow count={desktopWorkoutOverflow} /> : null}
             </div>

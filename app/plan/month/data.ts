@@ -20,18 +20,23 @@ import {
 export type DayEntryStatus = "done" | "partial" | "planned" | "missed" | "future" | "loggedExtra";
 
 export type DayEntry = {
+  /** Stable unique key per day cell. Composite `${routineId}::${activityTypeId}`
+   *  for typed entries (so two endurance logs with different types — e.g. a
+   *  trail run and a hike on the synthetic Endurance routine — stay distinct
+   *  in React reconciliation), plain routineId for everything else. Use this
+   *  as the React key when rendering entries, not routineId. */
+  key: string;
   routineId: string;
+  /** The activity type id when the entry is a typed slot. Lets the day
+   *  popover surface "Trail Run" or "Hike" log buttons that prefill the
+   *  type without the user having to pick it again. */
+  activityTypeId: string | null;
   routineName: string;
   domain: RoutineDomain;
   planned: number;
   logged: number;
   status: DayEntryStatus;
   latestLogId: string | null;
-  // True when this routine is a daily-firing frequency goal (DAY/1, WEEK/7,
-  // or weekday-mask). The calendar aggregates these into a single "habits"
-  // pill per cell so a user with 5+ daily habits doesn't see identical dot
-  // patterns on every day. false = workout-style routine (strength run,
-  // cardio session, etc.) which still gets an individual dot.
   isHabit: boolean;
 };
 
@@ -343,7 +348,9 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         (slot.activityTypeId ? activityTypeNameById.get(slot.activityTypeId) ?? null : null);
       const displayName = typeName ?? r.name;
       entries.push({
+        key,
         routineId: slot.routineId,
+        activityTypeId: slot.activityTypeId,
         routineName: displayName,
         domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
         planned: slot.planned,
