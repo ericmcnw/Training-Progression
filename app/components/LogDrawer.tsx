@@ -303,16 +303,25 @@ export default function LogDrawer() {
               );
             }
             if (logData.kind === "CARDIO") {
+              // Type-pill shortcuts (home FAB, schedule picker) stash the
+              // tapped activity type in drawer state before opening — it
+              // wins over the routine's own initial type so "Trail Run"
+              // opens a form already set to Trail Run.
+              const presetTypeId = getDrawerState<{ presetActivityTypeId?: string }>(logData.routineId)
+                ?.presetActivityTypeId;
               return (
                 <LogRunForm
-                  key={logData.routineId}
+                  // presetTypeId in the key so tapping a DIFFERENT type pill
+                  // remounts the form with the new initial type (same
+                  // routineId otherwise keeps the old mount's state).
+                  key={`${logData.routineId}::${presetTypeId ?? ""}`}
                   routineId={logData.routineId}
                   routineName={logData.routineName}
                   activePainZones={logData.activePainZones}
                   activitySlug={logData.activitySlug ?? null}
                   savedSpots={logData.savedSpots ?? []}
                   activityTypes={logData.activityTypes ?? []}
-                  initialActivityTypeId={logData.initialActivityTypeId ?? null}
+                  initialActivityTypeId={presetTypeId ?? logData.initialActivityTypeId ?? null}
                   routineIsSynthetic={logData.routineIsSynthetic ?? false}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}

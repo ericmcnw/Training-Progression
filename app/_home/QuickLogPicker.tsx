@@ -37,18 +37,14 @@ type Props = {
   onClose: () => void;
   filter: string;
   onFilter: (next: string) => void;
+  /** Section to start expanded — the FAB's "Log endurance" / "Log a
+   *  sport" shortcuts land here with the relevant section already open
+   *  so the tiles/pills are one tap away instead of three. */
+  initialOpenSection?: Domain;
 };
 
 const DOMAIN_ORDER = ["strength", "cardio", "sport", "mobility", "lifestyle"] as const;
-type Domain = (typeof DOMAIN_ORDER)[number];
-
-const DOMAIN_ACCENT: Record<Domain, string> = {
-  strength: "rgba(74,222,128,0.9)",
-  cardio: "rgba(78,148,255,0.9)",
-  sport: "rgba(251,146,60,0.9)",
-  mobility: "rgba(167,139,250,0.9)",
-  lifestyle: "rgba(244,114,182,0.9)",
-};
+export type Domain = (typeof DOMAIN_ORDER)[number];
 
 const DOMAIN_DISPLAY_LABEL: Record<Domain, string> = {
   strength: "Strength",
@@ -66,17 +62,19 @@ export default function QuickLogPicker({
   onClose,
   filter,
   onFilter,
+  initialOpenSection,
 }: Props) {
-  const { openDrawer } = useLogDrawer();
+  const { openDrawer, setDrawerState } = useLogDrawer();
 
-  // All sections collapsed by default. Search auto-expands matching
-  // sections so a typed query surfaces hits immediately.
+  // All sections collapsed by default (except an explicit shortcut
+  // target). Search auto-expands matching sections so a typed query
+  // surfaces hits immediately.
   const [openSections, setOpenSections] = useState<Record<Domain, boolean>>({
-    strength: false,
-    cardio: false,
-    sport: false,
-    mobility: false,
-    lifestyle: false,
+    strength: initialOpenSection === "strength",
+    cardio: initialOpenSection === "cardio",
+    sport: initialOpenSection === "sport",
+    mobility: initialOpenSection === "mobility",
+    lifestyle: initialOpenSection === "lifestyle",
   });
 
   useEffect(() => {
@@ -89,12 +87,11 @@ export default function QuickLogPicker({
   }
 
   function pickEnduranceType(activityTypeId: string) {
-    // Open the LogDrawer against the synthetic Endurance routine.
-    // The cardio form's type dropdown defaults to the routine's
-    // initial activityTypeId — but the drawer doesn't currently
-    // accept a pre-selected type override. We open the synthetic
-    // routine and the user confirms the type in the form (one tap).
-    void activityTypeId;
+    // Open the LogDrawer against the synthetic Endurance routine with
+    // the tapped type pre-selected — LogDrawer's cardio branch reads
+    // presetActivityTypeId from drawer state, so "Trail Run" lands on
+    // a form already set to Trail Run instead of asking again.
+    setDrawerState(SYNTHETIC_ENDURANCE_ROUTINE_ID, { presetActivityTypeId: activityTypeId });
     openDrawer(SYNTHETIC_ENDURANCE_ROUTINE_ID);
     onClose();
   }
@@ -183,7 +180,7 @@ export default function QuickLogPicker({
         {DOMAIN_ORDER.map((domain) => {
           if (!sectionHasContent(domain)) return null;
           const isOpen = effectiveOpen[domain];
-          const accent = DOMAIN_ACCENT[domain];
+          const accent = domainAccent(domain);
           const label = DOMAIN_DISPLAY_LABEL[domain];
           const sectionRoutines = routinesByDomain.get(domain) ?? [];
           const norm = filter.trim().toLowerCase();

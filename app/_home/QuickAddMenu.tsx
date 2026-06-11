@@ -13,7 +13,7 @@ import type { QuickPickRoutine } from "./types";
 import { COLOR } from "./tokens";
 import Popover from "./Popover";
 import { createDayTodo } from "@/app/components/dashboard/day-todo-actions";
-import QuickLogPicker from "./QuickLogPicker";
+import QuickLogPicker, { type Domain } from "./QuickLogPicker";
 import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
 
 type Props = {
@@ -38,7 +38,9 @@ export default function QuickAddMenu({
   today,
 }: Props) {
   const { openDrawer } = useLogDrawer();
-  const [picker, setPicker] = useState(false);
+  // Picker view: null = top-level menu. A Domain value opens the unified
+  // picker with that section pre-expanded ("all" = nothing pre-expanded).
+  const [picker, setPicker] = useState<"all" | Domain | null>(null);
   const [todoLabel, setTodoLabel] = useState("");
   const [pending, startTransition] = useTransition();
   const [filter, setFilter] = useState("");
@@ -68,19 +70,37 @@ export default function QuickAddMenu({
   return (
     <Popover
       open={open}
-      onClose={() => { setPicker(false); setFilter(""); onClose(); }}
+      onClose={() => { setPicker(null); setFilter(""); onClose(); }}
       title="Quick add"
       desktopWidth={380}
     >
-      {!picker ? (
+      {picker === null ? (
         <>
           <div style={section}>
             <div style={sectionLabel}>Log</div>
-            <button type="button" onClick={() => setPicker(true)} style={menuItem}>
+            <button type="button" onClick={() => setPicker("all")} style={menuItem}>
               <span style={menuItemIcon}>＋</span>
               <span style={menuItemText}>Log a routine</span>
               <span style={menuItemChevron}>›</span>
             </button>
+            {/* Direct shortcuts into the new type-based flows — endurance
+                type pills and sport tiles were buried two levels deep
+                behind "Log a routine"; these land with the right section
+                already expanded. */}
+            {(activityTypes?.length ?? 0) > 0 ? (
+              <button type="button" onClick={() => setPicker("cardio")} style={menuItem}>
+                <span style={{ ...menuItemIcon, color: "rgba(147,197,253,0.95)", background: "rgba(78,148,255,0.12)", borderColor: "rgba(78,148,255,0.32)" }}>🏃</span>
+                <span style={menuItemText}>Log endurance</span>
+                <span style={menuItemChevron}>›</span>
+              </button>
+            ) : null}
+            {(sports?.length ?? 0) > 0 ? (
+              <button type="button" onClick={() => setPicker("sport")} style={menuItem}>
+                <span style={{ ...menuItemIcon, color: "rgba(253,186,116,0.95)", background: "rgba(251,146,60,0.12)", borderColor: "rgba(251,146,60,0.32)" }}>🧗</span>
+                <span style={menuItemText}>Log a sport session</span>
+                <span style={menuItemChevron}>›</span>
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -135,14 +155,18 @@ export default function QuickAddMenu({
       ) : (
         <div style={section}>
           <div style={pickerHeader}>
-            <button type="button" onClick={() => { setPicker(false); setFilter(""); }} style={backButton}>
+            <button type="button" onClick={() => { setPicker(null); setFilter(""); }} style={backButton}>
               ‹ back
             </button>
           </div>
           <QuickLogPicker
+            // Remount per entry mode so the shortcut's pre-expanded section
+            // applies even after the user previously browsed another view.
+            key={picker}
             routines={routines}
             activityTypes={activityTypes}
             sports={sports}
+            initialOpenSection={picker === "all" ? undefined : picker}
             onSportSelected={(sport) => {
               onSportSelected(sport);
               onClose();
