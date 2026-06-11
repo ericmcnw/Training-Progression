@@ -40,7 +40,6 @@ import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import {
   climbOutcomeColor,
-  climbOutcomeBg,
   climbOutcomeLabel,
   gradeSort,
   PYRAMID_OUTCOMES,
@@ -62,7 +61,7 @@ import {
   type ClimbingChartWeeks,
 } from "@/lib/activities/climbing-chart";
 import { sportAccent } from "@/lib/sport-accent";
-import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
+import ClimbingCoverageStrip from "./ClimbingCoverageStrip";
 import { buildWeeklyGrid, type SessionEventInput } from "@/app/progress/details/activity-coverage";
 import { startOfWeekMonday } from "@/lib/week";
 
@@ -291,13 +290,25 @@ export default async function ClimbingHubPage(props: {
   );
   const chartHasData = chartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
 
-  // ── Pyramid (filtered by discipline pill) ───────────────────────────────
+  // ── Pyramid (filtered by discipline pill, split indoor/outdoor) ─────────
   const pyramidAttempts = disciplineFilter === "all"
     ? attempts
     : attempts.filter((a) => a.discipline === disciplineFilter);
   const pyramidRows = buildPyramidRows(pyramidAttempts);
   const hasBoulder = pyramidRows.boulderRows.length > 0;
   const hasYosemite = pyramidRows.yosemiteRows.length > 0;
+
+  // Indoor/outdoor pyramid split — venue resolves per session, so map the
+  // session's venue onto each attempt. The venue stat (session count + %)
+  // lives in each pyramid column's header, replacing the separate
+  // Indoor-vs-Outdoor card.
+  const venueBySessionId = new Map(sessions.map((s) => [s.id, s.venue]));
+  const gymPyramidRows = buildPyramidRows(
+    pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "GYM")
+  );
+  const cragPyramidRows = buildPyramidRows(
+    pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "CRAG")
+  );
 
   // Send rate — quiet stat folded into the pyramid subtitle. Gated behind
   // a minimum attempt count so it doesn't show a meaningless "100%" after
@@ -309,10 +320,9 @@ export default async function ClimbingHubPage(props: {
     ? Math.round((pyramidSendCount / pyramidAttempts.length) * 100)
     : null;
 
-  // ── Indoor / Outdoor split ──────────────────────────────────────────────
+  // ── Indoor / Outdoor split — feeds the pyramid column headers ───────────
   const gymSessions = sessions.filter((s) => s.venue === "GYM");
   const cragSessions = sessions.filter((s) => s.venue === "CRAG");
-  const unknownVenueSessions = sessions.filter((s) => s.venue === null);
 
   // ── Active projects (top 3) ─────────────────────────────────────────────
   const projectAttemptsInput = attempts
@@ -432,12 +442,17 @@ export default async function ClimbingHubPage(props: {
         </div>
       </header>
 
-      {/* ── Pulse strip ───────────────────────────────────────────── */}
-      <div style={pulseRowStyle}>
-        <PulseStat label="This week" value={sessionsThisWeek} sublabel="sessions" />
-        <PulseStat label="Last 4 weeks" value={sessions4w} sublabel="sessions" />
-        <PulseStat label="Last 12 weeks" value={sessions12w} sublabel="sessions" />
-        <PulseStat label="All time" value={sessionsAllTime} sublabel="sessions" />
+      {/* ── Pulse strip — single compact row, not four padded cards.
+          Sessions counts read left-to-right from most recent window to
+          all-time. ~40px tall vs the ~76px card row it replaces. */}
+      <div style={pulseStripStyle}>
+        <PulseStat label="This wk" value={sessionsThisWeek} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="4 wks" value={sessions4w} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="12 wks" value={sessions12w} />
+        <span style={pulseDividerStyle} aria-hidden />
+        <PulseStat label="All time" value={sessionsAllTime} />
       </div>
 
       {/* ── Hub navigation tiles ──────────────────────────────────── */}
@@ -508,23 +523,41 @@ export default async function ClimbingHubPage(props: {
         {!hasBoulder && !hasYosemite ? (
           <EmptyState message="No climbs in this discipline yet." />
         ) : (
-          <div style={{ display: "grid", gap: 14 }}>
-            {hasBoulder ? <PyramidBlock title="Bouldering" rows={pyramidRows.boulderRows} /> : null}
-            {hasYosemite ? <PyramidBlock title="Sport / Top rope" rows={pyramidRows.yosemiteRows} /> : null}
+          <div style={{ display: "grid", gap: 12 }}>
+            <OutcomeLegend showOnsight={hasYosemite && !hasBoulder} />
+            {/* Indoor / outdoor columns — venue stats live in the column
+                headers so the old separate Indoor-vs-Outdoor card is
+                folded in here. Falls back to a single combined pyramid
+                when no session has a venue. */}
+            {gymPyramidRows.allRows.length > 0 || cragPyramidRows.allRows.length > 0 ? (
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {gymPyramidRows.allRows.length > 0 ? (
+                  <PyramidSection
+                    title="🏠 Indoor"
+                    stat={`${gymSessions.length} session${gymSessions.length !== 1 ? "s" : ""} · ${sessions.length > 0 ? Math.round((gymSessions.length / sessions.length) * 100) : 0}%`}
+                    rows={gymPyramidRows}
+                  />
+                ) : null}
+                {cragPyramidRows.allRows.length > 0 ? (
+                  <PyramidSection
+                    title="🪨 Outdoor"
+                    stat={`${cragSessions.length} session${cragSessions.length !== 1 ? "s" : ""} · ${sessions.length > 0 ? Math.round((cragSessions.length / sessions.length) * 100) : 0}%`}
+                    rows={cragPyramidRows}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <PyramidSection title="All sessions" stat={`${sessions.length} session${sessions.length !== 1 ? "s" : ""}`} rows={pyramidRows} />
+            )}
           </div>
         )}
       </SectionCard>
 
-      {/* ── Indoor / Outdoor split ────────────────────────────────── */}
-      {(gymSessions.length > 0 || cragSessions.length > 0) ? (
-        <SectionCard title="Indoor vs Outdoor" subtitle="Where you're climbing · all time.">
-          <div style={venueSplitRowStyle}>
-            <VenueCard label="🏠 Indoor" count={gymSessions.length} accent={ACCENT} total={sessions.length} />
-            <VenueCard label="🪨 Outdoor" count={cragSessions.length} accent="rgba(132,204,22,0.9)" total={sessions.length} />
-            {unknownVenueSessions.length > 0 ? (
-              <VenueCard label="? Unknown" count={unknownVenueSessions.length} accent="rgba(148,163,184,0.7)" total={sessions.length} />
-            ) : null}
-          </div>
+      {/* ── Activity coverage — above projects so the rhythm story reads
+          before the working list. ── */}
+      {heatmapWeeks.length > 1 ? (
+        <SectionCard title="Activity Coverage" subtitle="Climbing sessions + supporting training · last 26 weeks. Tap a week to expand.">
+          <ClimbingCoverageStrip weeks={heatmapWeeks} />
         </SectionCard>
       ) : null}
 
@@ -645,17 +678,6 @@ export default async function ClimbingHubPage(props: {
         )}
       </SectionCard>
 
-      {/* ── Activity coverage heatmap ─────────────────────────────── */}
-      {heatmapWeeks.length > 1 ? (
-        <SectionCard title="Activity Coverage" subtitle="Climbing sessions + supporting training · last 52 weeks. Tap any week to expand.">
-          <ActivityCoverageHeatmap
-            weeks={heatmapWeeks}
-            sessionLabel="Climb session"
-            trainingLabel="Training"
-          />
-        </SectionCard>
-      ) : null}
-
       {/* ── Quick links ───────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/plan?tab=goals" style={quickLinkStyle}>Climbing goals →</Link>
@@ -668,12 +690,11 @@ export default async function ClimbingHubPage(props: {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function PulseStat({ label, value, sublabel }: { label: string; value: number; sublabel: string }) {
+function PulseStat({ label, value }: { label: string; value: number }) {
   return (
     <div style={pulseStatStyle}>
-      <div style={pulseLabelStyle}>{label}</div>
       <div style={{ ...pulseValueStyle, color: ACCENT_TEXT }}>{value}</div>
-      <div style={pulseSubStyle}>{sublabel}</div>
+      <div style={pulseLabelStyle}>{label}</div>
     </div>
   );
 }
@@ -688,62 +709,87 @@ function HubTile({ href, label, stat, icon }: { href: string; label: string; sta
   );
 }
 
-function PyramidBlock({ title, rows }: { title: string; rows: PyramidRow[] }) {
-  if (rows.length === 0) return null;
-  const max = Math.max(...rows.map((r) => r.total));
-  // Render top-down: hardest grades first so the pyramid reads from peak down.
-  const reversed = [...rows].reverse();
+// One pyramid column (Indoor or Outdoor). The venue stat (session count +
+// share %) sits in the header so the split card it replaced isn't missed.
+// Bars use SOLID outcome colors — the canonical pyramid look from the old
+// climbing world page; segments scale within the column's own max so each
+// column fills its width.
+function PyramidSection({ title, stat, rows }: { title: string; stat: string; rows: { boulderRows: PyramidRow[]; yosemiteRows: PyramidRow[] } }) {
+  const showBoth = rows.boulderRows.length > 0 && rows.yosemiteRows.length > 0;
+  const maxTotal = Math.max(
+    1,
+    ...rows.boulderRows.map((r) => r.total),
+    ...rows.yosemiteRows.map((r) => r.total)
+  );
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <div style={pyramidSubtitleStyle}>{title}</div>
-      <div style={{ display: "grid", gap: 4 }}>
-        {reversed.map((r) => (
-          <div key={`${r.system}::${r.grade}`} style={pyramidRowStyle}>
-            <span style={pyramidGradeStyle}>{r.grade}</span>
-            <div style={pyramidBarTrackStyle}>
-              {PYRAMID_OUTCOMES.map((outcome) => {
-                const count = r.counts[outcome as ClimbOutcome] ?? 0;
-                if (count === 0) return null;
-                const width = (count / max) * 100;
-                return (
-                  <span
-                    key={outcome}
-                    title={`${climbOutcomeLabel(outcome as ClimbOutcome, r.system)} × ${count}`}
-                    style={{
-                      width: `${width}%`,
-                      background: climbOutcomeBg(outcome as ClimbOutcome),
-                      borderRight: `1px solid ${climbOutcomeColor(outcome as ClimbOutcome)}`,
-                      color: climbOutcomeColor(outcome as ClimbOutcome),
-                      fontSize: 10,
-                      fontWeight: 900,
-                      padding: "2px 4px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {count}
-                  </span>
-                );
-              })}
-            </div>
-            <span style={pyramidTotalStyle}>{r.total}</span>
-          </div>
-        ))}
+    <div style={{ flex: "1 1 260px", minWidth: 0, display: "grid", gap: 8, alignContent: "start" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <span style={pyramidSubtitleStyle}>{title}</span>
+        <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>{stat}</span>
       </div>
+      {rows.boulderRows.length > 0 ? (
+        <div style={{ display: "grid", gap: 4 }}>
+          {showBoth ? <div style={pyramidSystemLabelStyle}>Boulder</div> : null}
+          {[...rows.boulderRows].reverse().map((r) => (
+            <PyramidBar key={`${r.system}::${r.grade}`} row={r} maxTotal={maxTotal} />
+          ))}
+        </div>
+      ) : null}
+      {rows.yosemiteRows.length > 0 ? (
+        <div style={{ display: "grid", gap: 4 }}>
+          {showBoth ? <div style={pyramidSystemLabelStyle}>Sport / Top rope</div> : null}
+          {[...rows.yosemiteRows].reverse().map((r) => (
+            <PyramidBar key={`${r.system}::${r.grade}`} row={r} maxTotal={maxTotal} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function VenueCard({ label, count, accent, total }: { label: string; count: number; accent: string; total: number }) {
-  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+function PyramidBar({ row, maxTotal }: { row: PyramidRow; maxTotal: number }) {
+  const BAR_MAX_PCT = 100;
+  const barPct = (row.total / maxTotal) * BAR_MAX_PCT;
+  const segments = PYRAMID_OUTCOMES
+    .map((o) => ({ outcome: o as ClimbOutcome, count: row.counts[o as ClimbOutcome] ?? 0 }))
+    .filter((s) => s.count > 0);
   return (
-    <div style={venueCardStyle}>
-      <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.7, letterSpacing: 0.4, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: accent, marginTop: 4 }}>{count}</div>
-      <div style={{ fontSize: 10, opacity: 0.55, fontWeight: 700, marginTop: 2 }}>{pct}% of sessions</div>
+    <div style={pyramidRowStyle}>
+      <span style={pyramidGradeStyle}>{row.grade}</span>
+      <div style={pyramidBarTrackStyle}>
+        {segments.map(({ outcome, count }) => (
+          <span
+            key={outcome}
+            title={`${climbOutcomeLabel(outcome, row.system)} × ${count}`}
+            style={{
+              width: `${(count / row.total) * barPct}%`,
+              background: climbOutcomeColor(outcome),
+              minWidth: 4,
+              flexShrink: 0,
+            }}
+          />
+        ))}
+      </div>
+      <span style={pyramidTotalStyle}>{row.total}</span>
+    </div>
+  );
+}
+
+// Shared outcome legend — solid swatches matching the bar segments.
+function OutcomeLegend({ showOnsight }: { showOnsight: boolean }) {
+  const items: Array<{ outcome: ClimbOutcome; label: string }> = [
+    { outcome: showOnsight ? "ONSIGHT" : "FLASH", label: showOnsight ? "Onsight" : "Flash" },
+    { outcome: "SEND", label: "Send" },
+    { outcome: "PROJECT", label: "Project" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {items.map((item) => (
+        <span key={item.outcome} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.8 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: climbOutcomeColor(item.outcome), display: "inline-block" }} />
+          {item.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -816,40 +862,48 @@ const subtitleStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const pulseRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
-  gap: 8,
+// Compact pulse strip — one bordered row, four inline stats with thin
+// dividers. Replaces the previous four-card grid that ate ~76px of
+// vertical space (worst on mobile where it wrapped to 2x2).
+const pulseStripStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 4,
+  padding: "8px 12px",
+  borderRadius: 12,
+  border: `1px solid ${ACCENT_BORDER}`,
+  background: `linear-gradient(180deg, ${ACCENT_BG}, rgba(255,255,255,0.02))`,
+};
+
+const pulseDividerStyle: React.CSSProperties = {
+  width: 1,
+  alignSelf: "stretch",
+  background: "rgba(255,255,255,0.08)",
+  flexShrink: 0,
 };
 
 const pulseStatStyle: React.CSSProperties = {
   display: "grid",
-  gap: 4,
-  padding: "12px 10px",
-  borderRadius: 12,
-  border: `1px solid ${ACCENT_BORDER}`,
-  background: `linear-gradient(180deg, ${ACCENT_BG}, rgba(255,255,255,0.02))`,
+  gap: 2,
   textAlign: "center",
+  flex: 1,
+  minWidth: 0,
 };
 
 const pulseLabelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 900,
-  letterSpacing: 0.5,
+  letterSpacing: 0.4,
   textTransform: "uppercase",
-  opacity: 0.62,
+  opacity: 0.6,
+  whiteSpace: "nowrap",
 };
 
 const pulseValueStyle: React.CSSProperties = {
-  fontSize: 22,
+  fontSize: 18,
   fontWeight: 900,
   lineHeight: 1,
-};
-
-const pulseSubStyle: React.CSSProperties = {
-  fontSize: 10,
-  opacity: 0.55,
-  fontWeight: 700,
 };
 
 // Hub navigation tiles — compact so 4 fit in one row on tablet+ and
@@ -959,12 +1013,15 @@ const pyramidGradeStyle: React.CSSProperties = {
   opacity: 0.85,
 };
 
+// Solid-segment bar track — gap:1 puts a hairline seam between outcome
+// segments so adjacent solid colors stay distinguishable (the old
+// climbing world page's pyramid look).
 const pyramidBarTrackStyle: React.CSSProperties = {
   display: "flex",
-  height: 18,
-  borderRadius: 6,
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(255,255,255,0.06)",
+  gap: 1,
+  height: 20,
+  borderRadius: 5,
+  background: "rgba(255,255,255,0.05)",
   overflow: "hidden",
 };
 
@@ -975,20 +1032,12 @@ const pyramidTotalStyle: React.CSSProperties = {
   textAlign: "left",
 };
 
-const venueSplitRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
-  gap: 8,
-};
-
-const venueCardStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 2,
-  padding: "12px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(255,255,255,0.02)",
-  textAlign: "center",
+const pyramidSystemLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  opacity: 0.45,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
 };
 
 const projectRowStyle: React.CSSProperties = {
