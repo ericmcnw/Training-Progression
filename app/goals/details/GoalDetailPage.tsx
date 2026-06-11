@@ -147,7 +147,7 @@ export default async function GoalDetailPage(props: {
           width, two-child case splits 50/50 on viewports >= ~720px. */}
       <div className="goalDetailTopRow" style={topRowStyle}>
         <SectionCard title="Current Progress">
-          <Hero entry={entry} accent={accent} />
+          <Hero entry={entry} accent={accent} consistency={consistency} />
         </SectionCard>
 
         {consistency ? (
@@ -171,7 +171,6 @@ export default async function GoalDetailPage(props: {
         ) : null}
       </div>
 
-      <TypeHighlights entry={entry} consistency={consistency} accent={accent} />
 
       <SectionCard title="History">
         <PerGraphicRangeFilter goalId={normalizedGoalId} paramKey="history" current={historyRange} searchParams={searchParams} />
@@ -282,9 +281,11 @@ function PerGraphicRangeFilter({
 function Hero({
   entry,
   accent,
+  consistency,
 }: {
   entry: NonNullable<Awaited<ReturnType<typeof getGoalInsight>>>;
   accent: GoalTypeAccent;
+  consistency: Awaited<ReturnType<typeof getFrequencyConsistency>> | null;
 }) {
   const type = entry.goal.goalType;
   const pctComplete = Math.min(100, Math.max(0, Math.round(entry.fractionComplete * 100)));
@@ -322,6 +323,11 @@ function Hero({
   // FREQUENCY skips tinyLine — the cadence + window appear as InfoList rows
   // below, so duplicating them as a tinyLine creates noise.
 
+  // Type-specific stat row, folded into the Hero (used to live in a
+  // separate "Streaks" / "Accumulation" / etc. SectionCard). Returns null
+  // if no meaningful stats apply.
+  const statBlock = renderHeroStats({ type, entry, consistency, accent });
+
   return (
     <div style={heroStyle}>
       <div className="goalDetailHeroRow" style={heroPrimaryRowStyle}>
@@ -356,6 +362,8 @@ function Hero({
 
       {tinyLine ? <div style={heroTinyLineStyle}>{tinyLine}</div> : null}
 
+      {statBlock}
+
       <InfoList
         items={[
           entry.targetHref
@@ -373,84 +381,72 @@ function Hero({
   );
 }
 
-// ── Type-specific highlights ──────────────────────────────────────────────
-
-function TypeHighlights({
+function renderHeroStats({
+  type,
   entry,
   consistency,
   accent,
 }: {
+  type: string;
   entry: NonNullable<Awaited<ReturnType<typeof getGoalInsight>>>;
   consistency: Awaited<ReturnType<typeof getFrequencyConsistency>> | null;
   accent: GoalTypeAccent;
 }) {
-  const type = entry.goal.goalType;
-
   if (type === "FREQUENCY" && consistency) {
     const state = consistency.state;
     const currentStreak = Math.max(state.currentDayStreak, state.windowStreak);
     const longestStreak = Math.max(state.longestDayStreak, state.longestWindowStreak);
     return (
-      <SectionCard title="Streaks">
-        <StatRow cols={3}>
-          <Stat label="Current" value={`${currentStreak}`} suffix={currentStreak === 1 ? "day" : "days"} accent={accent} />
-          <Stat label="Longest" value={`${longestStreak}`} suffix={longestStreak === 1 ? "day" : "days"} accent={accent} />
-          <Stat
-            label="This window"
-            value={`${state.currentWindow.progress}`}
-            suffix={`of ${state.currentWindow.target}`}
-            accent={accent}
-          />
-        </StatRow>
-      </SectionCard>
+      <StatRow cols={3}>
+        <Stat label="Current" value={`${currentStreak}`} suffix={currentStreak === 1 ? "day" : "days"} accent={accent} />
+        <Stat label="Longest" value={`${longestStreak}`} suffix={longestStreak === 1 ? "day" : "days"} accent={accent} />
+        <Stat
+          label="This window"
+          value={`${state.currentWindow.progress}`}
+          suffix={`of ${state.currentWindow.target}`}
+          accent={accent}
+        />
+      </StatRow>
     );
   }
-
   if (type === "VOLUME") {
     const remaining = Math.max(0, entry.targetValue - entry.actualValue);
     const pctPace = Math.round(entry.fractionComplete * 100);
     return (
-      <SectionCard title="Accumulation">
-        <StatRow cols={3}>
-          <Stat label="Logged" value={entry.actualDisplay} accent={accent} />
-          <Stat label="Remaining" value={formatRemainingMetric(entry.goal.metricType, remaining)} accent={accent} />
-          <Stat label="Pace" value={`${pctPace}%`} suffix="of target" accent={accent} />
-        </StatRow>
-      </SectionCard>
+      <StatRow cols={3}>
+        <Stat label="Logged" value={entry.actualDisplay} accent={accent} />
+        <Stat label="Remaining" value={formatRemainingMetric(entry.goal.metricType, remaining)} accent={accent} />
+        <Stat label="Pace" value={`${pctPace}%`} suffix="of target" accent={accent} />
+      </StatRow>
     );
   }
-
   if (type === "PERFORMANCE") {
     const gap = Math.max(0, entry.targetValue - entry.actualValue);
     return (
-      <SectionCard title="Performance">
-        <StatRow cols={3}>
-          <Stat label="Best so far" value={entry.actualDisplay} accent={accent} />
-          <Stat label="Target" value={entry.targetDisplay} accent={accent} />
-          <Stat
-            label="Gap"
-            value={gap > 0 ? formatRemainingMetric(entry.goal.metricType, gap) : "Hit ✓"}
-            accent={accent}
-          />
-        </StatRow>
-      </SectionCard>
+      <StatRow cols={3}>
+        <Stat label="Best so far" value={entry.actualDisplay} accent={accent} />
+        <Stat label="Target" value={entry.targetDisplay} accent={accent} />
+        <Stat
+          label="Gap"
+          value={gap > 0 ? formatRemainingMetric(entry.goal.metricType, gap) : "Hit ✓"}
+          accent={accent}
+        />
+      </StatRow>
     );
   }
-
   if (type === "COMPLETION") {
     const remaining = Math.max(0, entry.targetValue - entry.actualValue);
     return (
-      <SectionCard title="Completion">
-        <StatRow cols={2}>
-          <Stat label="Completed" value={`${entry.actualValue}`} suffix={`of ${entry.targetValue}`} accent={accent} />
-          <Stat label="To go" value={remaining > 0 ? `${remaining}` : "Done ✓"} accent={accent} />
-        </StatRow>
-      </SectionCard>
+      <StatRow cols={2}>
+        <Stat label="Completed" value={`${entry.actualValue}`} suffix={`of ${entry.targetValue}`} accent={accent} />
+        <Stat label="To go" value={remaining > 0 ? `${remaining}` : "Done ✓"} accent={accent} />
+      </StatRow>
     );
   }
-
   return null;
 }
+
+// ── Type-specific highlights ──────────────────────────────────────────────
 
 function StatRow({ children, cols = 3 }: { children: React.ReactNode; cols?: 2 | 3 }) {
   return (
