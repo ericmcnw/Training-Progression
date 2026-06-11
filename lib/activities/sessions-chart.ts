@@ -16,6 +16,12 @@ export type SessionChartInput = {
   date: Date;
   routineId: string;
   routineName: string;
+  /** Optional explicit series bucket. Defaults to routineId — pass this
+   *  when multiple logs share a routine but should chart as distinct
+   *  series (e.g. synthetic sport-routine logs split by their
+   *  sportData.sessionType: "Pickup" vs "Shoot around"). routineId still
+   *  drives the panel-row href. */
+  seriesKey?: string;
 };
 
 export type SessionChartData = {
@@ -50,28 +56,30 @@ export function buildSessionsChartData(
   const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
   const inWindow = sessions.filter((s) => s.date >= cutoff);
 
-  const byRoutine = new Map<string, {
-    routineId: string;
+  const byKey = new Map<string, {
+    key: string;
     routineName: string;
     totalSessions: number;
     sessionCountByWeek: Map<string, number>;
   }>();
+  const keyOf = (s: SessionChartInput) => s.seriesKey ?? s.routineId;
   for (const s of inWindow) {
-    let bucket = byRoutine.get(s.routineId);
+    const key = keyOf(s);
+    let bucket = byKey.get(key);
     if (!bucket) {
       bucket = {
-        routineId: s.routineId,
+        key,
         routineName: s.routineName,
         totalSessions: 0,
         sessionCountByWeek: new Map(),
       };
-      byRoutine.set(s.routineId, bucket);
+      byKey.set(key, bucket);
     }
     bucket.totalSessions += 1;
     incrementWeekMap(bucket.sessionCountByWeek, s.date, 1);
   }
 
-  const rankedRoutines = Array.from(byRoutine.values()).sort((a, b) => {
+  const rankedRoutines = Array.from(byKey.values()).sort((a, b) => {
     if (b.totalSessions !== a.totalSessions) return b.totalSessions - a.totalSessions;
     return a.routineName.localeCompare(b.routineName);
   });
@@ -83,9 +91,9 @@ export function buildSessionsChartData(
   const palette = accent
     ? [accent, ...ROUTINE_PALETTE.filter((c) => c !== accent)]
     : ROUTINE_PALETTE;
-  const colorByRoutineId = new Map<string, string>();
+  const colorByKey = new Map<string, string>();
   rankedRoutines.forEach((r, idx) => {
-    colorByRoutineId.set(r.routineId, palette[idx % palette.length]);
+    colorByKey.set(r.key, palette[idx % palette.length]);
   });
 
   const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
@@ -93,7 +101,7 @@ export function buildSessionsChartData(
 
   const series: StackedBarSeries[] = rankedRoutines.map((r) => ({
     label: r.routineName,
-    color: colorByRoutineId.get(r.routineId)!,
+    color: colorByKey.get(r.key)!,
     weeklyValues: fillWeeklySeries(r.sessionCountByWeek, range, now).map((p) => p.value),
   }));
 
@@ -115,7 +123,7 @@ export function buildSessionsChartData(
       performedAt: s.date,
       routineName: s.routineName,
       seriesLabel: s.routineName,
-      seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
+      seriesColor: colorByKey.get(keyOf(s)) ?? "rgba(255,255,255,0.4)",
       // No useful per-session metric on these surfaces (one mobility /
       // lifestyle log = one session, no volume/distance/pace). Empty
       // string suppresses the metric column in the chart panel rows.

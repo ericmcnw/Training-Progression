@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ACTIVITY_FAMILY_META, activitiesByFamily, getActivityEntry } from "@/lib/activity-families";
 import { loadSportsChartData } from "@/lib/activities/sports-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
-import { SectionCard, SectionLinkButton, TargetHeader, EmptyState } from "@/app/progress/ui";
+import { SectionCard, EmptyState } from "@/app/progress/ui";
+import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import { formatHoursMinutes } from "@/lib/progress";
 import { prisma } from "@/lib/prisma";
 import SupportRow from "./SupportRow";
@@ -52,25 +53,8 @@ export default async function SportsDashboardPage() {
 
   return (
     <>
-      <TargetHeader
-        section="sports"
-        title="Sports"
-        eyebrow="Activity world"
-        subtitle="Skill, sessions, time."
-        basePath="/activities/sports"
-        tab="overview"
-        range="all"
-        hideTabs
-        hideRange
-        hideSections
-        actions={
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <SectionLinkButton href="/activities" label="All activities" />
-          </div>
-        }
-      />
-
       <div style={pageBody}>
+        <ActivityHeader title="Sports" accent={meta.accent} />
         {/* Climbing hero — climbing is the only sport with a built-out
             deep world today, so we surface it prominently rather than
             making the user hunt for it in the tile grid below. */}

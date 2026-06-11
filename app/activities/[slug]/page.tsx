@@ -35,6 +35,8 @@ import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 import { formatRoutineSubtype } from "@/lib/routines";
+import { SPORT_LOG_CONFIG } from "@/app/routines/sportLogConfig";
+import { fuzzyDuplicateKey } from "@/lib/activity-spots";
 
 export const dynamic = "force-dynamic";
 
@@ -140,17 +142,35 @@ export default async function SportWorldPage(props: {
   const sessions4w = logs.filter((l) => l.performedAt >= fourWeeksAgo).length;
   const sessions12w = logs.filter((l) => l.performedAt >= twelveWeeksAgo).length;
 
-  // ── Chart — sessions per week stacked by routine ────────────────────────
+  // ── Chart — sessions per week, stacked by session variant ───────────────
+  // Logs from the sport-tile flow all share the synthetic routine
+  // ("Basketball"), but their dropdown pick lives in sportData.sessionType
+  // ("pickup" / "shoot-around" / …). Label each log by that variant and
+  // bucket by the fuzzy key of the label, so a legacy "Pick Up" routine
+  // and new "Pickup" dropdown logs merge into ONE series instead of the
+  // synthetic logs all flattening into a single "Basketball" bar.
+  const sessionTypeLabels = new Map(
+    (SPORT_LOG_CONFIG[params.slug]?.sessionTypeOptions ?? []).map((o) => [o.value, o.label])
+  );
+  function chartLabelFor(l: SportLogs[number]): string {
+    const sd = l.sportData as { sessionType?: string } | null;
+    if (sd?.sessionType) return sessionTypeLabels.get(sd.sessionType) ?? sd.sessionType;
+    return l.routine.name;
+  }
   const chartCutoff = new Date(now.getTime() - chartWeeks * 7 * 86_400_000);
   const chartData = buildSessionsChartData(
     logs
       .filter((l) => l.performedAt >= chartCutoff)
-      .map((l) => ({
-        id: l.id,
-        date: l.performedAt,
-        routineId: l.routineId,
-        routineName: l.routine.name,
-      })),
+      .map((l) => {
+        const label = chartLabelFor(l);
+        return {
+          id: l.id,
+          date: l.performedAt,
+          routineId: l.routineId,
+          routineName: label,
+          seriesKey: fuzzyDuplicateKey(label) || l.routineId,
+        };
+      }),
     { accentFirst: accent, now, weeks: chartWeeks }
   );
   const chartHasData = chartData.series.some((s) => s.weeklyValues.some((v) => v > 0));
