@@ -33,13 +33,14 @@ type WeekRow = { weekStartYmd: string; cells: Array<{ ymd: string }> };
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun-first
 
-// Cell size scales with range AND viewport. Desktop gets ~70% larger
-// cells so the heatmap actually fills the width of the detail card.
+// Cell size scales with range AND viewport. Desktop cells are roughly
+// 60-65% larger so the heatmap actually fills the width of the detail
+// card on PC.
 function cellSizeForWeeks(weeks: number, isDesktop: boolean): number {
   if (isDesktop) {
-    if (weeks <= 12) return 28;
-    if (weeks <= 26) return 22;
-    return 16;
+    if (weeks <= 12) return 36;
+    if (weeks <= 26) return 28;
+    return 20;
   }
   if (weeks <= 12) return 22;
   if (weeks <= 26) return 16;
@@ -137,6 +138,24 @@ export default function FrequencyHeatmap({
       : `${target.targetCount}× / ${target.targetInterval} ${targetUnitLabel}s`;
   const maskLabel = weekdayMask ? formatMaskLabel(weekdayMask) : null;
 
+  // Roll up the visible window into a done/covered/missed count strip.
+  // Mirrors the home-page expanded-detail stats — gives the user a
+  // quick "how am I doing this window" read without scanning every cell.
+  // Excludes future days; rest days (no expectation) are excluded from
+  // all three counts.
+  let doneCount = 0;
+  let coveredCount = 0;
+  let missedCount = 0;
+  for (const week of weeksGrid) {
+    for (const { ymd } of week.cells) {
+      if (ymd > today) continue;
+      const st = state.dailyState[ymd];
+      if (st === "done") doneCount++;
+      else if (st === "covered") coveredCount++;
+      else if (st === "missed") missedCount++;
+    }
+  }
+
   // Grid template: 1 label column + 7 day columns
   const gridTemplateColumns = `${LABEL_COL_PX}px repeat(7, ${CELL_SIZE}px)`;
 
@@ -145,6 +164,14 @@ export default function FrequencyHeatmap({
       <div style={subLineStyle}>
         <span>{cadenceLabel}</span>
         {maskLabel ? <span style={subLineDotStyle}>· {maskLabel}</span> : null}
+      </div>
+
+      <div style={statStripStyle}>
+        <StatTile label="Done" value={`${doneCount}d`} fg="rgb(74,222,128)" bg="rgba(74,222,128,0.10)" border="rgba(74,222,128,0.32)" />
+        {coveredCount > 0 ? (
+          <StatTile label="Covered" value={`${coveredCount}d`} fg="rgb(132,204,255)" bg="rgba(132,204,255,0.10)" border="rgba(132,204,255,0.32)" />
+        ) : null}
+        <StatTile label="Missed" value={`${missedCount}d`} fg="rgba(255,255,255,0.75)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.14)" />
       </div>
 
       <div
@@ -275,6 +302,30 @@ function Legend({ swatch, label }: { swatch: CSSProperties; label: string }) {
   );
 }
 
+// Tiny tile showing a done / covered / missed count for the visible window.
+// Mirrors the home-page expanded-detail stats pattern — small bordered
+// chip with a colored value on top, uppercase label below.
+function StatTile({
+  label,
+  value,
+  fg,
+  bg,
+  border,
+}: {
+  label: string;
+  value: string;
+  fg: string;
+  bg: string;
+  border: string;
+}) {
+  return (
+    <div style={{ ...statTileStyle, background: bg, borderColor: border }}>
+      <span style={{ ...statValueStyle, color: fg }}>{value}</span>
+      <span style={statLabelStyle}>{label}</span>
+    </div>
+  );
+}
+
 function cellStyle(
   state: "done" | "covered" | "missed" | "rest" | "future",
   isFuture: boolean,
@@ -339,6 +390,37 @@ const subLineStyle: CSSProperties = {
 
 const subLineDotStyle: CSSProperties = {
   opacity: 0.8,
+};
+
+const statStripStyle: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const statTileStyle: CSSProperties = {
+  display: "inline-flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 2,
+  padding: "6px 12px",
+  borderRadius: 10,
+  border: "1px solid",
+  minWidth: 56,
+};
+
+const statValueStyle: CSSProperties = {
+  fontSize: 16,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const statLabelStyle: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  opacity: 0.62,
 };
 
 const gridStyle: CSSProperties = {
