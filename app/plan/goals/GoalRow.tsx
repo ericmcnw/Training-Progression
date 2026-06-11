@@ -167,9 +167,9 @@ function DayDot({
       className="goalRowDot"
       aria-label={state}
       style={{
-        width: 12,
-        height: 12,
-        borderRadius: 3,
+        width: 18,
+        height: 18,
+        borderRadius: 4,
         display: "inline-block",
         ...(isToday ? { outline: "1px solid rgba(255,255,255,0.45)", outlineOffset: 2 } : {}),
         ...styles,
@@ -301,7 +301,7 @@ const progressBlockStyle: CSSProperties = {
 
 const frequencyBlockStyle: CSSProperties = {
   display: "grid",
-  gap: 4,
+  gap: 3,
   justifyItems: "end",
 };
 
@@ -311,15 +311,15 @@ const dotRowStyle: CSSProperties = {
 };
 
 const frequencyFractionStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   opacity: 0.7,
   fontWeight: 800,
 };
 
 const scalarBlockStyle: CSSProperties = {
   display: "grid",
-  gap: 5,
-  width: 140,
+  gap: 4,
+  width: 160,
 };
 
 const scalarLineStyle: CSSProperties = {
@@ -336,13 +336,13 @@ const scalarValueStyle: CSSProperties = {
 };
 
 const scalarTargetStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   opacity: 0.6,
   fontWeight: 700,
 };
 
 const progressTrackStyle: CSSProperties = {
-  height: 5,
+  height: 10,
   borderRadius: 999,
   background: "rgba(255,255,255,0.06)",
   overflow: "hidden",

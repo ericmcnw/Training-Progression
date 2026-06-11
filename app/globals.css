@@ -1941,14 +1941,14 @@ input.ghostInput::placeholder {
     font-size: 10px !important;
   }
   .goalRowScalar {
-    width: 96px !important;
+    width: 112px !important;
   }
   .goalRowDotRow {
     gap: 3px !important;
   }
   .goalRowDot {
-    width: 10px !important;
-    height: 10px !important;
+    width: 15px !important;
+    height: 15px !important;
   }
   .goalRowStatusLabel {
     display: none !important;
