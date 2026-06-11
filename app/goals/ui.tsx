@@ -1,21 +1,19 @@
 import Link from "next/link";
+import { TYPE_ACCENT } from "@/app/plan/goals/goal-type-accent";
 
-// PERFORMANCE moved off amber (which collided with lifestyle domain +
-// `behind` status) to rose. Kept in sync with the canonical TYPE_ACCENT
-// in app/plan/goals/goal-type-accent.ts.
-export const GOAL_TYPE_ACCENT: Record<string, string> = {
-  FREQUENCY: "rgba(129,140,248,0.65)",
-  PERFORMANCE: "rgba(251,113,133,0.65)",
-  VOLUME: "rgba(34,211,238,0.65)",
-  COMPLETION: "rgba(74,222,128,0.65)",
-};
+// Thin compatibility wrappers — the canonical accent table lives in
+// app/plan/goals/goal-type-accent. These exports kept the diff small
+// for downstream consumers; new code should import TYPE_ACCENT directly.
+export const GOAL_TYPE_ACCENT: Record<string, string> = Object.fromEntries(
+  Object.entries(TYPE_ACCENT).map(([type, a]) => [type, a.softColor])
+);
 
-export const GOAL_TYPE_CHIP_STYLE: Record<string, React.CSSProperties> = {
-  FREQUENCY: { borderColor: "rgba(129,140,248,0.45)", background: "rgba(129,140,248,0.14)", color: "#e0e7ff" },
-  PERFORMANCE: { borderColor: "rgba(251,113,133,0.45)", background: "rgba(251,113,133,0.13)", color: "#ffe4e6" },
-  VOLUME: { borderColor: "rgba(34,211,238,0.45)", background: "rgba(34,211,238,0.13)", color: "#cffafe" },
-  COMPLETION: { borderColor: "rgba(74,222,128,0.45)", background: "rgba(74,222,128,0.13)", color: "#dcfce7" },
-};
+export const GOAL_TYPE_CHIP_STYLE: Record<string, React.CSSProperties> = Object.fromEntries(
+  Object.entries(TYPE_ACCENT).map(([type, a]) => [
+    type,
+    { borderColor: a.border, background: a.chipBg, color: a.chipText },
+  ])
+);
 
 function splitValueAndUnit(value: string) {
   const match = value.trim().match(/^(.+?)(?:\s+([A-Za-z%/][A-Za-z0-9%/.-]*))?$/);
