@@ -46,6 +46,11 @@ export type ClimbingTrainingInput = {
   routineName: string;
   /** Effective routine domain — drives the bar color via domainColor(). */
   domain: RoutineDomain | string;
+  /** Climbing-tagged exercises that made this session qualify (hybrid
+   *  matching). Shown in the week panel's metric slot so the user sees
+   *  WHY an untagged routine's session counted. Empty/omitted for
+   *  sessions that qualified via the routine tag alone. */
+  matchedExercises?: string[];
 };
 
 export type ClimbingChartWeeks = 4 | 12;
@@ -260,13 +265,20 @@ export function buildClimbingTrainingChartData(
     const wkIdx = weekIndexByKey.get(weekKey(t.date));
     if (wkIdx === undefined) continue;
     const domain = String(t.domain);
+    const matched = t.matchedExercises ?? [];
+    const metricFormatted =
+      matched.length === 0
+        ? ""
+        : matched.length <= 2
+          ? matched.join(", ")
+          : `${matched.slice(0, 2).join(", ")} +${matched.length - 2}`;
     sessionsByWeek[wkIdx].push({
       id: t.id,
       performedAt: t.date,
       routineName: t.routineName,
       seriesLabel: DOMAIN_DISPLAY[domain] ?? domain,
       seriesColor: domainColor(domain),
-      metricFormatted: "",
+      metricFormatted,
       href: `/routines/${t.routineId}/logs/${t.id}/details`,
     });
   }

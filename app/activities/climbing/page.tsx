@@ -63,6 +63,7 @@ import {
 } from "@/lib/activities/climbing-chart";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { sportAccent } from "@/lib/sport-accent";
+import TrainingTagsPanel from "./TrainingTagsPanel";
 import { startOfWeekMonday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -159,28 +160,40 @@ export default async function ClimbingHubPage(props: {
     prisma.climbProblem.findMany({
       select: { id: true, name: true, grade: true, gradeSystem: true, locationId: true },
     }),
-    // Supporting-training logs — bilingual per CLAUDE.md rule 2: legacy
-    // metadata-tagged routines OR the newer supportsSports field. SESSION
-    // kind excluded (those are the climbing sessions themselves); CARDIO
-    // included so a trail run tagged as climbing support shows up as a
-    // blue segment in the training chart's domain breakdown.
+    // Supporting-training logs — HYBRID matching:
+    //   1) routine-level tag (legacy metadataGroups OR supportsSports), or
+    //   2) the session contains at least one climbing-tagged exercise
+    //      (Exercise.supportsSports) — so a generic Upper day counts on
+    //      the sessions where pull-ups / lock-offs actually appeared.
+    // SESSION kind excluded (those are the climbing sessions themselves);
+    // CARDIO included so a tagged trail run shows as a blue segment.
     prisma.routineLog.findMany({
       where: {
-        routine: {
-          isDeleted: false,
-          kind: { not: "SESSION" },
-          OR: [
-            { metadataGroups: { some: { group: { slug: "climbing" } } } },
-            { supportsSports: { has: "climbing" } },
-          ],
-        },
+        routine: { isDeleted: false, kind: { not: "SESSION" } },
+        OR: [
+          { routine: { metadataGroups: { some: { group: { slug: "climbing" } } } } },
+          { routine: { supportsSports: { has: "climbing" } } },
+          { exercises: { some: { exercise: { supportsSports: { has: "climbing" } } } } },
+        ],
       },
       orderBy: { performedAt: "desc" },
       select: {
         id: true,
         performedAt: true,
         routineId: true,
-        routine: { select: { name: true, domain: true, kind: true, subtype: true } },
+        routine: {
+          select: {
+            name: true,
+            domain: true,
+            kind: true,
+            subtype: true,
+            supportsSports: true,
+            metadataGroups: { select: { group: { select: { slug: true } } } },
+          },
+        },
+        exercises: {
+          select: { exercise: { select: { name: true, supportsSports: true } } },
+        },
       },
       take: 400,
     }),
@@ -301,16 +314,56 @@ export default async function ClimbingHubPage(props: {
 
   // ── Chart 2 — supporting training, stacked by domain ────────────────────
   const trainingChartData = buildClimbingTrainingChartData(
-    trainingLogs.map((l) => ({
-      id: l.id,
-      date: l.performedAt,
-      routineId: l.routineId,
-      routineName: l.routine.name,
-      domain: effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype),
-    })),
+    trainingLogs.map((l) => {
+      const routineTagged =
+        l.routine.supportsSports.includes("climbing") ||
+        l.routine.metadataGroups.some((g) => g.group.slug === "climbing");
+      // Surface matched exercises only when the EXERCISE is what made the
+      // session qualify — tagged routines count wholesale, no need to
+      // explain why.
+      const matchedExercises = routineTagged
+        ? []
+        : l.exercises
+            .filter((e) => e.exercise.supportsSports.includes("climbing"))
+            .map((e) => e.exercise.name);
+      return {
+        id: l.id,
+        date: l.performedAt,
+        routineId: l.routineId,
+        routineName: l.routine.name,
+        domain: effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype),
+        matchedExercises,
+      };
+    }),
     { weeks: chartWeeks, now }
   );
   const trainingChartHasData = trainingChartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
+
+  // Tagged routines + exercises for the "what counts" management panel.
+  const [taggedRoutines, taggedExercises, allExerciseNames] = await Promise.all([
+    prisma.routine.findMany({
+      where: {
+        isDeleted: false,
+        isActive: true,
+        kind: { not: "SESSION" },
+        OR: [
+          { metadataGroups: { some: { group: { slug: "climbing" } } } },
+          { supportsSports: { has: "climbing" } },
+        ],
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.exercise.findMany({
+      where: { supportsSports: { has: "climbing" } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.exercise.findMany({
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   // ── Pyramid (filtered by discipline pill, split indoor/outdoor) ─────────
   const pyramidAttempts = disciplineFilter === "all"
@@ -507,6 +560,15 @@ export default async function ClimbingHubPage(props: {
           compact={false}
         />
       ) : null}
+
+      {/* Tag management — visible + editable right under the chart it
+          drives. Routine tags link out to the routine edit page; exercise
+          tags add/remove inline. */}
+      <TrainingTagsPanel
+        taggedRoutines={taggedRoutines}
+        taggedExercises={taggedExercises}
+        allExerciseNames={allExerciseNames.map((e) => e.name)}
+      />
 
       {/* ── Pyramid ───────────────────────────────────────────────── */}
       <SectionCard
@@ -714,7 +776,7 @@ function PulseStat({ label, value }: { label: string; value: number }) {
 function HubTile({ href, label, stat, icon }: { href: string; label: string; stat: string; icon: string }) {
   return (
     <Link href={href} style={hubTileStyle}>
-      <span style={hubTileIconStyle} aria-hidden>{icon}</span>
+      <span aria-hidden>{icon}</span>
       <span style={hubTileLabelStyle}>{label}</span>
       <span style={hubTileStatStyle}>{stat}</span>
     </Link>
@@ -918,44 +980,41 @@ const pulseValueStyle: React.CSSProperties = {
   lineHeight: 1,
 };
 
-// Hub navigation tiles — compact so 4 fit in one row on tablet+ and
-// collapse to 2x2 on phone-class screens. The 130px minmax leaves room
-// for an icon, label, and short stat without crowding.
+// Hub navigation — compact inline pills (icon · label · stat on ONE
+// line) instead of stacked tiles. Three fit in a single row even on
+// small phones; ~32px tall vs the ~70px tiles they replace.
 const hubTileRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-  gap: 8,
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
 };
 
 const hubTileStyle: React.CSSProperties = {
-  display: "grid",
-  justifyItems: "center",
-  gap: 3,
-  padding: "12px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(255,255,255,0.025)",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
   textDecoration: "none",
   color: "inherit",
-  minHeight: 44,
-  textAlign: "center",
-};
-
-const hubTileIconStyle: React.CSSProperties = {
-  fontSize: 18,
-  lineHeight: 1,
+  minHeight: 36,
+  fontSize: 13,
+  flex: "1 1 auto",
+  justifyContent: "center",
+  whiteSpace: "nowrap",
 };
 
 const hubTileLabelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 12.5,
   fontWeight: 900,
   letterSpacing: 0.2,
-  marginTop: 3,
 };
 
 const hubTileStatStyle: React.CSSProperties = {
-  fontSize: 10,
-  opacity: 0.6,
+  fontSize: 10.5,
+  opacity: 0.55,
   fontWeight: 700,
 };
 

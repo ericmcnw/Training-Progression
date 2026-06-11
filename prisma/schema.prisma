@@ -861,6 +861,11 @@ model Exercise {
   supportsWeight Boolean             @default(false)
   libraryKind    ExerciseLibraryKind @default(STRENGTH)
   isUnilateral   Boolean             @default(false)
+  // Sport slugs this exercise trains for (mirrors Routine.supportsSports).
+  // Drives the hybrid "training for <sport>" match: a session on an
+  // untagged routine still counts as sport training when it contains a
+  // tagged exercise (e.g. pull-ups in a generic Upper day → climbing).
+  supportsSports String[]            @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
