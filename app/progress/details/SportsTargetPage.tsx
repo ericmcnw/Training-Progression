@@ -226,6 +226,11 @@ export default async function SportsTargetPage(props: {
     : "No activity";
 
   // ── Activity coverage (all-time) — climbing has its own world page ────────
+  // NOTE: /activities/climbing now routes to app/activities/climbing/page.tsx
+  // (Phase 3 hub) directly via Next.js static-segment precedence, so the
+  // `isClimbing` branches below are reachable only via legacy callers and
+  // can be cleaned up in a follow-up. Leaving the conditionals in place
+  // means nothing breaks if a virtual sport ever needs the same treatment.
   const isClimbing = params.slug === "climbing";
   // Virtual sports (surfing/snowboarding) don't have a metadata group at their
   // own slug — they roll up under board-sports. Use that for goal lookup so
