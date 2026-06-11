@@ -1,15 +1,18 @@
 import Link from "next/link";
 
+// PERFORMANCE moved off amber (which collided with lifestyle domain +
+// `behind` status) to rose. Kept in sync with the canonical TYPE_ACCENT
+// in app/plan/goals/goal-type-accent.ts.
 export const GOAL_TYPE_ACCENT: Record<string, string> = {
   FREQUENCY: "rgba(129,140,248,0.65)",
-  PERFORMANCE: "rgba(251,191,36,0.65)",
+  PERFORMANCE: "rgba(251,113,133,0.65)",
   VOLUME: "rgba(34,211,238,0.65)",
   COMPLETION: "rgba(74,222,128,0.65)",
 };
 
 export const GOAL_TYPE_CHIP_STYLE: Record<string, React.CSSProperties> = {
   FREQUENCY: { borderColor: "rgba(129,140,248,0.45)", background: "rgba(129,140,248,0.14)", color: "#e0e7ff" },
-  PERFORMANCE: { borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.13)", color: "#fef3c7" },
+  PERFORMANCE: { borderColor: "rgba(251,113,133,0.45)", background: "rgba(251,113,133,0.13)", color: "#ffe4e6" },
   VOLUME: { borderColor: "rgba(34,211,238,0.45)", background: "rgba(34,211,238,0.13)", color: "#cffafe" },
   COMPLETION: { borderColor: "rgba(74,222,128,0.45)", background: "rgba(74,222,128,0.13)", color: "#dcfce7" },
 };

@@ -17,12 +17,17 @@ import type { HabitRow } from "@/app/_home/types";
 import { TYPE_ACCENT, TYPE_ICON } from "./goal-type-accent";
 
 // Status colors are intentionally muted — see feedback_habit_lens.
+// behind and at_risk share the same amber dot to avoid collision with
+// the sport-domain orange (which was identical RGB to the old at_risk
+// at lower alpha). The status LABEL still distinguishes severity; the
+// row's left border + container border already collapsed both warning
+// states into amber, so the dot now matches.
 const STATUS_COLOR: Record<HabitRow["status"], string> = {
   complete: "rgba(74,222,128,0.7)",  // green check
   ahead:    "rgba(74,222,128,0.55)", // softer green
   on_track: "rgba(148,163,184,0.5)", // neutral
   behind:   "rgba(251,191,36,0.6)",  // gentle amber, not red
-  at_risk:  "rgba(251,146,60,0.65)", // warmer amber, still not red
+  at_risk:  "rgba(251,191,36,0.75)", // same amber, slightly stronger alpha
 };
 
 const STATUS_LABEL: Record<HabitRow["status"], string> = {

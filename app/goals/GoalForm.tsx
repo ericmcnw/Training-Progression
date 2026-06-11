@@ -108,10 +108,13 @@ const TYPE_TAGLINE: Record<GoalTypeValue, string> = {
   COMPLETION:  "Finish something",
 };
 
+// PERFORMANCE moved off amber to rose so it doesn't collide with the
+// lifestyle domain color or the `behind` status. Kept in sync with the
+// canonical TYPE_ACCENT in app/plan/goals/goal-type-accent.ts.
 const TYPE_ACCENT: Record<GoalTypeValue, { color: string; bg: string; border: string }> = {
   FREQUENCY:   { color: "rgb(129,140,248)", bg: "rgba(129,140,248,0.13)", border: "rgba(129,140,248,0.5)" },
   VOLUME:      { color: "rgb(34,211,238)",  bg: "rgba(34,211,238,0.12)",  border: "rgba(34,211,238,0.5)"  },
-  PERFORMANCE: { color: "rgb(251,191,36)",  bg: "rgba(251,191,36,0.12)",  border: "rgba(251,191,36,0.5)"  },
+  PERFORMANCE: { color: "rgb(251,113,133)", bg: "rgba(251,113,133,0.12)", border: "rgba(251,113,133,0.5)" },
   COMPLETION:  { color: "rgb(74,222,128)",  bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.5)"  },
 };
 

@@ -9,10 +9,13 @@ export type GoalTypeAccent = {
   weak: string;
 };
 
+// PERFORMANCE was amber (251,191,36) which collided exactly with the
+// lifestyle-domain color and the `behind` status color. Moved to rose
+// so a lifestyle PERFORMANCE goal doesn't render as amber-on-amber.
 export const TYPE_ACCENT: Record<string, GoalTypeAccent> = {
   FREQUENCY:   { color: "rgb(129,140,248)", bg: "rgba(129,140,248,0.10)", border: "rgba(129,140,248,0.45)", weak: "rgba(129,140,248,0.18)" },
   VOLUME:      { color: "rgb(34,211,238)",  bg: "rgba(34,211,238,0.10)",  border: "rgba(34,211,238,0.45)",  weak: "rgba(34,211,238,0.18)"  },
-  PERFORMANCE: { color: "rgb(251,191,36)",  bg: "rgba(251,191,36,0.10)",  border: "rgba(251,191,36,0.45)",  weak: "rgba(251,191,36,0.18)"  },
+  PERFORMANCE: { color: "rgb(251,113,133)", bg: "rgba(251,113,133,0.10)", border: "rgba(251,113,133,0.45)", weak: "rgba(251,113,133,0.18)" },
   COMPLETION:  { color: "rgb(74,222,128)",  bg: "rgba(74,222,128,0.10)",  border: "rgba(74,222,128,0.45)",  weak: "rgba(74,222,128,0.18)"  },
 };
 
