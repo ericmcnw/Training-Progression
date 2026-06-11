@@ -218,6 +218,15 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     icon: "🩹",
   },
   {
+    key: "REHAB_WORKOUT",
+    label: "Rehab Workout",
+    description: "Exercise template for rehab — pick exercises, track sets and reps",
+    domain: "mobility",
+    kind: "WORKOUT",
+    subtype: "REHAB",
+    icon: "🩺",
+  },
+  {
     key: "BREATHWORK",
     label: "Breathwork",
     description: "Breathing protocol, box breathing, or meditation",
