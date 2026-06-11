@@ -42,7 +42,10 @@ export default async function ClimbsBrowsePage(props: {
         areaId: true,
         climbArea: { select: { name: true } },
         notes: true,
+        movesCompleted: true,
+        totalMoves: true,
         sessionLogId: true,
+        problemId: true,
         problem: { select: { name: true } },
         sessionLog: {
           select: {
@@ -77,7 +80,10 @@ export default async function ClimbsBrowsePage(props: {
     areaId: a.areaId,
     areaName: a.climbArea?.name ?? a.area?.trim() ?? null,
     notes: a.notes,
+    problemId: a.problemId,
     problemName: a.problem?.name ?? null,
+    movesCompleted: a.movesCompleted,
+    totalMoves: a.totalMoves,
     sessionLogId: a.sessionLogId,
     routineId: a.sessionLog.routineId,
     routineName: a.sessionLog.routine.name,
@@ -110,7 +116,6 @@ export default async function ClimbsBrowsePage(props: {
           Every climb you&apos;ve logged — search and filter to find what you&apos;re after.
         </p>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-          <Link href="/activities/climbing/projects" style={siblingPillStyle}>🎯 Projects</Link>
           <Link href="/activities/climbing/map" style={siblingPillStyle}>🗺 Map</Link>
         </div>
       </header>

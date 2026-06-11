@@ -277,7 +277,7 @@ export default async function SportsTargetPage(props: {
               <>
                 <SectionLinkButton href="/activities/climbing/map" label="🗺 Map" />
                 <SectionLinkButton href="/activities/climbing/climbs" label="📋 Climbs" />
-                <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
+                <SectionLinkButton href="/activities/climbing/climbs?outcome=project" label="🎯 Projects" />
               </>
             ) : getActivitySpotConfig(params.slug)?.supportsMap ? (
               <SectionLinkButton href={`/activities/${params.slug}/map`} label="🗺 Map" />

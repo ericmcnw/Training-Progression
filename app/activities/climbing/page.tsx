@@ -514,7 +514,7 @@ export default async function ClimbingHubPage(props: {
       {/* ── Hub navigation tiles ──────────────────────────────────── */}
       <div style={hubTileRowStyle}>
         <HubTile href="/activities/climbing/climbs" label="Climbs" stat={`${tileTotals.climbs} logged`} icon="📋" />
-        <HubTile href="/activities/climbing/projects" label="Projects" stat={`${tileTotals.projects} active`} icon="🎯" />
+        <HubTile href="/activities/climbing/climbs?outcome=project" label="Projects" stat={`${tileTotals.projects} active`} icon="🎯" />
         <HubTile href="/activities/climbing/map" label="Map" stat={`${tileTotals.locations} location${tileTotals.locations === 1 ? "" : "s"}`} icon="🗺" />
       </div>
 
@@ -653,7 +653,7 @@ export default async function ClimbingHubPage(props: {
               const locationId = problemLocationById.get(p.problemId) ?? null;
               const href = locationId
                 ? `/activities/climbing/locations/${locationId}`
-                : "/activities/climbing/projects";
+                : "/activities/climbing/climbs?outcome=project";
               // Moves progress bar only renders when the user actually
               // tracked moves on this project — no bar, no noise for
               // climbers who don't use the moves fields.
@@ -681,7 +681,7 @@ export default async function ClimbingHubPage(props: {
               );
             })}
             {activeProjects.length > ACTIVE_PROJECTS_LIMIT ? (
-              <Link href="/activities/climbing/projects" style={viewAllLinkStyle}>
+              <Link href="/activities/climbing/climbs?outcome=project" style={viewAllLinkStyle}>
                 View all {activeProjects.length} active projects →
               </Link>
             ) : null}

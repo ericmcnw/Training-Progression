@@ -121,7 +121,6 @@ export default async function ClimbingMapPage() {
         actions={
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <SectionLinkButton href="/activities/climbing/climbs" label="📋 Climbs" />
-            <SectionLinkButton href="/activities/climbing/projects" label="🎯 Projects" />
             <SectionBackButton fallbackHref="/activities/climbing" label="← Back" />
           </div>
         }

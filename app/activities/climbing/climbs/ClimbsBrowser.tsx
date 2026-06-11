@@ -22,10 +22,10 @@ import {
   climbOutcomeColor,
   climbOutcomeLabel,
   gradeSort,
-  SENT_OUTCOMES,
   type ClimbGradeSystem,
   type ClimbOutcome,
 } from "@/lib/climb-types";
+import { buildProjectRollup } from "@/lib/climb-stats";
 
 export type BrowserAttempt = {
   id: string;
@@ -35,7 +35,10 @@ export type BrowserAttempt = {
   areaId: string | null;
   areaName: string | null;
   notes: string | null;
+  problemId: string | null;
   problemName: string | null;
+  movesCompleted: number | null;
+  totalMoves: number | null;
   sessionLogId: string;
   routineId: string;
   routineName: string;
@@ -49,13 +52,22 @@ export type BrowserLocation = { id: string; name: string; type: "GYM" | "CRAG" }
 export type BrowserArea = { id: string; name: string; locationId: string };
 
 type VenueFilter = "all" | "indoor" | "outdoor";
-type OutcomeFilter = "all" | "sent" | "working" | "project" | "falls";
+// "falls" only surfaces when legacy FELL rows exist — the outcome was
+// retired from the logger, so for most data it's an empty bucket and the
+// option simply doesn't render. Legacy "working" deep-links map to
+// "project".
+type OutcomeFilter = "all" | "flashed" | "sent" | "project" | "falls";
+type ActivityFilter = "all" | "active" | "dormant";
 type RangeFilter = "7d" | "4w" | "12w" | "1y" | "all";
 
 const RANGE_DAYS: Record<Exclude<RangeFilter, "all">, number> = {
   "7d": 7, "4w": 28, "12w": 84, "1y": 365,
 };
-const WORKING_FALL_RECENCY_DAYS = 30;
+const ACTIVE_PROJECT_WINDOW_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+
+const FLASH_OUTCOMES = new Set<ClimbOutcome>(["FLASH", "ONSIGHT"]);
+const SEND_OUTCOMES_ONLY = new Set<ClimbOutcome>(["SEND", "REDPOINT"]);
+const CLEAN_OUTCOMES = new Set<ClimbOutcome>(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
 
 export type ClimbsBrowserInitial = {
   q?: string;
@@ -80,11 +92,17 @@ export default function ClimbsBrowser({
 }) {
   const [q, setQ] = useState(initial.q ?? "");
   const [venue, setVenue] = useState<VenueFilter>(initial.venue ?? "all");
-  const [outcome, setOutcome] = useState<OutcomeFilter>(initial.outcome ?? "all");
+  const [outcome, setOutcome] = useState<OutcomeFilter>(
+    // Legacy "working" filter (projects + recent falls) folded into project view.
+    (initial.outcome as string) === "working" ? "project" : initial.outcome ?? "all"
+  );
+  const [activity, setActivity] = useState<ActivityFilter>("all");
   const [locationId, setLocationId] = useState(initial.location ?? "all");
   const [areaId, setAreaId] = useState(initial.area ?? "all");
   const [grade, setGrade] = useState(initial.grade ?? "all");
   const [range, setRange] = useState<RangeFilter>(initial.range ?? "1y");
+
+  const projectsView = outcome === "project";
 
   // URL sync — replaceState so the back button leaves the page, not the
   // filter history (same decision as every other filter surface).
@@ -109,10 +127,14 @@ export default function ClimbsBrowser({
     [areas, locationId]
   );
 
-  const filtered = useMemo(() => {
+  // Shared slice — every filter EXCEPT outcome + range. The attempts list
+  // view applies outcome + range on top; the projects view runs the
+  // rollup over this slice (range intentionally ignored there: a project
+  // is defined by its full attempt history, and a dormant project older
+  // than the range window silently vanishing would read as data loss).
+  const baseFiltered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return attempts.filter((a) => {
-      if (cutoff && a.performedAt < cutoff) return false;
       if (venue === "indoor" && a.venue !== "GYM") return false;
       if (venue === "outdoor" && a.venue !== "CRAG") return false;
       if (locationId !== "all" && a.locationId !== locationId) return false;
@@ -122,18 +144,6 @@ export default function ClimbsBrowser({
         if (a.areaId !== areaId && attemptArea !== expected) return false;
       }
       if (grade !== "all" && a.grade !== grade) return false;
-      if (outcome !== "all") {
-        if (outcome === "sent" && !SENT_OUTCOMES.has(a.outcome)) return false;
-        if (outcome === "project" && a.outcome !== "PROJECT") return false;
-        if (outcome === "falls" && a.outcome !== "FELL") return false;
-        if (outcome === "working") {
-          const isProject = a.outcome === "PROJECT";
-          const isRecentFall =
-            a.outcome === "FELL" &&
-            (now.getTime() - a.performedAt.getTime()) / 86_400_000 <= WORKING_FALL_RECENCY_DAYS;
-          if (!isProject && !isRecentFall) return false;
-        }
-      }
       if (search) {
         const haystack = [
           a.grade, a.areaName ?? "", a.notes ?? "", a.problemName ?? "", a.locationName ?? "",
@@ -142,7 +152,74 @@ export default function ClimbsBrowser({
       }
       return true;
     });
-  }, [attempts, cutoff, venue, locationId, areaId, grade, outcome, q, locationAreas, now]);
+  }, [attempts, venue, locationId, areaId, grade, q, locationAreas]);
+
+  const filtered = useMemo(() => {
+    return baseFiltered.filter((a) => {
+      if (cutoff && a.performedAt < cutoff) return false;
+      if (outcome === "flashed" && !FLASH_OUTCOMES.has(a.outcome)) return false;
+      if (outcome === "sent" && !SEND_OUTCOMES_ONLY.has(a.outcome)) return false;
+      if (outcome === "falls" && a.outcome !== "FELL") return false;
+      return true;
+    });
+  }, [baseFiltered, cutoff, outcome]);
+
+  // ── Projects view — per-problem rollup over the base slice ──────────────
+  const projects = useMemo(() => {
+    if (!projectsView) return [];
+    const rollup = buildProjectRollup(
+      baseFiltered.map((a) => ({
+        id: a.id,
+        problemId: a.problemId,
+        outcome: a.outcome,
+        grade: a.grade,
+        gradeSystem: a.gradeSystem,
+        movesCompleted: a.movesCompleted,
+        totalMoves: a.totalMoves,
+        notes: a.notes,
+        performedAt: a.performedAt,
+      })),
+      { now }
+    );
+    const activeCutoff = new Date(now.getTime() - ACTIVE_PROJECT_WINDOW_MS);
+    // Decorate with name + location from any attempt on the problem.
+    const attemptByProblem = new Map<string, BrowserAttempt>();
+    for (const a of baseFiltered) {
+      if (a.problemId && !attemptByProblem.has(a.problemId)) attemptByProblem.set(a.problemId, a);
+    }
+    return rollup
+      .map((r) => {
+        const sample = attemptByProblem.get(r.problemId);
+        return {
+          ...r,
+          problemName: sample?.problemName ?? "Unnamed",
+          locationId: sample?.locationId ?? null,
+          locationName: sample?.locationName ?? null,
+          isActive: r.lastAttempt >= activeCutoff,
+        };
+      })
+      .filter((p) => {
+        if (activity === "active") return p.isActive;
+        if (activity === "dormant") return !p.isActive;
+        return true;
+      });
+  }, [projectsView, baseFiltered, now, activity]);
+
+  // ── Data-driven outcome options — buckets only render when matching
+  // climbs actually exist, so retired outcomes (FELL) don't leave a
+  // permanently-empty filter sitting in the UI. ─────────────────────────
+  const outcomeOptions = useMemo(() => {
+    const hasFlash = attempts.some((a) => FLASH_OUTCOMES.has(a.outcome));
+    const hasSent = attempts.some((a) => SEND_OUTCOMES_ONLY.has(a.outcome));
+    const hasProject = attempts.some((a) => a.outcome === "PROJECT" || (a.problemId && !CLEAN_OUTCOMES.has(a.outcome)));
+    const hasFalls = attempts.some((a) => a.outcome === "FELL");
+    const options: Array<[string, string]> = [["all", "All"]];
+    if (hasFlash) options.push(["flashed", "⚡ Flashed"]);
+    if (hasSent) options.push(["sent", "Sent"]);
+    if (hasProject) options.push(["project", "Projects"]);
+    if (hasFalls) options.push(["falls", "Falls"]);
+    return options;
+  }, [attempts]);
 
   // Grade options follow the venue+location+range slice so switching grade
   // never strands you on an empty list.
@@ -185,11 +262,10 @@ export default function ClimbsBrowser({
     return [...map.values()].sort((a, b) => (b.lastVisit?.getTime() ?? 0) - (a.lastVisit?.getTime() ?? 0));
   }, [filtered]);
 
-  const sentCount = filtered.filter((a) => SENT_OUTCOMES.has(a.outcome)).length;
-  const projectCount = filtered.filter((a) => a.outcome === "PROJECT").length;
+  const sentCount = filtered.filter((a) => CLEAN_OUTCOMES.has(a.outcome)).length;
   const anyFilter =
     q.trim() !== "" || venue !== "all" || outcome !== "all" || locationId !== "all" ||
-    areaId !== "all" || grade !== "all" || range !== "1y";
+    areaId !== "all" || grade !== "all" || range !== "1y" || activity !== "all";
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -210,16 +286,28 @@ export default function ClimbsBrowser({
             onChange={(v) => setVenue(v as VenueFilter)}
             options={[["all", "All"], ["indoor", "🏠 Indoor"], ["outdoor", "🪨 Outdoor"]]}
           />
-          <Segmented
-            value={outcome}
-            onChange={(v) => setOutcome(v as OutcomeFilter)}
-            options={[["all", "All"], ["sent", "Sent"], ["working", "Working"], ["project", "Projects"], ["falls", "Falls"]]}
-          />
-          <Segmented
-            value={range}
-            onChange={(v) => setRange(v as RangeFilter)}
-            options={[["7d", "7d"], ["4w", "4w"], ["12w", "12w"], ["1y", "1y"], ["all", "All time"]]}
-          />
+          {outcomeOptions.length > 1 ? (
+            <Segmented
+              value={outcome}
+              onChange={(v) => setOutcome(v as OutcomeFilter)}
+              options={outcomeOptions}
+            />
+          ) : null}
+          {/* Range hides in projects view — a project is its full attempt
+              history; date-windowing it would silently drop dormant ones. */}
+          {projectsView ? (
+            <Segmented
+              value={activity}
+              onChange={(v) => setActivity(v as ActivityFilter)}
+              options={[["all", "All"], ["active", "Active"], ["dormant", "Dormant"]]}
+            />
+          ) : (
+            <Segmented
+              value={range}
+              onChange={(v) => setRange(v as RangeFilter)}
+              options={[["7d", "7d"], ["4w", "4w"], ["12w", "12w"], ["1y", "1y"], ["all", "All time"]]}
+            />
+          )}
         </div>
 
         <div style={selectRowStyle}>
@@ -254,8 +342,8 @@ export default function ClimbsBrowser({
             <button
               type="button"
               onClick={() => {
-                setQ(""); setVenue("all"); setOutcome("all"); setLocationId("all");
-                setAreaId("all"); setGrade("all"); setRange("1y");
+                setQ(""); setVenue("all"); setOutcome("all"); setActivity("all");
+                setLocationId("all"); setAreaId("all"); setGrade("all"); setRange("1y");
               }}
               style={resetBtnStyle}
             >
@@ -265,12 +353,16 @@ export default function ClimbsBrowser({
         </div>
 
         <div style={summaryLineStyle}>
-          {filtered.length} climb{filtered.length !== 1 ? "s" : ""} · {sentCount} sent · {projectCount} project{projectCount !== 1 ? "s" : ""}
+          {projectsView
+            ? `${projects.length} project${projects.length !== 1 ? "s" : ""} · ${projects.filter((p) => p.isActive).length} active`
+            : `${filtered.length} climb${filtered.length !== 1 ? "s" : ""} · ${sentCount} clean`}
         </div>
       </div>
 
-      {/* ── Results ────────────────────────────────────────────────── */}
-      {groups.length === 0 ? (
+      {/* ── Results — projects view renders per-problem rollup cards ── */}
+      {projectsView ? (
+        <ProjectGroups projects={projects} now={now} />
+      ) : groups.length === 0 ? (
         <div style={emptyCardStyle}>No climbs match — try removing a filter.</div>
       ) : (
         groups.map((group) => (
@@ -366,6 +458,137 @@ function ClimbList({ attempts }: { attempts: BrowserAttempt[] }) {
         );
       })}
     </div>
+  );
+}
+
+type DecoratedProject = {
+  problemId: string;
+  problemName: string;
+  grade: string;
+  gradeSystem: ClimbGradeSystem;
+  locationId: string | null;
+  locationName: string | null;
+  attemptCount: number;
+  lastAttempt: Date;
+  bestMoves: { completed: number; total: number } | null;
+  lastNotes: string | null;
+  isActive: boolean;
+};
+
+function ProjectGroups({ projects, now }: { projects: DecoratedProject[]; now: Date }) {
+  if (projects.length === 0) {
+    return (
+      <div style={emptyCardStyle}>
+        No projects match. Log attempts on named problems (without a clean send) to track them here.
+      </div>
+    );
+  }
+  type Group = { locationId: string | null; locationName: string; items: DecoratedProject[] };
+  const map = new Map<string, Group>();
+  for (const p of projects) {
+    const key = p.locationId ?? "__nl__";
+    const g = map.get(key) ?? {
+      locationId: p.locationId,
+      locationName: p.locationName ?? "Unknown location",
+      items: [],
+    };
+    g.items.push(p);
+    map.set(key, g);
+  }
+  for (const g of map.values()) {
+    g.items.sort((a, b) => {
+      const gd = gradeSort(b.grade, b.gradeSystem) - gradeSort(a.grade, a.gradeSystem);
+      if (gd !== 0) return gd;
+      return b.lastAttempt.getTime() - a.lastAttempt.getTime();
+    });
+  }
+  const groups = [...map.values()].sort((a, b) => {
+    const aLast = Math.max(...a.items.map((i) => i.lastAttempt.getTime()));
+    const bLast = Math.max(...b.items.map((i) => i.lastAttempt.getTime()));
+    return bLast - aLast;
+  });
+  return (
+    <>
+      {groups.map((group) => (
+        <section key={group.locationId ?? "__nl__"} style={groupCardStyle}>
+          <div style={groupHeaderStyle}>
+            <span style={{ fontSize: 14, fontWeight: 900, flex: 1, minWidth: 0 }}>{group.locationName}</span>
+            {group.locationId ? (
+              <Link href={`/activities/climbing/locations/${encodeURIComponent(group.locationId)}`} style={detailLinkStyle}>
+                Details →
+              </Link>
+            ) : null}
+          </div>
+          <div className="climbing-detail-grid">
+            {group.items.map((p) => (
+              <ProjectMiniCard key={p.problemId} project={p} now={now} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function ProjectMiniCard({ project, now }: { project: DecoratedProject; now: Date }) {
+  const movesPct = project.bestMoves && project.bestMoves.total > 0
+    ? Math.min(100, Math.round((project.bestMoves.completed / project.bestMoves.total) * 100))
+    : null;
+  const inner = (
+    <div
+      style={{
+        display: "grid",
+        gap: 8,
+        padding: 12,
+        borderRadius: 12,
+        background: project.isActive ? "rgba(167,139,250,0.06)" : "rgba(255,255,255,0.02)",
+        border: project.isActive ? "1px solid rgba(167,139,250,0.32)" : "1px solid rgba(255,255,255,0.06)",
+        cursor: project.locationId ? "pointer" : "default",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={projectGradeChipStyle}>{project.grade}</span>
+        <span style={{ fontSize: 14, fontWeight: 800, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {project.problemName}
+        </span>
+        <span style={project.isActive ? activeChipStyle : dormantChipStyle}>
+          {project.isActive ? "ACTIVE" : "DORMANT"}
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 11.5, opacity: 0.75 }}>
+        <span>{project.attemptCount} attempt{project.attemptCount === 1 ? "" : "s"}</span>
+        {project.bestMoves && project.bestMoves.total > 0 ? (
+          <span>· {project.bestMoves.completed}/{project.bestMoves.total} moves</span>
+        ) : null}
+        <span>· last {formatAppDate(project.lastAttempt, { month: "short", day: "numeric" })} ({relativeFromNow(project.lastAttempt, now)})</span>
+      </div>
+      {movesPct !== null ? (
+        <div style={movesTrackStyle} aria-hidden>
+          <div style={{ ...movesFillStyle, width: `${movesPct}%` }} />
+        </div>
+      ) : null}
+      {project.lastNotes ? (
+        <p
+          style={{
+            fontSize: 12, lineHeight: 1.4, margin: 0, opacity: 0.85, fontStyle: "italic",
+            whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box",
+            WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          }}
+        >
+          &ldquo;{project.lastNotes}&rdquo;
+        </p>
+      ) : null}
+    </div>
+  );
+  if (!project.locationId) return inner;
+  return (
+    <Link
+      href={`/activities/climbing/locations/${encodeURIComponent(project.locationId)}`}
+      style={{ textDecoration: "none", color: "inherit" }}
+      aria-label={`Open ${project.locationName} to see ${project.problemName}`}
+    >
+      {inner}
+    </Link>
   );
 }
 
@@ -552,4 +775,54 @@ const climbRowStyle: CSSProperties = {
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(255,255,255,0.02)",
+};
+
+const projectGradeChipStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  padding: "4px 10px",
+  borderRadius: 8,
+  background: "rgba(167,139,250,0.12)",
+  color: "rgba(196,181,253,0.95)",
+  border: "1px solid rgba(167,139,250,0.32)",
+  minWidth: 44,
+  textAlign: "center",
+  flexShrink: 0,
+};
+
+const activeChipStyle: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 900,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(167,139,250,0.4)",
+  background: "rgba(167,139,250,0.14)",
+  color: "rgba(196,181,253,0.95)",
+  letterSpacing: 0.5,
+  flexShrink: 0,
+};
+
+const dormantChipStyle: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 900,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  color: "rgba(255,255,255,0.6)",
+  letterSpacing: 0.5,
+  flexShrink: 0,
+};
+
+const movesTrackStyle: CSSProperties = {
+  height: 5,
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.06)",
+  overflow: "hidden",
+};
+
+const movesFillStyle: CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: "rgba(167,139,250,0.85)",
 };
