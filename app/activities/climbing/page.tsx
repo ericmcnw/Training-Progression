@@ -56,11 +56,12 @@ import {
 } from "@/lib/climb-stats";
 import {
   buildClimbingChartData,
+  buildClimbingTrainingChartData,
   DISCIPLINE_LABEL,
   DISCIPLINE_ORDER,
   type ClimbingChartWeeks,
-  type ClimbingStackBy,
 } from "@/lib/activities/climbing-chart";
+import { effectiveRoutineDomain } from "@/lib/routines";
 import { sportAccent } from "@/lib/sport-accent";
 import { startOfWeekMonday } from "@/lib/week";
 
@@ -118,7 +119,6 @@ export default async function ClimbingHubPage(props: {
 }) {
   const searchParams = (await props.searchParams) ?? {};
   const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
-  const chartStackBy: ClimbingStackBy = getParam(searchParams, "stack") === "venue" ? "venue" : "discipline";
   const recentExpanded = getParam(searchParams, "recent") === "all";
   const disciplineFilterParam = getParam(searchParams, "discipline");
 
@@ -159,12 +159,20 @@ export default async function ClimbingHubPage(props: {
     prisma.climbProblem.findMany({
       select: { id: true, name: true, grade: true, gradeSystem: true, locationId: true },
     }),
+    // Supporting-training logs — bilingual per CLAUDE.md rule 2: legacy
+    // metadata-tagged routines OR the newer supportsSports field. SESSION
+    // kind excluded (those are the climbing sessions themselves); CARDIO
+    // included so a trail run tagged as climbing support shows up as a
+    // blue segment in the training chart's domain breakdown.
     prisma.routineLog.findMany({
       where: {
         routine: {
           isDeleted: false,
-          kind: { notIn: ["SESSION", "CARDIO"] },
-          metadataGroups: { some: { group: { slug: "climbing" } } },
+          kind: { not: "SESSION" },
+          OR: [
+            { metadataGroups: { some: { group: { slug: "climbing" } } } },
+            { supportsSports: { has: "climbing" } },
+          ],
         },
       },
       orderBy: { performedAt: "desc" },
@@ -172,7 +180,7 @@ export default async function ClimbingHubPage(props: {
         id: true,
         performedAt: true,
         routineId: true,
-        routine: { select: { name: true } },
+        routine: { select: { name: true, domain: true, kind: true, subtype: true } },
       },
       take: 400,
     }),
@@ -276,7 +284,7 @@ export default async function ClimbingHubPage(props: {
   }
   const disciplineFilter = parseDisciplineFilter(disciplineFilterParam, activeDisciplinesAllTime);
 
-  // ── Chart data — climbing (stacked by discipline or venue) + training ───
+  // ── Chart 1 — climbing sessions, hue = discipline, shade = venue ────────
   const chartData = buildClimbingChartData(
     sessions.map((s) => ({
       id: s.id,
@@ -287,19 +295,22 @@ export default async function ClimbingHubPage(props: {
       disciplineCounts: s.disciplineCounts,
       venue: s.venue,
     })),
-    {
-      weeks: chartWeeks,
-      now,
-      stackBy: chartStackBy,
-      trainingSessions: trainingLogs.map((l) => ({
-        id: l.id,
-        date: l.performedAt,
-        routineId: l.routineId,
-        routineName: l.routine.name,
-      })),
-    }
+    { weeks: chartWeeks, now }
   );
   const chartHasData = chartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
+
+  // ── Chart 2 — supporting training, stacked by domain ────────────────────
+  const trainingChartData = buildClimbingTrainingChartData(
+    trainingLogs.map((l) => ({
+      id: l.id,
+      date: l.performedAt,
+      routineId: l.routineId,
+      routineName: l.routine.name,
+      domain: effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype),
+    })),
+    { weeks: chartWeeks, now }
+  );
+  const trainingChartHasData = trainingChartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
 
   // ── Pyramid (filtered by discipline pill, split indoor/outdoor) ─────────
   const pyramidAttempts = disciplineFilter === "all"
@@ -454,9 +465,9 @@ export default async function ClimbingHubPage(props: {
         <HubTile href="/activities/climbing/map" label="Map" stat={`${tileTotals.locations} location${tileTotals.locations === 1 ? "" : "s"}`} icon="🗺" />
       </div>
 
-      {/* ── Chart controls — range + stack-color toggle ──────────── */}
+      {/* ── Chart range — applies to both weekly charts below ──────── */}
       <div style={chartPillRowStyle}>
-        <span style={chartPillLabelStyle}>Range</span>
+        <span style={chartPillLabelStyle}>Chart range</span>
         {(["4w", "12w"] as const).map((w) => (
           <Link
             key={w}
@@ -466,32 +477,31 @@ export default async function ClimbingHubPage(props: {
             {w}
           </Link>
         ))}
-        <span style={{ ...chartPillLabelStyle, marginLeft: 8 }}>Color by</span>
-        <Link
-          href={buildHref(searchParams, { stack: undefined })}
-          style={chartStackBy === "discipline" ? pillSelectStyle : pillStyle}
-        >
-          Discipline
-        </Link>
-        <Link
-          href={buildHref(searchParams, { stack: "venue" })}
-          style={chartStackBy === "venue" ? pillSelectStyle : pillStyle}
-        >
-          Indoor/Outdoor
-        </Link>
       </div>
 
-      {/* Climbing + supporting-training per week in one stacked chart.
-          Training rides the top of each bar in violet; tapping a week
-          opens the panel with that week's climbs AND training logs in
-          date order — this replaced the separate Activity Coverage
-          heatmap, which duplicated the same data less readably. */}
+      {/* Chart 1 — climbing sessions. Hue = discipline (boulder orange,
+          sport lead red, top rope sky), shade = venue (indoor light,
+          outdoor deep). Only combos with data render. */}
       {chartHasData ? (
         <WeeklyBarChartWithSessions
-          title={`Climbing & Training per Week — Last ${chartWeeks} Weeks`}
+          title={`Climbing Sessions per Week — Last ${chartWeeks} Weeks`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}
+          unit=""
+          decimals={0}
+          compact={false}
+        />
+      ) : null}
+
+      {/* Chart 2 — supporting training (Fingers, Pull Day, tagged cardio,
+          …) stacked by domain so the support mix reads at a glance. */}
+      {trainingChartHasData ? (
+        <WeeklyBarChartWithSessions
+          title={`Climbing Training per Week — Last ${chartWeeks} Weeks`}
+          weekLabels={trainingChartData.weekLabels}
+          series={trainingChartData.series}
+          sessionsByWeek={trainingChartData.sessionsByWeek}
           unit=""
           decimals={0}
           compact={false}
