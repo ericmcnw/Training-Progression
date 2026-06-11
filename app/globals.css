@@ -1792,6 +1792,24 @@ input.ghostInput::placeholder {
   border-radius: 12px;
 }
 
+/* Frequency heatmap cells are rendered as buttons when interactive
+   (back-date missed days, view a day's logs). The global `button { ... }`
+   rule above adds min-height: 44px + green hover outline + box-shadow
+   which would stretch the 16x16 cells into 46x16 bars and add a thick
+   green halo on every hover. Reset those globals so the heatmap cells
+   render at their explicit inline size. */
+.freqHeatmapCell {
+  min-height: 0 !important;
+  padding: 0 !important;
+  font-weight: inherit !important;
+  background: transparent;
+}
+.freqHeatmapCell:hover,
+.freqHeatmapCell:focus-visible {
+  border-color: inherit !important;
+  box-shadow: none !important;
+}
+
 /* Sticky filter bar (used by Phase 4 browse-page filters and Phase 1 problem
    library tabs). Stays in view while scrolling long lists. The blur looks
    great on iOS Safari but degrades gracefully elsewhere. */

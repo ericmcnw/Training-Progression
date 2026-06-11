@@ -141,14 +141,21 @@ export default function FrequencyHeatmap({
                     ...cellStyle(cellState, isFuture, CELL_SIZE, accentColor, accentBorderColor),
                     ...(isToday ? todayRing : null),
                   };
+                  // NOTE: minHeight: 0 + font: inherit on the button styles
+                  // below — global CSS in globals.css sets `button { min-height:
+                  // 44px; padding: 10px 14px; font-weight: 700; }` for tap-
+                  // target safety, which would stretch cells from 16x16 into
+                  // ~46x16 bars. The className `freqHeatmapCell` also tames
+                  // the global :hover green outline.
                   if (cellState === "missed" && retroactiveLogRoutineId) {
                     return (
                       <button
                         key={ymd}
                         type="button"
+                        className="freqHeatmapCell"
                         onClick={() => openDrawer(retroactiveLogRoutineId, { defaultDate: ymd })}
                         title={`${dateLabel} — missed · tap to log`}
-                        style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, border: cellSx.border ?? "none" }}
+                        style={{ ...cellSx, cursor: "pointer", display: "block", padding: 0, minHeight: 0, border: cellSx.border ?? "none" }}
                         aria-label={`Back-date a log for ${dateLabel}`}
                       />
                     );
@@ -161,6 +168,7 @@ export default function FrequencyHeatmap({
                       <button
                         key={ymd}
                         type="button"
+                        className="freqHeatmapCell"
                         onClick={() => onDayClick(ymd)}
                         title={`${dateLabel} — ${cellState} (${dayLogs.length} log${dayLogs.length > 1 ? "s" : ""}) · tap to view`}
                         style={{
@@ -168,6 +176,7 @@ export default function FrequencyHeatmap({
                           cursor: "pointer",
                           display: "block",
                           padding: 0,
+                          minHeight: 0,
                           border: cellSx.border ?? "none",
                           ...(isOpen ? openCellRing : null),
                         }}
