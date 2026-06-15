@@ -461,6 +461,7 @@ model ClimbArea {
 
   location  ClimbLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
   attempts  ClimbAttempt[]
+  media     ClimbMedia[]
 
   @@unique([locationId, name])
   @@index([locationId])
@@ -516,10 +517,10 @@ model ClimbProblem {
   @@index([name])
 }
 
-// Photos and external links attached to a ClimbLocation or ClimbProblem.
-// Exactly one of locationId / problemId is set per row — enforced in the
-// server action, not at the DB level (Postgres CHECK constraints get noisy
-// in Prisma migrations).
+// Photos and external links attached to a ClimbLocation, ClimbArea, or
+// ClimbProblem. Exactly one of locationId / areaId / problemId is set per
+// row — enforced in the server action, not at the DB level (Postgres CHECK
+// constraints get noisy in Prisma migrations).
 //
 // Storage: PHOTO rows point at a URL we own (e.g. /uploads/climbing/yyyy/mm/
 // {cuid}.jpg in dev; Vercel Blob or R2 in prod). LINK rows point at an
@@ -539,12 +540,15 @@ model ClimbMedia {
 
   locationId String?
   location   ClimbLocation? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  areaId     String?
+  area       ClimbArea?     @relation(fields: [areaId], references: [id], onDelete: Cascade)
   problemId  String?
   problem    ClimbProblem?  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
   @@index([locationId, sortOrder])
+  @@index([areaId, sortOrder])
   @@index([problemId, sortOrder])
 }
 

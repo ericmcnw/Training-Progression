@@ -16,6 +16,7 @@ import { addClimbLink, uploadClimbPhoto } from "@/app/activities/climbing/media/
 
 type Target =
   | { kind: "location"; locationId: string }
+  | { kind: "area"; areaId: string }
   | { kind: "problem"; problemId: string };
 
 export default function MediaUploader({
@@ -34,6 +35,7 @@ export default function MediaUploader({
 
   function attachTargetFormData(formData: FormData) {
     if (target.kind === "location") formData.set("locationId", target.locationId);
+    else if (target.kind === "area") formData.set("areaId", target.areaId);
     else formData.set("problemId", target.problemId);
   }
 
@@ -71,7 +73,11 @@ export default function MediaUploader({
         await addClimbLink({
           url: linkUrl,
           caption: linkCaption || null,
-          ...(target.kind === "location" ? { locationId: target.locationId } : { problemId: target.problemId }),
+          ...(target.kind === "location"
+            ? { locationId: target.locationId }
+            : target.kind === "area"
+              ? { areaId: target.areaId }
+              : { problemId: target.problemId }),
         });
         setLinkUrl("");
         setLinkCaption("");

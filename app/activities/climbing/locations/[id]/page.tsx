@@ -36,6 +36,7 @@ import MediaUploader from "@/app/components/climbing/MediaUploader";
 import LocationDangerZone from "./LocationDangerZone";
 import MiniLocationMap from "./MiniLocationMap";
 import ProblemLibrary, { type ProblemLibraryEntry } from "./ProblemLibrary";
+import AreaLibrary, { type AreaLibraryEntry } from "./AreaLibrary";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function ClimbLocationDetailPage(props: {
 }) {
   const { id } = await Promise.resolve(props.params);
 
-  const [location, attempts, problems, mediaRows, problemMediaRows, siblings, areaRows] = await Promise.all([
+  const [location, attempts, problems, mediaRows, problemMediaRows, areaMediaRows, siblings, areaRows] = await Promise.all([
     prisma.climbLocation.findUnique({
       where: { id },
       select: {
@@ -126,6 +127,22 @@ export default async function ClimbLocationDetailPage(props: {
         width: true,
         height: true,
         problemId: true,
+      },
+    }),
+    // Area-scoped media for every area at this location. Same one-query +
+    // in-memory grouping approach as problem media.
+    prisma.climbMedia.findMany({
+      where: { area: { locationId: id } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        kind: true,
+        url: true,
+        thumbnailUrl: true,
+        caption: true,
+        width: true,
+        height: true,
+        areaId: true,
       },
     }),
     // Other locations — used by the merge-into dropdown in the danger zone.
@@ -309,13 +326,39 @@ export default async function ClimbLocationDetailPage(props: {
       target.lastVisit = a.sessionLog.performedAt;
     }
   }
-  const areaSummaries = [...areaById.values()].sort((a, b) => {
-    // Areas with logs come first (descending by recency), then unused ones.
-    if (a.climbCount > 0 && b.climbCount === 0) return -1;
-    if (b.climbCount > 0 && a.climbCount === 0) return 1;
-    if (a.lastVisit && b.lastVisit) return b.lastVisit.getTime() - a.lastVisit.getTime();
-    return a.name.localeCompare(b.name);
-  });
+  // Group area-scoped media by areaId so each area card gets its own gallery.
+  const areaMediaByAreaId = new Map<string, GalleryMediaItem[]>();
+  for (const m of areaMediaRows) {
+    if (!m.areaId) continue;
+    const list = areaMediaByAreaId.get(m.areaId) ?? [];
+    list.push({
+      id: m.id,
+      kind: m.kind,
+      url: m.url,
+      thumbnailUrl: m.thumbnailUrl,
+      caption: m.caption,
+      width: m.width,
+      height: m.height,
+    });
+    areaMediaByAreaId.set(m.areaId, list);
+  }
+
+  const areaSummaries: AreaLibraryEntry[] = [...areaById.values()]
+    .sort((a, b) => {
+      // Areas with logs come first (descending by recency), then unused ones.
+      if (a.climbCount > 0 && b.climbCount === 0) return -1;
+      if (b.climbCount > 0 && a.climbCount === 0) return 1;
+      if (a.lastVisit && b.lastVisit) return b.lastVisit.getTime() - a.lastVisit.getTime();
+      return a.name.localeCompare(b.name);
+    })
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      climbCount: a.climbCount,
+      sentCount: a.sentCount,
+      lastVisit: a.lastVisit,
+      media: areaMediaByAreaId.get(a.id) ?? [],
+    }));
 
   const media: GalleryMediaItem[] = mediaRows.map((m) => ({
     id: m.id,
@@ -419,44 +462,9 @@ export default async function ClimbLocationDetailPage(props: {
         {areaSummaries.length > 0 && (
           <SectionCard
             title={`Areas (${areaSummaries.length})`}
-            subtitle="Sectors / walls inside this location. Tap to filter your climbs."
+            subtitle="Sectors / walls inside this location. Tap Photos to add a topo, or Browse to filter your climbs."
           >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: 8,
-              }}
-            >
-              {areaSummaries.map((a) => (
-                <Link
-                  key={a.id}
-                  href={`/activities/climbing/climbs?location=${encodeURIComponent(location.id)}&area=${encodeURIComponent(a.id)}`}
-                  style={{
-                    display: "grid",
-                    gap: 4,
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    textDecoration: "none",
-                    color: "inherit",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 900 }}>{a.name}</div>
-                  <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700 }}>
-                    {a.climbCount === 0
-                      ? "No climbs yet"
-                      : `${a.climbCount} climb${a.climbCount === 1 ? "" : "s"} · ${a.sentCount} sent`}
-                  </div>
-                  {a.lastVisit && (
-                    <div style={{ fontSize: 10, opacity: 0.55, fontWeight: 700 }}>
-                      Last: {formatAppDate(a.lastVisit, { month: "short", day: "numeric", year: "numeric" })}
-                    </div>
-                  )}
-                </Link>
-              ))}
-            </div>
+            <AreaLibrary locationId={location.id} entries={areaSummaries} />
           </SectionCard>
         )}
 

@@ -84,6 +84,7 @@ async function dedupLocations() {
           });
           if (clash) {
             await tx.climbAttempt.updateMany({ where: { areaId: area.id }, data: { areaId: clash.id } });
+            await tx.climbMedia.updateMany({ where: { areaId: area.id }, data: { areaId: clash.id } });
             await tx.climbArea.delete({ where: { id: area.id } });
           } else {
             await tx.climbArea.update({ where: { id: area.id }, data: { locationId: canonical.id } });
@@ -140,6 +141,7 @@ async function dedupAreas() {
     for (const d of dups) {
       await prisma.$transaction(async (tx) => {
         await tx.climbAttempt.updateMany({ where: { areaId: d.id }, data: { areaId: canonical.id } });
+        await tx.climbMedia.updateMany({ where: { areaId: d.id }, data: { areaId: canonical.id } });
         await tx.climbArea.delete({ where: { id: d.id } });
       });
       console.log(`  ✓ merged "${d.name}" into "${canonical.name}"`);

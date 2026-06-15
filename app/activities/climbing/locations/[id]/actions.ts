@@ -191,6 +191,9 @@ export async function mergeClimbLocations(input: { sourceId: string; targetId: s
       });
       if (clash) {
         await tx.climbAttempt.updateMany({ where: { areaId: area.id }, data: { areaId: clash.id } });
+        // Move any area-scoped photos/links onto the surviving area before
+        // deleting, or they'd cascade away with the source area row.
+        await tx.climbMedia.updateMany({ where: { areaId: area.id }, data: { areaId: clash.id } });
         await tx.climbArea.delete({ where: { id: area.id } });
       } else {
         await tx.climbArea.update({ where: { id: area.id }, data: { locationId: input.targetId } });

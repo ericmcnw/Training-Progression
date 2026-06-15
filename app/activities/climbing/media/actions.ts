@@ -10,32 +10,45 @@ import {
 import { validateLinkUrl } from "@/lib/climb-media-shared";
 
 type AttachTarget =
-  | { locationId: string; problemId?: never }
-  | { problemId: string; locationId?: never };
+  | { locationId: string; areaId?: never; problemId?: never }
+  | { areaId: string; locationId?: never; problemId?: never }
+  | { problemId: string; locationId?: never; areaId?: never };
 
-function validateTarget(input: { locationId?: string | null; problemId?: string | null }): AttachTarget {
+function validateTarget(input: {
+  locationId?: string | null;
+  areaId?: string | null;
+  problemId?: string | null;
+}): AttachTarget {
   const hasLocation = typeof input.locationId === "string" && input.locationId.length > 0;
+  const hasArea = typeof input.areaId === "string" && input.areaId.length > 0;
   const hasProblem = typeof input.problemId === "string" && input.problemId.length > 0;
-  if (hasLocation === hasProblem) {
-    // Both set or both null/empty — neither is valid.
-    throw new Error("Media must attach to exactly one of a location or a problem");
+  const setCount = Number(hasLocation) + Number(hasArea) + Number(hasProblem);
+  if (setCount !== 1) {
+    throw new Error("Media must attach to exactly one of a location, area, or problem");
   }
-  return hasLocation
-    ? { locationId: input.locationId as string }
-    : { problemId: input.problemId as string };
+  if (hasLocation) return { locationId: input.locationId as string };
+  if (hasArea) return { areaId: input.areaId as string };
+  return { problemId: input.problemId as string };
 }
 
 // After mutating media, refresh both possible parent paths. We don't always
 // know which one is being viewed, so blanket-revalidate the surfaces that
 // render galleries. Cheap because force-dynamic anyway.
+// Where-clause picking the parent for the sortOrder aggregate.
+function parentWhere(target: AttachTarget) {
+  if ("locationId" in target) return { locationId: target.locationId };
+  if ("areaId" in target) return { areaId: target.areaId };
+  return { problemId: target.problemId };
+}
+
 function revalidateMediaParents(target: AttachTarget) {
   if ("locationId" in target) {
     revalidatePath(`/activities/climbing/locations/${target.locationId}`);
     revalidatePath("/activities/climbing/map");
   } else {
-    // Problem media surfaces on the location detail page (inside the
-    // problem library) — we don't have the locationId here without a
-    // round-trip, so just revalidate the climbing area.
+    // Area / problem media surfaces on the location detail page — we don't
+    // have the locationId here without a round-trip, so just revalidate the
+    // whole climbing layout.
     revalidatePath("/activities/climbing", "layout");
   }
 }
@@ -43,13 +56,14 @@ function revalidateMediaParents(target: AttachTarget) {
 export async function uploadClimbPhoto(formData: FormData) {
   const file = formData.get("file");
   const locationId = (formData.get("locationId") as string | null) ?? null;
+  const areaId = (formData.get("areaId") as string | null) ?? null;
   const problemId = (formData.get("problemId") as string | null) ?? null;
   const captionRaw = formData.get("caption");
   const caption = typeof captionRaw === "string" && captionRaw.trim() ? captionRaw.trim() : null;
 
   if (!(file instanceof File)) throw new Error("No file uploaded");
 
-  const target = validateTarget({ locationId, problemId });
+  const target = validateTarget({ locationId, areaId, problemId });
 
   let saved;
   try {
@@ -64,7 +78,7 @@ export async function uploadClimbPhoto(formData: FormData) {
   // for the default "no manual reorder" case.
   const maxOrder = await prisma.climbMedia.aggregate({
     _max: { sortOrder: true },
-    where: "locationId" in target ? { locationId: target.locationId } : { problemId: target.problemId },
+    where: parentWhere(target),
   });
   const nextOrder = (maxOrder._max.sortOrder ?? -1) + 1;
 
@@ -86,6 +100,7 @@ export async function uploadClimbPhoto(formData: FormData) {
 export async function addClimbLink(input: {
   url: string;
   locationId?: string | null;
+  areaId?: string | null;
   problemId?: string | null;
   caption?: string | null;
 }) {
@@ -95,7 +110,7 @@ export async function addClimbLink(input: {
 
   const maxOrder = await prisma.climbMedia.aggregate({
     _max: { sortOrder: true },
-    where: "locationId" in target ? { locationId: target.locationId } : { problemId: target.problemId },
+    where: parentWhere(target),
   });
   const nextOrder = (maxOrder._max.sortOrder ?? -1) + 1;
 
@@ -156,13 +171,14 @@ export async function reorderClimbMedia(input: { ids: string[] }) {
   if (input.ids.length === 0) return;
   const records = await prisma.climbMedia.findMany({
     where: { id: { in: input.ids } },
-    select: { id: true, locationId: true, problemId: true },
+    select: { id: true, locationId: true, areaId: true, problemId: true },
   });
   if (records.length !== input.ids.length) throw new Error("Some media records not found");
 
   const locationIds = new Set(records.map((r) => r.locationId).filter(Boolean));
+  const areaIds = new Set(records.map((r) => r.areaId).filter(Boolean));
   const problemIds = new Set(records.map((r) => r.problemId).filter(Boolean));
-  if (locationIds.size + problemIds.size !== 1) {
+  if (locationIds.size + areaIds.size + problemIds.size !== 1) {
     throw new Error("Reorder targets must share one parent");
   }
 
