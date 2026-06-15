@@ -43,6 +43,7 @@ const SPORT_ACTIVITY_COLORS: Record<string, string> = {
   skiing:         "rgba(99,102,241,0.9)",   // indigo — clear blue-purple, distinct from violet + cyan
   skateboarding:  "rgba(244,114,182,0.9)",  // pink
   basketball:     "rgba(220,38,38,0.9)",    // red — moved off the orange family
+  spikeball:      "rgba(250,204,21,0.9)",   // yellow — matches the Spikeball ball
   tennis:         "rgba(132,204,22,0.9)",   // chartreuse
   golf:           "rgba(40,212,160,0.9)",   // teal-green
 };

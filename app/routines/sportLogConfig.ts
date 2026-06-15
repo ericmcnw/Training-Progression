@@ -111,6 +111,21 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { key: "score", label: "Score", type: "text", placeholder: "e.g. 6-4, 6-3" },
     ],
   },
+  spikeball: {
+    locationPlaceholder: "Park / yard / court",
+    sessionTypeLabel: "Mode",
+    sessionTypeOptions: [
+      { value: "casual", label: "Casual" },
+      { value: "competitive", label: "Competitive" },
+      { value: "tournament", label: "Tournament" },
+    ],
+    extras: [
+      { key: "format", label: "Format", type: "text", placeholder: "e.g. 2v2, 1v1" },
+      { key: "gamesPlayed", label: "Games played", type: "number", numericHint: "integer" },
+      { key: "gamesWon", label: "Games won", type: "number", numericHint: "integer" },
+      { key: "opponents", label: "Opponents", type: "text" },
+    ],
+  },
 };
 
 export function getSportLogConfig(slug: string): SportLogConfig {

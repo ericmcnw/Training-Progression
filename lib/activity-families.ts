@@ -53,6 +53,7 @@ const SPORT_ACTIVITIES: ActivityRegistryEntry[] = [
   { slug: "skiing", label: "Skiing", family: "sports", eyebrow: "Board sport", sortHint: 12 },
   { slug: "skateboarding", label: "Skateboarding", family: "sports", eyebrow: "Board sport", sortHint: 13 },
   { slug: "basketball", label: "Basketball", family: "sports", eyebrow: "Team sport", sortHint: 30 },
+  { slug: "spikeball", label: "Spikeball", family: "sports", eyebrow: "Yard sport", sortHint: 32 },
   { slug: "tennis", label: "Tennis", family: "sports", eyebrow: "Racquet sport", sortHint: 40 },
   { slug: "golf", label: "Golf", family: "sports", eyebrow: "Sport · Outdoor", sortHint: 50 },
 ];

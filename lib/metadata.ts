@@ -94,6 +94,7 @@ export const METADATA_GROUP_SEEDS: MetadataSeedGroup[] = [
   { slug: "hiking", label: "Hiking", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "outdoor"] },
   { slug: "rowing", label: "Rowing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "basketball", label: "Basketball", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
+  { slug: "spikeball", label: "Spikeball", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "outdoor"] },
   { slug: "tennis", label: "Tennis", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "golf", label: "Golf", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "surfing", label: "Surfing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },

@@ -11,6 +11,7 @@ export const SPORT_ACCENT: Record<string, string> = {
   skiing: "rgba(99,102,241,0.9)",
   skateboarding: "rgba(244,114,182,0.9)",
   basketball: "rgba(220,38,38,0.9)",
+  spikeball: "rgba(250,204,21,0.9)",
   tennis: "rgba(132,204,22,0.9)",
   golf: "rgba(40,212,160,0.9)",
 };

@@ -230,6 +230,7 @@ const COMPATIBLE_ACTIVITY_SPOTS_RAW: Record<string, string[]> = {
   "rowing":            [],
   "skateboarding":     [],
   "basketball":        [],
+  "spikeball":         [],
   "tennis":            [],
   "golf":              [],
 };
