@@ -13,10 +13,16 @@ import {
   isSessionKind,
   isWorkoutKind,
 } from "@/lib/routines";
+import { loadProfileStats } from "@/lib/profile-stats";
+import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
+import { getActivityEntry } from "@/lib/activity-families";
 import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
 import MonthlySummary from "./MonthlySummary";
 import YearlySummary from "./YearlySummary";
+import ProfileHeader from "@/app/profile/ProfileHeader";
+import ProfileMilestones from "@/app/profile/ProfileMilestones";
+import ProfileSettings from "@/app/profile/ProfileSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +98,21 @@ export default async function ManualLogPageContent({
 
   // ── Calendar (current month in app timezone) ─────────────────────────────────
   const todayYmd = toAppYmd(now);
+
+  // Profile-view-only data: lifetime stats + milestones + sport settings.
+  // Skipped on the history view since none of it renders there.
+  const [profileStats, selectedSportsRaw, availableSports] = showHistory
+    ? [null, [], []]
+    : await Promise.all([
+        loadProfileStats(todayYmd),
+        listSelectedSports(),
+        listUnselectedSports(),
+      ]);
+  const selectedSports = selectedSportsRaw.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "",
+  }));
   const [calYear, calMonthNum] = todayYmd.split("-").slice(0, 2).map(Number);
   const calMonthIdx = calMonthNum - 1;
   const daysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate();
@@ -147,36 +168,23 @@ export default async function ManualLogPageContent({
     >
       <div style={{ display: "grid", gap: 8 }}>
         <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>
-          Profile & History
+          Profile
         </h1>
-        <div className="mobilePageSubtitle" style={{ opacity: 0.75, fontSize: 13 }}>
-          Log history, settings, and account preferences will live here.
-        </div>
       </div>
 
-      {/* ── Overview ── */}
-      <section className="mobileSectionCard" style={panel}>
-        <div className="mobileSectionHeader" style={panelHeader}>OVERVIEW</div>
-        <div className="mobileSectionBody" style={{ padding: 14, display: "grid", gap: 14 }}>
-          <div className="mobileCard" style={heroCard}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 900, opacity: 0.74 }}>
-                PROFILE HOME
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 900 }}>Your log archive and profile home.</div>
-              <div style={{ fontSize: 13, opacity: 0.76, maxWidth: 620 }}>
-                Settings and account preferences will live here as they are added.
-              </div>
-            </div>
-            <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
-              <Link href="/profile?view=history" style={primaryLinkBtn}>
-                Log History
-              </Link>
-              <Link href="/activities" style={linkBtn}>Activities</Link>
-              <Link href="/log" style={linkBtn}>Routines</Link>
-              <Link href="/goals" style={linkBtn}>Goals</Link>
-              <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>
-            </div>
+      {/* ── Athlete card + quick nav (profile view only) ── */}
+      {!showHistory && profileStats && (
+        <section style={{ display: "grid", gap: 14 }}>
+          <ProfileHeader stats={profileStats} />
+
+          <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
+            <Link href="/profile?view=history" style={primaryLinkBtn}>
+              Log History
+            </Link>
+            <Link href="/activities" style={linkBtn}>Activities</Link>
+            <Link href="/log" style={linkBtn}>Routines</Link>
+            <Link href="/goals" style={linkBtn}>Goals</Link>
+            <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>
           </div>
 
           <div style={summaryGrid}>
@@ -202,8 +210,18 @@ export default async function ManualLogPageContent({
               <div style={summaryMeta}>Ready to log</div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* ── Personal bests ── */}
+      {!showHistory && profileStats && (
+        <section className="mobileSectionCard" style={panel}>
+          <div className="mobileSectionHeader" style={panelHeader}>PERSONAL BESTS</div>
+          <div className="mobileSectionBody" style={{ padding: 14 }}>
+            <ProfileMilestones milestones={profileStats.milestones} />
+          </div>
+        </section>
+      )}
 
       {/* Weekly + monthly summary modules. Replace the old "This Week / This
           Month" single-number cards above with richer at-a-glance modules
@@ -225,6 +243,16 @@ export default async function ManualLogPageContent({
             <Link href="/profile?view=history" style={linkBtn}>
               Open Full Log History
             </Link>
+          </div>
+        </section>
+      )}
+
+      {/* ── Settings ── */}
+      {!showHistory && (
+        <section className="mobileSectionCard" style={panel}>
+          <div className="mobileSectionHeader" style={panelHeader}>SETTINGS</div>
+          <div className="mobileSectionBody" style={{ padding: 14 }}>
+            <ProfileSettings selectedSports={selectedSports} availableSports={availableSports} />
           </div>
         </section>
       )}
@@ -614,15 +642,6 @@ const panelHeader: React.CSSProperties = {
   background: "rgba(128,128,128,0.14)",
   borderBottom: "1px solid rgba(128,128,128,0.25)",
   fontWeight: 900,
-};
-
-const heroCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.26)",
-  borderRadius: 18,
-  padding: 18,
-  background: "linear-gradient(180deg, rgba(128,128,128,0.14), rgba(128,128,128,0.06))",
-  display: "grid",
-  gap: 14,
 };
 
 const heroActionRow: React.CSSProperties = {
