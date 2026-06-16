@@ -711,11 +711,6 @@ export default function WorkoutExerciseEditor({
 
                   {/* Block action row */}
                   <div style={styles.blockActionRow}>
-                    {block.lastRows?.length ? (
-                      <span style={styles.lastHint}>
-                        Hints from {block.lastDate ?? "last session"} · tap ✓ to fill
-                      </span>
-                    ) : null}
                     <div style={{ flex: 1 }} />
                     <button
                       type="button"
@@ -1266,15 +1261,6 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-  } as React.CSSProperties,
-
-  lastHint: {
-    fontSize: 11,
-    fontWeight: 700,
-    opacity: 0.55,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
   } as React.CSSProperties,
 
   removeBtn: {
