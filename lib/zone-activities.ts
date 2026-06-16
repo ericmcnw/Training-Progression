@@ -3,6 +3,20 @@ import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 
 type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
+// Coarse muscle/training tags used on exercises don't match the granular body-
+// zone group slugs, so they'd light up nothing on the map. Expand them to the
+// zone groups they actually cover. (`back` and `abductors` exist as groups but
+// have no zone; `core` is a training group, not a muscle group.)
+const ZONE_GROUP_ALIASES: Record<string, string[]> = {
+  back: ["upper-back", "lats"],
+  core: ["abs", "obliques"],
+  abductors: ["glute-medius"],
+};
+
+function expandToZoneGroups(slug: string): string[] {
+  return ZONE_GROUP_ALIASES[slug] ?? [slug];
+}
+
 function summarizeSets(sets: Array<{ reps: number | null; seconds: number | null; weightLb: number | null }>) {
   const setCount = sets.length;
   const heaviest = Math.max(0, ...sets.map((set) => set.weightLb ?? 0));
@@ -79,20 +93,25 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     select: { slug: true },
   });
   const muscleGroupSlugs = new Set(allMuscleGroups.map((group) => group.slug));
+  // A slug is usable if it's a real muscle group OR an aliasable coarse tag
+  // (back / core / abductors) that expands to zone groups.
+  const isMappable = (slug: string) => muscleGroupSlugs.has(slug) || Boolean(ZONE_GROUP_ALIASES[slug]);
+  const toZoneGroups = (slugs: string[]) =>
+    Array.from(new Set(slugs.flatMap(expandToZoneGroups).filter((slug) => muscleGroupSlugs.has(slug))));
   const exerciseMuscleSlugs = (entry: (typeof log.exercises)[number]) => {
     const direct = entry.exercise.metadataGroups
-      .filter((g) => g.group.kind === "MUSCLE_GROUP")
-      .map((g) => g.group.slug);
-    if (direct.length > 0) return Array.from(new Set(direct));
-    return Array.from(new Set(inferExerciseMetadataSlugs(entry.exercise.name).filter((slug) => muscleGroupSlugs.has(slug))));
+      .map((g) => g.group.slug)
+      .filter(isMappable);
+    if (direct.length > 0) return toZoneGroups(direct);
+    return toZoneGroups(inferExerciseMetadataSlugs(entry.exercise.name).filter(isMappable));
   };
 
   const exerciseGroupSlugs = new Set(log.exercises.flatMap((entry) => exerciseMuscleSlugs(entry)));
 
   // ── Collect muscle group slugs from the routine itself ────────────────────
-  const routineGroupSlugs = log.routine.metadataGroups
-    .filter((g) => g.group.kind === "MUSCLE_GROUP")
-    .map((g) => g.group.slug);
+  const routineGroupSlugs = toZoneGroups(
+    log.routine.metadataGroups.map((g) => g.group.slug).filter(isMappable)
+  );
 
   // Routine groups that aren't already covered per-exercise get their own entries
   const routineOnlySlugs = routineGroupSlugs.filter((slug) => !exerciseGroupSlugs.has(slug));
