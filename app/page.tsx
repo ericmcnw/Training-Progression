@@ -4,10 +4,18 @@
 
 import HomeShell from "./_home/HomeShell";
 import { getHomeData } from "./_home/data";
+import { getHomeInjuries } from "@/lib/home-injuries";
+import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const data = await getHomeData();
-  return <HomeShell data={data} />;
+  const [data, injuries, factorSuggestions, zones] = await Promise.all([
+    getHomeData(),
+    getHomeInjuries(),
+    getAggravatingFactorSuggestions(),
+    prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } }),
+  ]);
+  return <HomeShell data={data} injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />;
 }

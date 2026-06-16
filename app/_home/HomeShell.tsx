@@ -13,8 +13,20 @@ import MovementPatternsCard from "./MovementPatternsCard";
 import Fab from "./Fab";
 import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
+import HomeInjuriesSection from "./HomeInjuriesSection";
+import type { HomeInjury } from "@/lib/home-injuries";
 
-export default function HomeShell({ data }: { data: HomeData }) {
+export default function HomeShell({
+  data,
+  injuries,
+  factorSuggestions,
+  zones,
+}: {
+  data: HomeData;
+  injuries: HomeInjury[];
+  factorSuggestions: string[];
+  zones: { slug: string; label: string }[];
+}) {
   return (
     <div style={pageRoot} className="homeRoot">
       <AmbientStatusRow
@@ -24,6 +36,8 @@ export default function HomeShell({ data }: { data: HomeData }) {
       />
 
       <Last7DaysStrip stats={data.last7Days} />
+
+      <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
 
       {/* Two columns side-by-side on desktop. Each column flows its cards
           top-to-bottom with no inter-card whitespace beyond the gap, so an
