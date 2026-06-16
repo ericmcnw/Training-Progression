@@ -25,6 +25,15 @@
   gap: 18px;
 }
 
+/* Workout set-row delete button: only needed on desktop (no swipe there).
+   On touch devices, swipe-left-to-delete replaces it. !important overrides
+   the button's inline display. */
+@media (pointer: coarse) {
+  .setRowDeleteBtn {
+    display: none !important;
+  }
+}
+
 :root{
   /* Declares the page as dark so the browser themes native controls to
      match — most importantly, the date/time input's calendar-picker icon
