@@ -339,6 +339,55 @@ model Routine {
   @@index([activityTypeId])
 }
 
+// ── Rotations ───────────────────────────────────────────────────────────────
+// A rotation is an ordered list of slots (Push / Pull / Legs, Upper / Lower,
+// a bro split, …) advanced by LOGGING, not the calendar. Each slot is
+// satisfied by its primary routine OR any mapped covering activity (a climb
+// covers Pull, a long hike covers Legs). The Plan page recommends the first
+// unsatisfied slot in the current round. Distinct from the calendar-anchored
+// SchedulePlan model — that fires routines on dates; this advances on logs.
+model Rotation {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slots RotationSlot[]
+
+  @@index([isActive])
+}
+
+model RotationSlot {
+  id         String @id @default(cuid())
+  rotationId String
+  position   Int    @default(0)
+  name       String
+  // The routine you'd normally do for this slot. Optional — a slot can be
+  // satisfied purely by covering activities. Plain id (not an FK): routines
+  // are soft-deleted, and any missing ref is handled in app code.
+  primaryRoutineId String?
+
+  rotation Rotation               @relation(fields: [rotationId], references: [id], onDelete: Cascade)
+  coverage RotationSlotCoverage[]
+
+  @@index([rotationId, position])
+}
+
+model RotationSlotCoverage {
+  id     String @id @default(cuid())
+  slotId String
+  // Exactly one identifies what counts for the slot:
+  //   routineId — a specific routine (plain id, see RotationSlot note)
+  //   tag       — an activity registry / metadata slug ("climbing", "running")
+  routineId String?
+  tag       String?
+
+  slot RotationSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([slotId])
+}
+
 model SessionTemplate {
   id             String   @id @default(cuid())
   key            String   @unique

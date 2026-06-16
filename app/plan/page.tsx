@@ -7,7 +7,7 @@
 import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
 import GoalsTab from "./goals/GoalsTab";
-import RotationTab from "./cycles/CyclesTab";
+import RotationTab from "./cycles/RotationTab";
 import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
