@@ -1,12 +1,22 @@
-// Server component that lays out the home dashboard. On desktop the four
-// content sections sit in two flex columns side-by-side; each column stacks
-// its cards tightly so a tall card (WaG) doesn't open a gap under a short
-// neighbor (Habits). On mobile they collapse to a single column.
+// Server component that lays out the home dashboard.
+//
+// Layout (top → bottom):
+//   • Last 7 days strip — full width
+//   • Week at a Glance — full width (the scrollable rail wants the room)
+//   • Two independent columns on desktop:
+//       left:  Injuries → Frequency goals (HabitGrid)
+//       right: Domain volume → Movement patterns
+//     Each column stacks with align-content:start so expanding a card in
+//     one column never shifts the other column — only pushes its own
+//     column's cards down. On mobile the columns flatten to one stream.
+//
+// The Ambient status row was removed (2026-06-16): its Body chip is now the
+// Injuries section, its Habits chip lives in the frequency rows, and its
+// Week chip duplicates Week at a Glance.
 
 import type { CSSProperties } from "react";
 import type { HomeData } from "./types";
 import { COLOR, SECTION_GAP } from "./tokens";
-import AmbientStatusRow from "./AmbientStatusRow";
 import HabitGrid from "./HabitGrid";
 import DomainSparklines from "./DomainSparklines";
 import MovementPatternsCard from "./MovementPatternsCard";
@@ -29,39 +39,34 @@ export default function HomeShell({
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
-      <AmbientStatusRow
-        body={data.bodyChip}
-        habit={data.habitChip}
-        week={data.weekChip}
-      />
-
       <Last7DaysStrip stats={data.last7Days} />
 
-      <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
+      <WeekAtGlance
+        days={data.legacyGlanceDays}
+        today={data.today}
+        currentWeekStart={data.currentWeekStart}
+        schedulableRoutines={data.quickPickRoutines}
+        scheduleActivityTypes={data.scheduleActivityTypes}
+        scheduleSports={data.scheduleSports}
+      />
 
-      {/* Two columns side-by-side on desktop. Each column flows its cards
-          top-to-bottom with no inter-card whitespace beyond the gap, so an
-          imbalance in row heights doesn't open an awkward void mid-column. */}
+      {/* Two independent columns on desktop. Each column flows its cards
+          top-to-bottom with align-content:start, so expanding a collapsible
+          in one column pushes only that column's lower cards down — the
+          other column stays put. */}
       <div className="homeCols">
         <div className="homeCol">
-          <WeekAtGlance
-            days={data.legacyGlanceDays}
-            today={data.today}
-            currentWeekStart={data.currentWeekStart}
-            schedulableRoutines={data.quickPickRoutines}
-            scheduleActivityTypes={data.scheduleActivityTypes}
-            scheduleSports={data.scheduleSports}
-          />
-          <div className="homeMovementPatterns">
-            <MovementPatternsCard data={data.movementPatterns} />
-          </div>
-        </div>
-        <div className="homeCol">
+          <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
           <HabitGrid
             rows={data.habitRows}
             today={data.today}
           />
+        </div>
+        <div className="homeCol">
           <DomainSparklines series={data.domainSeries} />
+          <div className="homeMovementPatterns">
+            <MovementPatternsCard data={data.movementPatterns} />
+          </div>
         </div>
       </div>
 
