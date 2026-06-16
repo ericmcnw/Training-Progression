@@ -1093,6 +1093,12 @@ export async function createRoutine(formData: FormData) {
   const selectedGroupIds = await getValidMetadataGroupIds(formData.getAll("metadataGroupIds").map(String), "routine");
   const tagNames = parseTagNames(String(formData.get("tags") || ""));
   const supportsSports = parseSupportsSports(formData.getAll("supportsSports").map(String));
+  // COMPLETION routines can opt in to capturing optional per-session duration
+  // (cold plunge, sauna, etc.). The flag is hidden for other kinds — they
+  // already record duration through their main log shape — so we silently
+  // coerce it to false for non-COMPLETION submissions.
+  const capturesDuration =
+    kind === "COMPLETION" && String(formData.get("capturesDuration") || "") === "1";
 
   if (!name) throw new Error("Name is required.");
 
@@ -1107,6 +1113,7 @@ export async function createRoutine(formData: FormData) {
       isDeleted: false,
       deletedAt: null,
       supportsSports,
+      capturesDuration,
     },
     select: { id: true },
   });
@@ -1659,6 +1666,16 @@ export async function setCompletionForDay(routineId: string, ymd: string, done: 
     await recalculateRoutineLogStimulus(log.id);
     await createExerciseZoneActivitiesForLog(prisma, log.id);
   } else {
+    // For capturesDuration routines, the "bare completion" log may have
+    // a durationSec set — relax that filter so unchecking removes the
+    // tap-recorded log even after the user has added minutes to it.
+    // Other completion routines keep the strict durationSec:null filter
+    // so a manual-log entry with a duration isn't deleted by tapping the
+    // day card to uncheck.
+    const routine = await prisma.routine.findUnique({
+      where: { id: routineId },
+      select: { capturesDuration: true },
+    });
     const { start, end } = getAppDayRange(ymd);
     const latest = await prisma.routineLog.findFirst({
       where: {
@@ -1668,7 +1685,7 @@ export async function setCompletionForDay(routineId: string, ymd: string, done: 
         guidedSteps: { none: {} },
         metrics: { none: {} },
         distanceMi: null,
-        durationSec: null,
+        ...(routine?.capturesDuration ? {} : { durationSec: null }),
         location: null,
       },
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
@@ -1676,6 +1693,58 @@ export async function setCompletionForDay(routineId: string, ymd: string, done: 
     });
     if (latest) await prisma.routineLog.delete({ where: { id: latest.id } });
   }
+
+  revalidateRoutineSurfaces(routineId);
+}
+
+// Set the optional duration on the most-recent bare completion log for a
+// given day. No-op when the routine doesn't capture duration or there's no
+// matching log on that day. Pass `null` to clear an existing duration —
+// the log itself stays (the day is still marked done, just without minutes).
+export async function setCompletionDurationForDay(
+  routineId: string,
+  ymd: string,
+  minutes: number | null
+) {
+  if (!routineId) throw new Error("Missing routine id.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) throw new Error("Invalid date.");
+
+  const routine = await prisma.routine.findUnique({
+    where: { id: routineId },
+    select: { kind: true, capturesDuration: true },
+  });
+  if (!routine) throw new Error("Routine not found.");
+  if (routine.kind !== "COMPLETION") throw new Error("Routine is not a completion routine.");
+  if (!routine.capturesDuration) throw new Error("Routine doesn't capture duration.");
+
+  const durationSec =
+    minutes == null
+      ? null
+      : Number.isFinite(minutes) && minutes > 0
+      ? Math.round(minutes * 60)
+      : null;
+
+  const { start, end } = getAppDayRange(ymd);
+  const latest = await prisma.routineLog.findFirst({
+    where: {
+      routineId,
+      performedAt: { gte: start, lt: end },
+      exercises: { none: {} },
+      guidedSteps: { none: {} },
+      metrics: { none: {} },
+      distanceMi: null,
+      location: null,
+    },
+    orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true },
+  });
+
+  if (!latest) return; // Day isn't marked done — nothing to attach duration to.
+
+  await prisma.routineLog.update({
+    where: { id: latest.id },
+    data: { durationSec },
+  });
 
   revalidateRoutineSurfaces(routineId);
 }

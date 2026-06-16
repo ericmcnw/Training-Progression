@@ -107,6 +107,10 @@ export default function NewRoutineForm({
   const [kind, setKind] = useState<RoutineKind>("COMPLETION");
   const [subtype, setSubtype] = useState<string>("OTHER");
   const [domainOverride, setDomainOverride] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | "">("");
+  // COMPLETION-only opt-in for capturing optional duration each log. Defaults
+  // from the picked preset (cold plunge/sauna/etc. start true; daily habit
+  // starts false). User can still toggle in More Options before submit.
+  const [capturesDuration, setCapturesDuration] = useState<boolean>(false);
 
   const derivedDomain = deriveRoutineDomain(kind, subtype);
   const effectiveDomain = domainOverride || derivedDomain;
@@ -174,6 +178,7 @@ export default function NewRoutineForm({
     setKind(preset.kind);
     setSubtype(preset.subtype);
     setDomainOverride(preset.domain);
+    setCapturesDuration(preset.kind === "COMPLETION" && !!preset.capturesDuration);
     setSelectedMetadataGroupIds([]);
     if (preset.sessionTemplateKey) {
       const matched = sessionTemplates.find((t) => t.key === preset.sessionTemplateKey);
@@ -190,6 +195,7 @@ export default function NewRoutineForm({
     const defaultSubtype = ROUTINE_SUBTYPE_OPTIONS[kindMeta.kind][0] ?? "OTHER";
     setSubtype(defaultSubtype);
     setDomainOverride("");
+    setCapturesDuration(false);
     setSelectedMetadataGroupIds([]);
     setStep("form");
   }
@@ -453,6 +459,13 @@ export default function NewRoutineForm({
       <input type="hidden" name="subtype" value={subtype} />
       <input type="hidden" name="domain" value={effectiveDomain} />
       <input type="hidden" name="category" value={selectedPreset?.label ?? ""} />
+      {/* COMPLETION-only flag — submitted as "1" / "" so the action can
+          coerce it without depending on the toggle markup. */}
+      <input
+        type="hidden"
+        name="capturesDuration"
+        value={kind === "COMPLETION" && capturesDuration ? "1" : ""}
+      />
 
       {/* Step header */}
       <div style={s.stepHeader}>
@@ -631,10 +644,56 @@ export default function NewRoutineForm({
         </div>
       )}
 
-      {/* More options */}
-      <details style={s.moreCard}>
+      {/* More options. Default-open when the kind is COMPLETION and the
+          preset suggests duration capture, so the toggle is visible without
+          an extra tap on the cold-plunge / sauna flows. */}
+      <details
+        style={s.moreCard}
+        open={kind === "COMPLETION" && capturesDuration}
+      >
         <summary style={s.moreSummary}>More options</summary>
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+          {/* COMPLETION-only: opt-in for capturing optional duration per log.
+              Day-card checkbox stays a one-tap "done"; the minutes pill
+              becomes available next to it. */}
+          {kind === "COMPLETION" && (
+            <label
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start",
+                padding: "12px 14px",
+                border: "1px solid rgba(128,128,128,0.25)",
+                borderRadius: 12,
+                background: "rgba(128,128,128,0.04)",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={capturesDuration}
+                onChange={(e) => setCapturesDuration(e.target.checked)}
+                style={{
+                  width: 20,
+                  height: 20,
+                  marginTop: 2,
+                  accentColor: "rgba(84,203,130,0.95)",
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>
+                  Track duration on each log
+                </div>
+                <div style={{ ...s.help, marginTop: 0 }}>
+                  Adds an optional minutes pill next to the checkbox — useful for
+                  cold plunge, sauna, massage, foam rolling, active recovery.
+                  Leave it blank when you don&apos;t care about exact minutes;
+                  the session still counts as done.
+                </div>
+              </div>
+            </label>
+          )}
           <div>
             <label style={s.label}>
               Group Tags <span style={s.optional}>(optional)</span>

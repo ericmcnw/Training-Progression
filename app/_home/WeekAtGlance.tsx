@@ -18,6 +18,7 @@ import {
 } from "@/lib/routines";
 import { formatUtcDateLabel } from "@/lib/dates";
 import CompletionCheckbox from "@/app/components/dashboard/CompletionCheckbox";
+import CompletionMinutesPill from "@/app/components/dashboard/CompletionMinutesPill";
 import DayTodoList from "@/app/components/dashboard/DayTodoList";
 import SchedulePicker from "./SchedulePicker";
 
@@ -454,7 +455,22 @@ function DetailPanel({
                 </div>
                 <div style={detailRowActions}>
                   {isCompletion && !isFutureDay ? (
-                    <CompletionCheckbox routineId={item.routineId} ymd={day.ymd} done={isLogged} />
+                    <>
+                      {/* Minutes pill renders BEFORE the checkbox so it
+                          reads as "12m · ✓" — duration is the optional
+                          adornment, the checkbox is still the primary
+                          action. Pill self-hides when isLogged=false so
+                          unchecked rows don't show an orphaned pill. */}
+                      {item.capturesDuration && (
+                        <CompletionMinutesPill
+                          routineId={item.routineId}
+                          ymd={day.ymd}
+                          currentDurationSec={item.durationSec}
+                          isDone={isLogged}
+                        />
+                      )}
+                      <CompletionCheckbox routineId={item.routineId} ymd={day.ymd} done={isLogged} />
+                    </>
                   ) : showLogButton ? (
                     <DrawerLogButton
                       routineId={item.routineId}

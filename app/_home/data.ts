@@ -336,6 +336,12 @@ export async function getHomeData(): Promise<HomeData> {
       planned: number;
       logged: number;
       logIds: string[];
+      // COMPLETION-only — mirrors Routine.capturesDuration so the WaG
+      // detail panel can decide whether to render the minutes pill.
+      capturesDuration?: boolean;
+      // Most recent log's duration in seconds. Populated after the logs
+      // loop below from whichever log lands in logIds[0].
+      durationSec?: number | null;
     }>();
     for (const rid of plannedIds) {
       const r = routineMap.get(rid);
@@ -349,6 +355,7 @@ export async function getHomeData(): Promise<HomeData> {
         planned: 1,
         logged: 0,
         logIds: [],
+        capturesDuration: r.kind === "COMPLETION" ? r.capturesDuration : undefined,
       });
     }
     // Typed endurance slots (Run on Tuesday, Hike on Saturday, …) live
@@ -391,6 +398,11 @@ export async function getHomeData(): Promise<HomeData> {
       if (existing) {
         existing.logged += 1;
         existing.logIds.unshift(log.id);
+        // logIds[0] is the most-recent log → its durationSec is what the
+        // minutes pill renders. Skip non-COMPLETION logs (capturesDuration
+        // is COMPLETION-only) so we don't leak duration onto unrelated
+        // routine kinds.
+        if (existing.capturesDuration) existing.durationSec = log.durationSec ?? null;
       } else if (ymd <= today) {
         const r = routineMap.get(log.routineId);
         if (r) {
@@ -409,6 +421,9 @@ export async function getHomeData(): Promise<HomeData> {
             planned: 0,
             logged: 1,
             logIds: [log.id],
+            capturesDuration: r.kind === "COMPLETION" ? r.capturesDuration : undefined,
+            durationSec:
+              r.kind === "COMPLETION" && r.capturesDuration ? log.durationSec ?? null : undefined,
           });
         }
       }

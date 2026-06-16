@@ -305,6 +305,14 @@ model Routine {
   // also uses isPlaceholder = true.
   isPlaceholder Boolean @default(false)
 
+  // Opt-in for COMPLETION routines that want to capture an optional duration
+  // each session (cold plunge, sauna, massage, foam rolling, active recovery).
+  // When true, the day-card checkbox stays a one-tap "done" but a minutes
+  // pill renders next to it so the user can record duration after the fact.
+  // Stats helpers treat null durations as "session done, minutes unrecorded"
+  // — they're excluded from averages, not counted as zeros.
+  capturesDuration Boolean @default(false)
+
   // soft delete (hide from UI, keep logs for progress)
   isDeleted Boolean   @default(false)
   deletedAt DateTime?

@@ -15,6 +15,10 @@ export type ActivityPreset = {
   sessionTemplateKey?: string;
   /** Optional default name shown in the name input on the form. */
   defaultName?: string;
+  /** COMPLETION-only — default for the "track duration on each log" toggle.
+   *  Pre-set true on routines where duration is meaningful (sauna, cold
+   *  plunge, massage). The user can still flip it in the form. */
+  capturesDuration?: boolean;
 };
 
 // Routine-kind display metadata for the "what shape is this routine" picker.
@@ -499,6 +503,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     kind: "COMPLETION",
     subtype: "COLD_PLUNGE",
     icon: "🧊",
+    capturesDuration: true,
   },
   {
     key: "SAUNA",
@@ -508,6 +513,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     kind: "COMPLETION",
     subtype: "SAUNA",
     icon: "🌡️",
+    capturesDuration: true,
   },
   {
     key: "FOAM_ROLLING",
@@ -517,6 +523,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     kind: "COMPLETION",
     subtype: "FOAM_ROLLING",
     icon: "🔵",
+    capturesDuration: true,
   },
   {
     key: "MASSAGE",
@@ -526,6 +533,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     kind: "COMPLETION",
     subtype: "MASSAGE",
     icon: "💆",
+    capturesDuration: true,
   },
   {
     key: "ACTIVE_RECOVERY",
@@ -535,6 +543,7 @@ export const ACTIVITY_PRESETS: ActivityPreset[] = [
     kind: "COMPLETION",
     subtype: "ACTIVE_RECOVERY",
     icon: "🌀",
+    capturesDuration: true,
   },
   {
     key: "GUIDED_RECOVERY",

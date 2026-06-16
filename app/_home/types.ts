@@ -30,6 +30,13 @@ export type LegacyGlanceDay = {
     // view-log modal so all same-day logs (e.g. two walks) are openable
     // from a single "view →" button.
     logIds: string[];
+    // COMPLETION-only flag mirroring Routine.capturesDuration. When true,
+    // the WaG detail panel renders a minutes pill next to the checkbox.
+    capturesDuration?: boolean;
+    // When the day is logged AND the routine captures duration, the most
+    // recent log's durationSec (seconds) so the pill can display existing
+    // minutes. Null/undefined = day done but no duration recorded yet.
+    durationSec?: number | null;
   }>;
   logs: Array<{
     id: string;
