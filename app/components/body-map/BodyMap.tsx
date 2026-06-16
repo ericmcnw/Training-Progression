@@ -32,20 +32,20 @@ const BODY_COLORS = [
 // ─── Custom overlay zones ────────────────────────────────────────────────────
 // Drawn as SVG overlays because the library has no matching body part.
 // Coordinates use the library's front-view space: viewBox "0 0 724 1448", center x=362.
-// Hip flexor paths calibrated to the library's front-view space (viewBox "0 0 724 1448").
-// Reference: obliques bottom ≈ y657, adductors top ≈ y647 → hip crease is right in that band.
-// Each shape is ~50px wide × 82px tall — comparable to small zones like knees.
-// Left center x≈287, right center x≈437 (symmetric around body center 362).
+// Hip flexors are narrow, elongated teardrops (the iliopsoas runs diagonally
+// from the inguinal crease down toward the inner thigh) — smaller and more
+// muscle-like than the original round blobs, sitting medial to the hip joint
+// markers. Symmetric around body center 362.
 const CUSTOM_FRONT_ZONES: Array<{ slug: string; label: string; d: string }> = [
   {
     slug: "left-hip-flexor",
     label: "Left Hip Flexor",
-    d: "M262 648 C272 634 308 634 316 648 C322 662 320 694 310 712 C298 724 274 722 266 708 C256 692 252 664 262 648 Z",
+    d: "M298 654 C304 648 316 650 318 660 C320 682 315 710 307 730 C303 736 298 734 296 728 C290 706 290 676 298 654 Z",
   },
   {
     slug: "right-hip-flexor",
     label: "Right Hip Flexor",
-    d: "M408 648 C416 634 452 634 462 648 C472 664 472 692 458 708 C450 722 426 724 414 712 C404 694 402 662 408 648 Z",
+    d: "M426 654 C420 648 408 650 406 660 C404 682 409 710 417 730 C421 736 426 734 428 728 C434 706 434 676 426 654 Z",
   },
 ];
 
