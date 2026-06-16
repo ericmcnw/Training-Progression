@@ -128,7 +128,17 @@ function shortDate(ymd: string | undefined) {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
+// Joints (knee, ankle, shoulder, hip, elbow, wrist) aren't "trained," so the
+// detail panel drops the activity framing for them and focuses on pain/injury.
+const JOINT_SLUG_RE = /-joint$|(?:^|-)(elbow|wrist|knee|ankle)(?:-|$)/;
+function isJointSlug(slug: string) {
+  return JOINT_SLUG_RE.test(slug);
+}
+
 // ─── Zone detail panel ────────────────────────────────────────────────────────
+// Compact by design: header + one-line status, the 28-day "when trained"
+// sparkline (muscles only), and a collapsed history. Joints show a pain/injury
+// focus instead of training data.
 function ZonePanel({
   detail,
   onClose,
@@ -138,80 +148,102 @@ function ZonePanel({
   onClose: () => void;
   loading: boolean;
 }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const isJoint = isJointSlug(detail.slug);
+  const hasHistory = detail.recentActivities.length > 0;
+
+  const statusLine = isJoint
+    ? detail.painLevel != null
+      ? `Pain ${detail.painLevel}/10`
+      : detail.activeInjuries.length > 0
+      ? "Injured"
+      : "No pain logged"
+    : [
+        detail.activityCount != null
+          ? `${detail.activityCount} entr${detail.activityCount === 1 ? "y" : "ies"} this week`
+          : null,
+        detail.daysSinceWorked != null
+          ? `last ${detail.daysSinceWorked === 0 ? "today" : `${detail.daysSinceWorked}d ago`}`
+          : null,
+        detail.painLevel != null ? `pain ${detail.painLevel}/10` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "No recent work";
+
   return (
     <div style={{ ...panel, opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}>
       {/* Header */}
       <div style={panelHead}>
-        <div style={{ display: "grid", gap: 6 }}>
+        <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <h2 style={zoneTitle}>{detail.label}</h2>
             <span style={{ ...badge, ...freshnessBadge[detail.freshness as ZoneFreshness] }}>
               {freshnessLabel[detail.freshness as ZoneFreshness] ?? detail.freshness}
             </span>
           </div>
-          <div style={mutedText}>
-            {detail.activityCount != null
-              ? `${detail.activityCount} work entr${detail.activityCount === 1 ? "y" : "ies"} this week`
-              : "No recent work entries"}
-            {detail.daysSinceWorked != null
-              ? ` · last worked ${detail.daysSinceWorked === 0 ? "today" : `${detail.daysSinceWorked}d ago`}`
-              : ""}
-            {detail.painLevel != null ? ` · pain ${detail.painLevel}/10` : ""}
-          </div>
+          <div style={mutedText}>{statusLine}</div>
         </div>
         <button type="button" onClick={onClose} style={closeBtn} aria-label="Close zone detail">
           ✕
         </button>
       </div>
 
-      {/* 28-day activity sparkline — same visual language as the injury
-          pain history so /body and /injuries read as one system. The
-          weekActivityCounts data is still in the payload but we render the
-          richer 28-day signal here. */}
-      <div style={section}>
-        <div style={sparkHeaderRow}>
-          <div style={sectionHead}>Last 28 days</div>
-          <div style={sparkMeta}>
-            {weekTotal(detail.weekActivityCounts)} this week · {monthTotal(detail.dailyActivityCounts)} this month
-          </div>
-        </div>
-        <ActivitySparkline days={detail.dailyActivityCounts} today={detail.today} />
-      </div>
-
-      {/* Recent activities */}
-      {detail.recentActivities.length > 0 && (
+      {/* "When trained" sparkline — muscles only (joints aren't worked). */}
+      {!isJoint && (
         <div style={section}>
-          <div style={sectionHead}>What worked it</div>
-          <div style={{ display: "grid", gap: 6 }}>
-            {detail.recentActivities.map((a) => (
-              <div key={a.id} style={activityRow}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 850, fontSize: 13 }}>{a.label}</div>
-                  <div style={mutedText}>{a.zoneLabel} · {fmtTime(a.performedAt)}</div>
-                </div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
-                  <span style={chip}>{a.source.toLowerCase().replace(/_/g, " ")}</span>
-                  {a.intensity ? <span style={chip}>{a.intensity}</span> : null}
-                </div>
-              </div>
-            ))}
+          <div style={sparkHeaderRow}>
+            <div style={sectionHead}>Last 28 days</div>
+            <div style={sparkMeta}>
+              {weekTotal(detail.weekActivityCounts)} this week · {monthTotal(detail.dailyActivityCounts)} this month
+            </div>
           </div>
+          <ActivitySparkline days={detail.dailyActivityCounts} today={detail.today} />
         </div>
       )}
 
-      {/* Actions — when this zone is part of an active injury, surface a
-          direct link to its detail page so users don't have to bounce
-          through /injuries to find it. */}
+      {/* Collapsed history — the full "what worked it" list is a lot, so it's
+          tucked behind a toggle (muscles only). */}
+      {!isJoint && hasHistory && (
+        <div style={section}>
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            style={historyToggle}
+            aria-expanded={showHistory}
+          >
+            <span>What worked it ({detail.recentActivities.length})</span>
+            <span style={{ ...chevronStyle(showHistory), fontSize: 12 }} aria-hidden>▾</span>
+          </button>
+          {showHistory && (
+            <div style={{ display: "grid", gap: 6 }}>
+              {detail.recentActivities.map((a) => (
+                <div key={a.id} style={activityRow}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 850, fontSize: 12.5 }}>{a.label}</div>
+                    <div style={mutedText}>{a.zoneLabel} · {fmtTime(a.performedAt)}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
+                    <span style={chip}>{a.source.toLowerCase().replace(/_/g, " ")}</span>
+                    {a.intensity ? <span style={chip}>{a.intensity}</span> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {detail.activeInjuries.length > 0 && (
-          detail.activeInjuries.map((injury) => (
-            <Link key={injury.id} href={`/injuries/${injury.id}`} style={linkInjury}>
-              View injury · {injury.name}
-            </Link>
-          ))
-        )}
+        {detail.activeInjuries.map((injury) => (
+          <Link key={injury.id} href={`/injuries/${injury.id}`} style={linkInjury}>
+            View injury · {injury.name}
+          </Link>
+        ))}
         <Link href={`/body/log-pain?zone=${detail.slug}`} style={linkDanger}>Log pain</Link>
-        <Link href={`/body/${detail.slug}?manual=1`} style={linkSecondary}>Log activity</Link>
+        {!isJoint && (
+          <Link href={`/body/${detail.slug}?manual=1`} style={linkSecondary}>Log activity</Link>
+        )}
         {detail.activeInjuries.length === 0 && (
           <Link href={`/injuries/new?zone=${detail.slug}`} style={linkSecondary}>Mark injured</Link>
         )}
@@ -233,6 +265,7 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(MAP_OPEN_STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored === "false") setMapOpen(false);
     } catch {
       // ignore — localStorage unavailable
@@ -421,7 +454,28 @@ const legendSwatch: React.CSSProperties = {
 
 const panel: React.CSSProperties = {
   ...cardSurface,
-  gap: 14,
+  gap: 11,
+  padding: 13,
+};
+
+const historyToggle: React.CSSProperties = {
+  appearance: "none",
+  margin: 0,
+  padding: 0,
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  width: "100%",
+  minHeight: 32,
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.2,
+  textTransform: "uppercase",
+  color: COLOR.textDim,
 };
 
 const panelHead: React.CSSProperties = {
@@ -433,7 +487,7 @@ const panelHead: React.CSSProperties = {
 
 const zoneTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: 20,
+  fontSize: 17,
   fontWeight: 900,
   lineHeight: 1.1,
   letterSpacing: -0.2,
