@@ -4,7 +4,7 @@
 // stacked than siloed. Each section fetches its own data (server components),
 // and the jump-nav anchors let you skip straight to one on a long page.
 
-import { SectionCard } from "@/app/progress/ui";
+import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
 import GoalsTab from "./goals/GoalsTab";
 import RotationTab from "./cycles/CyclesTab";
@@ -43,34 +43,31 @@ export default async function PlanPage(props: {
         </nav>
       </header>
 
-      <div id="goals" style={anchorStyle}>
-        <SectionCard
-          title="Goals"
-          subtitle="Frequency, performance, volume, and completion targets."
-          actions={<NewGoalDrawerButton style={ctaStyle}>+ New Goal</NewGoalDrawerButton>}
-        >
-          <GoalsTab searchParams={searchParams} />
-        </SectionCard>
-      </div>
+      <PlanSection
+        id="goals"
+        title="Goals"
+        subtitle="Frequency, performance, volume, and completion targets."
+        action={<NewGoalDrawerButton style={ctaStyle}>+ New Goal</NewGoalDrawerButton>}
+      >
+        <GoalsTab searchParams={searchParams} />
+      </PlanSection>
 
-      <div id="schedule" style={anchorStyle}>
-        <SectionCard
-          title="Schedule"
-          subtitle="What's planned and logged this month. Tap any day for detail."
-          actions={<NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>}
-        >
-          <MonthTab searchParams={searchParams} />
-        </SectionCard>
-      </div>
+      <PlanSection
+        id="schedule"
+        title="Schedule"
+        subtitle="What's planned and logged this month. Tap any day for detail."
+        action={<NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>}
+      >
+        <MonthTab searchParams={searchParams} />
+      </PlanSection>
 
-      <div id="rotation" style={anchorStyle}>
-        <SectionCard
-          title="Rotation"
-          subtitle="Your training cycle — what you did last and what's up next."
-        >
-          <RotationTab />
-        </SectionCard>
-      </div>
+      <PlanSection
+        id="rotation"
+        title="Rotation"
+        subtitle="Your training cycle — what you did last and what's up next."
+      >
+        <RotationTab />
+      </PlanSection>
     </div>
   );
 }
@@ -122,12 +119,6 @@ const jumpPillStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   minHeight: 34,
-};
-
-// Offset anchor jumps so the section header clears the top edge / any sticky
-// chrome instead of butting against it.
-const anchorStyle: React.CSSProperties = {
-  scrollMarginTop: 14,
 };
 
 const ctaStyle: React.CSSProperties = {
