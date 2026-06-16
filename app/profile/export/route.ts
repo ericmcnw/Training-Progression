@@ -8,6 +8,11 @@ export const dynamic = "force-dynamic";
 // it with `download`. Pulls the user's routines, every log (with exercise
 // sets + endurance/sport fields), and the full climbing dataset so the file
 // is a real backup, not just a summary.
+//
+// SECURITY: this is an unauthenticated, unscoped dump of the entire database —
+// correct only while the app is single-user. Before multi-user/auth ships,
+// gate this behind the session and scope every query by userId, or it becomes
+// a full-data leak.
 export async function GET() {
   const [routines, logs, goals, climbLocations, climbAreas, climbProblems, climbAttempts, climbMedia] =
     await Promise.all([

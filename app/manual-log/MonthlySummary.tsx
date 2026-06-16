@@ -11,20 +11,16 @@
 // Server component; receives the already-fetched log array from the page.
 
 import type { CSSProperties } from "react";
-import { APP_TIME_ZONE, toAppYmd } from "@/lib/dates";
+import { APP_TIME_ZONE, getAppDayRange, toAppYmd } from "@/lib/dates";
+import { prisma } from "@/lib/prisma";
 import { formatHoursMinutes } from "@/lib/progress";
-import { domainColor } from "@/lib/routines";
-
-type Domain = "strength" | "cardio" | "mobility" | "sport" | "lifestyle";
-
-const DOMAIN_ORDER: Domain[] = ["strength", "cardio", "mobility", "sport", "lifestyle"];
-const DOMAIN_LABELS: Record<Domain, string> = {
-  strength: "Strength",
-  cardio: "Endurance",
-  mobility: "Mobility",
-  sport: "Sport",
-  lifestyle: "Lifestyle",
-};
+import { domainColor, effectiveRoutineDomain } from "@/lib/routines";
+import {
+  PROFILE_DOMAIN_LABELS as DOMAIN_LABELS,
+  PROFILE_DOMAIN_ORDER as DOMAIN_ORDER,
+  ymdWeekday,
+  type ProfileDomain as Domain,
+} from "@/lib/profile-summary";
 
 type EnrichedLog = {
   id: string;
@@ -38,35 +34,51 @@ type EnrichedLog = {
 
 const WEEKDAY_HEADERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-export default function MonthlySummary({ logs, today }: { logs: EnrichedLog[]; today: Date }) {
+// Self-fetches its own month window (rather than reusing the page's 500-row
+// recent-logs prop) so a heavy logger's current month is never silently
+// truncated — same rationale as YearlySummary.
+export default async function MonthlySummary({ today }: { today: Date }) {
   const todayYmd = toAppYmd(today);
   const [calYear, calMonthNum] = todayYmd.split("-").slice(0, 2).map(Number);
   const calMonthIdx = calMonthNum - 1;
-  const daysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate();
-  const monthStart = new Date(calYear, calMonthIdx, 1);
-  const monthEndExclusive = new Date(calYear, calMonthIdx + 1, 1);
+  const daysInMonth = new Date(Date.UTC(calYear, calMonthIdx + 1, 0)).getUTCDate();
   const todayDay = parseInt(todayYmd.split("-")[2], 10);
 
-  const firstOfMonthUTC = new Date(
-    `${calYear}-${String(calMonthNum).padStart(2, "0")}-01T12:00:00Z`
-  );
-  const firstDayLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: APP_TIME_ZONE,
-    weekday: "short",
-  }).format(firstOfMonthUTC);
-  const dayMap: Record<string, number> = {
-    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
-  };
-  const firstDayOfWeek = dayMap[firstDayLabel] ?? 0;
+  const monthYmd = `${calYear}-${String(calMonthNum).padStart(2, "0")}`;
+  const nextMonthFirst =
+    calMonthNum === 12
+      ? `${calYear + 1}-01-01`
+      : `${calYear}-${String(calMonthNum + 1).padStart(2, "0")}-01`;
+  const monthStart = getAppDayRange(`${monthYmd}-01`).start;
+  const monthEndExclusive = getAppDayRange(nextMonthFirst).start;
+
+  const firstDayOfWeek = ymdWeekday(`${monthYmd}-01`);
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: APP_TIME_ZONE,
     month: "long",
     year: "numeric",
   }).format(today);
 
-  const monthLogs = logs.filter(
-    (l) => l.performedAt >= monthStart && l.performedAt < monthEndExclusive
-  );
+  const rawLogs = await prisma.routineLog.findMany({
+    where: { performedAt: { gte: monthStart, lt: monthEndExclusive } },
+    select: {
+      id: true,
+      routineId: true,
+      performedAt: true,
+      distanceMi: true,
+      durationSec: true,
+      routine: { select: { name: true, domain: true, kind: true, subtype: true } },
+    },
+  });
+  const monthLogs: EnrichedLog[] = rawLogs.map((l) => ({
+    id: l.id,
+    routineId: l.routineId,
+    performedAt: l.performedAt,
+    distanceMi: l.distanceMi,
+    durationSec: l.durationSec,
+    domain: effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype) as Domain,
+    routine: { name: l.routine.name },
+  }));
 
   // ── KPIs ────────────────────────────────────────────────────────────────
   const sessions = monthLogs.length;

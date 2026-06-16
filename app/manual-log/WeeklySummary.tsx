@@ -17,17 +17,14 @@ import type { CSSProperties } from "react";
 import { toAppYmd } from "@/lib/dates";
 import { formatHoursMinutes } from "@/lib/progress";
 import { domainColor } from "@/lib/routines";
-
-type Domain = "strength" | "cardio" | "mobility" | "sport" | "lifestyle";
-
-const DOMAIN_ORDER: Domain[] = ["strength", "cardio", "mobility", "sport", "lifestyle"];
-const DOMAIN_LABELS: Record<Domain, string> = {
-  strength: "Strength",
-  cardio: "Endurance",
-  mobility: "Mobility",
-  sport: "Sport",
-  lifestyle: "Lifestyle",
-};
+import {
+  currentDailyStreak,
+  PROFILE_DOMAIN_LABELS as DOMAIN_LABELS,
+  PROFILE_DOMAIN_ORDER as DOMAIN_ORDER,
+  trailingYmds,
+  ymdWeekday,
+  type ProfileDomain as Domain,
+} from "@/lib/profile-summary";
 
 type EnrichedLog = {
   id: string;
@@ -52,35 +49,40 @@ const DAY_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function WeeklySummary({ logs, today }: { logs: EnrichedLog[]; today: Date }) {
   const todayYmd = toAppYmd(today);
-  const weekStart = new Date(today);
-  weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - 6); // trailing 7 days including today
+  // Trailing 7 app-timezone days (oldest → newest), including today.
+  const weekYmds = trailingYmds(todayYmd, 7);
+  const weekSet = new Set(weekYmds);
 
-  const weekLogs = logs.filter((l) => l.performedAt >= weekStart);
+  const logYmd = new Map<string, string>();
+  const ymdOf = (l: EnrichedLog) => {
+    let v = logYmd.get(l.id);
+    if (v === undefined) {
+      v = toAppYmd(l.performedAt);
+      logYmd.set(l.id, v);
+    }
+    return v;
+  };
+
+  const weekLogs = logs.filter((l) => weekSet.has(ymdOf(l)));
 
   // ── KPIs ────────────────────────────────────────────────────────────────
   const sessions = weekLogs.length;
   const totalSec = weekLogs.reduce((sum, l) => sum + (l.durationSec ?? 0), 0);
   const totalMi = weekLogs.reduce((sum, l) => sum + (l.distanceMi ?? 0), 0);
-  const streak = computeDailyStreak(logs, today);
+  const streak = currentDailyStreak(new Set(logs.map(ymdOf)), todayYmd);
 
   // ── Per-day cells (trailing 7 days, oldest → newest) ────────────────────
-  const days: DayCell[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
-    const ymd = toAppYmd(d);
-    const dow = d.getDay();
-    const dayLogs = weekLogs.filter((l) => toAppYmd(l.performedAt) === ymd);
-    days.push({
+  const days: DayCell[] = weekYmds.map((ymd) => {
+    const dow = ymdWeekday(ymd);
+    const dayLogs = weekLogs.filter((l) => ymdOf(l) === ymd);
+    return {
       ymd,
       letter: DAY_LETTERS[dow],
       full: DAY_FULL[dow],
       domains: dayLogs.map((l) => l.domain),
       isToday: ymd === todayYmd,
-    });
-  }
+    };
+  });
 
   // ── Per-domain counts ───────────────────────────────────────────────────
   const perDomain: Record<Domain, number> = {
@@ -168,31 +170,6 @@ export default function WeeklySummary({ logs, today }: { logs: EnrichedLog[]; to
 }
 
 // ───────────────────────────── helpers
-
-function computeDailyStreak(logs: EnrichedLog[], today: Date): number {
-  // Walks back from today, counting consecutive calendar days that have at
-  // least one log. Stops on the first empty day past today. Today itself is
-  // a grace day — an empty today doesn't break a streak that ran through
-  // yesterday, but a logged today bumps the count.
-  const loggedDays = new Set(logs.map((l) => toAppYmd(l.performedAt)));
-  const todayYmd = toAppYmd(today);
-  const cursor = new Date(today);
-  cursor.setHours(0, 0, 0, 0);
-  // If today not logged, start the count at yesterday.
-  if (!loggedDays.has(todayYmd)) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  let count = 0;
-  for (let i = 0; i < 366; i++) {
-    if (loggedDays.has(toAppYmd(cursor))) {
-      count++;
-      cursor.setDate(cursor.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return count;
-}
 
 type Highlight = { icon: string; text: string };
 

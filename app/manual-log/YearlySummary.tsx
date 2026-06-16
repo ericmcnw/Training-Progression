@@ -19,28 +19,27 @@
 
 import type { CSSProperties } from "react";
 import { prisma } from "@/lib/prisma";
-import { toAppYmd } from "@/lib/dates";
+import { addDaysYmd, diffYmdDays, getAppDayRange, toAppYmd } from "@/lib/dates";
 import { formatHoursMinutes } from "@/lib/progress";
 import { domainColor, effectiveRoutineDomain } from "@/lib/routines";
-
-type Domain = "strength" | "cardio" | "mobility" | "sport" | "lifestyle";
-
-const DOMAIN_ORDER: Domain[] = ["strength", "cardio", "mobility", "sport", "lifestyle"];
-const DOMAIN_LABELS: Record<Domain, string> = {
-  strength: "Strength",
-  cardio: "Endurance",
-  mobility: "Mobility",
-  sport: "Sport",
-  lifestyle: "Lifestyle",
-};
+import {
+  longestDailyStreak,
+  PROFILE_DOMAIN_LABELS as DOMAIN_LABELS,
+  PROFILE_DOMAIN_ORDER as DOMAIN_ORDER,
+  ymdWeekday,
+  type ProfileDomain as Domain,
+} from "@/lib/profile-summary";
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default async function YearlySummary({ today }: { today: Date }) {
-  const year = today.getFullYear();
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year + 1, 0, 1);
   const todayYmd = toAppYmd(today);
+  const year = Number(todayYmd.slice(0, 4));
+  const currentMonthIdx = Number(todayYmd.slice(5, 7)) - 1;
+  // App-timezone year bounds, not server-local — a New Year's Eve session in
+  // ET must land in the right year on a UTC host.
+  const yearStart = getAppDayRange(`${year}-01-01`).start;
+  const yearEnd = getAppDayRange(`${year + 1}-01-01`).start;
 
   const rawLogs = await prisma.routineLog.findMany({
     where: { performedAt: { gte: yearStart, lt: yearEnd } },
@@ -67,7 +66,7 @@ export default async function YearlySummary({ today }: { today: Date }) {
   const totalSec = logs.reduce((s, l) => s + (l.durationSec ?? 0), 0);
   const totalMi = logs.reduce((s, l) => s + (l.distanceMi ?? 0), 0);
   const activeDaySet = new Set(logs.map((l) => toAppYmd(l.performedAt)));
-  const dayOfYear = daysBetween(yearStart, today) + 1; // inclusive of today
+  const dayOfYear = diffYmdDays(todayYmd, `${year}-01-01`) + 1; // inclusive of today
   const daysElapsed = Math.min(dayOfYear, isLeapYear(year) ? 366 : 365);
 
   // ── Empty state ─────────────────────────────────────────────────────────
@@ -94,11 +93,10 @@ export default async function YearlySummary({ today }: { today: Date }) {
   const weeks: HeatCell[][] = [];
   const totalDays = isLeapYear(year) ? 366 : 365;
   let week: HeatCell[] = [];
-  const firstDow = yearStart.getDay();
+  const firstDow = ymdWeekday(`${year}-01-01`);
   for (let i = 0; i < firstDow; i++) week.push(null);
   for (let d = 0; d < totalDays; d++) {
-    const date = new Date(year, 0, 1 + d);
-    const ymd = toAppYmd(date);
+    const ymd = addDaysYmd(`${year}-01-01`, d);
     week.push({
       ymd,
       count: dayCounts.get(ymd) ?? 0,
@@ -127,10 +125,10 @@ export default async function YearlySummary({ today }: { today: Date }) {
     label,
     total: 0,
     byDomain: { strength: 0, cardio: 0, mobility: 0, sport: 0, lifestyle: 0 },
-    isFuture: i > today.getMonth(),
+    isFuture: i > currentMonthIdx,
   }));
   for (const log of logs) {
-    const m = log.performedAt.getMonth();
+    const m = Number(toAppYmd(log.performedAt).slice(5, 7)) - 1;
     monthBuckets[m].total++;
     monthBuckets[m].byDomain[log.domain]++;
   }
@@ -291,7 +289,7 @@ function buildRecords(
   }
 
   // Longest streak — longest consecutive run of days in activeDays.
-  const streak = longestConsecutiveRun(activeDays);
+  const streak = longestDailyStreak(activeDays);
   if (streak > 0) {
     out.push({
       icon: "🔥",
@@ -344,31 +342,6 @@ function buildRecords(
   }
 
   return out;
-}
-
-function longestConsecutiveRun(daySet: Set<string>): number {
-  // Sort the YMDs; walk forward tracking the running streak length by
-  // comparing each day to the previous day + 1.
-  const sorted = Array.from(daySet).sort();
-  if (sorted.length === 0) return 0;
-  let longest = 1;
-  let current = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(`${sorted[i - 1]}T00:00:00.000Z`);
-    const cur = new Date(`${sorted[i]}T00:00:00.000Z`);
-    const diffDays = Math.round((cur.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000));
-    if (diffDays === 1) {
-      current++;
-      if (current > longest) longest = current;
-    } else {
-      current = 1;
-    }
-  }
-  return longest;
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.floor((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 function isLeapYear(year: number): boolean {
