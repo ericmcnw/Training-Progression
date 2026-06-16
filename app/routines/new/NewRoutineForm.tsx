@@ -19,12 +19,14 @@ import {
 } from "@/lib/routines";
 import { ROUTINE_SUBTYPE_GROUP_DEFAULTS } from "@/lib/metadata";
 import {
-  DOMAIN_META,
-  ACTIVITY_PRESETS,
+  KIND_META,
   getActivitiesForDomain,
+  getActivitiesForKind,
   getDomainMeta,
+  getKindMeta,
   type ActivityPreset,
   type DomainMeta,
+  type KindMeta,
 } from "@/lib/routine-presets";
 import type { MetadataGroupKind, RoutineFrequencyUnit, RoutineKind } from "@/generated/prisma";
 
@@ -43,7 +45,14 @@ type MetadataGroupOption = {
   kind: MetadataGroupKind;
 };
 
-type Step = "domain" | "activity" | "form";
+// Three-step flow:
+//   "kind"     — pick a routine kind (Workout / Guided / Completion / Cardio /
+//                Sport). Only entered from the top-level /routines/new path;
+//                domain-scoped entry points (presetDomain) skip it.
+//   "activity" — pick a preset within the chosen kind OR within the scoped
+//                domain. Both flows funnel through this step.
+//   "form"     — the actual routine creation form.
+type Step = "kind" | "activity" | "form";
 
 export default function NewRoutineForm({
   metadataGroups,
@@ -83,10 +92,15 @@ export default function NewRoutineForm({
         });
       }
     : undefined;
-  const [step, setStep] = useState<Step>(presetDomain ? "activity" : "domain");
+  const [step, setStep] = useState<Step>(presetDomain ? "activity" : "kind");
   const [selectedDomain, setSelectedDomain] = useState<Exclude<RoutineDomain, "skill" | "general" | "habit"> | null>(
     presetDomain ?? null
   );
+  // Track the picked kind alongside the picked domain. Only one is set at
+  // a time depending on entry mode: presetDomain → selectedDomain; the
+  // top-level path → selectedKind. Step 3 (form) reads from neither —
+  // the preset's domain + kind flow through their own state below.
+  const [selectedKind, setSelectedKind] = useState<RoutineKind | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<ActivityPreset | null>(null);
 
   // Form state — populated from the preset selection
@@ -148,8 +162,9 @@ export default function NewRoutineForm({
     sessionTemplates.find((t) => t.id === effectiveSessionTemplateId) ??
     null;
 
-  function chooseDomain(domain: Exclude<RoutineDomain, "skill" | "general" | "habit">) {
-    setSelectedDomain(domain);
+  function chooseKind(nextKind: RoutineKind) {
+    setSelectedKind(nextKind);
+    setSelectedDomain(null);
     setSelectedPreset(null);
     setStep("activity");
   }
@@ -167,45 +182,78 @@ export default function NewRoutineForm({
     setStep("form");
   }
 
+  // "Blank" path inside a chosen kind — skip preset selection, jump to the
+  // form with that kind as the default. User can still adjust subtype.
+  function chooseBlankForKind(kindMeta: KindMeta) {
+    setSelectedPreset(null);
+    setKind(kindMeta.kind);
+    const defaultSubtype = ROUTINE_SUBTYPE_OPTIONS[kindMeta.kind][0] ?? "OTHER";
+    setSubtype(defaultSubtype);
+    setDomainOverride("");
+    setSelectedMetadataGroupIds([]);
+    setStep("form");
+  }
+
   function goBack() {
     if (step === "form") {
-      // Custom path (no domain selected) goes straight back to domain picker
-      setStep(selectedDomain ? "activity" : "domain");
+      // From the form, back to the activity picker if we have a context to
+      // return to (kind or domain). The fully custom path (entered via the
+      // "Custom (advanced)" link from step 1) has neither, so it goes all
+      // the way back to the kind picker.
+      if (selectedDomain || selectedKind) setStep("activity");
+      else setStep("kind");
     } else if (step === "activity") {
       // With a presetDomain, the activity picker IS the entry — there's no
-      // domain picker to go back to. Closing the drawer is the natural undo.
+      // earlier step to go back to. Closing the drawer is the natural undo.
       if (presetDomain) {
         onSuccess?.();
         return;
       }
+      setSelectedKind(null);
       setSelectedDomain(null);
-      setStep("domain");
+      setStep("kind");
     }
   }
 
+  // domainMeta and activityList both flex by entry mode: presetDomain entries
+  // show domain-scoped presets (legacy behavior), top-level entries show
+  // kind-scoped presets.
   const domainMeta = selectedDomain ? getDomainMeta(selectedDomain) : null;
-  const activityList = selectedDomain ? getActivitiesForDomain(selectedDomain) : [];
+  const kindMeta = selectedKind ? getKindMeta(selectedKind) : null;
+  const activityList = selectedDomain
+    ? getActivitiesForDomain(selectedDomain)
+    : selectedKind
+    ? getActivitiesForKind(selectedKind)
+    : [];
 
-  // ─── STEP 1: Domain picker ────────────────────────────────────────────────────
-  if (step === "domain") {
+  // ─── STEP 1: Kind picker ──────────────────────────────────────────────────────
+  // Asks "how does this routine get logged?" since the kind dictates the
+  // log form's shape. Domain (dashboard bucket) is derived from the preset
+  // pick on the next step.
+  if (step === "kind") {
     return (
       <div style={s.page}>
         <div style={s.pageHeader}>
-          <div style={s.pageTitle}>What are you training?</div>
-          <div style={s.pageSubtitle}>Pick the area that best fits your routine</div>
+          <div style={s.pageTitle}>What kind of routine?</div>
+          <div style={s.pageSubtitle}>
+            Pick how this routine gets logged. The dashboard category is set automatically after you pick a starting point.
+          </div>
         </div>
 
-        <div style={s.domainGrid}>
-          {DOMAIN_META.map((meta) => (
-            <DomainCard key={meta.domain} meta={meta} onSelect={chooseDomain} />
+        <div style={s.kindGrid}>
+          {KIND_META.map((meta) => (
+            <KindCard key={meta.kind} meta={meta} onSelect={chooseKind} />
           ))}
         </div>
 
-        {/* Custom / advanced escape hatch */}
+        {/* Custom / advanced escape hatch — bypasses both pickers and lands
+            in the form with COMPLETION/OTHER defaults the user can override. */}
         <button
           type="button"
           onClick={() => {
             setSelectedPreset(null);
+            setSelectedKind(null);
+            setSelectedDomain(null);
             setKind("COMPLETION");
             setSubtype("OTHER");
             setDomainOverride("");
@@ -219,11 +267,13 @@ export default function NewRoutineForm({
     );
   }
 
-  // ─── STEP 2: Activity picker ──────────────────────────────────────────────────
+  // ─── STEP 2a: Activity picker — entered via presetDomain (legacy) ────────────
+  // Domain-scoped entry points (`/activities/strength`, `/activities/sport`,
+  // etc.) skip the kind picker. The list is filtered by domain to preserve
+  // the muscle memory of "+ New routine" on those pages.
   if (step === "activity" && selectedDomain && domainMeta) {
     return (
       <div style={s.page}>
-        {/* Header with back + domain badge */}
         <div style={s.stepHeader}>
           <button type="button" onClick={goBack} style={s.backBtn}>← Back</button>
           <div style={{ ...s.domainBadge, color: domainMeta.color, background: domainMeta.bgColor, borderColor: domainMeta.borderColor }}>
@@ -233,12 +283,9 @@ export default function NewRoutineForm({
         <div style={s.pageTitle}>Choose an activity</div>
         <div style={s.pageSubtitle}>{domainMeta.description}</div>
 
-        {/* Cardio doesn't use the routine builder — endurance is logged by
-            activity type via /activities/endurance. The activity-type picker
-            sits at that surface; coming through the routine builder is the
-            wrong path. Show a clear redirect with the legacy preset list
-            collapsed below for users who still want to create a saved cardio
-            routine (rare; scheduled recurring sessions). */}
+        {/* Cardio domain redirect — endurance is logged by activity type,
+            not via a saved routine. Legacy presets stay reachable in a
+            collapsed expander for the rare scheduled-recurring case. */}
         {selectedDomain === "cardio" && (
           <div style={enduranceNudgeStyle}>
             <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
@@ -254,10 +301,7 @@ export default function NewRoutineForm({
           </div>
         )}
 
-        {/* Sport: each sport is enabled via the sport picker. Picking a sport
-            auto-creates its synthetic routine. Coming through the routine
-            builder is the wrong path. Show the redirect; legacy per-sport
-            presets remain below as the manual escape. */}
+        {/* Sport domain redirect — same shape as cardio. */}
         {selectedDomain === "sport" && (
           <div style={sportNudgeStyle}>
             <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
@@ -299,8 +343,109 @@ export default function NewRoutineForm({
     );
   }
 
+  // ─── STEP 2b: Activity picker — entered via kind picker ───────────────────────
+  // The list is filtered by kind. CARDIO + SESSION kinds carry a redirect
+  // banner that points the user at the right entry point; their preset
+  // lists stay reachable behind a collapsed "manual fallback" expander.
+  if (step === "activity" && selectedKind && kindMeta) {
+    const showRedirect = !!kindMeta.redirect;
+    return (
+      <div style={s.page}>
+        <div style={s.stepHeader}>
+          <button type="button" onClick={goBack} style={s.backBtn}>← Back</button>
+          <div
+            style={{
+              ...s.domainBadge,
+              color: kindMeta.color,
+              background: kindMeta.bgColor,
+              borderColor: kindMeta.borderColor,
+            }}
+          >
+            {kindMeta.icon} {kindMeta.label}
+          </div>
+        </div>
+        <div style={s.pageTitle}>Pick a starting point</div>
+        <div style={s.pageSubtitle}>{kindMeta.description}</div>
+
+        {/* Redirect nudge for CARDIO + SESSION (the two kinds the routine
+            builder is no longer the primary path for). */}
+        {showRedirect && kindMeta.redirect && (
+          <div
+            style={{
+              ...redirectNudgeBaseStyle,
+              background: kindMeta.bgColor,
+              borderColor: kindMeta.borderColor,
+              color: kindMeta.color,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 4, letterSpacing: 0.3 }}>
+              💡 Try this instead
+            </div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.85, marginBottom: 12, color: "rgba(255,255,255,0.85)" }}>
+              {kindMeta.redirect.reason}
+            </div>
+            <Link
+              href={kindMeta.redirect.href}
+              style={{
+                ...redirectLinkBaseStyle,
+                borderColor: kindMeta.color,
+                background: kindMeta.bgColor,
+                color: kindMeta.color,
+              }}
+            >
+              {kindMeta.redirect.label} →
+            </Link>
+          </div>
+        )}
+
+        {/* Preset list — for CARDIO/SESSION it lives behind a collapsed
+            expander (legacy fallback only); for the other three kinds the
+            list is the primary content. A "Start blank" card heads the
+            list when the kind has a real builder path. */}
+        {showRedirect ? (
+          <details style={legacyPresetCardStyle}>
+            <summary style={legacyPresetSummaryStyle}>
+              Create a {kindMeta.label.toLowerCase()} routine manually (advanced)
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <div style={s.activityList}>
+                <BlankKindCard meta={kindMeta} onSelect={chooseBlankForKind} />
+                {activityList.map((preset) => (
+                  <ActivityCard
+                    key={preset.key}
+                    preset={preset}
+                    domainMeta={getDomainMeta(preset.domain)}
+                    onSelect={chooseActivity}
+                  />
+                ))}
+              </div>
+            </div>
+          </details>
+        ) : (
+          <div style={s.activityList}>
+            <BlankKindCard meta={kindMeta} onSelect={chooseBlankForKind} />
+            {activityList.map((preset) => (
+              <ActivityCard
+                key={preset.key}
+                preset={preset}
+                domainMeta={getDomainMeta(preset.domain)}
+                onSelect={chooseActivity}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ─── STEP 3: Form ────────────────────────────────────────────────────────────
-  const activePresetMeta = selectedPreset && domainMeta;
+  // Header badge prefers the preset's resolved domain (so the user sees what
+  // dashboard bucket the routine will land in) and falls back to the kind
+  // badge when there's no preset yet — e.g. the "blank kind" or "custom"
+  // paths. domainMeta from earlier is only set in the presetDomain entry
+  // mode; for the top-level kind path we derive from effectiveDomain.
+  const badgeDomainMeta = selectedPreset ? getDomainMeta(effectiveDomain) : domainMeta;
+  const badgeKindMeta = !badgeDomainMeta ? (kindMeta ?? getKindMeta(kind)) : null;
 
   return (
     <form action={drawerSubmit ?? createRoutine} style={s.form}>
@@ -312,11 +457,29 @@ export default function NewRoutineForm({
       {/* Step header */}
       <div style={s.stepHeader}>
         <button type="button" onClick={goBack} style={s.backBtn}>← Back</button>
-        {activePresetMeta && (
-          <div style={{ ...s.domainBadge, color: domainMeta!.color, background: domainMeta!.bgColor, borderColor: domainMeta!.borderColor }}>
-            {domainMeta!.icon} {domainMeta!.label}
+        {badgeDomainMeta ? (
+          <div
+            style={{
+              ...s.domainBadge,
+              color: badgeDomainMeta.color,
+              background: badgeDomainMeta.bgColor,
+              borderColor: badgeDomainMeta.borderColor,
+            }}
+          >
+            {badgeDomainMeta.icon} {badgeDomainMeta.label}
           </div>
-        )}
+        ) : badgeKindMeta ? (
+          <div
+            style={{
+              ...s.domainBadge,
+              color: badgeKindMeta.color,
+              background: badgeKindMeta.bgColor,
+              borderColor: badgeKindMeta.borderColor,
+            }}
+          >
+            {badgeKindMeta.icon} {badgeKindMeta.label}
+          </div>
+        ) : null}
       </div>
 
       {/* Selected activity summary */}
@@ -524,27 +687,31 @@ export default function NewRoutineForm({
   );
 }
 
-// ─── Domain card component ────────────────────────────────────────────────────
-
-function DomainCard({
+// ─── Kind card component ──────────────────────────────────────────────────────
+// The Step-1 picker tile. KIND_META drives the data; visuals follow the
+// same shape the domain badges + activity cards use on later steps so the
+// flow reads as one design language. The shortDescription sits inline
+// with the label so the card stays compact; the longer description fills
+// the body.
+function KindCard({
   meta,
   onSelect,
 }: {
-  meta: DomainMeta;
-  onSelect: (domain: Exclude<RoutineDomain, "skill" | "general" | "habit">) => void;
+  meta: KindMeta;
+  onSelect: (kind: RoutineKind) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
     <button
       type="button"
-      onClick={() => onSelect(meta.domain)}
+      onClick={() => onSelect(meta.kind)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
-        gap: 8,
+        gap: 6,
         padding: "16px 14px",
         border: `1px solid ${hovered ? meta.color : meta.borderColor}`,
         borderRadius: 16,
@@ -553,13 +720,96 @@ function DomainCard({
         textAlign: "left",
         transition: "border-color 0.15s, background 0.15s",
         width: "100%",
+        minHeight: 124,
       }}
     >
-      <div style={{ fontSize: 28, lineHeight: 1 }}>{meta.icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 15, color: hovered ? meta.color : "inherit" }}>
-        {meta.label}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+        <div style={{ fontSize: 26, lineHeight: 1 }}>{meta.icon}</div>
+        <div style={{ display: "grid", gap: 1, minWidth: 0, flex: 1 }}>
+          <div style={{ fontWeight: 900, fontSize: 15, color: hovered ? meta.color : "inherit" }}>
+            {meta.label}
+          </div>
+          <div style={{ fontSize: 11.5, opacity: 0.6, fontWeight: 700 }}>
+            {meta.shortDescription}
+          </div>
+        </div>
       </div>
-      <div style={{ fontSize: 12, opacity: 0.65, lineHeight: 1.45 }}>{meta.description}</div>
+      <div style={{ fontSize: 12, opacity: 0.62, lineHeight: 1.45 }}>{meta.description}</div>
+      {meta.redirect && (
+        <div
+          style={{
+            fontSize: 10.5,
+            fontWeight: 800,
+            letterSpacing: 0.3,
+            opacity: 0.78,
+            color: meta.color,
+            marginTop: 2,
+          }}
+        >
+          → Usually logged via {meta.redirect.label.replace("Go to ", "")}
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ─── Blank-kind card — "start fresh in this kind" ─────────────────────────────
+// Sits at the top of each kind's preset list so the user can bypass presets
+// while still keeping the kind they picked. Visually muted vs the actual
+// presets so it doesn't pretend to be one.
+function BlankKindCard({
+  meta,
+  onSelect,
+}: {
+  meta: KindMeta;
+  onSelect: (meta: KindMeta) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(meta)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "14px 16px",
+        border: `1px dashed ${hovered ? meta.color : "rgba(128,128,128,0.35)"}`,
+        borderRadius: 14,
+        background: hovered ? meta.bgColor : "rgba(255,255,255,0.015)",
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "border-color 0.15s, background 0.15s",
+        width: "100%",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 20,
+          width: 40,
+          height: 40,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(128,128,128,0.06)",
+          borderRadius: 10,
+          flexShrink: 0,
+          opacity: 0.85,
+        }}
+      >
+        ＋
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: hovered ? meta.color : "inherit" }}>
+          Start blank
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.62, marginTop: 2, lineHeight: 1.4 }}>
+          Skip the preset and configure a {meta.label.toLowerCase()} routine from scratch.
+        </div>
+      </div>
+      <div style={{ color: "rgba(128,128,128,0.5)", fontSize: 16, flexShrink: 0 }}>›</div>
     </button>
   );
 }
@@ -665,6 +915,29 @@ const primaryRedirectLinkStyleSport: React.CSSProperties = {
   color: "rgba(254,215,170,1)",
 };
 
+// Generic redirect-nudge tokens used by the kind-mode Step 2. Colors are
+// applied inline per kind (CARDIO blue, SESSION orange) so the same
+// markup re-skins to match whichever kind the user picked.
+const redirectNudgeBaseStyle: React.CSSProperties = {
+  padding: "14px 16px",
+  borderRadius: 14,
+  borderWidth: 1,
+  borderStyle: "solid",
+};
+
+const redirectLinkBaseStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "10px 16px",
+  borderRadius: 10,
+  borderWidth: 1,
+  borderStyle: "solid",
+  fontSize: 13,
+  fontWeight: 900,
+  textDecoration: "none",
+  minHeight: 44,
+};
+
 const legacyPresetCardStyle: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.25)",
   borderRadius: 12,
@@ -714,6 +987,15 @@ const s = {
   domainGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+    gap: 10,
+  } as React.CSSProperties,
+
+  // Kind picker grid. Wider min so each card has room for icon + label +
+  // short tag inline at the top, and a 2-line description below. Auto-fill
+  // means PC shows 2-3 across (5 cards land 3+2), mobile collapses to 1.
+  kindGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
     gap: 10,
   } as React.CSSProperties,
 

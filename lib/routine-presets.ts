@@ -17,6 +17,111 @@ export type ActivityPreset = {
   defaultName?: string;
 };
 
+// Routine-kind display metadata for the "what shape is this routine" picker.
+// Kind is the LOG SHAPE — it dictates what fields appear when you record a
+// session. Domain is derived from kind+subtype+preset and only sets the
+// dashboard bucket; surfacing kind first makes the question the user is
+// actually asking ("how does this get logged?") match what they pick.
+//
+// Two of the kinds (CARDIO + SESSION) carry a `redirect` because endurance
+// is logged directly by activity type (no routine needed) and sports are
+// enabled via the sport picker (which materializes their session routine).
+// The kind card still renders so the user understands the shape exists,
+// but the nudge points them at the right entry.
+export type KindMeta = {
+  kind: RoutineKind;
+  label: string;
+  shortDescription: string;
+  description: string;
+  icon: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  redirect?: { href: string; label: string; reason: string };
+};
+
+export const KIND_META: KindMeta[] = [
+  {
+    kind: "WORKOUT",
+    label: "Workout",
+    shortDescription: "Sets, reps, weight",
+    description: "Pick exercises and log sets each session — strength, hypertrophy, rehab.",
+    icon: "🏋️",
+    color: "rgba(84,203,130,1)",
+    bgColor: "rgba(84,203,130,0.08)",
+    borderColor: "rgba(84,203,130,0.28)",
+  },
+  {
+    kind: "GUIDED",
+    label: "Guided",
+    shortDescription: "Timed step-by-step",
+    description: "Step through timed exercises in order — mobility flows, breathwork, warmups, cooldowns.",
+    icon: "🧘",
+    color: "rgba(192,132,252,1)",
+    bgColor: "rgba(192,132,252,0.08)",
+    borderColor: "rgba(192,132,252,0.28)",
+  },
+  {
+    kind: "COMPLETION",
+    label: "Completion",
+    shortDescription: "Done or not done",
+    description: "One tap to mark done — habits, supplements, check-ins, recovery (cold plunge, sauna, foam rolling).",
+    icon: "✅",
+    color: "rgba(251,191,36,1)",
+    bgColor: "rgba(251,191,36,0.08)",
+    borderColor: "rgba(251,191,36,0.28)",
+  },
+  {
+    kind: "CARDIO",
+    label: "Cardio",
+    shortDescription: "Distance and pace",
+    description: "Runs, walks, bikes, swims. Logged directly by activity type — no routine needed.",
+    icon: "🏃",
+    color: "rgba(78,148,255,1)",
+    bgColor: "rgba(78,148,255,0.08)",
+    borderColor: "rgba(78,148,255,0.28)",
+    redirect: {
+      href: "/activities/endurance",
+      label: "Go to Endurance",
+      reason: "Endurance is logged directly by activity type (Run, Hike, Bike, …). Pick a type and go.",
+    },
+  },
+  {
+    kind: "SESSION",
+    label: "Sport Session",
+    shortDescription: "Skill-shaped",
+    description: "Climbing, tennis, basketball, golf. Sports are enabled via the sport picker — each gets a session shape automatically.",
+    icon: "🏆",
+    color: "rgba(251,146,60,1)",
+    bgColor: "rgba(251,146,60,0.08)",
+    borderColor: "rgba(251,146,60,0.28)",
+    redirect: {
+      href: "/activities/sports",
+      label: "Go to Sports",
+      reason: "Sports are enabled from the sport picker — each gets a session shape automatically.",
+    },
+  },
+];
+
+export function getKindMeta(kind: RoutineKind): KindMeta {
+  return KIND_META.find((m) => m.kind === kind) ?? KIND_META[0];
+}
+
+// Filter presets for a given kind, deduping by key (a few presets — notably
+// REHAB_WORKOUT — appear under two domains with the same key; we only want
+// one row per key when surfacing by kind so React doesn't duplicate-key warn).
+export function getActivitiesForKind(kind: RoutineKind): ActivityPreset[] {
+  const seen = new Set<string>();
+  const out: ActivityPreset[] = [];
+  for (const preset of ACTIVITY_PRESETS) {
+    if (preset.kind !== kind) continue;
+    if (seen.has(preset.key)) continue;
+    seen.add(preset.key);
+    out.push(preset);
+  }
+  return out;
+}
+
 // Domain display metadata for the picker grid
 export type DomainMeta = {
   domain: Exclude<RoutineDomain, "skill" | "general" | "habit">;
