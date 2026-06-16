@@ -28,6 +28,10 @@ export type SetRow = {
   reps?: string;
   seconds?: string;
   weightLb?: string;
+  /** Client-only "confirmed" flag — drives the green done state and the
+   *  per-exercise progress count. Persisted in the draft so it survives a
+   *  reload, but never sent to the server (a set is saved iff it has values). */
+  done?: boolean;
 };
 
 export type WorkoutBlock = {
@@ -237,31 +241,82 @@ export default function WorkoutExerciseEditor({
     inputRefs.current.get(nextKey)?.focus();
   }
 
-  function copyLastSession(exerciseId: string) {
-    markDirty();
-    setBlocks((prev) =>
-      prev.map((block) => {
-        if (block.exerciseId !== exerciseId || !block.lastRows?.length) return block;
-        return { ...block, rows: block.lastRows.map((r, i) => ({ ...r, setNumber: i + 1 })) };
-      })
-    );
+  function rowHasValue(row: SetRow) {
+    return (row.reps ?? row.seconds ?? row.weightLb ?? "").toString().trim() !== "";
   }
 
-  function acceptGhostRow(exerciseId: string, setNumber: number, ghost: SetRow) {
+  // What a set fills from when confirmed (and what its grey hint shows):
+  // last session's matching set if we have it, otherwise the set directly
+  // above in this session (carry-forward fallback for added sets).
+  function suggestionFor(block: WorkoutBlock, rowIdx: number): SetRow | undefined {
+    const setNumber = block.rows[rowIdx]?.setNumber;
+    const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
+    if (fromLast && (fromLast.reps || fromLast.seconds || fromLast.weightLb)) return fromLast;
+    return rowIdx > 0 ? block.rows[rowIdx - 1] : undefined;
+  }
+
+  // Mark any typed-but-unconfirmed set in `exerciseId` as done. Fired when
+  // leaving an exercise so "typed a set, moved on" still counts it.
+  function commitTypedSets(source: WorkoutBlock[], exerciseId: string | null): WorkoutBlock[] {
+    if (!exerciseId) return source;
+    return source.map((block) => {
+      if (block.exerciseId !== exerciseId) return block;
+      if (!block.rows.some((r) => rowHasValue(r) && !r.done)) return block;
+      return {
+        ...block,
+        rows: block.rows.map((r) => (rowHasValue(r) && !r.done ? { ...r, done: true } : r)),
+      };
+    });
+  }
+
+  // Switch the open exercise, committing typed sets in the one being left.
+  function changeExpanded(nextId: string | null, source: WorkoutBlock[] = blocks) {
+    if (expandedId && expandedId !== nextId) {
+      const committed = commitTypedSets(source, expandedId);
+      if (committed !== source) {
+        markDirty();
+        setBlocks(committed);
+      }
+    }
+    setExpandedId(nextId);
+  }
+
+  // Confirm (or un-confirm) a set. Confirming an empty set fills it from its
+  // suggestion first; confirming the last set auto-advances to the next
+  // exercise. Pure client state — no network, so it's instant.
+  function confirmSet(exerciseId: string, rowIdx: number) {
     markDirty();
-    setBlocks((prev) =>
-      prev.map((block) => {
-        if (block.exerciseId !== exerciseId) return block;
-        return {
-          ...block,
-          rows: block.rows.map((row) =>
-            row.setNumber === setNumber
-              ? { ...row, reps: ghost.reps, seconds: ghost.seconds, weightLb: ghost.weightLb }
-              : row
-          ),
-        };
-      })
-    );
+    const block = blocks.find((b) => b.exerciseId === exerciseId);
+    const row = block?.rows[rowIdx];
+    if (!block || !row) return;
+    const togglingOff = !!row.done;
+
+    const newBlocks = blocks.map((b) => {
+      if (b.exerciseId !== exerciseId) return b;
+      return {
+        ...b,
+        rows: b.rows.map((r, i) => {
+          if (i !== rowIdx) return r;
+          if (togglingOff) return { ...r, done: false };
+          if (rowHasValue(r)) return { ...r, done: true };
+          const src = suggestionFor(b, i);
+          return {
+            ...r,
+            reps: r.reps ?? src?.reps,
+            seconds: r.seconds ?? src?.seconds,
+            weightLb: r.weightLb ?? src?.weightLb,
+            done: true,
+          };
+        }),
+      };
+    });
+    setBlocks(newBlocks);
+
+    // Auto-advance when the last set of the exercise was just confirmed.
+    if (!togglingOff && rowIdx === block.rows.length - 1) {
+      const bi = newBlocks.findIndex((b) => b.exerciseId === exerciseId);
+      changeExpanded(newBlocks[bi + 1]?.exerciseId ?? null, newBlocks);
+    }
   }
 
   function addExercise(exerciseId: string) {
@@ -331,6 +386,7 @@ export default function WorkoutExerciseEditor({
     );
   }
 
+  // Editing a value un-confirms the set — re-tap the check to lock it back in.
   function updateCell(exerciseId: string, setNumber: number, key: keyof SetRow, value: string) {
     markDirty();
     setBlocks((prev) =>
@@ -338,26 +394,8 @@ export default function WorkoutExerciseEditor({
         if (block.exerciseId !== exerciseId) return block;
         return {
           ...block,
-          rows: block.rows.map((row) => (row.setNumber === setNumber ? { ...row, [key]: value } : row)),
-        };
-      })
-    );
-  }
-
-  function copyPrevSet(exerciseId: string, setNumber: number) {
-    markDirty();
-    setBlocks((prev) =>
-      prev.map((block) => {
-        if (block.exerciseId !== exerciseId) return block;
-        const rowIdx = block.rows.findIndex((r) => r.setNumber === setNumber);
-        if (rowIdx <= 0) return block;
-        const prev_row = block.rows[rowIdx - 1];
-        return {
-          ...block,
-          rows: block.rows.map((row, i) =>
-            i === rowIdx
-              ? { ...row, weightLb: prev_row.weightLb, reps: prev_row.reps, seconds: prev_row.seconds }
-              : row
+          rows: block.rows.map((row) =>
+            row.setNumber === setNumber ? { ...row, [key]: value, done: false } : row
           ),
         };
       })
@@ -475,12 +513,6 @@ export default function WorkoutExerciseEditor({
     .filter(Boolean)
     .join(" - ");
 
-  function countLoggedSets(block: WorkoutBlock): number {
-    return block.rows.filter(
-      (r) => (r.reps ?? r.seconds ?? r.weightLb ?? "").toString().trim() !== ""
-    ).length;
-  }
-
   return (
     <div className="mobileListStack" style={{ display: "grid", gap: 12, width: "100%", maxWidth: 880, minWidth: 0 }}>
 
@@ -517,8 +549,7 @@ export default function WorkoutExerciseEditor({
 
         {blocks.map((block) => {
           const isExpanded = expandedId === block.exerciseId;
-          const loggedSets = countLoggedSets(block);
-          const blockLastRowsMap = new Map((block.lastRows ?? []).map((r) => [r.setNumber, r]));
+          const doneSets = block.rows.filter((r) => r.done).length;
 
           return (
             <div
@@ -533,15 +564,15 @@ export default function WorkoutExerciseEditor({
               {/* Accordion header */}
               <button
                 type="button"
-                onClick={() => setExpandedId(isExpanded ? null : block.exerciseId)}
+                onClick={() => changeExpanded(isExpanded ? null : block.exerciseId)}
                 style={styles.blockCardHeader}
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={{ fontWeight: 900, fontSize: 15 }}>{block.name}</div>
                   <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                     {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
-                    {loggedSets > 0
-                      ? ` · ${loggedSets}/${block.rows.length} sets`
+                    {doneSets > 0
+                      ? ` · ${doneSets}/${block.rows.length} done`
                       : ` · ${block.rows.length} sets`}
                   </div>
                 </div>
@@ -571,14 +602,9 @@ export default function WorkoutExerciseEditor({
                   {/* Block action row */}
                   <div style={styles.blockActionRow}>
                     {block.lastRows?.length ? (
-                      <button
-                        type="button"
-                        onClick={() => copyLastSession(block.exerciseId)}
-                        style={styles.copyLastBtn}
-                        title="Fill all sets from last session"
-                      >
-                        ↩ {block.lastDate ?? "Last"}
-                      </button>
+                      <span style={styles.lastHint}>
+                        Hints from {block.lastDate ?? "last session"} · tap ✓ to fill
+                      </span>
                     ) : null}
                     <div style={{ flex: 1 }} />
                     <button
@@ -610,9 +636,8 @@ export default function WorkoutExerciseEditor({
                   {/* Set rows */}
                   <div style={{ display: "grid", gap: 6 }}>
                     {block.rows.map((row, rowIdx) => {
-                      const ghostRow = blockLastRowsMap.get(row.setNumber);
+                      const suggestion = suggestionFor(block, rowIdx);
                       const rowIsEmpty = !row.reps && !row.seconds && !row.weightLb;
-                      const primaryFilled = block.unit === "REPS" ? !!row.reps : !!row.seconds;
                       return (
                         <div
                           key={row.setNumber}
@@ -622,9 +647,9 @@ export default function WorkoutExerciseEditor({
                             gap: 6,
                             alignItems: "center",
                             borderRadius: 10,
-                            padding: primaryFilled ? "2px 4px" : undefined,
-                            border: primaryFilled ? "1px solid rgba(74,222,128,0.28)" : undefined,
-                            background: primaryFilled ? "rgba(74,222,128,0.05)" : undefined,
+                            padding: "2px 4px",
+                            border: row.done ? "1px solid rgba(74,222,128,0.45)" : "1px solid transparent",
+                            background: row.done ? "rgba(74,222,128,0.1)" : undefined,
                           }}
                         >
                           <div style={styles.setNum}>{row.setNumber}</div>
@@ -636,7 +661,7 @@ export default function WorkoutExerciseEditor({
                               style={styles.bigInput}
                               value={row.weightLb ?? ""}
                               inputMode="decimal"
-                              placeholder={ghostRow?.weightLb ?? "—"}
+                              placeholder={suggestion?.weightLb ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "weightLb", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "weightLb"); } }}
                             />
@@ -649,7 +674,7 @@ export default function WorkoutExerciseEditor({
                               style={styles.bigInput}
                               value={row.reps ?? ""}
                               inputMode="numeric"
-                              placeholder={ghostRow?.reps ?? "—"}
+                              placeholder={suggestion?.reps ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "reps", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "reps"); } }}
                             />
@@ -662,34 +687,22 @@ export default function WorkoutExerciseEditor({
                               style={styles.bigInput}
                               value={row.seconds ?? ""}
                               inputMode="numeric"
-                              placeholder={ghostRow?.seconds ?? "—"}
+                              placeholder={suggestion?.seconds ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "seconds", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "seconds"); } }}
                             />
                           )}
 
                           <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                            {ghostRow && rowIsEmpty ? (
-                              <button
-                                type="button"
-                                onClick={() => acceptGhostRow(block.exerciseId, row.setNumber, ghostRow)}
-                                style={styles.iconBtnAccept}
-                                title="Accept last session values"
-                              >
-                                ↓
-                              </button>
-                            ) : rowIdx > 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => copyPrevSet(block.exerciseId, row.setNumber)}
-                                style={styles.iconBtn}
-                                title="Copy set above"
-                              >
-                                ↑
-                              </button>
-                            ) : (
-                              <div style={{ width: 32 }} />
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => confirmSet(block.exerciseId, rowIdx)}
+                              style={row.done ? styles.iconBtnCheckDone : styles.iconBtnCheck}
+                              title={row.done ? "Set confirmed — tap to undo" : rowIsEmpty ? "Confirm set (fills the hint)" : "Confirm set"}
+                              aria-pressed={row.done}
+                            >
+                              ✓
+                            </button>
                             <button
                               type="button"
                               onClick={() => { if (rowIsEmpty) removeRow(block.exerciseId, row.setNumber); else clearRow(block.exerciseId, row.setNumber); }}
@@ -973,20 +986,40 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
 
-  iconBtnAccept: {
+  iconBtnCheck: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    border: "1px solid rgba(115,220,152,0.45)",
-    background: "rgba(115,220,152,0.1)",
-    color: "rgba(115,220,152,0.9)",
+    border: "1px solid rgba(128,128,128,0.4)",
+    background: "rgba(128,128,128,0.08)",
+    color: "rgba(255,255,255,0.45)",
     fontWeight: 900,
-    fontSize: 14,
+    fontSize: 15,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  } as React.CSSProperties,
+
+  iconBtnCheckDone: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1px solid rgba(74,222,128,0.7)",
+    background: "rgba(74,222,128,0.9)",
+    color: "#07210f",
+    fontWeight: 900,
+    fontSize: 15,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
   } as React.CSSProperties,
 
   iconBtnDanger: {
@@ -1005,17 +1038,13 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
 
-  copyLastBtn: {
-    padding: "6px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(115,220,152,0.4)",
-    background: "rgba(115,220,152,0.08)",
-    color: "inherit",
-    fontWeight: 800,
-    fontSize: 12,
-    cursor: "pointer",
-    flexShrink: 0,
+  lastHint: {
+    fontSize: 11,
+    fontWeight: 700,
+    opacity: 0.55,
     whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   } as React.CSSProperties,
 
   removeBtn: {
