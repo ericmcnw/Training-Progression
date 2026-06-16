@@ -355,7 +355,7 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
 // rendered above the map on /body so the two read as one system.
 
 const LEGEND_ENTRIES: Array<{ key: ZoneFreshness; label: string; color: string }> = [
-  { key: "INJURED",         label: "Injured",         color: "rgba(248,113,113,0.85)" },
+  { key: "INJURED",         label: "Pain / injured (deeper = worse)", color: "rgba(248,113,113,0.85)" },
   { key: "RECOVERING",      label: "Recovering",      color: "rgba(147,197,253,0.85)" },
   { key: "WORKED_TODAY",    label: "Worked today",    color: "rgba(129,140,248,0.85)" },
   { key: "RECENTLY_WORKED", label: "Recently worked", color: "rgba(96,165,250,0.85)"  },

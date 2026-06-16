@@ -8,7 +8,6 @@ import type { BodyMapProps, BodyMapView, ZoneFreshness } from "./types";
 
 // ─── Freshness → library intensity ───────────────────────────────────────────
 // intensity 0 = not in data (default/unhighlighted)
-// colors array indexes: 0=recently-worked, 1=recovering, 2=worked-today, 3=injured, 4=selected
 const FRESHNESS_INTENSITY: Record<ZoneFreshness, number> = {
   FRESH: 0,
   RECENTLY_WORKED: 1,
@@ -20,13 +19,31 @@ const FRESHNESS_INTENSITY: Record<ZoneFreshness, number> = {
 // Intensity for a selected zone (selectable mode)
 const SELECTED_INTENSITY = 5;
 
-// Colors: index 0 → intensity 1, index 4 → intensity 5
+// Pain red-ramp: light → deep red, mapped from pain level 1-10. A higher pain
+// score reads as a deeper, more saturated red — so the body shows not just
+// THAT a zone hurts but HOW much.
+const PAIN_REDS = ["#FCA5A5", "#F87171", "#EF4444", "#DC2626", "#991B1B"] as const;
+function painBucket(pain: number): number {
+  // 1-2 → 0, 3-4 → 1, 5-6 → 2, 7-8 → 3, 9-10 → 4
+  return Math.min(4, Math.max(0, Math.ceil(pain / 2) - 1));
+}
+function painRed(pain: number): string {
+  return PAIN_REDS[painBucket(pain)];
+}
+// Pain occupies library intensities 6-10 (one per ramp shade), above the
+// freshness/selected intensities so a painful zone always wins the color.
+function painIntensity(pain: number): number {
+  return 6 + painBucket(pain);
+}
+
+// Colors: index 0 → intensity 1. 1-5 = freshness + selected; 6-10 = pain ramp.
 const BODY_COLORS = [
   "#2563EB", // 1 = recently worked (blue)
   "#93C5FD", // 2 = recovering (light blue)
   "#4338CA", // 3 = worked today (dark blue-purple)
-  "#E11D1D", // 4 = injured (deep vivid red)
+  "#E11D1D", // 4 = injured, no pain score (vivid red)
   "#ECFEFF", // 5 = selected (bright cyan-white)
+  ...PAIN_REDS, // 6-10 = pain level ramp
 ] as const;
 
 // ─── Custom overlay zones ────────────────────────────────────────────────────
@@ -265,7 +282,7 @@ function libKey(slug: string, side?: "left" | "right"): string {
 
 // ─── Build library data array ─────────────────────────────────────────────────
 function buildLibData(
-  zones: Array<{ slug: string; freshness: ZoneFreshness }>,
+  zones: Array<{ slug: string; freshness: ZoneFreshness; painLevel?: number }>,
   selectedSet: Set<string>,
   selectable: boolean,
 ): ExtendedBodyPart[] {
@@ -280,12 +297,17 @@ function buildLibData(
     else                  entry.central = Math.max(entry.central, intensity);
   };
 
-  // Add zone states
+  // Add zone states. Pain dominates: a zone with a pain score ramps red by
+  // severity; otherwise it falls back to its freshness color.
   for (const zone of zones) {
     const mapping = OUR_TO_LIB[zone.slug];
     if (!mapping) continue;
     const isSelected = selectable && selectedSet.has(zone.slug);
-    const intensity = isSelected ? SELECTED_INTENSITY : FRESHNESS_INTENSITY[zone.freshness];
+    const intensity = isSelected
+      ? SELECTED_INTENSITY
+      : zone.painLevel != null && zone.painLevel > 0
+      ? painIntensity(zone.painLevel)
+      : FRESHNESS_INTENSITY[zone.freshness];
     if (intensity === 0) continue;
     addIntensity(mapping.slug, mapping.side, intensity);
   }
@@ -334,7 +356,7 @@ function BodyPanel({
   gender: "male" | "female";
   onZoneClick?: (slug: string) => void;
   onZoneHover?: (slug: string | null) => void;
-  zones: Array<{ slug: string; freshness: ZoneFreshness }>;
+  zones: Array<{ slug: string; freshness: ZoneFreshness; painLevel?: number }>;
   selectedSet: Set<string>;
   selectable: boolean;
 }) {
@@ -352,6 +374,12 @@ function BodyPanel({
   const zoneStateMap = useMemo(() => {
     const m = new Map<string, ZoneFreshness>();
     for (const z of zones) m.set(z.slug, z.freshness);
+    return m;
+  }, [zones]);
+
+  const zonePainMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const z of zones) if (z.painLevel != null && z.painLevel > 0) m.set(z.slug, z.painLevel);
     return m;
   }, [zones]);
 
@@ -384,8 +412,13 @@ function BodyPanel({
           >
             {frontOverlayConfig(gender).zones.map((zone) => {
               const freshness = zoneStateMap.get(zone.slug) ?? "FRESH";
+              const pain = zonePainMap.get(zone.slug);
               const isSelected = selectable && selectedSet.has(zone.slug);
-              const fill = isSelected ? SELECTED_FILL : FRESHNESS_FILL[freshness];
+              const fill = isSelected
+                ? SELECTED_FILL
+                : pain != null
+                ? painRed(pain)
+                : FRESHNESS_FILL[freshness];
               return (
                 <path
                   key={zone.slug}
@@ -413,14 +446,17 @@ function BodyPanel({
                 library zone underneath. */}
             {frontOverlayConfig(gender).joints.map((joint) => {
               const freshness = zoneStateMap.get(joint.slug) ?? "FRESH";
+              const pain = zonePainMap.get(joint.slug);
               const isSelected = selectable && selectedSet.has(joint.slug);
-              const injuredOrPain = freshness === "INJURED";
+              const hurt = pain != null || freshness === "INJURED";
               const ringColor = isSelected
                 ? SELECTED_FILL
-                : injuredOrPain
+                : pain != null
+                ? painRed(pain)
+                : freshness === "INJURED"
                 ? "#E11D1D"
                 : "rgba(186,230,253,0.85)"; // cyan-tinted ring so joints read apart from muscles
-              const fill = isSelected ? "rgba(236,254,255,0.18)" : injuredOrPain ? "rgba(225,29,29,0.18)" : "rgba(8,15,28,0.55)";
+              const fill = isSelected ? "rgba(236,254,255,0.18)" : hurt ? "rgba(225,29,29,0.18)" : "rgba(8,15,28,0.55)";
               const clickable = joint.interactive !== false && Boolean(onZoneClick);
               return (
                 <g key={joint.slug} aria-label={joint.label}>
