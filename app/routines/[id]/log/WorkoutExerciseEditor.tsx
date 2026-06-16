@@ -654,7 +654,8 @@ export default function WorkoutExerciseEditor({
               }}
             >
 
-              {/* Accordion header + reorder grip */}
+              {/* Accordion header + reorder grip. Remove sits in the header
+                  (so it works collapsed too) just left of the chevron. */}
               <div style={styles.blockHeaderRow}>
               <div
                 role="button"
@@ -685,6 +686,22 @@ export default function WorkoutExerciseEditor({
                       : ` · ${block.rows.length} sets`}
                   </div>
                 </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => removeExercise(block.exerciseId)}
+                style={styles.headerRemoveBtn}
+                aria-label={`Remove ${block.name}`}
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                onClick={() => changeExpanded(isExpanded ? null : block.exerciseId)}
+                style={styles.chevronBtn}
+                aria-label={isExpanded ? "Collapse exercise" : "Expand exercise"}
+                aria-expanded={isExpanded}
+              >
                 <svg
                   viewBox="0 0 16 16"
                   fill="none"
@@ -694,7 +711,6 @@ export default function WorkoutExerciseEditor({
                   width={14}
                   height={14}
                   style={{
-                    flexShrink: 0,
                     opacity: 0.55,
                     transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
                     transition: "transform 180ms ease",
@@ -707,19 +723,7 @@ export default function WorkoutExerciseEditor({
 
               {/* Expanded content */}
               {isExpanded && (
-                <div style={{ padding: "0 14px 14px" }}>
-
-                  {/* Block action row */}
-                  <div style={styles.blockActionRow}>
-                    <div style={{ flex: 1 }} />
-                    <button
-                      type="button"
-                      onClick={() => removeExercise(block.exerciseId)}
-                      style={styles.removeBtn}
-                    >
-                      Remove
-                    </button>
-                  </div>
+                <div style={{ padding: "4px 14px 14px" }}>
 
                   {/* Column headers */}
                   <div
@@ -1157,13 +1161,36 @@ const styles = {
     opacity: 0.96,
   } as React.CSSProperties,
 
-  blockActionRow: {
+  headerRemoveBtn: {
+    alignSelf: "center",
+    flexShrink: 0,
+    padding: "6px 10px",
+    borderRadius: 8,
+    border: "1px solid rgba(220,38,38,0.4)",
+    background: "rgba(220,38,38,0.08)",
+    color: "inherit",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  } as React.CSSProperties,
+
+  chevronBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    paddingBottom: 10,
-    borderBottom: "1px solid rgba(128,128,128,0.18)",
-    marginBottom: 10,
+    justifyContent: "center",
+    flexShrink: 0,
+    width: 40,
+    alignSelf: "stretch",
+    padding: 0,
+    background: "none",
+    border: "none",
+    color: "inherit",
+    cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
   } as React.CSSProperties,
 
   colLabel: {
@@ -1260,18 +1287,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
-  } as React.CSSProperties,
-
-  removeBtn: {
-    padding: "6px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(220,38,38,0.4)",
-    background: "rgba(220,38,38,0.08)",
-    color: "inherit",
-    fontWeight: 800,
-    fontSize: 13,
-    cursor: "pointer",
     flexShrink: 0,
   } as React.CSSProperties,
 
