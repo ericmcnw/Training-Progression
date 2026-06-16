@@ -1,15 +1,20 @@
 "use client";
 
-// Home Goals section — replaces the bare HabitGrid card in the home left
-// column. Frequency goals are primary (the daily rhythm); other goal types
-// (performance / volume / one-time completion) sit in a secondary,
-// collapsed-by-default subgroup so they're glanceable without leaving home.
+// Home Goals section. Three shape-based groups, not type-based:
 //
-// Reuses HabitGrid (bare) verbatim for the frequency rows — including its
-// compact-row → rich-expand behavior — so this component only adds the
-// daily/weekly split, the "other goals" subgroup, and the section chrome.
-// To revert the whole rework: render <HabitGrid> directly in HomeShell
-// again and delete this file. Nothing else depends on it.
+//   Daily     — daily-style frequency goals (calendar-grid render). The
+//               everyday rhythm; always shown.
+//   Recurring — non-daily frequency goals (weekly/monthly) AND per-window
+//               volume goals (run 5mi/week, 100mi/month). Both accumulate
+//               toward a window target and read identically, so they share
+//               a group and the bars-vs-target visual. Behind a toggle.
+//   Other     — one-off / PR goals (squat 1RM, send a V8). Scalar progress
+//               bars. Behind a toggle.
+//
+// Reuses HabitGrid (bare) for the frequency rows verbatim. Recurring volume
+// goals render via a small inline bars row fed from the goal insight's
+// history series. Fully additive — revert by pointing HomeShell back at
+// <HabitGrid> and deleting this file + lib/home-goals.ts.
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
@@ -28,16 +33,20 @@ export default function HomeGoalsSection({
   today: string;
   otherGoals: HomeOtherGoal[];
 }) {
-  // Split frequency goals: daily-style (calendar grid render) are the daily
-  // rhythm shown up front; weekly/monthly (bars render) go behind a toggle.
   const dailyRows = habitRows.filter((r) => getFrequencyRenderMode(r.target) !== "weekly-bars");
   const weeklyRows = habitRows.filter((r) => getFrequencyRenderMode(r.target) === "weekly-bars");
+  const recurringGoals = otherGoals.filter((g) => g.shape === "recurring");
+  const oneoffGoals = otherGoals.filter((g) => g.shape === "oneoff");
 
-  const [showWeekly, setShowWeekly] = useState(false);
+  const [showRecurring, setShowRecurring] = useState(false);
   const [showOther, setShowOther] = useState(false);
 
+  const recurringCount = weeklyRows.length + recurringGoals.length;
   const totalCount = habitRows.length + otherGoals.length;
-  const hasFrequency = habitRows.length > 0;
+  const isEmpty = totalCount === 0;
+  // Only label the daily block when there's a sibling group to distinguish
+  // it from — a lone group needs no header.
+  const showGroupLabels = dailyRows.length > 0 && (recurringCount > 0 || oneoffGoals.length > 0);
 
   return (
     <CollapsibleSection
@@ -48,35 +57,56 @@ export default function HomeGoalsSection({
       storageKey="home.goals.open"
       defaultOpen
     >
-      {!hasFrequency && otherGoals.length === 0 ? (
+      {isEmpty ? (
         <div style={emptyState}>
           No goals yet. Add a frequency target to a routine, or create a goal from the Plan tab.
         </div>
       ) : null}
 
-      {/* Frequency — daily first, always shown. */}
-      {dailyRows.length > 0 ? <HabitGrid rows={dailyRows} today={today} chrome="bare" /> : null}
-
-      {/* Weekly / monthly frequency goals behind a toggle (collapsed by
-          default — daily rhythm is what the user checks most). */}
-      {weeklyRows.length > 0 ? (
+      {/* Daily */}
+      {dailyRows.length > 0 ? (
         <div style={{ display: "grid", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setShowWeekly((v) => !v)}
-            style={subToggle}
-            aria-expanded={showWeekly}
-          >
-            <span>{showWeekly ? "Hide" : "Show"} {weeklyRows.length} weekly {weeklyRows.length === 1 ? "goal" : "goals"}</span>
-            <span style={{ ...subChevron, transform: showWeekly ? "rotate(180deg)" : "none" }} aria-hidden>▾</span>
-          </button>
-          {showWeekly ? <HabitGrid rows={weeklyRows} today={today} chrome="bare" showDayHeader={false} /> : null}
+          {showGroupLabels ? <div style={groupLabel}>Daily</div> : null}
+          <HabitGrid rows={dailyRows} today={today} chrome="bare" />
         </div>
       ) : null}
 
-      {/* Other goals — performance / volume / completion. Secondary subgroup,
-          collapsed by default; auto-absent when there are none. */}
-      {otherGoals.length > 0 ? (
+      {/* Recurring — weekly/monthly frequency + per-window volume goals. */}
+      {recurringCount > 0 ? (
+        <div style={{ display: "grid", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowRecurring((v) => !v)}
+            style={subToggle}
+            aria-expanded={showRecurring}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              Recurring
+              <span style={subCount}>{recurringCount}</span>
+            </span>
+            <span style={{ ...subChevron, transform: showRecurring ? "rotate(180deg)" : "none" }} aria-hidden>▾</span>
+          </button>
+          {showRecurring ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              {weeklyRows.length > 0 ? (
+                <HabitGrid rows={weeklyRows} today={today} chrome="bare" showDayHeader={false} />
+              ) : null}
+              {recurringGoals.length > 0 ? (
+                <ul style={plainList}>
+                  {recurringGoals.map((g) => (
+                    <li key={g.id}>
+                      <RecurringGoalRow goal={g} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Other — one-off / PR goals (scalar progress). */}
+      {oneoffGoals.length > 0 ? (
         <div style={otherShell}>
           <button
             type="button"
@@ -86,28 +116,15 @@ export default function HomeGoalsSection({
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               Other goals
-              <span style={otherCount}>{otherGoals.length}</span>
+              <span style={subCount}>{oneoffGoals.length}</span>
             </span>
             <span style={{ ...subChevron, transform: showOther ? "rotate(180deg)" : "none" }} aria-hidden>▾</span>
           </button>
           {showOther ? (
-            <ul style={otherList}>
-              {otherGoals.map((g) => (
+            <ul style={plainList}>
+              {oneoffGoals.map((g) => (
                 <li key={g.id}>
-                  <Link href={g.detailHref} style={otherRow}>
-                    <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
-                      <div style={otherName}>
-                        {g.name}
-                        {g.isAchieved ? <span style={achievedTick} aria-label="achieved">✓</span> : null}
-                      </div>
-                      <ProgressBar fraction={g.fraction} achieved={g.isAchieved} />
-                    </div>
-                    <div style={otherMetric}>
-                      <span style={otherActual}>{g.actualDisplay}</span>
-                      <span style={otherTarget}>/ {g.targetDisplay}</span>
-                      <span style={otherTimeframe}>{g.timeframeLabel}</span>
-                    </div>
-                  </Link>
+                  <ScalarGoalRow goal={g} />
                 </li>
               ))}
             </ul>
@@ -118,14 +135,90 @@ export default function HomeGoalsSection({
   );
 }
 
-function ProgressBar({ fraction, achieved }: { fraction: number; achieved: boolean }) {
-  const pct = Math.min(100, Math.max(0, Math.round(fraction * 100)));
-  const color = achieved ? "rgba(51,255,122,0.9)" : pct >= 60 ? "rgba(132,204,255,0.9)" : "rgba(251,191,36,0.9)";
+// ── recurring (per-window) goal — bars vs target ─────────────────────────────
+function RecurringGoalRow({ goal }: { goal: HomeOtherGoal }) {
   return (
-    <div style={barTrack} aria-hidden>
-      <div style={{ ...barFill, width: `${pct}%`, background: color }} />
+    <Link href={goal.detailHref} style={goalRow}>
+      <div style={{ display: "grid", gap: 6, minWidth: 0, width: "100%" }}>
+        <div style={rowHeadLine}>
+          <span style={goalName}>{goal.name}</span>
+          <span style={metricInline}>
+            <span style={actualText}>{goal.actualDisplay}</span>
+            <span style={targetText}>/ {goal.targetDisplay}</span>
+          </span>
+        </div>
+        <GoalBars history={goal.history} target={goal.targetValue} />
+      </div>
+    </Link>
+  );
+}
+
+// 8-window bar chart with a dashed target line. The latest bar is the
+// in-progress window. Bars meeting/exceeding the target go green; short
+// ones amber.
+function GoalBars({ history, target }: { history: { label: string; value: number }[]; target: number }) {
+  if (history.length === 0) {
+    return <div style={{ ...barRow, alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", fontSize: 11, fontWeight: 700 }}>No history yet</div>;
+  }
+  const maxValue = Math.max(target, ...history.map((h) => h.value));
+  const scaleMax = maxValue > 0 ? maxValue * 1.12 : 1;
+  // Target line position from the bottom, as a %.
+  const targetPct = scaleMax > 0 ? Math.min(100, (target / scaleMax) * 100) : 0;
+  const last = history.length - 1;
+  return (
+    <div style={barOuter}>
+      {target > 0 ? <div style={{ ...targetLine, bottom: `${targetPct}%` }} aria-hidden /> : null}
+      <div style={barRow}>
+        {history.map((h, i) => {
+          const pct = scaleMax > 0 ? Math.max(3, (h.value / scaleMax) * 100) : 3;
+          const met = target > 0 && h.value >= target;
+          const isCurrent = i === last;
+          return (
+            <div key={`${h.label}-${i}`} style={barCol} title={`${h.label}: ${round(h.value)}${target > 0 ? ` / ${round(target)}` : ""}`}>
+              <div
+                style={{
+                  ...bar,
+                  height: `${pct}%`,
+                  background: met ? "rgba(51,255,122,0.85)" : "rgba(251,191,36,0.8)",
+                  opacity: isCurrent ? 1 : 0.78,
+                  outline: isCurrent ? "1px solid rgba(255,255,255,0.35)" : "none",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+// ── one-off / PR goal — scalar progress ──────────────────────────────────────
+function ScalarGoalRow({ goal }: { goal: HomeOtherGoal }) {
+  const pct = Math.min(100, Math.max(0, Math.round(goal.fraction * 100)));
+  const color = goal.isAchieved ? "rgba(51,255,122,0.9)" : pct >= 60 ? "rgba(132,204,255,0.9)" : "rgba(251,191,36,0.9)";
+  return (
+    <Link href={goal.detailHref} style={goalRow}>
+      <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+        <div style={goalName}>
+          {goal.name}
+          {goal.isAchieved ? <span style={achievedTick} aria-label="achieved">✓</span> : null}
+        </div>
+        <div style={barTrack} aria-hidden>
+          <div style={{ ...barTrackFill, width: `${pct}%`, background: color }} />
+        </div>
+      </div>
+      <div style={otherMetric}>
+        <span style={actualText}>{goal.actualDisplay}</span>
+        <span style={targetText}>/ {goal.targetDisplay}</span>
+        <span style={timeframeText}>{goal.timeframeLabel}</span>
+      </div>
+    </Link>
+  );
+}
+
+function round(v: number): string {
+  if (Math.abs(v) >= 100) return String(Math.round(v));
+  return (Math.round(v * 10) / 10).toString();
 }
 
 // ── styles ──────────────────────────────────────────────────────────────────
@@ -134,6 +227,15 @@ const emptyState: CSSProperties = {
   color: "rgba(255,255,255,0.55)",
   padding: "8px 4px",
   lineHeight: 1.5,
+};
+
+const groupLabel: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.45)",
+  paddingLeft: 2,
 };
 
 const subToggle: CSSProperties = {
@@ -156,20 +258,9 @@ const subToggle: CSSProperties = {
   minHeight: 40,
 };
 
-const subChevron: CSSProperties = {
-  fontSize: 10,
-  transition: "transform 160ms ease",
-  opacity: 0.7,
-};
+const subChevron: CSSProperties = { fontSize: 10, transition: "transform 160ms ease", opacity: 0.7 };
 
-const otherShell: CSSProperties = {
-  display: "grid",
-  gap: 8,
-  borderTop: "1px solid rgba(255,255,255,0.06)",
-  paddingTop: 12,
-};
-
-const otherCount: CSSProperties = {
+const subCount: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 900,
   padding: "1px 7px",
@@ -179,7 +270,14 @@ const otherCount: CSSProperties = {
   color: "rgba(255,255,255,0.6)",
 };
 
-const otherList: CSSProperties = {
+const otherShell: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  paddingTop: 12,
+};
+
+const plainList: CSSProperties = {
   listStyle: "none",
   margin: 0,
   padding: 0,
@@ -187,7 +285,7 @@ const otherList: CSSProperties = {
   gap: 6,
 };
 
-const otherRow: CSSProperties = {
+const goalRow: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -200,7 +298,14 @@ const otherRow: CSSProperties = {
   color: "inherit",
 };
 
-const otherName: CSSProperties = {
+const rowHeadLine: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const goalName: CSSProperties = {
   fontSize: 13,
   fontWeight: 800,
   overflow: "hidden",
@@ -209,12 +314,16 @@ const otherName: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
+  minWidth: 0,
 };
 
-const achievedTick: CSSProperties = {
-  color: "rgba(51,255,122,0.9)",
-  fontWeight: 900,
-  fontSize: 12,
+const achievedTick: CSSProperties = { color: "rgba(51,255,122,0.9)", fontWeight: 900, fontSize: 12 };
+
+const metricInline: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: 4,
+  flexShrink: 0,
 };
 
 const otherMetric: CSSProperties = {
@@ -226,9 +335,9 @@ const otherMetric: CSSProperties = {
   textAlign: "right",
 };
 
-const otherActual: CSSProperties = { fontSize: 13, fontWeight: 900, lineHeight: 1.1 };
-const otherTarget: CSSProperties = { fontSize: 10.5, fontWeight: 700, opacity: 0.6 };
-const otherTimeframe: CSSProperties = {
+const actualText: CSSProperties = { fontSize: 13, fontWeight: 900, lineHeight: 1.1 };
+const targetText: CSSProperties = { fontSize: 10.5, fontWeight: 700, opacity: 0.6 };
+const timeframeText: CSSProperties = {
   fontSize: 9,
   fontWeight: 800,
   letterSpacing: 0.3,
@@ -237,6 +346,7 @@ const otherTimeframe: CSSProperties = {
   marginTop: 1,
 };
 
+// scalar bar
 const barTrack: CSSProperties = {
   height: 5,
   borderRadius: 999,
@@ -244,8 +354,38 @@ const barTrack: CSSProperties = {
   overflow: "hidden",
   minWidth: 90,
 };
+const barTrackFill: CSSProperties = { height: "100%", borderRadius: 999 };
 
-const barFill: CSSProperties = {
+// recurring bars
+const barOuter: CSSProperties = {
+  position: "relative",
+  width: "100%",
+};
+const barRow: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+  gap: 3,
+  height: 38,
+  width: "100%",
+};
+const barCol: CSSProperties = {
+  flex: 1,
   height: "100%",
-  borderRadius: 999,
+  display: "flex",
+  alignItems: "flex-end",
+  minWidth: 0,
+};
+const bar: CSSProperties = {
+  width: "100%",
+  borderRadius: "3px 3px 2px 2px",
+  minHeight: 2,
+};
+const targetLine: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  height: 0,
+  borderTop: "1px dashed rgba(255,255,255,0.45)",
+  zIndex: 1,
+  pointerEvents: "none",
 };
