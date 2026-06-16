@@ -14,7 +14,7 @@
 
 import { useState, type CSSProperties } from "react";
 import type { MonthData, MonthDayCell, DayEntry, DayEntryStatus } from "./data";
-import { domainAccent } from "@/app/_home/client-utils";
+import { domainRgb } from "@/lib/routines";
 import DayDetailPopover from "./DayDetailPopover";
 import type { QuickPickRoutine } from "@/app/_home/types";
 
@@ -25,11 +25,11 @@ type Props = {
   scheduleSports?: import("@/app/_home/SchedulePicker").ScheduleSport[];
 };
 
-// Workout-dot caps. Lower than the original 6/10 because workouts are the
-// minority of daily entries — most users won't have more than 1-3 actual
-// workout sessions on a given day. The habit pill handles the rest.
-const MAX_DOTS_MOBILE = 4;
-const MAX_DOTS_DESKTOP = 6;
+// Per-cell entry caps. Mobile shows glyph dots (bigger now — a letter or
+// sport emoji each), desktop shows full word chips. Most days have 1-3
+// sessions; beyond the cap we render "+N".
+const MAX_DOTS_MOBILE = 3;
+const MAX_CHIPS_DESKTOP = 3;
 
 export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
@@ -105,9 +105,9 @@ function DayCell({
   const workouts = cell.entries.filter((e) => !e.isHabit);
   const habitsTotal = cell.entries.filter((e) => e.isHabit).length;
 
-  // Workout dot caps — different on mobile vs desktop. Render both and let
-  // CSS show the appropriate one. Avoids a window-size-dependent fork.
-  const desktopWorkouts = workouts.slice(0, MAX_DOTS_DESKTOP);
+  // Render both mobile + desktop variants and let CSS show the right one.
+  // Avoids a window-size-dependent fork.
+  const desktopWorkouts = workouts.slice(0, MAX_CHIPS_DESKTOP);
   const desktopWorkoutOverflow = workouts.length - desktopWorkouts.length;
   const mobileWorkouts = workouts.slice(0, MAX_DOTS_MOBILE);
   const mobileWorkoutOverflow = workouts.length - mobileWorkouts.length;
@@ -128,19 +128,20 @@ function DayCell({
     >
       <span style={dayNumber(cell.isToday)}>{cell.dayNumber}</span>
 
-      {/* Workout lane. */}
+      {/* Entry lane. Mobile = glyph dots; desktop = full word chips. Only
+          one renders per viewport (CSS toggle below). */}
       <div style={workoutLane}>
         {workouts.length > 0 ? (
           <>
-            <div className="planMonthDots planMonthDotsMobile" style={dotsRowBase}>
+            <div className="planMonthLane planMonthLaneMobile" style={dotsRowBase}>
               {mobileWorkouts.map((entry) => (
-                <Dot key={entry.key} entry={entry} />
+                <GlyphDot key={entry.key} entry={entry} />
               ))}
               {mobileWorkoutOverflow > 0 ? <Overflow count={mobileWorkoutOverflow} /> : null}
             </div>
-            <div className="planMonthDots planMonthDotsDesktop" style={dotsRowBase}>
+            <div className="planMonthLane planMonthLaneDesktop" style={chipsColBase}>
               {desktopWorkouts.map((entry) => (
-                <Dot key={entry.key} entry={entry} />
+                <WordChip key={entry.key} entry={entry} />
               ))}
               {desktopWorkoutOverflow > 0 ? <Overflow count={desktopWorkoutOverflow} /> : null}
             </div>
@@ -148,30 +149,55 @@ function DayCell({
         ) : null}
       </div>
 
-      {/* IMPORTANT: `display` is set in CSS (not inline) so the media-
-          query rules can actually toggle it. With `display: flex` set
-          inline, the .planMonthDotsDesktop { display: none } rule loses
-          on specificity and BOTH dot rows render at every viewport,
-          which appeared as doubled dots on each day. */}
+      {/* IMPORTANT: `display` is set in CSS (not inline) so the media-query
+          rules can toggle it. Inline `display:flex` would beat the
+          `display:none` class rule on specificity and render both lanes. */}
       <style>{`
-        .planMonthDotsMobile { display: flex; }
-        .planMonthDotsDesktop { display: none; }
+        .planMonthLaneMobile { display: flex; }
+        .planMonthLaneDesktop { display: none; }
         @media (min-width: 720px) {
-          .planMonthDotsMobile { display: none; }
-          .planMonthDotsDesktop { display: flex; }
+          .planMonthLaneMobile { display: none; }
+          .planMonthLaneDesktop { display: flex; }
         }
       `}</style>
     </button>
   );
 }
 
-function Dot({ entry }: { entry: DayEntry }) {
+// Mobile: a bigger rounded glyph dot — sport emoji or a domain-tinted letter
+// monogram. Filled when logged, outlined when planned/future.
+function GlyphDot({ entry }: { entry: DayEntry }) {
+  const tone = entryTone(entry.status, entry.domain);
   return (
     <span
-      style={dotStyle(entry.status, entry.domain)}
+      style={{
+        ...glyphDotBase,
+        background: tone.bg,
+        borderColor: tone.border,
+        color: entry.isIcon ? "inherit" : tone.glyph,
+      }}
       title={`${entry.routineName} — ${entry.status}`}
-      aria-hidden
-    />
+    >
+      {entry.glyph}
+    </span>
+  );
+}
+
+// Desktop: a full word chip — small glyph + truncated routine name.
+function WordChip({ entry }: { entry: DayEntry }) {
+  const tone = entryTone(entry.status, entry.domain);
+  return (
+    <span
+      style={{ ...wordChipBase, background: tone.bg, borderColor: tone.border }}
+      title={`${entry.routineName} — ${entry.status}`}
+    >
+      {entry.isIcon ? (
+        <span style={chipGlyphIcon} aria-hidden>{entry.glyph}</span>
+      ) : (
+        <span style={{ ...chipGlyphDot, background: tone.glyph }} aria-hidden />
+      )}
+      <span style={chipName}>{entry.routineName}</span>
+    </span>
   );
 }
 
@@ -255,51 +281,105 @@ function dayNumber(isToday: boolean): CSSProperties {
 }
 
 const workoutLane: CSSProperties = {
-  // Tiny fixed min-height so cells with no workouts still leave room above
-  // the habit pill — keeps the visual rhythm steady across the grid.
+  // Fixed min-height so empty days keep the same rhythm as full ones.
   minHeight: 10,
   display: "flex",
   alignItems: "flex-start",
 };
 
-// NOTE: `display` is intentionally NOT set here. It's controlled by the
-// CSS rules + media query above so .planMonthDotsMobile and
-// .planMonthDotsDesktop can be toggled per viewport. Setting display
+// NOTE: `display` is intentionally NOT set on the lane base styles. It's
+// controlled by the CSS rules + media query above so .planMonthLaneMobile
+// and .planMonthLaneDesktop can be toggled per viewport. Setting display
 // inline would defeat the media query (inline beats class selectors).
 const dotsRowBase: CSSProperties = {
   flexWrap: "wrap",
-  gap: 3,
+  gap: 4,
   alignItems: "center",
 };
 
-function dotStyle(status: DayEntryStatus, domain: string): CSSProperties {
-  const color = domainAccent(domain);
-  const base: CSSProperties = {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    border: `1.5px solid ${color}`,
-    flexShrink: 0,
-    boxSizing: "border-box",
-  };
+const chipsColBase: CSSProperties = {
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 3,
+  width: "100%",
+  minWidth: 0,
+};
+
+// Shared tone for a glyph dot / word chip based on log status. `bg` fills
+// the chip, `border` outlines it, `glyph` colors a letter monogram or the
+// desktop chip's leading dot. Missed days go red; future/planned stay faint.
+const MISSED_RGB = "248,113,113";
+function entryTone(status: DayEntryStatus, domain: string): { bg: string; border: string; glyph: string } {
+  const rgb = domainRgb(domain);
   switch (status) {
     case "done":
     case "loggedExtra":
-      return { ...base, background: color };
+      return { bg: `rgba(${rgb},0.92)`, border: `rgba(${rgb},0.92)`, glyph: "rgba(6,12,22,0.92)" };
     case "partial":
-      return { ...base, background: color, opacity: 0.7 };
+      return { bg: `rgba(${rgb},0.55)`, border: `rgba(${rgb},0.85)`, glyph: "rgba(6,12,22,0.9)" };
     case "missed":
-      return { ...base, background: "transparent", borderColor: "rgba(248,113,113,0.65)" };
+      return { bg: "transparent", border: `rgba(${MISSED_RGB},0.55)`, glyph: `rgba(${MISSED_RGB},0.9)` };
     case "future":
-      // Solid hollow ring at low opacity. The previous dashed border
-      // rendered as a few tick marks on an 8px circle and read as visual
-      // noise — solid + opacity reads cleanly at this size.
-      return { ...base, background: "transparent", opacity: 0.4 };
+      return { bg: "transparent", border: `rgba(${rgb},0.4)`, glyph: `rgba(${rgb},0.7)` };
     case "planned":
     default:
-      return { ...base, background: "transparent", opacity: 0.75 };
+      return { bg: `rgba(${rgb},0.12)`, border: `rgba(${rgb},0.65)`, glyph: `rgba(${rgb},0.95)` };
   }
 }
+
+const glyphDotBase: CSSProperties = {
+  width: 19,
+  height: 19,
+  borderRadius: 6,
+  borderWidth: 1.5,
+  borderStyle: "solid",
+  boxSizing: "border-box",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 900,
+  lineHeight: 1,
+  flexShrink: 0,
+};
+
+const wordChipBase: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "2px 7px",
+  borderRadius: 7,
+  borderWidth: 1,
+  borderStyle: "solid",
+  boxSizing: "border-box",
+  minHeight: 19,
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+};
+
+const chipGlyphIcon: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1,
+  flexShrink: 0,
+};
+
+const chipGlyphDot: CSSProperties = {
+  width: 7,
+  height: 7,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+
+const chipName: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.92)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  minWidth: 0,
+};
 
 const overflowChip: CSSProperties = {
   fontSize: 9.5,

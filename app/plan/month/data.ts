@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { addDaysYmd, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import type { RoutineDomain } from "@/lib/routines";
+import { activityIcon } from "@/lib/activity-families";
+import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 import {
   routineWithFrequencyTarget,
   shouldAutoScheduleRoutine,
@@ -33,6 +35,13 @@ export type DayEntry = {
   activityTypeId: string | null;
   routineName: string;
   domain: RoutineDomain;
+  /** Compact label for the calendar cell: a sport emoji when the entry is a
+   *  sport, otherwise the first letter of the display name (Push → "P").
+   *  The calendar's mobile dots show this; desktop shows the full name. */
+  glyph: string;
+  /** True when glyph is an emoji icon (sport) vs a letter monogram — lets
+   *  the cell skip the domain-color tint on emoji so it renders true-color. */
+  isIcon: boolean;
   planned: number;
   logged: number;
   status: DayEntryStatus;
@@ -347,12 +356,16 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         bucket?.activityTypeName ??
         (slot.activityTypeId ? activityTypeNameById.get(slot.activityTypeId) ?? null : null);
       const displayName = typeName ?? r.name;
+      const entryDomain = effectiveRoutineDomain(r.domain, r.kind, r.subtype);
+      const { glyph, isIcon } = entryGlyph(slot.routineId, entryDomain, displayName);
       entries.push({
         key,
         routineId: slot.routineId,
         activityTypeId: slot.activityTypeId,
         routineName: displayName,
-        domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
+        domain: entryDomain,
+        glyph,
+        isIcon,
         planned: slot.planned,
         logged: loggedCount,
         status,
@@ -415,6 +428,24 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       activeCycles: activeCyclesCount,
     },
   };
+}
+
+// Compact cell glyph: sports resolve to their emoji icon (via the synthetic
+// sport routine slug); everything else gets a first-letter monogram of the
+// display name. Returns isIcon so the renderer can skip the color tint on
+// emoji (they carry their own color) but tint letter monograms by domain.
+function entryGlyph(
+  routineId: string,
+  domain: RoutineDomain,
+  displayName: string
+): { glyph: string; isIcon: boolean } {
+  if (domain === "sport") {
+    const slug = sportSlugFromRoutineId(routineId);
+    const icon = slug ? activityIcon(slug) : null;
+    if (icon) return { glyph: icon, isIcon: true };
+  }
+  const firstChar = displayName.trim().charAt(0).toUpperCase();
+  return { glyph: firstChar || "•", isIcon: false };
 }
 
 function computeStatus(

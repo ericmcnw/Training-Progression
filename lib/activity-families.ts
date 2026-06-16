@@ -22,6 +22,10 @@ export type ActivityRegistryEntry = {
   family: ActivityFamily;
   /** Short eyebrow shown above the card title (e.g., "Cardio", "Board sport"). */
   eyebrow: string;
+  /** Emoji glyph for compact surfaces (Plan calendar dots, FAB, headers).
+   *  One per activity; sports get distinct icons, endurance shares motion
+   *  icons by modality. */
+  icon: string;
   /** Optional ordering hint within the family — lower numbers appear first. */
   sortHint?: number;
   /** True if this activity has a deep "world" build-out (Phase 3+). */
@@ -30,32 +34,32 @@ export type ActivityRegistryEntry = {
 
 // Endurance — pace/distance-shaped activities.
 const ENDURANCE_ACTIVITIES: ActivityRegistryEntry[] = [
-  { slug: "running", label: "Running", family: "endurance", eyebrow: "Endurance", sortHint: 10 },
-  { slug: "trail-running", label: "Trail Running", family: "endurance", eyebrow: "Endurance · Outdoor", sortHint: 11 },
-  { slug: "road-running", label: "Road Running", family: "endurance", eyebrow: "Endurance", sortHint: 12 },
-  { slug: "walking", label: "Walking", family: "endurance", eyebrow: "Endurance", sortHint: 20 },
-  { slug: "biking", label: "Biking", family: "endurance", eyebrow: "Endurance", sortHint: 30 },
-  { slug: "road-cycling", label: "Road Cycling", family: "endurance", eyebrow: "Endurance", sortHint: 31 },
-  { slug: "mountain-biking", label: "Mountain Biking", family: "endurance", eyebrow: "Endurance · Outdoor", sortHint: 32 },
-  { slug: "gravel-cycling", label: "Gravel Cycling", family: "endurance", eyebrow: "Endurance · Outdoor", sortHint: 33 },
-  { slug: "swimming", label: "Swimming", family: "endurance", eyebrow: "Endurance", sortHint: 40 },
-  { slug: "pool-swimming", label: "Pool Swimming", family: "endurance", eyebrow: "Endurance", sortHint: 41 },
-  { slug: "open-water-swimming", label: "Open Water Swimming", family: "endurance", eyebrow: "Endurance · Outdoor", sortHint: 42 },
-  { slug: "rowing", label: "Rowing", family: "endurance", eyebrow: "Endurance", sortHint: 50 },
-  { slug: "hiking", label: "Hiking", family: "endurance", eyebrow: "Endurance · Outdoor", sortHint: 60 },
+  { slug: "running", label: "Running", family: "endurance", eyebrow: "Endurance", icon: "🏃", sortHint: 10 },
+  { slug: "trail-running", label: "Trail Running", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🏃", sortHint: 11 },
+  { slug: "road-running", label: "Road Running", family: "endurance", eyebrow: "Endurance", icon: "🏃", sortHint: 12 },
+  { slug: "walking", label: "Walking", family: "endurance", eyebrow: "Endurance", icon: "🚶", sortHint: 20 },
+  { slug: "biking", label: "Biking", family: "endurance", eyebrow: "Endurance", icon: "🚴", sortHint: 30 },
+  { slug: "road-cycling", label: "Road Cycling", family: "endurance", eyebrow: "Endurance", icon: "🚴", sortHint: 31 },
+  { slug: "mountain-biking", label: "Mountain Biking", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🚵", sortHint: 32 },
+  { slug: "gravel-cycling", label: "Gravel Cycling", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🚴", sortHint: 33 },
+  { slug: "swimming", label: "Swimming", family: "endurance", eyebrow: "Endurance", icon: "🏊", sortHint: 40 },
+  { slug: "pool-swimming", label: "Pool Swimming", family: "endurance", eyebrow: "Endurance", icon: "🏊", sortHint: 41 },
+  { slug: "open-water-swimming", label: "Open Water Swimming", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🏊", sortHint: 42 },
+  { slug: "rowing", label: "Rowing", family: "endurance", eyebrow: "Endurance", icon: "🚣", sortHint: 50 },
+  { slug: "hiking", label: "Hiking", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🥾", sortHint: 60 },
 ];
 
 // Sports — skill / session-shaped activities.
 const SPORT_ACTIVITIES: ActivityRegistryEntry[] = [
-  { slug: "climbing", label: "Climbing", family: "sports", eyebrow: "Sport", sortHint: 5, hasDeepWorld: true },
-  { slug: "surfing", label: "Surfing", family: "sports", eyebrow: "Board sport", sortHint: 10 },
-  { slug: "snowboarding", label: "Snowboarding", family: "sports", eyebrow: "Board sport", sortHint: 11 },
-  { slug: "skiing", label: "Skiing", family: "sports", eyebrow: "Board sport", sortHint: 12 },
-  { slug: "skateboarding", label: "Skateboarding", family: "sports", eyebrow: "Board sport", sortHint: 13 },
-  { slug: "basketball", label: "Basketball", family: "sports", eyebrow: "Team sport", sortHint: 30 },
-  { slug: "spikeball", label: "Spikeball", family: "sports", eyebrow: "Yard sport", sortHint: 32 },
-  { slug: "tennis", label: "Tennis", family: "sports", eyebrow: "Racquet sport", sortHint: 40 },
-  { slug: "golf", label: "Golf", family: "sports", eyebrow: "Sport · Outdoor", sortHint: 50 },
+  { slug: "climbing", label: "Climbing", family: "sports", eyebrow: "Sport", icon: "🧗", sortHint: 5, hasDeepWorld: true },
+  { slug: "surfing", label: "Surfing", family: "sports", eyebrow: "Board sport", icon: "🏄", sortHint: 10 },
+  { slug: "snowboarding", label: "Snowboarding", family: "sports", eyebrow: "Board sport", icon: "🏂", sortHint: 11 },
+  { slug: "skiing", label: "Skiing", family: "sports", eyebrow: "Board sport", icon: "🎿", sortHint: 12 },
+  { slug: "skateboarding", label: "Skateboarding", family: "sports", eyebrow: "Board sport", icon: "🛹", sortHint: 13 },
+  { slug: "basketball", label: "Basketball", family: "sports", eyebrow: "Team sport", icon: "🏀", sortHint: 30 },
+  { slug: "spikeball", label: "Spikeball", family: "sports", eyebrow: "Yard sport", icon: "🏐", sortHint: 32 },
+  { slug: "tennis", label: "Tennis", family: "sports", eyebrow: "Racquet sport", icon: "🎾", sortHint: 40 },
+  { slug: "golf", label: "Golf", family: "sports", eyebrow: "Sport · Outdoor", icon: "⛳", sortHint: 50 },
 ];
 
 export const ACTIVITY_REGISTRY: ActivityRegistryEntry[] = [
@@ -67,6 +71,12 @@ const ENTRY_BY_SLUG = new Map(ACTIVITY_REGISTRY.map((entry) => [entry.slug, entr
 
 export function getActivityEntry(slug: string): ActivityRegistryEntry | null {
   return ENTRY_BY_SLUG.get(slug) ?? null;
+}
+
+/** Emoji glyph for an activity slug, or null if unknown. Used by compact
+ *  surfaces (Plan calendar, FAB, headers) that want an icon, not text. */
+export function activityIcon(slug: string): string | null {
+  return ENTRY_BY_SLUG.get(slug)?.icon ?? null;
 }
 
 export function isEnduranceActivity(slug: string) {
