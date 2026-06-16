@@ -70,16 +70,25 @@ const SELECTED_FILL = "#ECFEFF";
 // different viewBoxes ("724 0 724 1448", "-50 -40 734 1538", "756 0 774 1448")
 // and their own coordinates — those markers land once the front placement is
 // dialed in visually.
-type JointMarker = { slug: string; label: string; cx: number; cy: number; r: number };
+// `interactive: false` markers are decorative rings drawn over a real library
+// zone (knees, ankles) purely for visual unity — clicks pass through to the
+// library button underneath. Interactive markers (shoulder/hip/wrist/elbow)
+// have no library zone, so they own their own click target.
+type JointMarker = { slug: string; label: string; cx: number; cy: number; r: number; interactive?: boolean };
 const FRONT_JOINT_MARKERS_MALE: JointMarker[] = [
-  { slug: "left-shoulder-joint",  label: "Left Shoulder (joint)",  cx: 266, cy: 324, r: 17 },
-  { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", cx: 458, cy: 324, r: 17 },
-  { slug: "left-elbow",           label: "Left Elbow",             cx: 196, cy: 512, r: 16 },
-  { slug: "right-elbow",          label: "Right Elbow",            cx: 528, cy: 512, r: 16 },
-  { slug: "left-wrist",           label: "Left Wrist",             cx: 134, cy: 700, r: 15 },
-  { slug: "right-wrist",          label: "Right Wrist",            cx: 590, cy: 700, r: 15 },
-  { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 266, cy: 634, r: 16 },
-  { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 458, cy: 634, r: 16 },
+  { slug: "left-shoulder-joint",  label: "Left Shoulder (joint)",  cx: 266, cy: 324,  r: 17, interactive: true },
+  { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", cx: 458, cy: 324,  r: 17, interactive: true },
+  { slug: "left-elbow",           label: "Left Elbow",             cx: 196, cy: 512,  r: 16, interactive: true },
+  { slug: "right-elbow",          label: "Right Elbow",            cx: 528, cy: 512,  r: 16, interactive: true },
+  { slug: "left-wrist",           label: "Left Wrist",             cx: 134, cy: 700,  r: 15, interactive: true },
+  { slug: "right-wrist",          label: "Right Wrist",            cx: 590, cy: 700,  r: 15, interactive: true },
+  { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 266, cy: 634,  r: 16, interactive: true },
+  { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 458, cy: 634,  r: 16, interactive: true },
+  // Decorative-only rings over the library's own knee/ankle zones.
+  { slug: "left-knee-front",      label: "Left Knee",              cx: 293, cy: 1034, r: 16, interactive: false },
+  { slug: "right-knee-front",     label: "Right Knee",             cx: 431, cy: 1034, r: 16, interactive: false },
+  { slug: "left-ankle",           label: "Left Ankle",             cx: 284, cy: 1238, r: 14, interactive: false },
+  { slug: "right-ankle",          label: "Right Ankle",            cx: 440, cy: 1238, r: 14, interactive: false },
 ];
 
 // ─── Zone slug mapping ────────────────────────────────────────────────────────
@@ -355,8 +364,10 @@ function BodyPanel({
                 />
               );
             })}
-            {/* Joint ring markers (male front only for now). Distinct ring
-                shape reads as a joint, not a muscle. */}
+            {/* Joint ring markers (male front only for now). A ring + center
+                dot reads as a joint, not a muscle. Interactive ones own their
+                click target; decorative ones (knee/ankle) let taps fall
+                through to the library zone underneath. */}
             {gender === "male" && FRONT_JOINT_MARKERS_MALE.map((joint) => {
               const freshness = zoneStateMap.get(joint.slug) ?? "FRESH";
               const isSelected = selectable && selectedSet.has(joint.slug);
@@ -367,21 +378,22 @@ function BodyPanel({
                 ? "#E11D1D"
                 : "rgba(186,230,253,0.85)"; // cyan-tinted ring so joints read apart from muscles
               const fill = isSelected ? "rgba(236,254,255,0.18)" : injuredOrPain ? "rgba(225,29,29,0.18)" : "rgba(8,15,28,0.55)";
+              const clickable = joint.interactive !== false && Boolean(onZoneClick);
               return (
                 <g key={joint.slug} aria-label={joint.label}>
                   <circle
                     cx={joint.cx}
                     cy={joint.cy}
                     r={joint.r}
-                    fill={fill}
+                    fill={joint.interactive === false ? "none" : fill}
                     stroke={ringColor}
                     strokeWidth={3}
                     vectorEffect="non-scaling-stroke"
-                    pointerEvents="all"
-                    className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}
-                    onClick={onZoneClick ? () => onZoneClick(joint.slug) : undefined}
-                    onMouseEnter={onZoneHover ? () => onZoneHover(joint.slug) : undefined}
-                    onMouseLeave={onZoneHover ? () => onZoneHover(null) : undefined}
+                    pointerEvents={clickable ? "all" : "none"}
+                    className={clickable ? "pointer-events-auto cursor-pointer" : ""}
+                    onClick={clickable ? () => onZoneClick?.(joint.slug) : undefined}
+                    onMouseEnter={clickable && onZoneHover ? () => onZoneHover(joint.slug) : undefined}
+                    onMouseLeave={clickable && onZoneHover ? () => onZoneHover(null) : undefined}
                   />
                   {/* inner dot — marks it as a joint pivot */}
                   <circle cx={joint.cx} cy={joint.cy} r={joint.r * 0.28} fill={ringColor} pointerEvents="none" />
