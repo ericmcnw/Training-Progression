@@ -146,6 +146,11 @@ export default function WorkoutExerciseEditor({
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Reorder long-press state — drag only engages after a deliberate hold, so
+  // scrolling past the grip never starts a reorder.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gripStartY = useRef(0);
+  const pendingGripId = useRef<string | null>(null);
 
   // Draft state
   const [draftBanner, setDraftBanner] = useState<"recent" | "older" | null>(null);
@@ -214,6 +219,8 @@ export default function WorkoutExerciseEditor({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [expandedId]);
+
+  useEffect(() => () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }, []);
 
   const availableToAdd = useMemo(() => {
     const activeIds = new Set(blocks.map((block) => block.exerciseId));
@@ -361,17 +368,39 @@ export default function WorkoutExerciseEditor({
     });
   }
 
+  function cancelLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  // Drag engages only after a ~250ms hold. A quick touch or a scroll that
+  // grazes the grip moves the finger, which cancels the pending hold before
+  // it fires — so scrolling never starts a reorder.
   function onGripPointerDown(e: React.PointerEvent, exerciseId: string) {
     e.preventDefault();
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setExpandedId(null); // collapse so the whole list is visible while dragging
-    setDraggingId(exerciseId);
-    markDirty();
+    gripStartY.current = e.clientY;
+    pendingGripId.current = exerciseId;
+    cancelLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      if (pendingGripId.current !== exerciseId) return;
+      setExpandedId(null); // collapse so the whole list is visible while dragging
+      setDraggingId(exerciseId);
+      markDirty();
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+    }, 250);
   }
 
   function onGripPointerMove(e: React.PointerEvent) {
-    if (!draggingId) return;
+    if (!draggingId) {
+      // Movement before the hold fires = a scroll, not a drag → abort.
+      if (Math.abs(e.clientY - gripStartY.current) > 8) cancelLongPress();
+      return;
+    }
     const fromIdx = blocks.findIndex((b) => b.exerciseId === draggingId);
     if (fromIdx < 0) return;
     const y = e.clientY;
@@ -388,13 +417,14 @@ export default function WorkoutExerciseEditor({
   }
 
   function onGripPointerUp(e: React.PointerEvent) {
-    if (!draggingId) return;
+    cancelLongPress();
+    pendingGripId.current = null;
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {
       // capture may already be released
     }
-    setDraggingId(null);
+    if (draggingId) setDraggingId(null);
   }
 
   function removeExercise(exerciseId: string) {
@@ -627,7 +657,7 @@ export default function WorkoutExerciseEditor({
               <div style={styles.blockHeaderRow}>
               <div
                 role="button"
-                aria-label="Drag to reorder exercise"
+                aria-label="Hold and drag to reorder exercise"
                 onPointerDown={(e) => onGripPointerDown(e, block.exerciseId)}
                 onPointerMove={onGripPointerMove}
                 onPointerUp={onGripPointerUp}
