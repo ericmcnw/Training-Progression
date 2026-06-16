@@ -76,8 +76,8 @@ const FRONT_JOINT_MARKERS_MALE: JointMarker[] = [
   { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", cx: 458, cy: 324, r: 17 },
   { slug: "left-elbow",           label: "Left Elbow",             cx: 196, cy: 512, r: 16 },
   { slug: "right-elbow",          label: "Right Elbow",            cx: 528, cy: 512, r: 16 },
-  { slug: "left-wrist",           label: "Left Wrist",             cx: 152, cy: 700, r: 15 },
-  { slug: "right-wrist",          label: "Right Wrist",            cx: 572, cy: 700, r: 15 },
+  { slug: "left-wrist",           label: "Left Wrist",             cx: 134, cy: 700, r: 15 },
+  { slug: "right-wrist",          label: "Right Wrist",            cx: 590, cy: 700, r: 15 },
   { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 266, cy: 634, r: 16 },
   { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 458, cy: 634, r: 16 },
 ];
