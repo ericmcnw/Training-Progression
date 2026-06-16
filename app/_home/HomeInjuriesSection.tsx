@@ -145,25 +145,83 @@ export default function HomeInjuriesSection({
   );
 }
 
+function painLevelColor(level: number) {
+  if (level >= 7) return "#F87171";
+  if (level >= 4) return "#FBBF24";
+  return "#86EFAC";
+}
+
+function shortDate(ymd: string) {
+  const [, m, d] = ymd.split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
+
+// Auto-scaled, labeled, tappable pain line — small 1-2 point changes fill the
+// height (instead of vanishing on a flat 0-10 bar chart), the latest value is
+// called out, and tapping a point reads its exact date + level.
 function PainSparkline({ trend }: { trend: HomeInjury["painTrend"] }) {
+  const [sel, setSel] = useState<number | null>(null);
+
   if (trend.length === 0) {
     return <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>No pain logged yet.</div>;
   }
-  const h = 28;
-  const slot = 8;
-  const width = Math.max(trend.length * slot, slot);
+  if (trend.length === 1) {
+    const only = trend[0];
+    return (
+      <div style={{ fontSize: 12.5, fontWeight: 800 }}>
+        <span style={{ color: painLevelColor(only.level) }}>{only.level}/10</span>{" "}
+        <span style={{ opacity: 0.55, fontWeight: 700 }}>· {shortDate(only.ymd)}</span>
+      </div>
+    );
+  }
+
+  const levels = trend.map((d) => d.level);
+  let lo = Math.max(0, Math.min(...levels) - 1);
+  let hi = Math.min(10, Math.max(...levels) + 1);
+  if (hi - lo < 3) {
+    hi = Math.min(10, lo + 3);
+    lo = Math.max(0, hi - 3);
+  }
+
+  const W = 320;
+  const H = 54;
+  const padX = 6;
+  const padY = 7;
+  const x = (i: number) => padX + (i / (trend.length - 1)) * (W - padX * 2);
+  const y = (lvl: number) => padY + (1 - (lvl - lo) / (hi - lo)) * (H - padY * 2);
+  const line = trend.map((d, i) => `${x(i)},${y(d.level)}`).join(" ");
+
+  const selected = sel != null ? trend[sel] : trend[trend.length - 1];
+
   return (
-    <svg width="100%" height={h} viewBox={`0 0 ${width} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-      {trend.map((d, i) => {
-        const barH = Math.max(2, (d.level / 10) * h);
-        const color = d.level >= 7 ? "#DC2626" : d.level >= 4 ? "#F87171" : "#FCA5A5";
-        return (
-          <rect key={d.ymd} x={i * slot + 1} y={h - barH} width={slot - 2} height={barH} fill={color} rx={1}>
-            <title>{`${d.ymd}: ${d.level}/10`}</title>
-          </rect>
-        );
-      })}
-    </svg>
+    <div style={{ display: "grid", gap: 4 }}>
+      <div style={{ fontSize: 12, fontWeight: 800 }}>
+        <span style={{ color: painLevelColor(selected.level) }}>{selected.level}/10</span>{" "}
+        <span style={{ opacity: 0.55, fontWeight: 700 }}>· {shortDate(selected.ymd)}{sel == null ? " (latest)" : ""}</span>
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.4)", paddingBlock: 2 }}>
+          <span>{hi}</span>
+          <span>{lo}</span>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" style={{ display: "block", overflow: "visible" }} role="img" aria-label="Pain trend">
+          {[lo, hi].map((g) => (
+            <line key={g} x1={padX} x2={W - padX} y1={y(g)} y2={y(g)} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+          ))}
+          <polyline points={line} fill="none" stroke="rgba(248,113,113,0.7)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+          {trend.map((d, i) => {
+            const isSel = (sel == null ? i === trend.length - 1 : i === sel);
+            return (
+              <g key={d.ymd}>
+                {/* larger invisible hit target for easy tapping */}
+                <circle cx={x(i)} cy={y(d.level)} r={11} fill="transparent" style={{ cursor: "pointer" }} onClick={() => setSel(i)} />
+                <circle cx={x(i)} cy={y(d.level)} r={isSel ? 4 : 2.5} fill={isSel ? painLevelColor(d.level) : "rgba(248,113,113,0.85)"} stroke={isSel ? "#0b1422" : "none"} strokeWidth={1.5} pointerEvents="none" />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
   );
 }
 
