@@ -312,10 +312,15 @@ export default function WorkoutExerciseEditor({
     });
     setBlocks(newBlocks);
 
-    // Auto-advance when the last set of the exercise was just confirmed.
-    if (!togglingOff && rowIdx === block.rows.length - 1) {
-      const bi = newBlocks.findIndex((b) => b.exerciseId === exerciseId);
-      changeExpanded(newBlocks[bi + 1]?.exerciseId ?? null, newBlocks);
+    // Auto-advance only once EVERY set here is confirmed — so checking the
+    // last set while a middle set is still open keeps you put instead of
+    // skipping it. The exercise being "done" is the trigger, not the row.
+    if (!togglingOff) {
+      const updated = newBlocks.find((b) => b.exerciseId === exerciseId);
+      if (updated && updated.rows.every((r) => r.done)) {
+        const bi = newBlocks.findIndex((b) => b.exerciseId === exerciseId);
+        changeExpanded(newBlocks[bi + 1]?.exerciseId ?? null, newBlocks);
+      }
     }
   }
 
@@ -639,8 +644,11 @@ export default function WorkoutExerciseEditor({
                       const suggestion = suggestionFor(block, rowIdx);
                       const rowIsEmpty = !row.reps && !row.seconds && !row.weightLb;
                       return (
-                        <div
+                        <SwipeableRow
                           key={row.setNumber}
+                          onDelete={() => removeRow(block.exerciseId, row.setNumber)}
+                        >
+                        <div
                           style={{
                             display: "grid",
                             gridTemplateColumns: setGridColumns(block),
@@ -713,6 +721,7 @@ export default function WorkoutExerciseEditor({
                             </button>
                           </div>
                         </div>
+                        </SwipeableRow>
                       );
                     })}
                   </div>
@@ -852,6 +861,91 @@ export default function WorkoutExerciseEditor({
         >
           {saving ? savingLabel : saveLabel}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Touch swipe-to-delete for a set row. Inert on desktop (mouse fires no touch
+// events), so the ✕ button stays the delete path there. `touch-action: pan-y`
+// lets vertical scrolling pass through while we own horizontal drags; the row
+// only fills solid (over the red) while mid-swipe, so the resting look is
+// unchanged and no red bleeds through a transparent row.
+const SWIPE_DELETE_THRESHOLD = 96;
+
+function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: ReactNode }) {
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const axis = useRef<null | "h" | "v">(null);
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    startX.current = t.clientX;
+    startY.current = t.clientY;
+    axis.current = null;
+    setDragging(true);
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging) return;
+    const t = e.touches[0];
+    const ddx = t.clientX - startX.current;
+    const ddy = t.clientY - startY.current;
+    if (axis.current === null) {
+      if (Math.abs(ddx) < 8 && Math.abs(ddy) < 8) return;
+      axis.current = Math.abs(ddx) > Math.abs(ddy) ? "h" : "v";
+    }
+    if (axis.current !== "h") return; // vertical → let the page scroll
+    setDx(Math.max(-160, Math.min(0, ddx))); // left-only
+  }
+
+  function onTouchEnd() {
+    const shouldDelete = axis.current === "h" && dx <= -SWIPE_DELETE_THRESHOLD;
+    setDragging(false);
+    axis.current = null;
+    setDx(0);
+    if (shouldDelete) onDelete();
+  }
+
+  const armed = dx <= -SWIPE_DELETE_THRESHOLD;
+  return (
+    <div
+      style={{ position: "relative", overflow: "hidden", borderRadius: 10, touchAction: "pan-y" }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          paddingRight: 16,
+          background: `rgba(220,38,38,${(0.3 + Math.min(1, -dx / SWIPE_DELETE_THRESHOLD) * 0.6).toFixed(2)})`,
+          color: "#fff",
+          fontWeight: 900,
+          fontSize: 12.5,
+          letterSpacing: 0.4,
+          opacity: dx < 0 ? 1 : 0,
+        }}
+      >
+        {armed ? "Release to delete" : "Delete"}
+      </div>
+      <div
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dragging ? "none" : "transform 160ms ease",
+          position: "relative",
+          background: dx !== 0 ? "var(--bg)" : undefined,
+        }}
+      >
+        {children}
       </div>
     </div>
   );
