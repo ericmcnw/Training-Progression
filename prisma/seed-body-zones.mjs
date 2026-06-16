@@ -23,6 +23,9 @@ export const bodyZones = [
   { slug: "right-knee-front", label: "Right Knee", region: "knee", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 81 },
   { slug: "left-shin", label: "Left Shin", region: "shin", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: "tibialis", sortOrder: 90 },
   { slug: "right-shin", label: "Right Shin", region: "shin", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: "tibialis", sortOrder: 91 },
+  // Ankle joints — joints have no muscle metadata group (like knees/achilles).
+  { slug: "left-ankle", label: "Left Ankle", region: "ankle", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 95 },
+  { slug: "right-ankle", label: "Right Ankle", region: "ankle", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 96 },
   { slug: "abs", label: "Abdominals", region: "abs", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "abs", sortOrder: 25 },
   { slug: "obliques", label: "Obliques", region: "oblique", side: "BILATERAL", bodyView: "FRONT", metadataGroupSlug: "obliques", sortOrder: 26 },
   { slug: "neck-front", label: "Neck (front)", region: "neck", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "neck", sortOrder: 5 },

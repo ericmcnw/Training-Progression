@@ -91,6 +91,10 @@ const OUR_TO_LIB: Record<string, ZoneMapping> = {
   "right-knee-front":      { slug: "knees",       side: "right" },
   "left-shin":             { slug: "tibialis",    side: "left"  },
   "right-shin":            { slug: "tibialis",    side: "right" },
+  // Ankle joints — the library art has a dedicated "ankles" zone, so these
+  // need no custom overlay (unlike shoulder/hip/wrist/elbow).
+  "left-ankle":            { slug: "ankles",      side: "left"  },
+  "right-ankle":           { slug: "ankles",      side: "right" },
   // Fingers (maps to hands in library)
   "left-fingers":          { slug: "hands",       side: "left"  },
   "right-fingers":         { slug: "hands",       side: "right" },
@@ -150,6 +154,8 @@ const LIB_KEY_TO_OUR_SLUG: Record<string, string> = {
   "knees-r":          "right-knee-front",
   "tibialis-l":       "left-shin",
   "tibialis-r":       "right-shin",
+  "ankles-l":         "left-ankle",
+  "ankles-r":         "right-ankle",
   // Back — lats use upper-back zone, traps use trapezius zone
   "upper-back-l":     "left-lat",
   "upper-back-r":     "right-lat",
