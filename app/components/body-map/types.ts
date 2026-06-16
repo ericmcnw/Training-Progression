@@ -33,16 +33,21 @@ export type BodyMapProps = {
   view?: BodyMapView;
   selectable?: boolean;
   selectedSlugs?: string[];
-  onZoneClick?: (slug: string) => void;
+  /** Second arg is the view the zone was tapped from — lets callers place a
+   *  detail panel under the right view. */
+  onZoneClick?: (slug: string, view?: "front" | "back") => void;
   onZoneHover?: (slug: string | null) => void;
   size?: "sm" | "md" | "lg";
   showLegend?: boolean;
   /** Defaults to "male". TODO: read from user account once gender preference is collected at sign-up. */
   gender?: "male" | "female";
-  /** Rendered between the front and back panels (forces a single column when
+  /** Rendered after the `detailAfterView` panel (forces a single column when
    *  present) — e.g. the zone detail panel, so it sits right under the view
-   *  the zone was tapped from instead of below both. */
+   *  the zone was tapped from. */
   detailSlot?: ReactNode;
+  /** Which view's panel the detailSlot renders after. Defaults to the front
+   *  view (or the only view shown). */
+  detailAfterView?: "front" | "back";
 };
 
 export type BodyZonePath = {

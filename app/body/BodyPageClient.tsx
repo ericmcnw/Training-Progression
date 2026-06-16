@@ -261,6 +261,7 @@ export default function BodyPageClient({ zones, factorSuggestions = [] }: { zone
   const [isPending, startTransition] = useTransition();
   const [mapOpen, setMapOpen] = useState(true);
   const [painZone, setPainZone] = useState<{ slug: string; label: string } | null>(null);
+  const [pressedView, setPressedView] = useState<"front" | "back">("front");
   const requestId = useRef(0);
 
   // Persist the map collapse state across visits so users who prefer the
@@ -287,13 +288,14 @@ export default function BodyPageClient({ zones, factorSuggestions = [] }: { zone
     // lives below the map. We don't auto-clear it.
   }
 
-  function handleZoneClick(slug: string) {
+  function handleZoneClick(slug: string, view?: "front" | "back") {
     if (slug === selectedSlug) {
       requestId.current += 1;
       setSelectedSlug(null);
       setDetail(null);
       return;
     }
+    setPressedView(view ?? "front");
     setSelectedSlug(slug);
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
@@ -326,11 +328,13 @@ export default function BodyPageClient({ zones, factorSuggestions = [] }: { zone
           <div id="body-map-panel" style={{ marginTop: 12, display: "grid", gap: 10 }}>
             <BodyMap
               zones={zones}
+              view="front"
               size="md"
               selectable
               showLegend={false}
               onZoneClick={handleZoneClick}
               selectedSlugs={selectedSlug ? [selectedSlug] : []}
+              detailAfterView={pressedView}
               detailSlot={
                 detail ? (
                   <ZonePanel

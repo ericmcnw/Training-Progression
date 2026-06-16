@@ -354,7 +354,7 @@ function BodyPanel({
   view: "front" | "back";
   libData: ExtendedBodyPart[];
   gender: "male" | "female";
-  onZoneClick?: (slug: string) => void;
+  onZoneClick?: (slug: string, view?: "front" | "back") => void;
   onZoneHover?: (slug: string | null) => void;
   zones: Array<{ slug: string; freshness: ZoneFreshness; painLevel?: number }>;
   selectedSet: Set<string>;
@@ -366,7 +366,7 @@ function BodyPanel({
       (view === "back" ? LIB_KEY_TO_OUR_SLUG_BACK[key] : undefined) ??
       LIB_KEY_TO_OUR_SLUG[key];
     if (ourSlug) {
-      onZoneClick?.(ourSlug);
+      onZoneClick?.(ourSlug, view);
       onZoneHover?.(ourSlug);
     }
   };
@@ -433,7 +433,7 @@ function BodyPanel({
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}
-                  onClick={onZoneClick ? () => onZoneClick(zone.slug) : undefined}
+                  onClick={onZoneClick ? () => onZoneClick(zone.slug, "front") : undefined}
                   onMouseEnter={onZoneHover ? () => onZoneHover(zone.slug) : undefined}
                   onMouseLeave={onZoneHover ? () => onZoneHover(null) : undefined}
                   aria-label={zone.label}
@@ -470,7 +470,7 @@ function BodyPanel({
                     vectorEffect="non-scaling-stroke"
                     pointerEvents={clickable ? "all" : "none"}
                     className={clickable ? "pointer-events-auto cursor-pointer" : ""}
-                    onClick={clickable ? () => onZoneClick?.(joint.slug) : undefined}
+                    onClick={clickable ? () => onZoneClick?.(joint.slug, "front") : undefined}
                     onMouseEnter={clickable && onZoneHover ? () => onZoneHover(joint.slug) : undefined}
                     onMouseLeave={clickable && onZoneHover ? () => onZoneHover(null) : undefined}
                   />
@@ -498,6 +498,7 @@ export default function BodyMap({
   showLegend = true,
   gender = "male",
   detailSlot,
+  detailAfterView,
 }: BodyMapProps) {
   const [activeView, setActiveView] = useState<BodyMapView>(view);
   const selectedSet = useMemo(() => new Set(selectedSlugs), [selectedSlugs]);
@@ -506,9 +507,14 @@ export default function BodyMap({
     [zones, selectedSet, selectable],
   );
   const views = activeView === "both" ? (["front", "back"] as const) : [activeView];
-  // Where the detail slot goes — right under the front view when both are
-  // shown, otherwise under the single visible view.
-  const detailAfterView = (views as readonly string[]).includes("front") ? "front" : views[0];
+  // Place the detail after the view it was tapped from (caller-provided),
+  // falling back to the front view, or the only view shown.
+  const detailPlacement =
+    detailAfterView && (views as readonly string[]).includes(detailAfterView)
+      ? detailAfterView
+      : (views as readonly string[]).includes("front")
+      ? "front"
+      : views[0];
 
   return (
     <div className="relative mx-auto grid w-full gap-4" style={{ maxWidth: size === "sm" ? 360 : size === "lg" ? 760 : 560 }}>
@@ -556,7 +562,7 @@ export default function BodyMap({
               selectedSet={selectedSet}
               selectable={selectable}
             />
-            {detailSlot && v === detailAfterView ? detailSlot : null}
+            {detailSlot && v === detailPlacement ? detailSlot : null}
           </Fragment>
         ))}
       </div>
