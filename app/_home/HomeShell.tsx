@@ -24,8 +24,10 @@ import Fab from "./Fab";
 import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
 import HomeInjuriesSection from "./HomeInjuriesSection";
+import HomeRotationSection from "./HomeRotationSection";
 import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
+import type { HomeRotation } from "@/lib/home-rotation";
 
 export default function HomeShell({
   data,
@@ -33,12 +35,14 @@ export default function HomeShell({
   factorSuggestions,
   zones,
   otherGoals,
+  rotation,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
   factorSuggestions: string[];
   zones: { slug: string; label: string }[];
   otherGoals: HomeOtherGoal[];
+  rotation: HomeRotation | null;
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -70,6 +74,9 @@ export default function HomeShell({
           />
         </div>
         <div className="homeCol">
+          {/* Rotation sits atop the right column — omitted entirely when the
+              user has no active rotation. */}
+          {rotation ? <HomeRotationSection rotation={rotation} /> : null}
           <DomainSparklines series={data.domainSeries} />
           <div className="homeMovementPatterns">
             <MovementPatternsCard data={data.movementPatterns} />
