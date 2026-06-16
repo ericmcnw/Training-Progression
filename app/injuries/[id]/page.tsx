@@ -10,7 +10,7 @@ import InjuryTrainingHeatmap from "@/app/components/injuries/InjuryTrainingHeatm
 import { getInjuryTrainingHeatmap } from "./training-heatmap";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
-import { getInjury, updateInjury } from "../actions";
+import { getInjury, updateInjury, getAggravatingFactorSuggestions } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, addDaysYmd, diffYmdDays } from "@/lib/dates";
@@ -123,8 +123,9 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
     ),
   );
 
-  const [zones, painLogs, trainingHeatmap] = await Promise.all([
+  const [zones, factorSuggestions, painLogs, trainingHeatmap] = await Promise.all([
     prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } }),
+    getAggravatingFactorSuggestions(),
     prisma.painLog.findMany({
       where: {
         zoneId: { in: zoneIds },
@@ -204,6 +205,31 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
           selectedSlugs={zoneSlugs}
           size="md"
         />
+        {injury.aggravatingFactors.length > 0 ? (
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.5, textTransform: "uppercase", color: COLOR.textFaint }}>
+              Aggravating factors
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {injury.aggravatingFactors.map((f) => (
+                <span
+                  key={f}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(251,146,60,0.4)",
+                    background: "rgba(251,146,60,0.10)",
+                    color: "#FED7AA",
+                  }}
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {injury.notes ? <div style={muted}>{injury.notes}</div> : null}
         <InjuryStatusButtons id={injury.id} />
       </section>
@@ -300,6 +326,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         <div style={{ marginTop: 12 }}>
           <InjuryForm
             zones={zones}
+            factorSuggestions={factorSuggestions}
             submitLabel="Save injury"
             action={updateInjury.bind(null, injury.id)}
             initial={{
@@ -311,6 +338,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
               resolvedAt: injury.resolvedAt ? toAppYmd(injury.resolvedAt) : "",
               notes: injury.notes ?? "",
               zoneSlugs,
+              aggravatingFactors: injury.aggravatingFactors,
             }}
           />
         </div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { todayAppYmd } from "@/lib/dates";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
-import { createInjury } from "../actions";
+import { createInjury, getAggravatingFactorSuggestions } from "../actions";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,10 @@ function getParam(params: SearchParams, key: string) {
 export default async function NewInjuryPage(props: { searchParams?: Promise<SearchParams> }) {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const zone = getParam(searchParams, "zone");
-  const zones = await prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } });
+  const [zones, factorSuggestions] = await Promise.all([
+    prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } }),
+    getAggravatingFactorSuggestions(),
+  ]);
 
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
@@ -30,7 +33,7 @@ export default async function NewInjuryPage(props: { searchParams?: Promise<Sear
         </Link>
       </div>
       <section style={panel}>
-        <InjuryForm zones={zones} submitLabel="Create injury" action={createInjury} initial={zone ? { name: "", severity: 2, status: "ACTIVE", startedAt: todayAppYmd(), zoneSlugs: [zone] } : undefined} />
+        <InjuryForm zones={zones} factorSuggestions={factorSuggestions} submitLabel="Create injury" action={createInjury} initial={zone ? { name: "", severity: 2, status: "ACTIVE", startedAt: todayAppYmd(), zoneSlugs: [zone] } : undefined} />
       </section>
     </main>
   );

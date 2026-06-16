@@ -7,6 +7,7 @@ import type { InjuryStatus } from "@/generated/prisma";
 import type { ZoneState } from "@/app/components/body-map/types";
 import type { InjuryInput } from "@/app/injuries/actions";
 import { todayAppYmd } from "@/lib/dates";
+import FactorSearchField from "./FactorSearchField";
 
 type ZoneOption = { slug: string; label: string };
 
@@ -19,6 +20,7 @@ type InitialInjury = {
   resolvedAt?: string | null;
   notes?: string | null;
   zoneSlugs: string[];
+  aggravatingFactors?: string[];
 };
 
 export default function InjuryForm({
@@ -26,11 +28,13 @@ export default function InjuryForm({
   initial,
   submitLabel,
   action,
+  factorSuggestions = [],
 }: {
   zones: ZoneOption[];
   initial?: InitialInjury;
   submitLabel: string;
   action: (data: InjuryInput) => Promise<string | void>;
+  factorSuggestions?: string[];
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
@@ -39,6 +43,7 @@ export default function InjuryForm({
   const [startedAt, setStartedAt] = useState(initial?.startedAt ?? todayAppYmd());
   const [resolvedAt, setResolvedAt] = useState(initial?.resolvedAt ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [aggravatingFactors, setAggravatingFactors] = useState<string[]>(initial?.aggravatingFactors ?? []);
   const [selected, setSelected] = useState<string[]>(initial?.zoneSlugs ?? []);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -60,6 +65,7 @@ export default function InjuryForm({
           resolvedAt: resolvedAt || null,
           notes,
           zoneSlugs: selected,
+          aggravatingFactors,
         });
         router.push(id ? `/injuries/${id}` : "/injuries");
       } catch (error) {
@@ -99,6 +105,12 @@ export default function InjuryForm({
             <input type="date" value={resolvedAt} onChange={(event) => setResolvedAt(event.target.value)} />
           </label>
         ) : null}
+      </div>
+
+      <div style={field}>
+        Aggravating factors
+        <FactorSearchField value={aggravatingFactors} onChange={setAggravatingFactors} suggestions={factorSuggestions} />
+        <span style={hint}>What makes it worse — search a movement/exercise, or type your own and press enter.</span>
       </div>
 
       <label style={field}>

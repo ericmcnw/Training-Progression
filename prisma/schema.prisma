@@ -760,6 +760,10 @@ model ActiveInjury {
   startedAt  DateTime
   resolvedAt DateTime?
   notes      String?
+  // Free-form list of what makes this injury worse (movements, activities,
+  // exercises). Sourced via a typeahead from presets + the user's exercises +
+  // previously-used factors, but stored as plain strings so it stays flexible.
+  aggravatingFactors String[] @default([])
   zones      InjuryZone[]
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
