@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export type ZoneFreshness = "FRESH" | "WORKED_TODAY" | "RECENTLY_WORKED" | "RECOVERING" | "INJURED";
 
 export type BodyMapView = "front" | "back" | "both";
@@ -37,6 +39,10 @@ export type BodyMapProps = {
   showLegend?: boolean;
   /** Defaults to "male". TODO: read from user account once gender preference is collected at sign-up. */
   gender?: "male" | "female";
+  /** Rendered between the front and back panels (forces a single column when
+   *  present) — e.g. the zone detail panel, so it sits right under the view
+   *  the zone was tapped from instead of below both. */
+  detailSlot?: ReactNode;
 };
 
 export type BodyZonePath = {

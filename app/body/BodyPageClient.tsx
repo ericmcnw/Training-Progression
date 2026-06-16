@@ -327,8 +327,20 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
             <BodyMap
               zones={zones}
               size="md"
+              selectable
+              showLegend={false}
               onZoneClick={handleZoneClick}
               selectedSlugs={selectedSlug ? [selectedSlug] : []}
+              detailSlot={
+                detail ? (
+                  <ZonePanel
+                    detail={detail}
+                    onClose={() => { requestId.current += 1; setSelectedSlug(null); setDetail(null); }}
+                    loading={isPending}
+                    onLogPain={(slug, label) => setPainZone({ slug, label })}
+                  />
+                ) : undefined
+              }
             />
             <BodyMapLegend />
           </div>
@@ -339,15 +351,6 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
           Loading…
         </div>
-      )}
-
-      {detail && (
-        <ZonePanel
-          detail={detail}
-          onClose={() => { requestId.current += 1; setSelectedSlug(null); setDetail(null); }}
-          loading={isPending}
-          onLogPain={(slug, label) => setPainZone({ slug, label })}
-        />
       )}
 
       <PainLogSheet zone={painZone} onClose={() => setPainZone(null)} />

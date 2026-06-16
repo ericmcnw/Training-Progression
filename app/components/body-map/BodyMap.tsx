@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Body from "@mjcdev/react-body-highlighter";
 import type { ExtendedBodyPart } from "@mjcdev/react-body-highlighter";
 import BodyMapLegend from "./BodyMapLegend";
@@ -497,6 +497,7 @@ export default function BodyMap({
   size = "md",
   showLegend = true,
   gender = "male",
+  detailSlot,
 }: BodyMapProps) {
   const [activeView, setActiveView] = useState<BodyMapView>(view);
   const selectedSet = useMemo(() => new Set(selectedSlugs), [selectedSlugs]);
@@ -505,6 +506,9 @@ export default function BodyMap({
     [zones, selectedSet, selectable],
   );
   const views = activeView === "both" ? (["front", "back"] as const) : [activeView];
+  // Where the detail slot goes — right under the front view when both are
+  // shown, otherwise under the single visible view.
+  const detailAfterView = (views as readonly string[]).includes("front") ? "front" : views[0];
 
   return (
     <div className="relative mx-auto grid w-full gap-4" style={{ maxWidth: size === "sm" ? 360 : size === "lg" ? 760 : 560 }}>
@@ -536,19 +540,24 @@ export default function BodyMap({
       </div>
 
       {/* ── Body panels ────────────────────────────────────────────────────── */}
-      <div className={`grid gap-4 ${views.length === 2 ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+      {/* With a detail slot open we drop to a single column so the detail can
+          sit between front and back; otherwise both views go side by side on
+          desktop. */}
+      <div className={`grid gap-4 ${views.length === 2 && !detailSlot ? "sm:grid-cols-2" : "grid-cols-1"}`}>
         {views.map((v) => (
-          <BodyPanel
-            key={v}
-            view={v}
-            libData={libData}
-            gender={gender}
-            onZoneClick={onZoneClick}
-            onZoneHover={onZoneHover}
-            zones={zones}
-            selectedSet={selectedSet}
-            selectable={selectable}
-          />
+          <Fragment key={v}>
+            <BodyPanel
+              view={v}
+              libData={libData}
+              gender={gender}
+              onZoneClick={onZoneClick}
+              onZoneHover={onZoneHover}
+              zones={zones}
+              selectedSet={selectedSet}
+              selectable={selectable}
+            />
+            {detailSlot && v === detailAfterView ? detailSlot : null}
+          </Fragment>
         ))}
       </div>
 
