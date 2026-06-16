@@ -345,7 +345,6 @@ function BodyPanel({
               const freshness = zoneStateMap.get(zone.slug) ?? "FRESH";
               const isSelected = selectable && selectedSet.has(zone.slug);
               const fill = isSelected ? SELECTED_FILL : FRESHNESS_FILL[freshness];
-              const fresh = freshness === "FRESH" && !isSelected;
               return (
                 <path
                   key={zone.slug}
@@ -353,7 +352,10 @@ function BodyPanel({
                   fill={fill}
                   // transparent fill still needs to be clickable
                   pointerEvents="all"
-                  stroke={fresh ? "rgba(148,163,184,0.22)" : "rgba(148,163,184,0.55)"}
+                  // Border matches the panel background (#040c18) so the
+                  // hand-drawn hip-flexor shape blends into the body rather
+                  // than showing a grey outline that reads as out-of-place.
+                  stroke="#040c18"
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}
