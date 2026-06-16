@@ -24,10 +24,13 @@ export default function HomeInjuriesSection({
   injuries,
   factorSuggestions,
   zones,
+  embedded = false,
 }: {
   injuries: HomeInjury[];
   factorSuggestions: string[];
   zones: ZoneTarget[];
+  /** Drop the outer card chrome so this can sit inside another card. */
+  embedded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -39,7 +42,7 @@ export default function HomeInjuriesSection({
   }
 
   return (
-    <section style={card}>
+    <section style={embedded ? embeddedCard : card}>
       <div style={headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={title}>Injuries</span>
@@ -232,6 +235,11 @@ const card: CSSProperties = {
   borderRadius: 16,
   background: "rgba(255,255,255,0.028)",
   padding: 14,
+  display: "grid",
+  gap: 12,
+};
+
+const embeddedCard: CSSProperties = {
   display: "grid",
   gap: 12,
 };

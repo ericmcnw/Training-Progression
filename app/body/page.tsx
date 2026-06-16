@@ -64,9 +64,12 @@ export default async function BodyPage(props: {
         </>
       }
     >
-      <HomeInjuriesSection injuries={homeInjuries} factorSuggestions={factorSuggestions} zones={pickerZones} />
-
-      <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} />
+      {/* Freshness + injuries in one card. */}
+      <section style={statusInjuryCard}>
+        <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} bare />
+        <div style={cardDivider} />
+        <HomeInjuriesSection injuries={homeInjuries} factorSuggestions={factorSuggestions} zones={pickerZones} embedded />
+      </section>
 
       <BodyPageClient zones={zones} factorSuggestions={factorSuggestions} />
 
@@ -166,14 +169,14 @@ const STATUS_CHIPS: StatusChipMeta[] = [
   { key: "FRESH",           label: "Fresh",            bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.10)", color: COLOR.text },
 ];
 
-function BodyStatusRow({ counts, totalZones }: { counts: FreshnessCounts; totalZones: number }) {
+function BodyStatusRow({ counts, totalZones, bare = false }: { counts: FreshnessCounts; totalZones: number; bare?: boolean }) {
   // Render every state in the canonical order, but only the ones with a
   // non-zero count. If everything is FRESH (or no zones tracked) the row
   // still renders the Fresh chip so the user gets a "all good" signal.
   const visible = STATUS_CHIPS.filter((chip) => (counts[chip.key] ?? 0) > 0);
   const items = visible.length > 0 ? visible : STATUS_CHIPS.filter((chip) => chip.key === "FRESH");
   return (
-    <section style={statusRowStyle} aria-label="Body zone status">
+    <section style={bare ? bareStatusRowStyle : statusRowStyle} aria-label="Body zone status">
       <span style={statusRowLabel}>
         {totalZones} {totalZones === 1 ? "zone" : "zones"} tracked
       </span>
@@ -205,6 +208,26 @@ const statusRowStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   flexWrap: "wrap",
+};
+
+// Bare = no card chrome, for sitting inside the combined status+injuries card.
+const bareStatusRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const statusInjuryCard: React.CSSProperties = {
+  ...cardSurface,
+  display: "grid",
+  gap: 12,
+};
+
+const cardDivider: React.CSSProperties = {
+  height: 1,
+  background: "rgba(255,255,255,0.08)",
 };
 
 const statusRowLabel: React.CSSProperties = {
