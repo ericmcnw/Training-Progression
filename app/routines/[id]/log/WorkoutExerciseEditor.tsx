@@ -142,6 +142,7 @@ export default function WorkoutExerciseEditor({
   const [exerciseOptions, setExerciseOptions] = useState(availableExercises);
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(initialBlocks.length === 0);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -342,6 +343,58 @@ export default function WorkoutExerciseEditor({
     setExerciseQuery("");
     setExerciseError("");
     setShowAddPanel(false);
+  }
+
+  // Exercise reorder via the header grip. Pointer-based (works on touch +
+  // mouse). Order is persisted to the routine template on save — logWorkout
+  // writes RoutineExercise.sortOrder from the payload's exercise order, so
+  // nothing server-side changes here.
+  function moveBlock(fromIdx: number, toIdx: number) {
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+    markDirty();
+    setBlocks((prev) => {
+      if (fromIdx >= prev.length || toIdx >= prev.length) return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }
+
+  function onGripPointerDown(e: React.PointerEvent, exerciseId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setExpandedId(null); // collapse so the whole list is visible while dragging
+    setDraggingId(exerciseId);
+    markDirty();
+  }
+
+  function onGripPointerMove(e: React.PointerEvent) {
+    if (!draggingId) return;
+    const fromIdx = blocks.findIndex((b) => b.exerciseId === draggingId);
+    if (fromIdx < 0) return;
+    const y = e.clientY;
+    let toIdx = blocks.length - 1;
+    for (let i = 0; i < blocks.length; i += 1) {
+      const rect = blockRefs.current.get(blocks[i].exerciseId)?.getBoundingClientRect();
+      if (!rect) continue;
+      if (y < rect.top + rect.height / 2) {
+        toIdx = i;
+        break;
+      }
+    }
+    if (toIdx !== fromIdx) moveBlock(fromIdx, toIdx);
+  }
+
+  function onGripPointerUp(e: React.PointerEvent) {
+    if (!draggingId) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // capture may already be released
+    }
+    setDraggingId(null);
   }
 
   function removeExercise(exerciseId: string) {
@@ -554,6 +607,7 @@ export default function WorkoutExerciseEditor({
 
         {blocks.map((block) => {
           const isExpanded = expandedId === block.exerciseId;
+          const isDragging = draggingId === block.exerciseId;
           const doneSets = block.rows.filter((r) => r.done).length;
 
           return (
@@ -563,14 +617,33 @@ export default function WorkoutExerciseEditor({
                 if (node) blockRefs.current.set(block.exerciseId, node);
                 else blockRefs.current.delete(block.exerciseId);
               }}
-              style={isExpanded ? styles.blockCardExpanded : styles.blockCard}
+              style={{
+                ...(isExpanded ? styles.blockCardExpanded : styles.blockCard),
+                ...(isDragging ? styles.blockCardDragging : null),
+              }}
             >
 
-              {/* Accordion header */}
+              {/* Accordion header + reorder grip */}
+              <div style={styles.blockHeaderRow}>
+              <div
+                role="button"
+                aria-label="Drag to reorder exercise"
+                onPointerDown={(e) => onGripPointerDown(e, block.exerciseId)}
+                onPointerMove={onGripPointerMove}
+                onPointerUp={onGripPointerUp}
+                onPointerCancel={onGripPointerUp}
+                style={styles.gripHandle}
+              >
+                <svg viewBox="0 0 16 16" width={14} height={14} fill="currentColor" aria-hidden>
+                  <circle cx="6" cy="4" r="1.3" /><circle cx="10" cy="4" r="1.3" />
+                  <circle cx="6" cy="8" r="1.3" /><circle cx="10" cy="8" r="1.3" />
+                  <circle cx="6" cy="12" r="1.3" /><circle cx="10" cy="12" r="1.3" />
+                </svg>
+              </div>
               <button
                 type="button"
                 onClick={() => changeExpanded(isExpanded ? null : block.exerciseId)}
-                style={styles.blockCardHeader}
+                style={{ ...styles.blockCardHeader, flex: 1 }}
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={{ fontWeight: 900, fontSize: 15 }}>{block.name}</div>
@@ -599,6 +672,7 @@ export default function WorkoutExerciseEditor({
                   <path d="M2 5l6 6 6-6" />
                 </svg>
               </button>
+              </div>
 
               {/* Expanded content */}
               {isExpanded && (
@@ -1018,12 +1092,35 @@ const styles = {
     alignItems: "center",
     gap: 10,
     width: "100%",
-    padding: "12px 14px",
+    padding: "12px 14px 12px 4px",
     background: "none",
     border: "none",
     color: "inherit",
     cursor: "pointer",
     minHeight: 0,
+  } as React.CSSProperties,
+
+  blockHeaderRow: {
+    display: "flex",
+    alignItems: "stretch",
+  } as React.CSSProperties,
+
+  gripHandle: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    flexShrink: 0,
+    color: "rgba(255,255,255,0.4)",
+    cursor: "grab",
+    touchAction: "none",
+    WebkitTapHighlightColor: "transparent",
+  } as React.CSSProperties,
+
+  blockCardDragging: {
+    border: "1px solid rgba(115,220,152,0.6)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+    opacity: 0.96,
   } as React.CSSProperties,
 
   blockActionRow: {
