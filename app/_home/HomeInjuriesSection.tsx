@@ -6,6 +6,7 @@
 // factors + its own log-pain button. Resting state when nothing's active.
 
 import { useState, type CSSProperties } from "react";
+import Link from "next/link";
 import Popover from "./Popover";
 import PainLogSheet from "@/app/body/PainLogSheet";
 import type { HomeInjury } from "@/lib/home-injuries";
@@ -59,13 +60,13 @@ export default function HomeInjuriesSection({
           {injuries.map((injury) => (
             <div key={injury.id} style={injuryRow}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={injuryName}>{injury.name}</div>
+                <Link href={`/injuries/${injury.id}`} style={injuryLink}>
+                  <div style={injuryName}>{injury.name} <span style={{ opacity: 0.5, fontWeight: 800 }}>›</span></div>
                   <div style={injurySub}>
                     {injury.zones.map((z) => z.label).join(" · ")}
                     {injury.status === "FLARED" ? " · flared" : ""}
                   </div>
-                </div>
+                </Link>
                 <div style={{ ...painScore, color: painColor(injury.recentPainScore) }}>
                   {injury.recentPainScore != null ? injury.recentPainScore : "—"}
                   <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.5 }}>/10</span>
@@ -281,6 +282,14 @@ const injuryRow: CSSProperties = {
   borderRadius: 12,
   border: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(255,255,255,0.02)",
+};
+
+const injuryLink: CSSProperties = {
+  display: "grid",
+  gap: 2,
+  minWidth: 0,
+  textDecoration: "none",
+  color: "inherit",
 };
 
 const injuryName: CSSProperties = {

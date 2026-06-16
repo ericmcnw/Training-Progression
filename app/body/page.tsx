@@ -5,8 +5,9 @@ import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from 
 import CoverageGroupedBarChart from "@/app/progress/CoverageGroupedBarChart";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
-import { getInjuries, getAggravatingFactorSuggestions } from "@/app/injuries/actions";
-import type { InjuryStatus } from "@/generated/prisma";
+import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
+import { getHomeInjuries } from "@/lib/home-injuries";
+import HomeInjuriesSection from "@/app/_home/HomeInjuriesSection";
 import type { ZoneFreshness, ZoneState } from "@/app/components/body-map/types";
 
 export const dynamic = "force-dynamic";
@@ -35,14 +36,14 @@ export default async function BodyPage(props: {
   const lens = normalizeBodyLens(getParam(searchParams, "lens"));
   const range = normalizeBodyRange(getParam(searchParams, "range"));
 
-  const [zones, coverageOverview, injuries, factorSuggestions] = await Promise.all([
+  const [zones, coverageOverview, homeInjuries, factorSuggestions] = await Promise.all([
     getAllZonesWithState(),
     getCoverageOverviewModel(range),
-    getInjuries(),
+    getHomeInjuries(),
     getAggravatingFactorSuggestions(),
   ]);
 
-  const triageInjuries = injuries.filter((i) => i.status === "ACTIVE" || i.status === "FLARED");
+  const pickerZones = zones.map((z) => ({ slug: z.slug, label: z.label ?? z.slug }));
   const freshnessCounts = countByFreshness(zones);
   const needsAttention = buildNeedsAttention(zones);
 
@@ -63,27 +64,7 @@ export default async function BodyPage(props: {
         </>
       }
     >
-      {triageInjuries.length > 0 && (
-        <section style={injuryStripStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-            <div style={cardTitle}>Active injuries</div>
-            <Link href="/injuries" style={smallLinkStyle}>view all →</Link>
-          </div>
-          <div style={injuryCardRow}>
-            {triageInjuries.map((injury) => (
-              <Link key={injury.id} href={`/injuries/${injury.id}`} style={injuryCardLink(injury.status)}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 13 }}>{injury.name}</span>
-                  <span style={statusPillStyle(injury.status)}>{injury.status === "ACTIVE" ? "Active" : "Flared"}</span>
-                </div>
-                <div style={injuryCardMeta}>
-                  {injury.zones.map((z) => z.zone.label).join(" · ")}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      <HomeInjuriesSection injuries={homeInjuries} factorSuggestions={factorSuggestions} zones={pickerZones} />
 
       <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} />
 
@@ -442,62 +423,3 @@ const pillActiveStyle: React.CSSProperties = {
   color: "#bfdbfe",
 };
 
-const injuryStripStyle: React.CSSProperties = {
-  ...cardSurface,
-  gap: 10,
-};
-
-const injuryCardRow: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 10,
-};
-
-const injuryCardMeta: React.CSSProperties = {
-  fontSize: 11,
-  color: COLOR.textFaint,
-  fontWeight: 700,
-  marginTop: 4,
-  lineHeight: 1.4,
-};
-
-const smallLinkStyle: React.CSSProperties = {
-  color: COLOR.text,
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: 0.3,
-  opacity: 0.7,
-  textDecoration: "none",
-};
-
-function injuryCardLink(status: InjuryStatus): React.CSSProperties {
-  const flared = status === "FLARED";
-  return {
-    display: "grid",
-    gap: 2,
-    padding: "10px 12px",
-    borderRadius: RADIUS.control,
-    background: flared ? "rgba(251,146,60,0.07)" : "rgba(248,113,113,0.07)",
-    border: flared ? "1px solid rgba(251,146,60,0.28)" : "1px solid rgba(248,113,113,0.28)",
-    color: "inherit",
-    textDecoration: "none",
-    transition: "background 120ms",
-    minWidth: 0,
-  };
-}
-
-function statusPillStyle(status: InjuryStatus): React.CSSProperties {
-  const flared = status === "FLARED";
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "2px 8px",
-    borderRadius: RADIUS.pill,
-    fontSize: 10,
-    fontWeight: 800,
-    letterSpacing: 0.3,
-    background: flared ? "rgba(251,146,60,0.18)" : "rgba(248,113,113,0.18)",
-    border: flared ? "1px solid rgba(251,146,60,0.4)" : "1px solid rgba(248,113,113,0.4)",
-    color: flared ? "#FED7AA" : "#FCA5A5",
-  };
-}
