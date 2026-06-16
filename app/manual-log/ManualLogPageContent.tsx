@@ -14,6 +14,7 @@ import {
   isWorkoutKind,
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
+import { getAppSession } from "@/lib/auth";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
 import DeleteLogButton from "./DeleteLogButton";
@@ -101,12 +102,13 @@ export default async function ManualLogPageContent({
 
   // Profile-view-only data: lifetime stats + milestones + sport settings.
   // Skipped on the history view since none of it renders there.
-  const [profileStats, selectedSportsRaw, availableSports] = showHistory
-    ? [null, [], []]
+  const [profileStats, selectedSportsRaw, availableSports, session] = showHistory
+    ? [null, [], [], null]
     : await Promise.all([
         loadProfileStats(todayYmd),
         listSelectedSports(),
         listUnselectedSports(),
+        getAppSession(),
       ]);
   const selectedSports = selectedSportsRaw.map((s) => ({
     slug: s.slug,
@@ -228,7 +230,7 @@ export default async function ManualLogPageContent({
           (rhythm + composition + highlights for the week; heatmap + top
           routines + composition for the month). */}
       {!showHistory && <WeeklySummary logs={enrichedLogs} today={now} />}
-      {!showHistory && <MonthlySummary logs={enrichedLogs} today={now} />}
+      {!showHistory && <MonthlySummary today={now} />}
       {!showHistory && <YearlySummary today={now} />}
 
       {/* ── Recent Activity (profile view only) ── */}
@@ -252,7 +254,12 @@ export default async function ManualLogPageContent({
         <section className="mobileSectionCard" style={panel}>
           <div className="mobileSectionHeader" style={panelHeader}>SETTINGS</div>
           <div className="mobileSectionBody" style={{ padding: 14 }}>
-            <ProfileSettings selectedSports={selectedSports} availableSports={availableSports} />
+            <ProfileSettings
+              selectedSports={selectedSports}
+              availableSports={availableSports}
+              authMode={session?.mode ?? "single-user-dev"}
+              isAuthenticated={session?.isAuthenticated ?? false}
+            />
           </div>
         </section>
       )}
