@@ -49,6 +49,29 @@ const CUSTOM_FRONT_ZONES: Array<{ slug: string; label: string; d: string }> = [
   },
 ];
 
+// Female hip flexors — same elongated teardrop, in the female front coordinate
+// space (center x≈322, narrower body so they sit closer to center).
+const CUSTOM_FRONT_ZONES_FEMALE: Array<{ slug: string; label: string; d: string }> = [
+  {
+    slug: "left-hip-flexor",
+    label: "Left Hip Flexor",
+    d: "M298 694 C303 688 312 690 314 700 C316 720 312 744 306 760 C302 766 298 764 296 758 C291 738 292 714 298 694 Z",
+  },
+  {
+    slug: "right-hip-flexor",
+    label: "Right Hip Flexor",
+    d: "M346 694 C341 688 332 690 330 700 C328 720 332 744 338 760 C342 766 346 764 348 758 C353 738 352 714 346 694 Z",
+  },
+];
+
+// Per-gender front-overlay config — viewBox MUST match the library body's own
+// viewBox for the overlay to align. Back view has no overlay.
+function frontOverlayConfig(gender: "male" | "female") {
+  return gender === "female"
+    ? { viewBox: "-50 -40 734 1538", zones: CUSTOM_FRONT_ZONES_FEMALE, joints: FRONT_JOINT_MARKERS_FEMALE }
+    : { viewBox: "0 0 724 1448", zones: CUSTOM_FRONT_ZONES, joints: FRONT_JOINT_MARKERS_MALE };
+}
+
 const FRESHNESS_FILL: Record<ZoneFreshness, string> = {
   FRESH:            "transparent", // invisible when unworked — only border shows
   RECENTLY_WORKED:  "#2563EB",
@@ -85,10 +108,28 @@ const FRONT_JOINT_MARKERS_MALE: JointMarker[] = [
   { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 266, cy: 634,  r: 16, interactive: true },
   { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 458, cy: 634,  r: 16, interactive: true },
   // Decorative-only rings over the library's own knee/ankle zones.
-  { slug: "left-knee-front",      label: "Left Knee",              cx: 293, cy: 1034, r: 16, interactive: false },
-  { slug: "right-knee-front",     label: "Right Knee",             cx: 431, cy: 1034, r: 16, interactive: false },
+  { slug: "left-knee-front",      label: "Left Knee",              cx: 293, cy: 1010, r: 16, interactive: false },
+  { slug: "right-knee-front",     label: "Right Knee",             cx: 431, cy: 1010, r: 16, interactive: false },
   { slug: "left-ankle",           label: "Left Ankle",             cx: 284, cy: 1238, r: 14, interactive: false },
   { slug: "right-ankle",          label: "Right Ankle",            cx: 440, cy: 1238, r: 14, interactive: false },
+];
+
+// Female front uses a different art + viewBox ("-50 -40 734 1538"), so it has
+// its own coordinates (body center x≈322). First pass — anchored to the female
+// art's part positions but needs a visual tune like the male front did.
+const FRONT_JOINT_MARKERS_FEMALE: JointMarker[] = [
+  { slug: "left-shoulder-joint",  label: "Left Shoulder (joint)",  cx: 222, cy: 310,  r: 16, interactive: true },
+  { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", cx: 422, cy: 310,  r: 16, interactive: true },
+  { slug: "left-elbow",           label: "Left Elbow",             cx: 150, cy: 468,  r: 15, interactive: true },
+  { slug: "right-elbow",          label: "Right Elbow",            cx: 494, cy: 468,  r: 15, interactive: true },
+  { slug: "left-wrist",           label: "Left Wrist",             cx: 96,  cy: 678,  r: 14, interactive: true },
+  { slug: "right-wrist",          label: "Right Wrist",            cx: 548, cy: 678,  r: 14, interactive: true },
+  { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 272, cy: 690,  r: 15, interactive: true },
+  { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 372, cy: 690,  r: 15, interactive: true },
+  { slug: "left-knee-front",      label: "Left Knee",              cx: 268, cy: 990,  r: 15, interactive: false },
+  { slug: "right-knee-front",     label: "Right Knee",             cx: 376, cy: 990,  r: 15, interactive: false },
+  { slug: "left-ankle",           label: "Left Ankle",             cx: 282, cy: 1332, r: 13, interactive: false },
+  { slug: "right-ankle",          label: "Right Ankle",            cx: 362, cy: 1332, r: 13, interactive: false },
 ];
 
 // ─── Zone slug mapping ────────────────────────────────────────────────────────
@@ -337,11 +378,11 @@ function BodyPanel({
         </div>
         {view === "front" && (
           <svg
-            viewBox="0 0 724 1448"
+            viewBox={frontOverlayConfig(gender).viewBox}
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden
           >
-            {CUSTOM_FRONT_ZONES.map((zone) => {
+            {frontOverlayConfig(gender).zones.map((zone) => {
               const freshness = zoneStateMap.get(zone.slug) ?? "FRESH";
               const isSelected = selectable && selectedSet.has(zone.slug);
               const fill = isSelected ? SELECTED_FILL : FRESHNESS_FILL[freshness];
@@ -366,11 +407,11 @@ function BodyPanel({
                 />
               );
             })}
-            {/* Joint ring markers (male front only for now). A ring + center
-                dot reads as a joint, not a muscle. Interactive ones own their
-                click target; decorative ones (knee/ankle) let taps fall
-                through to the library zone underneath. */}
-            {gender === "male" && FRONT_JOINT_MARKERS_MALE.map((joint) => {
+            {/* Joint ring markers (per gender). A ring + center dot reads as a
+                joint, not a muscle. Interactive ones own their click target;
+                decorative ones (knee/ankle) let taps fall through to the
+                library zone underneath. */}
+            {frontOverlayConfig(gender).joints.map((joint) => {
               const freshness = zoneStateMap.get(joint.slug) ?? "FRESH";
               const isSelected = selectable && selectedSet.has(joint.slug);
               const injuredOrPain = freshness === "INJURED";
