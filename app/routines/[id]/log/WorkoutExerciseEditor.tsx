@@ -940,25 +940,33 @@ export default function WorkoutExerciseEditor({
   );
 }
 
-// Touch swipe-to-delete for a set row. Inert on desktop (mouse fires no touch
-// events), so the ✕ button stays the delete path there. `touch-action: pan-y`
-// lets vertical scrolling pass through while we own horizontal drags; the row
-// only fills solid (over the red) while mid-swipe, so the resting look is
-// unchanged and no red bleeds through a transparent row.
-const SWIPE_DELETE_THRESHOLD = 96;
+// Touch swipe-to-reveal-delete for a set row. Inert on desktop (mouse fires no
+// touch events), so the ✕ button stays the delete path there. Deliberately
+// safe against accidental deletes while scrolling:
+//   • A gesture only counts as a swipe when it's CLEARLY horizontal
+//     (|dx| > |dy| · 1.7 past a 14px deadzone) — a vertical scroll never
+//     engages it, and `touch-action: pan-y` lets the page keep scrolling.
+//   • A swipe only REVEALS a Delete button; deletion requires a second,
+//     deliberate tap. So an accidental swipe can't destroy a set.
+// Tapping the row while open just closes it.
+const SWIPE_REVEAL_WIDTH = 88;
+const SWIPE_OPEN_AT = 40;
 
 function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: ReactNode }) {
   const [dx, setDx] = useState(0);
+  const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
   const startY = useRef(0);
   const axis = useRef<null | "h" | "v">(null);
+  const base = useRef(0);
 
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
     startX.current = t.clientX;
     startY.current = t.clientY;
     axis.current = null;
+    base.current = open ? -SWIPE_REVEAL_WIDTH : 0;
     setDragging(true);
   }
 
@@ -968,22 +976,30 @@ function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: 
     const ddx = t.clientX - startX.current;
     const ddy = t.clientY - startY.current;
     if (axis.current === null) {
-      if (Math.abs(ddx) < 8 && Math.abs(ddy) < 8) return;
-      axis.current = Math.abs(ddx) > Math.abs(ddy) ? "h" : "v";
+      if (Math.abs(ddx) < 14 && Math.abs(ddy) < 14) return;
+      // Only engage the swipe when it's decisively horizontal; anything
+      // close to vertical is a scroll and we stay out of the way.
+      axis.current = Math.abs(ddx) > Math.abs(ddy) * 1.7 ? "h" : "v";
     }
-    if (axis.current !== "h") return; // vertical → let the page scroll
-    setDx(Math.max(-160, Math.min(0, ddx))); // left-only
+    if (axis.current !== "h") return;
+    setDx(Math.max(-SWIPE_REVEAL_WIDTH, Math.min(0, base.current + ddx)));
   }
 
   function onTouchEnd() {
-    const shouldDelete = axis.current === "h" && dx <= -SWIPE_DELETE_THRESHOLD;
     setDragging(false);
+    if (axis.current === "h") {
+      const shouldOpen = dx <= -SWIPE_OPEN_AT;
+      setOpen(shouldOpen);
+      setDx(shouldOpen ? -SWIPE_REVEAL_WIDTH : 0);
+    }
     axis.current = null;
-    setDx(0);
-    if (shouldDelete) onDelete();
   }
 
-  const armed = dx <= -SWIPE_DELETE_THRESHOLD;
+  function close() {
+    setOpen(false);
+    setDx(0);
+  }
+
   return (
     <div
       style={{ position: "relative", overflow: "hidden", borderRadius: 10, touchAction: "pan-y" }}
@@ -992,26 +1008,34 @@ function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: 
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
-      <div
-        aria-hidden
+      <button
+        type="button"
+        aria-label="Delete set"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
         style={{
           position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          paddingRight: 16,
-          background: `rgba(220,38,38,${(0.3 + Math.min(1, -dx / SWIPE_DELETE_THRESHOLD) * 0.6).toFixed(2)})`,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: SWIPE_REVEAL_WIDTH,
+          border: "none",
+          background: "rgba(220,38,38,0.92)",
           color: "#fff",
           fontWeight: 900,
-          fontSize: 12.5,
-          letterSpacing: 0.4,
+          fontSize: 13,
+          letterSpacing: 0.3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
           opacity: dx < 0 ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
         }}
       >
-        {armed ? "Release to delete" : "Delete"}
-      </div>
+        Delete
+      </button>
       <div
+        onClickCapture={(e) => { if (open) { e.preventDefault(); e.stopPropagation(); close(); } }}
         style={{
           transform: `translateX(${dx}px)`,
           transition: dragging ? "none" : "transform 160ms ease",
