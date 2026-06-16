@@ -25,9 +25,14 @@ type Props = {
   //   tab where the page provides its own section heading, so we don't
   //   want a nested "Frequency Goals" title.
   chrome?: "card" | "bare";
+  // Whether to render the S/M/T/W/T/F/S day-label header row above the
+  // rows. Defaults true (every existing caller). The home Goals section
+  // passes false for its secondary "weekly goals" subgroup so a single
+  // day-label header isn't repeated twice in one card.
+  showDayHeader?: boolean;
 };
 
-export default function HabitGrid({ rows, today, chrome = "card" }: Props) {
+export default function HabitGrid({ rows, today, chrome = "card", showDayHeader = true }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   // Single openLog state at the card root — reused by every row's bar
   // expansion. Renders the same floating popover the Domain Volume card
@@ -65,17 +70,19 @@ export default function HabitGrid({ rows, today, chrome = "card" }: Props) {
     <>
       {/* Day-label header row. Same grid columns as the habit rows so the
           weekday letters align exactly with the dot cells below. */}
-      <div style={headerRow} className="homeV2HabitHeader">
-        <div className="homeV2HabitHeaderSpacer" />
-        <div style={dayLabelGrid}>
-          {last7.map((ymd) => (
-            <span key={ymd} style={{ ...dayLabelText, ...(ymd === today ? dayLabelToday : null) }}>
-              {dayInitial(ymd)}
-            </span>
-          ))}
+      {showDayHeader ? (
+        <div style={headerRow} className="homeV2HabitHeader">
+          <div className="homeV2HabitHeaderSpacer" />
+          <div style={dayLabelGrid}>
+            {last7.map((ymd) => (
+              <span key={ymd} style={{ ...dayLabelText, ...(ymd === today ? dayLabelToday : null) }}>
+                {dayInitial(ymd)}
+              </span>
+            ))}
+          </div>
+          <div style={trailingHeaderText}>streak · this wk</div>
         </div>
-        <div style={trailingHeaderText}>streak · this wk</div>
-      </div>
+      ) : null}
 
       <ul style={list}>
         {rows.map((row) => {

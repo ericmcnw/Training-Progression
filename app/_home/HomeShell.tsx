@@ -17,7 +17,7 @@
 import type { CSSProperties } from "react";
 import type { HomeData } from "./types";
 import { COLOR, SECTION_GAP } from "./tokens";
-import HabitGrid from "./HabitGrid";
+import HomeGoalsSection from "./HomeGoalsSection";
 import DomainSparklines from "./DomainSparklines";
 import MovementPatternsCard from "./MovementPatternsCard";
 import Fab from "./Fab";
@@ -25,17 +25,20 @@ import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
 import HomeInjuriesSection from "./HomeInjuriesSection";
 import type { HomeInjury } from "@/lib/home-injuries";
+import type { HomeOtherGoal } from "@/lib/home-goals";
 
 export default function HomeShell({
   data,
   injuries,
   factorSuggestions,
   zones,
+  otherGoals,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
   factorSuggestions: string[];
   zones: { slug: string; label: string }[];
+  otherGoals: HomeOtherGoal[];
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -57,9 +60,13 @@ export default function HomeShell({
       <div className="homeCols">
         <div className="homeCol">
           <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
-          <HabitGrid
-            rows={data.habitRows}
+          {/* Phase 2: Goals section (frequency + other goals). To revert to
+              the plain frequency grid, swap this back to:
+              <HabitGrid rows={data.habitRows} today={data.today} /> */}
+          <HomeGoalsSection
+            habitRows={data.habitRows}
             today={data.today}
+            otherGoals={otherGoals}
           />
         </div>
         <div className="homeCol">
