@@ -296,7 +296,7 @@ export default async function LifestyleWorldPage(props: {
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/log?domain=lifestyle" style={quickLinkStyle}>Lifestyle routines →</Link>
-        <Link href="/plan?tab=goals&type=FREQUENCY" style={quickLinkStyle}>Frequency goals →</Link>
+        <Link href="/plan?type=FREQUENCY#goals" style={quickLinkStyle}>Frequency goals →</Link>
         <Link href="/activities" style={quickLinkStyle}>Back to Activities</Link>
       </div>
     </div>

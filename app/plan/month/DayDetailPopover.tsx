@@ -43,6 +43,12 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
   const canSchedule = hasPickable && day.ymd >= today;
   const isEmpty = day.entries.length === 0;
 
+  // Sessions (workouts / planned routines) render first; daily habits are
+  // grouped into their own labeled block below — the popover is where
+  // habits live now that they're off the calendar grid.
+  const sessions = day.entries.filter((e) => !e.isHabit);
+  const habits = day.entries.filter((e) => e.isHabit);
+
   // Header pill mirrors WeekAtGlance — green + Add. Hidden for past days
   // since scheduling onto yesterday makes no sense.
   const headerActions = canSchedule ? (
@@ -69,10 +75,23 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
               : "No activity logged."}
           </div>
         ) : (
-          <div style={list}>
-            {day.entries.map((entry) => (
-              <DayEntryRow key={entry.key} entry={entry} day={day} isFuture={isFuture} />
-            ))}
+          <div style={groups}>
+            {sessions.length > 0 ? (
+              <div style={list}>
+                {sessions.map((entry) => (
+                  <DayEntryRow key={entry.key} entry={entry} day={day} isFuture={isFuture} />
+                ))}
+              </div>
+            ) : null}
+
+            {habits.length > 0 ? (
+              <div style={list}>
+                <div style={groupLabel}>Daily habits</div>
+                {habits.map((entry) => (
+                  <DayEntryRow key={entry.key} entry={entry} day={day} isFuture={isFuture} />
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </Popover>
@@ -178,9 +197,23 @@ const addPillPlus: CSSProperties = {
   marginTop: -1,
 };
 
+const groups: CSSProperties = {
+  display: "grid",
+  gap: 14,
+};
+
 const list: CSSProperties = {
   display: "grid",
   gap: 6,
+};
+
+const groupLabel: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.45)",
+  marginBottom: 2,
 };
 
 const emptyHint: CSSProperties = {

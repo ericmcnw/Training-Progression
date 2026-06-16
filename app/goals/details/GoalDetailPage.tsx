@@ -134,7 +134,7 @@ export default async function GoalDetailPage(props: {
           {!entry.goal.isActive ? <div style={inactiveNoteStyle}>Inactive goal</div> : null}
         </div>
         <div className="goalDetailActions" style={headerActionsStyle}>
-          <SectionBackButton fallbackHref="/plan?tab=goals" label="← Back" />
+          <SectionBackButton fallbackHref="/plan#goals" label="← Back" />
           <EditGoalDrawerButton goalId={entry.goal.id} style={editGoalCtaStyle}>
             Edit Goal
           </EditGoalDrawerButton>

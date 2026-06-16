@@ -1,20 +1,15 @@
-// Goals tab — unified tile/row list surface. Replaces the split frequency-
-// heatmap + non-frequency-cards rendering with a single visual language:
-// each goal is a horizontal row with a type-aware progress visual. Per the
-// locked "habit lens = gentle visibility" feedback, behind-pace state is
-// subtle amber on the left edge — not red, no alarm language.
+// Goals section — embedded at the top of the unified Plan page. Each goal is
+// a horizontal row with a type-aware progress visual. Per the locked "habit
+// lens = gentle visibility" feedback, behind-pace state is subtle amber on
+// the left edge — not red, no alarm language.
 //
-// Sorted by status within each section so user immediately sees what
-// needs attention without aggressive call-outs.
-//
-// Filter: single chip row for goal type + an Inactive toggle. Active-only
-// by default.
+// Sorted by status so the user immediately sees what needs attention without
+// aggressive call-outs. Filter: a chip row for goal type + an Inactive
+// toggle. Active-only by default. The page provides the section chrome +
+// New Goal button; this component returns just the filter row + list.
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { ProgressShell, SectionCard } from "@/app/progress/ui";
-import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
-import { GOAL_TYPE_LABELS } from "@/lib/goals-config";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { getHabitRowsOnly } from "@/app/_home/data";
 import type { HabitRow } from "@/app/_home/types";
@@ -28,12 +23,19 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function buildGoalsHref(params: { type?: string; active?: string }) {
+// Build a /plan goal-filter href that preserves every other search param
+// (e.g. the calendar's `month`) and only overrides type/active. Anchored to
+// #goals so the filter tap keeps you at the goals section, not the page top.
+function buildGoalsHref(current: SearchParams, override: { type?: string; active?: string }) {
   const search = new URLSearchParams();
-  search.set("tab", "goals");
-  if (params.type && params.type !== "all") search.set("type", params.type);
-  if (params.active && params.active !== "active") search.set("active", params.active);
-  return `/plan?${search.toString()}`;
+  for (const [key, value] of Object.entries(current)) {
+    if (key === "tab" || key === "type" || key === "active") continue;
+    if (typeof value === "string") search.set(key, value);
+  }
+  if (override.type && override.type !== "all") search.set("type", override.type);
+  if (override.active && override.active !== "active") search.set("active", override.active);
+  const qs = search.toString();
+  return `/plan${qs ? `?${qs}` : ""}#goals`;
 }
 
 const TYPE_CHIPS = [
@@ -105,62 +107,88 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
   const hasEntries = entries.length > 0;
 
   return (
-    <ProgressShell
-      section="overview"
-      title="Plan / Goals"
-      displayTitle={`Goals${type === "all" ? "" : ` — ${GOAL_TYPE_LABELS[type as keyof typeof GOAL_TYPE_LABELS] ?? ""}`}`}
-      subtitle="Frequency, performance, volume, and completion goals — all derived from your routine and exercise logs."
-      navLabel="Filter"
-      navHint="Filter by goal type."
-      navItems={TYPE_CHIPS.map((chip) => ({
-        href: buildGoalsHref({ type: chip.value, active }),
-        label: chip.label,
-        active: chip.value === type,
-      }))}
-      actions={
-        <NewGoalDrawerButton style={drawerCtaStyle}>
-          New Goal
-        </NewGoalDrawerButton>
-      }
-    >
-      <SectionCard title="Goals">
-        <div style={topRowStyle}>
-          <Link
-            href={buildGoalsHref({ type, active: showInactive ? "active" : "all" })}
-            style={{
-              ...inactivePillStyle,
-              ...(showInactive ? inactivePillActiveStyle : {}),
-            }}
-          >
-            {showInactive ? "Showing inactive" : "Show inactive"}
-          </Link>
+    <div style={wrapStyle}>
+      <div style={filterRowStyle}>
+        <div style={chipRowStyle} role="tablist" aria-label="Filter goals by type">
+          {TYPE_CHIPS.map((chip) => {
+            const isActive = chip.value === type;
+            return (
+              <Link
+                key={chip.value}
+                href={buildGoalsHref(searchParams, { type: chip.value, active })}
+                scroll={false}
+                style={{ ...chipStyle, ...(isActive ? chipActiveStyle : {}) }}
+              >
+                {chip.label}
+              </Link>
+            );
+          })}
         </div>
+        <Link
+          href={buildGoalsHref(searchParams, { type, active: showInactive ? "active" : "all" })}
+          scroll={false}
+          style={{ ...inactivePillStyle, ...(showInactive ? inactivePillActiveStyle : {}) }}
+        >
+          {showInactive ? "Showing inactive" : "Show inactive"}
+        </Link>
+      </div>
 
-        {!hasEntries ? (
-          <div style={subtleTextStyle}>No goals match the current filters.</div>
-        ) : (
-          <div style={listStyle}>
-            {entries.map((entry) => (
-              <GoalRow
-                key={entry.insight.goal.id}
-                insight={entry.insight}
-                habitRow={entry.habitRow}
-                today={habitData.today}
-              />
-            ))}
-          </div>
-        )}
-      </SectionCard>
-    </ProgressShell>
+      {!hasEntries ? (
+        <div style={subtleTextStyle}>No goals match the current filters.</div>
+      ) : (
+        <div style={listStyle}>
+          {entries.map((entry) => (
+            <GoalRow
+              key={entry.insight.goal.id}
+              insight={entry.insight}
+              habitRow={entry.habitRow}
+              today={habitData.today}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-const topRowStyle: CSSProperties = {
+const wrapStyle: CSSProperties = {
+  display: "grid",
+  gap: 12,
+};
+
+const filterRowStyle: CSSProperties = {
   display: "flex",
   gap: 8,
   alignItems: "center",
+  justifyContent: "space-between",
   flexWrap: "wrap",
-  marginBottom: 12,
+};
+
+const chipRowStyle: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const chipStyle: CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  textDecoration: "none",
+  color: "inherit",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  minHeight: 32,
+  display: "inline-flex",
+  alignItems: "center",
+};
+
+const chipActiveStyle: CSSProperties = {
+  border: "1px solid rgba(51,255,122,0.45)",
+  background: "rgba(51,255,122,0.10)",
+  color: "rgba(51,255,122,0.95)",
 };
 
 const inactivePillStyle: CSSProperties = {
@@ -183,15 +211,5 @@ const inactivePillActiveStyle: CSSProperties = {
 const listStyle: CSSProperties = {
   display: "grid",
   gap: 8,
-};
-
-const drawerCtaStyle: CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid rgba(255,255,255,0.18)",
-  borderRadius: 12,
-  color: "inherit",
-  fontWeight: 800,
-  background: "rgba(255,255,255,0.06)",
-  cursor: "pointer",
 };
 

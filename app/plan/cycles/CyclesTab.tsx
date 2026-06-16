@@ -1,19 +1,24 @@
 import type { CSSProperties } from "react";
 
-// CyclesTab — placeholder. Future: list of active SchedulePlans with
-// activation toggles, plus a cycle editor that ports the drag-drop UX
-// from app/schedule/ScheduleBoard.tsx.
+// RotationTab — placeholder for the rotation engine (Phase 3). A rotation is
+// an ordered list of slots (Push / Pull / Legs, Upper / Lower, etc.) you
+// advance through by logging — not by the calendar. Each slot can be
+// satisfied by its primary routine OR a mapped covering activity (a climb
+// covers Pull, a long hike covers Legs), and the page recommends the next
+// unsatisfied slot. Build lands in a follow-up.
 
 export default function CyclesTab() {
   return (
-    <section style={shell} aria-label="Cycles">
+    <section style={shell} aria-label="Rotation">
       <div style={iconCircle} aria-hidden>
         ⟳
       </div>
-      <h2 style={title}>Cycles are coming</h2>
+      <h2 style={title}>Rotation is coming</h2>
       <p style={body}>
-        Recurring multi-day plans (e.g. Push / Pull / Legs) will live here.
-        For now, schedule individual routines from Home&apos;s Week at a glance.
+        Build a training rotation — Push / Pull / Legs, Upper / Lower, or your
+        own split — and this surface will track what you did last and recommend
+        what&apos;s up next. A climb can cover a pull day, a long hike a leg
+        day. For now, schedule individual routines from the calendar above.
       </p>
     </section>
   );

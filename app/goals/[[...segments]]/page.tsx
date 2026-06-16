@@ -5,10 +5,9 @@ export const dynamic = "force-dynamic";
 type Params = { segments?: string[] };
 type SearchParams = Record<string, string | string[] | undefined>;
 
-// Legacy redirect: /goals → /plan?tab=goals, /goals/<id> → /plan/goals/<id>.
-// Both Home's HabitGrid and Plan's Goals tab now point at the canonical
-// /plan/goals/<id> path; this keeps any pre-existing in-app links and
-// bookmarks pointed at the right destination.
+// Legacy redirect: /goals → /plan, /goals/<id> → /plan/goals/<id>. Plan is
+// now a single scrolling page with Goals as the first section, so a plain
+// /plan redirect lands on goals. Keeps old links and bookmarks pointed right.
 
 export default async function GoalsRedirect(props: {
   params: Promise<Params>;
@@ -20,12 +19,16 @@ export default async function GoalsRedirect(props: {
 
   if (segments.length === 0) {
     const qs = new URLSearchParams();
-    qs.set("tab", "goals");
     for (const [k, v] of Object.entries(searchParams)) {
+      if (k === "tab") continue;
       if (typeof v === "string") qs.set(k, v);
       else if (Array.isArray(v) && v[0]) qs.set(k, v[0]);
     }
-    redirect(`/plan?${qs.toString()}`);
+    // Goals is the first section of the unified Plan page, so a hashless
+    // redirect lands on it. (Server-redirect Location fragments aren't
+    // reliable; the in-app jump-nav handles client-side anchoring.)
+    const query = qs.toString();
+    redirect(`/plan${query ? `?${query}` : ""}`);
   }
 
   if (segments.length === 1) {

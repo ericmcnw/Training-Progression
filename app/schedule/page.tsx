@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 
-// Legacy redirect: /schedule → /plan?tab=month. Home's WeekAtGlance now
-// owns per-day scheduling via its inline "+ Add" picker, so the standalone
-// schedule page has nothing to add — visitors land on Plan / Month for
-// macro-horizon context.
+// Legacy redirect: /schedule → /plan. Home's WeekAtGlance now owns per-day
+// scheduling via its inline "+ Add" picker, so the standalone schedule page
+// has nothing to add — visitors land on the unified Plan page (schedule
+// section is the second card down).
 //
-// Preserves any `start` or `month` query the old page accepted by mapping
-// `month` straight through. `mode=edit` is dropped — the new model puts
-// scheduling on Home and cycles under Plan / Cycles.
+// Preserves the `month` query by mapping it straight through. `mode=edit`
+// is dropped — the new model puts scheduling on Home and the rotation under
+// Plan.
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function ScheduleRedirect(props: {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const month = getParam(searchParams, "month");
   const qs = new URLSearchParams();
-  qs.set("tab", "month");
   if (month && /^\d{4}-\d{2}$/.test(month)) qs.set("month", month);
-  redirect(`/plan?${qs.toString()}`);
+  const query = qs.toString();
+  redirect(`/plan${query ? `?${query}` : ""}`);
 }

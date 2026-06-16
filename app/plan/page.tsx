@@ -1,61 +1,144 @@
-// Plan — macro-horizon planning surface. Now that Home's WeekAtGlance
-// covers per-day scheduling, Plan focuses on Month (calendar view), Goals
-// (longer-horizon targets), and Cycles (recurring schedules).
-//
-// This page is the shell that owns the chrome. Each tab is rendered by its
-// own server component imported below, so the active tab can do its own
-// data fetching without the shell knowing about it.
+// Plan — one scrolling surface: Goals on top, the month Schedule below, and
+// the training Rotation last. The old Month / Goals / Cycles tab split is
+// gone: goals shouldn't hide behind a click, and the three views read better
+// stacked than siloed. Each section fetches its own data (server components),
+// and the jump-nav anchors let you skip straight to one on a long page.
 
-import PlanTabs, { isValidTab, type PlanTabKey } from "./PlanTabs";
+import { SectionCard } from "@/app/progress/ui";
 import MonthTab from "./month/MonthTab";
 import GoalsTab from "./goals/GoalsTab";
-import CyclesTab from "./cycles/CyclesTab";
-import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
+import RotationTab from "./cycles/CyclesTab";
+import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-function getParam(params: SearchParams, key: string) {
-  const value = params[key];
-  return Array.isArray(value) ? value[0] : value;
-}
+const JUMP_LINKS = [
+  { href: "#goals", label: "Goals" },
+  { href: "#schedule", label: "Schedule" },
+  { href: "#rotation", label: "Rotation" },
+];
 
 export default async function PlanPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
-  const requested = getParam(searchParams, "tab");
-  const tab: PlanTabKey = isValidTab(requested) ? requested : "month";
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <PlanTabs current={tab} />
-        {/* Schedule-surface entry point for creating a routine you want to
-            plan in. Defaults to the unscoped domain picker — pick any of the
-            five tiles. The activity-page-scoped flows handle the "I know what
-            domain I want" case; here we're in macro-planning context. */}
-        <NewRoutineDrawerButton style={planNewRoutineStyle}>
-          + New Routine
-        </NewRoutineDrawerButton>
+    <div className="mobilePageShell" style={pageStyle}>
+      <header style={headerStyle}>
+        <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+          <h1 className="mobilePageTitle" style={h1Style}>Plan</h1>
+          <p className="mobilePageSubtitle" style={subStyle}>
+            Your goals, schedule, and training rotation — all in one place.
+          </p>
+        </div>
+        <nav aria-label="Jump to section" style={jumpNavStyle}>
+          {JUMP_LINKS.map((l) => (
+            <a key={l.href} href={l.href} style={jumpPillStyle}>
+              {l.label}
+            </a>
+          ))}
+        </nav>
+      </header>
+
+      <div id="goals" style={anchorStyle}>
+        <SectionCard
+          title="Goals"
+          subtitle="Frequency, performance, volume, and completion targets."
+          actions={<NewGoalDrawerButton style={ctaStyle}>+ New Goal</NewGoalDrawerButton>}
+        >
+          <GoalsTab searchParams={searchParams} />
+        </SectionCard>
       </div>
-      {tab === "month" ? <MonthTab searchParams={searchParams} /> : null}
-      {tab === "goals" ? <GoalsTab searchParams={searchParams} /> : null}
-      {tab === "cycles" ? <CyclesTab /> : null}
+
+      <div id="schedule" style={anchorStyle}>
+        <SectionCard
+          title="Schedule"
+          subtitle="What's planned and logged this month. Tap any day for detail."
+          actions={<NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>}
+        >
+          <MonthTab searchParams={searchParams} />
+        </SectionCard>
+      </div>
+
+      <div id="rotation" style={anchorStyle}>
+        <SectionCard
+          title="Rotation"
+          subtitle="Your training cycle — what you did last and what's up next."
+        >
+          <RotationTab />
+        </SectionCard>
+      </div>
     </div>
   );
 }
 
-const planNewRoutineStyle: React.CSSProperties = {
+const pageStyle: React.CSSProperties = {
+  maxWidth: 980,
+  margin: "0 auto",
+  padding: 4,
+  display: "grid",
+  gap: 16,
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const h1Style: React.CSSProperties = {
+  fontSize: 26,
+  fontWeight: 900,
+  margin: 0,
+};
+
+const subStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  opacity: 0.7,
+};
+
+const jumpNavStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const jumpPillStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  padding: "8px 16px",
+  padding: "7px 13px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  textDecoration: "none",
+  color: "inherit",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  minHeight: 34,
+};
+
+// Offset anchor jumps so the section header clears the top edge / any sticky
+// chrome instead of butting against it.
+const anchorStyle: React.CSSProperties = {
+  scrollMarginTop: 14,
+};
+
+const ctaStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "8px 14px",
   borderRadius: 999,
   border: "1px solid rgba(51,255,122,0.45)",
   background: "rgba(51,255,122,0.10)",
   color: "rgba(51,255,122,0.95)",
-  fontSize: 13,
+  fontSize: 12.5,
   fontWeight: 800,
   letterSpacing: 0.2,
   cursor: "pointer",
