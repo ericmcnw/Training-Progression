@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { addDaysYmd, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import type { RoutineDomain } from "@/lib/routines";
-import { activityIcon } from "@/lib/activity-families";
+import { activityIcon, getActivityEntry } from "@/lib/activity-families";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 import {
   routineWithFrequencyTarget,
@@ -151,6 +151,10 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
             },
           },
         },
+        // Metadata group slugs resolve the activity icon for legacy
+        // routine-based sport/endurance logs (climbing, basketball, hiking…)
+        // — those slugs match the activity registry.
+        metadataGroups: { select: { group: { select: { slug: true } } } },
       },
     }),
     prisma.scheduleManualEntry.findMany({
@@ -198,6 +202,9 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   // ── Build maps ──────────────────────────────────────────────────────────
   const routines = rawRoutines.map(routineWithFrequencyTarget);
   const routineMap = new Map(routines.map((r) => [r.id, r]));
+  const metaSlugsById = new Map(
+    rawRoutines.map((r) => [r.id, r.metadataGroups.map((m) => m.group.slug)])
+  );
   const autoScheduledRoutines = routines.filter((r) => shouldAutoScheduleRoutine(r));
   const activityTypeNameById = new Map(activityTypesRaw.map((t) => [t.id, t.name]));
 
@@ -357,7 +364,12 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         (slot.activityTypeId ? activityTypeNameById.get(slot.activityTypeId) ?? null : null);
       const displayName = typeName ?? r.name;
       const entryDomain = effectiveRoutineDomain(r.domain, r.kind, r.subtype);
-      const { glyph, isIcon } = entryGlyph(slot.routineId, entryDomain, displayName);
+      const { glyph, isIcon } = entryGlyph(
+        slot.routineId,
+        metaSlugsById.get(slot.routineId) ?? [],
+        entryDomain,
+        displayName
+      );
       entries.push({
         key,
         routineId: slot.routineId,
@@ -430,12 +442,30 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   };
 }
 
-// Compact cell glyph: sports resolve to their emoji icon (via the synthetic
-// sport routine slug); everything else gets a first-letter monogram of the
-// display name. Returns isIcon so the renderer can skip the color tint on
-// emoji (they carry their own color) but tint letter monograms by domain.
+// Endurance type names (on synthetic-endurance logs, which carry no metadata)
+// → an icon by keyword. Cheap safety net so a "Trail Run" / "Hike" dot still
+// gets 🏃 / 🥾 even without a tagged metadata group.
+function enduranceKeywordIcon(name: string): string | null {
+  const n = name.toLowerCase();
+  if (n.includes("run")) return "🏃";
+  if (n.includes("hike")) return "🥾";
+  if (n.includes("walk")) return "🚶";
+  if (n.includes("bik") || n.includes("cycl") || n.includes("ride")) return "🚴";
+  if (n.includes("swim")) return "🏊";
+  if (n.includes("row")) return "🚣";
+  return null;
+}
+
+// Compact cell glyph for a calendar entry. Resolution order:
+//   1. Synthetic sport routine id → its sport icon.
+//   2. Any metadata group slug that matches the activity registry → its icon
+//      (covers legacy routine-based logs: climbing, basketball, hiking…).
+//   3. Endurance keyword on the display name (synthetic-endurance logs).
+//   4. First-letter monogram.
+// Returns isIcon so the renderer shows a bare emoji vs a domain-tinted letter.
 function entryGlyph(
   routineId: string,
+  metaSlugs: string[],
   domain: RoutineDomain,
   displayName: string
 ): { glyph: string; isIcon: boolean } {
@@ -444,6 +474,14 @@ function entryGlyph(
     const icon = slug ? activityIcon(slug) : null;
     if (icon) return { glyph: icon, isIcon: true };
   }
+  for (const slug of metaSlugs) {
+    if (getActivityEntry(slug)) {
+      const icon = activityIcon(slug);
+      if (icon) return { glyph: icon, isIcon: true };
+    }
+  }
+  const kw = enduranceKeywordIcon(displayName);
+  if (kw) return { glyph: kw, isIcon: true };
   const firstChar = displayName.trim().charAt(0).toUpperCase();
   return { glyph: firstChar || "•", isIcon: false };
 }

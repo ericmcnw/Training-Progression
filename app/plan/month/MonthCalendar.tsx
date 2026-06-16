@@ -164,18 +164,25 @@ function DayCell({
   );
 }
 
-// Mobile: a bigger rounded glyph dot — sport emoji or a domain-tinted letter
-// monogram. Filled when logged, outlined when planned/future.
+// Mobile: a sport/endurance entry renders as a bare emoji icon (no box); a
+// training entry renders as a compact domain-tinted letter monogram. Sized
+// so two fit side by side in a cell. Status shown by opacity (icons) or
+// fill (letters).
 function GlyphDot({ entry }: { entry: DayEntry }) {
+  if (entry.isIcon) {
+    return (
+      <span
+        style={{ ...glyphIconBase, opacity: iconOpacity(entry.status) }}
+        title={`${entry.routineName} — ${entry.status}`}
+      >
+        {entry.glyph}
+      </span>
+    );
+  }
   const tone = entryTone(entry.status, entry.domain);
   return (
     <span
-      style={{
-        ...glyphDotBase,
-        background: tone.bg,
-        borderColor: tone.border,
-        color: entry.isIcon ? "inherit" : tone.glyph,
-      }}
+      style={{ ...glyphLetterBase, background: tone.bg, borderColor: tone.border, color: tone.glyph }}
       title={`${entry.routineName} — ${entry.status}`}
     >
       {entry.glyph}
@@ -183,7 +190,8 @@ function GlyphDot({ entry }: { entry: DayEntry }) {
   );
 }
 
-// Desktop: a full word chip — small glyph + truncated routine name.
+// Desktop: a full word chip — leading emoji (sport/endurance) or a domain-
+// color dot (training), then the truncated routine name.
 function WordChip({ entry }: { entry: DayEntry }) {
   const tone = entryTone(entry.status, entry.domain);
   return (
@@ -192,11 +200,11 @@ function WordChip({ entry }: { entry: DayEntry }) {
       title={`${entry.routineName} — ${entry.status}`}
     >
       {entry.isIcon ? (
-        <span style={chipGlyphIcon} aria-hidden>{entry.glyph}</span>
+        <span style={{ ...chipGlyphIcon, opacity: iconOpacity(entry.status) }} aria-hidden>{entry.glyph}</span>
       ) : (
         <span style={{ ...chipGlyphDot, background: tone.glyph }} aria-hidden />
       )}
-      <span style={chipName}>{entry.routineName}</span>
+      <span style={{ ...chipName, color: tone.name }}>{entry.routineName}</span>
     </span>
   );
 }
@@ -268,6 +276,9 @@ function cellShell(cell: MonthDayCell, isSelected: boolean): CSSProperties {
     background: bg,
     opacity: cell.isFuture && cell.entries.length === 0 ? 0.6 : 1,
     transition: "background 120ms ease, border-color 120ms ease",
+    // Clip chips so a long routine name can never bleed past the cell edge.
+    overflow: "hidden",
+    minWidth: 0,
   };
 }
 
@@ -285,6 +296,9 @@ const workoutLane: CSSProperties = {
   minHeight: 10,
   display: "flex",
   alignItems: "flex-start",
+  // minWidth:0 lets the desktop word-chip column shrink + truncate instead
+  // of forcing the cell wider.
+  minWidth: 0,
 };
 
 // NOTE: `display` is intentionally NOT set on the lane base styles. It's
@@ -293,8 +307,9 @@ const workoutLane: CSSProperties = {
 // inline would defeat the media query (inline beats class selectors).
 const dotsRowBase: CSSProperties = {
   flexWrap: "wrap",
-  gap: 4,
+  gap: 3,
   alignItems: "center",
+  minWidth: 0,
 };
 
 const chipsColBase: CSSProperties = {
@@ -305,39 +320,76 @@ const chipsColBase: CSSProperties = {
   minWidth: 0,
 };
 
-// Shared tone for a glyph dot / word chip based on log status. `bg` fills
-// the chip, `border` outlines it, `glyph` colors a letter monogram or the
-// desktop chip's leading dot. Missed days go red; future/planned stay faint.
+// Shared tone for a chip / letter monogram based on log status. Backgrounds
+// are deliberately SUBTLE tints (not saturated fills) so light text stays
+// readable on top — the earlier full-color fill made green/amber/orange
+// chips hard to read. `glyph` colors a letter monogram or the leading dot;
+// `name` colors the chip text. Missed days go red; future/planned stay faint.
 const MISSED_RGB = "248,113,113";
-function entryTone(status: DayEntryStatus, domain: string): { bg: string; border: string; glyph: string } {
+function entryTone(status: DayEntryStatus, domain: string): { bg: string; border: string; glyph: string; name: string } {
   const rgb = domainRgb(domain);
+  const nameBright = "rgba(255,255,255,0.95)";
+  const nameDim = "rgba(255,255,255,0.6)";
   switch (status) {
     case "done":
     case "loggedExtra":
-      return { bg: `rgba(${rgb},0.92)`, border: `rgba(${rgb},0.92)`, glyph: "rgba(6,12,22,0.92)" };
+      return { bg: `rgba(${rgb},0.20)`, border: `rgba(${rgb},0.55)`, glyph: `rgba(${rgb},0.98)`, name: nameBright };
     case "partial":
-      return { bg: `rgba(${rgb},0.55)`, border: `rgba(${rgb},0.85)`, glyph: "rgba(6,12,22,0.9)" };
+      return { bg: `rgba(${rgb},0.14)`, border: `rgba(${rgb},0.45)`, glyph: `rgba(${rgb},0.95)`, name: nameBright };
     case "missed":
-      return { bg: "transparent", border: `rgba(${MISSED_RGB},0.55)`, glyph: `rgba(${MISSED_RGB},0.9)` };
+      return { bg: `rgba(${MISSED_RGB},0.10)`, border: `rgba(${MISSED_RGB},0.40)`, glyph: `rgba(${MISSED_RGB},0.9)`, name: nameDim };
     case "future":
-      return { bg: "transparent", border: `rgba(${rgb},0.4)`, glyph: `rgba(${rgb},0.7)` };
+      return { bg: `rgba(${rgb},0.05)`, border: `rgba(${rgb},0.22)`, glyph: `rgba(${rgb},0.7)`, name: nameDim };
     case "planned":
     default:
-      return { bg: `rgba(${rgb},0.12)`, border: `rgba(${rgb},0.65)`, glyph: `rgba(${rgb},0.95)` };
+      return { bg: `rgba(${rgb},0.08)`, border: `rgba(${rgb},0.30)`, glyph: `rgba(${rgb},0.9)`, name: nameDim };
   }
 }
 
-const glyphDotBase: CSSProperties = {
-  width: 19,
-  height: 19,
-  borderRadius: 6,
-  borderWidth: 1.5,
+// Icon status by opacity — bare emoji can't take a fill, so logged reads at
+// full strength and planned/future/missed fade back.
+function iconOpacity(status: DayEntryStatus): number {
+  switch (status) {
+    case "done":
+    case "loggedExtra":
+      return 1;
+    case "partial":
+      return 0.85;
+    case "missed":
+      return 0.5;
+    case "future":
+      return 0.45;
+    case "planned":
+    default:
+      return 0.7;
+  }
+}
+
+// Mobile bare emoji — fixed box so icons + letter chips align and two fit
+// side by side in a cell.
+const glyphIconBase: CSSProperties = {
+  width: 16,
+  height: 16,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 14,
+  lineHeight: 1,
+  flexShrink: 0,
+};
+
+// Mobile letter monogram — compact domain-tinted square.
+const glyphLetterBase: CSSProperties = {
+  width: 16,
+  height: 16,
+  borderRadius: 5,
+  borderWidth: 1,
   borderStyle: "solid",
   boxSizing: "border-box",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 900,
   lineHeight: 1,
   flexShrink: 0,
@@ -359,7 +411,7 @@ const wordChipBase: CSSProperties = {
 };
 
 const chipGlyphIcon: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   lineHeight: 1,
   flexShrink: 0,
 };
@@ -374,7 +426,6 @@ const chipGlyphDot: CSSProperties = {
 const chipName: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 800,
-  color: "rgba(255,255,255,0.92)",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
