@@ -26,6 +26,15 @@ export const bodyZones = [
   // Ankle joints — joints have no muscle metadata group (like knees/achilles).
   { slug: "left-ankle", label: "Left Ankle", region: "ankle", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 95 },
   { slug: "right-ankle", label: "Right Ankle", region: "ankle", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 96 },
+  // Joint markers (rendered as ring overlays, separate from the muscle zones).
+  { slug: "left-shoulder-joint", label: "Left Shoulder (joint)", region: "shoulder-joint", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 12 },
+  { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", region: "shoulder-joint", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 13 },
+  { slug: "left-elbow", label: "Left Elbow", region: "elbow", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 35 },
+  { slug: "right-elbow", label: "Right Elbow", region: "elbow", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 36 },
+  { slug: "left-wrist", label: "Left Wrist", region: "wrist", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 45 },
+  { slug: "right-wrist", label: "Right Wrist", region: "wrist", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 46 },
+  { slug: "left-hip-joint", label: "Left Hip (joint)", region: "hip-joint", side: "LEFT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 52 },
+  { slug: "right-hip-joint", label: "Right Hip (joint)", region: "hip-joint", side: "RIGHT", bodyView: "FRONT", metadataGroupSlug: null, sortOrder: 53 },
   { slug: "abs", label: "Abdominals", region: "abs", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "abs", sortOrder: 25 },
   { slug: "obliques", label: "Obliques", region: "oblique", side: "BILATERAL", bodyView: "FRONT", metadataGroupSlug: "obliques", sortOrder: 26 },
   { slug: "neck-front", label: "Neck (front)", region: "neck", side: "CENTRAL", bodyView: "FRONT", metadataGroupSlug: "neck", sortOrder: 5 },
