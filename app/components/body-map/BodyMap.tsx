@@ -58,6 +58,30 @@ const FRESHNESS_FILL: Record<ZoneFreshness, string> = {
 };
 const SELECTED_FILL = "#ECFEFF";
 
+// ─── Joint markers ────────────────────────────────────────────────────────────
+// Joints (shoulder, hip, wrist, elbow) aren't in the library art, so they're
+// drawn as small ring markers — visually distinct from the organic muscle
+// regions, and slightly offset from the nearby muscle so the joint and the
+// muscle are separate tap targets (e.g. the hip joint sits just above/lateral
+// to the hip-flexor region). Positions are anchored to the library's own
+// body-part coordinates (front-view space, viewBox "0 0 724 1448").
+//
+// NOTE: male front only for now. The back view and the female bodies use
+// different viewBoxes ("724 0 724 1448", "-50 -40 734 1538", "756 0 774 1448")
+// and their own coordinates — those markers land once the front placement is
+// dialed in visually.
+type JointMarker = { slug: string; label: string; cx: number; cy: number; r: number };
+const FRONT_JOINT_MARKERS_MALE: JointMarker[] = [
+  { slug: "left-shoulder-joint",  label: "Left Shoulder (joint)",  cx: 266, cy: 324, r: 17 },
+  { slug: "right-shoulder-joint", label: "Right Shoulder (joint)", cx: 458, cy: 324, r: 17 },
+  { slug: "left-elbow",           label: "Left Elbow",             cx: 196, cy: 512, r: 16 },
+  { slug: "right-elbow",          label: "Right Elbow",            cx: 528, cy: 512, r: 16 },
+  { slug: "left-wrist",           label: "Left Wrist",             cx: 152, cy: 700, r: 15 },
+  { slug: "right-wrist",          label: "Right Wrist",            cx: 572, cy: 700, r: 15 },
+  { slug: "left-hip-joint",       label: "Left Hip (joint)",       cx: 266, cy: 634, r: 16 },
+  { slug: "right-hip-joint",      label: "Right Hip (joint)",      cx: 458, cy: 634, r: 16 },
+];
+
 // ─── Zone slug mapping ────────────────────────────────────────────────────────
 type LibSide = "left" | "right" | null;
 type LibSlug =
@@ -329,6 +353,39 @@ function BodyPanel({
                   onMouseLeave={onZoneHover ? () => onZoneHover(null) : undefined}
                   aria-label={zone.label}
                 />
+              );
+            })}
+            {/* Joint ring markers (male front only for now). Distinct ring
+                shape reads as a joint, not a muscle. */}
+            {gender === "male" && FRONT_JOINT_MARKERS_MALE.map((joint) => {
+              const freshness = zoneStateMap.get(joint.slug) ?? "FRESH";
+              const isSelected = selectable && selectedSet.has(joint.slug);
+              const injuredOrPain = freshness === "INJURED";
+              const ringColor = isSelected
+                ? SELECTED_FILL
+                : injuredOrPain
+                ? "#E11D1D"
+                : "rgba(186,230,253,0.85)"; // cyan-tinted ring so joints read apart from muscles
+              const fill = isSelected ? "rgba(236,254,255,0.18)" : injuredOrPain ? "rgba(225,29,29,0.18)" : "rgba(8,15,28,0.55)";
+              return (
+                <g key={joint.slug} aria-label={joint.label}>
+                  <circle
+                    cx={joint.cx}
+                    cy={joint.cy}
+                    r={joint.r}
+                    fill={fill}
+                    stroke={ringColor}
+                    strokeWidth={3}
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="all"
+                    className={onZoneClick ? "pointer-events-auto cursor-pointer" : ""}
+                    onClick={onZoneClick ? () => onZoneClick(joint.slug) : undefined}
+                    onMouseEnter={onZoneHover ? () => onZoneHover(joint.slug) : undefined}
+                    onMouseLeave={onZoneHover ? () => onZoneHover(null) : undefined}
+                  />
+                  {/* inner dot — marks it as a joint pivot */}
+                  <circle cx={joint.cx} cy={joint.cy} r={joint.r * 0.28} fill={ringColor} pointerEvents="none" />
+                </g>
               );
             })}
           </svg>
