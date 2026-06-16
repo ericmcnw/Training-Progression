@@ -7,6 +7,7 @@ import type { ZoneState, ZoneFreshness } from "@/app/components/body-map/types";
 import { fetchZoneDetail } from "./_actions";
 import type { ZoneDetailResult } from "./_types";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
+import PainLogSheet from "./PainLogSheet";
 
 const MAP_OPEN_STORAGE_KEY = "body:mapOpen";
 
@@ -143,10 +144,12 @@ function ZonePanel({
   detail,
   onClose,
   loading,
+  onLogPain,
 }: {
   detail: ZoneDetailResult;
   onClose: () => void;
   loading: boolean;
+  onLogPain: (slug: string, label: string) => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const isJoint = isJointSlug(detail.slug);
@@ -240,10 +243,9 @@ function ZonePanel({
             View injury · {injury.name}
           </Link>
         ))}
-        <Link href={`/body/log-pain?zone=${detail.slug}`} style={linkDanger}>Log pain</Link>
-        {!isJoint && (
-          <Link href={`/body/${detail.slug}?manual=1`} style={linkSecondary}>Log activity</Link>
-        )}
+        <button type="button" onClick={() => onLogPain(detail.slug, detail.label)} style={linkDanger}>
+          Log pain
+        </button>
         {detail.activeInjuries.length === 0 && (
           <Link href={`/injuries/new?zone=${detail.slug}`} style={linkSecondary}>Mark injured</Link>
         )}
@@ -258,6 +260,7 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
   const [detail, setDetail] = useState<ZoneDetailResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const [mapOpen, setMapOpen] = useState(true);
+  const [painZone, setPainZone] = useState<{ slug: string; label: string } | null>(null);
   const requestId = useRef(0);
 
   // Persist the map collapse state across visits so users who prefer the
@@ -343,8 +346,11 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
           detail={detail}
           onClose={() => { requestId.current += 1; setSelectedSlug(null); setDetail(null); }}
           loading={isPending}
+          onLogPain={(slug, label) => setPainZone({ slug, label })}
         />
       )}
+
+      <PainLogSheet zone={painZone} onClose={() => setPainZone(null)} />
     </div>
   );
 }
