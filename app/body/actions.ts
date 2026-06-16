@@ -7,8 +7,21 @@ import { revalidatePath } from "next/cache";
 const painContexts = new Set<PainContext>(["AT_REST", "DURING_ACTIVITY", "AFTER_ACTIVITY", "MORNING", "GENERAL"]);
 const activitySources = new Set<ActivitySource>(["EXERCISE", "SPORT_TAG", "MANUAL"]);
 
+function sanitizeFactors(arr?: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of arr ?? []) {
+    const value = (raw ?? "").trim().slice(0, 60);
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
 export async function logPain(
-  input: { zoneSlug: string; level: number; context: PainContext; notes?: string; routineLogId?: string }[]
+  input: { zoneSlug: string; level: number; context: PainContext; notes?: string; routineLogId?: string; aggravatingFactors?: string[] }[]
 ) {
   const rows = input
     .map((entry) => ({
@@ -17,6 +30,7 @@ export async function logPain(
       context: entry.context,
       notes: entry.notes?.trim() || null,
       routineLogId: entry.routineLogId?.trim() || null,
+      aggravatingFactors: sanitizeFactors(entry.aggravatingFactors),
     }))
     .filter((entry) => entry.zoneSlug && entry.level > 0 && painContexts.has(entry.context));
 
@@ -39,13 +53,50 @@ export async function logPain(
           context: entry.context,
           notes: entry.notes,
           routineLogId: entry.routineLogId,
+          aggravatingFactors: entry.aggravatingFactors,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
   });
 
+  // Union the factors into any active injury covering the affected zones, so
+  // the injury's factor list grows as you log pain.
+  const factorsByZoneId = new Map<string, string[]>();
+  for (const entry of rows) {
+    if (entry.aggravatingFactors.length === 0) continue;
+    const zoneId = zoneIdBySlug.get(entry.zoneSlug);
+    if (!zoneId) continue;
+    factorsByZoneId.set(zoneId, [...(factorsByZoneId.get(zoneId) ?? []), ...entry.aggravatingFactors]);
+  }
+  if (factorsByZoneId.size > 0) {
+    const injuries = await prisma.activeInjury.findMany({
+      where: {
+        status: { in: ["ACTIVE", "FLARED", "RECOVERING"] },
+        zones: { some: { zoneId: { in: [...factorsByZoneId.keys()] } } },
+      },
+      select: { id: true, aggravatingFactors: true, zones: { select: { zoneId: true } } },
+    });
+    for (const injury of injuries) {
+      const incoming = injury.zones.flatMap((z) => factorsByZoneId.get(z.zoneId) ?? []);
+      if (incoming.length === 0) continue;
+      const seen = new Set(injury.aggravatingFactors.map((f) => f.toLowerCase()));
+      const merged = [...injury.aggravatingFactors];
+      for (const f of incoming) {
+        const key = f.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(f);
+        }
+      }
+      if (merged.length !== injury.aggravatingFactors.length) {
+        await prisma.activeInjury.update({ where: { id: injury.id }, data: { aggravatingFactors: merged } });
+      }
+    }
+  }
+
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/injuries");
   for (const row of rows) revalidatePath(`/body/${row.zoneSlug}`);
 }
 

@@ -744,6 +744,9 @@ model PainLog {
   level        Int
   context      PainContext
   notes        String?
+  // What aggravated this pain, captured at log time. Also unioned into any
+  // active injury on the zone so the injury accumulates its factors.
+  aggravatingFactors String[] @default([])
   loggedAt     DateTime    @default(now())
   routineLogId String?
   routineLog   RoutineLog? @relation(fields: [routineLogId], references: [id], onDelete: SetNull)

@@ -5,7 +5,7 @@ import { getCoverageOverviewModel, type CoverageLens, type CoverageRange } from 
 import CoverageGroupedBarChart from "@/app/progress/CoverageGroupedBarChart";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
-import { getInjuries } from "@/app/injuries/actions";
+import { getInjuries, getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import type { InjuryStatus } from "@/generated/prisma";
 import type { ZoneFreshness, ZoneState } from "@/app/components/body-map/types";
 
@@ -35,10 +35,11 @@ export default async function BodyPage(props: {
   const lens = normalizeBodyLens(getParam(searchParams, "lens"));
   const range = normalizeBodyRange(getParam(searchParams, "range"));
 
-  const [zones, coverageOverview, injuries] = await Promise.all([
+  const [zones, coverageOverview, injuries, factorSuggestions] = await Promise.all([
     getAllZonesWithState(),
     getCoverageOverviewModel(range),
     getInjuries(),
+    getAggravatingFactorSuggestions(),
   ]);
 
   const triageInjuries = injuries.filter((i) => i.status === "ACTIVE" || i.status === "FLARED");
@@ -86,7 +87,7 @@ export default async function BodyPage(props: {
 
       <BodyStatusRow counts={freshnessCounts} totalZones={zones.length} />
 
-      <BodyPageClient zones={zones} />
+      <BodyPageClient zones={zones} factorSuggestions={factorSuggestions} />
 
       <NeedsAttentionSection items={needsAttention} />
 

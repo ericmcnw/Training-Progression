@@ -10,6 +10,7 @@ import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Popover from "@/app/_home/Popover";
 import { logPain } from "@/app/body/actions";
+import FactorSearchField from "@/app/components/injuries/FactorSearchField";
 import type { PainContext } from "@/generated/prisma";
 
 const CONTEXTS: Array<{ value: PainContext; label: string }> = [
@@ -29,13 +30,16 @@ function painColor(level: number) {
 export default function PainLogSheet({
   zone,
   onClose,
+  factorSuggestions = [],
 }: {
   zone: { slug: string; label: string } | null;
   onClose: () => void;
+  factorSuggestions?: string[];
 }) {
   const [level, setLevel] = useState(3);
   const [context, setContext] = useState<PainContext>("GENERAL");
   const [notes, setNotes] = useState("");
+  const [factors, setFactors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -45,6 +49,7 @@ export default function PainLogSheet({
     setLevel(3);
     setContext("GENERAL");
     setNotes("");
+    setFactors([]);
     setError(null);
     onClose();
   }
@@ -54,7 +59,7 @@ export default function PainLogSheet({
     setError(null);
     startTransition(async () => {
       try {
-        await logPain([{ zoneSlug: zone.slug, level, context, notes: notes.trim() || undefined }]);
+        await logPain([{ zoneSlug: zone.slug, level, context, notes: notes.trim() || undefined, aggravatingFactors: factors }]);
         close();
         router.refresh();
       } catch (e) {
@@ -98,6 +103,11 @@ export default function PainLogSheet({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={fieldLabel}>What aggravates it?</span>
+            <FactorSearchField value={factors} onChange={setFactors} suggestions={factorSuggestions} />
           </div>
 
           <input

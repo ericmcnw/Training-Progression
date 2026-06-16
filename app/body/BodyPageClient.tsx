@@ -255,7 +255,7 @@ function ZonePanel({
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
+export default function BodyPageClient({ zones, factorSuggestions = [] }: { zones: ZoneState[]; factorSuggestions?: string[] }) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [detail, setDetail] = useState<ZoneDetailResult | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -353,7 +353,7 @@ export default function BodyPageClient({ zones }: { zones: ZoneState[] }) {
         </div>
       )}
 
-      <PainLogSheet zone={painZone} onClose={() => setPainZone(null)} />
+      <PainLogSheet zone={painZone} onClose={() => setPainZone(null)} factorSuggestions={factorSuggestions} />
     </div>
   );
 }
