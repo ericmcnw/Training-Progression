@@ -388,7 +388,8 @@ export default function WorkoutExerciseEditor({
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null;
       if (pendingGripId.current !== exerciseId) return;
-      setExpandedId(null); // collapse so the whole list is visible while dragging
+      // Don't collapse on engage — reflowing the list shifts cards out from
+      // under the finger. Drag the card as-is, expanded or not.
       setDraggingId(exerciseId);
       markDirty();
       if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
