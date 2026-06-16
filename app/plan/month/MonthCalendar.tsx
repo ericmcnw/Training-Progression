@@ -25,11 +25,10 @@ type Props = {
   scheduleSports?: import("@/app/_home/SchedulePicker").ScheduleSport[];
 };
 
-// Per-cell entry caps. Mobile shows glyph dots (bigger now — a letter or
-// sport emoji each), desktop shows full word chips. Most days have 1-3
-// sessions; beyond the cap we render "+N".
-const MAX_DOTS_MOBILE = 3;
-const MAX_CHIPS_DESKTOP = 3;
+// Per-cell entry caps. Mobile shows glyph dots in a 2-column grid (so two
+// fit per row); desktop shows full word chips. Beyond the cap we render "+N".
+const MAX_DOTS_MOBILE = 4;
+const MAX_CHIPS_DESKTOP = 4;
 
 export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
@@ -84,12 +83,21 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
         }
         @media (min-width: 720px) {
           .planMonthCalendarWrap {
-            --plan-cell-min-h: 96px;
+            /* Taller so four stacked word chips fit without overrunning. */
+            --plan-cell-min-h: 118px;
           }
         }
       `}</style>
     </div>
   );
+}
+
+// Cap a list, reserving the last visible slot for the "+N" chip when over —
+// keeps the lane to a fixed row count.
+function capWithOverflow<T>(items: T[], max: number): { shown: T[]; overflow: number } {
+  if (items.length <= max) return { shown: items, overflow: 0 };
+  const shown = items.slice(0, max - 1);
+  return { shown, overflow: items.length - shown.length };
 }
 
 function DayCell({
@@ -106,11 +114,10 @@ function DayCell({
   const habitsTotal = cell.entries.filter((e) => e.isHabit).length;
 
   // Render both mobile + desktop variants and let CSS show the right one.
-  // Avoids a window-size-dependent fork.
-  const desktopWorkouts = workouts.slice(0, MAX_CHIPS_DESKTOP);
-  const desktopWorkoutOverflow = workouts.length - desktopWorkouts.length;
-  const mobileWorkouts = workouts.slice(0, MAX_DOTS_MOBILE);
-  const mobileWorkoutOverflow = workouts.length - mobileWorkouts.length;
+  // When over the cap, reserve the last slot for "+N" so the lane never
+  // exceeds the cap's row count (mobile: 4 = 2 rows of 2).
+  const { shown: desktopWorkouts, overflow: desktopWorkoutOverflow } = capWithOverflow(workouts, MAX_CHIPS_DESKTOP);
+  const { shown: mobileWorkouts, overflow: mobileWorkoutOverflow } = capWithOverflow(workouts, MAX_DOTS_MOBILE);
 
   const ariaSummary = [
     workouts.length > 0 ? `${workouts.length} workout${workouts.length === 1 ? "" : "s"}` : null,
@@ -153,7 +160,7 @@ function DayCell({
           rules can toggle it. Inline `display:flex` would beat the
           `display:none` class rule on specificity and render both lanes. */}
       <style>{`
-        .planMonthLaneMobile { display: flex; }
+        .planMonthLaneMobile { display: grid; }
         .planMonthLaneDesktop { display: none; }
         @media (min-width: 720px) {
           .planMonthLaneMobile { display: none; }
@@ -270,7 +277,7 @@ function cellShell(cell: MonthDayCell, isSelected: boolean): CSSProperties {
     gridTemplateRows: "auto 1fr",
     gap: 4,
     minHeight: "var(--plan-cell-min-h, 70px)",
-    padding: "5px 6px 6px",
+    padding: "5px 5px 6px",
     borderRadius: 8,
     border: `1px solid ${borderColor}`,
     background: bg,
@@ -305,10 +312,15 @@ const workoutLane: CSSProperties = {
 // controlled by the CSS rules + media query above so .planMonthLaneMobile
 // and .planMonthLaneDesktop can be toggled per viewport. Setting display
 // inline would defeat the media query (inline beats class selectors).
+// Mobile dot lane: a 2-column grid guarantees exactly two dots per row no
+// matter how narrow the cell is (flex-wrap couldn't promise that). `display`
+// is set by the class above so the media query can toggle it.
 const dotsRowBase: CSSProperties = {
-  flexWrap: "wrap",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: 3,
+  justifyItems: "center",
   alignItems: "center",
+  width: "100%",
   minWidth: 0,
 };
 
@@ -365,23 +377,22 @@ function iconOpacity(status: DayEntryStatus): number {
   }
 }
 
-// Mobile bare emoji — fixed box so icons + letter chips align and two fit
-// side by side in a cell.
+// Mobile bare emoji — fixed box so icons + letter chips align in the grid.
 const glyphIconBase: CSSProperties = {
-  width: 16,
-  height: 16,
+  width: 15,
+  height: 15,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: 14,
+  fontSize: 13,
   lineHeight: 1,
   flexShrink: 0,
 };
 
 // Mobile letter monogram — compact domain-tinted square.
 const glyphLetterBase: CSSProperties = {
-  width: 16,
-  height: 16,
+  width: 15,
+  height: 15,
   borderRadius: 5,
   borderWidth: 1,
   borderStyle: "solid",
@@ -389,7 +400,7 @@ const glyphLetterBase: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 900,
   lineHeight: 1,
   flexShrink: 0,
