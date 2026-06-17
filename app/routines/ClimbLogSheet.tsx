@@ -17,6 +17,7 @@ import {
 } from "@/lib/climb-types";
 import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
 import SportLogModal from "./SportLogModal";
+import AreaCombobox from "./AreaCombobox";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
@@ -290,6 +291,12 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     });
   }
 
+  // Area names typed during this session (free-text, no saved id yet) so
+  // an area entered on climb #1 becomes a pickable option on climb #2+.
+  const sessionAreas = Array.from(
+    new Set(attempts.map((a) => a.area.trim()).filter((n) => n.length > 0))
+  );
+
   return (
     <SportLogModal
       title="Log Climbing"
@@ -433,7 +440,10 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                     {/* Climb identity — name + area. Optional but
                         recommended; the server resolves them into
                         ClimbProblem / ClimbArea rows so a future "this
-                        route again" picker can find them. */}
+                        route again" picker can find them. The area
+                        combobox searches saved areas + areas typed
+                        earlier this session, creating one when nothing
+                        matches. */}
                     <div style={attemptRow}>
                       <input
                         type="text"
@@ -442,50 +452,14 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                         onChange={(e) => updateAttempt(a.localId, { name: e.target.value })}
                         style={{ ...fieldInput, flex: "2 1 160px", minWidth: 0 }}
                       />
-                      <input
-                        type="text"
-                        placeholder="New area name"
-                        value={a.area}
-                        onChange={(e) =>
-                          updateAttempt(a.localId, { area: e.target.value, areaId: "" })
-                        }
-                        disabled={Boolean(a.areaId)}
-                        style={{
-                          ...fieldInput,
-                          flex: "1 1 110px",
-                          minWidth: 0,
-                          opacity: a.areaId ? 0.45 : 1,
-                        }}
+                      <AreaCombobox
+                        areaId={a.areaId}
+                        area={a.area}
+                        savedAreas={savedAreas}
+                        sessionAreas={sessionAreas}
+                        onPick={(pick) => updateAttempt(a.localId, pick)}
                       />
                     </div>
-
-                    {/* Saved-area chips — only when the user picked
-                        an existing location (not a fresh one). Tap a
-                        chip to attribute to that area; tap again to
-                        clear and free-type. */}
-                    {savedAreas.length > 0 ? (
-                      <div style={areaChipRow}>
-                        <span style={areaChipRowLabel}>Areas:</span>
-                        {savedAreas.map((area) => {
-                          const isOn = a.areaId === area.id;
-                          return (
-                            <button
-                              key={area.id}
-                              type="button"
-                              onClick={() =>
-                                updateAttempt(a.localId, {
-                                  areaId: isOn ? "" : area.id,
-                                  area: isOn ? a.area : "",
-                                })
-                              }
-                              style={isOn ? areaChipActive : areaChipInactive}
-                            >
-                              {area.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
 
                     <input
                       type="text"
@@ -597,43 +571,6 @@ const removeAttemptBtn: CSSProperties = {
   cursor: "pointer",
 };
 const attemptRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 };
-
-const areaChipRow: CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-  alignItems: "center",
-  marginTop: 6,
-};
-
-const areaChipRowLabel: CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 800,
-  letterSpacing: 0.6,
-  textTransform: "uppercase",
-  opacity: 0.45,
-  marginRight: 2,
-};
-
-const areaChipInactive: CSSProperties = {
-  padding: "5px 10px",
-  borderRadius: 999,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.03)",
-  color: "rgba(255,255,255,0.65)",
-  fontSize: 11,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const areaChipActive: CSSProperties = {
-  ...areaChipInactive,
-  borderColor: "rgba(51,255,122,0.45)",
-  background: "rgba(51,255,122,0.10)",
-  color: "rgba(51,255,122,0.95)",
-};
 
 const outcomeChipRow: CSSProperties = {
   display: "flex",
