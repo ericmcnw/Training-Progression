@@ -100,6 +100,55 @@ export async function logPain(
   for (const row of rows) revalidatePath(`/body/${row.zoneSlug}`);
 }
 
+export async function updatePainLog(
+  id: string,
+  input: { zoneSlug: string; level: number; context: PainContext; notes?: string; aggravatingFactors?: string[] }
+) {
+  const level = Math.max(0, Math.min(10, Math.round(Number(input.level))));
+  if (level <= 0) throw new Error("Pain level must be above 0.");
+  if (!painContexts.has(input.context)) throw new Error("Invalid context.");
+
+  const zone = await prisma.bodyZone.findUnique({
+    where: { slug: String(input.zoneSlug || "").trim() },
+    select: { id: true, slug: true },
+  });
+  if (!zone) throw new Error("Body zone not found.");
+
+  const existing = await prisma.painLog.findUnique({ where: { id }, select: { zone: { select: { slug: true } } } });
+
+  await prisma.painLog.update({
+    where: { id },
+    data: {
+      zoneId: zone.id,
+      level,
+      context: input.context,
+      notes: input.notes?.trim() || null,
+      aggravatingFactors: sanitizeFactors(input.aggravatingFactors),
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/body");
+  revalidatePath("/injuries");
+  revalidatePath(`/body/${zone.slug}`);
+  // Moving a log off its old zone changes that zone's surfaces too.
+  if (existing?.zone?.slug && existing.zone.slug !== zone.slug) revalidatePath(`/body/${existing.zone.slug}`);
+}
+
+export async function deletePainLog(id: string) {
+  const log = await prisma.painLog.findUnique({
+    where: { id },
+    select: { zone: { select: { slug: true } } },
+  });
+  if (!log) return;
+  await prisma.painLog.delete({ where: { id } });
+
+  revalidatePath("/");
+  revalidatePath("/body");
+  revalidatePath("/injuries");
+  if (log.zone?.slug) revalidatePath(`/body/${log.zone.slug}`);
+}
+
 export async function addManualZoneActivity(input: {
   zoneSlug: string;
   performedAt: Date | string;

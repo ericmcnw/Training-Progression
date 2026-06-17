@@ -8,6 +8,7 @@ import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import { getHomeInjuries } from "@/lib/home-injuries";
 import HomeInjuriesSection from "@/app/_home/HomeInjuriesSection";
+import LogPainButton from "@/app/components/injuries/LogPainButton";
 import type { ZoneFreshness, ZoneState } from "@/app/components/body-map/types";
 
 export const dynamic = "force-dynamic";
@@ -58,10 +59,11 @@ export default async function BodyPage(props: {
       title="Body"
       subtitle="Track zone freshness, injuries, and training load by region. Tap a zone on the map for details."
       toolbar={
-        <>
-          <Link href="/body/log-pain" style={dangerLinkStyle}>Log pain</Link>
-          <Link href="/injuries" style={linkStyle}>Injuries</Link>
-        </>
+        <LogPainButton
+          zones={pickerZones}
+          injuries={homeInjuries.map((i) => ({ id: i.id, name: i.name, zones: i.zones }))}
+          factorSuggestions={factorSuggestions}
+        />
       }
     >
       {/* Freshness + injuries in one card. */}
@@ -380,26 +382,6 @@ const attentionMeta: React.CSSProperties = {
   color: "#FDE68A",
   marginTop: 3,
   letterSpacing: 0.2,
-};
-
-const linkStyle: React.CSSProperties = {
-  display: "inline-flex",
-  minHeight: 36,
-  alignItems: "center",
-  border: `1px solid ${COLOR.borderStrong}`,
-  borderRadius: RADIUS.control,
-  padding: "8px 14px",
-  background: "rgba(255,255,255,0.05)",
-  color: "inherit",
-  textDecoration: "none",
-  fontSize: 12,
-  fontWeight: 800,
-};
-
-const dangerLinkStyle: React.CSSProperties = {
-  ...linkStyle,
-  border: "1px solid rgba(248,113,113,0.35)",
-  background: "rgba(248,113,113,0.08)",
 };
 
 const coverageSectionStyle: React.CSSProperties = {

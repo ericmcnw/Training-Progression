@@ -28,7 +28,7 @@ export default async function NewInjuryPage(props: { searchParams?: Promise<Sear
           <div style={eyebrow}>Injuries</div>
           <h1 style={h1}>New Injury</h1>
         </div>
-        <Link href="/injuries" style={linkStyle}>
+        <Link href="/body" style={linkStyle}>
           Back
         </Link>
       </div>

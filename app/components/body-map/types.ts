@@ -41,13 +41,10 @@ export type BodyMapProps = {
   showLegend?: boolean;
   /** Defaults to "male". TODO: read from user account once gender preference is collected at sign-up. */
   gender?: "male" | "female";
-  /** Rendered after the `detailAfterView` panel (forces a single column when
-   *  present) — e.g. the zone detail panel, so it sits right under the view
-   *  the zone was tapped from. */
+  /** Rendered full-width beneath the body panel(s) — e.g. the zone detail
+   *  panel. The two maps stay side by side on desktop; the detail never
+   *  splits them. */
   detailSlot?: ReactNode;
-  /** Which view's panel the detailSlot renders after. Defaults to the front
-   *  view (or the only view shown). */
-  detailAfterView?: "front" | "back";
 };
 
 export type BodyZonePath = {

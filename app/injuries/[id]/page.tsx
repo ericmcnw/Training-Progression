@@ -1,10 +1,11 @@
 import type React from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
 import BodyMap from "@/app/components/body-map/BodyMap";
 import InjuryForm from "@/app/components/injuries/InjuryForm";
-import QuickInjuryPainLog from "@/app/components/injuries/QuickInjuryPainLog";
+import LogPainButton from "@/app/components/injuries/LogPainButton";
+import DeletePainLogButton from "@/app/components/injuries/DeletePainLogButton";
+import EditPainLogButton from "@/app/components/injuries/EditPainLogButton";
 import PainHistoryChart, { type PainHistoryDay } from "@/app/components/injuries/PainHistoryChart";
 import InjuryTrainingHeatmap from "@/app/components/injuries/InjuryTrainingHeatmap";
 import { getInjuryTrainingHeatmap } from "./training-heatmap";
@@ -164,7 +165,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
       eyebrow="Injury"
       title={injury.name}
       subtitle={subtitle}
-      toolbar={<HistoryBackButton fallbackHref="/injuries" label="← Back" style={linkStyle} />}
+      toolbar={<HistoryBackButton fallbackHref="/body" label="← Back" style={linkStyle} />}
     >
       {/* Quick log + summary stats */}
       {injury.status !== "RESOLVED" && (
@@ -194,7 +195,11 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
               </div>
             )}
           </div>
-          <QuickInjuryPainLog zones={painZones} />
+          <LogPainButton
+            zones={painZones}
+            factorSuggestions={factorSuggestions}
+            style={logPainButtonStyle}
+          />
         </section>
       )}
 
@@ -298,8 +303,23 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
                     </div>
                   ) : null}
                 </div>
-                <div style={{ minWidth: 120 }}>
+                <div style={{ display: "grid", gap: 6, minWidth: 120, justifyItems: "end" }}>
                   <PainBar level={log.level} />
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <EditPainLogButton
+                      log={{
+                        id: log.id,
+                        zoneSlug: log.zone.slug,
+                        level: log.level,
+                        context: log.context,
+                        notes: log.notes ?? "",
+                        aggravatingFactors: log.aggravatingFactors,
+                      }}
+                      zones={zones}
+                      factorSuggestions={factorSuggestions}
+                    />
+                    <DeletePainLogButton id={log.id} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -349,6 +369,17 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 
 const panel: React.CSSProperties = { ...cardSurface, gap: 14 };
 const muted: React.CSSProperties = { fontSize: 13, color: COLOR.textDim, lineHeight: 1.45 };
+const logPainButtonStyle: React.CSSProperties = {
+  width: "100%",
+  justifyContent: "center",
+  minHeight: 46,
+  fontSize: 14,
+  fontWeight: 900,
+  borderRadius: 12,
+  border: "1px solid rgba(248,113,113,0.5)",
+  background: "rgba(248,113,113,0.14)",
+  color: "#FECACA",
+};
 const row: React.CSSProperties = {
   border: `1px solid ${COLOR.border}`,
   borderRadius: RADIUS.control,
