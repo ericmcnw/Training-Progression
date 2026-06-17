@@ -15,6 +15,7 @@ import {
   type ClimbGradeSystem,
   type ClimbOutcome,
 } from "@/lib/climb-types";
+import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
 import SportLogModal from "./SportLogModal";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
@@ -87,10 +88,6 @@ const OUTCOME_LABEL: Record<ClimbOutcome, string> = {
 
 function gradeSystemFor(d: ClimbingDiscipline): ClimbGradeSystem {
   return d === "BOULDER" ? "BOULDER_V" : "YOSEMITE";
-}
-
-function gradePlaceholder(d: ClimbingDiscipline): string {
-  return d === "BOULDER" ? "V4" : "5.10a";
 }
 
 function defaultOutcome(d: ClimbingDiscipline): ClimbOutcome {
@@ -190,6 +187,10 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
         // on SPORT_LEAD, etc.).
         if (patch.discipline && patch.discipline !== a.discipline) {
           merged.outcome = defaultOutcome(patch.discipline);
+          // Grade scale changes with discipline (V-scale ↔ YDS), so a
+          // carried-over grade would be invalid for the new dropdown —
+          // clear it and let the user re-pick.
+          merged.grade = "";
         }
         return merged;
       })
@@ -371,14 +372,27 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                           <option key={d.value} value={d.value}>{d.label}</option>
                         ))}
                       </select>
-                      <input
-                        type="text"
-                        placeholder={gradePlaceholder(a.discipline)}
-                        value={a.grade}
-                        onChange={(e) => updateAttempt(a.localId, { grade: e.target.value })}
-                        style={{ ...fieldInput, flex: "1 1 70px", minWidth: 0 }}
-                        aria-label="Grade"
-                      />
+                      {(() => {
+                        const gradeOpts = climbingGradeOptionsForDiscipline(a.discipline);
+                        // Preserve an out-of-list grade (a legacy/elite value
+                        // beyond the standard ladder) so a dropdown switch
+                        // never silently drops it.
+                        const showCustom = a.grade.trim() !== "" && !gradeOpts.includes(a.grade);
+                        return (
+                          <select
+                            value={a.grade}
+                            onChange={(e) => updateAttempt(a.localId, { grade: e.target.value })}
+                            style={{ ...fieldInput, flex: "1 1 90px", minWidth: 0 }}
+                            aria-label="Grade"
+                          >
+                            <option value="">Grade</option>
+                            {showCustom ? <option value={a.grade}>{a.grade}</option> : null}
+                            {gradeOpts.map((g) => (
+                              <option key={g} value={g}>{g}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                       {showTries ? (
                         <input
                           type="number"
