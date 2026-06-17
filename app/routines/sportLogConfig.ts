@@ -64,6 +64,15 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { key: "board", label: "Board", type: "text", placeholder: "e.g. 5'10 shortboard" },
     ],
   },
+  bodysurfing: {
+    locationPlaceholder: "Spot",
+    extras: [
+      { key: "waveCount", label: "Wave count", type: "number", numericHint: "integer" },
+      { key: "swellHeight", label: "Swell (ft)", type: "number", numericHint: "decimal" },
+      { key: "conditions", label: "Conditions", type: "text", placeholder: "e.g. clean head-high, glassy" },
+      { key: "gear", label: "Fins / handplane", type: "text", placeholder: "e.g. DaFin swim fins, handplane" },
+    ],
+  },
   snowboarding: {
     locationPlaceholder: "Mountain / resort",
     sessionTypeLabel: "Terrain",
