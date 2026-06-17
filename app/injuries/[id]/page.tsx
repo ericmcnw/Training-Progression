@@ -6,15 +6,15 @@ import InjuryForm from "@/app/components/injuries/InjuryForm";
 import LogPainButton from "@/app/components/injuries/LogPainButton";
 import DeletePainLogButton from "@/app/components/injuries/DeletePainLogButton";
 import EditPainLogButton from "@/app/components/injuries/EditPainLogButton";
-import PainHistoryChart, { type PainHistoryDay } from "@/app/components/injuries/PainHistoryChart";
-import InjuryTrainingHeatmap from "@/app/components/injuries/InjuryTrainingHeatmap";
+import PainTrendLine, { type PainTrendPoint } from "@/app/components/injuries/PainTrendLine";
+import InjuryTrainingLoad from "@/app/components/injuries/InjuryTrainingLoad";
 import { getInjuryTrainingHeatmap } from "./training-heatmap";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjury, updateInjury, getAggravatingFactorSuggestions } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, addDaysYmd, diffYmdDays } from "@/lib/dates";
+import { formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, diffYmdDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -44,30 +44,16 @@ function painColor(level: number): string {
   return "rgba(255,255,255,0.55)";
 }
 
-function buildPainHistory(
-  startedAtYmd: string,
-  todayYmd: string,
-  rows: Array<{ level: number; loggedAt: Date; context: string }>,
-): PainHistoryDay[] {
-  const peaks = new Map<string, { peak: number; context: PainHistoryDay["context"] }>();
+// Per-day peak pain, oldest → newest — the point series the trend line draws.
+function dailyPainPeaks(rows: Array<{ level: number; loggedAt: Date }>): PainTrendPoint[] {
+  const peak = new Map<string, number>();
   for (const row of rows) {
     const ymd = toAppYmd(row.loggedAt);
-    const existing = peaks.get(ymd);
-    if (!existing || row.level > existing.peak) {
-      peaks.set(ymd, { peak: row.level, context: row.context as PainHistoryDay["context"] });
-    }
+    peak.set(ymd, Math.max(peak.get(ymd) ?? 0, row.level));
   }
-  // diffYmdDays(a, b) = a - b, so we need (today - started) for a positive
-  // span. Reversing the args silently capped this at 1 day and hid every
-  // pain log older than today.
-  const totalDays = Math.max(1, diffYmdDays(todayYmd, startedAtYmd) + 1);
-  const days: PainHistoryDay[] = [];
-  for (let i = 0; i < totalDays; i++) {
-    const ymd = addDaysYmd(startedAtYmd, i);
-    const entry = peaks.get(ymd);
-    days.push({ ymd, peak: entry?.peak ?? null, context: entry?.context ?? null });
-  }
-  return days;
+  return [...peak.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([ymd, level]) => ({ ymd, level }));
 }
 
 function buildAggravators(
@@ -94,6 +80,13 @@ function buildAggravators(
     .slice(0, 5);
 }
 
+const STATUS_META: Record<string, { label: string; bg: string; border: string; color: string }> = {
+  ACTIVE:     { label: "Active",     bg: "rgba(248,113,113,0.16)", border: "rgba(248,113,113,0.42)", color: "#FCA5A5" },
+  FLARED:     { label: "Flared",     bg: "rgba(251,146,60,0.16)",  border: "rgba(251,146,60,0.42)",  color: "#FED7AA" },
+  RECOVERING: { label: "Recovering", bg: "rgba(147,197,253,0.16)", border: "rgba(147,197,253,0.36)", color: "#DBEAFE" },
+  RESOLVED:   { label: "Resolved",   bg: "rgba(255,255,255,0.06)", border: "rgba(255,255,255,0.16)", color: "rgba(255,255,255,0.62)" },
+};
+
 function PainBar({ level }: { level: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -101,6 +94,17 @@ function PainBar({ level }: { level: number }) {
         <div style={{ width: `${level * 10}%`, height: "100%", borderRadius: 4, background: painColor(level), transition: "width 0.2s" }} />
       </div>
       <span style={{ fontSize: 13, fontWeight: 900, color: painColor(level), minWidth: 32, textAlign: "right" }}>{level}/10</span>
+    </div>
+  );
+}
+
+function PainStat({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div style={statChip}>
+      <div style={statChipLabel}>{label}</div>
+      <div style={{ ...statChipValue, color: value !== null ? painColor(value) : COLOR.textFaint }}>
+        {value !== null ? `${value}/10` : "—"}
+      </div>
     </div>
   );
 }
@@ -113,9 +117,6 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const zoneIds = injury.zones.map((entry) => entry.zoneId);
   const zoneSlugs = injury.zones.map((entry) => entry.zone.slug);
   const painZones = injury.zones.map((entry) => ({ slug: entry.zone.slug, label: entry.zone.label }));
-  // Affected zones may map to one or more metadata groups (e.g. left + right
-  // hamstring both → "hamstrings"). Dedupe so the heatmap shows each group
-  // once.
   const affectedMuscleSlugs = Array.from(
     new Set(
       injury.zones
@@ -128,10 +129,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
     prisma.bodyZone.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { slug: true, label: true } }),
     getAggravatingFactorSuggestions(),
     prisma.painLog.findMany({
-      where: {
-        zoneId: { in: zoneIds },
-        loggedAt: { gte: injury.startedAt },
-      },
+      where: { zoneId: { in: zoneIds }, loggedAt: { gte: injury.startedAt } },
       orderBy: { loggedAt: "desc" },
       include: {
         zone: { select: { label: true, slug: true } },
@@ -151,101 +149,74 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 
   const startedYmd = toAppYmd(injury.startedAt);
   const today = todayAppYmd();
-  const painHistoryDays = buildPainHistory(startedYmd, today, painLogs);
+  const trendPoints = dailyPainPeaks(painLogs);
   const aggravators = buildAggravators(painLogs);
   const recentLogs = painLogs.slice(0, RECENT_LOG_LIMIT);
   const olderLogCount = Math.max(0, painLogs.length - recentLogs.length);
   const daysInjured = Math.max(0, diffYmdDays(today, startedYmd));
   const startedLabel = formatAppDate(injury.startedAt, { month: "short", day: "numeric", year: "numeric" });
-  const subtitle =
-    `${injury.status.toLowerCase()} · severity ${injury.severity}/5 · ${daysInjured === 0 ? "started today" : `${daysInjured} days`} · since ${startedLabel}`;
+  const isResolved = injury.status === "RESOLVED";
+  const status = STATUS_META[injury.status] ?? STATUS_META.ACTIVE;
 
   return (
     <PageShell
       eyebrow="Injury"
       title={injury.name}
-      subtitle={subtitle}
       toolbar={<HistoryBackButton fallbackHref="/body" label="← Back" style={linkStyle} />}
     >
-      {/* Quick log + summary stats */}
-      {injury.status !== "RESOLVED" && (
-        <section style={panel}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-            <div style={cardTitle}>Log pain</div>
-            {painLogs.length > 0 && (
-              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                {recentPainLevel !== null && (
-                  <div style={{ textAlign: "right" }}>
-                    <div style={statLabel}>Most recent</div>
-                    <div style={{ ...statValue, color: painColor(recentPainLevel) }}>{recentPainLevel}/10</div>
-                  </div>
-                )}
-                {avgPainLevel !== null && (
-                  <div style={{ textAlign: "right" }}>
-                    <div style={statLabel}>Avg ({painLogs.length})</div>
-                    <div style={{ ...statValue, color: painColor(avgPainLevel) }}>{avgPainLevel}/10</div>
-                  </div>
-                )}
-                {peakPainLevel !== null && (
-                  <div style={{ textAlign: "right" }}>
-                    <div style={statLabel}>Peak</div>
-                    <div style={{ ...statValue, color: painColor(peakPainLevel) }}>{peakPainLevel}/10</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <LogPainButton
-            zones={painZones}
-            factorSuggestions={factorSuggestions}
-            style={logPainButtonStyle}
-          />
-        </section>
-      )}
+      {/* ── Hero: identity, state, map, factors, actions ─────────────────── */}
+      <section style={heroCard}>
+        <div style={chipRow}>
+          <span style={{ ...statusPill, background: status.bg, borderColor: status.border, color: status.color }}>{status.label}</span>
+          <span style={metaChip}>{"●".repeat(injury.severity)}{"○".repeat(Math.max(0, 5 - injury.severity))} severity</span>
+          <span style={metaChip}>{daysInjured === 0 ? "started today" : `${daysInjured} day${daysInjured === 1 ? "" : "s"}`}</span>
+          <span style={metaChip}>since {startedLabel}</span>
+        </div>
 
-      {/* Body map + status */}
-      <section style={panel}>
         <BodyMap
-          zones={zoneSlugs.map((slug) => ({ slug, freshness: injury.status === "RESOLVED" ? "RECOVERING" : "INJURED" }))}
+          zones={zoneSlugs.map((slug) => ({ slug, freshness: isResolved ? "RECOVERING" : "INJURED" }))}
           selectedSlugs={zoneSlugs}
           size="md"
         />
+
         {injury.aggravatingFactors.length > 0 ? (
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.5, textTransform: "uppercase", color: COLOR.textFaint }}>
-              Aggravating factors
-            </div>
+            <div style={miniLabel}>Aggravating factors</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {injury.aggravatingFactors.map((f) => (
-                <span
-                  key={f}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(251,146,60,0.4)",
-                    background: "rgba(251,146,60,0.10)",
-                    color: "#FED7AA",
-                  }}
-                >
-                  {f}
-                </span>
+                <span key={f} style={factorChip}>{f}</span>
               ))}
             </div>
           </div>
         ) : null}
+
         {injury.notes ? <div style={muted}>{injury.notes}</div> : null}
+
+        {!isResolved && (
+          <LogPainButton zones={painZones} factorSuggestions={factorSuggestions} style={logPainButtonStyle} />
+        )}
         <InjuryStatusButtons id={injury.id} />
       </section>
 
-      {/* Pain history chart */}
+      {/* ── Pain trend ───────────────────────────────────────────────────── */}
       <section style={panel}>
-        <div style={cardTitle}>Pain history</div>
-        <PainHistoryChart days={painHistoryDays} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <div style={cardTitle}>Pain trend</div>
+          {painLogs.length > 0 && (
+            <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>{painLogs.length} log{painLogs.length === 1 ? "" : "s"}</div>
+          )}
+        </div>
+        {painLogs.length > 0 && (
+          <div style={statChipRow}>
+            <PainStat label="Most recent" value={recentPainLevel} />
+            <PainStat label="Average" value={avgPainLevel} />
+            <PainStat label="Peak" value={peakPainLevel} />
+          </div>
+        )}
+        <PainTrendLine trend={trendPoints} size="lg" />
       </section>
 
-      {/* Aggravators rollup */}
+      {/* ── Aggravators ──────────────────────────────────────────────────── */}
       {aggravators.length > 0 && (
         <section style={panel}>
           <div style={cardTitle}>Aggravators</div>
@@ -268,13 +239,13 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         </section>
       )}
 
-      {/* Recent logs */}
+      {/* ── Recent logs ──────────────────────────────────────────────────── */}
       <section style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <div style={cardTitle}>Recent logs</div>
           {olderLogCount > 0 && (
             <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
-              {olderLogCount} earlier log{olderLogCount === 1 ? "" : "s"} in the chart above
+              {olderLogCount} earlier log{olderLogCount === 1 ? "" : "s"} in the trend above
             </div>
           )}
         </div>
@@ -327,17 +298,16 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         )}
       </section>
 
-      {/* Training load — heatmap of weekly sessions on the affected muscle
-          group, click a row to see the routines that contributed. */}
+      {/* ── Training load ────────────────────────────────────────────────── */}
       <section style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <div style={cardTitle}>Training load on affected muscle group{affectedMuscleSlugs.length === 1 ? "" : "s"}</div>
           <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>last 8 weeks</div>
         </div>
-        <InjuryTrainingHeatmap data={trainingHeatmap} />
+        <InjuryTrainingLoad data={trainingHeatmap} />
       </section>
 
-      {/* Edit — collapsed since most visits are about reviewing the trend, not editing */}
+      {/* ── Edit (collapsed) ─────────────────────────────────────────────── */}
       <details style={panel}>
         <summary style={detailsSummary}>
           <span style={cardTitle}>Edit details</span>
@@ -368,7 +338,70 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 }
 
 const panel: React.CSSProperties = { ...cardSurface, gap: 14 };
+const heroCard: React.CSSProperties = { ...cardSurface, gap: 14 };
 const muted: React.CSSProperties = { fontSize: 13, color: COLOR.textDim, lineHeight: 1.45 };
+
+const chipRow: React.CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" };
+
+const statusPill: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 11px",
+  borderRadius: RADIUS.pill,
+  border: "1px solid",
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.3,
+};
+
+const metaChip: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: RADIUS.pill,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.03)",
+  fontSize: 11.5,
+  fontWeight: 700,
+  color: COLOR.textDim,
+};
+
+const miniLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+};
+
+const factorChip: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(251,146,60,0.4)",
+  background: "rgba(251,146,60,0.10)",
+  color: "#FED7AA",
+};
+
+const statChipRow: React.CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
+const statChip: React.CSSProperties = {
+  flex: "1 1 90px",
+  minWidth: 90,
+  padding: "8px 12px",
+  borderRadius: RADIUS.control,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.03)",
+};
+const statChipLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+};
+const statChipValue: React.CSSProperties = { fontSize: 22, fontWeight: 900, lineHeight: 1.15, marginTop: 2 };
+
 const logPainButtonStyle: React.CSSProperties = {
   width: "100%",
   justifyContent: "center",
@@ -380,6 +413,7 @@ const logPainButtonStyle: React.CSSProperties = {
   background: "rgba(248,113,113,0.14)",
   color: "#FECACA",
 };
+
 const row: React.CSSProperties = {
   border: `1px solid ${COLOR.border}`,
   borderRadius: RADIUS.control,
@@ -390,8 +424,7 @@ const row: React.CSSProperties = {
   gap: 12,
   background: "rgba(255,255,255,0.03)",
 };
-const statLabel: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: COLOR.textFaint, letterSpacing: 0.5, textTransform: "uppercase" };
-const statValue: React.CSSProperties = { fontSize: 24, fontWeight: 900, lineHeight: 1.1, marginTop: 2 };
+
 const aggravatorRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -402,6 +435,7 @@ const aggravatorRow: React.CSSProperties = {
   border: "1px solid rgba(248,113,113,0.18)",
   background: "rgba(248,113,113,0.04)",
 };
+
 const detailsSummary: React.CSSProperties = {
   cursor: "pointer",
   listStyle: "none",
@@ -411,6 +445,7 @@ const detailsSummary: React.CSSProperties = {
   gap: 8,
   flexWrap: "wrap",
 };
+
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",
   minHeight: 36,
