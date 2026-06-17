@@ -101,7 +101,13 @@ export default async function SportWorldPage(props: {
         .filter((routine) => routine.isActive && routine.kind === "SESSION" && routine.subtype === virtualSport.subtype)
         .map((routine) => routine.id)
     );
-    logs = allLogs.filter((log) => routineIds.has(log.routineId));
+    // Bilingual: also include logs on the synthetic per-sport routine — sport-
+    // tile logs land there (and re-parented legacy logs were moved there), not
+    // on a subtype-tagged routine. Without this, surfing/snowboarding pages
+    // undercount.
+    const { getSyntheticSportRoutineId } = await import("@/lib/synthetic-sport-routines");
+    const syntheticId = getSyntheticSportRoutineId(params.slug);
+    logs = allLogs.filter((log) => routineIds.has(log.routineId) || log.routineId === syntheticId);
     title = virtualSport.label;
   } else {
     if (isVirtualSportSlug(params.slug)) notFound();
