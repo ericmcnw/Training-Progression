@@ -29,6 +29,26 @@ export type ExtraFieldConfig = {
   showIf?: { key: string; in: string[] };
 };
 
+// How a log's win/loss is derived for the People & Records block:
+//   • gamesWonOfPlayed — a session aggregates N games, M won (Spikeball).
+//   • resultField — one match with a Win/Loss select (Tennis).
+export type PeopleStatsRecord =
+  | { kind: "gamesWonOfPlayed"; playedKey: string; wonKey: string }
+  | { kind: "resultField"; key: string; winValue: string };
+
+// Declares that a sport tracks people (teammates / opponents) so the world
+// page can render a win-rate ring + with/against leaderboards from sportData.
+export type PeopleStatsSpec = {
+  /** Person extra keys whose value is a teammate (your side). */
+  teammateKeys?: string[];
+  /** Person extra keys whose value is an opponent. */
+  opponentKeys?: string[];
+  /** How to read win/loss from a log. Omit → only counts appearances. */
+  record?: PeopleStatsRecord;
+  /** Singular noun for the ring context, e.g. "game" / "match". */
+  unit?: string;
+};
+
 export type SportLogConfig = {
   /** Optional placeholder for the universal "Where" field. */
   locationPlaceholder?: string;
@@ -37,6 +57,8 @@ export type SportLogConfig = {
   sessionTypeOptions?: Array<{ value: string; label: string }>;
   sessionTypeLabel?: string; // e.g. "Mode" / "Type"
   extras?: ExtraFieldConfig[];
+  /** When set, the world page renders a People & Records block. */
+  peopleStats?: PeopleStatsSpec;
 };
 
 export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
@@ -122,9 +144,23 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { value: "rally", label: "Rally" },
     ],
     extras: [
-      { key: "opponent", label: "Opponent", type: "text" },
+      {
+        key: "result",
+        label: "Result",
+        type: "select",
+        options: [
+          { value: "win", label: "Win" },
+          { value: "loss", label: "Loss" },
+        ],
+      },
+      { key: "opponent", label: "Opponent", type: "person" },
       { key: "score", label: "Score", type: "text", placeholder: "e.g. 6-4, 6-3" },
     ],
+    peopleStats: {
+      opponentKeys: ["opponent"],
+      record: { kind: "resultField", key: "result", winValue: "win" },
+      unit: "match",
+    },
   },
   spikeball: {
     locationPlaceholder: "Park / yard / court",
@@ -152,6 +188,12 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { key: "gamesPlayed", label: "Games played", type: "number", numericHint: "integer" },
       { key: "gamesWon", label: "Games won", type: "number", numericHint: "integer" },
     ],
+    peopleStats: {
+      teammateKeys: ["teammate"],
+      opponentKeys: ["opponent1", "opponent2"],
+      record: { kind: "gamesWonOfPlayed", playedKey: "gamesPlayed", wonKey: "gamesWon" },
+      unit: "game",
+    },
   },
 };
 

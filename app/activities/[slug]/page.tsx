@@ -33,7 +33,7 @@ import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
-import SpikeballStats from "./SpikeballStats";
+import SportPeopleStats from "./SportPeopleStats";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 import { formatRoutineSubtype } from "@/lib/routines";
 import { SPORT_LOG_CONFIG } from "@/app/routines/sportLogConfig";
@@ -134,6 +134,7 @@ export default async function SportWorldPage(props: {
   const accent = sportAccent(params.slug);
   const entry = getActivityEntry(params.slug);
   const supportsMap = !!getActivitySpotConfig(params.slug)?.supportsMap;
+  const peopleSpec = SPORT_LOG_CONFIG[params.slug]?.peopleStats;
 
   // ── Pulse rollups (fixed windows + all time) ────────────────────────────
   const thisWeekStart = startOfWeekMonday(now);
@@ -244,8 +245,8 @@ export default async function SportWorldPage(props: {
         </>
       ) : null}
 
-      {/* ── Per-sport metrics — Spikeball people & records ────────── */}
-      {params.slug === "spikeball" ? <SpikeballStats logs={logs} accent={accent} /> : null}
+      {/* ── Per-sport metrics — People & Records (sports with a peopleStats spec) ── */}
+      {peopleSpec ? <SportPeopleStats logs={logs} accent={accent} spec={peopleSpec} /> : null}
 
       {/* ── Goals ─────────────────────────────────────────────────── */}
       <ActivityGoalsSection goals={sportGoals} activitySlug={goalLookupSlug} activityLabel={title} />
@@ -348,7 +349,7 @@ export default async function SportWorldPage(props: {
       </SectionCard>
 
       {/* ── Room to grow — explicit slot for future per-sport metrics. ── */}
-      {params.slug !== "spikeball" ? (
+      {!peopleSpec ? (
         <div style={comingSoonStyle}>
           More {title.toLowerCase()} metrics land here as they&apos;re defined — session
           templates with peak stats unlock performance trends and PR cards

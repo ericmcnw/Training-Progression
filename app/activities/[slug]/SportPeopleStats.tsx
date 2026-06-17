@@ -1,17 +1,17 @@
-// Spikeball "People & Records" — the per-sport metrics block on the
-// Spikeball world page. Derives everything from each log's sportData
-// (format + teammate / opponent1 / opponent2 + gamesPlayed / gamesWon),
-// so it lights up automatically as games are logged. Server component —
-// pure render, no interactivity.
+// "People & Records" — the per-sport metrics block for any sport whose
+// SPORT_LOG_CONFIG declares a `peopleStats` spec (Spikeball, Tennis, …).
+// Derives everything from each log's sportData, so it lights up as games
+// are logged. Server component — pure render, no interactivity.
 //
 //   • Overall win-rate ring + record / games / sessions.
-//   • "Played with" — your record teaming up with each person.
+//   • "Played with" — your record teaming up with each person (if the
+//     sport has teammate keys).
 //   • "Played against" — your record facing each person.
 
 import { SectionCard } from "@/app/progress/ui";
+import type { PeopleStatsSpec, PeopleStatsRecord } from "@/app/routines/sportLogConfig";
 
-type SpikeballStatsLog = { sportData: unknown };
-
+type StatsLog = { sportData: unknown };
 type Tally = { name: string; sessions: number; games: number; won: number };
 
 function cleanName(v: unknown): string | null {
@@ -26,64 +26,75 @@ function toInt(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-function parseExtras(sportData: unknown): {
-  teammate: string | null;
-  opponents: string[];
-  games: number | null;
-  won: number | null;
-} | null {
+function extrasOf(sportData: unknown): Record<string, unknown> | null {
   if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return null;
-  const sd = sportData as Record<string, unknown>;
-  if (sd.sport !== "spikeball") return null;
-  const extras = sd.extras;
+  const extras = (sportData as Record<string, unknown>).extras;
   if (!extras || typeof extras !== "object") return null;
-  const e = extras as Record<string, unknown>;
-  return {
-    teammate: cleanName(e.teammate),
-    opponents: [cleanName(e.opponent1), cleanName(e.opponent2)].filter((n): n is string => Boolean(n)),
-    games: toInt(e.gamesPlayed),
-    won: toInt(e.gamesWon),
-  };
+  return extras as Record<string, unknown>;
 }
 
-function bump(map: Map<string, Tally>, name: string, games: number | null, won: number | null) {
+// A log's (games, won) per the record spec. Only counts toward win rate when
+// the data is complete — a session with games played but no wins recorded, or
+// a match with no result, contributes 0 games so it doesn't skew the rate.
+function recordFor(extras: Record<string, unknown>, rec: PeopleStatsRecord | undefined): { games: number; won: number } {
+  if (!rec) return { games: 0, won: 0 };
+  if (rec.kind === "gamesWonOfPlayed") {
+    const g = toInt(extras[rec.playedKey]);
+    const w = toInt(extras[rec.wonKey]);
+    if (g == null || g <= 0 || w == null) return { games: 0, won: 0 };
+    return { games: g, won: Math.min(w, g) };
+  }
+  // resultField
+  const v = (extras[rec.key] ?? "").toString().trim();
+  if (v === "") return { games: 0, won: 0 };
+  return { games: 1, won: v === rec.winValue ? 1 : 0 };
+}
+
+function bump(map: Map<string, Tally>, name: string, games: number, won: number) {
   const t = map.get(name) ?? { name, sessions: 0, games: 0, won: 0 };
   t.sessions += 1;
-  if (games != null) {
-    t.games += games;
-    if (won != null) t.won += Math.min(won, games);
-  }
+  t.games += games;
+  t.won += won;
   map.set(name, t);
 }
 
-export default function SpikeballStats({
+export default function SportPeopleStats({
   logs,
   accent,
+  spec,
 }: {
-  logs: SpikeballStatsLog[];
+  logs: StatsLog[];
   accent: string;
+  spec: PeopleStatsSpec;
 }) {
   const withMap = new Map<string, Tally>();
   const againstMap = new Map<string, Tally>();
   let totalGames = 0;
   let totalWon = 0;
   let sessionsWithGames = 0;
-  let totalSessions = 0;
+
+  const totalSessions = logs.length;
 
   for (const log of logs) {
-    const x = parseExtras(log.sportData);
-    if (!x) continue;
-    totalSessions += 1;
-    if (x.games != null && x.games > 0) {
-      totalGames += x.games;
+    const extras = extrasOf(log.sportData);
+    if (!extras) continue;
+    const { games, won } = recordFor(extras, spec.record);
+    if (games > 0) {
+      totalGames += games;
+      totalWon += won;
       sessionsWithGames += 1;
-      if (x.won != null) totalWon += Math.min(x.won, x.games);
     }
-    if (x.teammate) bump(withMap, x.teammate, x.games, x.won);
-    for (const opp of x.opponents) bump(againstMap, opp, x.games, x.won);
+    for (const key of spec.teammateKeys ?? []) {
+      const name = cleanName(extras[key]);
+      if (name) bump(withMap, name, games, won);
+    }
+    for (const key of spec.opponentKeys ?? []) {
+      const name = cleanName(extras[key]);
+      if (name) bump(againstMap, name, games, won);
+    }
   }
 
-  // Nothing to show until at least one person or game has been logged.
+  // Nothing to show until at least one person or scored game is logged.
   if (totalSessions === 0 || (withMap.size === 0 && againstMap.size === 0 && totalGames === 0)) {
     return null;
   }
@@ -97,18 +108,24 @@ export default function SpikeballStats({
 
   const overallPct = totalGames > 0 ? Math.round((totalWon / totalGames) * 100) : null;
   const overallLosses = totalGames - totalWon;
+  const unit = spec.unit ?? "game";
+  const hasWith = (spec.teammateKeys?.length ?? 0) > 0;
 
   return (
     <SectionCard
       title="People & Records"
-      subtitle="Your win rate overall, and with and against everyone you've logged."
+      subtitle={
+        hasWith
+          ? "Your win rate overall, and with and against everyone you've logged."
+          : "Your win rate overall, and against everyone you've logged."
+      }
     >
       {/* ── Overall record hero ─────────────────────────────────────── */}
       <div style={heroCard(accent)}>
         <WinRing pct={overallPct} accent={accent} />
         <div style={heroStats}>
           <HeroStat label="Record" value={totalGames > 0 ? `${totalWon}–${overallLosses}` : "—"} accent={accent} />
-          <HeroStat label="Games" value={totalGames > 0 ? String(totalGames) : "—"} accent={accent} />
+          <HeroStat label={`${unit[0].toUpperCase()}${unit.slice(1)}s`} value={totalGames > 0 ? String(totalGames) : "—"} accent={accent} />
           <HeroStat
             label="Sessions"
             value={String(totalSessions)}
@@ -118,12 +135,10 @@ export default function SpikeballStats({
         </div>
       </div>
 
-      {/* ── Played with ─────────────────────────────────────────────── */}
       {withList.length > 0 ? (
         <PersonGroup title="Played with" caption="Win rate teaming up" people={withList} accent={accent} />
       ) : null}
 
-      {/* ── Played against ──────────────────────────────────────────── */}
       {againstList.length > 0 ? (
         <PersonGroup title="Played against" caption="Your win rate facing them" people={againstList} accent={accent} />
       ) : null}
@@ -204,8 +219,8 @@ function PersonGroup({
   );
 }
 
-// Win rate always counts YOUR wins, so a fuller bar = better for you in
-// both the "with" and "against" groups — they read the same way.
+// Win rate always counts YOUR wins, so a fuller bar = better for you in both
+// the "with" and "against" groups — they read the same way.
 function PersonRow({ person, accent }: { person: Tally; accent: string }) {
   const pct = person.games > 0 ? Math.round((person.won / person.games) * 100) : null;
   const losses = person.games - person.won;
@@ -221,7 +236,7 @@ function PersonRow({ person, accent }: { person: Tally; accent: string }) {
               <b style={{ color: "rgba(248,113,113,0.95)" }}>{losses}</b>
             </>
           ) : (
-            <span style={{ opacity: 0.5, fontSize: 11, fontWeight: 700 }}>no games scored</span>
+            <span style={{ opacity: 0.5, fontSize: 11, fontWeight: 700 }}>no result logged</span>
           )}
         </span>
       </div>
