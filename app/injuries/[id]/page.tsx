@@ -158,6 +158,17 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const isResolved = injury.status === "RESOLVED";
   const status = STATUS_META[injury.status] ?? STATUS_META.ACTIVE;
 
+  // Open the body map on the side that actually shows the injury — front-only
+  // injuries default to the front view, back-only to the back, mixed (or a
+  // both-sided zone) to both. The user can still toggle.
+  const injuredViews = new Set(injury.zones.map((entry) => entry.zone.bodyView));
+  const defaultBodyView: "front" | "back" | "both" =
+    injuredViews.has("BOTH") || (injuredViews.has("FRONT") && injuredViews.has("BACK"))
+      ? "both"
+      : injuredViews.has("BACK")
+        ? "back"
+        : "front";
+
   return (
     <PageShell
       eyebrow="Injury"
@@ -176,6 +187,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         <BodyMap
           zones={zoneSlugs.map((slug) => ({ slug, freshness: isResolved ? "RECOVERING" : "INJURED" }))}
           selectedSlugs={zoneSlugs}
+          view={defaultBodyView}
           size="md"
         />
 
