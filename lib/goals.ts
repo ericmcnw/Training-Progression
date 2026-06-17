@@ -1847,7 +1847,7 @@ export async function getGroupFrequencyGoalById(goalId: string) {
     where: { id },
     include: {
       routines: {
-        select: { routineId: true, role: true },
+        select: { routineId: true, role: true, routine: { select: { isDeleted: true } } },
       },
       triggerExercises: {
         select: { exerciseId: true },
@@ -1855,10 +1855,15 @@ export async function getGroupFrequencyGoalById(goalId: string) {
     },
   });
   if (!goal) return null;
-  // Flatten the join rows so callers consume a clean string[] (the form
-  // initial values + matcher input both expect plain ids).
+  // Drop memberships whose routine was deleted (e.g. retired legacy routines)
+  // so dangling ids never reach the edit form or a re-save. Flatten the join
+  // rows so callers consume a clean string[] (the form initial values +
+  // matcher input both expect plain ids).
   return {
     ...goal,
+    routines: goal.routines
+      .filter((row) => !row.routine?.isDeleted)
+      .map((row) => ({ routineId: row.routineId, role: row.role })),
     triggerExerciseIds: goal.triggerExercises.map((row) => row.exerciseId),
   };
 }
