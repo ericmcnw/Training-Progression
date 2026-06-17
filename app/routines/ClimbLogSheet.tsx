@@ -570,7 +570,9 @@ const chip: CSSProperties = {
   gap: 6,
   padding: "6px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   fontSize: 12,
@@ -592,7 +594,9 @@ const toggleRow: CSSProperties = { display: "flex", gap: 4 };
 const toggleInactive: CSSProperties = {
   padding: "8px 12px",
   borderRadius: 9,
-  border: "1px solid rgba(255,255,255,0.12)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.04)",
   color: "inherit",
   fontSize: 12,
@@ -608,7 +612,9 @@ const toggleActive: CSSProperties = {
 const cancelInlineBtn: CSSProperties = {
   padding: "8px 12px",
   borderRadius: 9,
-  border: "1px solid rgba(255,255,255,0.12)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.12)",
   background: "transparent",
   color: "inherit",
   fontSize: 12,
@@ -620,7 +626,9 @@ const attemptStack: CSSProperties = { display: "grid", gap: 8 };
 const attemptCard: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.10)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.025)",
 };
 const attemptHeader: CSSProperties = {
@@ -669,7 +677,9 @@ const areaChipRowLabel: CSSProperties = {
 const areaChipInactive: CSSProperties = {
   padding: "5px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.10)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)",
   color: "rgba(255,255,255,0.65)",
   fontSize: 11,
@@ -694,7 +704,9 @@ const outcomeChipRow: CSSProperties = {
 const outcomeChipInactive: CSSProperties = {
   padding: "6px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.10)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.03)",
   color: "rgba(255,255,255,0.65)",
   fontSize: 11,
