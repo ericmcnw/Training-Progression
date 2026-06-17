@@ -30,11 +30,15 @@ const contextLabels: Record<string, string> = {
 
 const RECENT_LOG_LIMIT = 8;
 
-type AggravatorRow = {
-  routineName: string;
-  avgLevel: number;
-  peakLevel: number;
-  logCount: number;
+const POST_ACTIVITY_CONTEXTS = new Set(["AFTER_ACTIVITY", "DURING_ACTIVITY"]);
+
+type PainLogRow = {
+  id: string;
+  level: number;
+  context: string;
+  loggedAt: Date;
+  aggravatingFactors: string[];
+  routineLog: { routine: { name: string } } | null;
 };
 
 function painColor(level: number): string {
@@ -45,39 +49,76 @@ function painColor(level: number): string {
 }
 
 // Per-day peak pain, oldest → newest — the point series the trend line draws.
-function dailyPainPeaks(rows: Array<{ level: number; loggedAt: Date }>): PainTrendPoint[] {
-  const peak = new Map<string, number>();
+// Each day's representative is its highest-pain log, so tapping a point can
+// surface that log's routine + aggravating factors.
+function dailyPainPeaks(rows: PainLogRow[]): PainTrendPoint[] {
+  const byDay = new Map<string, PainLogRow>();
   for (const row of rows) {
     const ymd = toAppYmd(row.loggedAt);
-    peak.set(ymd, Math.max(peak.get(ymd) ?? 0, row.level));
+    const existing = byDay.get(ymd);
+    if (!existing || row.level > existing.level) byDay.set(ymd, row);
   }
-  return [...peak.entries()]
+  return [...byDay.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([ymd, level]) => ({ ymd, level }));
+    .map(([ymd, log]) => ({
+      ymd,
+      level: log.level,
+      routineName: log.routineLog?.routine?.name ?? null,
+      factors: log.aggravatingFactors,
+      context: log.context,
+    }));
 }
 
-function buildAggravators(
-  rows: Array<{ level: number; routineLog: { routine: { name: string } } | null }>,
-): AggravatorRow[] {
-  const byRoutine = new Map<string, { sum: number; peak: number; count: number }>();
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+type FactorCorrelation = { factor: string; avg: number; peak: number; count: number };
+
+// Each saved aggravating factor and the average pain logged when it was present.
+function buildFactorCorrelations(rows: PainLogRow[]): FactorCorrelation[] {
+  const byFactor = new Map<string, { sum: number; peak: number; count: number }>();
   for (const row of rows) {
-    const routineName = row.routineLog?.routine?.name;
-    if (!routineName) continue;
-    const current = byRoutine.get(routineName) ?? { sum: 0, peak: 0, count: 0 };
-    current.sum += row.level;
-    if (row.level > current.peak) current.peak = row.level;
-    current.count += 1;
-    byRoutine.set(routineName, current);
+    for (const f of row.aggravatingFactors) {
+      const cur = byFactor.get(f) ?? { sum: 0, peak: 0, count: 0 };
+      cur.sum += row.level;
+      cur.peak = Math.max(cur.peak, row.level);
+      cur.count += 1;
+      byFactor.set(f, cur);
+    }
   }
-  return Array.from(byRoutine.entries())
-    .map(([routineName, stats]) => ({
-      routineName,
-      avgLevel: Math.round((stats.sum / stats.count) * 10) / 10,
-      peakLevel: stats.peak,
-      logCount: stats.count,
-    }))
-    .sort((a, b) => b.avgLevel - a.avgLevel)
-    .slice(0, 5);
+  return [...byFactor.entries()]
+    .map(([factor, s]) => ({ factor, avg: Math.round((s.sum / s.count) * 10) / 10, peak: s.peak, count: s.count }))
+    .sort((a, b) => b.avg - a.avg || b.count - a.count);
+}
+
+type PostSpike = {
+  id: string;
+  level: number;
+  routineName: string | null;
+  factors: string[];
+  loggedAt: Date;
+  delta: number;
+};
+
+// Post-activity pain logs whose level sits above the injury's median baseline —
+// the sessions that actually flared it, ranked by how high they spiked.
+function buildPostActivitySpikes(rows: PainLogRow[], baseline: number): PostSpike[] {
+  return rows
+    .filter((r) => POST_ACTIVITY_CONTEXTS.has(r.context) && r.level > baseline)
+    .sort((a, b) => b.level - a.level || b.loggedAt.getTime() - a.loggedAt.getTime())
+    .slice(0, 6)
+    .map((r) => ({
+      id: r.id,
+      level: r.level,
+      routineName: r.routineLog?.routine?.name ?? null,
+      factors: r.aggravatingFactors,
+      loggedAt: r.loggedAt,
+      delta: Math.round((r.level - baseline) * 10) / 10,
+    }));
 }
 
 const STATUS_META: Record<string, { label: string; bg: string; border: string; color: string }> = {
@@ -150,7 +191,10 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const startedYmd = toAppYmd(injury.startedAt);
   const today = todayAppYmd();
   const trendPoints = dailyPainPeaks(painLogs);
-  const aggravators = buildAggravators(painLogs);
+  const baselineMedian = median(painLogs.map((l) => l.level));
+  const factorCorrelations = buildFactorCorrelations(painLogs);
+  const postSpikes = buildPostActivitySpikes(painLogs, baselineMedian);
+  const hasAggravatorData = factorCorrelations.length > 0 || postSpikes.length > 0;
   const recentLogs = painLogs.slice(0, RECENT_LOG_LIMIT);
   const olderLogCount = Math.max(0, painLogs.length - recentLogs.length);
   const daysInjured = Math.max(0, diffYmdDays(today, startedYmd));
@@ -228,26 +272,55 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         <PainTrendLine trend={trendPoints} size="lg" />
       </section>
 
-      {/* ── Aggravators ──────────────────────────────────────────────────── */}
-      {aggravators.length > 0 && (
+      {/* ── What aggravates it ───────────────────────────────────────────── */}
+      {hasAggravatorData && (
         <section style={panel}>
-          <div style={cardTitle}>Aggravators</div>
-          <div style={muted}>Routines where this injury flared the most, ranked by average level logged on the same session.</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {aggravators.map((row) => (
-              <div key={row.routineName} style={aggravatorRow}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 14 }}>{row.routineName}</div>
-                  <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700, marginTop: 2 }}>
-                    {row.logCount} log{row.logCount === 1 ? "" : "s"} · peak {row.peakLevel}/10
+          <div style={cardTitle}>What aggravates it</div>
+
+          {factorCorrelations.length > 0 && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={miniLabel}>Logged factors · average pain when present</div>
+              {factorCorrelations.map((fc) => (
+                <div key={fc.factor} style={aggravatorRow}>
+                  <div style={{ flex: 1, minWidth: 0, display: "grid", gap: 4 }}>
+                    <span style={{ ...factorChip, justifySelf: "start" }}>{fc.factor}</span>
+                    <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>
+                      {fc.count} log{fc.count === 1 ? "" : "s"} · peak {fc.peak}/10
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 110 }}>
+                    <PainBar level={Math.round(fc.avg)} />
                   </div>
                 </div>
-                <div style={{ minWidth: 110 }}>
-                  <PainBar level={Math.round(row.avgLevel)} />
+              ))}
+            </div>
+          )}
+
+          {postSpikes.length > 0 && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={miniLabel}>High pain after activity · above your median ({baselineMedian}/10)</div>
+              {postSpikes.map((s) => (
+                <div key={s.id} style={aggravatorRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 900, fontSize: 14 }}>{s.routineName ?? "After activity"}</div>
+                    <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700, marginTop: 2 }}>
+                      {formatAppDate(s.loggedAt, { month: "short", day: "numeric" })} · +{s.delta} vs median
+                    </div>
+                    {s.factors.length > 0 && (
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
+                        {s.factors.map((f) => (
+                          <span key={f} style={factorChipSm}>{f}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ minWidth: 110 }}>
+                    <PainBar level={s.level} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -390,6 +463,16 @@ const factorChip: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
   padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(251,146,60,0.4)",
+  background: "rgba(251,146,60,0.10)",
+  color: "#FED7AA",
+};
+
+const factorChipSm: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  padding: "2px 8px",
   borderRadius: 999,
   border: "1px solid rgba(251,146,60,0.4)",
   background: "rgba(251,146,60,0.10)",
