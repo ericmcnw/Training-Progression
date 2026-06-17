@@ -309,7 +309,12 @@ export default function LogRunForm({
         elevationGainFt: elevation,
         notes,
         performedAtLocal: performedAtLocal || undefined,
-        activitySlug: activitySlug ?? undefined,
+        // Use the derived slug, not the prop: the synthetic Endurance routine
+        // passes a null prop, so the spot resolver needs the slug derived from
+        // the picked activity type (e.g. Walk → "walking") to know which spot
+        // library to file a new location under. Sending the null prop made
+        // resolveActivitySpotId throw whenever a spot was attached.
+        activitySlug: derivedActivitySlug ?? undefined,
         activityTypeId: activityTypeId ?? undefined,
         intervalsConfig: intervalsConfig ?? undefined,
         ...spotParams,
