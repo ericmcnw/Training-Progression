@@ -37,6 +37,8 @@ import {
   resolveRoutineActivitySlug,
   type SpotPickerItem,
 } from "@/lib/activity-spots";
+import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
+import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import {
   climbingDisciplineForTemplateKey,
@@ -253,6 +255,9 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       activitySpot: {
         select: { id: true, activitySlug: true, name: true, region: true, type: true, osmType: true, osmId: true, latitude: true, longitude: true },
       },
+      // The activity type's slug lets us derive a spot library for cardio
+      // logged against the synthetic Endurance routine (which has no tag).
+      activityType: { select: { slug: true } },
       // Sport-specific structured payload (golf scorecard, basketball
       // mode/extras, etc.). Powers the edit-time per-sport panels.
       sportData: true,
@@ -405,9 +410,24 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
     const isSessionLog = isSessionKind(logKind);
     const isClimbingSession =
       isSessionLog && isClimbingTemplateKey(routine.sessionDetails?.template?.key);
-    const editSpotActivitySlug = isClimbingSession
+    let editSpotActivitySlug = isClimbingSession
       ? "climbing"
       : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
+    // Synthetic routines (Endurance, sports-{slug}-synthetic) carry no
+    // metadata tags, so resolveRoutineActivitySlug returns null and the edit
+    // form couldn't show the spot picker or load saved spots — meaning you
+    // couldn't add a location after the fact. Derive the spot library from
+    // the log's own identity instead: cardio from its activity type, sport
+    // from the synthetic routine id.
+    if (!editSpotActivitySlug) {
+      if (isCardioKind(logKind)) {
+        editSpotActivitySlug = log.activityType?.slug
+          ? TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug] ?? null
+          : null;
+      } else if (isSessionKind(logKind)) {
+        editSpotActivitySlug = sportSlugFromRoutineId(log.routineId);
+      }
+    }
     const editSpotCompatibleSlugs = editSpotActivitySlug
       ? compatibleActivitySlugs(editSpotActivitySlug)
       : [];
@@ -519,7 +539,6 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
     // route to the sport-specific edit form. Everything else stays on
     // EditSessionLogForm.
     if (isSessionKind(logKind)) {
-      const { sportSlugFromRoutineId } = await import("@/lib/synthetic-sport-routines");
       const sportSlug = sportSlugFromRoutineId(log.routineId);
       if (sportSlug && sportSlug !== "climbing") {
         // Synthetic sport routines have no metadata-group tags, so
