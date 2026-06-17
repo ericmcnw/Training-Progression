@@ -33,6 +33,7 @@ import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import SpikeballStats from "./SpikeballStats";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 import { formatRoutineSubtype } from "@/lib/routines";
 import { SPORT_LOG_CONFIG } from "@/app/routines/sportLogConfig";
@@ -243,6 +244,9 @@ export default async function SportWorldPage(props: {
         </>
       ) : null}
 
+      {/* ── Per-sport metrics — Spikeball people & records ────────── */}
+      {params.slug === "spikeball" ? <SpikeballStats logs={logs} accent={accent} /> : null}
+
       {/* ── Goals ─────────────────────────────────────────────────── */}
       <ActivityGoalsSection goals={sportGoals} activitySlug={goalLookupSlug} activityLabel={title} />
 
@@ -344,11 +348,13 @@ export default async function SportWorldPage(props: {
       </SectionCard>
 
       {/* ── Room to grow — explicit slot for future per-sport metrics. ── */}
-      <div style={comingSoonStyle}>
-        More {title.toLowerCase()} metrics land here as they&apos;re defined — session
-        templates with peak stats unlock performance trends and PR cards
-        {entry?.eyebrow ? ` for ${entry.eyebrow.toLowerCase()}` : ""}.
-      </div>
+      {params.slug !== "spikeball" ? (
+        <div style={comingSoonStyle}>
+          More {title.toLowerCase()} metrics land here as they&apos;re defined — session
+          templates with peak stats unlock performance trends and PR cards
+          {entry?.eyebrow ? ` for ${entry.eyebrow.toLowerCase()}` : ""}.
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/log" style={quickLinkStyle}>Log a session →</Link>
