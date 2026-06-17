@@ -265,14 +265,25 @@ export function getTopActivitiesForFamily(
   }
 
   for (const log of logs4w) {
+    // Synthetic per-sport routines (sports-<slug>-synthetic) carry the slug
+    // in their id and have NO metadata groups, so credit them directly —
+    // otherwise every sport-tile log is dropped from the stripe.
+    const synthSportSlug =
+      family === "sports" &&
+      log.routineId.startsWith("sports-") &&
+      log.routineId.endsWith("-synthetic")
+        ? log.routineId.slice("sports-".length, -"-synthetic".length)
+        : undefined;
     // Prefer the log's activityType when present — same priority order as
     // app/activities/page.tsx aggregator.
     const typedSlug = log.activityType
       ? TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug]
       : undefined;
-    const slugs: Iterable<string> | undefined = typedSlug
-      ? [typedSlug]
-      : routineSlugs.get(log.routineId);
+    const slugs: Iterable<string> | undefined = synthSportSlug
+      ? [synthSportSlug]
+      : typedSlug
+        ? [typedSlug]
+        : routineSlugs.get(log.routineId);
     if (!slugs) continue;
 
     for (const slug of slugs) {
