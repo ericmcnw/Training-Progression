@@ -3,8 +3,9 @@
 import { useEffect, useState, useTransition, type CSSProperties } from "react";
 import {
   listAreasForClimbLocation,
-  listRecentClimbLocations,
+  loadClimbSpotPickerData,
   logClimbAction,
+  type ClimbLogInput,
 } from "@/app/log/climb-log-actions";
 import {
   climbOutcomeBg,
@@ -15,21 +16,33 @@ import {
   type ClimbOutcome,
 } from "@/lib/climb-types";
 import SportLogModal from "./SportLogModal";
-import { useSportLogDraft } from "./useSportLogDraft";
+import SpotPicker from "@/app/components/log/SpotPicker";
+import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+
+// Synthetic SpotPicker config for climbing. getActivitySpotConfig() returns
+// null for climbing (its spots live in ClimbLocation, not ActivitySpot), but
+// the picker still needs GYM/CRAG type options so a newly-pinned location
+// carries its type. SpotPicker only reads `spotTypes` off the config, so a
+// local literal is safe — routing to ClimbLocation happens in the action.
+const CLIMB_SPOT_CONFIG: ActivitySpotConfig = {
+  supportsMap: true,
+  spotTypes: [
+    { value: "GYM", label: "Gym", emoji: "🧗", pinColor: "rgba(56,189,248,0.9)" },
+    { value: "CRAG", label: "Crag", emoji: "⛰️", pinColor: "rgba(132,204,22,0.9)" },
+  ],
+  defaultPinColor: "rgba(56,189,248,0.9)",
+  spotNoun: "crag / gym",
+};
+
+type ClimbRecentSpot = { ref: { kind: "climbLocation"; id: string }; name: string; region: string | null };
 
 // Rich climb-log sheet — replaces the generic SportQuickLogRow sheet
 // when the user taps the "Climbing" row. Per-attempt entry with
 // discipline + grade + outcome, plus session-level date / location /
 // duration / notes. Saves via logClimbAction → logSession (existing
 // server action handles location resolution + ClimbAttempt creation).
-
-type RecentLocation = {
-  id: string;
-  name: string;
-  type: "GYM" | "CRAG";
-  region: string | null;
-};
 
 type Attempt = {
   localId: string;
@@ -104,32 +117,39 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState("");
   const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
 
-  // Location state — three modes:
-  //   • locationId set → user picked a recent location
-  //   • newName set + locationId null → user typed a fresh location
-  //   • both empty → no location attached (server allows null)
-  const [recent, setRecent] = useState<RecentLocation[]>([]);
-  const [locationId, setLocationId] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<"GYM" | "CRAG">("GYM");
-  const [showNewLocation, setShowNewLocation] = useState(false);
+  // Location — a single SpotPicker value: search any saved ClimbLocation,
+  // pick a recent chip, or pin a new place via OSM. Saved picks are always
+  // climbLocation refs (we only feed climb locations as saved spots).
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [savedSpots, setSavedSpots] = useState<SpotPickerItem[]>([]);
+  const [recentSpots, setRecentSpots] = useState<ClimbRecentSpot[]>([]);
+
+  // The picked existing-location id, when the value is a saved climb
+  // location — drives the per-attempt saved-area chips. A brand-new pin has
+  // no id yet (created on save), so areas fall back to free-text.
+  const pickedLocationId =
+    spotValue?.kind === "saved" && spotValue.ref.kind === "climbLocation" ? spotValue.ref.id : null;
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Load the user's recent climb locations once on mount.
+  // Load saved + recent climb locations once on mount.
   useEffect(() => {
     let cancelled = false;
-    listRecentClimbLocations()
-      .then((rows) => {
+    loadClimbSpotPickerData()
+      .then((data) => {
         if (cancelled) return;
-        setRecent(rows);
-        // Auto-pick the most recent location if any — 95% of the
-        // time it's the right answer and saves a tap.
-        if (rows.length > 0) setLocationId(rows[0].id);
+        setSavedSpots(data.savedSpots);
+        setRecentSpots(data.recentSpots);
+        // Auto-pick the most recent location — 95% of the time it's the
+        // right answer and saves a tap.
+        const top = data.recentSpots[0];
+        if (top) {
+          setSpotValue({ kind: "saved", ref: top.ref, display: { name: top.name, region: top.region } });
+        }
       })
       .catch(() => {
-        /* non-fatal — picker just won't show recents */
+        /* non-fatal — picker just won't show saved/recents */
       });
     return () => {
       cancelled = true;
@@ -146,11 +166,11 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let cancelled = false;
     setAttempts((arr) => arr.map((a) => (a.areaId ? { ...a, areaId: "" } : a)));
-    if (showNewLocation || !locationId) {
+    if (!pickedLocationId) {
       setSavedAreas([]);
       return;
     }
-    listAreasForClimbLocation(locationId)
+    listAreasForClimbLocation(pickedLocationId)
       .then((rows) => {
         if (!cancelled) setSavedAreas(rows);
       })
@@ -158,7 +178,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [locationId, showNewLocation]);
+  }, [pickedLocationId]);
 
   function updateAttempt(localId: string, patch: Partial<Attempt>) {
     setAttempts((arr) =>
@@ -204,9 +224,37 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
       setError("Duration must be a positive number.");
       return;
     }
-    if (showNewLocation && !newName.trim()) {
-      setError("Name the new location, or pick one from the recent list.");
-      return;
+    // Resolve the picked spot into climb-location params. Saved climb
+    // location → id; a new pin → name/type/coords/osm (logSession dedups
+    // by name+type+osm and backfills coordinates). No spot → null location.
+    let locationParams: Pick<
+      ClimbLogInput,
+      | "climbLocationId"
+      | "newLocationName"
+      | "newLocationType"
+      | "newLocationRegion"
+      | "newLocationLatitude"
+      | "newLocationLongitude"
+      | "newLocationOsmType"
+      | "newLocationOsmId"
+    > = {};
+    if (spotValue?.kind === "saved" && spotValue.ref.kind === "climbLocation") {
+      locationParams = { climbLocationId: spotValue.ref.id };
+    } else if (spotValue?.kind === "new") {
+      const d = spotValue.draft;
+      if (!d.name.trim()) {
+        setError("Name the new location, or pick one from your saved list.");
+        return;
+      }
+      locationParams = {
+        newLocationName: d.name.trim(),
+        newLocationType: d.type === "CRAG" ? "CRAG" : "GYM",
+        newLocationRegion: d.region,
+        newLocationLatitude: d.latitude,
+        newLocationLongitude: d.longitude,
+        newLocationOsmType: d.osmType,
+        newLocationOsmId: d.osmId,
+      };
     }
 
     startTransition(async () => {
@@ -215,9 +263,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
           performedAtIso: new Date(ms).toISOString(),
           durationMinutes: minutes,
           notes: notes.trim() || undefined,
-          climbLocationId: showNewLocation ? undefined : locationId ?? undefined,
-          newLocationName: showNewLocation ? newName.trim() : undefined,
-          newLocationType: showNewLocation ? newType : undefined,
+          ...locationParams,
           attempts: validAttempts.map((a) => {
             const triesNum =
               outcomeUsesTriesCount(a.outcome) && a.triesCount.trim() !== ""
@@ -272,74 +318,14 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
 
           <div style={fieldGroup}>
             <span style={fieldGroupLabel}>Location</span>
-            {recent.length > 0 && !showNewLocation ? (
-              <div style={chipRow}>
-                {recent.map((loc) => {
-                  const active = locationId === loc.id;
-                  return (
-                    <button
-                      key={loc.id}
-                      type="button"
-                      style={active ? chipActive : chip}
-                      onClick={() => setLocationId(loc.id)}
-                    >
-                      <span style={chipDot(loc.type === "GYM" ? "rgba(56,189,248,0.9)" : "rgba(132,204,22,0.9)")} />
-                      {loc.name}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  style={chip}
-                  onClick={() => {
-                    setLocationId(null);
-                    setShowNewLocation(true);
-                  }}
-                >
-                  + New
-                </button>
-              </div>
-            ) : null}
-            {(showNewLocation || recent.length === 0) ? (
-              <div style={newLocationRow}>
-                <input
-                  type="text"
-                  placeholder="Location name (e.g. Movement Boulder)"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  style={{ ...fieldInput, flex: 1, minWidth: 0 }}
-                />
-                <div style={toggleRow}>
-                  <button
-                    type="button"
-                    style={newType === "GYM" ? toggleActive : toggleInactive}
-                    onClick={() => setNewType("GYM")}
-                  >
-                    Gym
-                  </button>
-                  <button
-                    type="button"
-                    style={newType === "CRAG" ? toggleActive : toggleInactive}
-                    onClick={() => setNewType("CRAG")}
-                  >
-                    Crag
-                  </button>
-                </div>
-                {recent.length > 0 ? (
-                  <button
-                    type="button"
-                    style={cancelInlineBtn}
-                    onClick={() => {
-                      setShowNewLocation(false);
-                      setNewName("");
-                      setLocationId(recent[0].id);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+            <SpotPicker
+              config={CLIMB_SPOT_CONFIG}
+              spotNoun="crag / gym"
+              savedSpots={savedSpots}
+              recentSpots={recentSpots}
+              value={spotValue}
+              onChange={setSpotValue}
+            />
           </div>
 
           {/* Climbs list */}
@@ -562,65 +548,6 @@ const fieldGroupLabel: CSSProperties = {
 // font is required to block iOS Safari's focus-zoom behavior.
 const fieldInput: CSSProperties = inputStyle;
 const twoCol: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
-
-const chipRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
-const chip: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "6px 10px",
-  borderRadius: 999,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-const chipActive: CSSProperties = {
-  ...chip,
-  borderColor: "rgba(51,255,122,0.45)",
-  background: "rgba(51,255,122,0.10)",
-  color: "rgba(51,255,122,0.95)",
-};
-function chipDot(bg: string): CSSProperties {
-  return { width: 7, height: 7, borderRadius: 999, background: bg, flexShrink: 0 };
-}
-
-const newLocationRow: CSSProperties = { display: "flex", gap: 6, alignItems: "stretch", flexWrap: "wrap" };
-const toggleRow: CSSProperties = { display: "flex", gap: 4 };
-const toggleInactive: CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 9,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-const toggleActive: CSSProperties = {
-  ...toggleInactive,
-  borderColor: "rgba(51,255,122,0.45)",
-  background: "rgba(51,255,122,0.10)",
-  color: "rgba(51,255,122,0.95)",
-};
-const cancelInlineBtn: CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 9,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "transparent",
-  color: "inherit",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-};
 
 const attemptStack: CSSProperties = { display: "grid", gap: 8 };
 const attemptCard: CSSProperties = {
