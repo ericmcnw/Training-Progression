@@ -25,68 +25,81 @@ export async function GET(req: Request) {
   const prefillRoutineId = url.searchParams.get("routineId") || "";
 
   if (goalId) {
-    const isGroupFrequencyGoal = goalId.startsWith("group-frequency:");
-    if (isGroupFrequencyGoal) {
+    // A goal id can arrive in several shapes:
+    //   • Goal-table row      → a bare cuid (VOLUME/PERFORMANCE/… goals)
+    //   • FrequencyGoal       → "group-frequency:<id>", "fg_<routineId>", OR a
+    //                            bare FrequencyGoal cuid (the /plan/goals/[id]
+    //                            detail page links with the bare id).
+    // Resolve robustly: try the Goal table for un-prefixed ids, and treat
+    // anything that isn't a Goal row (or is explicitly fg_/group-frequency:)
+    // as a FrequencyGoal. Previously only the "group-frequency:" prefix was
+    // recognized, so editing any other frequency-goal id 404'd.
+    const looksFrequency = goalId.startsWith("group-frequency:") || goalId.startsWith("fg_");
+    const goalRow = looksFrequency ? null : await getGoalById(goalId);
+
+    if (looksFrequency || !goalRow) {
       const [goal, options] = await Promise.all([
         getGroupFrequencyGoalById(goalId),
         getGoalFormOptions(),
       ]);
-      if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
-      const initial: GoalFormInitial = {
-        name: goal.name,
-        goalType: "FREQUENCY",
-        targetType: "GROUP",
-        targetId: "",
-        metricType: "SESSIONS",
-        timeframe: goal.targetUnit,
-        targetValue: goal.targetCount,
-        startDate: "",
-        endDate: "",
-        isActive: goal.isActive,
-        notes: "",
-        benchmarkDistanceMi: "",
-        benchmarkLabel: "",
-        sessionMetricDefinitionId: "",
-        sessionMetricTarget: "",
-        minReps: "",
-        groupFrequencyGoalId: goal.id,
-        groupFrequency: {
-          targetCount: goal.targetCount,
-          targetInterval: goal.targetInterval,
-          targetUnit: goal.targetUnit,
-          weekdayMask: goal.weekdayMask ?? null,
-          routineIds: goal.routines.filter((r) => r.role !== "SUBSTITUTE").map((r) => r.routineId),
-          substituteRoutineIds: goal.routines.filter((r) => r.role === "SUBSTITUTE").map((r) => r.routineId),
-          triggerExerciseIds: goal.triggerExerciseIds,
-          triggerSubtypes: goal.triggerSubtypes,
-          triggerActivityTypeIds: goal.triggerActivityTypeIds,
-          triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
-          triggerMinSets: goal.triggerMinSets,
-        },
-      };
-      return NextResponse.json({ mode: "edit-group" as const, options, initial });
+      if (goal) {
+        const initial: GoalFormInitial = {
+          name: goal.name,
+          goalType: "FREQUENCY",
+          targetType: "GROUP",
+          targetId: "",
+          metricType: "SESSIONS",
+          timeframe: goal.targetUnit,
+          targetValue: goal.targetCount,
+          startDate: "",
+          endDate: "",
+          isActive: goal.isActive,
+          notes: "",
+          benchmarkDistanceMi: "",
+          benchmarkLabel: "",
+          sessionMetricDefinitionId: "",
+          sessionMetricTarget: "",
+          minReps: "",
+          groupFrequencyGoalId: goal.id,
+          groupFrequency: {
+            targetCount: goal.targetCount,
+            targetInterval: goal.targetInterval,
+            targetUnit: goal.targetUnit,
+            weekdayMask: goal.weekdayMask ?? null,
+            routineIds: goal.routines.filter((r) => r.role !== "SUBSTITUTE").map((r) => r.routineId),
+            substituteRoutineIds: goal.routines.filter((r) => r.role === "SUBSTITUTE").map((r) => r.routineId),
+            triggerExerciseIds: goal.triggerExerciseIds,
+            triggerSubtypes: goal.triggerSubtypes,
+            triggerActivityTypeIds: goal.triggerActivityTypeIds,
+            triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
+            triggerMinSets: goal.triggerMinSets,
+          },
+        };
+        return NextResponse.json({ mode: "edit-group" as const, options, initial });
+      }
+      if (!goalRow) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
     }
 
-    const [goal, options] = await Promise.all([getGoalById(goalId), getGoalFormOptions()]);
-    if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    const options = await getGoalFormOptions();
+    if (!goalRow) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
     const initial: GoalFormInitial = {
-      id: goal.id,
-      name: goal.name,
-      goalType: goal.goalType,
-      targetType: goal.targetType,
-      targetId: goal.targetId,
-      metricType: goal.metricType,
-      timeframe: goal.timeframe,
-      targetValue: goal.targetValue,
-      startDate: toYmd(goal.startDate),
-      endDate: toYmd(goal.endDate),
-      isActive: goal.isActive,
-      notes: goal.notes ?? "",
-      benchmarkDistanceMi: goal.config?.benchmarkDistanceMi ? String(goal.config.benchmarkDistanceMi) : "",
-      benchmarkLabel: goal.config?.benchmarkLabel ?? "",
-      sessionMetricDefinitionId: goal.config?.sessionMetricDefinitionId ?? "",
-      sessionMetricTarget: goal.config?.sessionMetricTargetText ?? "",
-      minReps: goal.config?.minReps ? String(goal.config.minReps) : "",
+      id: goalRow.id,
+      name: goalRow.name,
+      goalType: goalRow.goalType,
+      targetType: goalRow.targetType,
+      targetId: goalRow.targetId,
+      metricType: goalRow.metricType,
+      timeframe: goalRow.timeframe,
+      targetValue: goalRow.targetValue,
+      startDate: toYmd(goalRow.startDate),
+      endDate: toYmd(goalRow.endDate),
+      isActive: goalRow.isActive,
+      notes: goalRow.notes ?? "",
+      benchmarkDistanceMi: goalRow.config?.benchmarkDistanceMi ? String(goalRow.config.benchmarkDistanceMi) : "",
+      benchmarkLabel: goalRow.config?.benchmarkLabel ?? "",
+      sessionMetricDefinitionId: goalRow.config?.sessionMetricDefinitionId ?? "",
+      sessionMetricTarget: goalRow.config?.sessionMetricTargetText ?? "",
+      minReps: goalRow.config?.minReps ? String(goalRow.config.minReps) : "",
     };
     return NextResponse.json({ mode: "edit" as const, options, initial });
   }
