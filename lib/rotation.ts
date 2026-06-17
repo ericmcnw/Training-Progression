@@ -121,7 +121,9 @@ export async function getRotationOverview(): Promise<RotationOverview | null> {
     primaryRoutineId:
       slot.primaryRoutineId && liveRoutineIds.has(slot.primaryRoutineId) ? slot.primaryRoutineId : null,
     coverageRoutineIds: new Set(
-      slot.coverage.map((c) => c.routineId).filter((x): x is string => typeof x === "string" && liveRoutineIds.has(x))
+      slot.coverage
+        .map((c) => c.routineId)
+        .filter((x): x is string => x != null && liveRoutineIds.has(x))
     ),
     coverageTags: new Set(slot.coverage.map((c) => c.tag).filter((x): x is string => Boolean(x))),
   }));
