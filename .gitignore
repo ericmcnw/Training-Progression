@@ -10,6 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
+# one-off migration reversal backups (local DB ids, not source)
+/scripts/_retire-legacy-backup.json
+
 # testing
 /coverage
 
