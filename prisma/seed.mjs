@@ -77,6 +77,7 @@ const metadataGroups = [
   { slug: "tennis", label: "Tennis", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "golf", label: "Golf", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio"] },
   { slug: "surfing", label: "Surfing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
+  { slug: "bodysurfing", label: "Bodysurfing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["cardio", "outdoor"] },
   { slug: "snowboarding", label: "Snowboarding", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
   { slug: "skiing", label: "Skiing", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio", "outdoor"] },
   { slug: "skateboarding", label: "Skateboarding", kind: "CARDIO_ACTIVITY", appliesToExercise: false, appliesToRoutine: true, parentSlugs: ["board-sports", "cardio"] },
