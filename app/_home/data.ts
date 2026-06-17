@@ -22,21 +22,17 @@ import {
   shouldAutoScheduleRoutine,
   isRoutineAutoScheduledOnDay,
 } from "@/lib/routine-frequency";
-import { getAllZonesWithState } from "@/lib/body-zones";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getMovementPatternData } from "./movement-patterns";
 import type {
-  BodyChipStatus,
   DayTodo,
   DomainSeries,
   DomainTone,
   DomainWeek,
-  HabitChipStatus,
   HabitRow,
   HomeData,
   LegacyGlanceDay,
   QuickPickRoutine,
-  WeekChipStatus,
 } from "./types";
 import { DOMAIN_LABEL } from "./tokens";
 
@@ -88,7 +84,6 @@ export async function getHomeData(): Promise<HomeData> {
     dayTodosRaw,
     planEntriesRaw,
     manualEntriesRaw,
-    zoneStates,
     movementPatterns,
   ] = await Promise.all([
     prisma.routine.findMany({
@@ -172,7 +167,6 @@ export async function getHomeData(): Promise<HomeData> {
     prisma.$queryRawUnsafe<Array<{ routineId: string; activityTypeId: string | null; scheduledDate: string; sortOrder: number }>>(
       'SELECT "routineId","activityTypeId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
     ),
-    getAllZonesWithState().catch(() => []),
     getMovementPatternData().catch(() => ({
       weekStarts: [] as string[],
       patterns: [] as Awaited<ReturnType<typeof getMovementPatternData>>["patterns"],
@@ -712,81 +706,6 @@ export async function getHomeData(): Promise<HomeData> {
     };
   }).filter((series) => series.weeks.some((w) => w.count > 0));
 
-  // ── Ambient chip statuses ────────────────────────────────────────────────
-  let injuredCount = 0;
-  let recoveringCount = 0;
-  for (const zone of zoneStates) {
-    if (zone.freshness === "INJURED") injuredCount++;
-    else if (zone.freshness === "RECOVERING") recoveringCount++;
-  }
-  const bodyChip: BodyChipStatus = injuredCount > 0
-    ? {
-        tone: "injured",
-        primaryLabel: `${injuredCount} active`,
-        secondaryLabel: recoveringCount > 0 ? `${recoveringCount} recovering` : "see details",
-      }
-    : recoveringCount > 0
-    ? {
-        tone: "recovering",
-        primaryLabel: `${recoveringCount} recovering`,
-        secondaryLabel: "no injuries",
-      }
-    : { tone: "clear", primaryLabel: "all clear", secondaryLabel: "no flags" };
-
-  const bestStreak = habitRows.find((h) => h.currentStreak > 0);
-  // Find an at-risk habit that's NOT the same as bestStreak — otherwise the
-  // chip's "warn" line silently vanished when the only at-risk habit was also
-  // the one with the longest active streak.
-  const atRisk = habitRows.find(
-    (h) =>
-      (h.status === "at_risk" || h.status === "behind") &&
-      h.routineId !== bestStreak?.routineId
-  );
-  const habitChip: HabitChipStatus = {
-    bestStreakName: bestStreak?.routineName ?? null,
-    bestStreakLabel: bestStreak ? `${bestStreak.currentStreak}d` : null,
-    atRiskName: atRisk?.routineName ?? null,
-    atRiskLabel: atRisk
-      ? `${atRisk.weekFraction.progress}/${Math.max(atRisk.weekFraction.target, atRisk.weekFraction.progress + 1)}`
-      : null,
-  };
-
-  // ── Week chip (planned vs done for current calendar week) ────────────────
-  let weekPlannedDone = 0;
-  let weekPlannedTotal = 0;
-  for (let i = 0; i < 7; i++) {
-    const ymd = addDaysYmd(currentWeekStart, i);
-    const planned = plannedRoutineIdsForDay(ymd);
-    weekPlannedTotal += planned.size;
-    if (ymd > today) continue;
-    const dayLogs = logsByYmd.get(ymd) ?? [];
-    const loggedRoutineSet = new Set(dayLogs.map((l) => l.routineId));
-    for (const rid of planned) if (loggedRoutineSet.has(rid)) weekPlannedDone++;
-  }
-  const pace: WeekChipStatus["paceLabel"] =
-    weekPlannedTotal === 0
-      ? "starting"
-      : weekPlannedDone >= weekPlannedTotal
-      ? "complete"
-      : (() => {
-          // Linear pace expectation: how many days into the week elapsed,
-          // proportional to the planned total.
-          const daysElapsed = Math.min(
-            7,
-            Math.max(1, diffYmdDays(today, currentWeekStart) + 1)
-          );
-          const expectedByNow = (daysElapsed / 7) * weekPlannedTotal;
-          if (weekPlannedDone >= expectedByNow + 0.5) return "ahead";
-          if (weekPlannedDone >= expectedByNow - 0.5) return "on track";
-          return "behind";
-        })();
-  const weekChip: WeekChipStatus = {
-    done: weekPlannedDone,
-    planned: weekPlannedTotal,
-    paceLabel: pace,
-    fillPercent: weekPlannedTotal > 0 ? Math.min(100, Math.round((weekPlannedDone / weekPlannedTotal) * 100)) : 0,
-  };
-
   // ── Quick-pick routines for the FAB ──────────────────────────────────────
   const quickPickRoutines: QuickPickRoutine[] = routinesWithTargets
     .map((r) => ({
@@ -850,9 +769,6 @@ export async function getHomeData(): Promise<HomeData> {
     habitRows,
     domainSeries,
     movementPatterns,
-    bodyChip,
-    habitChip,
-    weekChip,
     quickPickRoutines,
     scheduleActivityTypes,
     scheduleSports,

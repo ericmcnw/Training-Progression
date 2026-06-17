@@ -2,9 +2,8 @@ import type { CSSProperties } from "react";
 import type { Last7DaysStats } from "./types";
 
 // Compact "Last 7 days" snapshot strip. Three big stat cells: session
-// count, total active time, total cardio miles. Renders just under the
-// AmbientStatusRow at the top of the home dashboard — gives an at-a-
-// glance view of the rolling week without scrolling.
+// count, total active time, total cardio miles. Sits at the very top of
+// the home dashboard — an at-a-glance view of the rolling week.
 export default function Last7DaysStrip({ stats }: { stats: Last7DaysStats }) {
   const minutes = Math.round(stats.totalDurationSec / 60);
   return (

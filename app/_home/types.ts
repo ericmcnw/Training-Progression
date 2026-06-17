@@ -160,27 +160,6 @@ export type DomainSeries = {
   weeks: DomainWeek[]; // length 8, oldest → newest
 };
 
-// Ambient chip status.
-export type BodyChipStatus = {
-  tone: "clear" | "recovering" | "injured";
-  primaryLabel: string;
-  secondaryLabel: string;
-};
-
-export type HabitChipStatus = {
-  bestStreakLabel: string | null;
-  bestStreakName: string | null;
-  atRiskLabel: string | null;
-  atRiskName: string | null;
-};
-
-export type WeekChipStatus = {
-  done: number;
-  planned: number;
-  paceLabel: "on track" | "ahead" | "behind" | "complete" | "starting";
-  fillPercent: number;
-};
-
 // Routine link for the FAB quick-add picker.
 export type QuickPickRoutine = {
   routineId: string;
@@ -205,9 +184,6 @@ export type HomeData = {
   habitRows: HabitRow[];
   domainSeries: DomainSeries[];
   movementPatterns: import("./movement-patterns").MovementPatternData;
-  bodyChip: BodyChipStatus;
-  habitChip: HabitChipStatus;
-  weekChip: WeekChipStatus;
   quickPickRoutines: QuickPickRoutine[];
   /** Last-7-days totals shown in a compact strip at the top of the dashboard. */
   last7Days: Last7DaysStats;

@@ -135,61 +135,121 @@ export default function HomeGoalsSection({
   );
 }
 
-// ── recurring (per-window) goal — bars vs target ─────────────────────────────
+// ── recurring (per-window) goal — interactive bars vs target ─────────────────
+// Not a full-row Link: the bars are tappable to select a window, so wrapping
+// them in an anchor would hijack the tap into navigation. The name links to
+// the goal detail; the bars stay interactive.
 function RecurringGoalRow({ goal }: { goal: HomeOtherGoal }) {
   return (
-    <Link href={goal.detailHref} style={goalRow}>
-      <div style={{ display: "grid", gap: 6, minWidth: 0, width: "100%" }}>
-        <div style={rowHeadLine}>
-          <span style={goalName}>{goal.name}</span>
-          <span style={metricInline}>
-            <span style={actualText}>{goal.actualDisplay}</span>
-            <span style={targetText}>/ {goal.targetDisplay}</span>
-          </span>
-        </div>
-        <GoalBars history={goal.history} target={goal.targetValue} />
-      </div>
-    </Link>
+    <div style={recurringRow}>
+      <Link href={goal.detailHref} style={recurringNameLink}>
+        <span style={goalName}>{goal.name}</span>
+        <span style={nameChevron} aria-hidden>›</span>
+      </Link>
+      <InteractiveGoalBars
+        history={goal.history}
+        target={goal.targetValue}
+        unit={unitSuffix(goal.targetDisplay)}
+        currentDisplay={goal.actualDisplay}
+        targetDisplay={goal.targetDisplay}
+      />
+    </div>
   );
 }
 
-// 8-window bar chart with a dashed target line. The latest bar is the
-// in-progress window. Bars meeting/exceeding the target go green; short
-// ones amber.
-function GoalBars({ history, target }: { history: { label: string; value: number }[]; target: number }) {
+// 8-window bar chart with a dashed target line + a tap-to-select readout.
+// Defaults to the latest (in-progress) window; tapping any bar updates the
+// readout line above. Bars meeting/exceeding target are green, short ones
+// amber; the selected bar is ringed.
+function InteractiveGoalBars({
+  history,
+  target,
+  unit,
+  currentDisplay,
+  targetDisplay,
+}: {
+  history: { label: string; value: number }[];
+  target: number;
+  unit: string;
+  currentDisplay: string;
+  targetDisplay: string;
+}) {
+  const last = history.length - 1;
+  const [selected, setSelected] = useState<number>(last);
+
   if (history.length === 0) {
-    return <div style={{ ...barRow, alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", fontSize: 11, fontWeight: 700 }}>No history yet</div>;
+    return (
+      <div style={{ ...barRow, alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", fontSize: 11, fontWeight: 700 }}>
+        No history yet
+      </div>
+    );
   }
+
+  // Clamp in case the selected index outruns a shorter history on re-render.
+  const idx = Math.min(selected, last);
+  const point = history[idx];
+  const isCurrent = idx === last;
+  const met = target > 0 && point.value >= target;
+  // The current (in-progress) window has a nicely formatted actualDisplay;
+  // past windows only have raw values, so format those with the parsed unit.
+  const valueLabel = isCurrent ? currentDisplay : `${round(point.value)}${unit ? ` ${unit}` : ""}`;
+
   const maxValue = Math.max(target, ...history.map((h) => h.value));
   const scaleMax = maxValue > 0 ? maxValue * 1.12 : 1;
-  // Target line position from the bottom, as a %.
   const targetPct = scaleMax > 0 ? Math.min(100, (target / scaleMax) * 100) : 0;
-  const last = history.length - 1;
+
   return (
-    <div style={barOuter}>
-      {target > 0 ? <div style={{ ...targetLine, bottom: `${targetPct}%` }} aria-hidden /> : null}
-      <div style={barRow}>
-        {history.map((h, i) => {
-          const pct = scaleMax > 0 ? Math.max(3, (h.value / scaleMax) * 100) : 3;
-          const met = target > 0 && h.value >= target;
-          const isCurrent = i === last;
-          return (
-            <div key={`${h.label}-${i}`} style={barCol} title={`${h.label}: ${round(h.value)}${target > 0 ? ` / ${round(target)}` : ""}`}>
-              <div
-                style={{
-                  ...bar,
-                  height: `${pct}%`,
-                  background: met ? "rgba(51,255,122,0.85)" : "rgba(251,191,36,0.8)",
-                  opacity: isCurrent ? 1 : 0.78,
-                  outline: isCurrent ? "1px solid rgba(255,255,255,0.35)" : "none",
-                }}
-              />
-            </div>
-          );
-        })}
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={readoutLine}>
+        <span style={readoutWindow}>
+          {point.label}
+          {isCurrent ? <span style={readoutNow}>now</span> : null}
+        </span>
+        <span style={metricInline}>
+          <span style={{ ...actualText, color: met ? "rgba(120,235,170,0.95)" : actualText.color }}>{valueLabel}</span>
+          <span style={targetText}>/ {targetDisplay}</span>
+        </span>
+      </div>
+      <div style={barOuter}>
+        {target > 0 ? <div style={{ ...targetLine, bottom: `${targetPct}%` }} aria-hidden /> : null}
+        <div style={barRow}>
+          {history.map((h, i) => {
+            const pct = scaleMax > 0 ? Math.max(3, (h.value / scaleMax) * 100) : 3;
+            const barMet = target > 0 && h.value >= target;
+            const sel = i === idx;
+            return (
+              <button
+                key={`${h.label}-${i}`}
+                type="button"
+                onClick={() => setSelected(i)}
+                style={barBtn}
+                aria-label={`${h.label}: ${round(h.value)}${target > 0 ? ` of ${round(target)}` : ""}`}
+                aria-pressed={sel}
+              >
+                <div
+                  style={{
+                    ...bar,
+                    height: `${pct}%`,
+                    background: barMet ? "rgba(51,255,122,0.85)" : "rgba(251,191,36,0.8)",
+                    opacity: sel ? 1 : 0.55,
+                    outline: sel ? "1.5px solid rgba(255,255,255,0.65)" : "none",
+                    outlineOffset: 1,
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
+}
+
+// Parse the unit suffix out of a formatted target string ("5 mi" → "mi",
+// "3000 ft" → "ft", "12 sessions" → "sessions"). Empty when there's no
+// trailing unit (bare counts). Strips the leading number/decimals/commas.
+function unitSuffix(targetDisplay: string): string {
+  return targetDisplay.replace(/^[\d.,\s]+/, "").trim();
 }
 
 // ── one-off / PR goal — scalar progress ──────────────────────────────────────
@@ -298,13 +358,6 @@ const goalRow: CSSProperties = {
   color: "inherit",
 };
 
-const rowHeadLine: CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  justifyContent: "space-between",
-  gap: 10,
-};
-
 const goalName: CSSProperties = {
   fontSize: 13,
   fontWeight: 800,
@@ -356,7 +409,61 @@ const barTrack: CSSProperties = {
 };
 const barTrackFill: CSSProperties = { height: "100%", borderRadius: 999 };
 
-// recurring bars
+// recurring row + interactive bars
+const recurringRow: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.07)",
+  background: "rgba(255,255,255,0.018)",
+};
+
+const recurringNameLink: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  textDecoration: "none",
+  color: "inherit",
+  minWidth: 0,
+};
+
+const nameChevron: CSSProperties = {
+  fontSize: 16,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.35)",
+  flexShrink: 0,
+};
+
+const readoutLine: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const readoutWindow: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.6)",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minWidth: 0,
+};
+
+const readoutNow: CSSProperties = {
+  fontSize: 8.5,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  padding: "1px 6px",
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.08)",
+  color: "rgba(255,255,255,0.6)",
+};
+
 const barOuter: CSSProperties = {
   position: "relative",
   width: "100%",
@@ -365,20 +472,30 @@ const barRow: CSSProperties = {
   display: "flex",
   alignItems: "flex-end",
   gap: 3,
-  height: 38,
+  height: 40,
   width: "100%",
 };
-const barCol: CSSProperties = {
+const barBtn: CSSProperties = {
+  appearance: "none",
+  WebkitAppearance: "none",
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  margin: 0,
   flex: 1,
   height: "100%",
   display: "flex",
   alignItems: "flex-end",
   minWidth: 0,
+  cursor: "pointer",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
 };
 const bar: CSSProperties = {
   width: "100%",
   borderRadius: "3px 3px 2px 2px",
   minHeight: 2,
+  transition: "opacity 120ms ease",
 };
 const targetLine: CSSProperties = {
   position: "absolute",
