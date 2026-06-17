@@ -13,7 +13,7 @@
 // (16px font, matching modal chrome) so editing reads identical to
 // creating.
 
-import { useMemo, useState, useTransition, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import SpotPicker from "@/app/components/log/SpotPicker";
@@ -21,9 +21,10 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
-import { updateSportLogAction } from "@/app/log/sport-actions";
+import { listSportPeople, updateSportLogAction } from "@/app/log/sport-actions";
 import { updateGolfLogAction } from "@/app/log/golf-log-actions";
-import { getSportLogConfig } from "@/app/routines/sportLogConfig";
+import { getSportLogConfig, isExtraVisible } from "@/app/routines/sportLogConfig";
+import SportExtraControl from "@/app/routines/sportExtraControl";
 
 type CommonProps = {
   routineId: string;
@@ -447,8 +448,17 @@ function EditGenericSport({
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
   const [sessionType, setSessionType] = useState(parsed.sessionType);
   const [extras, setExtras] = useState<GenericSportExtras>(parsed.extras);
+  const [people, setPeople] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSportPeople()
+      .then((p) => { if (!cancelled) setPeople(p); })
+      .catch(() => { /* non-fatal */ });
+    return () => { cancelled = true; };
+  }, []);
 
   function save() {
     setError(null);
@@ -464,6 +474,7 @@ function EditGenericSport({
     }
     const extrasOut: Record<string, string | number | undefined> = {};
     for (const f of config.extras ?? []) {
+      if (!isExtraVisible(f, extras)) continue; // don't persist hidden conditional fields
       const raw = (extras[f.key] ?? "").trim();
       if (raw === "") continue;
       extrasOut[f.key] = f.type === "number" ? Number(raw) : raw;
@@ -542,26 +553,18 @@ function EditGenericSport({
 
       {config.extras && config.extras.length > 0 ? (
         <div style={extrasGrid}>
-          {config.extras.map((f) => (
-            <Field key={f.key} label={f.label}>
-              {f.type === "textarea" ? (
-                <textarea
+          {config.extras
+            .filter((f) => isExtraVisible(f, extras))
+            .map((f) => (
+              <Field key={f.key} label={f.label}>
+                <SportExtraControl
+                  field={f}
                   value={extras[f.key] ?? ""}
-                  onChange={(e) => setExtras((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  style={{ ...textareaStyle, minHeight: 70 }}
+                  onChange={(v) => setExtras((prev) => ({ ...prev, [f.key]: v }))}
+                  people={people}
                 />
-              ) : (
-                <input
-                  type={f.type === "number" ? "number" : "text"}
-                  inputMode={f.type === "number" ? (f.numericHint === "decimal" ? "decimal" : "numeric") : undefined}
-                  placeholder={f.placeholder}
-                  value={extras[f.key] ?? ""}
-                  onChange={(e) => setExtras((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  style={inputStyle}
-                />
-              )}
-            </Field>
-          ))}
+              </Field>
+            ))}
         </div>
       ) : null}
 

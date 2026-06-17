@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition, type CSSProperties } from "react";
-import { loadSportLogContext, logSportAction, type SportLogContext } from "@/app/log/sport-actions";
+import { loadSportLogContext, logSportAction, listSportPeople, type SportLogContext } from "@/app/log/sport-actions";
 import ClimbLogSheet from "./ClimbLogSheet";
 import GolfLogSheet from "./GolfLogSheet";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
-import { getSportLogConfig, type ExtraFieldConfig } from "./sportLogConfig";
+import { getSportLogConfig, isExtraVisible } from "./sportLogConfig";
+import SportExtraControl from "./sportExtraControl";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
@@ -95,6 +96,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
   // when the sheet opens. Sport with no spot support (config null)
   // skips the picker entirely.
   const [spotCtx, setSpotCtx] = useState<SportLogContext | null>(null);
+  const [people, setPeople] = useState<string[]>([]);
   useEffect(() => {
     let cancelled = false;
     loadSportLogContext(sport.slug)
@@ -103,6 +105,13 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       })
       .catch(() => {
         /* non-fatal — picker just won't render */
+      });
+    listSportPeople()
+      .then((p) => {
+        if (!cancelled) setPeople(p);
+      })
+      .catch(() => {
+        /* non-fatal — person inputs just won't suggest */
       });
     return () => {
       cancelled = true;
@@ -130,6 +139,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
     // undefined so the field isn't persisted at all.
     const extrasOut: Record<string, string | number | undefined> = {};
     for (const f of config.extras ?? []) {
+      if (!isExtraVisible(f, draft.extras)) continue; // don't persist hidden (e.g. 1v1 teammate)
       const raw = (draft.extras[f.key] ?? "").trim();
       if (raw === "") continue;
       extrasOut[f.key] = f.type === "number" ? Number(raw) : raw;
@@ -228,18 +238,27 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
         />
       </label>
 
-      {/* Per-sport extra fields — surfing wave count, basketball
-          score, snowboarding runs, etc. */}
+      {/* Per-sport extra fields — surfing wave count, basketball score,
+          spikeball format + teammate/opponents, etc. Conditional fields
+          (showIf) only render when their condition is met. */}
       {config.extras && config.extras.length > 0 ? (
         <div style={extrasGrid}>
-          {config.extras.map((f) => (
-            <ExtraField
-              key={f.key}
-              field={f}
-              value={draft.extras[f.key] ?? ""}
-              onChange={(v) => setExtra(f.key, v)}
-            />
-          ))}
+          {config.extras
+            .filter((f) => isExtraVisible(f, draft.extras))
+            .map((f) => {
+              const fullWidth = f.type === "textarea" || f.type === "select" || f.type === "person";
+              return (
+                <label key={f.key} style={{ ...fieldLabel, ...(fullWidth ? { gridColumn: "1 / -1" } : null) }}>
+                  {f.label}
+                  <SportExtraControl
+                    field={f}
+                    value={draft.extras[f.key] ?? ""}
+                    onChange={(v) => setExtra(f.key, v)}
+                    people={people}
+                  />
+                </label>
+              );
+            })}
         </div>
       ) : null}
 
@@ -254,49 +273,6 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       </label>
       {error ? <div style={errorTextStyle}>{error}</div> : null}
     </SportLogModal>
-  );
-}
-
-function ExtraField({
-  field,
-  value,
-  onChange,
-}: {
-  field: ExtraFieldConfig;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  if (field.type === "textarea") {
-    return (
-      <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
-        {field.label}
-        <textarea
-          placeholder={field.placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={textareaStyle}
-        />
-      </label>
-    );
-  }
-  return (
-    <label style={fieldLabel}>
-      {field.label}
-      <input
-        type={field.type === "number" ? "number" : "text"}
-        inputMode={
-          field.type === "number"
-            ? field.numericHint === "decimal"
-              ? "decimal"
-              : "numeric"
-            : undefined
-        }
-        placeholder={field.placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={fieldInput}
-      />
-    </label>
   );
 }
 

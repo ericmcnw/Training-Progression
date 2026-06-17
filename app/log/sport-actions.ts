@@ -28,6 +28,35 @@ import {
   type SpotPickerItem,
 } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import { personExtraKeys } from "@/app/routines/sportLogConfig";
+
+// Shared pool of people you've logged with/against, gathered from every
+// sport log's person-typed extras (+ legacy free-text opponent fields).
+// Powers the searchable/creatable person inputs so teammates/opponents
+// build a reusable roster across sessions and sports.
+export async function listSportPeople(): Promise<string[]> {
+  const personKeys = personExtraKeys();
+  const logs = await prisma.routineLog.findMany({
+    where: { routineId: { startsWith: "sports-" } },
+    select: { sportData: true },
+  });
+  const names = new Set<string>();
+  for (const log of logs) {
+    const sd = log.sportData;
+    if (!sd || typeof sd !== "object" || Array.isArray(sd)) continue;
+    const extras = (sd as Record<string, unknown>).extras;
+    if (!extras || typeof extras !== "object") continue;
+    for (const key of personKeys) {
+      const raw = (extras as Record<string, unknown>)[key];
+      if (typeof raw !== "string") continue;
+      for (const part of raw.split(",")) {
+        const name = part.trim();
+        if (name) names.add(name);
+      }
+    }
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
 
 export async function addSportAction(slug: string): Promise<void> {
   await ensureSportSelected(slug);

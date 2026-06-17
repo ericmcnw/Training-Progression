@@ -12,7 +12,7 @@
 // To add a new sport's rich form, edit this file. The LogSheet UI
 // reads the config and renders accordingly — no JSX changes needed.
 
-export type ExtraFieldType = "text" | "number" | "textarea";
+export type ExtraFieldType = "text" | "number" | "textarea" | "select" | "person";
 
 export type ExtraFieldConfig = {
   key: string;
@@ -21,6 +21,12 @@ export type ExtraFieldConfig = {
   placeholder?: string;
   /** For number fields — passed through to inputMode/min/etc. */
   numericHint?: "integer" | "decimal";
+  /** For `select` fields — dropdown choices. */
+  options?: Array<{ value: string; label: string }>;
+  /** Conditional visibility: only render when another extra's current
+   *  value is one of `in`. Used by Spikeball to show teammate + 2nd
+   *  opponent only when Format is 2v2. */
+  showIf?: { key: string; in: string[] };
 };
 
 export type SportLogConfig = {
@@ -120,14 +126,46 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { value: "tournament", label: "Tournament" },
     ],
     extras: [
-      { key: "format", label: "Format", type: "text", placeholder: "e.g. 2v2, 1v1" },
+      {
+        key: "format",
+        label: "Format",
+        type: "select",
+        options: [
+          { value: "1v1", label: "1v1" },
+          { value: "2v2", label: "2v2" },
+        ],
+      },
+      // Teammate + 2nd opponent only apply to 2v2. All three pull from the
+      // same shared people pool so you can track who you play with/against.
+      { key: "teammate", label: "Teammate", type: "person", showIf: { key: "format", in: ["2v2"] } },
+      { key: "opponent1", label: "Opponent", type: "person" },
+      { key: "opponent2", label: "Opponent 2", type: "person", showIf: { key: "format", in: ["2v2"] } },
       { key: "gamesPlayed", label: "Games played", type: "number", numericHint: "integer" },
       { key: "gamesWon", label: "Games won", type: "number", numericHint: "integer" },
-      { key: "opponents", label: "Opponents", type: "text" },
     ],
   },
 };
 
 export function getSportLogConfig(slug: string): SportLogConfig {
   return SPORT_LOG_CONFIG[slug] ?? {};
+}
+
+/** Whether an extra field should render given the current extra values
+ *  (evaluates its optional `showIf` condition). Fields with no condition
+ *  always show. */
+export function isExtraVisible(field: ExtraFieldConfig, extras: Record<string, string>): boolean {
+  if (!field.showIf) return true;
+  return field.showIf.in.includes((extras[field.showIf.key] ?? "").trim());
+}
+
+/** Extra keys that hold a person's name, across every sport (plus legacy
+ *  free-text keys). Used to build the shared people pool. */
+export function personExtraKeys(): Set<string> {
+  const keys = new Set<string>(["opponent", "opponents"]); // legacy free-text
+  for (const cfg of Object.values(SPORT_LOG_CONFIG)) {
+    for (const f of cfg.extras ?? []) {
+      if (f.type === "person") keys.add(f.key);
+    }
+  }
+  return keys;
 }
