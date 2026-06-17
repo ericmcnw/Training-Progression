@@ -17,7 +17,8 @@ export async function GET() {
   const [routines, logs, goals, climbLocations, climbAreas, climbProblems, climbAttempts, climbMedia] =
     await Promise.all([
       prisma.routine.findMany({
-        where: { isDeleted: false },
+        // Full backup: include soft-deleted routines too, so every log's
+        // routineId resolves and the archived/deleted state round-trips.
         select: {
           id: true,
           name: true,
@@ -25,6 +26,7 @@ export async function GET() {
           domain: true,
           subtype: true,
           isActive: true,
+          isDeleted: true,
           isPlaceholder: true,
           supportsSports: true,
           createdAt: true,
