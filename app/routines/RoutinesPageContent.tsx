@@ -10,6 +10,7 @@ import RoutineCard from "./RoutineCard";
 import RoutineSection from "./RoutineSection";
 import QuickLogDrawerButton from "./QuickLogDrawerButton";
 import EnduranceQuickLogButton from "./EnduranceQuickLogButton";
+import EnduranceQuickLogRow from "./EnduranceQuickLogRow";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import SportsAddButton from "./SportsAddButton";
 import SportQuickLogRow from "./SportQuickLogRow";
@@ -253,6 +254,14 @@ export default async function RoutinesPageContent(props: {
     groups.set("sport", []);
   }
 
+  // Endurance is always loggable via the synthetic Endurance routine (the
+  // type is picked by dropdown in the log form). The legacy per-type cardio
+  // routines were retired, so seed an empty bucket to keep the ENDURANCE
+  // section + its log entry on the page.
+  if (!groups.has("cardio")) {
+    groups.set("cardio", []);
+  }
+
   const orderedDomains = domainOrder.filter((d) => groups.has(d));
 
   return (
@@ -382,16 +391,17 @@ export default async function RoutinesPageContent(props: {
             );
           }
 
+          const isCardio = domain === "cardio";
           return (
             <RoutineSection
               key={domain}
               title={label.toUpperCase()}
-              count={list.length}
+              count={isCardio ? list.length + 1 : list.length}
               accentColor={accent}
               quickLogSlot={
                 domain === "strength" ? (
                   <QuickLogDrawerButton style={styles.quickLogPill} />
-                ) : domain === "cardio" ? (
+                ) : isCardio ? (
                   // Endurance section uses domain="cardio" under the hood
                   // (see ROUTINE_DOMAIN_OPTIONS in lib/routines). The
                   // section header still reads "Endurance" via that
@@ -401,6 +411,9 @@ export default async function RoutinesPageContent(props: {
               }
               defaultOpen={!!domainFilter}
             >
+              {/* Always-present endurance entry — opens the type-picker log
+                  form. Sits above any user-created cardio routines. */}
+              {isCardio ? <EnduranceQuickLogRow /> : null}
               {list.map((routine) => (
                 <RoutineCard
                   key={routine.id}
