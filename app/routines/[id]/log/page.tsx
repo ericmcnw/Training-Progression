@@ -266,7 +266,7 @@ export default async function LogRoutinePage(props: {
     : isCardioKind(kind)
     ? (
         await prisma.routineLog.findMany({
-          where: { routineId, distanceMi: { not: null }, durationSec: { not: null } },
+          where: { routineId, OR: [{ distanceMi: { not: null } }, { durationSec: { not: null } }] },
           orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
           take: 20,
           select: { id: true, performedAt: true, distanceMi: true, durationSec: true, elevationGainFt: true, notes: true },
@@ -534,7 +534,11 @@ export default async function LogRoutinePage(props: {
                   {log.type === "WORKOUT"
                     ? `Sets: ${log.setCount}`
                     : log.type === "CARDIO"
-                    ? `${(log.distanceMi ?? 0).toFixed(2)} mi | ${formatHoursMinutes(log.durationSec ?? 0)}${log.elevationGainFt ? ` | ${log.elevationGainFt} ft` : ""}`
+                    ? [
+                        log.distanceMi != null ? `${log.distanceMi.toFixed(2)} mi` : null,
+                        log.durationSec ? formatHoursMinutes(log.durationSec) : null,
+                        log.elevationGainFt ? `${log.elevationGainFt} ft` : null,
+                      ].filter(Boolean).join(" | ") || "Logged"
                     : log.type === "GUIDED"
                     ? `${log.durationSec ? formatGuidedSeconds(log.durationSec) : "No duration"} | ${log.guidedStepCount} saved items`
                     : log.type === "SESSION"

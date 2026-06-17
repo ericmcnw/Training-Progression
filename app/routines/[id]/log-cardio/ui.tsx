@@ -235,7 +235,8 @@ export default function LogRunForm({
   }
 
   async function onSave() {
-    const distance = Number(distanceMi);
+    const distanceProvided = distanceMi.trim().length > 0;
+    const distance = distanceProvided ? Number(distanceMi) : null;
     const elevation =
       elevationGainFt.trim().length > 0
         ? Number(elevationGainFt)
@@ -252,13 +253,18 @@ export default function LogRunForm({
       return;
     }
 
-    if (!Number.isFinite(distance) || distance <= 0) {
-      alert("Enter a valid distance in miles.");
+    const hasDistance = distance !== null && Number.isFinite(distance) && distance > 0;
+    const hasDuration = Number.isFinite(durationSec) && durationSec > 0;
+
+    // Distance is optional (a walk is often logged by time only) — but if
+    // they typed something, it has to be a real number.
+    if (distanceProvided && !hasDistance) {
+      alert("Enter a valid distance in miles, or leave it blank.");
       return;
     }
-
-    if (!Number.isFinite(durationSec) || durationSec <= 0) {
-      alert("Enter a valid duration.");
+    // Need at least one of distance / duration so the log means something.
+    if (!hasDistance && !hasDuration) {
+      alert("Add a distance or a duration.");
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
@@ -322,6 +328,8 @@ export default function LogRunForm({
       draftCtx?.clearDraft(routineId);
       drawer?.clearDirty();
       finish();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Couldn't save this cardio log. Please try again.");
     } finally {
       setSaving(false);
     }

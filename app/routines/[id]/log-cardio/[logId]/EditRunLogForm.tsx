@@ -74,9 +74,9 @@ export default function EditRunLogForm({
   routineId: string;
   logId: string;
   returnTo: string;
-  initialDistanceMi: number;
+  initialDistanceMi: number | null;
   initialElevationGainFt: number | null;
-  initialDurationSec: number;
+  initialDurationSec: number | null;
   initialNotes: string;
   initialPerformedAt: Date;
   activitySlug?: string | null;
@@ -100,12 +100,12 @@ export default function EditRunLogForm({
   // When provided, the Back button calls this instead of navigating.
   onCancel?: () => void;
 }) {
-  const [distanceMi, setDistanceMi] = useState(String(initialDistanceMi));
+  const [distanceMi, setDistanceMi] = useState(initialDistanceMi != null ? String(initialDistanceMi) : "");
   const [elevationGainFt, setElevationGainFt] = useState(
     initialElevationGainFt !== null && initialElevationGainFt !== undefined ? String(initialElevationGainFt) : ""
   );
-  const [minutes, setMinutes] = useState(String(Math.floor(initialDurationSec / 60)));
-  const [seconds, setSeconds] = useState(String(initialDurationSec % 60));
+  const [minutes, setMinutes] = useState(initialDurationSec != null ? String(Math.floor(initialDurationSec / 60)) : "");
+  const [seconds, setSeconds] = useState(initialDurationSec != null ? String(initialDurationSec % 60) : "");
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
@@ -148,7 +148,8 @@ export default function EditRunLogForm({
   }, [activitySlug]);
 
   async function onSave() {
-    const distance = Number(distanceMi);
+    const distanceProvided = distanceMi.trim().length > 0;
+    const distance = distanceProvided ? Number(distanceMi) : null;
     const elevation =
       elevationGainFt.trim().length > 0
         ? Number(elevationGainFt)
@@ -156,12 +157,15 @@ export default function EditRunLogForm({
     const mins = Number(minutes || "0");
     const secs = Number(seconds || "0");
     const durationSec = mins * 60 + secs;
-    if (!Number.isFinite(distance) || distance <= 0) {
-      alert("Enter a valid distance in miles.");
+
+    const hasDistance = distance !== null && Number.isFinite(distance) && distance > 0;
+    const hasDuration = Number.isFinite(durationSec) && durationSec > 0;
+    if (distanceProvided && !hasDistance) {
+      alert("Enter a valid distance in miles, or leave it blank.");
       return;
     }
-    if (!Number.isFinite(durationSec) || durationSec <= 0) {
-      alert("Enter a valid duration.");
+    if (!hasDistance && !hasDuration) {
+      alert("Add a distance or a duration.");
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
@@ -209,6 +213,8 @@ export default function EditRunLogForm({
       });
       if (onComplete) onComplete();
       else window.location.href = returnTo;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Couldn't save changes. Please try again.");
     } finally {
       setSaving(false);
     }

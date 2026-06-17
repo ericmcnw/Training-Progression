@@ -2189,7 +2189,7 @@ function splitResolvedSpot(
 
 export async function logCardio(params: {
   routineId: string;
-  distanceMi: number;
+  distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
   location?: string;
@@ -2227,11 +2227,19 @@ export async function logCardio(params: {
   painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
-  if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) {
+  // Distance is optional (walks are often logged by time alone); duration is
+  // optional too. A log just needs at least one of them to mean anything.
+  const hasDistance =
+    params.distanceMi !== null &&
+    params.distanceMi !== undefined &&
+    Number.isFinite(params.distanceMi) &&
+    params.distanceMi > 0;
+  const hasDuration = Number.isFinite(params.durationSec) && params.durationSec > 0;
+  if (params.distanceMi !== null && params.distanceMi !== undefined && !hasDistance) {
     throw new Error("Distance must be > 0.");
   }
-  if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) {
-    throw new Error("Duration must be > 0.");
+  if (!hasDistance && !hasDuration) {
+    throw new Error("Add a distance or a duration.");
   }
   if (
     params.elevationGainFt !== null &&
@@ -2248,8 +2256,8 @@ export async function logCardio(params: {
     data: {
       routineId: params.routineId,
       performedAt: parsePerformedAt(params.performedAtLocal),
-      distanceMi: params.distanceMi,
-      durationSec: params.durationSec,
+      distanceMi: hasDistance ? params.distanceMi : null,
+      durationSec: hasDuration ? params.durationSec : null,
       elevationGainFt:
         params.elevationGainFt !== null && params.elevationGainFt !== undefined
           ? Math.round(params.elevationGainFt)
@@ -2283,7 +2291,7 @@ export async function logCardio(params: {
 
 export async function logRun(params: {
   routineId: string;
-  distanceMi: number;
+  distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
   location?: string;
@@ -2671,7 +2679,7 @@ export async function logSession(params: {
 export type UpdateCardioLogParams = {
   routineId: string;
   logId: string;
-  distanceMi: number;
+  distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
   notes?: string;
@@ -2714,8 +2722,16 @@ export type UpdateCardioLogParams = {
 export async function updateCardioLog(params: UpdateCardioLogParams) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   if (!params.logId) throw new Error("Missing logId.");
-  if (!Number.isFinite(params.distanceMi) || params.distanceMi <= 0) throw new Error("Distance must be > 0.");
-  if (!Number.isFinite(params.durationSec) || params.durationSec <= 0) throw new Error("Duration must be > 0.");
+  const hasDistance =
+    params.distanceMi !== null &&
+    params.distanceMi !== undefined &&
+    Number.isFinite(params.distanceMi) &&
+    params.distanceMi > 0;
+  const hasDuration = Number.isFinite(params.durationSec) && params.durationSec > 0;
+  if (params.distanceMi !== null && params.distanceMi !== undefined && !hasDistance) {
+    throw new Error("Distance must be > 0.");
+  }
+  if (!hasDistance && !hasDuration) throw new Error("Add a distance or a duration.");
   if (
     params.elevationGainFt !== null &&
     params.elevationGainFt !== undefined &&
@@ -2760,8 +2776,8 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
     // null-or-object union cleanly.
     const partialUpdate: Record<string, unknown> = {
       performedAt: parsePerformedAt(params.performedAtLocal),
-      distanceMi: params.distanceMi,
-      durationSec: params.durationSec,
+      distanceMi: hasDistance ? params.distanceMi : null,
+      durationSec: hasDuration ? params.durationSec : null,
       elevationGainFt:
         params.elevationGainFt !== null && params.elevationGainFt !== undefined
           ? Math.round(params.elevationGainFt)

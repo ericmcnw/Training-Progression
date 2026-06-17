@@ -114,9 +114,9 @@ export type EditCardioData = {
   routineId: string;
   routineName: string;
   logId: string;
-  initialDistanceMi: number;
+  initialDistanceMi: number | null;
   initialElevationGainFt: number | null;
-  initialDurationSec: number;
+  initialDurationSec: number | null;
   initialNotes: string;
   initialPerformedAt: Date;
   activitySlug: string | null;
@@ -501,9 +501,9 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       return {
         kind: "CARDIO",
         ...base,
-        initialDistanceMi: log.distanceMi ?? 0,
+        initialDistanceMi: log.distanceMi ?? null,
         initialElevationGainFt: log.elevationGainFt,
-        initialDurationSec: log.durationSec ?? 0,
+        initialDurationSec: log.durationSec ?? null,
         activitySlug: editSpotActivitySlug,
         savedSpots: editSavedSpots,
         initialSpot: initialEditSpot,
