@@ -102,19 +102,27 @@ export async function getRotationOverview(): Promise<RotationOverview | null> {
     if (slot.primaryRoutineId) routineIds.add(slot.primaryRoutineId);
     for (const c of slot.coverage) if (c.routineId) routineIds.add(c.routineId);
   }
+  // Only resolve LIVE routines. A slot/coverage pointing at a soft-deleted
+  // routine (e.g. a retired legacy routine) renders via the existing
+  // "(removed routine)" / null-name fallbacks and no longer counts toward
+  // satisfying or advancing the slot.
   const routineRows = routineIds.size
     ? await prisma.routine.findMany({
-        where: { id: { in: [...routineIds] } },
+        where: { id: { in: [...routineIds] }, isDeleted: false },
         select: { id: true, name: true },
       })
     : [];
   const routineNameById = new Map(routineRows.map((r) => [r.id, r.name]));
+  const liveRoutineIds = new Set(routineRows.map((r) => r.id));
 
-  // Matchers per slot.
+  // Matchers per slot — deleted routine refs are dropped so they can't match.
   const matchers = rotation.slots.map((slot) => ({
     id: slot.id,
-    primaryRoutineId: slot.primaryRoutineId,
-    coverageRoutineIds: new Set(slot.coverage.map((c) => c.routineId).filter((x): x is string => Boolean(x))),
+    primaryRoutineId:
+      slot.primaryRoutineId && liveRoutineIds.has(slot.primaryRoutineId) ? slot.primaryRoutineId : null,
+    coverageRoutineIds: new Set(
+      slot.coverage.map((c) => c.routineId).filter((x): x is string => typeof x === "string" && liveRoutineIds.has(x))
+    ),
     coverageTags: new Set(slot.coverage.map((c) => c.tag).filter((x): x is string => Boolean(x))),
   }));
 
