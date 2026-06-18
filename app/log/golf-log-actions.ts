@@ -7,6 +7,7 @@ import { normalizeSpotName } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { clampEffort } from "@/lib/strain";
 import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
+import { stampLogWeather } from "@/lib/weather-stamp";
 
 // Server action for golf logging. Persists session-level fields on
 // RoutineLog (performedAt, durationSec, notes) + the round detail as
@@ -120,6 +121,7 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
   });
 
   await createActivityZoneActivitiesForLog(prisma, log.id);
+  await stampLogWeather(log.id);
 
   revalidatePath("/log");
   revalidatePath("/activities/sports");

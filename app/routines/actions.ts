@@ -16,6 +16,7 @@ function parseSupportsSports(raw: string[]): string[] {
 }
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
+import { stampLogWeather } from "@/lib/weather-stamp";
 import { createActivityZoneActivitiesForLog, createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { clampEffort } from "@/lib/strain";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
@@ -2298,6 +2299,7 @@ export async function logCardio(params: {
   await createExerciseZoneActivitiesForLog(prisma, log.id);
   await createActivityZoneActivitiesForLog(prisma, log.id);
   await applyPainCheckToLog(log.id, params.painCheck);
+  await stampLogWeather(log.id);
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -2684,6 +2686,7 @@ export async function logSession(params: {
     await createActivityZoneActivitiesForLog(prisma, logId);
     await applyZoneTagsToLog(logId, parsePerformedAt(params.performedAtLocal), params.zoneTags);
     await applyPainCheckToLog(logId, params.painCheck);
+    await stampLogWeather(logId);
   }
 
   revalidateRoutineSurfaces(params.routineId);

@@ -31,6 +31,7 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { personExtraKeys } from "@/app/routines/sportLogConfig";
 import { clampEffort } from "@/lib/strain";
 import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
+import { stampLogWeather } from "@/lib/weather-stamp";
 
 // Shared pool of people you've logged with/against, gathered from every
 // sport log's person-typed extras (+ legacy free-text opponent fields).
@@ -377,6 +378,7 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
   });
 
   await createActivityZoneActivitiesForLog(prisma, log.id);
+  await stampLogWeather(log.id);
 
   revalidatePath("/log");
   revalidatePath("/activities/sports");
