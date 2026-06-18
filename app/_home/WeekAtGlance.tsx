@@ -859,6 +859,8 @@ const logButton: CSSProperties = {
   fontSize: 11.5,
   fontWeight: 900,
   lineHeight: 1,
+  // Beat the global button min-height:44 so the row stays compact.
+  minHeight: 0,
   textDecoration: "none",
   letterSpacing: 0.3,
 };
@@ -873,6 +875,7 @@ const viewLink: CSSProperties = {
   borderRadius: 8,
   border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",
+  minHeight: 0,
 };
 
 const availableSection: CSSProperties = {

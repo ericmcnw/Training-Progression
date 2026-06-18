@@ -107,6 +107,9 @@ function boxStyle(size: number, checked: boolean): CSSProperties {
   return {
     width: size,
     height: size,
+    // Override the global `button { min-height: 44px }` so the size prop
+    // actually controls the box (otherwise it floors at 44 and bloats rows).
+    minHeight: 0,
     flexShrink: 0,
     padding: 0,
     margin: 0,
