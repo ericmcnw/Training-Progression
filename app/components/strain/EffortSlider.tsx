@@ -87,19 +87,30 @@ export function EffortSlider({
           border: 4px solid ${color};
           box-shadow: 0 2px 8px rgba(0,0,0,0.45);
         }
-        .${cls}[data-untouched="true"]::-webkit-slider-thumb { opacity: 0.55; }
-        .${cls}[data-untouched="true"]::-moz-range-thumb { opacity: 0.55; }
+        /* Untouched = clearly "not rated yet": grey, flat track + no thumb,
+           so it never looks like a value was set. Tapping a number sets it. */
+        .${cls}[data-untouched="true"]::-webkit-slider-runnable-track { background: rgba(148,163,184,0.18); }
+        .${cls}[data-untouched="true"]::-moz-range-track { background: rgba(148,163,184,0.18); }
+        .${cls}[data-untouched="true"]::-webkit-slider-thumb { opacity: 0; }
+        .${cls}[data-untouched="true"]::-moz-range-thumb { opacity: 0; }
       `}</style>
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
         <label style={{ fontWeight: 900, fontSize: 15, flex: 1, minWidth: 0 }}>{label}</label>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color, opacity: touched ? 1 : 0.6 }}>
-            {display}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 900, color, opacity: touched ? 1 : 0.6, letterSpacing: 0.3 }}>
-            {effortLabel(display).toUpperCase()}
-          </span>
+          {touched ? (
+            <>
+              <span style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color }}>{display}</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color, letterSpacing: 0.3 }}>
+                {effortLabel(display).toUpperCase()}
+              </span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 16, fontWeight: 900, color: "rgba(148,163,184,0.9)" }}>Not rated</span>
+              <span style={{ fontSize: 10, fontWeight: 800, opacity: 0.5, letterSpacing: 0.5 }}>OPTIONAL</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -167,10 +178,10 @@ export function EffortSlider({
       </div>
 
       <div style={{ display: "grid", gap: 2 }}>
-        <div style={{ fontSize: 13, opacity: 0.9 }}>{effortAnchor(display)}</div>
+        {touched ? <div style={{ fontSize: 13, opacity: 0.9 }}>{effortAnchor(display)}</div> : null}
         {!touched ? (
           <div style={{ fontSize: 12, opacity: 0.6 }}>
-            {hint ?? "Estimate — tap or drag to set your rating. Left unrated, this stays a guess."}
+            {hint ?? "Optional — tap a number or drag to rate how hard it felt."}
           </div>
         ) : null}
       </div>

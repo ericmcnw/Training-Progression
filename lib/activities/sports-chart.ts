@@ -10,7 +10,7 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
-import { sessionLoad, effectiveEffort } from "@/lib/strain";
+import { sessionLoad } from "@/lib/strain";
 
 // 12-week sports chart + per-sport rollup. Mirrors the endurance
 // builder's shape so the rest of the dashboard code uses one chart
@@ -211,7 +211,8 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
         metricFormatted: log.durationSec ? formatDuration(log.durationSec) : "1 session",
         load: sessionLoad(log.effort, log.durationSec),
         loadEstimated: log.effort == null,
-        effort: effectiveEffort(log.effort, log.durationSec != null ? log.durationSec / 60 : null),
+        // RAW rating only — null when unrated. Charts never use an estimate.
+        effort: log.effort ?? undefined,
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

@@ -162,11 +162,16 @@ function EffortBars({
         </div>
         <div style={{ ...barsTrack, height: TRACK_H }}>
           {weekLabels.map((wk, wi) => {
+            // Rated sessions stack on top (hue × effort); unrated go to the
+            // bottom as neutral grey so "happened but not rated" reads clearly.
             const ws = (sessionsByWeek[wi] ?? [])
               .slice()
-              .sort((a, b) => orderIdx(a.seriesLabel) - orderIdx(b.seriesLabel) || (a.effort ?? 0) - (b.effort ?? 0));
+              .sort((a, b) => {
+                const ar = a.effort == null ? 1 : 0;
+                const br = b.effort == null ? 1 : 0;
+                return ar - br || orderIdx(a.seriesLabel) - orderIdx(b.seriesLabel) || (a.effort ?? 0) - (b.effort ?? 0);
+              });
             const isSel = selectedWeek === wi;
-            const peak = ws.reduce((m, s) => Math.max(m, s.effort ?? 0), 0);
             return (
               <button
                 key={wi}
@@ -178,19 +183,23 @@ function EffortBars({
                 style={{ ...barCol, ...(isSel ? barColSel : null) }}
               >
                 <div style={barStack}>
-                  {peak > 0 ? <div style={{ height: 2, borderRadius: 2, background: effortColor(peak) }} /> : null}
-                  {ws.map((s) => (
-                    <div
-                      key={s.id}
-                      style={{
-                        height: Math.max(2, (1 / yMax) * TRACK_H),
-                        borderRadius: 1.5,
-                        background: shadeByEffort(colorByLabel.get(s.seriesLabel) ?? "rgba(148,163,184,0.9)", s.effort, s.loadEstimated),
-                        ...(s.loadEstimated ? { outline: "1px dashed rgba(148,163,184,0.5)", outlineOffset: -1 } : null),
-                        opacity: isSel || selectedWeek === null ? 1 : 0.5,
-                      }}
-                    />
-                  ))}
+                  {ws.map((s) => {
+                    const rated = s.effort != null;
+                    return (
+                      <div
+                        key={s.id}
+                        style={{
+                          height: Math.max(2, (1 / yMax) * TRACK_H),
+                          borderRadius: 1.5,
+                          background: rated
+                            ? shadeByEffort(colorByLabel.get(s.seriesLabel) ?? "rgba(148,163,184,0.9)", s.effort as number)
+                            : "rgba(148,163,184,0.2)",
+                          ...(rated ? null : { outline: "1px dashed rgba(148,163,184,0.45)", outlineOffset: -1 }),
+                          opacity: isSel || selectedWeek === null ? 1 : 0.5,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </button>
             );
@@ -207,7 +216,7 @@ function EffortBars({
         </div>
       </div>
       <div style={effortLegendRow}>
-        <span style={{ opacity: 0.55 }}>Lighter = easier · solid = harder</span>
+        <span style={{ opacity: 0.55 }}>Lighter = easier · solid = harder · grey = not rated</span>
       </div>
     </div>
   );
@@ -257,6 +266,14 @@ function EffortLines({
       })
       .filter((l) => l.pts.some((p) => p != null));
   }, [series, sessionsByWeek, weekLabels, mode]);
+
+  if (lines.length === 0) {
+    return (
+      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", fontWeight: 600, padding: "18px 4px", textAlign: "center" }}>
+        No effort ratings in this range yet — rate a few sessions to see the trend.
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "grid", gap: 6 }}>
@@ -371,10 +388,12 @@ function WeekPanel({
                 <span style={rowName}>{s.routineName}</span>
                 <span style={rowMetric}>{s.metricFormatted}</span>
                 {s.effort != null ? (
-                  <span style={{ ...effortChip, color: effortColor(s.effort), borderColor: `${effortColor(s.effort)}66`, opacity: s.loadEstimated ? 0.55 : 1 }}>
-                    {s.loadEstimated ? "~" : ""}{clampEffort(s.effort)}
+                  <span style={{ ...effortChip, color: effortColor(s.effort), borderColor: `${effortColor(s.effort)}66` }}>
+                    {clampEffort(s.effort)}
                   </span>
-                ) : null}
+                ) : (
+                  <span style={effortChipUnrated} title="Not rated">–</span>
+                )}
                 <span style={caret}>›</span>
               </button>
             );
@@ -412,11 +431,10 @@ function parseRgb(rgba: string): { r: number; g: number; b: number } {
   return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 148, g: 163, b: 184 };
 }
 // Series hue, alpha scaled by effort — easy sessions read translucent, hard
-// ones solid. Unrated/estimated stay muted regardless.
-function shadeByEffort(rgba: string, effort: number | undefined, estimated?: boolean): string {
+// ones solid. Only ever called with a real rating (unrated render grey).
+function shadeByEffort(rgba: string, effort: number): string {
   const { r, g, b } = parseRgb(rgba);
-  const e = effort == null ? 4 : clampEffort(effort);
-  const alpha = estimated ? 0.28 : 0.4 + 0.6 * (e / 10);
+  const alpha = 0.4 + 0.6 * (clampEffort(effort) / 10);
   return `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
 }
 
@@ -471,4 +489,5 @@ const rowDate: CSSProperties = { fontSize: 11, fontWeight: 800, opacity: 0.65, f
 const rowName: CSSProperties = { flex: "2 1 0", minWidth: 0, fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const rowMetric: CSSProperties = { flex: "1 1 0", minWidth: 0, fontSize: 11.5, fontWeight: 800, opacity: 0.9, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", fontVariantNumeric: "tabular-nums" };
 const effortChip: CSSProperties = { flexShrink: 0, fontSize: 10.5, fontWeight: 900, padding: "2px 7px", borderRadius: 999, border: "1px solid", background: "rgba(255,255,255,0.03)", fontVariantNumeric: "tabular-nums" };
+const effortChipUnrated: CSSProperties = { flexShrink: 0, fontSize: 10.5, fontWeight: 900, padding: "2px 8px", borderRadius: 999, border: "1px dashed rgba(148,163,184,0.4)", background: "transparent", color: "rgba(148,163,184,0.8)" };
 const caret: CSSProperties = { fontSize: 14, opacity: 0.4, fontWeight: 700, paddingRight: 2, flexShrink: 0 };
