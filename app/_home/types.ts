@@ -50,15 +50,6 @@ export type LegacyGlanceDay = {
   // chip in the WaG block. Absent when no home base is set or the fetch failed.
   weather?: { code: number; highF: number };
   todos?: Array<{ id: string; ymd: string; label: string; done: boolean }>;
-  // Habit-domain routines that aren't on the schedule for this day but are
-  // available to log inline. Populated for today + future only — past days
-  // surface what actually happened via the `planned`/`logs` arrays.
-  availableHabits?: Array<{
-    routineId: string;
-    routineName: string;
-    kind: string;
-    domain: RoutineDomain;
-  }>;
 };
 
 // One routine planned or logged on a given day.

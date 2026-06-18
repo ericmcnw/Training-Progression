@@ -380,8 +380,7 @@ function DetailPanel({
   const planned = day.planned;
   const unplannedLogs = day.logs.filter((l) => !planned.some((p) => p.routineId === l.routineId));
   const isFutureDay = day.ymd > today;
-  const availableHabits = day.availableHabits ?? [];
-  const isEmpty = planned.length === 0 && unplannedLogs.length === 0 && availableHabits.length === 0;
+  const isEmpty = planned.length === 0 && unplannedLogs.length === 0;
   const [pickerOpen, setPickerOpen] = useState(false);
   // Scheduling onto past days is meaningless — only show the button on today
   // and future days. Hides itself entirely if the parent didn't pass a
@@ -488,42 +487,6 @@ function DetailPanel({
           ))}
         </div>
       )}
-
-      {/* Habits not on this day's schedule — surfaced here for today + future
-          so the user can log a 2×/week or non-auto-scheduled habit inline
-          without leaving the dashboard. Past days omit this list. */}
-      {availableHabits.length > 0 ? (
-        <div style={availableSection}>
-          <span style={availableSectionLabel}>Habits available</span>
-          <div style={detailList}>
-            {availableHabits.map((h) => {
-              const normalizedKind = normalizeRoutineKind(h.kind);
-              const isCompletion = normalizedKind === "COMPLETION";
-              return (
-                <div key={h.routineId} style={detailRow(false)}>
-                  <span style={{ ...domainBar, background: domainAccent(h.domain) }} aria-hidden />
-                  <div style={detailRowText}>
-                    <span style={detailRowName}>{h.routineName}</span>
-                    <span style={detailRowMeta}>habit · {formatRoutineTypeLabel(normalizedKind).toLowerCase()}</span>
-                  </div>
-                  <div style={detailRowActions}>
-                    {isCompletion && !isFutureDay ? (
-                      <CompletionCheckbox routineId={h.routineId} ymd={day.ymd} done={false} size={22} />
-                    ) : (
-                      <DrawerLogButton
-                        routineId={h.routineId}
-                        defaultDate={day.ymd}
-                        className=""
-                        style={logButton}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
 
       <DayTodoList ymd={day.ymd} todos={day.todos ?? []} mode="panel" />
 
@@ -878,18 +841,3 @@ const viewLink: CSSProperties = {
   minHeight: 0,
 };
 
-const availableSection: CSSProperties = {
-  display: "grid",
-  gap: 6,
-  paddingTop: 8,
-  marginTop: 2,
-  borderTop: `1px dashed ${COLOR.border}`,
-};
-
-const availableSectionLabel: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  color: COLOR.textFaint,
-};

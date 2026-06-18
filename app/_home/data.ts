@@ -230,16 +230,6 @@ export async function getHomeData(): Promise<HomeData> {
   // same way they are everywhere else in the app.
   const autoScheduledRoutines = routinesWithTargets.filter((r) => shouldAutoScheduleRoutine(r));
 
-  // All active habit-domain routines — used to surface non-auto-scheduled
-  // habits (e.g. "2× per week" goals) as loggable in today's/future's detail
-  // panel so the user doesn't have to navigate elsewhere to mark them done.
-  const habitDomainRoutineIds = new Set<string>();
-  for (const r of routinesWithTargets) {
-    if (effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "lifestyle") {
-      habitDomainRoutineIds.add(r.id);
-    }
-  }
-
   function plannedRoutineIdsForDay(ymd: string): Set<string> {
     const set = new Set<string>(manualByDay.get(ymd) ?? []);
     for (const cycle of cycleEntries) {
@@ -460,28 +450,6 @@ export async function getHomeData(): Promise<HomeData> {
       }
     }
 
-    // Available habits — only habits actually SCHEDULED for this day: daily
-    // habits surface every day, weekday-masked goals (e.g. Mon/Wed/Fri) only
-    // on those weekdays. Weekly-count and untargeted habits don't appear here
-    // — they live in the Frequency Goals card. Excludes anything already
-    // planned or already logged that day. Today + future only; past days just
-    // show what happened.
-    const availableHabits: LegacyGlanceDay["availableHabits"] = ymd >= today
-      ? Array.from(habitDomainRoutineIds)
-          .filter((rid) => !plannedMap.has(rid))
-          .filter((rid) => isExpectedDay(habitTargetById.get(rid) ?? null, ymd))
-          .filter((rid) => !habitLogYmdsById.get(rid)?.has(ymd))
-          .map((rid) => routineMap.get(rid))
-          .filter((r): r is NonNullable<typeof r> => Boolean(r))
-          .map((r) => ({
-            routineId: r.id,
-            routineName: r.name,
-            kind: r.kind,
-            domain: effectiveRoutineDomain(r.domain, r.kind, r.subtype),
-          }))
-          .sort((a, b) => a.routineName.localeCompare(b.routineName))
-      : [];
-
     const dayWeather = wagWeather[ymd];
     legacyGlanceDays.push({
       ymd,
@@ -492,7 +460,6 @@ export async function getHomeData(): Promise<HomeData> {
       habitAggregate: { expected: habitExpected, completed: habitCompleted },
       weather: dayWeather ? { code: dayWeather.code, highF: dayWeather.highF } : undefined,
       todos: todosByYmd.get(ymd) ?? [],
-      availableHabits,
     });
   }
 
