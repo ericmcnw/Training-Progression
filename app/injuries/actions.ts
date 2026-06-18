@@ -65,12 +65,23 @@ function sanitizeInput(data: InjuryInput) {
 
 // Typeahead source: previously-used factors first (most relevant), then the
 // preset list, then the user's exercise names. Deduped case-insensitively.
+// Pulls past factors from BOTH injuries and pain logs so a factor typed while
+// logging pain on an un-injured zone still reappears next time.
 export async function getAggravatingFactorSuggestions(): Promise<string[]> {
-  const [injuries, exercises] = await Promise.all([
+  const [injuries, painLogs, exercises] = await Promise.all([
     prisma.activeInjury.findMany({ select: { aggravatingFactors: true } }),
+    prisma.painLog.findMany({
+      where: { NOT: { aggravatingFactors: { isEmpty: true } } },
+      select: { aggravatingFactors: true },
+      orderBy: { loggedAt: "desc" },
+      take: 200,
+    }),
     prisma.exercise.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
   ]);
-  const past = injuries.flatMap((injury) => injury.aggravatingFactors);
+  const past = [
+    ...injuries.flatMap((injury) => injury.aggravatingFactors),
+    ...painLogs.flatMap((log) => log.aggravatingFactors),
+  ];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const value of [...past, ...PRESET_AGGRAVATING_FACTORS, ...exercises.map((e) => e.name)]) {
