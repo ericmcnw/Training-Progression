@@ -57,7 +57,7 @@ export default function DomainSparklines({ series }: Props) {
     <section style={cardSurface}>
       <header style={cardHeader}>
         <span style={cardTitle}>Domain volume</span>
-        <span style={cardHint}>last 8 weeks · tap a bar</span>
+        <span style={cardHint}>last 8 weeks</span>
       </header>
 
       {/* Shared week-range axis — sits above the first domain row so every

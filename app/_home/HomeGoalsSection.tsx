@@ -53,7 +53,6 @@ export default function HomeGoalsSection({
       title="Goals"
       count={totalCount}
       countTone="accent"
-      hint="tap a row to expand"
       storageKey="home.goals.open"
       defaultOpen
     >
