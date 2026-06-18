@@ -16,6 +16,7 @@ import { isCardioKind, isCompletionKind, isGuidedKind, isSessionKind, isWorkoutK
 import { climbOutcomeColor, climbOutcomeBg, climbOutcomeLabel } from "@/lib/climb-types";
 import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 import type { LogSummaryData } from "@/lib/log-summary";
+import WeatherBadge from "@/app/components/WeatherBadge";
 
 const formatSeconds = formatGuidedSeconds;
 
@@ -30,6 +31,11 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
     <>
       <section style={panel}>
         <div style={panelHeader}>SUMMARY</div>
+        {data.weather ? (
+          <div style={{ marginBottom: 10 }}>
+            <WeatherBadge weather={data.weather} detailed />
+          </div>
+        ) : null}
         <div style={summaryGrid}>
           {isCompletionKind(logKind) && (
             <div style={statCard}>

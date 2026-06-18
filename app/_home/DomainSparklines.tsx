@@ -16,6 +16,7 @@ import { COLOR, cardSurface, cardHeader, cardTitle, cardHint, DOMAIN_LABEL } fro
 import { domainAccent } from "./client-utils";
 import Popover from "./Popover";
 import { getHomeLogReport, type LogReport } from "./log-detail-action";
+import WeatherBadge from "@/app/components/WeatherBadge";
 
 type Props = { series: DomainSeries[] };
 
@@ -417,6 +418,12 @@ export function LogDetailPopover({
 function LogReportBody({ report }: { report: LogReport }) {
   return (
     <div style={reportShell}>
+      {report.weather ? (
+        <div style={{ display: "flex" }}>
+          <WeatherBadge weather={report.weather} />
+        </div>
+      ) : null}
+
       {/* Top-line metrics adapt by kind. */}
       <TopLineMetrics report={report} />
 

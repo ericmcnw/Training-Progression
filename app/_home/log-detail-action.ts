@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeRoutineKind } from "@/lib/routines";
 import { getLogDisplayName } from "@/lib/routine-display";
+import { coerceWeatherSnapshot, type WeatherSnapshot } from "@/lib/weather";
 
 export type LogReportSet = {
   setNumber: number;
@@ -55,6 +56,7 @@ export type LogReport = {
   location: string | null;
   notes: string | null;
   completionCount: number | null;
+  weather: WeatherSnapshot | null;
   exercises: LogReportExercise[];     // WORKOUT / SESSION
   guidedSteps: LogReportGuidedStep[]; // GUIDED
   metrics: LogReportMetric[];         // ad-hoc + session custom metrics
@@ -183,6 +185,7 @@ export async function getHomeLogReport(logId: string): Promise<LogReport | null>
     location: log.location,
     notes: log.notes,
     completionCount: log.completionCount,
+    weather: coerceWeatherSnapshot(log.weather),
     exercises,
     guidedSteps,
     metrics,

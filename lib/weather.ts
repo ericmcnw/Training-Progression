@@ -229,6 +229,27 @@ export async function fetchDailyWeather({
   }
 }
 
+// Coerce a stored RoutineLog.weather JSON blob back into a WeatherSnapshot.
+// Validates at the boundary (it's deserialized storage) — returns null for
+// anything that isn't a recognizable snapshot.
+export function coerceWeatherSnapshot(value: unknown): WeatherSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const w = value as Record<string, unknown>;
+  if (typeof w.tempF !== "number" || typeof w.code !== "number") return null;
+  return {
+    tempF: w.tempF,
+    feelsLikeF: typeof w.feelsLikeF === "number" ? w.feelsLikeF : w.tempF,
+    code: w.code,
+    windMph: typeof w.windMph === "number" ? w.windMph : 0,
+    precipIn: typeof w.precipIn === "number" ? w.precipIn : 0,
+    humidity: typeof w.humidity === "number" ? w.humidity : 0,
+    lat: typeof w.lat === "number" ? w.lat : 0,
+    lng: typeof w.lng === "number" ? w.lng : 0,
+    source: "open-meteo",
+    fetchedAt: typeof w.fetchedAt === "string" ? w.fetchedAt : "",
+  };
+}
+
 // WMO weather code → short label + emoji. Reference:
 // https://open-meteo.com/en/docs (WMO Weather interpretation codes).
 export function describeWeatherCode(code: number): { label: string; emoji: string } {

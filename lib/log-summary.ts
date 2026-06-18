@@ -13,6 +13,7 @@ import { isSessionKind } from "@/lib/routines";
 import type { ExerciseUnitValue } from "@/lib/exercises";
 import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
 import { getRoutineDisplayName } from "@/lib/routine-display";
+import { coerceWeatherSnapshot, type WeatherSnapshot } from "@/lib/weather";
 
 export type LogSummaryRoutine = {
   id: string;
@@ -132,6 +133,7 @@ export type LogSummaryData = {
   elevationGainFt: number | null;
   durationSec: number | null;
   location: string | null;
+  weather: WeatherSnapshot | null;
   logKind: RoutineKind;
   routine: LogSummaryRoutine;
   // Structured intervals payload — present when the activity type uses
@@ -273,6 +275,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       elevationGainFt: true,
       durationSec: true,
       location: true,
+      weather: true,
       // Pull activityType info so getRoutineDisplayName can resolve a
       // typed endurance log to its activity type name. Without these the
       // ViewLogDrawer would render "Endurance" literally for every typed
@@ -369,6 +372,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     elevationGainFt: log.elevationGainFt,
     durationSec: log.durationSec,
     location: log.location,
+    weather: coerceWeatherSnapshot(log.weather),
     logKind,
     routine: { ...log.routine, name: displayName },
     intervals: parseIntervalsConfig(log.intervalsConfig),
