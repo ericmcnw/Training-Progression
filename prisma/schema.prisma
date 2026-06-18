@@ -654,6 +654,11 @@ model RoutineLog {
   durationSec     Int?
   distanceMi      Float?
   elevationGainFt Int?
+  // Perceived effort 1-10 (Borg-style RPE) for cardio + sport logs. Drives
+  // the strain model: load = duration × convexWeight(effort), which feeds the
+  // body map + training-load charts. Editable/backfillable per log. Null for
+  // logs without a rating (historical, strength, or skipped).
+  effort          Int?
   location        String?
   climbLocationId String?
   activitySpotId  String?
