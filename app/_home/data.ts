@@ -460,14 +460,17 @@ export async function getHomeData(): Promise<HomeData> {
       }
     }
 
-    // Available habits — every active habit-domain routine that isn't
-    // already on this day's plan and hasn't been logged today. Only computed
-    // for today + future, since past days only need to show what actually
-    // happened. The detail panel surfaces these with a Log button so users
-    // can mark a non-scheduled habit done inline.
+    // Available habits — only habits actually SCHEDULED for this day: daily
+    // habits surface every day, weekday-masked goals (e.g. Mon/Wed/Fri) only
+    // on those weekdays. Weekly-count and untargeted habits don't appear here
+    // — they live in the Frequency Goals card. Excludes anything already
+    // planned or already logged that day. Today + future only; past days just
+    // show what happened.
     const availableHabits: LegacyGlanceDay["availableHabits"] = ymd >= today
       ? Array.from(habitDomainRoutineIds)
           .filter((rid) => !plannedMap.has(rid))
+          .filter((rid) => isExpectedDay(habitTargetById.get(rid) ?? null, ymd))
+          .filter((rid) => !habitLogYmdsById.get(rid)?.has(ymd))
           .map((rid) => routineMap.get(rid))
           .filter((r): r is NonNullable<typeof r> => Boolean(r))
           .map((r) => ({
