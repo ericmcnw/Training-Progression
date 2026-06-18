@@ -187,7 +187,9 @@ export async function updateGolfLogAction(
       performedAt,
       durationSec,
       notes: input.notes?.trim() || null,
-      effort: input.effort == null ? null : clampEffort(input.effort),
+      ...(input.effort !== undefined
+        ? { effort: input.effort == null ? null : clampEffort(input.effort) }
+        : {}),
       location: spotResolved.displayLocation,
       activitySpotId: spotResolved.activitySpotId,
       // Explicit null so a previously-set climbLocationId (e.g. the

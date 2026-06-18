@@ -162,6 +162,7 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
       id: true,
       performedAt: true,
       effort: true,
+      activityTypeId: true,
       routine: {
         select: {
           name: true,
@@ -217,8 +218,15 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     log.routine.metadataGroups.map((g) => g.group.slug).filter(isMappable)
   );
 
-  // Routine groups that aren't already covered per-exercise get their own entries
-  const routineOnlySlugs = routineGroupSlugs.filter((slug) => !exerciseGroupSlugs.has(slug));
+  // Routine groups that aren't already covered per-exercise get their own entries.
+  // Skip them entirely for cardio (activityTypeId set): the SPORT_TAG activity
+  // path owns muscle attribution there, so emitting routine-level muscle tags
+  // too would double-count the zones (legacy cardio routines hand-tagged with
+  // muscle groups). Strength/sport sessions have no activityType and keep this.
+  const routineOnlySlugs =
+    log.activityTypeId != null
+      ? []
+      : routineGroupSlugs.filter((slug) => !exerciseGroupSlugs.has(slug));
 
   const allSlugs = Array.from(new Set([...exerciseGroupSlugs, ...routineOnlySlugs]));
   if (allSlugs.length === 0) return;
