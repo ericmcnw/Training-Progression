@@ -169,6 +169,7 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     select: {
       id: true,
       performedAt: true,
+      effort: true,
       routine: {
         select: {
           name: true,
@@ -242,11 +243,16 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
     zonesBySlug.set(zone.metadataGroupSlug ?? "", current);
   }
 
+  // When the session was rated (RPE), that effort drives intensity for all its
+  // zones — volume alone misjudges bodyweight-hard / loaded-easy work. Falls
+  // back to per-exercise volume heuristics when unrated.
+  const sessionIntensity = log.effort != null ? effortIntensity(log.effort) : null;
+
   // ── Per-exercise zone activities ──────────────────────────────────────────
   const exerciseData = log.exercises.flatMap((entry) => {
     const groupSlugs = exerciseMuscleSlugs(entry);
     const label = `${entry.exercise.name} ${summarizeSets(entry.sets)}`;
-    const intensity = deriveIntensity(entry.sets);
+    const intensity = sessionIntensity ?? deriveIntensity(entry.sets);
     return groupSlugs.flatMap((slug) =>
       (zonesBySlug.get(slug) ?? []).map((zone) => ({
         zoneId: zone.id,
@@ -267,7 +273,7 @@ export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: s
       performedAt: log.performedAt,
       source: "EXERCISE" as const,
       label: log.routine.name,
-      intensity: null as string | null,
+      intensity: sessionIntensity as string | null,
     }))
   );
 

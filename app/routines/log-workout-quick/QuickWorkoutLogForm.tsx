@@ -183,6 +183,7 @@ export default function QuickWorkoutLogForm({
             notes: payload.notes,
             performedAtLocal: payload.performedAtLocal || undefined,
             exercises: payload.exercises,
+            effort: payload.effort,
           });
           if (onComplete) {
             onComplete();

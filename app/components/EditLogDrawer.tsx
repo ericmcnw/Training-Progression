@@ -186,6 +186,7 @@ function FormForKind({
         returnTo={returnTo}
         initialNotes={data.initialNotes}
         initialPerformedAt={data.initialPerformedAt}
+        initialEffort={data.initialEffort}
         initialExercises={data.initialExercises}
         availableExercises={data.availableExercises}
         onComplete={onComplete}

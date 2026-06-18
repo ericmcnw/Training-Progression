@@ -22,6 +22,7 @@ export default function EditWorkoutLogForm({
   returnTo,
   initialNotes,
   initialPerformedAt,
+  initialEffort = null,
   initialExercises,
   availableExercises,
   onComplete,
@@ -32,6 +33,7 @@ export default function EditWorkoutLogForm({
   returnTo: string;
   initialNotes: string;
   initialPerformedAt: Date;
+  initialEffort?: number | null;
   initialExercises: WorkoutBlock[];
   availableExercises: ExerciseOption[];
   onComplete?: () => void;
@@ -42,6 +44,7 @@ export default function EditWorkoutLogForm({
       routineId={routineId}
       initialNotes={initialNotes}
       initialPerformedAt={toLocalInputValue(initialPerformedAt)}
+      initialEffort={initialEffort}
       initialBlocks={initialExercises}
       availableExercises={availableExercises}
       saveLabel="Save Changes"
@@ -56,6 +59,7 @@ export default function EditWorkoutLogForm({
           notes: payload.notes,
           performedAtLocal: payload.performedAtLocal || undefined,
           exercises: payload.exercises,
+          effort: payload.effort,
         });
         if (onComplete) onComplete();
         else window.location.href = returnTo;

@@ -15,6 +15,9 @@ export type WorkoutDraft = {
   notes: string;
   performedAtLocal: string;
   blocks: WorkoutBlock[];
+  // Perceived effort 1-10, or null until rated. Optional so drafts written
+  // before the strain model deserialize cleanly.
+  effort?: number | null;
 };
 
 export type SessionDraft = {

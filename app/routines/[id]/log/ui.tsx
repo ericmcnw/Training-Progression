@@ -71,6 +71,7 @@ export default function LogWorkoutForm({
           notes: payload.notes,
           performedAtLocal: payload.performedAtLocal || undefined,
           exercises: payload.exercises,
+          effort: payload.effort,
           painCheck:
             activePainZones.length > 0
               ? {

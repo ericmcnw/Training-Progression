@@ -12,7 +12,9 @@ import {
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
-import { DateTimeField, Field, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
+import { DateTimeField, Field, FormSection, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
+import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import { predictEffortDefault } from "@/lib/strain";
 
 export type ExerciseOption = {
   id: string;
@@ -47,6 +49,7 @@ export type WorkoutBlock = {
 type SavePayload = {
   notes: string;
   performedAtLocal: string;
+  effort: number | null;
   exercises: {
     exerciseId: string;
     sets: {
@@ -84,6 +87,7 @@ export default function WorkoutExerciseEditor({
   routineName,
   initialNotes,
   initialPerformedAt,
+  initialEffort = null,
   initialBlocks,
   availableExercises,
   initialExpandedId,
@@ -108,6 +112,7 @@ export default function WorkoutExerciseEditor({
   routineName?: string;
   initialNotes: string;
   initialPerformedAt: string;
+  initialEffort?: number | null;
   initialBlocks: WorkoutBlock[];
   availableExercises: ExerciseOption[];
   initialExpandedId?: string | null;
@@ -132,6 +137,7 @@ export default function WorkoutExerciseEditor({
   const drawer = useOptionalLogDrawer();
 
   const [notes, setNotes] = useState(initialNotes);
+  const [effort, setEffort] = useState<number | null>(initialEffort);
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt || localDateTimeNow);
   const [saving, setSaving] = useState(false);
   const [creatingExercise, startCreateExercise] = useTransition();
@@ -173,6 +179,7 @@ export default function WorkoutExerciseEditor({
     setBlocks(restored);
     setExpandedId((current) => current ?? restored[0]?.exerciseId ?? null);
     setNotes(draft.notes);
+    if (draft.effort !== undefined) setEffort(draft.effort);
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
@@ -191,6 +198,7 @@ export default function WorkoutExerciseEditor({
       notes,
       performedAtLocal,
       blocks,
+      effort,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -198,7 +206,7 @@ export default function WorkoutExerciseEditor({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, notes, performedAtLocal]);
+  }, [blocks, notes, performedAtLocal, effort]);
 
   // Bubble live blocks up to the host (used by the quick-log auto-suggest
   // button so it can read what's currently selected without owning the state).
@@ -498,6 +506,7 @@ export default function WorkoutExerciseEditor({
     }
     setBlocks(initialBlocks);
     setNotes(initialNotes);
+    setEffort(initialEffort);
     setPerformedAtLocal(initialPerformedAt);
     setExpandedId(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
     isDirtyRef.current = false;
@@ -531,6 +540,7 @@ export default function WorkoutExerciseEditor({
       await onSave({
         notes,
         performedAtLocal,
+        effort,
         exercises: blocks.map((block) => ({
           exerciseId: block.exerciseId,
           sets: block.rows.map((row) => ({
@@ -933,6 +943,14 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
+
+      <FormSection title="Effort" description="How hard this session felt — powers your training load and body map.">
+        <EffortSlider
+          value={effort}
+          predicted={predictEffortDefault(null)}
+          onChange={(next) => { markDirty(); setEffort(next); }}
+        />
+      </FormSection>
 
       <Field label={`Notes (optional)${sessionSummary ? ` - ${sessionSummary}` : ""}`}>
         <textarea

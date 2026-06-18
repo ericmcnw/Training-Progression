@@ -1778,6 +1778,10 @@ export async function logWorkout(params: {
   notes?: string;
   performedAtLocal?: string;
   exercises: WorkoutExerciseInput[];
+  /** Perceived effort 1-10 (RPE) for the whole session — drives strength
+   *  load + body-map intensity (volume alone lies: a bodyweight pistol
+   *  squat outworks an easy loaded squat). null/omitted = unrated. */
+  effort?: number | null;
   painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
@@ -1794,6 +1798,7 @@ export async function logWorkout(params: {
         routineId: params.routineId,
         performedAt,
         notes: params.notes?.trim() || null,
+        effort: params.effort != null ? clampEffort(params.effort) : null,
       },
       select: { id: true },
     });
@@ -1838,6 +1843,8 @@ export async function logAdHocWorkout(params: {
   notes?: string;
   performedAtLocal?: string;
   exercises: WorkoutExerciseInput[];
+  /** Perceived effort 1-10 (RPE) for the session. */
+  effort?: number | null;
 }) {
   const { findOrCreateQuickLogPlaceholder, sanitizeQuickLogDomain, sanitizeQuickWorkoutSubtype } =
     await import("@/lib/quick-log");
@@ -1859,6 +1866,7 @@ export async function logAdHocWorkout(params: {
         routineId: placeholder.id,
         performedAt: parsePerformedAt(params.performedAtLocal),
         notes: params.notes?.trim() || null,
+        effort: params.effort != null ? clampEffort(params.effort) : null,
       },
       select: { id: true },
     });
@@ -2846,6 +2854,8 @@ export async function updateWorkoutLog(params: {
       weightLb?: number | null;
     }[];
   }[];
+  /** Perceived effort 1-10, or null to clear. Omit to leave unchanged. */
+  effort?: number | null;
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
   if (!params.logId) throw new Error("Missing logId.");
@@ -2865,6 +2875,9 @@ export async function updateWorkoutLog(params: {
       data: {
         performedAt: parsePerformedAt(params.performedAtLocal),
         notes: params.notes?.trim() || null,
+        ...(params.effort !== undefined
+          ? { effort: params.effort == null ? null : clampEffort(params.effort) }
+          : {}),
       },
     });
 

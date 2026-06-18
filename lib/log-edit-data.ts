@@ -82,6 +82,8 @@ export type EditWorkoutData = {
   logId: string;
   initialPerformedAt: Date;
   initialNotes: string;
+  /** Stored perceived effort 1-10, or null if never rated. Backfillable. */
+  initialEffort: number | null;
   initialExercises: Array<{
     exerciseId: string;
     name: string;
@@ -388,7 +390,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
               : [{ setNumber: 1 }],
         })),
     ];
-    return { kind: "WORKOUT", ...base, initialExercises, availableExercises };
+    return { kind: "WORKOUT", ...base, initialEffort: log.effort ?? null, initialExercises, availableExercises };
   }
 
   if (isGuidedKind(logKind)) {
