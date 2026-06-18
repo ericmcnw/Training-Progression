@@ -76,6 +76,9 @@ export type CardioDraft = {
   // Structured spot pick (saved-ref OR new-spot draft) — restored
   // verbatim into the SpotPicker on form remount.
   spotValue?: SpotPickerValue;
+  // Perceived effort 1-10, or null when the user hasn't rated yet. Optional
+  // so drafts written before the strain model deserialize cleanly.
+  effort?: number | null;
 };
 
 export type GuidedDraft = {

@@ -131,6 +131,10 @@ export type EditCardioData = {
   availableActivityTypes: EditCardioActivityTypeOption[];
   initialActivityTypeId: string | null;
   initialIntervals: EditCardioIntervals | null;
+  // Stored perceived effort 1-10, or null if never rated. The edit form
+  // pre-fills the slider with this (null → slider sits at the predicted
+  // guess, untouched, so historical logs can be backfilled).
+  initialEffort: number | null;
 };
 
 export type EditGuidedData = {
@@ -218,6 +222,8 @@ export type EditSportData = {
   activitySlug: string | null;
   savedSpots: SpotPickerItem[];
   initialSpot: SpotPickerValue;
+  /** Stored perceived effort 1-10, or null if never rated. */
+  initialEffort: number | null;
 };
 
 export type LogEditData =
@@ -245,6 +251,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       elevationGainFt: true,
       durationSec: true,
       location: true,
+      effort: true,
       climbLocationId: true,
       activitySpotId: true,
       activityTypeId: true,
@@ -530,6 +537,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         availableActivityTypes,
         initialActivityTypeId: log.activityTypeId ?? null,
         initialIntervals: intervals,
+        initialEffort: log.effort ?? null,
       };
     }
 
@@ -554,6 +562,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           activitySlug: sportSlug,
           savedSpots: editSavedSpots,
           initialSpot: initialEditSpot,
+          initialEffort: log.effort ?? null,
         };
       }
     }

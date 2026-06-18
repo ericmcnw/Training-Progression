@@ -17,6 +17,7 @@ function parseSupportsSports(raw: string[]): string[] {
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
+import { clampEffort } from "@/lib/strain";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
@@ -2224,6 +2225,9 @@ export async function logCardio(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  /** Perceived effort 1-10 (RPE). null = user didn't rate it; the strain
+   *  model estimates a value downstream via effectiveEffort(). */
+  effort?: number | null;
   painCheck?: PainCheckInput;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
@@ -2264,6 +2268,7 @@ export async function logCardio(params: {
           : null,
       notes: params.notes?.trim() || null,
       location: params.location?.trim() || null,
+      effort: params.effort != null ? clampEffort(params.effort) : null,
       activitySpotId: split.activitySpotId,
       climbLocationId: split.climbLocationId,
       activityTypeId: params.activityTypeId ?? null,
@@ -2314,6 +2319,7 @@ export async function logRun(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  effort?: number | null;
   painCheck?: PainCheckInput;
 }) {
   return logCardio(params);
@@ -2697,6 +2703,10 @@ export type UpdateCardioLogParams = {
     workDurationSec: number | null;
     restSec: number | null;
   } | null;
+  /** Perceived effort 1-10. Pass a number to set/backfill the rating, null
+   *  to clear it, omit to leave unchanged. Editing effort re-derives this
+   *  log's load + body-map intensity. */
+  effort?: number | null;
   // Spot wiring — same shape as logCardio. `clearSpot: true` nulls both
   // FKs; omitting all spot params leaves the existing links untouched.
   clearSpot?: boolean;
@@ -2786,6 +2796,7 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
     };
     if (params.activityTypeId !== undefined) partialUpdate.activityTypeId = params.activityTypeId;
     if (params.intervalsConfig !== undefined) partialUpdate.intervalsConfig = params.intervalsConfig ?? null;
+    if (params.effort !== undefined) partialUpdate.effort = params.effort == null ? null : clampEffort(params.effort);
     if (hasSpotParams) {
       partialUpdate.climbLocationId = nextClimbLocationId;
       partialUpdate.activitySpotId = nextActivitySpotId;

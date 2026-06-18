@@ -210,6 +210,7 @@ function FormForKind({
         availableActivityTypes={data.availableActivityTypes}
         initialActivityTypeId={data.initialActivityTypeId}
         initialIntervals={data.initialIntervals}
+        initialEffort={data.initialEffort}
         onComplete={onComplete}
         onCancel={onCancel}
       />
