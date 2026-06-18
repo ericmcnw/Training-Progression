@@ -25,6 +25,10 @@ export type WeekSession = {
   /** Optional href — if present the row becomes a link to the session
    *  detail page. */
   href?: string;
+  /** Training load (effort × duration, convex). When present on any
+   *  session, the chart shows a Sessions⇄Load toggle and the panel rows
+   *  surface a load badge. Absent for surfaces with no effort capture. */
+  load?: number;
 };
 
 // `sessionsByWeek[i]` = sessions that contributed to week index `i`
@@ -44,6 +48,7 @@ export default function WeeklyBarChartWithSessions({
   unit,
   decimals,
   compact,
+  primaryLabel = "Sessions",
 }: {
   title: string;
   weekLabels: string[];
@@ -52,11 +57,43 @@ export default function WeeklyBarChartWithSessions({
   unit?: string;
   decimals?: number;
   compact?: boolean;
+  /** Left label of the Sessions⇄Load toggle — names the default-view
+   *  metric ("Sessions", "Distance", "Volume"). Only shown when sessions
+   *  carry load. */
+  primaryLabel?: string;
 }) {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  // Sessions (default metric) vs Load view. Only meaningful when load data
+  // is present; the toggle is hidden otherwise.
+  const [view, setView] = useState<"primary" | "load">("primary");
   // Clicked session row → opens the shared LogDetailPopover (same one
   // the home dashboard uses) instead of navigating to a separate page.
   const [openLog, setOpenLog] = useState<OpenLog>(null);
+
+  // Any session carrying a load value unlocks the Load view. Derive the
+  // load bars from the per-session loads so builders only attach `load`
+  // to each session and never duplicate the stacking logic.
+  const hasLoad = useMemo(
+    () => sessionsByWeek.some((wk) => wk.some((s) => s.load != null)),
+    [sessionsByWeek]
+  );
+  const loadSeries = useMemo<StackedBarSeries[] | null>(() => {
+    if (!hasLoad) return null;
+    return series.map((s) => ({
+      label: s.label,
+      color: s.color,
+      weeklyValues: weekLabels.map((_, wi) =>
+        (sessionsByWeek[wi] ?? [])
+          .filter((ws) => ws.seriesLabel === s.label)
+          .reduce((sum, ws) => sum + (ws.load ?? 0), 0)
+      ),
+    }));
+  }, [hasLoad, series, sessionsByWeek, weekLabels]);
+
+  const isLoadView = view === "load" && loadSeries != null;
+  const activeSeries = isLoadView ? loadSeries! : series;
+  const activeUnit = isLoadView ? "" : unit;
+  const activeDecimals = isLoadView ? 0 : decimals;
 
   const weekSessions = useMemo(() => {
     if (selectedWeek === null) return null;
@@ -69,8 +106,8 @@ export default function WeeklyBarChartWithSessions({
   // the bar that was tapped.
   const weekTotalLabel = useMemo(() => {
     if (selectedWeek === null) return null;
-    const dec = decimals ?? 1;
-    const total = series.reduce(
+    const dec = activeDecimals ?? 1;
+    const total = activeSeries.reduce(
       (sum, s) => sum + (s.weeklyValues[selectedWeek] ?? 0),
       0
     );
@@ -78,11 +115,18 @@ export default function WeeklyBarChartWithSessions({
       (sum, s) => sum + (s.weeklyMinutes?.[selectedWeek] ?? 0),
       0
     );
+    // In the default view, surface the week's load as a secondary stat so
+    // both data + load read at a glance (the load view already shows it as
+    // the headline total).
+    const loadTotal = loadSeries
+      ? loadSeries.reduce((sum, s) => sum + (s.weeklyValues[selectedWeek] ?? 0), 0)
+      : 0;
     return {
-      total: `${total.toFixed(dec)}${unit ? ` ${unit}` : ""}`,
+      total: `${total.toFixed(dec)}${activeUnit ? ` ${activeUnit}` : ""}`,
       mins: totalMins > 0 ? totalMins : null,
+      load: !isLoadView && loadTotal > 0 ? Math.round(loadTotal) : null,
     };
-  }, [selectedWeek, series, unit, decimals]);
+  }, [selectedWeek, activeSeries, activeUnit, activeDecimals, series, loadSeries, isLoadView]);
 
   // Enrich each series with a per-week "top session" string so the
   // chart tooltip can render the week's top session for that series
@@ -92,7 +136,7 @@ export default function WeeklyBarChartWithSessions({
   // matching sessions in a given week, leave null and the chart
   // skips the sub-line.
   const enrichedSeries = useMemo(() => {
-    return series.map((s) => {
+    return activeSeries.map((s) => {
       const topSessionPerWeek: Array<string | null> = sessionsByWeek.map((wkSessions) => {
         const matches = wkSessions.filter((ws) => ws.seriesLabel === s.label);
         if (matches.length === 0) return null;
@@ -100,7 +144,7 @@ export default function WeeklyBarChartWithSessions({
       });
       return { ...s, topSessionPerWeek };
     });
-  }, [series, sessionsByWeek]);
+  }, [activeSeries, sessionsByWeek]);
 
   return (
     <div
@@ -120,12 +164,37 @@ export default function WeeklyBarChartWithSessions({
         margin: "0 auto",
       }}
     >
+      {loadSeries != null ? (
+        <div style={toggleRow}>
+          <div style={toggleGroup} role="tablist" aria-label="Chart metric">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isLoadView}
+              onClick={() => setView("primary")}
+              style={!isLoadView ? toggleBtnActive : toggleBtn}
+            >
+              {primaryLabel}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isLoadView}
+              onClick={() => setView("load")}
+              style={isLoadView ? toggleBtnActive : toggleBtn}
+            >
+              Load
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <StackedWeeklyBarChart
-        title={title}
+        title={isLoadView ? `${title} · Load` : title}
         weekLabels={weekLabels}
         series={enrichedSeries}
-        unit={unit}
-        decimals={decimals}
+        unit={activeUnit}
+        decimals={activeDecimals}
         // Default to compact mode on activity dashboards — saves ~60px
         // of vertical space per chart on mobile and the bars stay
         // readable at the smaller height. Callers can opt back into
@@ -186,7 +255,7 @@ function WeekSessionsPanel({
 }: {
   weekLabel: string;
   sessions: WeekSession[];
-  weekTotal: { total: string; mins: number | null } | null;
+  weekTotal: { total: string; mins: number | null; load: number | null } | null;
   onClear: () => void;
   onSelectSession: (session: WeekSession) => void;
 }) {
@@ -210,6 +279,9 @@ function WeekSessionsPanel({
           <span style={weekTotalValue}>{weekTotal.total}</span>
           {weekTotal.mins ? (
             <span style={weekTotalMins}>· {formatMins(weekTotal.mins)}</span>
+          ) : null}
+          {weekTotal.load != null ? (
+            <span style={weekTotalLoad}>· {weekTotal.load} load</span>
           ) : null}
         </div>
       ) : null}
@@ -253,6 +325,9 @@ function SessionRow({ session, onSelect }: { session: WeekSession; onSelect: () 
       <span style={rowDateStyle}>{dayLabel}</span>
       <span style={rowRoutineStyle}>{session.routineName}</span>
       <span style={rowMetricStyle}>{session.metricFormatted}</span>
+      {session.load != null ? (
+        <span style={rowLoadBadge}>{Math.round(session.load)}</span>
+      ) : null}
       <span style={rowCaretStyle}>›</span>
     </button>
   );
@@ -435,4 +510,58 @@ const weekTotalMins: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   opacity: 0.7,
+};
+
+const weekTotalLoad: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "rgba(251,146,60,0.95)",
+};
+
+// Sessions⇄Load segmented toggle above the chart.
+const toggleRow: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+};
+
+const toggleGroup: CSSProperties = {
+  display: "inline-flex",
+  gap: 2,
+  padding: 2,
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+};
+
+const toggleBtn: CSSProperties = {
+  minHeight: 30,
+  padding: "5px 14px",
+  borderRadius: 999,
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  fontSize: 11.5,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  cursor: "pointer",
+  opacity: 0.6,
+};
+
+const toggleBtnActive: CSSProperties = {
+  ...toggleBtn,
+  background: "rgba(255,255,255,0.10)",
+  opacity: 1,
+};
+
+// Per-session load chip — orange to tie back to the load accent.
+const rowLoadBadge: CSSProperties = {
+  flexShrink: 0,
+  fontSize: 10.5,
+  fontWeight: 900,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(251,146,60,0.35)",
+  background: "rgba(251,146,60,0.1)",
+  color: "rgba(251,146,60,0.95)",
+  fontVariantNumeric: "tabular-nums",
 };

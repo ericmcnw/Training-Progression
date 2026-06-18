@@ -171,6 +171,7 @@ export default async function StrengthWorldPage() {
               sessionsByWeek={chartData.sessionsByWeek}
               unit="lb"
               decimals={0}
+              primaryLabel="Volume"
             />
           </>
         ) : null}

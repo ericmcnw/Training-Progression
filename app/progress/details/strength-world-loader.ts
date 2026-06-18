@@ -2,6 +2,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { buildWeeklyGrid, type HeatmapWeek } from "./activity-coverage";
+import { sessionLoad } from "@/lib/strain";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,8 @@ export type StrengthSessionStat = {
    *  not just aggregate sets+volume. Null if the session had no
    *  weighted sets (e.g. timed/rep-only work). */
   topSet: { exerciseName: string; weight: number; reps: number } | null;
+  /** Training load (effort × duration, convex) for the chart's Load view. */
+  load?: number;
 };
 
 export type StrengthWorldData = {
@@ -120,6 +123,8 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
       id: true,
       performedAt: true,
       routineId: true,
+      effort: true,
+      durationSec: true,
       routine: {
         select: { id: true, name: true, kind: true, subtype: true, domain: true },
       },
@@ -151,10 +156,13 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
   let totalSets = 0;
   let totalVolume = 0;
   const sessionDates: Date[] = [];
+  // RPE-based training load per session for the chart's Load view.
+  const loadByLogId = new Map<string, number>();
 
   for (const log of strengthLogs) {
     totalSessions += 1;
     sessionDates.push(log.performedAt);
+    loadByLogId.set(log.id, sessionLoad(log.effort, log.durationSec));
 
     let logSets = 0;
     let logVolume = 0;
@@ -294,6 +302,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     sets: s.totalSets,
     volume: s.totalVolume,
     topSet: s.topSet,
+    load: loadByLogId.get(s.id),
   }));
 
   const recentSessions = recentSessionList

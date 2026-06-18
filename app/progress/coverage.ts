@@ -5,6 +5,7 @@ import { ROUTINE_KIND_LABEL, effectiveRoutineDomain, normalizeRoutineKind, routi
 import { prisma } from "@/lib/prisma";
 import { getRoutineLogs, type RoutineLogWithRelations } from "./data";
 import { isSportGroup, sportGroupTargetHref } from "./sports";
+import { sessionLoad } from "@/lib/strain";
 
 export type CoverageLens = "muscles" | "patterns" | "sports";
 export type CoverageRange = "week" | "2w" | "4w" | "12w" | "ytd";
@@ -29,6 +30,10 @@ export type CoverageDetailLog = {
   performedAt: string;
   performedAtLabel: string;
   relevantParts: string[];
+  /** Training load (effort × duration, convex) for this session — lets
+   *  load-weighted views (injury training-load chart) sum real strain
+   *  rather than raw session counts. */
+  load: number;
 };
 
 export type CoverageCategoryRow = {
@@ -456,6 +461,7 @@ export async function getCoverageOverviewModel(range: CoverageRange = "4w"): Pro
           routineDomain: effectiveRoutineDomain(log.routine.domain, routineKind, log.routine.subtype),
           performedAt: log.performedAt.toISOString(),
           performedAtLabel: formatAppDate(log.performedAt, { month: "short", day: "numeric" }),
+          load: sessionLoad(log.effort, log.durationSec, log.distanceMi),
           relevantParts: relevantPartsForLog({
             log,
             targetGroupId: group.id,

@@ -69,7 +69,8 @@ export type InjuryHeatmapDomainRow = {
   domainLabel: string;
   totalCount: number;
   recentCount: number;
-  weeks: number[]; // length WEEKS, oldest → newest
+  weeks: number[]; // length WEEKS, oldest → newest — session counts
+  loadWeeks: number[]; // length WEEKS — summed training load
   contributingLogs: CoverageDetailLog[]; // sorted newest → oldest
 };
 
@@ -78,7 +79,8 @@ export type InjuryHeatmapCategory = {
   label: string;
   totalCount: number;
   recentCount: number;
-  weeks: number[]; // combined across all domains, length WEEKS
+  weeks: number[]; // combined session counts across all domains, length WEEKS
+  loadWeeks: number[]; // combined training load across all domains, length WEEKS
   domains: InjuryHeatmapDomainRow[]; // only domains with at least one log
 };
 
@@ -144,15 +146,20 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
     // Bucket by domain (honoring the routine's explicit domain override —
     // a PT routine marked "mobility" stays mobility), then by week. Habit-
     // domain logs are dropped here since they're not training load.
-    const byDomain = new Map<HeatmapDomain, { logs: CoverageDetailLog[]; weeks: number[] }>();
+    const byDomain = new Map<HeatmapDomain, { logs: CoverageDetailLog[]; weeks: number[]; loadWeeks: number[] }>();
     for (const dl of pooled) {
       if (!isHeatmapDomain(dl.routineDomain)) continue;
       const domain = dl.routineDomain;
-      const entry = byDomain.get(domain) ?? { logs: [], weeks: new Array<number>(WEEKS).fill(0) };
+      const entry =
+        byDomain.get(domain) ??
+        { logs: [], weeks: new Array<number>(WEEKS).fill(0), loadWeeks: new Array<number>(WEEKS).fill(0) };
       entry.logs.push(dl);
       const ymd = toAppYmd(new Date(dl.performedAt));
       const idx = bucketIndex(ymd);
-      if (idx >= 0) entry.weeks[idx] += 1;
+      if (idx >= 0) {
+        entry.weeks[idx] += 1;
+        entry.loadWeeks[idx] += dl.load;
+      }
       byDomain.set(domain, entry);
     }
 
@@ -169,6 +176,7 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
           totalCount,
           recentCount,
           weeks: entry.weeks,
+          loadWeeks: entry.loadWeeks.map((n) => Math.round(n)),
           contributingLogs: entry.logs,
         };
       })
@@ -176,8 +184,12 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
 
     // Combined weekly totals for the category header strip.
     const combinedWeeks = new Array<number>(WEEKS).fill(0);
+    const combinedLoadWeeks = new Array<number>(WEEKS).fill(0);
     for (const row of domains) {
-      for (let i = 0; i < WEEKS; i++) combinedWeeks[i] += row.weeks[i];
+      for (let i = 0; i < WEEKS; i++) {
+        combinedWeeks[i] += row.weeks[i];
+        combinedLoadWeeks[i] += row.loadWeeks[i];
+      }
     }
     const totalCount = combinedWeeks.reduce((s, n) => s + n, 0);
     const recentCount = combinedWeeks.slice(WEEKS - RECENT_WEEKS).reduce((s, n) => s + n, 0);
@@ -192,6 +204,7 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
       totalCount,
       recentCount,
       weeks: combinedWeeks,
+      loadWeeks: combinedLoadWeeks.map((n) => Math.round(n)),
       domains,
     };
   });

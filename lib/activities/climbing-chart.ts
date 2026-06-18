@@ -25,6 +25,7 @@ import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { domainColor, type RoutineDomain } from "@/lib/routines";
 import type { ClimbingDiscipline } from "@/lib/climb-types";
+import { sessionLoad } from "@/lib/strain";
 
 export type ClimbingSessionInput = {
   id: string;
@@ -37,6 +38,9 @@ export type ClimbingSessionInput = {
    *  attributed to whichever discipline has the highest count. */
   disciplineCounts: Record<ClimbingDiscipline, number>;
   venue?: "GYM" | "CRAG" | null;
+  /** Perceived effort + duration → training load for the Load view. */
+  effort?: number | null;
+  durationSec?: number | null;
 };
 
 export type ClimbingTrainingInput = {
@@ -51,6 +55,9 @@ export type ClimbingTrainingInput = {
    *  WHY an untagged routine's session counted. Empty/omitted for
    *  sessions that qualified via the routine tag alone. */
   matchedExercises?: string[];
+  /** Perceived effort + duration → training load for the Load view. */
+  effort?: number | null;
+  durationSec?: number | null;
 };
 
 export type ClimbingChartWeeks = 4 | 12;
@@ -198,6 +205,7 @@ export function buildClimbingChartData(
       seriesLabel: group.label,
       seriesColor: group.color,
       metricFormatted: "",
+      load: sessionLoad(s.effort, s.durationSec),
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }
@@ -279,6 +287,7 @@ export function buildClimbingTrainingChartData(
       seriesLabel: DOMAIN_DISPLAY[domain] ?? domain,
       seriesColor: domainColor(domain),
       metricFormatted,
+      load: sessionLoad(t.effort, t.durationSec),
       href: `/routines/${t.routineId}/logs/${t.id}/details`,
     });
   }

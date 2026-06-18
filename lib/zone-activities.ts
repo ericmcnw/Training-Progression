@@ -5,6 +5,7 @@ import {
   computeLoad,
   effectiveEffort,
   effortIntensity,
+  estimateDurationMin,
   musclesForActivity,
 } from "@/lib/strain";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
@@ -66,15 +67,6 @@ function humanizeSlug(slug: string): string {
     .split("-")
     .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
     .join(" ");
-}
-
-// Distance-only cardio (a logged walk/run with no duration) still needs a
-// duration to size its load + floor check. Estimate from distance at a blended
-// ~10 min/mile; fall back to a default session length when neither is known.
-function estimateDurationMin(durationSec: number | null, distanceMi: number | null): number {
-  if (durationSec && durationSec > 0) return durationSec / 60;
-  if (distanceMi && distanceMi > 0) return distanceMi * 10;
-  return 30;
 }
 
 function activityLabel(

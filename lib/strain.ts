@@ -50,6 +50,27 @@ export function effectiveEffort(effort: number | null | undefined, durationMin?:
   return effort != null ? clampEffort(effort) : predictEffortDefault(durationMin);
 }
 
+// Distance-only cardio (a walk/run logged without a duration) still needs a
+// duration to size its load. Estimate from distance at a blended ~10 min/mile;
+// fall back to a default session length when neither is known.
+export function estimateDurationMin(durationSec: number | null | undefined, distanceMi?: number | null): number {
+  if (durationSec && durationSec > 0) return durationSec / 60;
+  if (distanceMi && distanceMi > 0) return distanceMi * 10;
+  return 30;
+}
+
+// One-call training load for a logged session: effort (or its estimate) ×
+// convex weight × duration (or its estimate). The single helper every chart +
+// the body map share so load is computed identically everywhere.
+export function sessionLoad(
+  effort: number | null | undefined,
+  durationSec: number | null | undefined,
+  distanceMi?: number | null,
+): number {
+  const min = estimateDurationMin(durationSec, distanceMi);
+  return computeLoad(effectiveEffort(effort, min), min);
+}
+
 // ─── Display: zones, labels, anchors, colors ────────────────────────────────
 export type EffortZone = { min: number; max: number; label: string; color: string };
 export const EFFORT_ZONES: EffortZone[] = [

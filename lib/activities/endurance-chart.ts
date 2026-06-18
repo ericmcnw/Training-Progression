@@ -9,6 +9,7 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { formatPace } from "@/lib/progress";
+import { sessionLoad } from "@/lib/strain";
 import {
   TYPE_SLUG_TO_REGISTRY_SLUG,
   ENDURANCE_ACTIVITY_COLORS,
@@ -108,6 +109,7 @@ export async function loadEnduranceChartData(input?: {
       performedAt: true,
       distanceMi: true,
       durationSec: true,
+      effort: true,
       activityTypeId: true,
       activityType: {
         select: { slug: true, name: true, family: { select: { slug: true } } },
@@ -205,6 +207,7 @@ export async function loadEnduranceChartData(input?: {
         seriesLabel: label,
         seriesColor: "rgba(255,255,255,0.4)", // placeholder — resolved below
         metricFormatted,
+        load: sessionLoad(log.effort, log.durationSec, log.distanceMi),
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

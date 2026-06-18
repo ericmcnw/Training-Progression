@@ -10,6 +10,7 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
+import { sessionLoad } from "@/lib/strain";
 
 // 12-week sports chart + per-sport rollup. Mirrors the endurance
 // builder's shape so the rest of the dashboard code uses one chart
@@ -107,6 +108,7 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
       routineId: true,
       performedAt: true,
       durationSec: true,
+      effort: true,
       // Routine name powers the session-panel row label. Pulled in the
       // same query — no extra roundtrip.
       routine: { select: { name: true } },
@@ -207,6 +209,7 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
         seriesLabel: label,
         seriesColor: "rgba(255,255,255,0.4)", // resolved below
         metricFormatted: log.durationSec ? formatDuration(log.durationSec) : "1 session",
+        load: sessionLoad(log.effort, log.durationSec),
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

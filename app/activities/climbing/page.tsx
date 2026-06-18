@@ -147,6 +147,8 @@ export default async function ClimbingHubPage(props: {
           select: {
             performedAt: true,
             routineId: true,
+            effort: true,
+            durationSec: true,
             climbLocation: { select: { id: true, name: true, type: true } },
             routine: {
               select: {
@@ -182,6 +184,8 @@ export default async function ClimbingHubPage(props: {
         id: true,
         performedAt: true,
         routineId: true,
+        effort: true,
+        durationSec: true,
         routine: {
           select: {
             name: true,
@@ -225,6 +229,8 @@ export default async function ClimbingHubPage(props: {
     sends: number;
     hardestSend: string | null;
     hardestSendSystem: ClimbGradeSystem | null;
+    effort: number | null;
+    durationSec: number | null;
   };
   const sessionMap = new Map<string, SessionRollup>();
   for (const a of attempts) {
@@ -248,6 +254,8 @@ export default async function ClimbingHubPage(props: {
         sends: 0,
         hardestSend: null,
         hardestSendSystem: null,
+        effort: sl.effort ?? null,
+        durationSec: sl.durationSec ?? null,
       };
       sessionMap.set(a.sessionLogId, s);
     }
@@ -303,6 +311,8 @@ export default async function ClimbingHubPage(props: {
       locationName: s.locationName,
       disciplineCounts: s.disciplineCounts,
       venue: s.venue,
+      effort: s.effort,
+      durationSec: s.durationSec,
     })),
     { weeks: chartWeeks, now }
   );
@@ -329,6 +339,8 @@ export default async function ClimbingHubPage(props: {
         routineName: l.routine.name,
         domain: effectiveRoutineDomain(l.routine.domain, l.routine.kind, l.routine.subtype),
         matchedExercises,
+        effort: l.effort,
+        durationSec: l.durationSec,
       };
     }),
     { weeks: chartWeeks, now }

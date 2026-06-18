@@ -30,6 +30,10 @@ const TRACK_H = 96;
 
 export default function InjuryTrainingLoad({ data }: { data: InjuryHeatmapData }) {
   const [sel, setSel] = useState<{ category: string; weekIdx: number } | null>(null);
+  // Session counts vs training load (effort × duration). Load weights a hard
+  // session heavier than an easy one — the truer read of strain on a healing
+  // muscle.
+  const [view, setView] = useState<"sessions" | "load">("sessions");
 
   if (data.categories.length === 0) {
     return (
@@ -39,9 +43,15 @@ export default function InjuryTrainingLoad({ data }: { data: InjuryHeatmapData }
     );
   }
 
+  const isLoad = view === "load";
+  const catWeeks = (c: InjuryHeatmapData["categories"][number]) => (isLoad ? c.loadWeeks : c.weeks);
+  const drWeeks = (dr: InjuryHeatmapData["categories"][number]["domains"][number]) =>
+    isLoad ? dr.loadWeeks : dr.weeks;
+  const anyLoad = data.categories.some((c) => c.loadWeeks.some((n) => n > 0));
+
   // Consistent y-scale across every muscle group so a heavy week reads heavy
   // in all charts.
-  const globalPeak = Math.max(1, ...data.categories.flatMap((c) => c.weeks));
+  const globalPeak = Math.max(1, ...data.categories.flatMap((c) => catWeeks(c)));
 
   // Which domains appear anywhere — drives the legend.
   const presentDomains = STACK_ORDER.filter((d) =>
@@ -52,28 +62,53 @@ export default function InjuryTrainingLoad({ data }: { data: InjuryHeatmapData }
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {presentDomains.length > 0 && (
-        <div style={legendRow}>
-          {presentDomains.map((d) => (
-            <span key={d} style={legendItem}>
-              <span style={{ ...legendSwatch, background: DOMAIN_ACCENT[d] }} />
-              {DOMAIN_LABEL[d]}
-            </span>
-          ))}
-        </div>
-      )}
+      <div style={topRow}>
+        {presentDomains.length > 0 ? (
+          <div style={legendRow}>
+            {presentDomains.map((d) => (
+              <span key={d} style={legendItem}>
+                <span style={{ ...legendSwatch, background: DOMAIN_ACCENT[d] }} />
+                {DOMAIN_LABEL[d]}
+              </span>
+            ))}
+          </div>
+        ) : <span />}
+        {anyLoad ? (
+          <div style={toggleGroup} role="tablist" aria-label="Bar metric">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isLoad}
+              onClick={() => setView("sessions")}
+              style={!isLoad ? toggleBtnActive : toggleBtn}
+            >
+              Sessions
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isLoad}
+              onClick={() => setView("load")}
+              style={isLoad ? toggleBtnActive : toggleBtn}
+            >
+              Load
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {data.categories.map((category) => {
-        // count per domain per week for this category
+        // value per domain per week for this category (count or load)
         const weekDomainCounts: Array<Partial<Record<HeatmapDomain, number>>> = Array.from(
           { length: weekCount },
           () => ({}),
         );
         for (const dr of category.domains) {
-          dr.weeks.forEach((count, i) => {
-            if (count > 0) weekDomainCounts[i][dr.domain] = count;
+          drWeeks(dr).forEach((value, i) => {
+            if (value > 0) weekDomainCounts[i][dr.domain] = value;
           });
         }
+        const categoryWeeks = catWeeks(category);
 
         return (
           <div key={category.slug} style={{ display: "grid", gap: 8 }}>
@@ -90,7 +125,8 @@ export default function InjuryTrainingLoad({ data }: { data: InjuryHeatmapData }
               <>
                 <div style={chartRow} role="group" aria-label={`${category.label} weekly training load`}>
                   {data.weekStarts.map((ws, i) => {
-                    const total = category.weeks[i];
+                    const total = categoryWeeks[i];
+                    const sessionTotal = category.weeks[i];
                     const isSel = sel?.category === category.slug && sel.weekIdx === i;
                     const isCurrent = i === weekCount - 1;
                     return (
@@ -100,9 +136,13 @@ export default function InjuryTrainingLoad({ data }: { data: InjuryHeatmapData }
                         onClick={() => setSel(isSel ? null : { category: category.slug, weekIdx: i })}
                         style={{ ...colBtn, ...(isSel ? colBtnSelected : null) }}
                         aria-pressed={isSel}
-                        title={`Week of ${weekShort(ws)}: ${total} session${total === 1 ? "" : "s"}`}
+                        title={
+                          isLoad
+                            ? `Week of ${weekShort(ws)}: ${total} load · ${sessionTotal} session${sessionTotal === 1 ? "" : "s"}`
+                            : `Week of ${weekShort(ws)}: ${total} session${total === 1 ? "" : "s"}`
+                        }
                       >
-                        <span style={colCount}>{total > 0 ? total : ""}</span>
+                        <span style={colCount}>{total > 0 ? (isLoad ? compactLoad(total) : total) : ""}</span>
                         <span style={track}>
                           {STACK_ORDER.map((d) => {
                             const count = weekDomainCounts[i][d] ?? 0;
@@ -195,6 +235,12 @@ function weekShort(ymd: string): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
+// Compact load number for the cramped per-bar count slot: 1500 → "1.5k".
+function compactLoad(load: number): string {
+  if (load >= 1000) return `${(load / 1000).toFixed(1)}k`;
+  return String(load);
+}
+
 function formatWeekRange(startYmd: string, endYmdExclusive: string): string {
   const endYmd = addDaysYmd(endYmdExclusive, -1);
   const start = new Date(`${startYmd}T00:00:00.000Z`);
@@ -204,6 +250,41 @@ function formatWeekRange(startYmd: string, endYmdExclusive: string): string {
 }
 
 // ── styles ──────────────────────────────────────────────────────────────────
+const topRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const toggleGroup: CSSProperties = {
+  display: "inline-flex",
+  gap: 2,
+  padding: 2,
+  borderRadius: 999,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const toggleBtn: CSSProperties = {
+  minHeight: 28,
+  padding: "4px 12px",
+  borderRadius: 999,
+  border: "none",
+  background: "transparent",
+  color: COLOR.textDim,
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const toggleBtnActive: CSSProperties = {
+  ...toggleBtn,
+  background: "rgba(255,255,255,0.10)",
+  color: COLOR.text,
+};
+
 const legendRow: CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap" };
 const legendItem: CSSProperties = {
   display: "inline-flex",

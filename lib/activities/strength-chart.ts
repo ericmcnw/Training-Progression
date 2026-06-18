@@ -132,6 +132,7 @@ export function buildStrengthChartData(
       // panel and the bar read as one visual.
       seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
       metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}${topSetSuffix}`,
+      load: s.load,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }
