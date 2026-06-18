@@ -33,6 +33,14 @@ export async function setHomeLocation(input: {
   return { ok: true, weather };
 }
 
+// Read-only current conditions for arbitrary coords — powers the home strip's
+// "use current location" override (which never persists; it just reskins the
+// chip until the user reloads or switches back to home).
+export async function getCurrentWeatherAt(lat: number, lng: number): Promise<WeatherSnapshot | null> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return fetchCurrentWeather({ lat, lng });
+}
+
 export async function clearHomeLocation(): Promise<void> {
   const profile = await ensureAppProfile();
   if (!profile) return;

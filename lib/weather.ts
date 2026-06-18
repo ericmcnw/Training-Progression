@@ -144,7 +144,7 @@ export async function fetchCurrentWeather({
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m` +
     `&timezone=GMT&${IMPERIAL}`;
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetch(url, { headers: { Accept: "application/json" }, next: { revalidate: 1800 } });
     if (!res.ok) return null;
     const data = (await res.json()) as {
       current?: {

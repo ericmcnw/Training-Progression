@@ -46,7 +46,7 @@ export default function HomeShell({
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
-      <Last7DaysStrip stats={data.last7Days} />
+      <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
 
       <WeekAtGlance
         days={data.legacyGlanceDays}

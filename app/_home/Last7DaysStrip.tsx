@@ -1,14 +1,26 @@
 import type { CSSProperties } from "react";
 import type { Last7DaysStats } from "./types";
+import type { WeatherSnapshot } from "@/lib/weather";
+import HomeWeatherControl from "./HomeWeatherControl";
 
 // Compact "Last 7 days" snapshot strip. Three big stat cells: session
 // count, total active time, total cardio miles. Sits at the very top of
-// the home dashboard — an at-a-glance view of the rolling week.
-export default function Last7DaysStrip({ stats }: { stats: Last7DaysStats }) {
+// the home dashboard — an at-a-glance view of the rolling week. The eyebrow
+// row also carries the home-base live-weather chip on the right.
+export default function Last7DaysStrip({
+  stats,
+  homeWeather,
+}: {
+  stats: Last7DaysStats;
+  homeWeather: { label: string | null; current: WeatherSnapshot | null };
+}) {
   const minutes = Math.round(stats.totalDurationSec / 60);
   return (
     <section style={shellStyle} aria-label="Last 7 days summary">
-      <div style={eyebrowStyle}>Last 7 days</div>
+      <div style={eyebrowRowStyle}>
+        <div style={eyebrowStyle}>Last 7 days</div>
+        <HomeWeatherControl home={homeWeather.current} homeLabel={homeWeather.label} />
+      </div>
       <div style={gridStyle}>
         <Stat
           value={String(stats.sessions)}
@@ -63,6 +75,13 @@ const shellStyle: CSSProperties = {
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.08)",
   background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+};
+
+const eyebrowRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
 };
 
 const eyebrowStyle: CSSProperties = {

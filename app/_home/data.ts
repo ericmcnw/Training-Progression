@@ -24,7 +24,7 @@ import {
 } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getHomeLocation } from "@/lib/home-location";
-import { fetchDailyWeather, type DailyWeather } from "@/lib/weather";
+import { fetchDailyWeather, fetchCurrentWeather, type DailyWeather, type WeatherSnapshot } from "@/lib/weather";
 import { getMovementPatternData } from "./movement-patterns";
 import type {
   DayTodo,
@@ -176,13 +176,22 @@ export async function getHomeData(): Promise<HomeData> {
       summary: { strong: 0, ok: 0, lacking: 0, absent: 0 },
       headline: "no pattern data yet",
     })),
-    // Ambient home-base weather across the WaG range — one cached forecast
-    // call covers the whole rail. Runs concurrently with the DB queries and
-    // fails soft to {} so the dashboard never blocks on it.
-    (async (): Promise<Record<string, DailyWeather>> => {
+    // Home-base weather: the per-day rail (daily highs) + current conditions
+    // for the live strip chip, plus the home label. One home-location read,
+    // then the two weather calls in parallel. Runs concurrently with the DB
+    // queries and fails soft so the dashboard never blocks on it.
+    (async (): Promise<{
+      daily: Record<string, DailyWeather>;
+      current: WeatherSnapshot | null;
+      label: string | null;
+    }> => {
       const home = await getHomeLocation();
-      if (!home) return {};
-      return fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd });
+      if (!home) return { daily: {}, current: null, label: null };
+      const [daily, current] = await Promise.all([
+        fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd }),
+        fetchCurrentWeather({ lat: home.lat, lng: home.lng }),
+      ]);
+      return { daily, current, label: home.label };
     })(),
   ]);
 
@@ -450,7 +459,7 @@ export async function getHomeData(): Promise<HomeData> {
       }
     }
 
-    const dayWeather = wagWeather[ymd];
+    const dayWeather = wagWeather.daily[ymd];
     legacyGlanceDays.push({
       ymd,
       label: dayLabelOf(ymd),
@@ -760,6 +769,7 @@ export async function getHomeData(): Promise<HomeData> {
       totalDurationSec: last7DurationSec,
       totalCardioMi: last7CardioMi,
     },
+    homeWeather: { label: wagWeather.label, current: wagWeather.current },
   };
 }
 

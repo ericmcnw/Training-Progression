@@ -181,6 +181,9 @@ export type HomeData = {
   quickPickRoutines: QuickPickRoutine[];
   /** Last-7-days totals shown in a compact strip at the top of the dashboard. */
   last7Days: Last7DaysStats;
+  /** Home-base live conditions + label for the strip's weather chip. Current
+   *  is null when no home base is set or the fetch failed. */
+  homeWeather: { label: string | null; current: import("@/lib/weather").WeatherSnapshot | null };
   /** Enabled endurance activity types for the typed-endurance schedule
    *  shortcut in the schedule picker. */
   scheduleActivityTypes: Array<{
