@@ -14,17 +14,22 @@ export function useLearnedEffortPrefill(opts: {
   durationMin?: number | null;
 }): number {
   const { routineId, activityTypeId, durationMin } = opts;
-  const [learned, setLearned] = useState<number | null>(null);
+  // Stamp the fetched value with the activity key it belongs to. While a new
+  // key's fetch is in flight the stamp won't match, so we fall back to the
+  // duration heuristic rather than show a stale activity's learned value —
+  // and we avoid resetting state synchronously inside the effect.
+  const key = activityTypeId ? `t:${activityTypeId}` : routineId ? `r:${routineId}` : "";
+  const [entry, setEntry] = useState<{ key: string; value: number | null } | null>(null);
 
   useEffect(() => {
+    if (!key) return;
     let cancelled = false;
-    setLearned(null);
-    if (!routineId && !activityTypeId) return;
     learnedEffortForActivity({ routineId, activityTypeId })
-      .then((value) => { if (!cancelled) setLearned(value); })
-      .catch(() => { if (!cancelled) setLearned(null); });
+      .then((value) => { if (!cancelled) setEntry({ key, value }); })
+      .catch(() => { if (!cancelled) setEntry({ key, value: null }); });
     return () => { cancelled = true; };
-  }, [routineId, activityTypeId]);
+  }, [key, routineId, activityTypeId]);
 
+  const learned = entry && entry.key === key ? entry.value : null;
   return learned ?? predictEffortDefault(durationMin ?? null);
 }
