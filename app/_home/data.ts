@@ -44,7 +44,7 @@ const HABIT_GRID_DAYS = 30;
 const FREQUENCY_STATE_DAYS = 56;
 const DOMAIN_WEEKS = 8;
 const WAG_WEEKS = 12;       // weeks of history shown in the scrollable WaG rail
-const WAG_FORWARD_DAYS = 3; // extra days past today shown at the right edge
+const WAG_FORWARD_DAYS = 7; // extra days past today shown at the right edge
 
 const DOMAIN_ORDER: DomainTone[] = ["strength", "cardio", "mobility", "sport", "lifestyle"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

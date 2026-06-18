@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { LegacyGlanceDay, QuickPickRoutine } from "./types";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import ViewButton from "@/app/components/ViewButton";
-import { COLOR, RADIUS, cardSurface, cardHeader, cardTitle, cardHint } from "./tokens";
+import { COLOR, cardSurface } from "./tokens";
 import { domainAccent } from "./client-utils";
 import {
   formatRoutineTypeLabel,
@@ -167,11 +167,6 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
 
   return (
     <section style={cardSurface} aria-label="Week at a glance">
-      <header style={cardHeader}>
-        <span style={cardTitle}>Week at a glance</span>
-        <span style={cardHint}>scroll · tap a day →</span>
-      </header>
-
       <div style={navRow}>
         <button
           type="button"
@@ -326,7 +321,6 @@ function DayCard({
           ))
         )}
       </div>
-      <div style={statusLine(status)}>{statusText(status, loggedCount, plannedCount)}</div>
     </button>
   );
 }
@@ -357,18 +351,6 @@ function buildDots(day: LegacyGlanceDay): DotSpec[] {
     result.push({ domain: l.domain, logged: true, routineName: l.routineName });
   }
   return result;
-}
-
-function statusText(
-  status: "done" | "partial" | "plan" | "missed" | "empty",
-  logged: number,
-  planned: number,
-): string {
-  if (status === "done") return "done";
-  if (status === "partial") return `${logged}/${planned || logged}`;
-  if (status === "missed") return "missed";
-  if (status === "plan") return "plan";
-  return "—";
 }
 
 // ───────────────────────────────────────────────────── Detail panel
@@ -619,12 +601,20 @@ function cardShell(
     : isSelected
     ? "rgba(255,255,255,0.32)"
     : "rgba(255,255,255,0.08)";
+  // Precedence: today's gradient and the selection highlight win over the
+  // status tint (both are transient/navigational); below them, status shades
+  // the block — red missed, green done, amber partial — so the day's outcome
+  // reads from color alone now that the status word is gone.
   const bg = isToday
     ? "linear-gradient(180deg, rgba(51,255,122,0.12), rgba(51,255,122,0.025))"
     : isSelected
     ? "rgba(255,255,255,0.06)"
     : status === "missed"
-    ? "rgba(248,113,113,0.04)"
+    ? "rgba(248,113,113,0.05)"
+    : status === "done"
+    ? "rgba(51,255,122,0.06)"
+    : status === "partial"
+    ? "rgba(251,191,36,0.06)"
     : "rgba(255,255,255,0.02)";
   return {
     all: "unset",
@@ -638,6 +628,9 @@ function cardShell(
     background: bg,
     display: "grid",
     gap: 5,
+    // Content bottom-aligned so the freed top of the block is reserved for
+    // the per-day weather chip (Phase 4).
+    alignContent: "end",
     textAlign: "center",
     boxSizing: "border-box",
     boxShadow: isToday ? "0 4px 14px rgba(51,255,122,0.10)" : "none",
@@ -701,22 +694,6 @@ const emptyDot: CSSProperties = {
   background: "rgba(255,255,255,0.10)",
   flexShrink: 0,
 };
-
-function statusLine(status: "done" | "partial" | "plan" | "missed" | "empty"): CSSProperties {
-  const tone =
-    status === "done" ? COLOR.success
-      : status === "partial" ? COLOR.amber
-      : status === "missed" ? COLOR.red
-      : status === "plan" ? COLOR.textDim
-      : COLOR.textFaint;
-  return {
-    fontSize: 10,
-    fontWeight: 800,
-    letterSpacing: 0.3,
-    color: tone,
-    textTransform: "uppercase",
-  };
-}
 
 // detail panel
 const detailShell: CSSProperties = {
