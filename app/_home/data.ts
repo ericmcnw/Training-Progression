@@ -23,6 +23,8 @@ import {
   isRoutineAutoScheduledOnDay,
 } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
+import { getHomeLocation } from "@/lib/home-location";
+import { fetchDailyWeather, type DailyWeather } from "@/lib/weather";
 import { getMovementPatternData } from "./movement-patterns";
 import type {
   DayTodo,
@@ -85,6 +87,7 @@ export async function getHomeData(): Promise<HomeData> {
     planEntriesRaw,
     manualEntriesRaw,
     movementPatterns,
+    wagWeather,
   ] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true },
@@ -173,6 +176,14 @@ export async function getHomeData(): Promise<HomeData> {
       summary: { strong: 0, ok: 0, lacking: 0, absent: 0 },
       headline: "no pattern data yet",
     })),
+    // Ambient home-base weather across the WaG range — one cached forecast
+    // call covers the whole rail. Runs concurrently with the DB queries and
+    // fails soft to {} so the dashboard never blocks on it.
+    (async (): Promise<Record<string, DailyWeather>> => {
+      const home = await getHomeLocation();
+      if (!home) return {};
+      return fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd });
+    })(),
   ]);
 
   const routinesWithTargets = routines.map(routineWithFrequencyTarget);
@@ -468,6 +479,7 @@ export async function getHomeData(): Promise<HomeData> {
           .sort((a, b) => a.routineName.localeCompare(b.routineName))
       : [];
 
+    const dayWeather = wagWeather[ymd];
     legacyGlanceDays.push({
       ymd,
       label: dayLabelOf(ymd),
@@ -475,6 +487,7 @@ export async function getHomeData(): Promise<HomeData> {
       planned,
       logs,
       habitAggregate: { expected: habitExpected, completed: habitCompleted },
+      weather: dayWeather ? { code: dayWeather.code, highF: dayWeather.highF } : undefined,
       todos: todosByYmd.get(ymd) ?? [],
       availableHabits,
     });

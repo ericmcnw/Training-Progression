@@ -17,6 +17,7 @@ import {
   normalizeRoutineKind,
 } from "@/lib/routines";
 import { formatUtcDateLabel } from "@/lib/dates";
+import { describeWeatherCode } from "@/lib/weather";
 import CompletionCheckbox from "@/app/components/dashboard/CompletionCheckbox";
 import CompletionMinutesPill from "@/app/components/dashboard/CompletionMinutesPill";
 import DayTodoList from "@/app/components/dashboard/DayTodoList";
@@ -308,6 +309,12 @@ function DayCard({
       aria-pressed={isSelected}
       aria-label={`${day.label} ${day.dayNumber}`}
     >
+      {day.weather ? (
+        <span style={weatherChip} title={describeWeatherCode(day.weather.code).label}>
+          <span aria-hidden style={weatherEmoji}>{describeWeatherCode(day.weather.code).emoji}</span>
+          <span style={weatherTemp}>{day.weather.highF}°</span>
+        </span>
+      ) : null}
       <div style={dayLabelCol(isToday)}>
         <span style={dayInitial}>{day.label.charAt(0)}</span>
         <span style={dayNumber(isToday)}>{day.dayNumber}</span>
@@ -618,6 +625,7 @@ function cardShell(
     : "rgba(255,255,255,0.02)";
   return {
     all: "unset",
+    position: "relative",
     cursor: "pointer",
     flexShrink: 0,
     width,
@@ -638,6 +646,31 @@ function cardShell(
     transition: "transform 120ms ease, border-color 120ms ease",
   };
 }
+
+// Weather chip — absolutely anchored to the top of the block (the space freed
+// by removing the status word + bottom-aligning content). Ambient home-base
+// daily high; absent when no home base is set.
+const weatherChip: CSSProperties = {
+  position: "absolute",
+  top: 6,
+  left: 0,
+  right: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 2,
+  lineHeight: 1,
+  pointerEvents: "none",
+};
+
+const weatherEmoji: CSSProperties = { fontSize: 11 };
+
+const weatherTemp: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  color: COLOR.textDim,
+  letterSpacing: -0.2,
+};
 
 function dayLabelCol(isToday: boolean): CSSProperties {
   return {

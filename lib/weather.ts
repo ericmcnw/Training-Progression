@@ -175,6 +175,60 @@ export async function fetchCurrentWeather({
   }
 }
 
+export type DailyWeather = { code: number; highF: number; lowF: number };
+
+// Daily high/low + code for a date range at one place. Powers the per-day
+// chips on the home Week-at-a-glance rail. The range stays within Open-Meteo's
+// forecast window (today-92 … today+16), so one call covers the whole rail —
+// no archive needed. Cached ~30 min; returns {} on any failure (home renders
+// weather-less). Keyed by YYYY-MM-DD in the location's local timezone.
+export async function fetchDailyWeather({
+  lat,
+  lng,
+  startYmd,
+  endYmd,
+}: {
+  lat: number;
+  lng: number;
+  startYmd: string;
+  endYmd: string;
+}): Promise<Record<string, DailyWeather>> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
+  const url =
+    `${FORECAST_URL}?latitude=${lat}&longitude=${lng}` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
+    `&start_date=${startYmd}&end_date=${endYmd}&timezone=auto&${IMPERIAL}`;
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 1800 },
+    });
+    if (!res.ok) return {};
+    const data = (await res.json()) as {
+      daily?: {
+        time: string[];
+        weather_code: number[];
+        temperature_2m_max: number[];
+        temperature_2m_min: number[];
+      };
+    };
+    const d = data.daily;
+    if (!d?.time?.length) return {};
+    const out: Record<string, DailyWeather> = {};
+    for (let i = 0; i < d.time.length; i++) {
+      if (d.temperature_2m_max[i] == null) continue;
+      out[d.time[i]] = {
+        code: d.weather_code[i] ?? 0,
+        highF: round(d.temperature_2m_max[i]),
+        lowF: round(d.temperature_2m_min[i] ?? d.temperature_2m_max[i]),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 // WMO weather code → short label + emoji. Reference:
 // https://open-meteo.com/en/docs (WMO Weather interpretation codes).
 export function describeWeatherCode(code: number): { label: string; emoji: string } {

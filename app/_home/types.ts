@@ -46,6 +46,9 @@ export type LegacyGlanceDay = {
     domain: RoutineDomain;
   }>;
   habitAggregate?: { expected: number; completed: number };
+  // Ambient home-base weather for this day (high temp + WMO code) shown as a
+  // chip in the WaG block. Absent when no home base is set or the fetch failed.
+  weather?: { code: number; highF: number };
   todos?: Array<{ id: string; ymd: string; label: string; done: boolean }>;
   // Habit-domain routines that aren't on the schedule for this day but are
   // available to log inline. Populated for today + future only — past days
