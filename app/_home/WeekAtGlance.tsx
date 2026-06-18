@@ -376,7 +376,7 @@ function DetailPanel({
   scheduleSports?: import("./SchedulePicker").ScheduleSport[];
 }) {
   const fullDate = formatUtcDateLabel(day.ymd, { weekday: "long", month: "long", day: "numeric" });
-  const sub = day.ymd === today ? "today" : day.ymd < today ? "past day" : "upcoming";
+  const sub = day.ymd === today ? "Today" : day.ymd < today ? "Past day" : "Upcoming";
   const planned = day.planned;
   const unplannedLogs = day.logs.filter((l) => !planned.some((p) => p.routineId === l.routineId));
   const isFutureDay = day.ymd > today;
@@ -398,10 +398,10 @@ function DetailPanel({
   return (
     <div style={detailShell}>
       <div style={detailHeader}>
-        <div style={detailTitleCol}>
-          <span style={detailTitle}>{fullDate}</span>
-          <span style={detailSub}>{sub}</span>
-        </div>
+        <span style={detailTitle}>
+          {fullDate}
+          <span style={detailSubInline}> · {sub}</span>
+        </span>
         {canSchedule ? (
           <button
             type="button"
@@ -458,7 +458,7 @@ function DetailPanel({
                           isDone={isLogged}
                         />
                       )}
-                      <CompletionCheckbox routineId={item.routineId} ymd={day.ymd} done={isLogged} />
+                      <CompletionCheckbox routineId={item.routineId} ymd={day.ymd} done={isLogged} size={22} />
                     </>
                   ) : showLogButton ? (
                     <DrawerLogButton
@@ -508,7 +508,7 @@ function DetailPanel({
                   </div>
                   <div style={detailRowActions}>
                     {isCompletion && !isFutureDay ? (
-                      <CompletionCheckbox routineId={h.routineId} ymd={day.ymd} done={false} />
+                      <CompletionCheckbox routineId={h.routineId} ymd={day.ymd} done={false} size={22} />
                     ) : (
                       <DrawerLogButton
                         routineId={h.routineId}
@@ -740,29 +740,22 @@ const detailShell: CSSProperties = {
 
 const detailHeader: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
+  alignItems: "center",
   justifyContent: "space-between",
   gap: 10,
 };
 
-const detailTitleCol: CSSProperties = {
-  display: "grid",
-  gap: 2,
-  minWidth: 0,
-};
-
 const detailTitle: CSSProperties = {
+  flex: "1 1 auto",
+  minWidth: 0,
   fontSize: 13,
   fontWeight: 900,
   color: COLOR.text,
 };
 
-const detailSub: CSSProperties = {
-  fontSize: 11,
+const detailSubInline: CSSProperties = {
   fontWeight: 700,
   color: COLOR.textFaint,
-  textTransform: "uppercase",
-  letterSpacing: 0.4,
 };
 
 // Compact pill button — sits next to the date in the panel header. The "+"
@@ -772,24 +765,24 @@ const schedulePillBtn: CSSProperties = {
   all: "unset",
   display: "inline-flex",
   alignItems: "center",
-  gap: 5,
-  padding: "5px 11px 5px 8px",
+  gap: 4,
+  padding: "3px 10px 3px 7px",
   borderRadius: 999,
   border: `1px solid rgba(51,255,122,0.40)`,
   background: COLOR.successSoft,
   color: COLOR.success,
-  fontSize: 11.5,
+  fontSize: 11,
   fontWeight: 900,
   letterSpacing: 0.3,
   textTransform: "uppercase",
   cursor: "pointer",
   flexShrink: 0,
   whiteSpace: "nowrap",
-  minHeight: 28,
+  minHeight: 24,
 };
 
 const schedulePillPlus: CSSProperties = {
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 900,
   lineHeight: 1,
   marginTop: -1,
@@ -813,11 +806,11 @@ function detailRow(isLogged: boolean): CSSProperties {
     gridTemplateColumns: "3px 1fr auto",
     gap: 10,
     alignItems: "center",
-    padding: "8px 10px",
+    padding: "6px 10px",
     borderRadius: 10,
     border: `1px solid ${COLOR.border}`,
     background: isLogged ? "rgba(51,255,122,0.05)" : "rgba(255,255,255,0.02)",
-    minHeight: 44,
+    minHeight: 38,
   };
 }
 
@@ -858,13 +851,14 @@ const logButton: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "6px 14px",
-  borderRadius: 10,
+  padding: "4px 12px",
+  borderRadius: 9,
   border: `1px solid rgba(51,255,122,0.42)`,
   background: COLOR.successSoft,
   color: COLOR.success,
-  fontSize: 12,
+  fontSize: 11.5,
   fontWeight: 900,
+  lineHeight: 1,
   textDecoration: "none",
   letterSpacing: 0.3,
 };
@@ -872,9 +866,10 @@ const logButton: CSSProperties = {
 const viewLink: CSSProperties = {
   fontSize: 11,
   fontWeight: 800,
+  lineHeight: 1,
   color: COLOR.textDim,
   textDecoration: "none",
-  padding: "5px 9px",
+  padding: "4px 9px",
   borderRadius: 8,
   border: `1px solid ${COLOR.border}`,
   background: "rgba(255,255,255,0.04)",
