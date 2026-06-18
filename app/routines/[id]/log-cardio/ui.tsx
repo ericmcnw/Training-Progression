@@ -544,7 +544,7 @@ export default function LogRunForm({
         />
       </FormSection>
 
-      <FormSection title="Effort" description="How hard this felt — powers your training load and body map.">
+      <FormSection title="Effort">
         <EffortSlider
           value={effort}
           predicted={predictedEffort}

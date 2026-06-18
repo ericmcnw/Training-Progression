@@ -91,9 +91,9 @@ export function EffortSlider({
         .${cls}[data-untouched="true"]::-moz-range-thumb { opacity: 0.55; }
       `}</style>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-        <label style={{ fontWeight: 900, fontSize: 15 }}>{label}</label>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+        <label style={{ fontWeight: 900, fontSize: 15, flex: 1, minWidth: 0 }}>{label}</label>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 34, fontWeight: 900, lineHeight: 1, color, opacity: touched ? 1 : 0.6 }}>
             {display}
           </span>
@@ -128,7 +128,7 @@ export function EffortSlider({
               onClick={() => onChange(n)}
               aria-label={`Rate ${n}`}
               style={{
-                minHeight: 36,
+                minHeight: 40,
                 borderRadius: 9,
                 border: active ? `2px solid ${effortColor(n)}` : "1px solid rgba(128,128,128,0.4)",
                 background: active ? `${effortColor(n)}22` : "rgba(128,128,128,0.08)",

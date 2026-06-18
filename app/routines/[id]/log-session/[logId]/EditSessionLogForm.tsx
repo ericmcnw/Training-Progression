@@ -420,7 +420,7 @@ export default function EditSessionLogForm({
         </FormSection>
       ) : null}
 
-      <FormSection title="Effort" description="Rate how hard this felt — updates your training load and body map.">
+      <FormSection title="Effort">
         <EffortSlider
           value={effort}
           predicted={predictEffortDefault(Number(durationMin) > 0 ? Number(durationMin) : null)}

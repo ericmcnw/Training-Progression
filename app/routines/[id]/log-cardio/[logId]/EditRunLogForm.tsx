@@ -349,7 +349,7 @@ export default function EditRunLogForm({
         </Field>
       </FormSection>
 
-      <FormSection title="Effort" description="Rate how hard this felt — updates your training load and body map.">
+      <FormSection title="Effort">
         <EffortSlider value={effort} predicted={predictedEffort} onChange={setEffort} />
       </FormSection>
 

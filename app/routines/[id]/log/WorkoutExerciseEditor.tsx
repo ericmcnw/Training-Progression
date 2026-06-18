@@ -945,7 +945,7 @@ export default function WorkoutExerciseEditor({
       )}
 
 
-      <FormSection title="Effort" description="How hard this session felt — powers your training load and body map.">
+      <FormSection title="Effort">
         <EffortSlider
           value={effort}
           predicted={predictedEffort}
