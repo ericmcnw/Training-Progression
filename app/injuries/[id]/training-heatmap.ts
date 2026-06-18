@@ -15,7 +15,10 @@ import {
 } from "@/app/progress/coverage";
 import { getWeekBoundsSunday } from "@/lib/week";
 
-const WEEKS = 8;
+// Full width of the pre-cached coverage range. The injury page crops this to
+// the injury's own window (since start, capped here) so the load bars share a
+// date axis with the pain trend.
+const WEEKS = 12;
 const RECENT_WEEKS = 4;
 
 // Habit-domain logs aren't training load (they're checkbox completions like
@@ -92,8 +95,7 @@ export type InjuryHeatmapData = {
 export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Promise<InjuryHeatmapData> {
   if (metadataGroupSlugs.length === 0) return { weekStarts: [], categories: [] };
 
-  // 12w is the widest pre-cached range; we take the most recent 8 weeks
-  // out of it so this call shares the existing cache slot.
+  // 12w is the widest pre-cached range — use it whole and share the cache slot.
   const overview = await getCoverageOverviewModel("12w");
   const muscleSection = overview.sections.find((s) => s.lens === "muscles");
   const sportsSection = overview.sections.find((s) => s.lens === "sports");

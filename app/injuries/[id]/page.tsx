@@ -6,9 +6,10 @@ import InjuryForm from "@/app/components/injuries/InjuryForm";
 import LogPainButton from "@/app/components/injuries/LogPainButton";
 import DeletePainLogButton from "@/app/components/injuries/DeletePainLogButton";
 import EditPainLogButton from "@/app/components/injuries/EditPainLogButton";
-import PainTrendLine, { type PainTrendPoint } from "@/app/components/injuries/PainTrendLine";
+import { type PainTrendPoint } from "@/app/components/injuries/PainTrendLine";
 import InjuryTrainingLoad from "@/app/components/injuries/InjuryTrainingLoad";
 import { getInjuryTrainingHeatmap } from "./training-heatmap";
+import { getWeekBoundsSunday } from "@/lib/week";
 import PageShell from "@/app/components/PageShell";
 import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjury, updateInjury, getAggravatingFactorSuggestions } from "../actions";
@@ -190,6 +191,9 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 
   const startedYmd = toAppYmd(injury.startedAt);
   const today = todayAppYmd();
+  // Pain + load share this window: the Sunday of the injury's first week,
+  // naturally capped to the 12-week cache by the timeline component.
+  const loadWindowStartYmd = getWeekBoundsSunday(injury.startedAt).startYmd;
   const trendPoints = dailyPainPeaks(painLogs);
   const baselineMedian = median(painLogs.map((l) => l.level));
   const factorCorrelations = buildFactorCorrelations(painLogs);
@@ -254,10 +258,10 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
         <InjuryStatusButtons id={injury.id} />
       </section>
 
-      {/* ── Pain trend ───────────────────────────────────────────────────── */}
+      {/* ── Pain + training load (shared timeline) ───────────────────────── */}
       <section style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <div style={cardTitle}>Pain trend</div>
+          <div style={cardTitle}>Pain &amp; training load</div>
           {painLogs.length > 0 && (
             <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>{painLogs.length} log{painLogs.length === 1 ? "" : "s"}</div>
           )}
@@ -269,7 +273,11 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
             <PainStat label="Peak" value={peakPainLevel} />
           </div>
         )}
-        <PainTrendLine trend={trendPoints} size="lg" />
+        <InjuryTrainingLoad
+          data={trainingHeatmap}
+          painPoints={trendPoints}
+          windowStartYmd={loadWindowStartYmd}
+        />
       </section>
 
       {/* ── What aggravates it ───────────────────────────────────────────── */}
@@ -381,15 +389,6 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
             ))}
           </div>
         )}
-      </section>
-
-      {/* ── Training load ────────────────────────────────────────────────── */}
-      <section style={panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <div style={cardTitle}>Training load on affected muscle group{affectedMuscleSlugs.length === 1 ? "" : "s"}</div>
-          <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700 }}>last 8 weeks</div>
-        </div>
-        <InjuryTrainingLoad data={trainingHeatmap} />
       </section>
 
       {/* ── Edit (collapsed) ─────────────────────────────────────────────── */}
