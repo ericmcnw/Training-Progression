@@ -16,6 +16,7 @@ import {
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getAppSession } from "@/lib/auth";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
+import { getHomeLocation } from "@/lib/home-location";
 import { getActivityEntry } from "@/lib/activity-families";
 import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
@@ -102,13 +103,14 @@ export default async function ManualLogPageContent({
 
   // Profile-view-only data: lifetime stats + milestones + sport settings.
   // Skipped on the history view since none of it renders there.
-  const [profileStats, selectedSportsRaw, availableSports, session] = showHistory
-    ? [null, [], [], null]
+  const [profileStats, selectedSportsRaw, availableSports, session, homeLocation] = showHistory
+    ? [null, [], [], null, null]
     : await Promise.all([
         loadProfileStats(todayYmd),
         listSelectedSports(),
         listUnselectedSports(),
         getAppSession(),
+        getHomeLocation(),
       ]);
   const selectedSports = selectedSportsRaw.map((s) => ({
     slug: s.slug,
@@ -259,6 +261,7 @@ export default async function ManualLogPageContent({
               availableSports={availableSports}
               authMode={session?.mode ?? "single-user-dev"}
               isAuthenticated={session?.isAuthenticated ?? false}
+              homeLocation={homeLocation}
             />
           </div>
         </section>

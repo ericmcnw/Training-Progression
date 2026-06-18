@@ -687,6 +687,14 @@ model RoutineLog {
   //       ballCount?, notes? }> } }
   sportData Json?
 
+  // Weather snapshot captured at save time for outdoor-eligible logs (sport
+  // + endurance). Permanent point-in-time record so it never changes if the
+  // provider is swapped later. Shape: lib/weather.ts WeatherSnapshot
+  //   { tempF, feelsLikeF, code, windMph, precipIn, humidity, lat, lng,
+  //     source, fetchedAt }. Null for logs without coords, indoor strength/
+  //     mobility logs, and anything logged before this landed.
+  weather Json?
+
   routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
   climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)
   activitySpot  ActivitySpot?  @relation(fields: [activitySpotId], references: [id], onDelete: SetNull)
@@ -996,6 +1004,12 @@ model AppProfile {
   id                         String   @id @default(cuid())
   key                        String   @unique @default("default")
   selectedStimulusPresetKeys String[] @default([])
+  // Home base — default location for weather when a log has no picked spot,
+  // and the anchor for the home-page live-conditions widget + per-day WaG
+  // chips. Null until the user sets it in profile settings.
+  homeLat                    Float?
+  homeLng                    Float?
+  homeLabel                  String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 

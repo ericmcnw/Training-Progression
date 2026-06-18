@@ -4,6 +4,8 @@ import SportsAddButton, {
   type AvailableSport,
   type SelectedSportLite,
 } from "@/app/routines/SportsAddButton";
+import HomeLocationSetting from "@/app/profile/HomeLocationSetting";
+import type { HomeLocation } from "@/lib/home-location";
 
 // Profile settings card.
 //   • Account — reflects the lib/auth session seam. Inert until a provider is
@@ -19,11 +21,13 @@ export default function ProfileSettings({
   availableSports,
   authMode,
   isAuthenticated,
+  homeLocation,
 }: {
   selectedSports: SelectedSportLite[];
   availableSports: AvailableSport[];
   authMode: string;
   isAuthenticated: boolean;
+  homeLocation: HomeLocation | null;
 }) {
   const authProviderConfigured = authMode === "authenticated";
 
@@ -69,6 +73,8 @@ export default function ProfileSettings({
           <span style={segmentStyle}>Metric</span>
         </div>
       </div>
+
+      <HomeLocationSetting initial={homeLocation} />
 
       <div style={rowStyle}>
         <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
