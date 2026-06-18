@@ -55,8 +55,6 @@ export default function WeeklyEffortChart({
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [openLog, setOpenLog] = useState<OpenLog>(null);
 
-  const colorByLabel = useMemo(() => new Map(series.map((s) => [s.label, s.color])), [series]);
-
   const lensLabel = (l: Lens) =>
     l === "magnitude" ? magnitude!.label : l === "bars" ? "Sessions" : "Effort";
 
@@ -106,13 +104,15 @@ export default function WeeklyEffortChart({
           onSelectWeek={(i) => setSelectedWeek((p) => (p === i ? null : i))}
         />
       ) : (
-        <EffortBars
+        <StackedWeeklyBarChart
+          title=""
           weekLabels={weekLabels}
-          seriesOrder={series.map((s) => s.label)}
-          colorByLabel={colorByLabel}
-          sessionsByWeek={sessionsByWeek}
-          selectedWeek={selectedWeek}
-          onSelectWeek={(i) => setSelectedWeek((p) => (p === i ? null : i))}
+          series={series}
+          unit=""
+          decimals={0}
+          compact={compact}
+          hideTooltip
+          onPinnedWeekChange={setSelectedWeek}
         />
       )}
 
@@ -125,99 +125,6 @@ export default function WeeklyEffortChart({
         />
       ) : null}
       <LogDetailPopover open={openLog} onClose={() => setOpenLog(null)} />
-    </div>
-  );
-}
-
-// ── B2: per-session slivers, hue = series, shade = effort, peak cap ──────────
-function EffortBars({
-  weekLabels,
-  seriesOrder,
-  colorByLabel,
-  sessionsByWeek,
-  selectedWeek,
-  onSelectWeek,
-}: {
-  weekLabels: string[];
-  seriesOrder: string[];
-  colorByLabel: Map<string, string>;
-  sessionsByWeek: SessionsByWeek;
-  selectedWeek: number | null;
-  onSelectWeek: (i: number) => void;
-}) {
-  const orderIdx = (label: string) => {
-    const i = seriesOrder.indexOf(label);
-    return i < 0 ? seriesOrder.length : i;
-  };
-  const yMax = niceMax(Math.max(1, ...sessionsByWeek.map((wk) => wk.length)));
-  const TRACK_H = 116;
-  const stride = weekLabels.length > 10 ? 3 : weekLabels.length > 6 ? 2 : 1;
-
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <div style={barsTrackRow}>
-        <div style={yAxisCol} aria-hidden>
-          <span style={yTick}>{yMax}</span>
-          <span style={yTick}>0</span>
-        </div>
-        <div style={{ ...barsTrack, height: TRACK_H }}>
-          {weekLabels.map((wk, wi) => {
-            // Rated sessions stack on top (hue × effort); unrated go to the
-            // bottom as neutral grey so "happened but not rated" reads clearly.
-            const ws = (sessionsByWeek[wi] ?? [])
-              .slice()
-              .sort((a, b) => {
-                const ar = a.effort == null ? 1 : 0;
-                const br = b.effort == null ? 1 : 0;
-                return ar - br || orderIdx(a.seriesLabel) - orderIdx(b.seriesLabel) || (a.effort ?? 0) - (b.effort ?? 0);
-              });
-            const isSel = selectedWeek === wi;
-            return (
-              <button
-                key={wi}
-                type="button"
-                className="swbcBar"
-                aria-label={`Week ${wk}: ${ws.length} session${ws.length === 1 ? "" : "s"}`}
-                aria-pressed={isSel}
-                onClick={() => onSelectWeek(wi)}
-                style={{ ...barCol, ...(isSel ? barColSel : null) }}
-              >
-                <div style={barStack}>
-                  {ws.map((s) => {
-                    const rated = s.effort != null;
-                    return (
-                      <div
-                        key={s.id}
-                        style={{
-                          height: Math.max(2, (1 / yMax) * TRACK_H),
-                          borderRadius: 1.5,
-                          background: rated
-                            ? shadeByEffort(colorByLabel.get(s.seriesLabel) ?? "rgba(148,163,184,0.9)", s.effort as number)
-                            : "rgba(148,163,184,0.2)",
-                          ...(rated ? null : { outline: "1px dashed rgba(148,163,184,0.45)", outlineOffset: -1 }),
-                          opacity: isSel || selectedWeek === null ? 1 : 0.5,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div style={xAxisRow} aria-hidden>
-        <div style={{ minWidth: 20 }} />
-        <div style={xAxisLabels}>
-          {weekLabels.map((wk, wi) => {
-            const show = wi % stride === 0 || wi === weekLabels.length - 1;
-            return <span key={wi} style={xTick}>{show ? shortLabel(wk) : ""}</span>;
-          })}
-        </div>
-      </div>
-      <div style={effortLegendRow}>
-        <span style={{ opacity: 0.55 }}>Lighter = easier · solid = harder · grey = not rated</span>
-      </div>
     </div>
   );
 }
@@ -415,27 +322,9 @@ function buildOpenLog(session: WeekSession): OpenLog {
     label: session.seriesLabel,
   };
 }
-function niceMax(v: number) {
-  if (v <= 4) return Math.max(1, v);
-  if (v <= 6) return 6;
-  if (v <= 8) return 8;
-  if (v <= 10) return 10;
-  return Math.ceil(v / 5) * 5;
-}
 function shortLabel(label: string) {
   const i = label.indexOf("-");
   return i > 0 ? label.slice(0, i) : label;
-}
-function parseRgb(rgba: string): { r: number; g: number; b: number } {
-  const m = rgba.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 148, g: 163, b: 184 };
-}
-// Series hue, alpha scaled by effort — easy sessions read translucent, hard
-// ones solid. Only ever called with a real rating (unrated render grey).
-function shadeByEffort(rgba: string, effort: number): string {
-  const { r, g, b } = parseRgb(rgba);
-  const alpha = 0.4 + 0.6 * (clampEffort(effort) / 10);
-  return `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
 }
 
 // ── styles ───────────────────────────────────────────────────────────────────
@@ -463,15 +352,10 @@ const lensBtnActive: CSSProperties = { ...lensBtn, background: "rgba(255,255,255
 const barsTrackRow: CSSProperties = { display: "flex", gap: 6, alignItems: "stretch", minWidth: 0 };
 const yAxisCol: CSSProperties = { display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "flex-end", minWidth: 20, paddingRight: 4, borderRight: "1px dashed rgba(255,255,255,0.10)" };
 const yTick: CSSProperties = { fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", lineHeight: 1 };
-const barsTrack: CSSProperties = { flex: 1, display: "flex", gap: 4, alignItems: "stretch", minWidth: 0 };
-const barCol: CSSProperties = { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "0 2px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, appearance: "none", overflow: "hidden" };
-const barColSel: CSSProperties = { boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.28)" };
-const barStack: CSSProperties = { display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "stretch", gap: 1, width: "100%", minHeight: 0 };
 
 const xAxisRow: CSSProperties = { display: "flex", gap: 6, alignItems: "stretch", minWidth: 0 };
 const xAxisLabels: CSSProperties = { flex: 1, display: "flex", gap: 4, minWidth: 0 };
 const xTick: CSSProperties = { flex: "1 1 0", minWidth: 0, textAlign: "center", fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap", overflow: "hidden" };
-const effortLegendRow: CSSProperties = { display: "flex", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)" };
 
 const legendRow: CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", paddingTop: 4 };
 const legendItem: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 800, opacity: 0.7 };
