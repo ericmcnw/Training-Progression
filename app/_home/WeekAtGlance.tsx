@@ -316,7 +316,7 @@ function DayCard({
         </span>
       ) : null}
       <div style={dayLabelCol(isToday)}>
-        <span style={dayInitial}>{day.label.charAt(0)}</span>
+        <span style={dayInitial}>{day.label}</span>
         <span style={dayNumber(isToday)}>{day.dayNumber}</span>
       </div>
       <div style={dotsRow}>
@@ -682,9 +682,9 @@ function dayLabelCol(isToday: boolean): CSSProperties {
 }
 
 const dayInitial: CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 800,
-  letterSpacing: 0.6,
+  letterSpacing: 0.4,
   textTransform: "uppercase",
   opacity: 0.78,
 };
