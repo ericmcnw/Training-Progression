@@ -210,6 +210,7 @@ export async function loadSportsChartData(now = new Date()): Promise<SportsChart
         seriesColor: "rgba(255,255,255,0.4)", // resolved below
         metricFormatted: log.durationSec ? formatDuration(log.durationSec) : "1 session",
         load: sessionLoad(log.effort, log.durationSec),
+        loadEstimated: log.effort == null,
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

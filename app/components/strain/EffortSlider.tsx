@@ -170,7 +170,7 @@ export function EffortSlider({
         <div style={{ fontSize: 13, opacity: 0.9 }}>{effortAnchor(display)}</div>
         {!touched ? (
           <div style={{ fontSize: 12, opacity: 0.6 }}>
-            {hint ?? "Tap or drag to rate — we pre-filled a guess."}
+            {hint ?? "Estimate — tap or drag to set your rating. Left unrated, this stays a guess."}
           </div>
         ) : null}
       </div>

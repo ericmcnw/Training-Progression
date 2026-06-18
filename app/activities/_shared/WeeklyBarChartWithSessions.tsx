@@ -29,6 +29,10 @@ export type WeekSession = {
    *  session, the chart shows a Sessions⇄Load toggle and the panel rows
    *  surface a load badge. Absent for surfaces with no effort capture. */
   load?: number;
+  /** True when `load` was computed from an ESTIMATED effort (the session
+   *  was never rated). The badge marks these so a guess never reads as a
+   *  real rating. */
+  loadEstimated?: boolean;
 };
 
 // `sessionsByWeek[i]` = sessions that contributed to week index `i`
@@ -326,7 +330,12 @@ function SessionRow({ session, onSelect }: { session: WeekSession; onSelect: () 
       <span style={rowRoutineStyle}>{session.routineName}</span>
       <span style={rowMetricStyle}>{session.metricFormatted}</span>
       {session.load != null ? (
-        <span style={rowLoadBadge}>{Math.round(session.load)}</span>
+        <span
+          style={session.loadEstimated ? rowLoadBadgeEst : rowLoadBadge}
+          title={session.loadEstimated ? "Estimated load — this session isn't rated yet" : "Training load"}
+        >
+          {session.loadEstimated ? "~" : ""}{Math.round(session.load)}
+        </span>
       ) : null}
       <span style={rowCaretStyle}>›</span>
     </button>
@@ -564,4 +573,13 @@ const rowLoadBadge: CSSProperties = {
   background: "rgba(251,146,60,0.1)",
   color: "rgba(251,146,60,0.95)",
   fontVariantNumeric: "tabular-nums",
+};
+
+// Estimated-load variant — muted + dashed so a guess never reads as a
+// real rating (the "~" prefix reinforces it).
+const rowLoadBadgeEst: CSSProperties = {
+  ...rowLoadBadge,
+  border: "1px dashed rgba(148,163,184,0.45)",
+  background: "rgba(148,163,184,0.08)",
+  color: "rgba(148,163,184,0.9)",
 };

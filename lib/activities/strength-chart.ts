@@ -133,6 +133,7 @@ export function buildStrengthChartData(
       seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
       metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}${topSetSuffix}`,
       load: s.load,
+      loadEstimated: s.loadEstimated,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }

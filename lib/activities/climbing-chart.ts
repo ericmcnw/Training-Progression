@@ -206,6 +206,7 @@ export function buildClimbingChartData(
       seriesColor: group.color,
       metricFormatted: "",
       load: sessionLoad(s.effort, s.durationSec),
+      loadEstimated: s.effort == null,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }
@@ -288,6 +289,7 @@ export function buildClimbingTrainingChartData(
       seriesColor: domainColor(domain),
       metricFormatted,
       load: sessionLoad(t.effort, t.durationSec),
+      loadEstimated: t.effort == null,
       href: `/routines/${t.routineId}/logs/${t.id}/details`,
     });
   }

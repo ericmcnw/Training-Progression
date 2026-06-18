@@ -208,6 +208,7 @@ export async function loadEnduranceChartData(input?: {
         seriesColor: "rgba(255,255,255,0.4)", // placeholder — resolved below
         metricFormatted,
         load: sessionLoad(log.effort, log.durationSec, log.distanceMi),
+        loadEstimated: log.effort == null,
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

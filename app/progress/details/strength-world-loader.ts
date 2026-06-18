@@ -79,6 +79,8 @@ export type StrengthSessionStat = {
   topSet: { exerciseName: string; weight: number; reps: number } | null;
   /** Training load (effort × duration, convex) for the chart's Load view. */
   load?: number;
+  /** True when load came from an estimated (unrated) effort. */
+  loadEstimated?: boolean;
 };
 
 export type StrengthWorldData = {
@@ -158,11 +160,13 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
   const sessionDates: Date[] = [];
   // RPE-based training load per session for the chart's Load view.
   const loadByLogId = new Map<string, number>();
+  const estimatedByLogId = new Set<string>();
 
   for (const log of strengthLogs) {
     totalSessions += 1;
     sessionDates.push(log.performedAt);
     loadByLogId.set(log.id, sessionLoad(log.effort, log.durationSec));
+    if (log.effort == null) estimatedByLogId.add(log.id);
 
     let logSets = 0;
     let logVolume = 0;
@@ -303,6 +307,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     volume: s.totalVolume,
     topSet: s.topSet,
     load: loadByLogId.get(s.id),
+    loadEstimated: estimatedByLogId.has(s.id),
   }));
 
   const recentSessions = recentSessionList
