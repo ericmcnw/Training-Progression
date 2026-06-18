@@ -112,6 +112,7 @@ export default async function EditRoutineLogPage(props: {
               initialSpot={data.initialSpot}
               initialClimbAttempts={data.initialClimbAttempts}
               climbDefaultDiscipline={data.climbDefaultDiscipline}
+              initialEffort={data.initialEffort}
             />
           ) : data.kind === "SPORT" ? (
             <EditSportLogForm
@@ -125,6 +126,7 @@ export default async function EditRoutineLogPage(props: {
               savedSpots={data.savedSpots}
               activitySlug={data.activitySlug}
               sportData={data.sportData}
+              initialEffort={data.initialEffort}
               returnTo={returnTo}
             />
           ) : (

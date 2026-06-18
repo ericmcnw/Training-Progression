@@ -7,6 +7,8 @@ import SportLogModal from "./SportLogModal";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
+import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import { predictEffortDefault } from "@/lib/strain";
 
 // Rich golf log sheet. Two modes — COURSE (per-hole detail) and
 // RANGE (per-club shot detail) — sharing the same session header
@@ -61,6 +63,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
   const [duration, setDuration] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [effort, setEffort] = useState<number | null>(null);
 
   // COURSE mode state
   // Spot picker — replaces the prior free-text courseName field.
@@ -151,6 +154,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             durationMinutes: minutes,
             notes: sessionNotes.trim() || undefined,
             spotValue,
+            effort,
             holes: holes.map((h) => ({
               number: h.number,
               par: h.par.trim() === "" ? undefined : Number(h.par),
@@ -167,6 +171,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             durationMinutes: minutes,
             notes: sessionNotes.trim() || undefined,
             spotValue,
+            effort,
             ballCount: ballCount.trim() === "" ? undefined : Number(ballCount),
             shots: validShots.map((s) => ({
               club: s.club.trim(),
@@ -398,6 +403,15 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
               />
             </label>
             <div />
+          </div>
+
+          <div style={fieldGroup}>
+            <span style={fieldGroupLabel}>Effort</span>
+            <EffortSlider
+              value={effort}
+              predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+              onChange={setEffort}
+            />
           </div>
 
           <label style={fieldLabel}>

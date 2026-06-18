@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureSportSelected, getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 import { normalizeSpotName } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import { clampEffort } from "@/lib/strain";
 
 // Server action for golf logging. Persists session-level fields on
 // RoutineLog (performedAt, durationSec, notes) + the round detail as
@@ -34,6 +35,8 @@ export type GolfLogInput = {
   /** Spot picker value — tied to the ActivitySpot library for golf
    *  ("course" noun). Same mapping/recents UX as other sports. */
   spotValue?: SpotPickerValue;
+  /** Perceived effort 1-10 (RPE). null/omitted = unrated. */
+  effort?: number | null;
 } & (
   | {
       mode: "COURSE";
@@ -108,6 +111,7 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
       durationSec: durationSec ?? undefined,
       notes: input.notes?.trim() || undefined,
       location: spotResolved.displayLocation ?? undefined,
+      effort: input.effort != null ? clampEffort(input.effort) : null,
       activitySpotId: spotResolved.activitySpotId ?? undefined,
       sportData,
     },
@@ -180,6 +184,7 @@ export async function updateGolfLogAction(
       performedAt,
       durationSec,
       notes: input.notes?.trim() || null,
+      effort: input.effort == null ? null : clampEffort(input.effort),
       location: spotResolved.displayLocation,
       activitySpotId: spotResolved.activitySpotId,
       // Explicit null so a previously-set climbLocationId (e.g. the

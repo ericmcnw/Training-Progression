@@ -29,6 +29,7 @@ import {
 } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { personExtraKeys } from "@/app/routines/sportLogConfig";
+import { clampEffort } from "@/lib/strain";
 
 // Shared pool of people you've logged with/against, gathered from every
 // sport log's person-typed extras (+ legacy free-text opponent fields).
@@ -89,6 +90,9 @@ export type LogSportInput = {
    *  conditions, etc.). Shape varies per sport. Stored verbatim
    *  inside RoutineLog.sportData under `extras`. */
   extras?: Record<string, string | number | undefined>;
+  /** Perceived effort 1-10 (RPE). null/omitted = unrated; estimated
+   *  downstream by the strain model. */
+  effort?: number | null;
 };
 
 // Server-side: resolve a SpotPickerValue into the right FK + display
@@ -363,6 +367,7 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
       durationSec: durationSec ?? undefined,
       notes: input.notes?.trim() || undefined,
       location: spotResolved.displayLocation ?? undefined,
+      effort: input.effort != null ? clampEffort(input.effort) : null,
       activitySpotId: spotResolved.activitySpotId ?? undefined,
       climbLocationId: spotResolved.climbLocationId ?? undefined,
       sportData,
@@ -390,6 +395,8 @@ export async function updateSportLogAction(input: {
   sessionType?: string;
   extras?: Record<string, string | number | undefined>;
   sportSlug: string;
+  /** Perceived effort 1-10, or null to clear. Backfillable on edit. */
+  effort?: number | null;
 }): Promise<void> {
   const performedAt = new Date(input.performedAtIso);
   if (Number.isNaN(performedAt.getTime())) {
@@ -427,6 +434,7 @@ export async function updateSportLogAction(input: {
       performedAt,
       durationSec,
       notes: input.notes?.trim() || null,
+      effort: input.effort == null ? null : clampEffort(input.effort),
       location: spotResolved.displayLocation,
       activitySpotId: spotResolved.activitySpotId,
       // Explicit (not undefined) so a previously-set link gets

@@ -188,6 +188,8 @@ export type EditSessionData = {
   // for the per-climb stage when the form opens in per-climb mode but
   // has no attempts to anchor on.
   climbDefaultDiscipline: ClimbingDiscipline | null;
+  /** Stored perceived effort 1-10, or null if never rated. Backfillable. */
+  initialEffort: number | null;
 };
 
 export type EditCompletionData = {
@@ -657,6 +659,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       initialSpot: initialEditSpot,
       initialClimbAttempts,
       climbDefaultDiscipline,
+      initialEffort: log.effort ?? null,
     };
   }
 

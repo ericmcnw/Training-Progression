@@ -22,6 +22,8 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import { predictEffortDefault } from "@/lib/strain";
 
 // Synthetic SpotPicker config for climbing. getActivitySpotConfig() returns
 // null for climbing (its spots live in ClimbLocation, not ActivitySpot), but
@@ -113,6 +115,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
   const [duration, setDuration] = useState("");
   const [notes, setNotes] = useState("");
+  const [effort, setEffort] = useState<number | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
 
   // Location — a single SpotPicker value: search any saved ClimbLocation,
@@ -265,6 +268,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
           performedAtIso: new Date(ms).toISOString(),
           durationMinutes: minutes,
           notes: notes.trim() || undefined,
+          effort,
           ...locationParams,
           attempts: validAttempts.map((a) => {
             const triesNum =
@@ -490,6 +494,15 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               />
             </label>
             <div />
+          </div>
+
+          <div style={fieldGroup}>
+            <span style={fieldGroupLabel}>Effort</span>
+            <EffortSlider
+              value={effort}
+              predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+              onChange={setEffort}
+            />
           </div>
 
           <label style={fieldLabel}>

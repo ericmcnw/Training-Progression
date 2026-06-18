@@ -98,6 +98,8 @@ export type ClimbLogInput = {
   performedAtIso: string;
   durationMinutes?: number;
   notes?: string;
+  /** Perceived effort 1-10 (RPE) — session-level. null/omitted = unrated. */
+  effort?: number | null;
   /** Either pick an existing location… */
   climbLocationId?: string;
   /** …or create a new one inline. Both name and type required for new.
@@ -156,6 +158,7 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
     performedAtLocal: toLocalDateTimeString(performedAt),
     durationSec: input.durationMinutes ? Math.round(input.durationMinutes * 60) : null,
     notes: input.notes?.trim() || undefined,
+    effort: input.effort ?? null,
     climbLocationId: input.climbLocationId,
     newClimbLocationName: input.newLocationName?.trim() || undefined,
     newClimbLocationType: input.newLocationType,

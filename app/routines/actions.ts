@@ -2541,6 +2541,8 @@ export async function logSession(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  /** Perceived effort 1-10 (RPE) — session-level. null/omitted = unrated. */
+  effort?: number | null;
   zoneTags?: ZoneTagInput;
   painCheck?: PainCheckInput;
 }) {
@@ -2608,6 +2610,7 @@ export async function logSession(params: {
         durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
+        effort: params.effort != null ? clampEffort(params.effort) : null,
         climbLocationId: split.climbLocationId,
         activitySpotId: split.activitySpotId,
       },
@@ -3049,6 +3052,8 @@ export async function updateSessionLog(params: {
   newActivitySpotLongitude?: number | null;
   newActivitySpotOsmType?: string | null;
   newActivitySpotOsmId?: string | null;
+  /** Perceived effort 1-10, or null to clear. Omit to leave unchanged. */
+  effort?: number | null;
 }) {
   await ensureRoutineKind(params.routineId, "SESSION");
   if (!params.logId) throw new Error("Missing logId.");
@@ -3143,6 +3148,9 @@ export async function updateSessionLog(params: {
         durationSec: params.durationSec ?? null,
         location: params.location?.trim() || null,
         notes: params.notes?.trim() || null,
+        ...(params.effort !== undefined
+          ? { effort: params.effort == null ? null : clampEffort(params.effort) }
+          : {}),
         ...(hasSpotParams
           ? {
               climbLocationId: nextClimbLocationId,

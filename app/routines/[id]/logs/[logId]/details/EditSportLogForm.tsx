@@ -25,6 +25,8 @@ import { listSportPeople, updateSportLogAction } from "@/app/log/sport-actions";
 import { updateGolfLogAction } from "@/app/log/golf-log-actions";
 import { getSportLogConfig, isExtraVisible } from "@/app/routines/sportLogConfig";
 import SportExtraControl from "@/app/routines/sportExtraControl";
+import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import { predictEffortDefault } from "@/lib/strain";
 
 type CommonProps = {
   routineId: string;
@@ -38,6 +40,8 @@ type CommonProps = {
   activitySlug: string | null;
   /** Raw RoutineLog.sportData — parsed per-sport. */
   sportData: unknown;
+  /** Stored perceived effort 1-10, or null if never rated. Backfillable. */
+  initialEffort: number | null;
   returnTo: string;
   /** Drawer-mounted callers override navigation: onComplete closes
    *  the drawer + refreshes the dashboard instead of routing to
@@ -137,6 +141,7 @@ function EditGolfLog({
   initialSpot,
   savedSpots,
   sportData,
+  initialEffort,
   returnTo,
   onComplete,
   onCancel,
@@ -146,6 +151,7 @@ function EditGolfLog({
   const [performedAt, setPerformedAt] = useState(formatLocal(initialPerformedAt));
   const [duration, setDuration] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [notes, setNotes] = useState(initialNotes);
+  const [effort, setEffort] = useState<number | null>(initialEffort);
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
   const [mode, setMode] = useState<GolfMode>(parsed.mode);
   const [holes, setHoles] = useState<EditGolfHole[]>(parsed.holes);
@@ -183,6 +189,7 @@ function EditGolfLog({
             durationMinutes: minutes,
             notes: notes.trim() || undefined,
             spotValue: spot,
+            effort,
             holes: holes.map((h) => ({
               number: h.number,
               par: h.par.trim() === "" ? undefined : Number(h.par),
@@ -200,6 +207,7 @@ function EditGolfLog({
             durationMinutes: minutes,
             notes: notes.trim() || undefined,
             spotValue: spot,
+            effort,
             ballCount: ballCount.trim() === "" ? undefined : Number(ballCount),
             shots: validShots.map((s) => ({
               club: s.club.trim(),
@@ -387,6 +395,15 @@ function EditGolfLog({
         />
       </Field>
 
+      <div style={fieldGroup}>
+        <span style={effortLabelStyle}>Effort</span>
+        <EffortSlider
+          value={effort}
+          predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+          onChange={setEffort}
+        />
+      </div>
+
       <Field label="Notes">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={textareaStyle} />
       </Field>
@@ -433,6 +450,7 @@ function EditGenericSport({
   initialSpot,
   savedSpots,
   sportData,
+  initialEffort,
   returnTo,
   onComplete,
   onCancel,
@@ -445,6 +463,7 @@ function EditGenericSport({
   const [performedAt, setPerformedAt] = useState(formatLocal(initialPerformedAt));
   const [duration, setDuration] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [notes, setNotes] = useState(initialNotes);
+  const [effort, setEffort] = useState<number | null>(initialEffort);
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
   const [sessionType, setSessionType] = useState(parsed.sessionType);
   const [extras, setExtras] = useState<GenericSportExtras>(parsed.extras);
@@ -490,6 +509,7 @@ function EditGenericSport({
           spotValue: spot,
           sessionType: sessionType.trim() || undefined,
           extras: extrasOut,
+          effort,
         });
         if (onComplete) {
           onComplete();
@@ -568,6 +588,15 @@ function EditGenericSport({
         </div>
       ) : null}
 
+      <div style={fieldGroup}>
+        <span style={effortLabelStyle}>Effort</span>
+        <EffortSlider
+          value={effort}
+          predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+          onChange={setEffort}
+        />
+      </div>
+
       <Field label="Notes">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={textareaStyle} />
       </Field>
@@ -617,6 +646,7 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
 const form: CSSProperties = { display: "grid", gap: 16 };
 const fieldLabel: CSSProperties = { display: "grid", gap: 8, fontWeight: 900 };
 const fieldGroup: CSSProperties = { display: "grid", gap: 6 };
+const effortLabelStyle: CSSProperties = { fontWeight: 900 };
 
 const modeRow: CSSProperties = { display: "flex", gap: 6 };
 const modeBtnInactive: CSSProperties = {

@@ -11,6 +11,8 @@ import SportExtraControl from "./sportExtraControl";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import { predictEffortDefault } from "@/lib/strain";
 
 // One row in the SPORT section, representing a user's selected sport.
 // Tap → log sheet. Each sport has its own rich form when one exists,
@@ -67,6 +69,8 @@ type GenericDraft = {
   /** Per-sport extra fields by key — strings to keep the draft
    *  serializable; coerced to numbers at submit time. */
   extras: Record<string, string>;
+  /** Perceived effort 1-10, null until the user rates it. */
+  effort: number | null;
 };
 
 // Exported so other surfaces (the home FAB, future quick-actions)
@@ -87,6 +91,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       sessionType: "",
       spot: null,
       extras: {},
+      effort: null,
     }
   );
   const [pending, startTransition] = useTransition();
@@ -155,6 +160,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           spotValue: draft.spot,
           sessionType: draft.sessionType.trim() || undefined,
           extras: extrasOut,
+          effort: draft.effort,
         });
         clearDraft();
         onClose();
@@ -163,6 +169,10 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       }
     });
   }
+
+  const predictedEffort = predictEffortDefault(
+    Number(draft.duration) > 0 ? Number(draft.duration) : null,
+  );
 
   return (
     <SportLogModal
@@ -261,6 +271,15 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
             })}
         </div>
       ) : null}
+
+      <div style={fieldGroup}>
+        <span style={fieldLabelText}>Effort</span>
+        <EffortSlider
+          value={draft.effort}
+          predicted={predictedEffort}
+          onChange={(next) => setDraft((d) => ({ ...d, effort: next }))}
+        />
+      </div>
 
       <label style={fieldLabel}>
         Notes
