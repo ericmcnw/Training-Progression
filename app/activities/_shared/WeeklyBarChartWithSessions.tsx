@@ -33,6 +33,9 @@ export type WeekSession = {
    *  was never rated). The badge marks these so a guess never reads as a
    *  real rating. */
   loadEstimated?: boolean;
+  /** Effective perceived effort 1-10 (rating, or the estimate when unrated —
+   *  pair with loadEstimated). Drives the effort-shaded bars + effort lines. */
+  effort?: number;
 };
 
 // `sessionsByWeek[i]` = sessions that contributed to week index `i`
