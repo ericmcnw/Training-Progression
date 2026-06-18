@@ -16,7 +16,7 @@ function parseSupportsSports(raw: string[]): string[] {
 }
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
-import { createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
+import { createActivityZoneActivitiesForLog, createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { clampEffort } from "@/lib/strain";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
@@ -2288,6 +2288,7 @@ export async function logCardio(params: {
   }
   await recalculateRoutineLogStimulus(log.id);
   await createExerciseZoneActivitiesForLog(prisma, log.id);
+  await createActivityZoneActivitiesForLog(prisma, log.id);
   await applyPainCheckToLog(log.id, params.painCheck);
 
   revalidateRoutineSurfaces(params.routineId);
@@ -2672,6 +2673,7 @@ export async function logSession(params: {
   if (logId) {
     await recalculateRoutineLogStimulus(logId);
     await createExerciseZoneActivitiesForLog(prisma, logId);
+    await createActivityZoneActivitiesForLog(prisma, logId);
     await applyZoneTagsToLog(logId, parsePerformedAt(params.performedAtLocal), params.zoneTags);
     await applyPainCheckToLog(logId, params.painCheck);
   }
@@ -2818,6 +2820,7 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
   });
   await recalculateRoutineLogStimulus(params.logId);
   await createExerciseZoneActivitiesForLog(prisma, params.logId);
+  await createActivityZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
 }
@@ -3217,6 +3220,7 @@ export async function updateSessionLog(params: {
   });
   await recalculateRoutineLogStimulus(params.logId);
   await createExerciseZoneActivitiesForLog(prisma, params.logId);
+  await createActivityZoneActivitiesForLog(prisma, params.logId);
 
   revalidateRoutineSurfaces(params.routineId);
   if (params.preferredClimbingGrades) {

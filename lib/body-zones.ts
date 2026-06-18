@@ -157,19 +157,40 @@ function maxFreshness(states: ZoneFreshness[]) {
   return states.reduce<ZoneFreshness>((best, current) => (rank[current] > rank[best] ? current : best), "FRESH");
 }
 
-export function computeFreshness(lastWorkedAt: Date | null, injuries: InjuryLike[] = [], now = new Date()): ZoneFreshness {
+// How long a zone reads as worked/recovering after a session, scaled by the
+// session's intensity — a hard effort stresses tissue longer than an easy one.
+// `recentlyWorked` is the last day still shown as RECENTLY_WORKED; `recovering`
+// the last day shown as RECOVERING; beyond that the zone is FRESH.
+const RECOVERY_WINDOWS: Record<"easy" | "moderate" | "hard", { recentlyWorked: number; recovering: number }> = {
+  easy: { recentlyWorked: 1, recovering: 2 },
+  moderate: { recentlyWorked: 3, recovering: 6 },
+  hard: { recentlyWorked: 4, recovering: 8 },
+};
+
+function recoveryWindow(intensity: string | null | undefined) {
+  if (intensity === "easy" || intensity === "hard") return RECOVERY_WINDOWS[intensity];
+  return RECOVERY_WINDOWS.moderate;
+}
+
+export function computeFreshness(
+  lastWorkedAt: Date | null,
+  injuries: InjuryLike[] = [],
+  now = new Date(),
+  lastIntensity?: string | null,
+): ZoneFreshness {
   if (injuries.some((injury) => injury.status === "ACTIVE" || injury.status === "FLARED")) {
     return "INJURED";
   }
 
   const daysSinceWorked = daysSinceDate(lastWorkedAt, now);
+  const window = recoveryWindow(lastIntensity);
   let freshness: ZoneFreshness = "FRESH";
 
   if (daysSinceWorked === 0) {
     freshness = "WORKED_TODAY";
-  } else if (daysSinceWorked != null && daysSinceWorked <= 3) {
+  } else if (daysSinceWorked != null && daysSinceWorked <= window.recentlyWorked) {
     freshness = "RECENTLY_WORKED";
-  } else if (daysSinceWorked != null && daysSinceWorked <= 6) {
+  } else if (daysSinceWorked != null && daysSinceWorked <= window.recovering) {
     freshness = "RECOVERING";
   }
 
@@ -216,13 +237,14 @@ function toZoneState({
   now: Date;
 }): ZoneState & { lastWorkedAt: Date | null; daysSinceWorked: number | null } {
   const lastWorkedAt = activities[0]?.performedAt ?? null;
+  const lastIntensity = activities[0]?.intensity ?? null;
   const activeInjuries = injuries.filter((injury) => injury.status === "ACTIVE" || injury.status === "FLARED" || injury.status === "RECOVERING");
   const recentPainLogs = painLogs.filter((entry) => entry.loggedAt >= daysAgo(2, now));
   const weeklyActivityCount = activities.filter((entry) => entry.performedAt >= daysAgo(7, now)).length;
 
   return {
     slug: zone.slug,
-    freshness: computeFreshness(lastWorkedAt, activeInjuries, now),
+    freshness: computeFreshness(lastWorkedAt, activeInjuries, now, lastIntensity),
     painLevel: computePainLevel({ recentPainLogs, injuries: activeInjuries }),
     activityCount: weeklyActivityCount,
     lastWorkedAt,

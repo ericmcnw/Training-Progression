@@ -1,5 +1,14 @@
 import type { PrismaClient } from "@/generated/prisma";
 import { inferExerciseMetadataSlugs } from "@/lib/metadata";
+import {
+  clearsFloor,
+  computeLoad,
+  effectiveEffort,
+  effortIntensity,
+  musclesForActivity,
+} from "@/lib/strain";
+import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
+import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 
 type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -49,6 +58,108 @@ export async function syncRoutineLogZoneActivityDates(tx: Tx, routineLogId: stri
   await tx.zoneActivity.updateMany({
     where: { routineLogId: log.id },
     data: { performedAt: log.performedAt },
+  });
+}
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
+// Distance-only cardio (a logged walk/run with no duration) still needs a
+// duration to size its load + floor check. Estimate from distance at a blended
+// ~10 min/mile; fall back to a default session length when neither is known.
+function estimateDurationMin(durationSec: number | null, distanceMi: number | null): number {
+  if (durationSec && durationSec > 0) return durationSec / 60;
+  if (distanceMi && distanceMi > 0) return distanceMi * 10;
+  return 30;
+}
+
+function activityLabel(
+  log: { activityType: { name: string } | null; routine: { name: string } | null; distanceMi: number | null; durationSec: number | null },
+  registrySlug: string,
+): string {
+  const base = log.activityType?.name ?? log.routine?.name ?? humanizeSlug(registrySlug);
+  const bits: string[] = [];
+  if (log.distanceMi && log.distanceMi > 0) bits.push(`${log.distanceMi} mi`);
+  if (log.durationSec && log.durationSec > 0) bits.push(`${Math.round(log.durationSec / 60)} min`);
+  return bits.length > 0 ? `${base} · ${bits.join(" · ")}` : base;
+}
+
+// Body-map zone activities for cardio + sport logs. Unlike the EXERCISE path
+// (which reads sets/metadata), this maps the activity's REGISTRY slug to muscle
+// groups via ACTIVITY_MUSCLE_MAP and stamps each lit zone with the session's
+// effort-derived intensity. Idempotent: clears this log's prior SPORT_TAG rows
+// first, so editing effort (or dropping below the load floor) recomputes them.
+export async function createActivityZoneActivitiesForLog(tx: Tx, routineLogId: string) {
+  const log = await tx.routineLog.findUnique({
+    where: { id: routineLogId },
+    select: {
+      id: true,
+      performedAt: true,
+      effort: true,
+      durationSec: true,
+      distanceMi: true,
+      routineId: true,
+      activityType: { select: { name: true, slug: true } },
+      routine: { select: { name: true } },
+    },
+  });
+  if (!log) return;
+
+  // Always clear prior rows for this log so edits recompute cleanly (and a
+  // log that drops below the floor on edit loses its zones).
+  await tx.zoneActivity.deleteMany({ where: { routineLogId: log.id, source: "SPORT_TAG" } });
+
+  // Registry slug: sport synthetic routine id → sport slug; otherwise a cardio
+  // activity type → its registry slug.
+  const sportSlug = sportSlugFromRoutineId(log.routineId);
+  const registrySlug =
+    sportSlug ??
+    (log.activityType?.slug ? TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug] ?? null : null);
+  if (!registrySlug) return;
+
+  const muscles = musclesForActivity(registrySlug);
+  if (muscles.length === 0) return;
+
+  const durationMin = estimateDurationMin(log.durationSec, log.distanceMi);
+  const effort = effectiveEffort(log.effort, durationMin);
+  const load = computeLoad(effort, durationMin);
+  // Recovery-tier sessions (a 1-mi stroll) stay under the floor and light
+  // nothing — keeps the body map meaningful.
+  if (!clearsFloor(load, registrySlug)) return;
+
+  const intensity = effortIntensity(effort);
+
+  const allMuscleGroups = await tx.metadataGroup.findMany({
+    where: { kind: "MUSCLE_GROUP" },
+    select: { slug: true },
+  });
+  const muscleGroupSlugs = new Set(allMuscleGroups.map((group) => group.slug));
+  const zoneGroupSlugs = Array.from(
+    new Set(muscles.flatMap(expandToZoneGroups).filter((slug) => muscleGroupSlugs.has(slug)))
+  );
+  if (zoneGroupSlugs.length === 0) return;
+
+  const zones = await tx.bodyZone.findMany({
+    where: { metadataGroupSlug: { in: zoneGroupSlugs } },
+    select: { id: true },
+  });
+  if (zones.length === 0) return;
+
+  const label = activityLabel(log, registrySlug);
+  await tx.zoneActivity.createMany({
+    data: zones.map((zone) => ({
+      zoneId: zone.id,
+      routineLogId: log.id,
+      performedAt: log.performedAt,
+      source: "SPORT_TAG" as const,
+      label,
+      intensity,
+    })),
+    skipDuplicates: true,
   });
 }
 

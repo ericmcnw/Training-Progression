@@ -6,6 +6,7 @@ import { ensureSportSelected, getSyntheticSportRoutineId } from "@/lib/synthetic
 import { normalizeSpotName } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { clampEffort } from "@/lib/strain";
+import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
 
 // Server action for golf logging. Persists session-level fields on
 // RoutineLog (performedAt, durationSec, notes) + the round detail as
@@ -118,6 +119,8 @@ export async function logGolfAction(input: GolfLogInput): Promise<{ logId: strin
     select: { id: true },
   });
 
+  await createActivityZoneActivitiesForLog(prisma, log.id);
+
   revalidatePath("/log");
   revalidatePath("/activities/sports");
   revalidatePath("/activities/golf");
@@ -194,6 +197,8 @@ export async function updateGolfLogAction(
       sportData,
     },
   });
+
+  await createActivityZoneActivitiesForLog(prisma, input.logId);
 
   revalidatePath("/log");
   revalidatePath("/activities/sports");
