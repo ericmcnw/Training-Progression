@@ -14,7 +14,7 @@ import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { DateTimeField, Field, FormSection, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
+import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 export type ExerciseOption = {
   id: string;
@@ -138,6 +138,7 @@ export default function WorkoutExerciseEditor({
 
   const [notes, setNotes] = useState(initialNotes);
   const [effort, setEffort] = useState<number | null>(initialEffort);
+  const predictedEffort = useLearnedEffortPrefill({ routineId });
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt || localDateTimeNow);
   const [saving, setSaving] = useState(false);
   const [creatingExercise, startCreateExercise] = useTransition();
@@ -947,7 +948,7 @@ export default function WorkoutExerciseEditor({
       <FormSection title="Effort" description="How hard this session felt — powers your training load and body map.">
         <EffortSlider
           value={effort}
-          predicted={predictEffortDefault(null)}
+          predicted={predictedEffort}
           onChange={(next) => { markDirty(); setEffort(next); }}
         />
       </FormSection>

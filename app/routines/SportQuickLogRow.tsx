@@ -12,7 +12,7 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
+import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 // One row in the SPORT section, representing a user's selected sport.
 // Tap → log sheet. Each sport has its own rich form when one exists,
@@ -170,9 +170,10 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
     });
   }
 
-  const predictedEffort = predictEffortDefault(
-    Number(draft.duration) > 0 ? Number(draft.duration) : null,
-  );
+  const predictedEffort = useLearnedEffortPrefill({
+    routineId: `sports-${sport.slug}-synthetic`,
+    durationMin: Number(draft.duration) > 0 ? Number(draft.duration) : null,
+  });
 
   return (
     <SportLogModal

@@ -23,7 +23,7 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
+import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 // Synthetic SpotPicker config for climbing. getActivitySpotConfig() returns
 // null for climbing (its spots live in ClimbLocation, not ActivitySpot), but
@@ -117,6 +117,10 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState("");
   const [effort, setEffort] = useState<number | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
+  const predictedEffort = useLearnedEffortPrefill({
+    routineId: "sports-climbing-synthetic",
+    durationMin: Number(duration) > 0 ? Number(duration) : null,
+  });
 
   // Location — a single SpotPicker value: search any saved ClimbLocation,
   // pick a recent chip, or pin a new place via OSM. Saved picks are always
@@ -500,7 +504,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
             <span style={fieldGroupLabel}>Effort</span>
             <EffortSlider
               value={effort}
-              predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+              predicted={predictedEffort}
               onChange={setEffort}
             />
           </div>

@@ -8,7 +8,7 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
+import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 // Rich golf log sheet. Two modes — COURSE (per-hole detail) and
 // RANGE (per-club shot detail) — sharing the same session header
@@ -64,6 +64,10 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   const [duration, setDuration] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [effort, setEffort] = useState<number | null>(null);
+  const predictedEffort = useLearnedEffortPrefill({
+    routineId: "sports-golf-synthetic",
+    durationMin: Number(duration) > 0 ? Number(duration) : null,
+  });
 
   // COURSE mode state
   // Spot picker — replaces the prior free-text courseName field.
@@ -409,7 +413,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             <span style={fieldGroupLabel}>Effort</span>
             <EffortSlider
               value={effort}
-              predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+              predicted={predictedEffort}
               onChange={setEffort}
             />
           </div>

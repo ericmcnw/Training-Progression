@@ -32,7 +32,7 @@ import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import type { ActivityTypeOption } from "@/app/components/LogDrawer";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
+import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 export default function LogRunForm({
   routineId,
@@ -234,13 +234,15 @@ export default function LogRunForm({
     return `${paceMins}:${String(paceSecs).padStart(2, "0")} /mi`;
   }, [distanceMi, minutes, seconds]);
 
-  // Smart pre-fill for the effort slider, scaled to the duration entered so
-  // far. Section 6 will swap this for a per-activity learned default; for now
-  // it's the duration heuristic from the strain lib.
-  const predictedEffort = useMemo(() => {
-    const totalMin = Number(minutes || "0") + Number(seconds || "0") / 60;
-    return predictEffortDefault(totalMin > 0 ? totalMin : null);
-  }, [minutes, seconds]);
+  // Smart pre-fill for the effort slider: the user's learned median for this
+  // activity type once they've rated a few, otherwise scaled to the duration
+  // entered so far.
+  const totalEffortMin = Number(minutes || "0") + Number(seconds || "0") / 60;
+  const predictedEffort = useLearnedEffortPrefill({
+    activityTypeId,
+    routineId,
+    durationMin: totalEffortMin > 0 ? totalEffortMin : null,
+  });
 
   const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
