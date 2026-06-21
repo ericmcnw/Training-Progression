@@ -393,13 +393,16 @@ export async function getHomeData(): Promise<HomeData> {
     today,
   });
 
-  // Per-day weather for the WaG rail. Past/today precedence: the real temp you
-  // logged that day (observed) → the daily high where you were (breadcrumb) →
-  // the home-base daily high. Future days only ever have the daily forecast
-  // (already steered by any active-location override).
+  // Per-day weather for the WaG rail.
+  //   • An active override is an explicit "show me this place now" gesture, so
+  //     it wins for today + the forecast days (ymd >= today).
+  //   • Otherwise, past/today prefer the real temp you logged that day
+  //     (observed) → the daily high where you were (breadcrumb) → the daily
+  //     high. Earlier past days are never touched by the override.
   type DayWeatherView = { code: number; highF: number; source: "observed" | "breadcrumb" | "daily" };
   function resolveDayWeather(ymd: string): DayWeatherView | undefined {
-    if (ymd <= today) {
+    const overrideDay = activeLoc != null && ymd >= today;
+    if (!overrideDay && ymd <= today) {
       const s = stampedByYmd.get(ymd);
       if (s) return { code: s.code, highF: s.tempF, source: "observed" };
       const b = breadcrumbDaily[ymd];
