@@ -272,16 +272,15 @@ export async function getHomeData(): Promise<HomeData> {
       const anchor = active ?? home;
       if (!anchor) return { daily: {}, current: null, label: null, isOverride: false };
 
-      const firstFuture = addDaysYmd(today, 1);
       const homeDaily = home
         ? fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd })
         : Promise.resolve<Record<string, DailyWeather>>({});
-      // Only a second forecast call when an override is in play and there are
-      // future days to recolor; otherwise the home call already covers them.
-      const futureDaily =
-        active && firstFuture <= wagEnd
-          ? fetchDailyWeather({ lat: active.lat, lng: active.lng, startYmd: firstFuture, endYmd: wagEnd })
-          : Promise.resolve<Record<string, DailyWeather>>({});
+      // An override steers today + the forecast days (where you are now). Only
+      // a second call when an override is in play; the home call covers the
+      // rest. Earlier past days stay on home (homeDaily isn't overwritten there).
+      const futureDaily = active
+        ? fetchDailyWeather({ lat: active.lat, lng: active.lng, startYmd: today, endYmd: wagEnd })
+        : Promise.resolve<Record<string, DailyWeather>>({});
       const [daily, future, current] = await Promise.all([
         homeDaily,
         futureDaily,
