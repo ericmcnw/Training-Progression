@@ -23,6 +23,7 @@ import MovementPatternsCard from "./MovementPatternsCard";
 import Fab from "./Fab";
 import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
+import LocationPingCapture from "./LocationPingCapture";
 import HomeInjuriesSection from "./HomeInjuriesSection";
 import HomeRotationSection from "./HomeRotationSection";
 import type { HomeInjury } from "@/lib/home-injuries";
@@ -46,6 +47,7 @@ export default function HomeShell({
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
+      <LocationPingCapture />
       <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
 
       <WeekAtGlance

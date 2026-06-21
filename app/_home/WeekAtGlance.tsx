@@ -23,6 +23,13 @@ import CompletionMinutesPill from "@/app/components/dashboard/CompletionMinutesP
 import DayTodoList from "@/app/components/dashboard/DayTodoList";
 import SchedulePicker from "./SchedulePicker";
 
+function weatherTitle(weather: NonNullable<LegacyGlanceDay["weather"]>): string {
+  const label = describeWeatherCode(weather.code).label;
+  if (weather.source === "observed") return `${label} · ${weather.highF}° when you logged here`;
+  if (weather.source === "breadcrumb") return `${label} · ${weather.highF}° where you were`;
+  return `${label} · ${weather.highF}° daily high`;
+}
+
 type Props = {
   days: LegacyGlanceDay[];
   today: string;
@@ -310,7 +317,7 @@ function DayCard({
       aria-label={`${day.label} ${day.dayNumber}`}
     >
       {day.weather ? (
-        <span style={weatherChip} title={describeWeatherCode(day.weather.code).label}>
+        <span style={weatherChip} title={weatherTitle(day.weather)}>
           <span aria-hidden style={weatherEmoji}>{describeWeatherCode(day.weather.code).emoji}</span>
           <span style={weatherTemp}>{day.weather.highF}°</span>
         </span>

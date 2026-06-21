@@ -24,7 +24,15 @@ import {
 } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
 import { getHomeLocation } from "@/lib/home-location";
-import { fetchDailyWeather, fetchCurrentWeather, type DailyWeather, type WeatherSnapshot } from "@/lib/weather";
+import { getActiveLocation } from "@/lib/active-location";
+import { getRecentPings } from "@/lib/location-pings";
+import {
+  fetchDailyWeather,
+  fetchCurrentWeather,
+  coerceWeatherSnapshot,
+  type DailyWeather,
+  type WeatherSnapshot,
+} from "@/lib/weather";
 import { getMovementPatternData } from "./movement-patterns";
 import type {
   DayTodo,
@@ -63,6 +71,68 @@ function timeLabel(date: Date): string {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+// Pings within this radius of home are treated as "home" — the home-base daily
+// rail already covers those days, so no separate fetch.
+const BREADCRUMB_AWAY_KM = 25;
+
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Daily weather for past days spent away from home, from location breadcrumbs.
+// One representative ping per day (last wins), kept only when meaningfully away
+// from home, then clustered by coarse coords so each visited place is a single
+// ranged forecast call. Fails soft to {} — breadcrumb weather is a bonus.
+async function resolveBreadcrumbWeather(opts: {
+  pings: Array<{ lat: number; lng: number; capturedAt: Date }>;
+  home: { lat: number; lng: number } | null;
+  stampedYmds: Set<string>;
+  today: string;
+}): Promise<Record<string, DailyWeather>> {
+  const { pings, home, stampedYmds, today } = opts;
+  if (pings.length === 0) return {};
+
+  const byDay = new Map<string, { lat: number; lng: number }>();
+  for (const p of pings) {
+    const ymd = toAppYmd(p.capturedAt);
+    if (ymd > today || stampedYmds.has(ymd)) continue;
+    byDay.set(ymd, { lat: p.lat, lng: p.lng }); // pings are asc → last of day wins
+  }
+  const away = [...byDay.entries()].filter(
+    ([, c]) => !home || haversineKm(home.lat, home.lng, c.lat, c.lng) > BREADCRUMB_AWAY_KM
+  );
+  if (away.length === 0) return {};
+
+  const clusters = new Map<string, { lat: number; lng: number; ymds: string[] }>();
+  for (const [ymd, c] of away) {
+    const key = `${c.lat.toFixed(1)},${c.lng.toFixed(1)}`;
+    const cluster = clusters.get(key) ?? { lat: c.lat, lng: c.lng, ymds: [] };
+    cluster.ymds.push(ymd);
+    clusters.set(key, cluster);
+  }
+
+  const out: Record<string, DailyWeather> = {};
+  await Promise.all(
+    [...clusters.values()].map(async (cl) => {
+      const sorted = cl.ymds.slice().sort();
+      const daily = await fetchDailyWeather({
+        lat: cl.lat,
+        lng: cl.lng,
+        startYmd: sorted[0],
+        endYmd: sorted[sorted.length - 1],
+      });
+      for (const ymd of cl.ymds) if (daily[ymd]) out[ymd] = daily[ymd];
+    })
+  );
+  return out;
+}
+
 export async function getHomeData(): Promise<HomeData> {
   const today = todayAppYmd();
   const habitWindowStart = addDaysYmd(today, -(HABIT_GRID_DAYS - 1));
@@ -76,6 +146,11 @@ export async function getHomeData(): Promise<HomeData> {
   // Widest log window we need to cover: spark, WaG, and habit grid.
   const widestStart = [sparkStart, wagStart, habitWindowStart].sort()[0];
 
+  // Resolved once and shared: the live weather IIFE and the breadcrumb
+  // back-fill below both need these. Cookie read + one indexed lookup.
+  const homeLoc = await getHomeLocation();
+  const activeLoc = await getActiveLocation();
+
   // TODO(perf): these queries re-run on every dashboard visit because the
   // page is `force-dynamic` and nothing here is wrapped in unstable_cache.
   // The biggest single repeat-visit win in the app. Plan + risks + initial
@@ -88,6 +163,7 @@ export async function getHomeData(): Promise<HomeData> {
     manualEntriesRaw,
     movementPatterns,
     wagWeather,
+    recentPings,
   ] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true },
@@ -142,6 +218,9 @@ export async function getHomeData(): Promise<HomeData> {
         // — cheap to include here vs. a second roundtrip.
         distanceMi: true,
         durationSec: true,
+        // Stamped ambient weather — lets a past WaG day show the real temp
+        // where you actually were that day instead of the home-base daily high.
+        weather: true,
         routine: {
           select: {
             id: true, name: true, kind: true, domain: true, subtype: true,
@@ -177,22 +256,50 @@ export async function getHomeData(): Promise<HomeData> {
       headline: "no pattern data yet",
     })),
     // Home-base weather: the per-day rail (daily highs) + current conditions
-    // for the live strip chip, plus the home label. One home-location read,
-    // then the two weather calls in parallel. Runs concurrently with the DB
-    // queries and fails soft so the dashboard never blocks on it.
+    // for the live strip chip, plus the home label. Past+today days always
+    // come from the home base; an active-location override (the chip's "use my
+    // current location") only steers the *future* days + the live chip — past
+    // weather should reflect where you actually were. Runs concurrently with
+    // the DB queries and fails soft so the dashboard never blocks on it.
     (async (): Promise<{
       daily: Record<string, DailyWeather>;
       current: WeatherSnapshot | null;
       label: string | null;
+      isOverride: boolean;
     }> => {
-      const home = await getHomeLocation();
-      if (!home) return { daily: {}, current: null, label: null };
-      const [daily, current] = await Promise.all([
-        fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd }),
-        fetchCurrentWeather({ lat: home.lat, lng: home.lng }),
+      const home = homeLoc;
+      const active = activeLoc;
+      const anchor = active ?? home;
+      if (!anchor) return { daily: {}, current: null, label: null, isOverride: false };
+
+      const firstFuture = addDaysYmd(today, 1);
+      const homeDaily = home
+        ? fetchDailyWeather({ lat: home.lat, lng: home.lng, startYmd: wagStart, endYmd: wagEnd })
+        : Promise.resolve<Record<string, DailyWeather>>({});
+      // Only a second forecast call when an override is in play and there are
+      // future days to recolor; otherwise the home call already covers them.
+      const futureDaily =
+        active && firstFuture <= wagEnd
+          ? fetchDailyWeather({ lat: active.lat, lng: active.lng, startYmd: firstFuture, endYmd: wagEnd })
+          : Promise.resolve<Record<string, DailyWeather>>({});
+      const [daily, future, current] = await Promise.all([
+        homeDaily,
+        futureDaily,
+        fetchCurrentWeather({ lat: anchor.lat, lng: anchor.lng }),
       ]);
-      return { daily, current, label: home.label };
+      return {
+        daily: { ...daily, ...future },
+        current,
+        label: active ? active.label ?? "Current" : home?.label ?? null,
+        isOverride: Boolean(active),
+      };
     })(),
+    // Passive location breadcrumbs over the past WaG window — feeds the
+    // breadcrumb back-fill below. Best-effort ([] on any DB hiccup).
+    getRecentPings(
+      new Date(`${wagStart}T00:00:00.000Z`),
+      new Date(`${addDaysYmd(today, 1)}T00:00:00.000Z`)
+    ),
   ]);
 
   const routinesWithTargets = routines.map(routineWithFrequencyTarget);
@@ -262,6 +369,45 @@ export async function getHomeData(): Promise<HomeData> {
     logsByYmd.get(ymd)!.push(log);
     if (!logsByRoutine.has(log.routineId)) logsByRoutine.set(log.routineId, []);
     logsByRoutine.get(log.routineId)!.push({ performedAt: log.performedAt });
+  }
+
+  // ── Stamped weather per day ──────────────────────────────────────────────
+  // A past day prefers the real conditions stamped on a log you did that day
+  // (where you actually were) over the home-base daily high. allLogs is sorted
+  // performedAt asc, so the last stamped log of a day wins (most recent).
+  const stampedByYmd = new Map<string, WeatherSnapshot>();
+  for (const log of allLogs) {
+    if (log.weather == null) continue;
+    const ymd = toAppYmd(log.performedAt);
+    if (ymd > today) continue;
+    const snap = coerceWeatherSnapshot(log.weather);
+    if (snap) stampedByYmd.set(ymd, snap);
+  }
+
+  // Breadcrumb back-fill: for past days you were away from home but didn't log,
+  // use the daily high at the location your phone reported that day. Days you
+  // logged (stampedByYmd) already have the real temp and are skipped.
+  const breadcrumbDaily = await resolveBreadcrumbWeather({
+    pings: recentPings,
+    home: homeLoc,
+    stampedYmds: new Set(stampedByYmd.keys()),
+    today,
+  });
+
+  // Per-day weather for the WaG rail. Past/today precedence: the real temp you
+  // logged that day (observed) → the daily high where you were (breadcrumb) →
+  // the home-base daily high. Future days only ever have the daily forecast
+  // (already steered by any active-location override).
+  type DayWeatherView = { code: number; highF: number; source: "observed" | "breadcrumb" | "daily" };
+  function resolveDayWeather(ymd: string): DayWeatherView | undefined {
+    if (ymd <= today) {
+      const s = stampedByYmd.get(ymd);
+      if (s) return { code: s.code, highF: s.tempF, source: "observed" };
+      const b = breadcrumbDaily[ymd];
+      if (b) return { code: b.code, highF: b.highF, source: "breadcrumb" };
+    }
+    const d = wagWeather.daily[ymd];
+    return d ? { code: d.code, highF: d.highF, source: "daily" } : undefined;
   }
 
   // ── Todos grouped by ymd ─────────────────────────────────────────────────
@@ -459,7 +605,6 @@ export async function getHomeData(): Promise<HomeData> {
       }
     }
 
-    const dayWeather = wagWeather.daily[ymd];
     legacyGlanceDays.push({
       ymd,
       label: dayLabelOf(ymd),
@@ -467,7 +612,7 @@ export async function getHomeData(): Promise<HomeData> {
       planned,
       logs,
       habitAggregate: { expected: habitExpected, completed: habitCompleted },
-      weather: dayWeather ? { code: dayWeather.code, highF: dayWeather.highF } : undefined,
+      weather: resolveDayWeather(ymd),
       todos: todosByYmd.get(ymd) ?? [],
     });
   }
@@ -769,7 +914,11 @@ export async function getHomeData(): Promise<HomeData> {
       totalDurationSec: last7DurationSec,
       totalCardioMi: last7CardioMi,
     },
-    homeWeather: { label: wagWeather.label, current: wagWeather.current },
+    homeWeather: {
+      label: wagWeather.label,
+      current: wagWeather.current,
+      isOverride: wagWeather.isOverride,
+    },
   };
 }
 

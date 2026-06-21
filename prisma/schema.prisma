@@ -1016,6 +1016,20 @@ model AppProfile {
   stimulusPreferences UserStimulusPreference[]
 }
 
+// Passive location breadcrumbs captured when the app is opened (web can't track
+// in the background). Used to attribute a temp to past WaG days you didn't log
+// at but were away from home. Keyed by the session profile key, not an FK, so a
+// capture never depends on an AppProfile row existing.
+model LocationPing {
+  id         String   @id @default(cuid())
+  profileKey String
+  lat        Float
+  lng        Float
+  capturedAt DateTime @default(now())
+
+  @@index([profileKey, capturedAt])
+}
+
 model UserStimulusPreference {
   id                 String   @id @default(cuid())
   profileId          String

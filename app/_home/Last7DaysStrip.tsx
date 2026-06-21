@@ -12,14 +12,18 @@ export default function Last7DaysStrip({
   homeWeather,
 }: {
   stats: Last7DaysStats;
-  homeWeather: { label: string | null; current: WeatherSnapshot | null };
+  homeWeather: { label: string | null; current: WeatherSnapshot | null; isOverride: boolean };
 }) {
   const minutes = Math.round(stats.totalDurationSec / 60);
   return (
     <section style={shellStyle} aria-label="Last 7 days summary">
       <div style={eyebrowRowStyle}>
         <div style={eyebrowStyle}>Last 7 days</div>
-        <HomeWeatherControl home={homeWeather.current} homeLabel={homeWeather.label} />
+        <HomeWeatherControl
+          current={homeWeather.current}
+          label={homeWeather.label}
+          isOverride={homeWeather.isOverride}
+        />
       </div>
       <div style={gridStyle}>
         <Stat

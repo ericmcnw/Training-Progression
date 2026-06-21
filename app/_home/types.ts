@@ -46,9 +46,12 @@ export type LegacyGlanceDay = {
     domain: RoutineDomain;
   }>;
   habitAggregate?: { expected: number; completed: number };
-  // Ambient home-base weather for this day (high temp + WMO code) shown as a
-  // chip in the WaG block. Absent when no home base is set or the fetch failed.
-  weather?: { code: number; highF: number };
+  // Weather for this day shown as a chip in the WaG block. `highF` is the
+  // displayed temp; `source` says where it came from: "observed" = the real
+  // temp stamped on a log you did that day, "breadcrumb" = the daily high at a
+  // location you visited that day, "daily" = the home-base (or override
+  // forecast) daily high. Absent when no location is set or the fetch failed.
+  weather?: { code: number; highF: number; source?: "observed" | "breadcrumb" | "daily" };
   todos?: Array<{ id: string; ymd: string; label: string; done: boolean }>;
 };
 
@@ -181,9 +184,14 @@ export type HomeData = {
   quickPickRoutines: QuickPickRoutine[];
   /** Last-7-days totals shown in a compact strip at the top of the dashboard. */
   last7Days: Last7DaysStats;
-  /** Home-base live conditions + label for the strip's weather chip. Current
-   *  is null when no home base is set or the fetch failed. */
-  homeWeather: { label: string | null; current: import("@/lib/weather").WeatherSnapshot | null };
+  /** Live conditions + label for the strip's weather chip. Current is null
+   *  when no location is set or the fetch failed. isOverride is true when an
+   *  active-location override is steering it instead of the home base. */
+  homeWeather: {
+    label: string | null;
+    current: import("@/lib/weather").WeatherSnapshot | null;
+    isOverride: boolean;
+  };
   /** Enabled endurance activity types for the typed-endurance schedule
    *  shortcut in the schedule picker. */
   scheduleActivityTypes: Array<{

@@ -1,26 +1,30 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCurrentWeatherAt } from "@/app/profile/home-location-actions";
+import { setActiveLocation, clearActiveLocation } from "@/app/profile/home-location-actions";
 import { describeWeatherCode, type WeatherSnapshot } from "@/lib/weather";
 
-// Compact live-conditions chip for the "Last 7 days" strip corner. Defaults to
-// home-base conditions; tapping fetches the device's current location and
-// reskins the chip until you tap again (a temporary override — it never
-// changes the saved home base). With no home base set, it's a nudge to set one.
+// Compact live-conditions chip for the "Last 7 days" strip corner. Shows the
+// active location's conditions (home base by default). Tapping persists the
+// device's current location as an override — it survives refresh and steers
+// the future WaG forecast days too — until you tap again to return to home.
+// The override is device-local and never changes the saved home base. With no
+// location at all, it's a nudge to set one.
 export default function HomeWeatherControl({
-  home,
-  homeLabel,
+  current,
+  label,
+  isOverride,
 }: {
-  home: WeatherSnapshot | null;
-  homeLabel: string | null;
+  current: WeatherSnapshot | null;
+  label: string | null;
+  isOverride: boolean;
 }) {
-  const [override, setOverride] = useState<WeatherSnapshot | null>(null);
-  const [usingCurrent, setUsingCurrent] = useState(false);
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  if (!home && !override) {
+  if (!current) {
     return (
       <Link href="/profile" style={setLink}>
         📍 Set location
@@ -28,31 +32,29 @@ export default function HomeWeatherControl({
     );
   }
 
-  function onTap() {
-    if (usingCurrent) {
-      setUsingCurrent(false); // back to home
+  async function onTap() {
+    if (busy) return;
+    if (isOverride) {
+      setBusy(true);
+      await clearActiveLocation();
+      router.refresh();
+      setBusy(false);
       return;
     }
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const w = await getCurrentWeatherAt(pos.coords.latitude, pos.coords.longitude);
+        await setActiveLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        router.refresh();
         setBusy(false);
-        if (w) {
-          setOverride(w);
-          setUsingCurrent(true);
-        }
       },
       () => setBusy(false),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     );
   }
 
-  const shown = usingCurrent ? override : home;
-  if (!shown) return null;
-  const d = describeWeatherCode(shown.code);
-  const label = usingCurrent ? "Current" : homeLabel;
+  const d = describeWeatherCode(current.code);
 
   return (
     <button
@@ -61,15 +63,15 @@ export default function HomeWeatherControl({
       disabled={busy}
       style={chip}
       title={
-        usingCurrent
-          ? "Showing current location — tap to return to home"
+        isOverride
+          ? "Showing your current location — tap to return to home"
           : "Tap to use your current location"
       }
     >
       <span aria-hidden style={{ opacity: 0.7 }}>📍</span>
       {label ? <span style={labelStyle}>{label}</span> : null}
       <span aria-hidden>{d.emoji}</span>
-      <span style={temp}>{busy ? "…" : `${shown.tempF}°`}</span>
+      <span style={temp}>{busy ? "…" : `${current.tempF}°`}</span>
     </button>
   );
 }
