@@ -725,6 +725,7 @@ const starterExercises = [
   { name: "Calf Raise", unit: "REPS", supportsWeight: true, metadata: ["calves", "legs", "lower-body"] },
   { name: "Single-Leg Calf Raise", unit: "REPS", supportsWeight: true, isUnilateral: true, metadata: ["calves", "legs", "lower-body"] },
   { name: "Seated Calf Raise", unit: "REPS", supportsWeight: true, metadata: ["calves", "legs", "lower-body"] },
+  { name: "Bent-Knee Calf Raise", unit: "REPS", supportsWeight: true, metadata: ["calves", "legs", "lower-body"] },
   { name: "Biceps Curl", unit: "REPS", supportsWeight: true, metadata: ["biceps", "pull", "upper-body"] },
   { name: "Dumbbell Biceps Curl", unit: "REPS", supportsWeight: true, metadata: ["biceps", "pull", "upper-body"] },
   { name: "Hammer Curl", unit: "REPS", supportsWeight: true, metadata: ["biceps", "forearms", "pull", "upper-body"] },
