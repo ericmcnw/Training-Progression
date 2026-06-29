@@ -5,9 +5,11 @@
 // row so users who train mostly via habits see their data instead of
 // empty cells.
 
-import React, { useEffect, useRef, useState, type CSSProperties } from "react";
+import React, { useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { LegacyGlanceDay, QuickPickRoutine } from "./types";
+import { deleteDaySpan } from "./day-span-actions";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import ViewButton from "@/app/components/ViewButton";
 import { COLOR, cardSurface } from "./tokens";
@@ -29,6 +31,109 @@ function weatherTitle(weather: NonNullable<LegacyGlanceDay["weather"]>): string 
   if (weather.source === "breadcrumb") return `${label} · ${weather.highF}° where you were`;
   return `${label} · ${weather.highF}° daily high`;
 }
+
+// Color + glyph for a multi-day span bar, keyed by kind. Backpacking trips are
+// activity (green); the rest are "explaining a dip" annotations.
+function spanColor(kind: string): string {
+  switch (kind) {
+    case "backpacking": return "rgba(132,204,120,0.95)";
+    case "vacation": return "rgba(251,191,36,0.95)";
+    case "travel": return "rgba(96,165,250,0.95)";
+    case "sick": return "rgba(248,113,113,0.92)";
+    case "rest": return "rgba(167,139,250,0.92)";
+    default: return "rgba(148,163,184,0.92)";
+  }
+}
+
+function spanIcon(kind: string): string {
+  switch (kind) {
+    case "backpacking": return "🎒";
+    case "vacation": return "🏖️";
+    case "travel": return "✈️";
+    case "sick": return "🤒";
+    case "rest": return "😴";
+    default: return "📍";
+  }
+}
+
+function spanBarStyle(span: NonNullable<LegacyGlanceDay["span"]>): CSSProperties {
+  const capL = span.isStart;
+  const capR = span.isEnd;
+  return {
+    position: "absolute",
+    bottom: 3,
+    height: 4,
+    // Caps inset to the card content; connectors over-extend past the border to
+    // bridge the 6px inter-card gap so the bar reads continuous across days.
+    left: capL ? 6 : -5,
+    right: capR ? 6 : -5,
+    background: spanColor(span.kind),
+    borderTopLeftRadius: capL ? 3 : 0,
+    borderBottomLeftRadius: capL ? 3 : 0,
+    borderTopRightRadius: capR ? 3 : 0,
+    borderBottomRightRadius: capR ? 3 : 0,
+    pointerEvents: "none",
+    zIndex: 1,
+  };
+}
+
+const spanStartIcon: CSSProperties = {
+  position: "absolute",
+  bottom: 9,
+  left: 4,
+  fontSize: 10,
+  lineHeight: 1,
+  pointerEvents: "none",
+  zIndex: 2,
+};
+
+const spanBanner: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.035)",
+  marginBottom: 10,
+};
+
+const spanBannerLabel: CSSProperties = {
+  fontWeight: 900,
+  fontSize: 13,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const spanBannerRange: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.6,
+};
+
+const spanBannerRemove: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 9,
+  border: "1px solid rgba(248,113,113,0.3)",
+  background: "rgba(248,113,113,0.08)",
+  color: "rgba(248,160,160,0.95)",
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const spanBannerKind: CSSProperties = {
+  padding: "4px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(132,204,120,0.35)",
+  background: "rgba(132,204,120,0.12)",
+  color: "rgba(170,224,150,0.95)",
+  fontSize: 10.5,
+  fontWeight: 800,
+  flexShrink: 0,
+};
 
 type Props = {
   days: LegacyGlanceDay[];
@@ -322,6 +427,14 @@ function DayCard({
           <span style={weatherTemp}>{day.weather.highF}°</span>
         </span>
       ) : null}
+      {day.span ? (
+        <>
+          <span style={spanBarStyle(day.span)} aria-hidden />
+          {day.span.isStart ? (
+            <span style={spanStartIcon} aria-hidden>{spanIcon(day.span.kind)}</span>
+          ) : null}
+        </>
+      ) : null}
       <div style={dayLabelCol(isToday)}>
         <span style={dayInitial}>{day.label}</span>
         <span style={dayNumber(isToday)}>{day.dayNumber}</span>
@@ -368,6 +481,37 @@ function buildDots(day: LegacyGlanceDay): DotSpec[] {
 }
 
 // ───────────────────────────────────────────────────── Detail panel
+
+function SpanBanner({ span }: { span: NonNullable<LegacyGlanceDay["span"]> }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const range =
+    span.startYmd === span.endYmd
+      ? formatUtcDateLabel(span.startYmd)
+      : `${formatUtcDateLabel(span.startYmd)} – ${formatUtcDateLabel(span.endYmd)}`;
+  function remove() {
+    startTransition(async () => {
+      await deleteDaySpan(span.id);
+      router.refresh();
+    });
+  }
+  return (
+    <div style={{ ...spanBanner, borderColor: spanColor(span.kind).replace(/0\.9\d?\)$/, "0.4)") }}>
+      <span aria-hidden style={{ fontSize: 15 }}>{spanIcon(span.kind)}</span>
+      <span style={{ display: "grid", gap: 1, minWidth: 0, flex: 1 }}>
+        <span style={spanBannerLabel}>{span.label}</span>
+        <span style={spanBannerRange}>{range}</span>
+      </span>
+      {span.source === "dayspan" ? (
+        <button type="button" onClick={remove} disabled={pending} style={spanBannerRemove}>
+          {pending ? "…" : "Remove"}
+        </button>
+      ) : (
+        <span style={spanBannerKind}>Trip</span>
+      )}
+    </div>
+  );
+}
 
 function DetailPanel({
   day,
@@ -420,6 +564,8 @@ function DetailPanel({
           </button>
         ) : null}
       </div>
+
+      {day.span ? <SpanBanner span={day.span} /> : null}
 
       {isEmpty ? (
         <div style={emptyHint}>No routines planned. Add a to-do or log something ad-hoc.</div>

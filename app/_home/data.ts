@@ -26,6 +26,7 @@ import { getWeekBoundsSunday } from "@/lib/week";
 import { getHomeLocation } from "@/lib/home-location";
 import { getActiveLocation } from "@/lib/active-location";
 import { getRecentPings } from "@/lib/location-pings";
+import { getWagSpans } from "@/lib/day-spans";
 import {
   fetchDailyWeather,
   fetchCurrentWeather,
@@ -164,6 +165,7 @@ export async function getHomeData(): Promise<HomeData> {
     movementPatterns,
     wagWeather,
     recentPings,
+    wagSpans,
   ] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true },
@@ -299,7 +301,30 @@ export async function getHomeData(): Promise<HomeData> {
       new Date(`${wagStart}T00:00:00.000Z`),
       new Date(`${addDaysYmd(today, 1)}T00:00:00.000Z`)
     ),
+    // Multi-day spans (backpacking trips + manual vacation/away) drawn as a
+    // bar across the WaG rail. Best-effort ([] on any DB hiccup).
+    getWagSpans(wagStart, wagEnd),
   ]);
+
+  // Index spans by day for the WaG rail. dayspans first, backpacking last (see
+  // getWagSpans ordering) so a trip inside a vacation wins that day's bar.
+  const spansByYmd = new Map<string, LegacyGlanceDay["span"]>();
+  for (const sp of wagSpans) {
+    const from = sp.startYmd < wagStart ? wagStart : sp.startYmd;
+    const to = sp.endYmd > wagEnd ? wagEnd : sp.endYmd;
+    for (let ymd = from; ymd <= to; ymd = addDaysYmd(ymd, 1)) {
+      spansByYmd.set(ymd, {
+        id: sp.id,
+        source: sp.source,
+        kind: sp.kind,
+        label: sp.label,
+        startYmd: sp.startYmd,
+        endYmd: sp.endYmd,
+        isStart: ymd === sp.startYmd,
+        isEnd: ymd === sp.endYmd,
+      });
+    }
+  }
 
   const routinesWithTargets = routines.map(routineWithFrequencyTarget);
   const routineMap = new Map(routinesWithTargets.map((r) => [r.id, r]));
@@ -615,6 +640,7 @@ export async function getHomeData(): Promise<HomeData> {
       logs,
       habitAggregate: { expected: habitExpected, completed: habitCompleted },
       weather: resolveDayWeather(ymd),
+      span: spansByYmd.get(ymd),
       todos: todosByYmd.get(ymd) ?? [],
     });
   }

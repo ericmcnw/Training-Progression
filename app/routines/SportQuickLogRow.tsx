@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition, type CSSProperties } from "react";
 import { loadSportLogContext, logSportAction, listSportPeople, type SportLogContext } from "@/app/log/sport-actions";
 import ClimbLogSheet from "./ClimbLogSheet";
 import GolfLogSheet from "./GolfLogSheet";
+import BackpackingLogSheet from "./BackpackingLogSheet";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
 import { getSportLogConfig, isExtraVisible } from "./sportLogConfig";
@@ -52,6 +53,8 @@ export default function SportQuickLogRow({ sport }: { sport: SportRowData }) {
           <ClimbLogSheet onClose={() => setOpen(false)} />
         ) : sport.slug === "golf" ? (
           <GolfLogSheet onClose={() => setOpen(false)} />
+        ) : sport.slug === "backpacking" ? (
+          <BackpackingLogSheet onClose={() => setOpen(false)} />
         ) : (
           <LogSheet sport={sport} onClose={() => setOpen(false)} />
         )

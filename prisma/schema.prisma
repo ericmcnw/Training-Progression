@@ -695,10 +695,16 @@ model RoutineLog {
   //     mobility logs, and anything logged before this landed.
   weather Json?
 
+  // Multi-day backpacking: a trip is a BackpackingTrip parent + one RoutineLog
+  // per day (so each day shows natively on the WaG / schedule / charts and
+  // per-day miles attribute correctly). Null for every non-backpacking log.
+  backpackingTripId String?
+
   routine       Routine        @relation(fields: [routineId], references: [id], onDelete: Cascade)
   climbLocation ClimbLocation? @relation(fields: [climbLocationId], references: [id], onDelete: SetNull)
   activitySpot  ActivitySpot?  @relation(fields: [activitySpotId], references: [id], onDelete: SetNull)
   activityType  ActivityType?  @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
+  backpackingTrip BackpackingTrip? @relation(fields: [backpackingTripId], references: [id], onDelete: Cascade)
 
   exercises           SessionExercise[]
   guidedSteps         GuidedStepLog[]
@@ -715,6 +721,55 @@ model RoutineLog {
   @@index([climbLocationId])
   @@index([activitySpotId])
   @@index([activityTypeId, performedAt])
+  @@index([backpackingTripId])
+}
+
+// A multi-day backpacking trip. Parent of N day-logs (RoutineLog rows, one per
+// day on the trail). Holds the trip-level data that doesn't belong on any single
+// day: trail, trailhead/area, overall gear list + pack weight. Per-day miles /
+// elevation / campsite live on each day-log's sportData. Soft data; deleting a
+// trip cascades its day-logs.
+model BackpackingTrip {
+  id              String   @id @default(cuid())
+  profileKey      String
+  routineId       String   // the synthetic backpacking routine (domain=cardio)
+  trail           String?  // overall route, e.g. "John Muir Trail"
+  location        String?  // display name of the trailhead / area
+  activitySpotId  String?  // ActivitySpot FK for the trailhead / area
+  startYmd        String   // first day on trail (YYYY-MM-DD)
+  endYmd          String   // last day on trail
+  totalMiles      Float?   // sum of day miles (denormalized for quick reads)
+  // Inline gear snapshot: [{ name, weightGrams?, quantity?, consumable? }].
+  // The future Gear/loadout tables will populate this, not replace it.
+  gear            Json?
+  packWeightGrams Int?     // total carried weight at trip time (snapshot)
+  baseWeightGrams Int?     // total excluding consumables
+  notes           String?
+  effort          Int?     // perceived effort 1-10 for the trip
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  dayLogs RoutineLog[]
+
+  @@index([profileKey, startYmd])
+}
+
+// A generic multi-day span shown as a bar across the Week-at-a-glance — a
+// vacation, travel, illness, or any stretch worth marking. Unlike a backpacking
+// trip (which IS activity), a DaySpan usually EXPLAINS a dip in activity. Pure
+// annotation: no logs attached.
+model DaySpan {
+  id         String   @id @default(cuid())
+  profileKey String
+  kind       String   // "vacation" | "travel" | "away" | "sick" | "rest" | "other"
+  label      String
+  startYmd   String
+  endYmd     String
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([profileKey, startYmd])
 }
 
 model BodyZone {

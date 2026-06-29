@@ -14,6 +14,7 @@ import EnduranceQuickLogRow from "./EnduranceQuickLogRow";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import SportsAddButton from "./SportsAddButton";
 import SportQuickLogRow from "./SportQuickLogRow";
+import ActivityQuickLogRow from "./ActivityLogSheet";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
 import { sportAccent } from "@/lib/sport-accent";
@@ -358,7 +359,8 @@ export default async function RoutinesPageContent(props: {
             // tap to a quick-log sheet and (b) any legacy sport-domain
             // routines the user already has. The "+" button in the
             // section header opens the add/remove sport picker.
-            const totalCount = list.length + sportRows.length;
+            // +1 for the pinned freeform "Activity" catch-all tile.
+            const totalCount = list.length + sportRows.length + 1;
             return (
               <RoutineSection
                 key={domain}
@@ -373,6 +375,7 @@ export default async function RoutinesPageContent(props: {
                 }
                 defaultOpen={!!domainFilter}
               >
+                <ActivityQuickLogRow />
                 {sportRows.map((sport) => (
                   <SportQuickLogRow key={sport.slug} sport={sport} />
                 ))}

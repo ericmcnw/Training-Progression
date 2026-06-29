@@ -11,7 +11,9 @@ import QuickAddMenu from "./QuickAddMenu";
 import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
 import ClimbLogSheet from "@/app/routines/ClimbLogSheet";
 import GolfLogSheet from "@/app/routines/GolfLogSheet";
+import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
 import { GenericSportLogSheet } from "@/app/routines/SportQuickLogRow";
+import { ActivityLogSheet } from "@/app/routines/ActivityLogSheet";
 
 type Props = {
   routines: QuickPickRoutine[];
@@ -27,6 +29,8 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
   // golf, or the generic per-sport sheet). Same sheets the /log SPORT
   // section uses — single source of truth for sport logging UX.
   const [activeSport, setActiveSport] = useState<ScheduleSport | null>(null);
+  // Freeform "Activity" sheet — opened from the QuickAddMenu item.
+  const [activityOpen, setActivityOpen] = useState(false);
 
   return (
     <>
@@ -49,6 +53,7 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
         activityTypes={activityTypes}
         sports={sports}
         onSportSelected={(sport) => setActiveSport(sport)}
+        onLogActivity={() => setActivityOpen(true)}
         today={today}
       />
 
@@ -59,9 +64,13 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
         <ClimbLogSheet onClose={() => setActiveSport(null)} />
       ) : activeSport?.slug === "golf" ? (
         <GolfLogSheet onClose={() => setActiveSport(null)} />
+      ) : activeSport?.slug === "backpacking" ? (
+        <BackpackingLogSheet onClose={() => setActiveSport(null)} />
       ) : activeSport ? (
         <GenericSportLogSheet sport={activeSport} onClose={() => setActiveSport(null)} />
       ) : null}
+
+      {activityOpen ? <ActivityLogSheet onClose={() => setActivityOpen(false)} /> : null}
 
       <style>{`
         .homeV2Fab {

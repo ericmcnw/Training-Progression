@@ -155,6 +155,48 @@ export async function createActivityZoneActivitiesForLog(tx: Tx, routineLogId: s
   });
 }
 
+// User-asserted body-part involvement (the freeform "Activity" log's
+// "what felt worked" picker). Unlike the auto paths, these muscles come
+// straight from the user, written as source=MANUAL so they light the body
+// map's recently-worked view without any activity→muscle guessing.
+// Idempotent: clears this log's prior MANUAL rows so edits recompute.
+export async function createManualZoneActivitiesForLog(
+  tx: Tx,
+  routineLogId: string,
+  zoneGroupSlugs: string[],
+  intensity: string | null,
+  label: string,
+) {
+  await tx.zoneActivity.deleteMany({ where: { routineLogId, source: "MANUAL" } });
+
+  const uniqueSlugs = Array.from(new Set(zoneGroupSlugs));
+  if (uniqueSlugs.length === 0) return;
+
+  const log = await tx.routineLog.findUnique({
+    where: { id: routineLogId },
+    select: { performedAt: true },
+  });
+  if (!log) return;
+
+  const zones = await tx.bodyZone.findMany({
+    where: { metadataGroupSlug: { in: uniqueSlugs } },
+    select: { id: true },
+  });
+  if (zones.length === 0) return;
+
+  await tx.zoneActivity.createMany({
+    data: zones.map((zone) => ({
+      zoneId: zone.id,
+      routineLogId,
+      performedAt: log.performedAt,
+      source: "MANUAL" as const,
+      label,
+      intensity,
+    })),
+    skipDuplicates: true,
+  });
+}
+
 export async function createExerciseZoneActivitiesForLog(tx: Tx, routineLogId: string) {
   const log = await tx.routineLog.findUnique({
     where: { id: routineLogId },

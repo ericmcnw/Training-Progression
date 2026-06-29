@@ -30,6 +30,15 @@ export type ActivityRegistryEntry = {
   sortHint?: number;
   /** True if this activity has a deep "world" build-out (Phase 3+). */
   hasDeepWorld?: boolean;
+  /** Pinned catch-all (the freeform "Activity" entry). Resolves for
+   *  icon/label via getActivityEntry, but excluded from every family
+   *  iteration — it's not a browsable/selectable sport, it has its own
+   *  always-present entry points. */
+  pinnedCatchAll?: boolean;
+  /** Domain to stamp on this activity's synthetic routine. Defaults to the
+   *  natural one for the family ("sport" for sports). Backpacking rides the
+   *  sports machinery but logs as cardio, so it overrides to "cardio". */
+  logDomain?: "sport" | "cardio";
 };
 
 // Endurance — pace/distance-shaped activities.
@@ -61,11 +70,26 @@ const SPORT_ACTIVITIES: ActivityRegistryEntry[] = [
   { slug: "spikeball", label: "Spikeball", family: "sports", eyebrow: "Yard sport", icon: "🏐", sortHint: 32 },
   { slug: "tennis", label: "Tennis", family: "sports", eyebrow: "Racquet sport", icon: "🎾", sortHint: 40 },
   { slug: "golf", label: "Golf", family: "sports", eyebrow: "Sport · Outdoor", icon: "⛳", sortHint: 50 },
+  // Backpacking rides the sports rich-form machinery (dedicated multi-day
+  // sheet + synthetic routine + FAB dispatch) but logs as cardio — it's a
+  // hiking-family pursuit at heart, so its synthetic routine is domain=cardio
+  // and it reads as "Endurance · Outdoor".
+  { slug: "backpacking", label: "Backpacking", family: "sports", eyebrow: "Endurance · Outdoor", icon: "🎒", sortHint: 55, logDomain: "cardio" },
+];
+
+// Freeform catch-all — the "Activity" entry. Family is "sports" so it
+// shares the synthetic-routine + body-map plumbing, but pinnedCatchAll
+// keeps it out of the sports lists; it surfaces via its own pinned tile +
+// FAB item instead. Registered here only so activityIcon()/getActivityEntry
+// resolve its glyph on the calendar, FAB, and headers.
+const CATCH_ALL_ACTIVITIES: ActivityRegistryEntry[] = [
+  { slug: "activity", label: "Activity", family: "sports", eyebrow: "Anything you did", icon: "🤸", sortHint: 0, pinnedCatchAll: true },
 ];
 
 export const ACTIVITY_REGISTRY: ActivityRegistryEntry[] = [
   ...ENDURANCE_ACTIVITIES,
   ...SPORT_ACTIVITIES,
+  ...CATCH_ALL_ACTIVITIES,
 ];
 
 const ENTRY_BY_SLUG = new Map(ACTIVITY_REGISTRY.map((entry) => [entry.slug, entry]));
@@ -89,7 +113,7 @@ export function isSportActivity(slug: string) {
 }
 
 export function activitiesByFamily(family: ActivityFamily): ActivityRegistryEntry[] {
-  return ACTIVITY_REGISTRY.filter((entry) => entry.family === family).sort(
+  return ACTIVITY_REGISTRY.filter((entry) => entry.family === family && !entry.pinnedCatchAll).sort(
     (a, b) => (a.sortHint ?? 999) - (b.sortHint ?? 999) || a.label.localeCompare(b.label)
   );
 }

@@ -52,6 +52,20 @@ export type LegacyGlanceDay = {
   // location you visited that day, "daily" = the home-base (or override
   // forecast) daily high. Absent when no location is set or the fetch failed.
   weather?: { code: number; highF: number; source?: "observed" | "breadcrumb" | "daily" };
+  // Multi-day span covering this day (backpacking trip or manual vacation/away),
+  // drawn as a continuous bar across the rail. isStart/isEnd cap the bar; a span
+  // that runs off the visible window simply has no cap there. Absent on days
+  // with no span.
+  span?: {
+    id: string;
+    source: "backpacking" | "dayspan";
+    kind: string;
+    label: string;
+    startYmd: string;
+    endYmd: string;
+    isStart: boolean;
+    isEnd: boolean;
+  };
   todos?: Array<{ id: string; ymd: string; label: string; done: boolean }>;
 };
 

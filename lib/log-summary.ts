@@ -14,6 +14,25 @@ import type { ExerciseUnitValue } from "@/lib/exercises";
 import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
 import { getRoutineDisplayName } from "@/lib/routine-display";
 import { coerceWeatherSnapshot, type WeatherSnapshot } from "@/lib/weather";
+import { toAppYmd } from "@/lib/dates";
+
+const GRAMS_PER_OZ = 28.349523125;
+const GRAMS_PER_LB = 453.59237;
+
+// Trip-level rollup for a backpacking day-log — every day-log of a trip exposes
+// the same parent trip so opening any day shows the whole trip.
+export type LogSummaryBackpacking = {
+  trail: string | null;
+  location: string | null;
+  startYmd: string;
+  endYmd: string;
+  totalMiles: number | null;
+  nights: number;
+  packLb: number | null;
+  baseLb: number | null;
+  gear: Array<{ name: string; oz: number | null; quantity: number; consumable: boolean }>;
+  days: Array<{ ymd: string; miles: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
+};
 
 export type LogSummaryRoutine = {
   id: string;
@@ -142,6 +161,9 @@ export type LogSummaryData = {
   /** Sport-specific structured data (golf scorecard, basketball mode,
    *  surfing extras, etc.). null when the log isn't a sport log. */
   sportData: LogSummarySportData | null;
+  /** Backpacking trip rollup — present on every day-log of a trip. null
+   *  otherwise. */
+  backpacking: LogSummaryBackpacking | null;
   /** ActivitySpot link — name + region for the detail-page heading
    *  when the Spot Picker was used at log time. */
   spot: LogSummarySpot | null;
@@ -187,6 +209,62 @@ function parseIntervalsConfig(raw: unknown): LogSummaryIntervals | null {
     return null;
   }
   return out;
+}
+
+type RawTrip = {
+  trail: string | null;
+  location: string | null;
+  startYmd: string;
+  endYmd: string;
+  totalMiles: number | null;
+  gear: unknown;
+  packWeightGrams: number | null;
+  baseWeightGrams: number | null;
+  dayLogs: Array<{
+    performedAt: Date;
+    distanceMi: number | null;
+    elevationGainFt: number | null;
+    notes: string | null;
+    sportData: unknown;
+  }>;
+};
+
+// Build the trip rollup from the parent BackpackingTrip + its day-logs. Days
+// come from the child logs (not the parent) so per-day miles / elevation stay
+// the single source of truth; campsite rides each day-log's sportData.
+function parseBackpackingTrip(trip: RawTrip | null | undefined): LogSummaryBackpacking | null {
+  if (!trip) return null;
+  const gearRaw = Array.isArray(trip.gear) ? (trip.gear as Array<Record<string, unknown>>) : [];
+  const gear = gearRaw
+    .filter((g) => typeof g.name === "string" && g.name.trim().length > 0)
+    .map((g) => ({
+      name: g.name as string,
+      oz: typeof g.weightGrams === "number" ? Math.round((g.weightGrams / GRAMS_PER_OZ) * 10) / 10 : null,
+      quantity: typeof g.quantity === "number" && g.quantity > 0 ? g.quantity : 1,
+      consumable: Boolean(g.consumable),
+    }));
+  const days = trip.dayLogs.map((d) => {
+    const sd = (d.sportData && typeof d.sportData === "object" ? d.sportData : {}) as Record<string, unknown>;
+    return {
+      ymd: toAppYmd(d.performedAt),
+      miles: d.distanceMi ?? null,
+      elevGainFt: d.elevationGainFt ?? null,
+      campsite: typeof sd.campsite === "string" ? sd.campsite : null,
+      notes: d.notes ?? null,
+    };
+  });
+  return {
+    trail: trip.trail,
+    location: trip.location,
+    startYmd: trip.startYmd,
+    endYmd: trip.endYmd,
+    totalMiles: trip.totalMiles,
+    nights: Math.max(0, trip.dayLogs.length - 1),
+    packLb: trip.packWeightGrams != null ? Math.round((trip.packWeightGrams / GRAMS_PER_LB) * 10) / 10 : null,
+    baseLb: trip.baseWeightGrams != null ? Math.round((trip.baseWeightGrams / GRAMS_PER_LB) * 10) / 10 : null,
+    gear,
+    days,
+  };
 }
 
 // Coerce RoutineLog.sportData JSON into a known discriminated shape.
@@ -287,6 +365,30 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       // mode, surfing wave count, etc.). Discriminated by `sport`.
       // See RoutineLog.sportData in prisma/schema.prisma for shape.
       sportData: true,
+      // Parent backpacking trip (if this is a trip day-log). Pulls the
+      // trip-level rollup + all sibling day-logs so any day shows the trip.
+      backpackingTrip: {
+        select: {
+          trail: true,
+          location: true,
+          startYmd: true,
+          endYmd: true,
+          totalMiles: true,
+          gear: true,
+          packWeightGrams: true,
+          baseWeightGrams: true,
+          dayLogs: {
+            orderBy: { performedAt: "asc" },
+            select: {
+              performedAt: true,
+              distanceMi: true,
+              elevationGainFt: true,
+              notes: true,
+              sportData: true,
+            },
+          },
+        },
+      },
       // ActivitySpot link — sport / endurance logs that picked a spot
       // get the spot name + region rendered alongside the legacy
       // free-text location field.
@@ -377,6 +479,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     routine: { ...log.routine, name: displayName },
     intervals: parseIntervalsConfig(log.intervalsConfig),
     sportData: parseSportData(log.sportData),
+    backpacking: parseBackpackingTrip(log.backpackingTrip),
     spot: log.activitySpot
       ? {
           id: log.activitySpot.id,

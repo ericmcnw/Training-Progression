@@ -57,7 +57,7 @@ export async function listSelectedSports(): Promise<SelectedSport[]> {
   const entries = slugs
     .map((slug) => {
       const entry = getActivityEntry(slug);
-      if (!entry || entry.family !== "sports") return null;
+      if (!entry || entry.family !== "sports" || entry.pinnedCatchAll) return null;
       return { slug, label: entry.label, routineId: getSyntheticSportRoutineId(slug) };
     })
     .filter((e): e is SelectedSport => e !== null)
@@ -91,17 +91,19 @@ export async function ensureSportSelected(slug: string): Promise<void> {
     throw new Error(`Unknown sport slug: ${slug}`);
   }
   const id = getSyntheticSportRoutineId(slug);
+  const domain = entry.logDomain ?? "sport";
 
   // Upsert by id. If the row existed but was archived (isActive=false),
-  // restore it.
+  // restore it. `domain` is set on update too so an activity that changed its
+  // logDomain (e.g. backpacking → cardio) gets corrected on next selection.
   await prisma.routine.upsert({
     where: { id },
-    update: { isActive: true, isDeleted: false, name: entry.label },
+    update: { isActive: true, isDeleted: false, name: entry.label, domain },
     create: {
       id,
       name: entry.label,
       kind: "SESSION",
-      domain: "sport",
+      domain,
       isActive: true,
       isPlaceholder: true,
       isDeleted: false,

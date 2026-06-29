@@ -156,6 +156,11 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
         </div>
       </section>
 
+      {/* Backpacking trip rollup — shown on every day-log of a trip, so
+          opening any day surfaces the whole trip: per-day miles table,
+          totals, and the gear list + pack weight. */}
+      {data.backpacking ? <BackpackingPanel trip={data.backpacking} /> : null}
+
       {/* Golf scorecard — appears on COURSE-mode logs with at least
           one hole row. Shows total par, total score, vs-par + the
           hole-by-hole grid the user filled in. RANGE mode renders a
@@ -428,6 +433,77 @@ function prettifySessionType(slug: string): string {
     .split(/[-_\s]+/)
     .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
     .join(" ");
+}
+
+function formatTripDay(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function BackpackingPanel({ trip }: { trip: NonNullable<LogSummaryData["backpacking"]> }) {
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>BACKPACKING TRIP</div>
+      <div style={contentPad}>
+        {trip.trail ? <div style={{ fontWeight: 900, fontSize: 15 }}>{trip.trail}</div> : null}
+        {trip.location ? <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>{trip.location}</div> : null}
+
+        <div style={{ ...summaryGrid, padding: 0, marginTop: 12 }}>
+          <div style={statCard}>
+            <div style={statLabel}>Total</div>
+            <div style={statValue}>{(trip.totalMiles ?? 0).toFixed(1)} mi</div>
+          </div>
+          <div style={statCard}>
+            <div style={statLabel}>Days</div>
+            <div style={statValue}>{trip.days.length}</div>
+          </div>
+          {trip.nights > 0 ? (
+            <div style={statCard}>
+              <div style={statLabel}>Nights</div>
+              <div style={statValue}>{trip.nights}</div>
+            </div>
+          ) : null}
+          {trip.packLb != null ? (
+            <div style={statCard}>
+              <div style={statLabel}>Pack weight</div>
+              <div style={statValue}>{trip.packLb} lb</div>
+              {trip.baseLb != null ? <div style={statSub}>{trip.baseLb} lb base</div> : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
+          {trip.days.map((d, i) => (
+            <div key={`${d.ymd}-${i}`} style={itemCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 900 }}>Day {i + 1} · {formatTripDay(d.ymd)}</span>
+                <span style={{ fontWeight: 800, opacity: 0.85 }}>
+                  {d.miles != null ? `${d.miles.toFixed(1)} mi` : "—"}
+                  {d.elevGainFt ? ` · ${d.elevGainFt} ft` : ""}
+                </span>
+              </div>
+              {d.campsite ? <div style={{ fontSize: 12, opacity: 0.72, marginTop: 2 }}>⛺ {d.campsite}</div> : null}
+              {d.notes ? <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>{d.notes}</div> : null}
+            </div>
+          ))}
+        </div>
+
+        {trip.gear.length > 0 ? (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ ...statLabel, marginBottom: 6 }}>Gear · {trip.gear.length} item{trip.gear.length === 1 ? "" : "s"}</div>
+            <div style={{ display: "grid", gap: 4 }}>
+              {trip.gear.map((g, i) => (
+                <div key={`${g.name}-${i}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}>
+                  <span>{g.consumable ? "🍫 " : ""}{g.name}{g.quantity > 1 ? ` ×${g.quantity}` : ""}</span>
+                  <span style={{ opacity: 0.65 }}>{g.oz != null ? `${g.oz} oz` : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 function GolfCoursePanel({

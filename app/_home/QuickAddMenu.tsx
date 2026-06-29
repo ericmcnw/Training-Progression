@@ -13,7 +13,16 @@ import type { QuickPickRoutine } from "./types";
 import { COLOR } from "./tokens";
 import Popover from "./Popover";
 import { createDayTodo } from "@/app/components/dashboard/day-todo-actions";
+import { createDaySpan } from "./day-span-actions";
 import QuickLogPicker, { type Domain } from "./QuickLogPicker";
+
+const AWAY_KINDS: Array<{ value: string; label: string }> = [
+  { value: "vacation", label: "🏖️ Vacation" },
+  { value: "travel", label: "✈️ Travel" },
+  { value: "away", label: "📍 Away" },
+  { value: "sick", label: "🤒 Sick" },
+  { value: "rest", label: "😴 Rest" },
+];
 import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
 
 type Props = {
@@ -25,6 +34,8 @@ type Props = {
   /** Bubbled up to the Fab so it can mount the right sport log
    *  sheet (climbing / golf / generic). */
   onSportSelected: (sport: ScheduleSport) => void;
+  /** Opens the freeform "Activity" log sheet (mounted at the Fab). */
+  onLogActivity: () => void;
   today: string;
 };
 
@@ -35,6 +46,7 @@ export default function QuickAddMenu({
   activityTypes,
   sports,
   onSportSelected,
+  onLogActivity,
   today,
 }: Props) {
   const { openDrawer } = useLogDrawer();
@@ -45,6 +57,32 @@ export default function QuickAddMenu({
   const [pending, startTransition] = useTransition();
   const [filter, setFilter] = useState("");
   const [todoError, setTodoError] = useState<string | null>(null);
+
+  // "Mark time away" inline form — a multi-day span (vacation / travel / etc.)
+  // that draws a bar across the WaG, explaining a dip in activity.
+  const [awayOpen, setAwayOpen] = useState(false);
+  const [awayKind, setAwayKind] = useState("vacation");
+  const [awayLabel, setAwayLabel] = useState("");
+  const [awayStart, setAwayStart] = useState(today);
+  const [awayEnd, setAwayEnd] = useState(today);
+  const [awayError, setAwayError] = useState<string | null>(null);
+
+  function saveAway() {
+    const label = awayLabel.trim();
+    if (!label) { setAwayError("Add a label."); return; }
+    if (!awayStart || !awayEnd) { setAwayError("Pick start and end dates."); return; }
+    setAwayError(null);
+    startTransition(async () => {
+      try {
+        await createDaySpan({ kind: awayKind, label, startYmd: awayStart, endYmd: awayEnd });
+        setAwayOpen(false);
+        setAwayLabel("");
+        onClose();
+      } catch {
+        setAwayError("Couldn't save. Try again.");
+      }
+    });
+  }
 
   function addTodo() {
     const trimmed = todoLabel.trim();
@@ -101,6 +139,13 @@ export default function QuickAddMenu({
                 <span style={menuItemChevron}>›</span>
               </button>
             ) : null}
+            {/* Freeform catch-all — mixed/casual movement that fits no
+                template. Mounts the Activity sheet at the Fab level. */}
+            <button type="button" onClick={() => { onLogActivity(); onClose(); }} style={menuItem}>
+              <span style={{ ...menuItemIcon, color: "rgba(94,234,212,0.95)", background: "rgba(45,212,191,0.12)", borderColor: "rgba(45,212,191,0.32)" }}>🤸</span>
+              <span style={menuItemText}>Log activity</span>
+              <span style={menuItemChevron}>›</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -150,6 +195,44 @@ export default function QuickAddMenu({
                 {todoError}
               </div>
             ) : null}
+
+            {!awayOpen ? (
+              <button type="button" onClick={() => setAwayOpen(true)} style={menuItem}>
+                <span style={{ ...menuItemIcon, color: "rgba(253,224,140,0.95)", background: "rgba(251,191,36,0.12)", borderColor: "rgba(251,191,36,0.32)" }}>🏖️</span>
+                <span style={menuItemText}>Mark time away</span>
+                <span style={menuItemChevron}>›</span>
+              </button>
+            ) : (
+              <div style={awayForm}>
+                <select value={awayKind} onChange={(e) => setAwayKind(e.target.value)} style={awayInput}>
+                  {AWAY_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>{k.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={awayLabel}
+                  onChange={(e) => setAwayLabel(e.target.value)}
+                  placeholder="Label (e.g. Hawaii)"
+                  style={awayInput}
+                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input type="date" value={awayStart} onChange={(e) => setAwayStart(e.target.value)} style={awayInput} aria-label="Start date" />
+                  <input type="date" value={awayEnd} onChange={(e) => setAwayEnd(e.target.value)} style={awayInput} aria-label="End date" />
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button type="button" onClick={saveAway} disabled={pending || !awayLabel.trim()} style={addButton}>
+                    Save
+                  </button>
+                  <button type="button" onClick={() => { setAwayOpen(false); setAwayError(null); }} style={backButton}>
+                    Cancel
+                  </button>
+                </div>
+                {awayError ? (
+                  <div role="alert" style={{ color: COLOR.red, fontSize: 11, fontWeight: 700 }}>{awayError}</div>
+                ) : null}
+              </div>
+            )}
           </div>
         </>
       ) : (
@@ -266,6 +349,29 @@ const addButton: CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
   cursor: "pointer",
+};
+
+const awayForm: CSSProperties = {
+  display: "grid",
+  gap: 6,
+  padding: 10,
+  borderRadius: 12,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.025)",
+};
+
+// fontSize 16 explicit so the <select> + date inputs don't trigger iOS zoom
+// (globals.css floors <input> but not every control).
+const awayInput: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  minHeight: 40,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.04)",
+  color: COLOR.text,
+  fontSize: 16,
 };
 
 const pickerHeader: CSSProperties = {
