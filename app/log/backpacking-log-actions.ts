@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
-import { ensureSportSelected, getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
+import { ensureBackpackingRoutine, getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 import { normalizeSpotName } from "@/lib/activity-spots";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { clampEffort } from "@/lib/strain";
@@ -141,7 +141,7 @@ async function createDayLogs(
 }
 
 export async function logBackpackingTrip(input: BackpackingLogInput): Promise<{ tripId: string }> {
-  await ensureSportSelected(SLUG);
+  await ensureBackpackingRoutine();
   const routineId = getSyntheticSportRoutineId(SLUG);
   const session = await getAppSession();
 

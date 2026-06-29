@@ -8,10 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { clampEffort, effortIntensity } from "@/lib/strain";
-import {
-  createActivityZoneActivitiesForLog,
-  createManualZoneActivitiesForLog,
-} from "@/lib/zone-activities";
+import { createManualZoneActivitiesForLog } from "@/lib/zone-activities";
 import { stampLogWeather } from "@/lib/weather-stamp";
 import {
   ACTIVITY_TAGS,
@@ -94,10 +91,10 @@ export async function logActivityAction(input: LogActivityInput): Promise<{ logI
     select: { id: true },
   });
 
-  // No-op today (the "activity" slug has no muscle map, by design), but
-  // keeps the write path uniform and clears stale SPORT_TAG rows on re-log.
-  await createActivityZoneActivitiesForLog(prisma, log.id);
-
+  // Freeform activity has no auto activity→muscle map (by design — body-part
+  // involvement is user-asserted, never guessed). So we skip the SPORT_TAG
+  // path entirely and write only the user's MANUAL parts below.
+  //
   // User-asserted body parts → MANUAL zone activity, lighting the body map's
   // recently-worked view. Intensity follows the session's effort if rated,
   // else a sensible "moderate" (the user said it got worked).

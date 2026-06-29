@@ -36,6 +36,8 @@ type Props = {
   onSportSelected: (sport: ScheduleSport) => void;
   /** Opens the freeform "Activity" log sheet (mounted at the Fab). */
   onLogActivity: () => void;
+  /** Opens the multi-day backpacking trip sheet (mounted at the Fab). */
+  onLogBackpacking: () => void;
   today: string;
 };
 
@@ -47,6 +49,7 @@ export default function QuickAddMenu({
   sports,
   onSportSelected,
   onLogActivity,
+  onLogBackpacking,
   today,
 }: Props) {
   const { openDrawer } = useLogDrawer();
@@ -139,6 +142,13 @@ export default function QuickAddMenu({
                 <span style={menuItemChevron}>›</span>
               </button>
             ) : null}
+            {/* Backpacking — a multi-day endurance trip with its own rich
+                logger. Direct entry (no "add it as a sport" hop). */}
+            <button type="button" onClick={() => { onLogBackpacking(); onClose(); }} style={menuItem}>
+              <span style={{ ...menuItemIcon, color: "rgba(147,197,253,0.95)", background: "rgba(78,148,255,0.12)", borderColor: "rgba(78,148,255,0.32)" }}>🎒</span>
+              <span style={menuItemText}>Log backpacking trip</span>
+              <span style={menuItemChevron}>›</span>
+            </button>
             {/* Freeform catch-all — mixed/casual movement that fits no
                 template. Mounts the Activity sheet at the Fab level. */}
             <button type="button" onClick={() => { onLogActivity(); onClose(); }} style={menuItem}>

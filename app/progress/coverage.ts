@@ -6,6 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { getRoutineLogs, type RoutineLogWithRelations } from "./data";
 import { isSportGroup, sportGroupTargetHref } from "./sports";
 import { sessionLoad } from "@/lib/strain";
+import {
+  bodyPartLabel,
+  bodyPartsToZoneGroups,
+  freeformBodyPartsFromSportData,
+  isFreeformActivityRoutineId,
+} from "@/lib/freeform-activity";
 
 export type CoverageLens = "muscles" | "patterns" | "sports";
 export type CoverageRange = "week" | "2w" | "4w" | "12w" | "ytd";
@@ -271,6 +277,14 @@ function collectLogGroupIds(log: RoutineLogWithRelations, groupIdBySlug: Map<str
     appendSet(groupIds, guidedGroupIds.size > 0 ? guidedGroupIds : routineGroupIds);
   }
 
+  // Freeform "Activity" logs carry no metadata groups — they bucket onto the
+  // muscle lens via the user's explicit "felt worked" body parts, mapped
+  // through the same muscle-group ids exercises use.
+  if (isFreeformActivityRoutineId(log.routineId)) {
+    const partGroups = bodyPartsToZoneGroups(freeformBodyPartsFromSportData(log.sportData));
+    appendSet(groupIds, groupIdsFromSlugs(partGroups, groupIdBySlug));
+  }
+
   return groupIds;
 }
 
@@ -347,6 +361,14 @@ function relevantPartsForLog(params: {
     relevantParts.add(
       `Guided steps: ${Array.from(matchingGuidedStepTitles).sort((left, right) => left.localeCompare(right)).join(", ")}`
     );
+  }
+
+  if (isFreeformActivityRoutineId(log.routineId)) {
+    const partKeys = freeformBodyPartsFromSportData(log.sportData);
+    const partGroupIds = groupIdsFromSlugs(bodyPartsToZoneGroups(partKeys), groupIdBySlug);
+    if (partKeys.length > 0 && matchesSelectedGroup(targetGroupId, partGroupIds, descendantsByGroupId)) {
+      relevantParts.add(`Felt worked: ${partKeys.map(bodyPartLabel).join(", ")}`);
+    }
   }
 
   if (relevantParts.size === 0 && matchesSelectedGroup(targetGroupId, routineGroupIds, descendantsByGroupId)) {

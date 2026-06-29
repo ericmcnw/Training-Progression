@@ -35,10 +35,11 @@ export type ActivityRegistryEntry = {
    *  iteration — it's not a browsable/selectable sport, it has its own
    *  always-present entry points. */
   pinnedCatchAll?: boolean;
-  /** Domain to stamp on this activity's synthetic routine. Defaults to the
-   *  natural one for the family ("sport" for sports). Backpacking rides the
-   *  sports machinery but logs as cardio, so it overrides to "cardio". */
-  logDomain?: "sport" | "cardio";
+  /** Excluded from family browse listings (Activities landing, add-sport
+   *  picker, chart slug-sets) while still resolving for icon/label/eyebrow.
+   *  Backpacking uses this: it's an endurance pursuit with a dedicated
+   *  multi-day logger + its own entry point, not a browseable activity card. */
+  hiddenFromBrowse?: boolean;
 };
 
 // Endurance — pace/distance-shaped activities.
@@ -56,6 +57,10 @@ const ENDURANCE_ACTIVITIES: ActivityRegistryEntry[] = [
   { slug: "open-water-swimming", label: "Open Water Swimming", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🏊", sortHint: 42 },
   { slug: "rowing", label: "Rowing", family: "endurance", eyebrow: "Endurance", icon: "🚣", sortHint: 50 },
   { slug: "hiking", label: "Hiking", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🥾", sortHint: 60 },
+  // Backpacking is an endurance pursuit (under the hiking umbrella) but has a
+  // dedicated multi-day trip logger + its own entry point, so it's hidden from
+  // the browseable activity listings. Its synthetic routine is domain=cardio.
+  { slug: "backpacking", label: "Backpacking", family: "endurance", eyebrow: "Endurance · Outdoor", icon: "🎒", sortHint: 61, hiddenFromBrowse: true },
 ];
 
 // Sports — skill / session-shaped activities.
@@ -70,11 +75,6 @@ const SPORT_ACTIVITIES: ActivityRegistryEntry[] = [
   { slug: "spikeball", label: "Spikeball", family: "sports", eyebrow: "Yard sport", icon: "🏐", sortHint: 32 },
   { slug: "tennis", label: "Tennis", family: "sports", eyebrow: "Racquet sport", icon: "🎾", sortHint: 40 },
   { slug: "golf", label: "Golf", family: "sports", eyebrow: "Sport · Outdoor", icon: "⛳", sortHint: 50 },
-  // Backpacking rides the sports rich-form machinery (dedicated multi-day
-  // sheet + synthetic routine + FAB dispatch) but logs as cardio — it's a
-  // hiking-family pursuit at heart, so its synthetic routine is domain=cardio
-  // and it reads as "Endurance · Outdoor".
-  { slug: "backpacking", label: "Backpacking", family: "sports", eyebrow: "Endurance · Outdoor", icon: "🎒", sortHint: 55, logDomain: "cardio" },
 ];
 
 // Freeform catch-all — the "Activity" entry. Family is "sports" so it
@@ -113,7 +113,7 @@ export function isSportActivity(slug: string) {
 }
 
 export function activitiesByFamily(family: ActivityFamily): ActivityRegistryEntry[] {
-  return ACTIVITY_REGISTRY.filter((entry) => entry.family === family && !entry.pinnedCatchAll).sort(
+  return ACTIVITY_REGISTRY.filter((entry) => entry.family === family && !entry.pinnedCatchAll && !entry.hiddenFromBrowse).sort(
     (a, b) => (a.sortHint ?? 999) - (b.sortHint ?? 999) || a.label.localeCompare(b.label)
   );
 }

@@ -31,6 +31,9 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
   const [activeSport, setActiveSport] = useState<ScheduleSport | null>(null);
   // Freeform "Activity" sheet — opened from the QuickAddMenu item.
   const [activityOpen, setActivityOpen] = useState(false);
+  // Backpacking trip sheet — endurance pursuit with its own direct entry
+  // (no "add it as a sport" hop), opened straight from the QuickAddMenu.
+  const [backpackingOpen, setBackpackingOpen] = useState(false);
 
   return (
     <>
@@ -54,6 +57,7 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
         sports={sports}
         onSportSelected={(sport) => setActiveSport(sport)}
         onLogActivity={() => setActivityOpen(true)}
+        onLogBackpacking={() => setBackpackingOpen(true)}
         today={today}
       />
 
@@ -64,13 +68,12 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
         <ClimbLogSheet onClose={() => setActiveSport(null)} />
       ) : activeSport?.slug === "golf" ? (
         <GolfLogSheet onClose={() => setActiveSport(null)} />
-      ) : activeSport?.slug === "backpacking" ? (
-        <BackpackingLogSheet onClose={() => setActiveSport(null)} />
       ) : activeSport ? (
         <GenericSportLogSheet sport={activeSport} onClose={() => setActiveSport(null)} />
       ) : null}
 
       {activityOpen ? <ActivityLogSheet onClose={() => setActivityOpen(false)} /> : null}
+      {backpackingOpen ? <BackpackingLogSheet onClose={() => setBackpackingOpen(false)} /> : null}
 
       <style>{`
         .homeV2Fab {

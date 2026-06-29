@@ -110,3 +110,20 @@ export function bodyPartsToZoneGroups(keys: string[]): string[] {
   }
   return Array.from(out);
 }
+
+const PART_LABEL = new Map(BODY_PART_OPTIONS.map((p) => [p.key, p.label]));
+
+/** Human label for a stored body-part key. */
+export function bodyPartLabel(key: string): string {
+  return PART_LABEL.get(key) ?? key;
+}
+
+/** Safely read the validated body-part keys off a freeform log's sportData blob. */
+export function freeformBodyPartsFromSportData(sportData: unknown): string[] {
+  if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return [];
+  const parts = (sportData as Record<string, unknown>).bodyParts;
+  if (!Array.isArray(parts)) return [];
+  return parts.filter(
+    (p): p is string => typeof p === "string" && BODY_PART_ZONE_GROUPS[p] !== undefined,
+  );
+}

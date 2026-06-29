@@ -91,19 +91,39 @@ export async function ensureSportSelected(slug: string): Promise<void> {
     throw new Error(`Unknown sport slug: ${slug}`);
   }
   const id = getSyntheticSportRoutineId(slug);
-  const domain = entry.logDomain ?? "sport";
 
   // Upsert by id. If the row existed but was archived (isActive=false),
-  // restore it. `domain` is set on update too so an activity that changed its
-  // logDomain (e.g. backpacking → cardio) gets corrected on next selection.
+  // restore it.
   await prisma.routine.upsert({
     where: { id },
-    update: { isActive: true, isDeleted: false, name: entry.label, domain },
+    update: { isActive: true, isDeleted: false, name: entry.label },
     create: {
       id,
       name: entry.label,
       kind: "SESSION",
-      domain,
+      domain: "sport",
+      isActive: true,
+      isPlaceholder: true,
+      isDeleted: false,
+    },
+  });
+}
+
+/** Backpacking's synthetic routine. Backpacking is an endurance pursuit (not a
+ *  sports-family activity), so it doesn't go through ensureSportSelected — but
+ *  it reuses the same synthetic-routine id scheme for a stable, lookup-free id.
+ *  domain=cardio so its trip miles count as cardio. Idempotent; created on the
+ *  first trip log. */
+export async function ensureBackpackingRoutine(): Promise<void> {
+  const id = getSyntheticSportRoutineId("backpacking");
+  await prisma.routine.upsert({
+    where: { id },
+    update: { isActive: true, isDeleted: false, name: "Backpacking", domain: "cardio" },
+    create: {
+      id,
+      name: "Backpacking",
+      kind: "SESSION",
+      domain: "cardio",
       isActive: true,
       isPlaceholder: true,
       isDeleted: false,
