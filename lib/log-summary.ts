@@ -31,7 +31,7 @@ export type LogSummaryBackpacking = {
   nights: number;
   packLb: number | null;
   baseLb: number | null;
-  gear: Array<{ name: string; oz: number | null; quantity: number; consumable: boolean }>;
+  gear: Array<{ type: string; name: string; oz: number | null; quantity: number; consumable: boolean }>;
   days: Array<{ ymd: string; miles: number | null; durationSec: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
   totalDurationSec: number;
 };
@@ -242,6 +242,7 @@ function parseBackpackingTrip(trip: RawTrip | null | undefined): LogSummaryBackp
   const gear = gearRaw
     .filter((g) => typeof g.name === "string" && g.name.trim().length > 0)
     .map((g) => ({
+      type: typeof g.type === "string" ? g.type : "",
       name: g.name as string,
       oz: typeof g.weightGrams === "number" ? Math.round((g.weightGrams / GRAMS_PER_OZ) * 10) / 10 : null,
       quantity: typeof g.quantity === "number" && g.quantity > 0 ? g.quantity : 1,

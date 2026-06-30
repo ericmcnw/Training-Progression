@@ -17,6 +17,7 @@ import { climbOutcomeColor, climbOutcomeBg, climbOutcomeLabel } from "@/lib/clim
 import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 import type { LogSummaryData } from "@/lib/log-summary";
 import WeatherBadge from "@/app/components/WeatherBadge";
+import { gearTypeMeta } from "@/lib/gear-types";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
@@ -509,7 +510,7 @@ function BackpackingPanel({ trip }: { trip: NonNullable<LogSummaryData["backpack
             <div style={{ display: "grid", gap: 4 }}>
               {trip.gear.map((g, i) => (
                 <div key={`${g.name}-${i}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}>
-                  <span>{g.consumable ? "🍫 " : ""}{g.name}{g.quantity > 1 ? ` ×${g.quantity}` : ""}</span>
+                  <span>{g.type ? `${gearTypeMeta(g.type).icon} ` : ""}{g.consumable ? "🍫 " : ""}{g.name}{g.quantity > 1 ? ` ×${g.quantity}` : ""}</span>
                   <span style={{ opacity: 0.65 }}>{g.oz != null ? `${g.oz} oz` : ""}</span>
                 </div>
               ))}

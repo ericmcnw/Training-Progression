@@ -10,6 +10,8 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle, textareaStyle, Field, FormSection } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
+import GearPicker from "@/app/components/log/GearPicker";
+import type { GearPick } from "@/lib/gear-pick-types";
 
 // Dedicated multi-day backpacking trip sheet. A trip is logged as a parent
 // BackpackingTrip + one day-log per day, so it spans the calendar natively.
@@ -30,18 +32,10 @@ type DayRow = {
   notes: string;
 };
 
-type GearRow = {
-  localId: string;
-  name: string;
-  weightOz: string;
-  quantity: string;
-  consumable: boolean;
-};
-
 type Draft = {
   trail: string;
   days: DayRow[];
-  gear: GearRow[];
+  gear: GearPick[];
   effort: number | null;
   notes: string;
 };
@@ -76,10 +70,6 @@ function newDay(ymd: string): DayRow {
   return { localId: rid(), ymd, miles: "", hours: "", minutes: "", elevGainFt: "", campsite: "", notes: "" };
 }
 
-function newGear(): GearRow {
-  return { localId: rid(), name: "", weightOz: "", quantity: "1", consumable: false };
-}
-
 function initialDraft(): Draft {
   return {
     trail: "",
@@ -108,6 +98,8 @@ function draftFromEdit(e: BackpackingEditData): Draft {
         : [newDay(todayYmd())],
     gear: e.gear.map((g) => ({
       localId: rid(),
+      gearId: g.gearId,
+      type: g.type,
       name: g.name,
       weightOz: g.weightGrams != null ? String(Math.round((g.weightGrams / GRAMS_PER_OZ) * 10) / 10) : "",
       quantity: String(g.quantity),
@@ -134,7 +126,8 @@ export default function BackpackingLogSheet({
 }) {
   const isEdit = Boolean(editTripId);
   // Edit gets a trip-scoped draft key so it never clobbers the new-trip draft.
-  const draftKey = isEdit ? `sport-log-draft-backpacking-edit-${editTripId}` : "sport-log-draft-backpacking";
+  // `-v2` invalidates pre-gear-picker drafts (the gear row shape changed).
+  const draftKey = isEdit ? `sport-log-draft-backpacking-edit-v2-${editTripId}` : "sport-log-draft-backpacking-v2";
   const [draft, setDraft, clearDraft] = useSportLogDraft<Draft>(
     draftKey,
     isEdit && initialEdit ? draftFromEdit(initialEdit) : initialDraft()
@@ -200,15 +193,6 @@ export default function BackpackingLogSheet({
   function removeDay(localId: string) {
     setDraft((d) => (d.days.length === 1 ? d : { ...d, days: d.days.filter((x) => x.localId !== localId) }));
   }
-  function setGear(localId: string, p: Partial<GearRow>) {
-    setDraft((d) => ({ ...d, gear: d.gear.map((x) => (x.localId === localId ? { ...x, ...p } : x)) }));
-  }
-  function addGear() {
-    setDraft((d) => ({ ...d, gear: [...d.gear, newGear()] }));
-  }
-  function removeGear(localId: string) {
-    setDraft((d) => ({ ...d, gear: d.gear.filter((x) => x.localId !== localId) }));
-  }
 
   function submit() {
     setError(null);
@@ -236,6 +220,8 @@ export default function BackpackingLogSheet({
       gear: gear
         .filter((g) => g.name.trim().length > 0)
         .map((g) => ({
+          gearId: g.gearId,
+          type: g.type,
           name: g.name.trim(),
           weightGrams: g.weightOz.trim() === "" ? undefined : Math.round(Number(g.weightOz) * GRAMS_PER_OZ),
           quantity: g.quantity.trim() === "" ? 1 : Number(g.quantity),
@@ -389,48 +375,8 @@ export default function BackpackingLogSheet({
           </div>
         </FormSection>
 
-        <FormSection title="Gear" description="What you carried + per-item weight (oz). Powers your pack weight.">
-          <div style={{ display: "grid", gap: 10 }}>
-            {gear.map((g) => (
-              <div key={g.localId} style={gearRow}>
-                <input
-                  style={{ ...inputStyle, flex: 2, minWidth: 0 }}
-                  value={g.name}
-                  onChange={(e) => setGear(g.localId, { name: e.target.value })}
-                  placeholder="Item"
-                />
-                <input
-                  inputMode="decimal"
-                  style={{ ...inputStyle, width: 64, flexShrink: 0 }}
-                  value={g.weightOz}
-                  onChange={(e) => setGear(g.localId, { weightOz: e.target.value })}
-                  placeholder="oz"
-                />
-                <input
-                  inputMode="numeric"
-                  style={{ ...inputStyle, width: 48, flexShrink: 0 }}
-                  value={g.quantity}
-                  onChange={(e) => setGear(g.localId, { quantity: e.target.value })}
-                  placeholder="×"
-                  aria-label="Quantity"
-                />
-                <button
-                  type="button"
-                  onClick={() => setGear(g.localId, { consumable: !g.consumable })}
-                  style={g.consumable ? consumableOn : consumableOff}
-                  title="Consumable (food/fuel/water) — excluded from base weight"
-                >
-                  🍫
-                </button>
-                <button type="button" style={removeBtn} onClick={() => removeGear(g.localId)} aria-label="Remove gear">
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-          <button type="button" style={addBtn} onClick={addGear}>
-            + Add gear
-          </button>
+        <FormSection title="Gear" description="Pick from your saved gear or add new — type, name, weight. Powers your pack weight.">
+          <GearPicker activitySlug="backpacking" value={gear} onChange={(g) => patch({ gear: g })} />
           {totals.packLb != null ? (
             <div style={tripTotals}>
               Pack: <strong>{totals.packLb.toFixed(1)} lb</strong>
@@ -475,7 +421,6 @@ const dayBadge: CSSProperties = { fontWeight: 900, fontSize: 13, opacity: 0.85 }
 const dayGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 };
 const miniField: CSSProperties = { display: "grid", gap: 4, minWidth: 0 };
 const miniLabel: CSSProperties = { fontSize: 12, fontWeight: 700, opacity: 0.72 };
-const gearRow: CSSProperties = { display: "flex", gap: 6, alignItems: "center" };
 
 const addBtn: CSSProperties = {
   marginTop: 10,
@@ -500,27 +445,6 @@ const removeBtn: CSSProperties = {
   color: "rgba(248,160,160,0.95)",
   fontWeight: 900,
   cursor: "pointer",
-};
-const consumableBase: CSSProperties = {
-  width: 36,
-  height: 38,
-  minHeight: 38,
-  flexShrink: 0,
-  borderRadius: 8,
-  fontSize: 15,
-  cursor: "pointer",
-};
-const consumableOff: CSSProperties = {
-  ...consumableBase,
-  border: "1px solid rgba(128,128,128,0.4)",
-  background: "rgba(128,128,128,0.08)",
-  opacity: 0.45,
-};
-const consumableOn: CSSProperties = {
-  ...consumableBase,
-  border: "1px solid rgba(251,191,36,0.5)",
-  background: "rgba(251,191,36,0.16)",
-  opacity: 1,
 };
 const tripTotals: CSSProperties = {
   marginTop: 10,

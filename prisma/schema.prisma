@@ -772,6 +772,25 @@ model DaySpan {
   @@index([profileKey, startYmd])
 }
 
+// Owned gear — a reusable inventory item (footwear, tent, snowboard, …) picked
+// on logs and reused across them. `activitySlug` null = universal (shows on any
+// log, e.g. footwear); set = scoped to that activity + its compatibles. `type`
+// is a gear-type slug (see lib/gear-types.ts) driving icon + lifetime unit.
+model Gear {
+  id           String    @id @default(cuid())
+  profileKey   String
+  type         String
+  name         String
+  weightGrams  Int?
+  activitySlug String?
+  consumable   Boolean   @default(false)
+  retiredAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([profileKey, retiredAt])
+}
+
 model BodyZone {
   id                String   @id @default(cuid())
   slug              String   @unique

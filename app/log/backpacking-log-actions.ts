@@ -10,6 +10,7 @@ import { clampEffort } from "@/lib/strain";
 import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
 import { stampLogWeather } from "@/lib/weather-stamp";
 import { parseAppDateTimeLocal, toAppYmd } from "@/lib/dates";
+import { resolveGearPicks } from "@/lib/gear";
 
 // Backpacking trip logging. A trip is a BackpackingTrip parent + one RoutineLog
 // per day on the trail, so each day shows natively on the WaG / schedule /
@@ -28,6 +29,8 @@ export type BackpackingDayInput = {
 };
 
 export type BackpackingGearInput = {
+  gearId?: string | null;
+  type?: string;
   name: string;
   weightGrams?: number;
   quantity?: number;
@@ -55,7 +58,18 @@ type CleanDay = Required<Pick<BackpackingDayInput, "ymd">> & {
   notes: string | null;
 };
 
-type CleanGear = { name: string; weightGrams: number | null; quantity: number; consumable: boolean };
+type CleanGear = { weightGrams: number | null; quantity: number; consumable: boolean };
+
+function toGearInput(g: BackpackingGearInput) {
+  return {
+    gearId: g.gearId ?? null,
+    type: g.type ?? "",
+    name: g.name,
+    weightGrams: Number.isFinite(g.weightGrams) ? Number(g.weightGrams) : null,
+    quantity: Number.isFinite(g.quantity) ? Number(g.quantity) : 1,
+    consumable: Boolean(g.consumable),
+  };
+}
 
 function cleanDays(days: BackpackingDayInput[]): CleanDay[] {
   return days
@@ -77,17 +91,6 @@ function cleanDays(days: BackpackingDayInput[]): CleanDay[] {
       return acc;
     }, [])
     .sort((a, b) => a.ymd.localeCompare(b.ymd));
-}
-
-function cleanGear(gear: BackpackingGearInput[]): CleanGear[] {
-  return gear
-    .map((g) => ({
-      name: g.name?.trim() ?? "",
-      weightGrams: Number.isFinite(g.weightGrams) && (g.weightGrams as number) >= 0 ? Math.round(Number(g.weightGrams)) : null,
-      quantity: Number.isFinite(g.quantity) && (g.quantity as number) > 0 ? Math.round(Number(g.quantity)) : 1,
-      consumable: Boolean(g.consumable),
-    }))
-    .filter((g) => g.name.length > 0);
 }
 
 function packWeights(gear: CleanGear[]): { packWeightGrams: number | null; baseWeightGrams: number | null } {
@@ -152,7 +155,7 @@ export async function logBackpackingTrip(input: BackpackingLogInput): Promise<{ 
   const days = cleanDays(input.days);
   if (days.length === 0) throw new Error("A backpacking trip needs at least one day with a date.");
 
-  const gear = cleanGear(input.gear);
+  const gear = await resolveGearPicks(input.gear.map(toGearInput), SLUG);
   const { packWeightGrams, baseWeightGrams } = packWeights(gear);
   const totalMiles = days.reduce((s, d) => s + d.miles, 0);
   const spot = await resolveBackpackingSpot(input.spotValue);
@@ -194,7 +197,7 @@ export async function updateBackpackingTrip(input: { tripId: string } & Backpack
   const days = cleanDays(input.days);
   if (days.length === 0) throw new Error("A backpacking trip needs at least one day with a date.");
 
-  const gear = cleanGear(input.gear);
+  const gear = await resolveGearPicks(input.gear.map(toGearInput), SLUG);
   const { packWeightGrams, baseWeightGrams } = packWeights(gear);
   const totalMiles = days.reduce((s, d) => s + d.miles, 0);
   const spot = await resolveBackpackingSpot(input.spotValue);
@@ -242,7 +245,7 @@ export type BackpackingEditData = {
   trail: string;
   spotValue: SpotPickerValue | null;
   days: Array<{ ymd: string; miles: number | null; durationMin: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
-  gear: Array<{ name: string; weightGrams: number | null; quantity: number; consumable: boolean }>;
+  gear: Array<{ gearId: string | null; type: string; name: string; weightGrams: number | null; quantity: number; consumable: boolean }>;
   notes: string;
   effort: number | null;
 };
@@ -294,6 +297,8 @@ export async function getBackpackingTripForEdit(tripId: string): Promise<Backpac
   const gear = gearRaw
     .filter((g) => typeof g.name === "string")
     .map((g) => ({
+      gearId: typeof g.gearId === "string" ? g.gearId : null,
+      type: typeof g.type === "string" ? g.type : "",
       name: g.name as string,
       weightGrams: typeof g.weightGrams === "number" ? g.weightGrams : null,
       quantity: typeof g.quantity === "number" && g.quantity > 0 ? g.quantity : 1,
