@@ -6,7 +6,9 @@ import { ymdWeekday, PROFILE_DOMAIN_LABELS as DOMAIN_LABELS } from "@/lib/profil
 import { resolvePeriod, type Period } from "@/lib/reports/period";
 import { loadReportLogs } from "@/lib/reports/load";
 import { loadReportTotals } from "@/lib/reports/totals";
+import { loadPeriodGoals } from "@/lib/reports/evaluate";
 import { delta, summarize } from "@/lib/reports/aggregate";
+import GoalsBlock from "./GoalsBlock";
 import {
   buildNumbers,
   countChip,
@@ -54,9 +56,12 @@ export default async function MonthReport({ period }: { period: Period }) {
 
   const maxDayCount = Math.max(1, ...Array.from(cur.dayCounts.values()));
   const numbers = buildNumbers(cur, totals);
+  const goals = period.isCurrent ? await loadPeriodGoals("month") : [];
 
   return (
-    <section style={panel}>
+    <>
+      <GoalsBlock goals={goals} />
+      <section style={panel}>
       <div style={panelHeader}>{period.label.toUpperCase()}</div>
       <div style={body}>
         <KpiStrip
@@ -140,7 +145,8 @@ export default async function MonthReport({ period }: { period: Period }) {
           </div>
         )}
       </div>
-    </section>
+      </section>
+    </>
   );
 }
 

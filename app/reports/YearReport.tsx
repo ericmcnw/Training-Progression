@@ -11,7 +11,9 @@ import {
 import { resolvePeriod, type Period } from "@/lib/reports/period";
 import { loadReportLogs } from "@/lib/reports/load";
 import { loadReportTotals } from "@/lib/reports/totals";
+import { loadPeriodGoals } from "@/lib/reports/evaluate";
 import { delta, summarize } from "@/lib/reports/aggregate";
+import GoalsBlock from "./GoalsBlock";
 import {
   buildNumbers,
   countChip,
@@ -100,8 +102,12 @@ export default async function YearReport({ period }: { period: Period }) {
     numbers.unshift({ label: "Best month", value: bestMonth.label, sub: `${bestMonth.total} sessions`, accent: "rgba(250,204,21,0.95)" });
   }
 
+  const goals = period.isCurrent ? await loadPeriodGoals("year") : [];
+
   return (
-    <section style={panel}>
+    <>
+      <GoalsBlock goals={goals} />
+      <section style={panel}>
       <div style={panelHeader}>{period.label}</div>
       <div style={body}>
         <KpiStrip
@@ -183,7 +189,8 @@ export default async function YearReport({ period }: { period: Period }) {
 
         <NumbersGrid title="THIS YEAR IN NUMBERS" rows={numbers} />
       </div>
-    </section>
+      </section>
+    </>
   );
 }
 

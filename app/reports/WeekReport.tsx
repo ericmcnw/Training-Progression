@@ -22,6 +22,8 @@ import {
   type ProfileDomain as Domain,
 } from "@/lib/profile-summary";
 import type { Period } from "@/lib/reports/period";
+import { loadPeriodGoals } from "@/lib/reports/evaluate";
+import GoalsBlock from "./GoalsBlock";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -93,6 +95,7 @@ export default async function WeekReport({ period }: { period: Period }) {
   }));
 
   const highlights = buildHighlights(logs, byDay);
+  const goals = period.isCurrent ? await loadPeriodGoals("week") : [];
 
   // ── Totals line (rule 1: keep the old report's strength/cardio detail) ─────
   const totalsParts: string[] = [`${sessions} session${sessions === 1 ? "" : "s"}`];
@@ -118,6 +121,8 @@ export default async function WeekReport({ period }: { period: Period }) {
 
   return (
     <>
+      <GoalsBlock goals={goals} />
+
       {/* KPI strip */}
       <section style={panel}>
         <div style={panelHeader}>THIS WEEK (SUN–SAT)</div>
