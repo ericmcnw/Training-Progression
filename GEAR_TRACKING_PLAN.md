@@ -171,6 +171,67 @@ inline also lands in the `Gear` table for reuse.
 
 ---
 
+## Cross-app gear + usage surfacing (2026-06-30)
+
+Gear is a primitive across the whole app, not just backpacking/footwear. Same
+`Gear` table; the picker appears wherever an activity has hardware worth tracking.
+
+### Sports hardware (savable boards, etc.)
+Activity-scoped gear types feed the relevant sport sheets:
+- `snowboard` → Snowboarding · `skis` → Skiing · `surfboard`/`bodyboard` →
+  Surfing/Bodysurfing · `skateboard` → Skateboarding · (climbing: `rope`,
+  `harness`, `shoes`, `rack` — though climbing has its own world).
+- Pick "your board" on a snowboard log the same way you pick footwear on a run.
+  Saved once, reused; activity-scoped so a surfboard never shows on a ski log.
+
+### Usage metrics by type (the interesting part)
+Each gear **type** maps to a natural lifetime unit, computed from the logs/trips
+that reference it:
+
+| Type | Unit | Source |
+|---|---|---|
+| footwear | **miles** | Σ `distanceMi` of linked logs (cardio + backpacking days) |
+| tent · sleeping bag · sleeping pad | **nights** | Σ trip nights (`days−1`) of linked trips |
+| pack | **trips + nights** | count + Σ nights |
+| snowboard · skis | **days / sessions** | count of linked sport logs |
+| surfboard · bodyboard | **sessions** (+ waves if tracked) | count of linked logs |
+| rope · harness | **sessions + age** | count + months since `purchasedAt` |
+| (generic) | **sessions + age** | count + age |
+
+Unit/scope/surfacing all come from one `GEAR_TYPE` registry (preset types →
+`{ label, scope: universal|activity, unit, surfacesIn: activitySlug }`).
+
+### Where gear shows up
+- **`/gear` hub** — the home for gear. Inventory grouped by activity, each card
+  showing its type-appropriate usage ("Brooks Ghost 16 · 247 mi", "Big Agnes ·
+  18 nights", "Lib Tech · 24 days") + retire status / lifetime bar.
+- **Endurance world** (`/activities/endurance`) — a **Footwear** widget: shoe
+  mileage + retire nudge. (Per Eric: shoe miles read as endurance.)
+- **Sport worlds** (`/activities/[sport]`) — that sport's gear + usage (snowboard
+  days on Snowboarding, boards on Surfing, …).
+- **Backpacking / trip** — tent nights, pack-weight trend across trips.
+- **`/gear/[id]` detail** — usage timeline + trend chart + retire/replace ("Ghost
+  16 replaces Ghost 15").
+- **Log form picker** — selection (already specced above).
+- **Home nudge** (optional) — "your shoes passed 400 mi — retire?".
+
+### Model implication
+Usage needs gear↔log links, not just the trip snapshot:
+- `RoutineLogGear` (logId ↔ gearId) for cardio + sport logs.
+- Backpacking gear links to the trip (so nights derive from the trip's days).
+- Aggregations are cheap on-demand reads (Σ over linked logs); cache later if
+  the `/gear` hub feels slow.
+
+### Phasing (revised)
+1. **Inventory + picker** across backpacking → cardio footwear → sport boards
+   (the `Gear` table + `GearPicker`, type/name/weight + select-from-saved).
+2. **Usage rollups + `/gear` hub** — per-type units, lifetime bars, retire.
+3. **World-page widgets** — footwear on Endurance, boards on sport worlds, tent
+   nights on backpacking.
+4. **`/gear/[id]` detail + replacement graph + home nudges.**
+
+---
+
 ## Core data model
 
 ### `Gear` — generalized from day one
