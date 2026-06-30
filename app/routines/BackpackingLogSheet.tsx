@@ -331,7 +331,7 @@ export default function BackpackingLogSheet({
                       <input
                         inputMode="numeric"
                         style={{ ...inputStyle, textAlign: "center" }}
-                        value={d.hours}
+                        value={d.hours ?? ""}
                         onChange={(e) => setDay(d.localId, { hours: e.target.value })}
                         placeholder="h"
                         aria-label="Hours hiked"
@@ -340,7 +340,7 @@ export default function BackpackingLogSheet({
                       <input
                         inputMode="numeric"
                         style={{ ...inputStyle, textAlign: "center" }}
-                        value={d.minutes}
+                        value={d.minutes ?? ""}
                         onChange={(e) => setDay(d.localId, { minutes: e.target.value })}
                         placeholder="m"
                         aria-label="Minutes hiked"
