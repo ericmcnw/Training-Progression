@@ -241,11 +241,12 @@ Note: no test runner exists in the repo (open decision — add vitest, or keep v
 **Phase 1 — Navigable Week report. ✅ DONE (pending on-device verify).**
 Dynamic `app/reports/[period]/page.tsx` (validates kind, resolves period, fetches earliest log for prev-clamp) + `ReportShell` (Week/Month/Year tabs + prev/next stepper + jump-to-current) + `WeekReport` (KPI strip sessions/time/distance/active, 7-day rhythm, by-domain bar, highlights, totals line, and the legacy per-day detail list ported verbatim) + month/year `PeriodPlaceholder` (Phase 2 fills). `/reports` and `/reports/weekly` redirect to `/reports/week` (anchor preserved); in-app links updated. Project typecheck clean (0 errors).
 
-**Phase 2 — Month + Year reports.**
-`/reports/month`, `/reports/year` with their existing visual modules, navigable. `ReportShell` tabs + stepper unified.
+**Phase 2 — Month + Year reports. ✅ DONE (pending on-device verify).**
+`MonthReport` + `YearReport` (navigable). Shared `lib/reports/aggregate.ts` (`summarize` → sessions/time/distance/elev/**load**/active-days/longest-streak/domains/dayCounts/topRoutines/longest/furthest + `delta`) and `lib/reports/totals.ts` (windowed per-domain headline numbers — climb sends + hardest grade, strength volume + sets, via log-id filter). Shared `app/reports/_ui.tsx` (Kpi/DomainBar/DeltaChips/NumbersGrid + `buildNumbers`). Month = KPIs + vs-last-month + calendar heatmap + composition + in-numbers + top routines. Year = KPIs + vs-last-year + year heatmap + domain-stacked monthly bars + in-numbers (incl. best month). Typecheck + prod build clean.
+**Pulled forward from Phase 3:** the *trend* half (this-vs-previous-period deltas) shipped here to make the reports genuinely useful. Phase 3 now = the *goals/frequency evaluation* half only.
 
-**Phase 3 — Evaluative layer.**
-Wire goals + frequency status (`evaluate.ts`) and vs-previous deltas (`compare.ts`) into all three periods. "Was it enough / which way am I trending."
+**Phase 3 — Evaluative layer (goals/frequency).**
+Wire goals + frequency status (`evaluate.ts`) into all three periods: per-period "hit/missed/progress" against active Goals + FrequencyGoals. ("Which way am I trending" already shipped in Phase 2.)
 
 **Phase 3.5 — Drill-down prep (no visible change).**
 Refactor the four 12w loaders (`sports-chart`, `endurance-chart`, `strength-chart`, `endurance-pace`) to separate fetch from aggregation over an explicit `{start,end}` window — existing activity-world pages pass their current 12w window so behavior is unchanged (additive, CLAUDE.md rule 2). Climbing already follows this pattern (`buildPyramidRows`).

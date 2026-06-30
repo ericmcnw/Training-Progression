@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { isPeriodKind, resolvePeriod } from "@/lib/reports/period";
 import ReportShell from "../ReportShell";
 import WeekReport from "../WeekReport";
-import PeriodPlaceholder from "../PeriodPlaceholder";
+import MonthReport from "../MonthReport";
+import YearReport from "../YearReport";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,10 @@ export default async function ReportPeriodPage({
     <ReportShell period={period} earliestMs={earliestMs}>
       {period.kind === "week" ? (
         <WeekReport period={period} />
+      ) : period.kind === "month" ? (
+        <MonthReport period={period} />
       ) : (
-        <PeriodPlaceholder period={period} />
+        <YearReport period={period} />
       )}
     </ReportShell>
   );
