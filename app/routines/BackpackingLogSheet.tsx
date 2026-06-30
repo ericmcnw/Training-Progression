@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
-import { logBackpackingTrip, type BackpackingLogInput } from "@/app/log/backpacking-log-actions";
+import { logBackpackingTrip, updateBackpackingTrip, type BackpackingLogInput, type BackpackingEditData } from "@/app/log/backpacking-log-actions";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import { useSportLogDraft } from "./useSportLogDraft";
 import SportLogModal from "./SportLogModal";
@@ -80,11 +80,56 @@ function initialDraft(): Draft {
   };
 }
 
-export default function BackpackingLogSheet({ onClose }: { onClose: () => void }) {
-  const [draft, setDraft, clearDraft] = useSportLogDraft<Draft>("sport-log-draft-backpacking", initialDraft());
+function draftFromEdit(e: BackpackingEditData): Draft {
+  return {
+    trail: e.trail,
+    days:
+      e.days.length > 0
+        ? e.days.map((d) => ({
+            localId: rid(),
+            ymd: d.ymd,
+            miles: d.miles != null ? String(d.miles) : "",
+            elevGainFt: d.elevGainFt != null ? String(d.elevGainFt) : "",
+            campsite: d.campsite ?? "",
+            notes: d.notes ?? "",
+          }))
+        : [newDay(todayYmd())],
+    gear: e.gear.map((g) => ({
+      localId: rid(),
+      name: g.name,
+      weightOz: g.weightGrams != null ? String(Math.round((g.weightGrams / GRAMS_PER_OZ) * 10) / 10) : "",
+      quantity: String(g.quantity),
+      consumable: g.consumable,
+    })),
+    effort: e.effort,
+    notes: e.notes,
+  };
+}
+
+export default function BackpackingLogSheet({
+  onClose,
+  editTripId,
+  initialEdit,
+  onSaved,
+}: {
+  onClose: () => void;
+  /** Present in edit mode — saves via updateBackpackingTrip instead of create. */
+  editTripId?: string;
+  initialEdit?: BackpackingEditData;
+  /** Called after a successful save (the caller typically navigates away,
+   *  since editing regenerates the day-logs with new ids). */
+  onSaved?: () => void;
+}) {
+  const isEdit = Boolean(editTripId);
+  // Edit gets a trip-scoped draft key so it never clobbers the new-trip draft.
+  const draftKey = isEdit ? `sport-log-draft-backpacking-edit-${editTripId}` : "sport-log-draft-backpacking";
+  const [draft, setDraft, clearDraft] = useSportLogDraft<Draft>(
+    draftKey,
+    isEdit && initialEdit ? draftFromEdit(initialEdit) : initialDraft()
+  );
   const { trail, days, gear, effort, notes } = draft;
 
-  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialEdit?.spotValue ?? null);
   const [spotCtx, setSpotCtx] = useState<SportLogContext | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -182,8 +227,13 @@ export default function BackpackingLogSheet({ onClose }: { onClose: () => void }
 
     startTransition(async () => {
       try {
-        await logBackpackingTrip(payload);
+        if (isEdit && editTripId) {
+          await updateBackpackingTrip({ tripId: editTripId, ...payload });
+        } else {
+          await logBackpackingTrip(payload);
+        }
         clearDraft();
+        onSaved?.();
         onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save trip.");
@@ -193,7 +243,7 @@ export default function BackpackingLogSheet({ onClose }: { onClose: () => void }
 
   return (
     <SportLogModal
-      title="Log Backpacking Trip"
+      title={isEdit ? "Edit Backpacking Trip" : "Log Backpacking Trip"}
       onClose={onClose}
       footer={
         <>
@@ -201,7 +251,7 @@ export default function BackpackingLogSheet({ onClose }: { onClose: () => void }
             Cancel
           </button>
           <button type="button" onClick={submit} style={btnPrimary} disabled={pending}>
-            {pending ? "Saving…" : "Save trip"}
+            {pending ? "Saving…" : isEdit ? "Save changes" : "Save trip"}
           </button>
         </>
       }

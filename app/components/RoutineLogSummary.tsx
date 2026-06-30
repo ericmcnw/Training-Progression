@@ -17,6 +17,14 @@ import { climbOutcomeColor, climbOutcomeBg, climbOutcomeLabel } from "@/lib/clim
 import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 import type { LogSummaryData } from "@/lib/log-summary";
 import WeatherBadge from "@/app/components/WeatherBadge";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
+import {
+  getBackpackingTripForEdit,
+  deleteBackpackingTrip,
+  type BackpackingEditData,
+} from "@/app/log/backpacking-log-actions";
 
 const formatSeconds = formatGuidedSeconds;
 
@@ -501,10 +509,104 @@ function BackpackingPanel({ trip }: { trip: NonNullable<LogSummaryData["backpack
             </div>
           </div>
         ) : null}
+
+        <BackpackingTripActions tripId={trip.id} />
       </div>
     </section>
   );
 }
+
+function BackpackingTripActions({ tripId }: { tripId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [editData, setEditData] = useState<BackpackingEditData | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function openEdit() {
+    setLoadingEdit(true);
+    try {
+      const data = await getBackpackingTripForEdit(tripId);
+      if (data) setEditData(data);
+    } finally {
+      setLoadingEdit(false);
+    }
+  }
+
+  function doDelete() {
+    // Editing/deleting regenerates or removes the day-logs, so the current
+    // log id won't survive — land on home, where the trip bar reflects it.
+    startTransition(async () => {
+      await deleteBackpackingTrip(tripId);
+      router.push("/");
+    });
+  }
+
+  return (
+    <div style={tripActionsRow}>
+      <button type="button" onClick={openEdit} disabled={loadingEdit || pending} style={tripEditBtn}>
+        {loadingEdit ? "Loading…" : "Edit trip"}
+      </button>
+      {!confirmDelete ? (
+        <button type="button" onClick={() => setConfirmDelete(true)} disabled={pending} style={tripDeleteBtn}>
+          Delete
+        </button>
+      ) : (
+        <>
+          <button type="button" onClick={doDelete} disabled={pending} style={tripConfirmBtn}>
+            {pending ? "Deleting…" : "Confirm delete"}
+          </button>
+          <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} style={tripEditBtn}>
+            Keep
+          </button>
+        </>
+      )}
+      {editData ? (
+        <BackpackingLogSheet
+          editTripId={tripId}
+          initialEdit={editData}
+          onClose={() => setEditData(null)}
+          onSaved={() => router.push("/")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+const tripActionsRow: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  marginTop: 16,
+  paddingTop: 12,
+  borderTop: "1px solid rgba(128,128,128,0.2)",
+  flexWrap: "wrap",
+};
+const tripEditBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.5)",
+  background: "rgba(128,128,128,0.12)",
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: "pointer",
+};
+const tripDeleteBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(248,113,113,0.3)",
+  background: "rgba(248,113,113,0.08)",
+  color: "rgba(248,160,160,0.95)",
+  fontWeight: 800,
+  fontSize: 13,
+  cursor: "pointer",
+};
+const tripConfirmBtn: React.CSSProperties = {
+  ...tripDeleteBtn,
+  border: "1px solid rgba(248,113,113,0.6)",
+  background: "rgba(248,113,113,0.2)",
+  color: "rgba(255,210,210,0.98)",
+};
 
 function GolfCoursePanel({
   course,

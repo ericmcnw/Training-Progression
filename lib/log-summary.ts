@@ -22,6 +22,7 @@ const GRAMS_PER_LB = 453.59237;
 // Trip-level rollup for a backpacking day-log — every day-log of a trip exposes
 // the same parent trip so opening any day shows the whole trip.
 export type LogSummaryBackpacking = {
+  id: string;
   trail: string | null;
   location: string | null;
   startYmd: string;
@@ -212,6 +213,7 @@ function parseIntervalsConfig(raw: unknown): LogSummaryIntervals | null {
 }
 
 type RawTrip = {
+  id: string;
   trail: string | null;
   location: string | null;
   startYmd: string;
@@ -254,6 +256,7 @@ function parseBackpackingTrip(trip: RawTrip | null | undefined): LogSummaryBackp
     };
   });
   return {
+    id: trip.id,
     trail: trip.trail,
     location: trip.location,
     startYmd: trip.startYmd,
@@ -369,6 +372,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       // trip-level rollup + all sibling day-logs so any day shows the trip.
       backpackingTrip: {
         select: {
+          id: true,
           trail: true,
           location: true,
           startYmd: true,

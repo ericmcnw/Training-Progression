@@ -9,7 +9,7 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { clampEffort } from "@/lib/strain";
 import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
 import { stampLogWeather } from "@/lib/weather-stamp";
-import { parseAppDateTimeLocal } from "@/lib/dates";
+import { parseAppDateTimeLocal, toAppYmd } from "@/lib/dates";
 
 // Backpacking trip logging. A trip is a BackpackingTrip parent + one RoutineLog
 // per day on the trail, so each day shows natively on the WaG / schedule /
@@ -232,6 +232,70 @@ export async function deleteBackpackingTrip(tripId: string): Promise<void> {
   await prisma.backpackingTrip.delete({ where: { id: tripId } }).catch(() => {});
   revalidatePath("/");
   revalidatePath("/log");
+}
+
+export type BackpackingEditData = {
+  trail: string;
+  spotValue: SpotPickerValue | null;
+  days: Array<{ ymd: string; miles: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
+  gear: Array<{ name: string; weightGrams: number | null; quantity: number; consumable: boolean }>;
+  notes: string;
+  effort: number | null;
+};
+
+// Load a trip back into the sheet's editable shape. Days come from the child
+// logs; the saved trailhead is reconstructed into a SpotPickerValue so editing
+// + re-saving preserves the location instead of wiping it.
+export async function getBackpackingTripForEdit(tripId: string): Promise<BackpackingEditData | null> {
+  const trip = await prisma.backpackingTrip.findUnique({
+    where: { id: tripId },
+    select: {
+      trail: true,
+      activitySpotId: true,
+      notes: true,
+      effort: true,
+      gear: true,
+      dayLogs: {
+        orderBy: { performedAt: "asc" },
+        select: { performedAt: true, distanceMi: true, elevationGainFt: true, notes: true, sportData: true },
+      },
+    },
+  });
+  if (!trip) return null;
+
+  let spotValue: SpotPickerValue | null = null;
+  if (trip.activitySpotId) {
+    const spot = await prisma.activitySpot.findUnique({
+      where: { id: trip.activitySpotId },
+      select: { id: true, name: true, region: true },
+    });
+    if (spot) {
+      spotValue = { kind: "saved", ref: { kind: "activitySpot", id: spot.id }, display: { name: spot.name, region: spot.region } };
+    }
+  }
+
+  const days = trip.dayLogs.map((d) => {
+    const sd = (d.sportData && typeof d.sportData === "object" ? d.sportData : {}) as Record<string, unknown>;
+    return {
+      ymd: toAppYmd(d.performedAt),
+      miles: d.distanceMi ?? null,
+      elevGainFt: d.elevationGainFt ?? null,
+      campsite: typeof sd.campsite === "string" ? sd.campsite : null,
+      notes: d.notes ?? null,
+    };
+  });
+
+  const gearRaw = Array.isArray(trip.gear) ? (trip.gear as Array<Record<string, unknown>>) : [];
+  const gear = gearRaw
+    .filter((g) => typeof g.name === "string")
+    .map((g) => ({
+      name: g.name as string,
+      weightGrams: typeof g.weightGrams === "number" ? g.weightGrams : null,
+      quantity: typeof g.quantity === "number" && g.quantity > 0 ? g.quantity : 1,
+      consumable: Boolean(g.consumable),
+    }));
+
+  return { trail: trip.trail ?? "", spotValue, days, gear, notes: trip.notes ?? "", effort: trip.effort ?? null };
 }
 
 // Resolve a SpotPicker value into an ActivitySpot FK + display string, scoped
