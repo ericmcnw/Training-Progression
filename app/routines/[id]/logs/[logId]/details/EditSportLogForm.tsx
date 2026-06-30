@@ -27,6 +27,8 @@ import { getSportLogConfig, isExtraVisible } from "@/app/routines/sportLogConfig
 import SportExtraControl from "@/app/routines/sportExtraControl";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { predictEffortDefault } from "@/lib/strain";
+import GearPicker from "@/app/components/log/GearPicker";
+import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
 
 type CommonProps = {
   routineId: string;
@@ -42,6 +44,8 @@ type CommonProps = {
   sportData: unknown;
   /** Stored perceived effort 1-10, or null if never rated. Backfillable. */
   initialEffort: number | null;
+  /** Gear linked to this log, as picker values (for prefill). */
+  initialGear?: GearPick[];
   returnTo: string;
   /** Drawer-mounted callers override navigation: onComplete closes
    *  the drawer + refreshes the dashboard instead of routing to
@@ -451,6 +455,7 @@ function EditGenericSport({
   savedSpots,
   sportData,
   initialEffort,
+  initialGear = [],
   returnTo,
   onComplete,
   onCancel,
@@ -465,6 +470,7 @@ function EditGenericSport({
   const [notes, setNotes] = useState(initialNotes);
   const [effort, setEffort] = useState<number | null>(initialEffort);
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
+  const [gear, setGear] = useState<GearPick[]>(initialGear);
   const [sessionType, setSessionType] = useState(parsed.sessionType);
   const [extras, setExtras] = useState<GenericSportExtras>(parsed.extras);
   const [people, setPeople] = useState<string[]>([]);
@@ -510,6 +516,7 @@ function EditGenericSport({
           sessionType: sessionType.trim() || undefined,
           extras: extrasOut,
           effort,
+          gearPicks: gearToPickInput(gear),
         });
         if (onComplete) {
           onComplete();
@@ -587,6 +594,18 @@ function EditGenericSport({
             ))}
         </div>
       ) : null}
+
+      <div style={fieldGroup}>
+        <span style={effortLabelStyle}>Gear</span>
+        <GearPicker
+          activitySlug={sportSlug}
+          value={gear}
+          onChange={setGear}
+          showWeight={false}
+          showConsumable={false}
+          showQuantity={false}
+        />
+      </div>
 
       <div style={fieldGroup}>
         <span style={effortLabelStyle}>Effort</span>

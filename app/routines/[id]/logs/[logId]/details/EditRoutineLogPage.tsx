@@ -49,8 +49,9 @@ export default async function EditRoutineLogPage(props: {
     return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
   }
 
-  // Gear linked to this log (footwear etc.) — prefilled into the cardio editor.
-  const initialGear = data.kind === "CARDIO" ? await getLogGearPicks(logId) : [];
+  // Gear linked to this log (footwear / boards) — prefilled into the editor.
+  const initialGear =
+    data.kind === "CARDIO" || data.kind === "SPORT" ? await getLogGearPicks(logId) : [];
 
   const kindLabel =
     data.kind === "WORKOUT" ? "Workout"
@@ -145,6 +146,7 @@ export default async function EditRoutineLogPage(props: {
               activitySlug={data.activitySlug}
               sportData={data.sportData}
               initialEffort={data.initialEffort}
+              initialGear={initialGear}
               returnTo={returnTo}
             />
           ) : (

@@ -176,6 +176,7 @@ export default function LogRunForm({
     // draft chip labeled correctly across refreshes. Older drafts won't
     // have this field; the form falls back to initialActivityTypeId.
     if (stored.activityTypeId !== undefined) setActivityTypeId(stored.activityTypeId);
+    if (stored.gear !== undefined) setGear(stored.gear);
     draftStartedAtRef.current = stored.startedAt;
     isDirtyRef.current = true;
     draftCtx?.saveDraft(stored);
@@ -209,6 +210,7 @@ export default function LogRunForm({
       // is always empty on new logs.
       location: "",
       spotValue: spotValue ?? undefined,
+      gear,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -216,7 +218,7 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId]);
+  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, gear]);
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);

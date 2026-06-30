@@ -2,6 +2,7 @@ import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor
 import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
 import type { ClimbAttemptDraft, QuickClimbRow } from "@/lib/climb-types";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import type { GearPick } from "@/lib/gear-pick-types";
 
 const DRAFT_KEY_PREFIX = "log-draft:";
 const DRAFT_INDEX_KEY = "log-draft-index";
@@ -82,6 +83,9 @@ export type CardioDraft = {
   // Perceived effort 1-10, or null when the user hasn't rated yet. Optional
   // so drafts written before the strain model deserialize cleanly.
   effort?: number | null;
+  // Gear picks (footwear etc.) — restored into the GearPicker on remount.
+  // Optional so older drafts deserialize cleanly.
+  gear?: GearPick[];
 };
 
 export type GuidedDraft = {

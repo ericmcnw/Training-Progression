@@ -32,6 +32,7 @@ import { personExtraKeys } from "@/app/routines/sportLogConfig";
 import { clampEffort } from "@/lib/strain";
 import { createActivityZoneActivitiesForLog } from "@/lib/zone-activities";
 import { stampLogWeather } from "@/lib/weather-stamp";
+import { setLogGear, type GearPickInput } from "@/lib/gear";
 
 // Shared pool of people you've logged with/against, gathered from every
 // sport log's person-typed extras (+ legacy free-text opponent fields).
@@ -95,6 +96,8 @@ export type LogSportInput = {
   /** Perceived effort 1-10 (RPE). null/omitted = unrated; estimated
    *  downstream by the strain model. */
   effort?: number | null;
+  /** Gear used (boards etc.) — linked to the log via RoutineLogGear. */
+  gearPicks?: GearPickInput[];
 };
 
 // Server-side: resolve a SpotPickerValue into the right FK + display
@@ -379,6 +382,7 @@ export async function logSportAction(input: LogSportInput): Promise<{ logId: str
 
   await createActivityZoneActivitiesForLog(prisma, log.id);
   await stampLogWeather(log.id);
+  await setLogGear(log.id, input.gearPicks ?? [], input.sportSlug);
 
   revalidatePath("/log");
   revalidatePath("/activities/sports");
@@ -402,6 +406,8 @@ export async function updateSportLogAction(input: {
   sportSlug: string;
   /** Perceived effort 1-10, or null to clear. Backfillable on edit. */
   effort?: number | null;
+  /** Gear used. Omit to leave links untouched; pass [] to clear. */
+  gearPicks?: GearPickInput[];
 }): Promise<void> {
   const performedAt = new Date(input.performedAtIso);
   if (Number.isNaN(performedAt.getTime())) {
@@ -453,6 +459,9 @@ export async function updateSportLogAction(input: {
   });
 
   await createActivityZoneActivitiesForLog(prisma, input.logId);
+  if (input.gearPicks !== undefined) {
+    await setLogGear(input.logId, input.gearPicks, input.sportSlug);
+  }
 
   revalidatePath("/log");
   revalidatePath("/activities/sports");

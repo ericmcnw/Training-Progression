@@ -9,7 +9,9 @@ import { useSportLogDraft } from "./useSportLogDraft";
 import { getSportLogConfig, isExtraVisible } from "./sportLogConfig";
 import SportExtraControl from "./sportExtraControl";
 import SpotPicker from "@/app/components/log/SpotPicker";
+import GearPicker from "@/app/components/log/GearPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
 import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
@@ -71,6 +73,8 @@ type GenericDraft = {
   extras: Record<string, string>;
   /** Perceived effort 1-10, null until the user rates it. */
   effort: number | null;
+  /** Gear used (boards etc.) — saved to inventory + linked on save. */
+  gear: GearPick[];
 };
 
 // Exported so other surfaces (the home FAB, future quick-actions)
@@ -92,6 +96,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       spot: null,
       extras: {},
       effort: null,
+      gear: [],
     }
   );
   const [pending, startTransition] = useTransition();
@@ -161,6 +166,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
           sessionType: draft.sessionType.trim() || undefined,
           extras: extrasOut,
           effort: draft.effort,
+          gearPicks: gearToPickInput(draft.gear),
         });
         clearDraft();
         onClose();
@@ -272,6 +278,18 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
             })}
         </div>
       ) : null}
+
+      <div style={fieldGroup}>
+        <span style={fieldLabelText}>Gear</span>
+        <GearPicker
+          activitySlug={sport.slug}
+          value={draft.gear}
+          onChange={(g) => setDraft((d) => ({ ...d, gear: g }))}
+          showWeight={false}
+          showConsumable={false}
+          showQuantity={false}
+        />
+      </div>
 
       <div style={fieldGroup}>
         <span style={fieldLabelText}>Effort</span>
