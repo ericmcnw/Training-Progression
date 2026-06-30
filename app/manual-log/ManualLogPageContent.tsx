@@ -190,7 +190,7 @@ export default async function ManualLogPageContent({
             <Link href="/activities" style={linkBtn}>Activities</Link>
             <Link href="/log" style={linkBtn}>Routines</Link>
             <Link href="/goals" style={linkBtn}>Goals</Link>
-            <Link href="/reports/weekly" style={linkBtn}>Weekly Report</Link>
+            <Link href="/reports/week" style={linkBtn}>Reports</Link>
           </div>
 
           <div style={summaryGrid}>

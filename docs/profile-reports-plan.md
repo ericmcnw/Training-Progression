@@ -166,28 +166,59 @@ All of this already exists and is date-flexible — we wrap, we don't rebuild (C
 
 ---
 
-## 7. Profile page (slimmed)
+## 7. Profile page (deep design)
 
-`/profile` (default view) becomes identity + lifetime + one glance + entry points:
-1. **`ProfileHeader`** — keep lifetime KPIs + domain split. Avatar/name stay a decorative stub until auth (do not invest now).
-2. **Personal bests** (`ProfileMilestones`) — keep.
-3. **"Last 7 days" pulse** — a *compact* rolling glance (the slimmed essence of today's `WeeklySummary`), with **"View reports →"** linking to `/reports/week`.
-4. **Recent activity (5)** → link to history (keep).
-5. **Settings button** → opens settings (modal or `/profile/settings`; see §8).
+`/profile` (default view) becomes **identity → lifetime → pulse → ways in**. Glance-and-go; nothing requires interaction to understand. Top to bottom:
 
-Removed from profile: the three full inline W/M/Y modules (they move to `/reports`). This is the one place we *intentionally drop* surface from profile — noted here per CLAUDE.md rule 1, because it moves rather than disappears.
+1. **Identity header** — avatar + display name + "Tracking since {month year} · best streak Nd", with a **⚙ gear button top-right** = the settings entry point (§8).
+   - **Decision: lightweight-real identity now.** Add to `AppProfile` (additive migration, CLAUDE.md rule 4): `displayName String?`, `avatarEmoji String?`, `avatarColor String?`. User can set a name and pick an emoji (or initials-on-color) avatar. Falls back to today's "Your Training" / 🏔 when unset. Editing lives in Settings → Account (§8). Forward-compatible: when auth lands, these migrate to the real user record.
+2. **Lifetime KPI row** — sessions / active days / hours / current streak. Keep `ProfileHeader`'s row as-is.
+3. **Domain split bar** — keep, but make it **tappable** → `/profile?view=history&domain=<d>`. Turns inert decoration into navigation.
+4. **Personal bests** (`ProfileMilestones`) — keep; the natural place to grow more record types over time.
+5. **"Last 7 days" pulse** — a *compact* rolling glance (slimmed essence of today's `WeeklySummary`), with **"View reports →"** linking to `/reports/week`. The only rolling element on the page.
+6. **Ways in** — button row: Reports · History · Goals · Activities · Routines.
+7. **Recent activity (5)** → link to history (keep).
+
+Removed from the profile scroll: the three full inline W/M/Y modules (move to `/reports`) **and** the inline settings block (moves behind the gear). Both *move*, not disappear — noted per CLAUDE.md rule 1.
 
 History view: unchanged.
 
 ---
 
-## 8. Settings surface
+## 8. Settings page (deep design)
 
-User direction: a **button on the profile** → popup or page; maybe a frozen-header entry later.
+**Decision: own route `/profile/settings`**, full-page (full-screen on mobile, no modal-in-transformed-ancestor pitfalls). Reached by the ⚙ gear on the profile header. (A frozen-header gear and/or modal variant is deferred; if a modal ever happens it must use the `SportLogModal` portal pattern — CLAUDE.md rule 5.)
 
-Plan:
-- Phase 1: a "Settings" button in the profile header opening **its own route `/profile/settings`** (simplest, no modal-in-transformed-ancestor pitfalls; full-page on mobile is fine). Move `ProfileSettings` contents there (account stub, units stub, home location, sports picker, export).
-- Defer: modal version and/or frozen-header entry — revisit after the reports hub ships. If we do a modal, it **must use the `SportLogModal` portal pattern** (CLAUDE.md rule 5) to escape transformed ancestors.
+**Decision: hub that links out.** `/profile/settings` owns the *global* prefs and **links to** the existing per-domain config pages rather than absorbing them (respects existing infra — CLAUDE.md rule 2). Grouped cards:
+
+| Group | Contents | Source |
+|---|---|---|
+| **Account** | Single-user notice now → name/email/sign-out with auth. **Identity editor** (displayName + avatarEmoji/avatarColor) lives here. | New (identity) + existing auth stub |
+| **Units & display** | Imperial/Metric — **deferred**, kept as a visible "coming soon" affordance (not wired). Week-start stays **Sunday, no toggle** (decided). | Existing dead placeholder stays inert |
+| **Location & weather** | Home location picker. | ✅ `HomeLocationSetting` (move here) |
+| **Activities & sports** | Sports selection (✅ `SportsAddButton`). **Links out** to endurance type visibility (`/activities/endurance/settings`) and training-emphasis / stimulus preferences (`lib/stimulus-preferences.ts`). | Mix: own + link-out |
+| **Habits & reminders** | Reminder opt-in (per the "gentle visibility, opt-in" principle). Placeholder until habit reminders are built. | Future |
+| **Data** | Export (✅ `/profile/export`). Later: import, danger-zone delete-all. | Partial |
+
+Deferred-but-noted: **Units (Imperial/Metric) is its own mini-project** — the toggle is trivial but every distance/weight/pace/elevation display across logs, charts, reports, and milestones must respect it. Out of scope here; revisit as a focused pass.
+
+### New schema (additive only)
+```prisma
+model AppProfile {
+  // ...existing...
+  displayName  String?
+  avatarEmoji  String?
+  avatarColor  String?
+}
+```
+
+---
+
+## 8a. Printable / "full read" report mode (captured — decisions pending)
+
+Agreed direction: every report has two faces over the same aggregated data — **interactive** (navigate + expand + drill) and **printable** ("full read": one period, everything expanded, a linear document you can print / save-as-PDF / screenshot to share). Cheap because Phase 0 already splits aggregation from rendering — this is a *second renderer*, not a second pipeline. Lands ~Phase 4 (once drill-downs exist).
+
+Pending decisions (do not block earlier phases): (1) **light "paper" theme** for print vs match dark app — lean light; (2) **delivery** browser print-to-PDF (zero new deps, works on iOS via share→print) vs server-generated PDF — lean print-to-PDF first; (3) whether it **doubles as the share artifact** — design header/footer (date stamp, name) as if yes even if sharing ships later.
 
 ---
 
@@ -202,11 +233,13 @@ The schema is single-user (`AppProfile`, no `User` table) but auth is scaffolded
 
 ## 10. Phasing (each phase independently shippable + verifiable on device — CLAUDE.md rule 6)
 
-**Phase 0 — Foundations (no visible change).**
-`lib/reports/period.ts` (period bounds/nav) + `lib/reports/load.ts` (windowed log fetch) + refactor the four 12w loaders to separate fetch/aggregate with an explicit window (existing pages pass their 12w window → no behavior change). Unit-verify period math (week/month/year boundaries, leap year, app-TZ New Year's Eve).
+**Phase 0 — Foundations (no visible change). ✅ DONE.**
+`lib/reports/period.ts` (period bounds/nav — week/month/year, resolve anchor → {start,end,label,prev,next,isCurrent}, future-clamped) + `lib/reports/load.ts` (windowed log fetch → enriched `ReportLog[]`). Both composed over proven `lib/week.ts`/`lib/dates.ts` primitives; typecheck clean.
+**Reorder:** the four-12w-loader refactor moved OUT of Phase 0 → into "Phase 3.5 (drill-down prep)", because Phases 1–3 aggregate at the domain level and don't touch the per-sport chart loaders. Smaller, lower-risk foundation; faster path to a visible report.
+Note: no test runner exists in the repo (open decision — add vitest, or keep verifying on-device per rule 6). Period math currently verified by composition + typecheck; on-device verification lands with Phase 1.
 
-**Phase 1 — Navigable Week report.**
-`/reports/week` with descriptive content ported from `WeeklySummary` + the old `/reports/weekly` day list, now navigable (prev/next, jump-to-current). Redirect `/reports/weekly` → `/reports/week`. Verify paging back through real past weeks.
+**Phase 1 — Navigable Week report. ✅ DONE (pending on-device verify).**
+Dynamic `app/reports/[period]/page.tsx` (validates kind, resolves period, fetches earliest log for prev-clamp) + `ReportShell` (Week/Month/Year tabs + prev/next stepper + jump-to-current) + `WeekReport` (KPI strip sessions/time/distance/active, 7-day rhythm, by-domain bar, highlights, totals line, and the legacy per-day detail list ported verbatim) + month/year `PeriodPlaceholder` (Phase 2 fills). `/reports` and `/reports/weekly` redirect to `/reports/week` (anchor preserved); in-app links updated. Project typecheck clean (0 errors).
 
 **Phase 2 — Month + Year reports.**
 `/reports/month`, `/reports/year` with their existing visual modules, navigable. `ReportShell` tabs + stepper unified.
@@ -214,13 +247,16 @@ The schema is single-user (`AppProfile`, no `User` table) but auth is scaffolded
 **Phase 3 — Evaluative layer.**
 Wire goals + frequency status (`evaluate.ts`) and vs-previous deltas (`compare.ts`) into all three periods. "Was it enough / which way am I trending."
 
-**Phase 4 — Per-sport drill-downs.**
-`drilldown.ts`: climbing pyramid, endurance mileage/pace, strength volume/PRs, sport `sportData` rollups. Per-domain expandable sections.
+**Phase 3.5 — Drill-down prep (no visible change).**
+Refactor the four 12w loaders (`sports-chart`, `endurance-chart`, `strength-chart`, `endurance-pace`) to separate fetch from aggregation over an explicit `{start,end}` window — existing activity-world pages pass their current 12w window so behavior is unchanged (additive, CLAUDE.md rule 2). Climbing already follows this pattern (`buildPyramidRows`).
 
-**Phase 5 — Profile slim-down + Settings route.**
-Replace inline W/M/Y on profile with the compact pulse + "View reports" link. Add Settings button → `/profile/settings`. Remove now-dead inline summary usage.
+**Phase 4 — Per-sport drill-downs + printable mode.**
+`drilldown.ts`: climbing pyramid, endurance mileage/pace, strength volume/PRs, sport `sportData` rollups. Per-domain expandable sections. Then the **printable "full read" renderer** (§8a) over the same data — light paper theme, browser print-to-PDF.
 
-**Deferred / revisit:** settings modal vs frozen-header entry; "week in review" notification/cadence; shareable/exportable report artifact; avatar/name (with auth).
+**Phase 5 — Profile redesign + Settings route.**
+Additive `AppProfile` migration (`displayName`, `avatarEmoji`, `avatarColor`). Rebuild `/profile` per §7 (identity header + gear, tappable domain split, compact pulse, ways-in row); remove inline W/M/Y and inline settings. New `/profile/settings` per §8 (hub that links out) with the identity editor. Remove now-dead inline summary usage.
+
+**Deferred / revisit:** Units Imperial/Metric (own focused pass); settings modal vs frozen-header entry; week-start Sun/Mon toggle; "week in review" notification/cadence; share artifact (link/image); auth-backed real account identity.
 
 ---
 

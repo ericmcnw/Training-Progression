@@ -193,7 +193,7 @@ export default function WeeklyMomentumSectionClient({
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Link
-            href="/reports/weekly"
+            href="/reports/week"
             style={{
               fontSize: 12,
               fontWeight: 800,
