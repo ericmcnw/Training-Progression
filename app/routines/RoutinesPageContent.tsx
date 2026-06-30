@@ -11,6 +11,7 @@ import RoutineSection from "./RoutineSection";
 import QuickLogDrawerButton from "./QuickLogDrawerButton";
 import EnduranceQuickLogButton from "./EnduranceQuickLogButton";
 import EnduranceQuickLogRow from "./EnduranceQuickLogRow";
+import BackpackingQuickLogRow from "./BackpackingQuickLogRow";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import SportsAddButton from "./SportsAddButton";
 import SportQuickLogRow from "./SportQuickLogRow";
@@ -399,7 +400,7 @@ export default async function RoutinesPageContent(props: {
             <RoutineSection
               key={domain}
               title={label.toUpperCase()}
-              count={isCardio ? list.length + 1 : list.length}
+              count={isCardio ? list.length + 2 : list.length}
               accentColor={accent}
               quickLogSlot={
                 domain === "strength" ? (
@@ -417,6 +418,9 @@ export default async function RoutinesPageContent(props: {
               {/* Always-present endurance entry — opens the type-picker log
                   form. Sits above any user-created cardio routines. */}
               {isCardio ? <EnduranceQuickLogRow /> : null}
+              {/* Backpacking — endurance pursuit with its own multi-day trip
+                  sheet. Sits right under the generic endurance entry. */}
+              {isCardio ? <BackpackingQuickLogRow /> : null}
               {list.map((routine) => (
                 <RoutineCard
                   key={routine.id}

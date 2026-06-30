@@ -253,7 +253,11 @@ export default async function EnduranceWorldPage(props: {
             sessionsByWeek={chartData.sessionsByWeek}
             unit="mi"
             decimals={1}
-            primaryLabel="Distance"
+            primaryLabel="Miles"
+            secondaryLabel="Time"
+            secondaryUnit="min"
+            tertiaryLabel="Elevation"
+            tertiaryUnit="ft"
             // Opt out of compact mode — at 760px max-width the chart
             // reads better with the taller (132px) bar track. Compact
             // (96px) makes 12 bars look squat at desktop densities.

@@ -36,6 +36,14 @@ export type WeekSession = {
   /** Effective perceived effort 1-10 (rating, or the estimate when unrated —
    *  pair with loadEstimated). Drives the effort-shaded bars + effort lines. */
   effort?: number;
+  /** Alternate secondary metric for the toggle (e.g. set count). When the
+   *  chart is given a `secondaryLabel`, the toggle's second view sums this
+   *  instead of load — powers the strength "Sessions ⇄ Sets" toggle. */
+  secondaryValue?: number;
+  /** Third metric for a 3-way toggle (e.g. elevation ft). When the chart is
+   *  given a `tertiaryLabel` and sessions carry this, a third toggle button
+   *  appears — powers the endurance "Miles / Time / Elevation" toggle. */
+  tertiaryValue?: number;
 };
 
 // `sessionsByWeek[i]` = sessions that contributed to week index `i`
@@ -56,6 +64,10 @@ export default function WeeklyBarChartWithSessions({
   decimals,
   compact,
   primaryLabel = "Sessions",
+  secondaryLabel,
+  secondaryUnit,
+  tertiaryLabel,
+  tertiaryUnit,
 }: {
   title: string;
   weekLabels: string[];
@@ -64,43 +76,80 @@ export default function WeeklyBarChartWithSessions({
   unit?: string;
   decimals?: number;
   compact?: boolean;
-  /** Left label of the Sessions⇄Load toggle — names the default-view
-   *  metric ("Sessions", "Distance", "Volume"). Only shown when sessions
-   *  carry load. */
+  /** Left label of the toggle — names the default-view metric ("Sessions",
+   *  "Distance", "Volume"). Only shown when there's a second view. */
   primaryLabel?: string;
+  /** Right label of the toggle. Default "Load" (auto-shown when sessions
+   *  carry `load`). Pass e.g. "Sets" + per-session `secondaryValue` to make
+   *  the toggle a non-load metric (used by the strength page). */
+  secondaryLabel?: string;
+  /** Unit shown in the secondary view (e.g. "min" for a Distance⇄Time
+   *  toggle). Defaults to unitless (Load, Sets). */
+  secondaryUnit?: string;
+  /** Optional third toggle view, summing per-session `tertiaryValue` (e.g.
+   *  "Elevation"). Renders a third button only when sessions carry the value. */
+  tertiaryLabel?: string;
+  /** Unit shown in the tertiary view (e.g. "ft"). */
+  tertiaryUnit?: string;
 }) {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
-  // Sessions (default metric) vs Load view. Only meaningful when load data
-  // is present; the toggle is hidden otherwise.
-  const [view, setView] = useState<"primary" | "load">("primary");
+  // Primary (default metric) vs secondary (Load / Time / Sets) vs an optional
+  // tertiary (Elevation) view. Each extra view only appears when its data is
+  // present; with none, no toggle renders.
+  const [view, setView] = useState<"primary" | "secondary" | "tertiary">("primary");
   // Clicked session row → opens the shared LogDetailPopover (same one
   // the home dashboard uses) instead of navigating to a separate page.
   const [openLog, setOpenLog] = useState<OpenLog>(null);
 
-  // Any session carrying a load value unlocks the Load view. Derive the
-  // load bars from the per-session loads so builders only attach `load`
-  // to each session and never duplicate the stacking logic.
+  // The toggle's second view is either Load (auto-shown when sessions carry
+  // `load` — sports/climbing/mobility) or an alternate metric named by
+  // `secondaryLabel` + per-session `secondaryValue` (the strength "Sets"
+  // toggle). A given chart uses one or the other, never both.
   const hasLoad = useMemo(
     () => sessionsByWeek.some((wk) => wk.some((s) => s.load != null)),
     [sessionsByWeek]
   );
-  const loadSeries = useMemo<StackedBarSeries[] | null>(() => {
-    if (!hasLoad) return null;
+  const hasSecondaryValue = useMemo(
+    () => secondaryLabel != null && sessionsByWeek.some((wk) => wk.some((s) => s.secondaryValue != null)),
+    [secondaryLabel, sessionsByWeek]
+  );
+  const secondaryName = hasSecondaryValue ? secondaryLabel! : "Load";
+  const secondarySeries = useMemo<StackedBarSeries[] | null>(() => {
+    if (!hasLoad && !hasSecondaryValue) return null;
     return series.map((s) => ({
       label: s.label,
       color: s.color,
       weeklyValues: weekLabels.map((_, wi) =>
         (sessionsByWeek[wi] ?? [])
           .filter((ws) => ws.seriesLabel === s.label)
-          .reduce((sum, ws) => sum + (ws.load ?? 0), 0)
+          .reduce((sum, ws) => sum + (hasSecondaryValue ? (ws.secondaryValue ?? 0) : (ws.load ?? 0)), 0)
       ),
     }));
-  }, [hasLoad, series, sessionsByWeek, weekLabels]);
+  }, [hasLoad, hasSecondaryValue, series, sessionsByWeek, weekLabels]);
 
-  const isLoadView = view === "load" && loadSeries != null;
-  const activeSeries = isLoadView ? loadSeries! : series;
-  const activeUnit = isLoadView ? "" : unit;
-  const activeDecimals = isLoadView ? 0 : decimals;
+  // Optional third view (e.g. Elevation), summed from per-session tertiaryValue.
+  const hasTertiaryValue = useMemo(
+    () => tertiaryLabel != null && sessionsByWeek.some((wk) => wk.some((s) => s.tertiaryValue != null)),
+    [tertiaryLabel, sessionsByWeek]
+  );
+  const tertiarySeries = useMemo<StackedBarSeries[] | null>(() => {
+    if (!hasTertiaryValue) return null;
+    return series.map((s) => ({
+      label: s.label,
+      color: s.color,
+      weeklyValues: weekLabels.map((_, wi) =>
+        (sessionsByWeek[wi] ?? [])
+          .filter((ws) => ws.seriesLabel === s.label)
+          .reduce((sum, ws) => sum + (ws.tertiaryValue ?? 0), 0)
+      ),
+    }));
+  }, [hasTertiaryValue, series, sessionsByWeek, weekLabels]);
+
+  const isSecondaryView = view === "secondary" && secondarySeries != null;
+  const isTertiaryView = view === "tertiary" && tertiarySeries != null;
+  const activeSeries = isTertiaryView ? tertiarySeries! : isSecondaryView ? secondarySeries! : series;
+  const activeUnit = isTertiaryView ? (tertiaryUnit ?? "") : isSecondaryView ? (secondaryUnit ?? "") : unit;
+  const activeDecimals = isSecondaryView || isTertiaryView ? 0 : decimals;
 
   const weekSessions = useMemo(() => {
     if (selectedWeek === null) return null;
@@ -123,17 +172,17 @@ export default function WeeklyBarChartWithSessions({
       0
     );
     // In the default view, surface the week's load as a secondary stat so
-    // both data + load read at a glance (the load view already shows it as
-    // the headline total).
-    const loadTotal = loadSeries
-      ? loadSeries.reduce((sum, s) => sum + (s.weeklyValues[selectedWeek] ?? 0), 0)
+    // both data + load read at a glance (the load view shows it as the
+    // headline). Load-only — the Sets view has no separate load line.
+    const loadTotal = hasLoad
+      ? (sessionsByWeek[selectedWeek] ?? []).reduce((sum, ws) => sum + (ws.load ?? 0), 0)
       : 0;
     return {
       total: `${total.toFixed(dec)}${activeUnit ? ` ${activeUnit}` : ""}`,
       mins: totalMins > 0 ? totalMins : null,
-      load: !isLoadView && loadTotal > 0 ? Math.round(loadTotal) : null,
+      load: view === "primary" && loadTotal > 0 ? Math.round(loadTotal) : null,
     };
-  }, [selectedWeek, activeSeries, activeUnit, activeDecimals, series, loadSeries, isLoadView]);
+  }, [selectedWeek, activeSeries, activeUnit, activeDecimals, series, hasLoad, sessionsByWeek, view]);
 
   // Enrich each series with a per-week "top session" string so the
   // chart tooltip can render the week's top session for that series
@@ -171,33 +220,46 @@ export default function WeeklyBarChartWithSessions({
         margin: "0 auto",
       }}
     >
-      {loadSeries != null ? (
+      {secondarySeries != null || tertiarySeries != null ? (
         <div style={toggleRow}>
           <div style={toggleGroup} role="tablist" aria-label="Chart metric">
             <button
               type="button"
               role="tab"
-              aria-selected={!isLoadView}
+              aria-selected={view === "primary"}
               onClick={() => setView("primary")}
-              style={!isLoadView ? toggleBtnActive : toggleBtn}
+              style={view === "primary" ? toggleBtnActive : toggleBtn}
             >
               {primaryLabel}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isLoadView}
-              onClick={() => setView("load")}
-              style={isLoadView ? toggleBtnActive : toggleBtn}
-            >
-              Load
-            </button>
+            {secondarySeries != null ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isSecondaryView}
+                onClick={() => setView("secondary")}
+                style={isSecondaryView ? toggleBtnActive : toggleBtn}
+              >
+                {secondaryName}
+              </button>
+            ) : null}
+            {tertiarySeries != null ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isTertiaryView}
+                onClick={() => setView("tertiary")}
+                style={isTertiaryView ? toggleBtnActive : toggleBtn}
+              >
+                {tertiaryLabel}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
       <StackedWeeklyBarChart
-        title={isLoadView ? `${title} · Load` : title}
+        title={isTertiaryView ? `${title} · ${tertiaryLabel}` : isSecondaryView ? `${title} · ${secondaryName}` : title}
         weekLabels={weekLabels}
         series={enrichedSeries}
         unit={activeUnit}

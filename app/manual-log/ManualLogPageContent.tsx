@@ -14,6 +14,7 @@ import {
   isWorkoutKind,
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
+import { getLogDisplayName } from "@/lib/routine-display";
 import { getAppSession } from "@/lib/auth";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getHomeLocation } from "@/lib/home-location";
@@ -66,6 +67,7 @@ export default async function ManualLogPageContent({
         elevationGainFt: true,
         durationSec: true,
         location: true,
+        sportData: true,
         routine: {
           select: {
             id: true,
@@ -502,7 +504,7 @@ export default async function ManualLogPageContent({
                       >
                         <div style={{ fontSize: 13, flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 800 }}>
-                            {log.routine.name}
+                            {getLogDisplayName(log)}
                           </div>
                           <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
                             {typeLabel} ·{" "}

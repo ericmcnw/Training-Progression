@@ -9,7 +9,6 @@ import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/Weekl
 import { getWeekBoundsSunday } from "@/lib/week";
 import { toAppYmd } from "@/lib/dates";
 import { formatPace } from "@/lib/progress";
-import { sessionLoad } from "@/lib/strain";
 import {
   TYPE_SLUG_TO_REGISTRY_SLUG,
   ENDURANCE_ACTIVITY_COLORS,
@@ -89,6 +88,10 @@ export async function loadEnduranceChartData(input?: {
           ? [{ routineId: { in: enduranceRoutineIds } }]
           : []),
         { activityTypeId: { not: null } },
+        // Backpacking day-logs are neither metadata-tagged nor typed, but are
+        // an endurance pursuit — pull them in so the trip's miles/time/elev
+        // land on the chart as a "Backpacking" series.
+        { backpackingTripId: { not: null } },
       ],
       // Family/type narrowing — only when the user has scoped down via
       // the family tabs / type sub-pills. Legacy un-typed logs against
@@ -109,6 +112,8 @@ export async function loadEnduranceChartData(input?: {
       performedAt: true,
       distanceMi: true,
       durationSec: true,
+      elevationGainFt: true,
+      backpackingTripId: true,
       effort: true,
       activityTypeId: true,
       activityType: {
@@ -165,6 +170,9 @@ export async function loadEnduranceChartData(input?: {
       // user's per-log type over the routine's pre-edit metadata.
       label = log.activityType.name;
       paletteSlug = TYPE_SLUG_TO_REGISTRY_SLUG[log.activityType.slug];
+    } else if (log.backpackingTripId) {
+      label = "Backpacking";
+      paletteSlug = "backpacking";
     } else {
       label = routineEnduranceLabel.get(log.routineId);
     }
@@ -184,6 +192,7 @@ export async function loadEnduranceChartData(input?: {
     if (wkIdx !== undefined) {
       const distance = log.distanceMi ?? 0;
       const duration = log.durationSec ?? 0;
+      const elevation = log.elevationGainFt ?? 0;
       // Endurance sessions read richest with all three: distance,
       // duration, pace. Pace is only meaningful when both are present
       // (and distance > 0 to avoid div-by-zero). When only one signal
@@ -199,6 +208,9 @@ export async function loadEnduranceChartData(input?: {
         // formatPace already appends "/mi" — don't double-suffix.
         parts.push(formatPace(duration / distance));
       }
+      if (elevation > 0) {
+        parts.push(`${elevation.toLocaleString()} ft`);
+      }
       const metricFormatted = parts.length > 0 ? parts.join(" · ") : "—";
       sessionsByWeek[wkIdx].push({
         id: log.id,
@@ -207,8 +219,10 @@ export async function loadEnduranceChartData(input?: {
         seriesLabel: label,
         seriesColor: "rgba(255,255,255,0.4)", // placeholder — resolved below
         metricFormatted,
-        load: sessionLoad(log.effort, log.durationSec, log.distanceMi),
-        loadEstimated: log.effort == null,
+        // Time (minutes) + elevation (ft) power the Miles/Time/Elevation
+        // toggle. Load stays off — these are the native endurance metrics.
+        secondaryValue: duration > 0 ? Math.round(duration / 60) : undefined,
+        tertiaryValue: elevation > 0 ? elevation : undefined,
         href: `/routines/${log.routineId}/logs/${log.id}/details`,
       });
     }

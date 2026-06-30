@@ -40,6 +40,7 @@ export const ENDURANCE_ACTIVITY_COLORS: Record<string, string> = {
   "open-water-swimming":  "rgba(14,116,144,0.9)",
   rowing:                 "rgba(239,68,68,0.9)",
   hiking:                 "rgba(34,197,94,0.9)",
+  backpacking:            "rgba(132,204,120,0.9)",
 };
 
 export const ENDURANCE_FALLBACK_COLORS = [

@@ -24,7 +24,8 @@ const ACCENT_TEXT = "rgba(153,246,228,0.98)";
 type ActivityDraft = {
   performedAt: string;
   tags: string[];
-  duration: string;
+  hours: string;
+  minutes: string;
   effort: number | null;
   bodyParts: string[];
   notes: string;
@@ -55,7 +56,8 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
   const [draft, setDraft, clearDraft] = useSportLogDraft<ActivityDraft>("activity-log-draft", {
     performedAt: formatLocalDateTime(new Date()),
     tags: [],
-    duration: "",
+    hours: "",
+    minutes: "",
     effort: null,
     bodyParts: [],
     notes: "",
@@ -70,8 +72,10 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
     }));
   }
 
-  function setDuration(value: string) {
-    setDraft((d) => ({ ...d, duration: value }));
+  function applyBucketMinutes(totalMin: number) {
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    setDraft((d) => ({ ...d, hours: h ? String(h) : "", minutes: m ? String(m) : "" }));
   }
 
   function toggleBodyPart(key: string) {
@@ -90,11 +94,14 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
       setError("Invalid date/time.");
       return;
     }
-    const minutes = draft.duration.trim() === "" ? undefined : Number(draft.duration);
-    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
-      setError("Duration must be a positive number.");
+    const h = draft.hours.trim() === "" ? 0 : Number(draft.hours);
+    const m = draft.minutes.trim() === "" ? 0 : Number(draft.minutes);
+    if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0) {
+      setError("Enter a valid duration.");
       return;
     }
+    const totalMin = h * 60 + m;
+    const minutes = totalMin > 0 ? totalMin : undefined;
 
     startTransition(async () => {
       try {
@@ -114,7 +121,8 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
     });
   }
 
-  const activeBucket = DURATION_BUCKETS.find((b) => String(b.minutes) === draft.duration.trim());
+  const totalMinutes = (Number(draft.hours) || 0) * 60 + (Number(draft.minutes) || 0);
+  const activeBucket = totalMinutes > 0 ? DURATION_BUCKETS.find((b) => b.minutes === totalMinutes) : undefined;
 
   return (
     <SportLogModal
@@ -176,24 +184,41 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
               <button
                 key={b.key}
                 type="button"
-                onClick={() => setDuration(on ? "" : String(b.minutes))}
+                onClick={() => applyBucketMinutes(on ? 0 : b.minutes)}
                 aria-pressed={on}
-                style={on ? bucketOn : bucketOff}
+                style={on ? chipOn : chipOff}
               >
                 {b.label}
-                <span style={bucketHint}>{b.hint}</span>
               </button>
             );
           })}
         </div>
-        <input
-          type="number"
-          inputMode="numeric"
-          placeholder="or exact minutes"
-          value={draft.duration}
-          onChange={(e) => setDuration(e.target.value)}
-          style={inputStyle}
-        />
+        <div style={hmRow}>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              value={draft.hours}
+              onChange={(e) => setDraft((d) => ({ ...d, hours: e.target.value }))}
+              style={inputStyle}
+              aria-label="Hours"
+            />
+            <span style={hmLabel}>hours</span>
+          </div>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              value={draft.minutes}
+              onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
+              style={inputStyle}
+              aria-label="Minutes"
+            />
+            <span style={hmLabel}>minutes</span>
+          </div>
+        </div>
       </div>
 
       <div style={fieldGroup}>
@@ -350,33 +375,9 @@ const chipOn: CSSProperties = {
   color: ACCENT_TEXT,
 };
 
-const bucketBase: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-  gap: 1,
-  minHeight: 48,
-  padding: "7px 14px",
-  borderRadius: 12,
-  fontSize: 13,
-  fontWeight: 800,
-  cursor: "pointer",
-  touchAction: "manipulation",
-  transition: "background 0.12s, border-color 0.12s, color 0.12s",
-};
-const bucketOff: CSSProperties = {
-  ...bucketBase,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-};
-const bucketOn: CSSProperties = {
-  ...bucketBase,
-  border: `1px solid ${ACCENT_BORDER}`,
-  background: ACCENT_BG,
-  color: ACCENT_TEXT,
-};
-const bucketHint: CSSProperties = { fontSize: 10, fontWeight: 700, opacity: 0.6 };
+const hmRow: CSSProperties = { display: "flex", gap: 10 };
+const hmCol: CSSProperties = { flex: 1, display: "grid", gap: 4, minWidth: 0 };
+const hmLabel: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textAlign: "center" };
 
 const btnPrimary: CSSProperties = {
   padding: "10px 16px",

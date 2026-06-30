@@ -132,8 +132,10 @@ export function buildStrengthChartData(
       // panel and the bar read as one visual.
       seriesColor: colorByRoutineId.get(s.routineId) ?? "rgba(255,255,255,0.4)",
       metricFormatted: `${s.sets} set${s.sets === 1 ? "" : "s"} · ${formatVolume(s.volume)}${topSetSuffix}`,
-      load: s.load,
-      loadEstimated: s.loadEstimated,
+      // Sets power the Sessions⇄Sets toggle (load is intentionally dropped on
+      // strength — sets/volume are the native "how much"). Only the Sessions
+      // chart passes secondaryLabel="Sets", so the Volume chart shows no toggle.
+      secondaryValue: s.sets,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }

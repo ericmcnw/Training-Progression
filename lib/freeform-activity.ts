@@ -52,15 +52,16 @@ export function activityTagLabel(key: string): string {
   return TAG_LABEL.get(key) ?? key;
 }
 
-export type DurationBucket = { key: string; label: string; minutes: number; hint: string };
+export type DurationBucket = { key: string; label: string; minutes: number };
 
-// Casual duration buckets — one tap fills a representative duration so the
-// log still carries minutes (needed for stats/active-day) without demanding
-// precision. An exact-minutes input sits alongside for when it's known.
+// Quick duration shortcuts — one tap fills the hours/minutes fields. Round
+// values; the manual hours + minutes inputs cover anything in between, so the
+// user never has to convert to total minutes in their head.
 export const DURATION_BUCKETS: DurationBucket[] = [
-  { key: "bit", label: "A bit", minutes: 20, hint: "~20 min" },
-  { key: "while", label: "A while", minutes: 60, hint: "~1 hr" },
-  { key: "day", label: "Most of the day", minutes: 180, hint: "~3 hr" },
+  { key: "30m", label: "30 min", minutes: 30 },
+  { key: "1h", label: "1 hr", minutes: 60 },
+  { key: "2h", label: "2 hr", minutes: 120 },
+  { key: "3h", label: "3 hr", minutes: 180 },
 ];
 
 export type BodyPartOption = { key: string; label: string };
@@ -116,6 +117,16 @@ const PART_LABEL = new Map(BODY_PART_OPTIONS.map((p) => [p.key, p.label]));
 /** Human label for a stored body-part key. */
 export function bodyPartLabel(key: string): string {
   return PART_LABEL.get(key) ?? key;
+}
+
+/** Display name for a freeform log — its tags joined ("Swim · Walk"), or null
+ *  to fall back to the routine name ("Activity") when there are no tags. */
+export function freeformActivityName(sportData: unknown): string | null {
+  if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return null;
+  const tags = (sportData as Record<string, unknown>).tags;
+  if (!Array.isArray(tags) || tags.length === 0) return null;
+  const labels = tags.filter((t): t is string => typeof t === "string").map(activityTagLabel);
+  return labels.length > 0 ? labels.join(" · ") : null;
 }
 
 /** Safely read the validated body-part keys off a freeform log's sportData blob. */

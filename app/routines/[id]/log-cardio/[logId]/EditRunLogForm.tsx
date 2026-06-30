@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { updateRunLog } from "../../../actions";
 import { Field, FieldGrid, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
@@ -8,8 +8,6 @@ import {
   type SpotPickerItem,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
-import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -70,7 +68,6 @@ export default function EditRunLogForm({
   availableActivityTypes = [],
   initialActivityTypeId = null,
   initialIntervals = null,
-  initialEffort = null,
   onComplete,
   onCancel,
 }: {
@@ -96,8 +93,6 @@ export default function EditRunLogForm({
     workDurationSec: number | null;
     restSec: number | null;
   } | null;
-  /** Stored perceived effort 1-10, or null when never rated. Backfillable. */
-  initialEffort?: number | null;
   // When provided (drawer-mounted edit), called after a successful save
   // instead of navigating to `returnTo`. Lets the drawer close + refresh
   // the page in place.
@@ -112,10 +107,6 @@ export default function EditRunLogForm({
   const [minutes, setMinutes] = useState(initialDurationSec != null ? String(Math.floor(initialDurationSec / 60)) : "");
   const [seconds, setSeconds] = useState(initialDurationSec != null ? String(initialDurationSec % 60) : "");
   const [notes, setNotes] = useState(initialNotes);
-  // Perceived effort 1-10. Pre-filled from the stored value; null means this
-  // log was never rated (e.g. logged before the strain model) and the slider
-  // opens at the predicted guess so it can be backfilled.
-  const [effort, setEffort] = useState<number | null>(initialEffort);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
@@ -145,13 +136,6 @@ export default function EditRunLogForm({
 
   const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
   const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
-
-  // Slider pre-fill for unrated logs — duration-scaled guess (Section 6 will
-  // make this per-activity learned).
-  const predictedEffort = useMemo(() => {
-    const totalMin = Number(minutes || "0") + Number(seconds || "0") / 60;
-    return predictEffortDefault(totalMin > 0 ? totalMin : null);
-  }, [minutes, seconds]);
 
   useEffect(() => {
     if (!activitySlug) { setRecentSpots([]); return; }
@@ -225,7 +209,6 @@ export default function EditRunLogForm({
         // through to the action. Server overwrites both atomically.
         activityTypeId: activityTypeId ?? null,
         intervalsConfig,
-        effort,
         ...spotParams,
       });
       if (onComplete) onComplete();
@@ -347,10 +330,6 @@ export default function EditRunLogForm({
         <Field label="Performed at">
           <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
         </Field>
-      </FormSection>
-
-      <FormSection title="Effort">
-        <EffortSlider value={effort} predicted={predictedEffort} onChange={setEffort} />
       </FormSection>
 
       <FormSection title="Notes">

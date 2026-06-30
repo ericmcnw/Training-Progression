@@ -163,6 +163,7 @@ export default async function StrengthWorldPage() {
               sessionsByWeek={chartData.sessionsByWeek}
               unit="sess"
               decimals={0}
+              secondaryLabel="Sets"
             />
             <WeeklyBarChartWithSessions
               title="Weekly Volume (lb) — Last 12 Weeks"

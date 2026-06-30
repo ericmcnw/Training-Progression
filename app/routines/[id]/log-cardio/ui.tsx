@@ -31,8 +31,6 @@ import {
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import type { ActivityTypeOption } from "@/app/components/LogDrawer";
-import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 export default function LogRunForm({
   routineId,
@@ -76,9 +74,6 @@ export default function LogRunForm({
   const [minutes, setMinutes] = useState("");
   const [seconds, setSeconds] = useState("");
   const [notes, setNotes] = useState("");
-  // Perceived effort 1-10. null until the user touches the slider — that's how
-  // the strain model tells a real rating from the pre-filled guess.
-  const [effort, setEffort] = useState<number | null>(null);
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
@@ -169,7 +164,6 @@ export default function LogRunForm({
     setMinutes(stored.minutes);
     setSeconds(stored.seconds);
     setNotes(stored.notes);
-    if (stored.effort !== undefined) setEffort(stored.effort);
     setPerformedAtLocal(stored.performedAtLocal || localDateTimeNow());
     // Restore the structured spot pick — preserves OSM identity + coords
     // across browser refreshes. Drafts written before this schema bump
@@ -212,7 +206,6 @@ export default function LogRunForm({
       // is always empty on new logs.
       location: "",
       spotValue: spotValue ?? undefined,
-      effort,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -220,7 +213,7 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, effort]);
+  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId]);
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);
@@ -233,16 +226,6 @@ export default function LogRunForm({
     const paceSecs = Math.round((paceMinPerMile - paceMins) * 60);
     return `${paceMins}:${String(paceSecs).padStart(2, "0")} /mi`;
   }, [distanceMi, minutes, seconds]);
-
-  // Smart pre-fill for the effort slider: the user's learned median for this
-  // activity type once they've rated a few, otherwise scaled to the duration
-  // entered so far.
-  const totalEffortMin = Number(minutes || "0") + Number(seconds || "0") / 60;
-  const predictedEffort = useLearnedEffortPrefill({
-    activityTypeId,
-    routineId,
-    durationMin: totalEffortMin > 0 ? totalEffortMin : null,
-  });
 
   const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
@@ -334,7 +317,6 @@ export default function LogRunForm({
         activitySlug: derivedActivitySlug ?? undefined,
         activityTypeId: activityTypeId ?? undefined,
         intervalsConfig: intervalsConfig ?? undefined,
-        effort,
         ...spotParams,
         painCheck:
           activePainZones.length > 0
@@ -541,14 +523,6 @@ export default function LogRunForm({
         <DateTimeField
           value={performedAtLocal}
           onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
-        />
-      </FormSection>
-
-      <FormSection title="Effort">
-        <EffortSlider
-          value={effort}
-          predicted={predictedEffort}
-          onChange={(next) => { markDirty(); setEffort(next); }}
         />
       </FormSection>
 

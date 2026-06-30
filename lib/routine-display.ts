@@ -18,6 +18,7 @@
 //      sessions, climbing, lifestyle, etc.)
 
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "./activity-types";
+import { freeformActivityName, isFreeformActivityRoutineId } from "./freeform-activity";
 
 export type RoutineDisplayInput = {
   routineId: string;
@@ -27,9 +28,18 @@ export type RoutineDisplayInput = {
   /** Activity type stored on the routine — fallback for legacy
    *  endurance routines whose logs don't carry the type yet. */
   routineActivityTypeName?: string | null;
+  /** Freeform "Activity" log's sportData — surfaces its tags as the name
+   *  ("Swim · Walk") instead of the bare routine name. */
+  sportData?: unknown;
 };
 
 export function getRoutineDisplayName(input: RoutineDisplayInput): string {
+  // Freeform activity → show what you did (tags), falling through to
+  // "Activity" when untagged.
+  if (isFreeformActivityRoutineId(input.routineId)) {
+    const name = freeformActivityName(input.sportData);
+    if (name) return name;
+  }
   if (input.logActivityTypeName) return input.logActivityTypeName;
   if (input.routineId === SYNTHETIC_ENDURANCE_ROUTINE_ID) return "Endurance";
   if (input.routineActivityTypeName) return input.routineActivityTypeName;
@@ -42,11 +52,15 @@ export function getLogDisplayName(log: {
   routineId: string;
   routine?: { name: string; activityType?: { name: string } | null } | null;
   activityType?: { name: string } | null;
+  /** Optional — when the log's query selects sportData, freeform "Activity"
+   *  logs render their tags. Absent → falls back to the routine name. */
+  sportData?: unknown;
 }): string {
   return getRoutineDisplayName({
     routineId: log.routineId,
     routineName: log.routine?.name ?? "",
     logActivityTypeName: log.activityType?.name ?? null,
     routineActivityTypeName: log.routine?.activityType?.name ?? null,
+    sportData: log.sportData,
   });
 }

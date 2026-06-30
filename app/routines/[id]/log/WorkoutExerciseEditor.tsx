@@ -13,8 +13,6 @@ import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { DateTimeField, Field, FormSection, inputStyle, localDateTimeNow, textareaStyle } from "./form-ui";
-import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 export type ExerciseOption = {
   id: string;
@@ -137,8 +135,10 @@ export default function WorkoutExerciseEditor({
   const drawer = useOptionalLogDrawer();
 
   const [notes, setNotes] = useState(initialNotes);
-  const [effort, setEffort] = useState<number | null>(initialEffort);
-  const predictedEffort = useLearnedEffortPrefill({ routineId });
+  // Effort is no longer captured on strength forms (sets/volume are the native
+  // metric), but we preserve any existing stored value through edits rather
+  // than wiping it. SavePayload still carries it.
+  const [effort] = useState<number | null>(initialEffort);
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt || localDateTimeNow);
   const [saving, setSaving] = useState(false);
   const [creatingExercise, startCreateExercise] = useTransition();
@@ -180,7 +180,6 @@ export default function WorkoutExerciseEditor({
     setBlocks(restored);
     setExpandedId((current) => current ?? restored[0]?.exerciseId ?? null);
     setNotes(draft.notes);
-    if (draft.effort !== undefined) setEffort(draft.effort);
     setPerformedAtLocal(draft.performedAtLocal || localDateTimeNow());
     isDirtyRef.current = true;
     setDraftBanner(draftIsRecent(draft) ? "recent" : "older");
@@ -507,7 +506,6 @@ export default function WorkoutExerciseEditor({
     }
     setBlocks(initialBlocks);
     setNotes(initialNotes);
-    setEffort(initialEffort);
     setPerformedAtLocal(initialPerformedAt);
     setExpandedId(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
     isDirtyRef.current = false;
@@ -944,14 +942,6 @@ export default function WorkoutExerciseEditor({
         </div>
       )}
 
-
-      <FormSection title="Effort">
-        <EffortSlider
-          value={effort}
-          predicted={predictedEffort}
-          onChange={(next) => { markDirty(); setEffort(next); }}
-        />
-      </FormSection>
 
       <Field label={`Notes (optional)${sessionSummary ? ` - ${sessionSummary}` : ""}`}>
         <textarea

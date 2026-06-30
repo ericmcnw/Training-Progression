@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toAppYmd } from "@/lib/dates";
+import { getAppSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,15 @@ export const dynamic = "force-dynamic";
 // gate this behind the session and scope every query by userId, or it becomes
 // a full-data leak.
 export async function GET() {
+  // Once auth is enabled, never allow an unauthenticated full-DB dump. In
+  // single-user-dev mode the whole app is intentionally open, so the export
+  // stays usable for the owner's own backups. When userId scoping lands, the
+  // queries below must also be scoped (see docs/auth-migration-hit-list.md).
+  const session = await getAppSession();
+  if (session.mode === "authenticated" && !session.userId) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
   const [routines, logs, goals, climbLocations, climbAreas, climbProblems, climbAttempts, climbMedia] =
     await Promise.all([
       prisma.routine.findMany({

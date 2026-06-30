@@ -81,7 +81,6 @@ export default async function EditRoutineLogPage(props: {
               availableActivityTypes={data.availableActivityTypes}
               initialActivityTypeId={data.initialActivityTypeId}
               initialIntervals={data.initialIntervals}
-              initialEffort={data.initialEffort}
             />
           ) : data.kind === "GUIDED" ? (
             <EditGuidedLogForm
