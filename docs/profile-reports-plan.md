@@ -248,11 +248,11 @@ Dynamic `app/reports/[period]/page.tsx` (validates kind, resolves period, fetche
 **Phase 3 — Evaluative layer (goals/frequency). ✅ DONE (pending on-device verify).**
 `lib/reports/evaluate.ts` (`loadPeriodGoals(kind)` reuses `getGoalsOverview({active})` and filters to the timeframes that match the report — week→DAY/WEEK, month→MONTH, year→ONE_TIME) + `app/reports/GoalsBlock.tsx` ("VS YOUR GOALS" leading panel: status chip + progress bar + actual/target, tone matched to ActivityGoalsSection). Wired into Week/Month/Year. **Current-period only** — `getGoalsOverview` evaluates the current window, so past periods show the trend deltas instead (arbitrary-past-window goal eval deferred). Clean `.next` build verified.
 
-**Phase 3.5 — Drill-down prep (no visible change).**
-Refactor the four 12w loaders (`sports-chart`, `endurance-chart`, `strength-chart`, `endurance-pace`) to separate fetch from aggregation over an explicit `{start,end}` window — existing activity-world pages pass their current 12w window so behavior is unchanged (additive, CLAUDE.md rule 2). Climbing already follows this pattern (`buildPyramidRows`).
+**Phase 3.5 — Drill-down prep. ❌ DROPPED (not needed).**
+The 12w activity-world loaders return week-series shapes tuned for their own bar charts, not a calendar-period breakdown — reusing them would be awkward. Instead the report drill-downs use their own lean windowed aggregations (the `buildPyramidRows` pattern). No loader refactor; activity-world pages untouched.
 
-**Phase 4 — Per-sport drill-downs + printable mode.**
-`drilldown.ts`: climbing pyramid, endurance mileage/pace, strength volume/PRs, sport `sportData` rollups. Per-domain expandable sections. Then the **printable "full read" renderer** (§8a) over the same data — light paper theme, browser print-to-PDF.
+**Phase 4 — Per-sport drill-downs + printable mode. ✅ DONE (pending on-device verify).**
+`lib/reports/drilldown.ts` (`loadDrilldowns(window, logs)` → climbing grade pyramid via `buildPyramidRows` + sends/hardest, endurance-by-family sessions/miles/time, strength top exercises by volume, non-climbing sport sessions-by-name; each section only runs when its domain appears). `app/reports/DrilldownSections.tsx` renders a "BREAKDOWN" panel of native `<details>` drawers (zero client JS, forced open in print). Wired into Month + Year (Week keeps its per-day list as its detail view). **Printable mode:** `PrintButton` (client, `window.print()`) + scoped `@media print` CSS in ReportShell — drops nav chrome, forces drawers open, reveals a print-only period header, keeps colors faithful (`print-color-adjust: exact`). Light "paper" theme remains the deferred refinement (inline-rgba override is a separate pass). Typecheck + clean build verified.
 
 **Phase 5 — Profile redesign + Settings route.**
 Additive `AppProfile` migration (`displayName`, `avatarEmoji`, `avatarColor`). Rebuild `/profile` per §7 (identity header + gear, tappable domain split, compact pulse, ways-in row); remove inline W/M/Y and inline settings. New `/profile/settings` per §8 (hub that links out) with the identity editor. Remove now-dead inline summary usage.

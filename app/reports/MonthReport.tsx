@@ -7,8 +7,10 @@ import { resolvePeriod, type Period } from "@/lib/reports/period";
 import { loadReportLogs } from "@/lib/reports/load";
 import { loadReportTotals } from "@/lib/reports/totals";
 import { loadPeriodGoals } from "@/lib/reports/evaluate";
+import { loadDrilldowns } from "@/lib/reports/drilldown";
 import { delta, summarize } from "@/lib/reports/aggregate";
 import GoalsBlock from "./GoalsBlock";
+import DrilldownSections from "./DrilldownSections";
 import {
   buildNumbers,
   countChip,
@@ -57,6 +59,7 @@ export default async function MonthReport({ period }: { period: Period }) {
   const maxDayCount = Math.max(1, ...Array.from(cur.dayCounts.values()));
   const numbers = buildNumbers(cur, totals);
   const goals = period.isCurrent ? await loadPeriodGoals("month") : [];
+  const drills = await loadDrilldowns(period, logs);
 
   return (
     <>
@@ -146,6 +149,7 @@ export default async function MonthReport({ period }: { period: Period }) {
         )}
       </div>
       </section>
+      <DrilldownSections drills={drills} />
     </>
   );
 }

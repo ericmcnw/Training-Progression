@@ -1,6 +1,21 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { PERIOD_KINDS, type Period, type PeriodKind } from "@/lib/reports/period";
+import PrintButton from "./PrintButton";
+
+// Scoped print rules: drop nav chrome, force every drawer open, reveal the
+// print-only period header, and keep the dark theme's colors faithful so the
+// PDF reads like the screen. (Light "paper" theme is a future refinement.)
+const PRINT_CSS = `
+@media print {
+  .reportNoPrint { display: none !important; }
+  .reportPrintOnly { display: block !important; }
+  .reportRoot details > summary { list-style: none; }
+  .reportRoot details > *:not(summary) { display: block !important; }
+  .reportRoot, .reportRoot * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.reportPrintOnly { display: none; }
+`;
 
 // Nav chrome shared by every report period. Pure presentational + Link-based —
 // no client interactivity. Tabs switch period kind (always to the current
@@ -37,16 +52,22 @@ export default function ReportShell({
   const prevDisabled = earliestMs === null || earliestMs >= period.start.getTime();
 
   return (
-    <div style={shell}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href="/profile" style={backLink}>← Profile</Link>
-        <Link href="/" style={backLink}>Dashboard</Link>
+    <div style={shell} className="reportRoot">
+      <style>{PRINT_CSS}</style>
+
+      <div className="reportNoPrint" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href="/profile" style={backLink}>← Profile</Link>
+          <Link href="/" style={backLink}>Dashboard</Link>
+        </div>
+        <PrintButton />
       </div>
 
       <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Reports</h1>
+      <div className="reportPrintOnly" style={{ fontSize: 14, fontWeight: 800, opacity: 0.8 }}>{period.label}</div>
 
       {/* Period-kind tabs */}
-      <div style={tabRow} role="tablist" aria-label="Report period">
+      <div style={tabRow} className="reportNoPrint" role="tablist" aria-label="Report period">
         {PERIOD_KINDS.map((k) => {
           const active = k === period.kind;
           return (
@@ -64,7 +85,7 @@ export default function ReportShell({
       </div>
 
       {/* Prev / label / next stepper */}
-      <div style={stepper}>
+      <div style={stepper} className="reportNoPrint">
         {prevDisabled ? (
           <span style={{ ...navBtn, ...navDisabled }} aria-disabled>← Prev</span>
         ) : (

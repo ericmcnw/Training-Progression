@@ -12,8 +12,10 @@ import { resolvePeriod, type Period } from "@/lib/reports/period";
 import { loadReportLogs } from "@/lib/reports/load";
 import { loadReportTotals } from "@/lib/reports/totals";
 import { loadPeriodGoals } from "@/lib/reports/evaluate";
+import { loadDrilldowns } from "@/lib/reports/drilldown";
 import { delta, summarize } from "@/lib/reports/aggregate";
 import GoalsBlock from "./GoalsBlock";
+import DrilldownSections from "./DrilldownSections";
 import {
   buildNumbers,
   countChip,
@@ -103,6 +105,7 @@ export default async function YearReport({ period }: { period: Period }) {
   }
 
   const goals = period.isCurrent ? await loadPeriodGoals("year") : [];
+  const drills = await loadDrilldowns(period, logs);
 
   return (
     <>
@@ -190,6 +193,7 @@ export default async function YearReport({ period }: { period: Period }) {
         <NumbersGrid title="THIS YEAR IN NUMBERS" rows={numbers} />
       </div>
       </section>
+      <DrilldownSections drills={drills} />
     </>
   );
 }
