@@ -20,6 +20,7 @@ import { parseAppDateTimeLocal, toAppYmd } from "@/lib/dates";
 export type BackpackingDayInput = {
   ymd: string; // YYYY-MM-DD
   miles?: number;
+  durationMin?: number; // time hiked that day
   elevGainFt?: number;
   campsite?: string;
   trail?: string; // segment for the day, if different from the overall trail
@@ -47,6 +48,7 @@ const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type CleanDay = Required<Pick<BackpackingDayInput, "ymd">> & {
   miles: number;
+  durationSec: number | null;
   elevGainFt: number | null;
   campsite: string | null;
   trail: string | null;
@@ -61,6 +63,7 @@ function cleanDays(days: BackpackingDayInput[]): CleanDay[] {
     .map((d) => ({
       ymd: d.ymd,
       miles: Number.isFinite(d.miles) && (d.miles as number) > 0 ? Number(d.miles) : 0,
+      durationSec: Number.isFinite(d.durationMin) && (d.durationMin as number) > 0 ? Math.round(Number(d.durationMin) * 60) : null,
       elevGainFt: Number.isFinite(d.elevGainFt) ? Math.round(Number(d.elevGainFt)) : null,
       campsite: d.campsite?.trim() || null,
       trail: d.trail?.trim() || null,
@@ -120,6 +123,7 @@ async function createDayLogs(
         backpackingTripId: tripId,
         performedAt,
         distanceMi: d.miles > 0 ? d.miles : undefined,
+        durationSec: d.durationSec ?? undefined,
         elevationGainFt: d.elevGainFt ?? undefined,
         notes: d.notes ?? undefined,
         location: ctx.location ?? undefined,
@@ -237,7 +241,7 @@ export async function deleteBackpackingTrip(tripId: string): Promise<void> {
 export type BackpackingEditData = {
   trail: string;
   spotValue: SpotPickerValue | null;
-  days: Array<{ ymd: string; miles: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
+  days: Array<{ ymd: string; miles: number | null; durationMin: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
   gear: Array<{ name: string; weightGrams: number | null; quantity: number; consumable: boolean }>;
   notes: string;
   effort: number | null;
@@ -257,7 +261,7 @@ export async function getBackpackingTripForEdit(tripId: string): Promise<Backpac
       gear: true,
       dayLogs: {
         orderBy: { performedAt: "asc" },
-        select: { performedAt: true, distanceMi: true, elevationGainFt: true, notes: true, sportData: true },
+        select: { performedAt: true, distanceMi: true, durationSec: true, elevationGainFt: true, notes: true, sportData: true },
       },
     },
   });
@@ -279,6 +283,7 @@ export async function getBackpackingTripForEdit(tripId: string): Promise<Backpac
     return {
       ymd: toAppYmd(d.performedAt),
       miles: d.distanceMi ?? null,
+      durationMin: d.durationSec != null ? Math.round(d.durationSec / 60) : null,
       elevGainFt: d.elevationGainFt ?? null,
       campsite: typeof sd.campsite === "string" ? sd.campsite : null,
       notes: d.notes ?? null,

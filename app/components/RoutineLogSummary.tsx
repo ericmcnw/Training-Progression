@@ -471,6 +471,12 @@ function BackpackingPanel({ trip }: { trip: NonNullable<LogSummaryData["backpack
               <div style={statValue}>{trip.nights}</div>
             </div>
           ) : null}
+          {trip.totalDurationSec > 0 ? (
+            <div style={statCard}>
+              <div style={statLabel}>Time</div>
+              <div style={statValue}>{formatSeconds(trip.totalDurationSec)}</div>
+            </div>
+          ) : null}
           {trip.packLb != null ? (
             <div style={statCard}>
               <div style={statLabel}>Pack weight</div>
@@ -487,6 +493,7 @@ function BackpackingPanel({ trip }: { trip: NonNullable<LogSummaryData["backpack
                 <span style={{ fontWeight: 900 }}>Day {i + 1} · {formatTripDay(d.ymd)}</span>
                 <span style={{ fontWeight: 800, opacity: 0.85 }}>
                   {d.miles != null ? `${d.miles.toFixed(1)} mi` : "—"}
+                  {d.durationSec ? ` · ${formatSeconds(d.durationSec)}` : ""}
                   {d.elevGainFt ? ` · ${d.elevGainFt} ft` : ""}
                 </span>
               </div>

@@ -32,7 +32,8 @@ export type LogSummaryBackpacking = {
   packLb: number | null;
   baseLb: number | null;
   gear: Array<{ name: string; oz: number | null; quantity: number; consumable: boolean }>;
-  days: Array<{ ymd: string; miles: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
+  days: Array<{ ymd: string; miles: number | null; durationSec: number | null; elevGainFt: number | null; campsite: string | null; notes: string | null }>;
+  totalDurationSec: number;
 };
 
 export type LogSummaryRoutine = {
@@ -225,6 +226,7 @@ type RawTrip = {
   dayLogs: Array<{
     performedAt: Date;
     distanceMi: number | null;
+    durationSec: number | null;
     elevationGainFt: number | null;
     notes: string | null;
     sportData: unknown;
@@ -250,11 +252,13 @@ function parseBackpackingTrip(trip: RawTrip | null | undefined): LogSummaryBackp
     return {
       ymd: toAppYmd(d.performedAt),
       miles: d.distanceMi ?? null,
+      durationSec: d.durationSec ?? null,
       elevGainFt: d.elevationGainFt ?? null,
       campsite: typeof sd.campsite === "string" ? sd.campsite : null,
       notes: d.notes ?? null,
     };
   });
+  const totalDurationSec = days.reduce((s, d) => s + (d.durationSec ?? 0), 0);
   return {
     id: trip.id,
     trail: trip.trail,
@@ -267,6 +271,7 @@ function parseBackpackingTrip(trip: RawTrip | null | undefined): LogSummaryBackp
     baseLb: trip.baseWeightGrams != null ? Math.round((trip.baseWeightGrams / GRAMS_PER_LB) * 10) / 10 : null,
     gear,
     days,
+    totalDurationSec,
   };
 }
 
@@ -386,6 +391,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
             select: {
               performedAt: true,
               distanceMi: true,
+              durationSec: true,
               elevationGainFt: true,
               notes: true,
               sportData: true,

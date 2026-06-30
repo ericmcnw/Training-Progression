@@ -23,6 +23,8 @@ type DayRow = {
   localId: string;
   ymd: string;
   miles: string;
+  hours: string;
+  minutes: string;
   elevGainFt: string;
   campsite: string;
   notes: string;
@@ -48,6 +50,14 @@ function rid(): string {
   return Math.random().toString(36).slice(2);
 }
 
+function formatHM(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
+
 function todayYmd(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
@@ -63,7 +73,7 @@ function nextYmd(ymd: string): string {
 }
 
 function newDay(ymd: string): DayRow {
-  return { localId: rid(), ymd, miles: "", elevGainFt: "", campsite: "", notes: "" };
+  return { localId: rid(), ymd, miles: "", hours: "", minutes: "", elevGainFt: "", campsite: "", notes: "" };
 }
 
 function newGear(): GearRow {
@@ -89,6 +99,8 @@ function draftFromEdit(e: BackpackingEditData): Draft {
             localId: rid(),
             ymd: d.ymd,
             miles: d.miles != null ? String(d.miles) : "",
+            hours: d.durationMin != null ? String(Math.floor(d.durationMin / 60)) : "",
+            minutes: d.durationMin != null ? String(d.durationMin % 60) : "",
             elevGainFt: d.elevGainFt != null ? String(d.elevGainFt) : "",
             campsite: d.campsite ?? "",
             notes: d.notes ?? "",
@@ -150,6 +162,7 @@ export default function BackpackingLogSheet({
 
   const totals = useMemo(() => {
     const totalMiles = days.reduce((s, d) => s + (Number(d.miles) || 0), 0);
+    const totalMin = days.reduce((s, d) => s + (Number(d.hours) || 0) * 60 + (Number(d.minutes) || 0), 0);
     let packG = 0;
     let baseG = 0;
     let anyWeight = false;
@@ -165,6 +178,7 @@ export default function BackpackingLogSheet({
     const hasConsumables = gear.some((g) => g.consumable && Number(g.weightOz) > 0);
     return {
       totalMiles,
+      totalMin,
       nights: Math.max(0, days.length - 1),
       packLb: anyWeight ? packG / GRAMS_PER_LB : null,
       baseLb: anyWeight && hasConsumables ? baseG / GRAMS_PER_LB : null,
@@ -208,13 +222,17 @@ export default function BackpackingLogSheet({
       spotValue: spotValue ?? undefined,
       notes: notes.trim() || undefined,
       effort,
-      days: validDays.map((d) => ({
-        ymd: d.ymd,
-        miles: d.miles.trim() === "" ? undefined : Number(d.miles),
-        elevGainFt: d.elevGainFt.trim() === "" ? undefined : Number(d.elevGainFt),
-        campsite: d.campsite.trim() || undefined,
-        notes: d.notes.trim() || undefined,
-      })),
+      days: validDays.map((d) => {
+        const durationMin = (Number(d.hours) || 0) * 60 + (Number(d.minutes) || 0);
+        return {
+          ymd: d.ymd,
+          miles: d.miles.trim() === "" ? undefined : Number(d.miles),
+          durationMin: durationMin > 0 ? durationMin : undefined,
+          elevGainFt: d.elevGainFt.trim() === "" ? undefined : Number(d.elevGainFt),
+          campsite: d.campsite.trim() || undefined,
+          notes: d.notes.trim() || undefined,
+        };
+      }),
       gear: gear
         .filter((g) => g.name.trim().length > 0)
         .map((g) => ({
@@ -308,6 +326,28 @@ export default function BackpackingLogSheet({
                     />
                   </label>
                   <label style={miniField}>
+                    <span style={miniLabel}>Time hiked</span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input
+                        inputMode="numeric"
+                        style={{ ...inputStyle, textAlign: "center" }}
+                        value={d.hours}
+                        onChange={(e) => setDay(d.localId, { hours: e.target.value })}
+                        placeholder="h"
+                        aria-label="Hours hiked"
+                      />
+                      <span style={{ opacity: 0.5, fontWeight: 800 }}>:</span>
+                      <input
+                        inputMode="numeric"
+                        style={{ ...inputStyle, textAlign: "center" }}
+                        value={d.minutes}
+                        onChange={(e) => setDay(d.localId, { minutes: e.target.value })}
+                        placeholder="m"
+                        aria-label="Minutes hiked"
+                      />
+                    </div>
+                  </label>
+                  <label style={miniField}>
                     <span style={miniLabel}>Elev gain (ft)</span>
                     <input
                       inputMode="numeric"
@@ -345,6 +385,7 @@ export default function BackpackingLogSheet({
           <div style={tripTotals}>
             <strong>{totals.totalMiles ? totals.totalMiles.toFixed(1) : "0"} mi</strong> over {days.length} day{days.length === 1 ? "" : "s"}
             {totals.nights > 0 ? ` · ${totals.nights} night${totals.nights === 1 ? "" : "s"}` : ""}
+            {totals.totalMin > 0 ? ` · ${formatHM(totals.totalMin)}` : ""}
           </div>
         </FormSection>
 
