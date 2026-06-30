@@ -230,6 +230,27 @@ Usage needs gear↔log links, not just the trip snapshot:
    nights on backpacking.
 4. **`/gear/[id]` detail + replacement graph + home nudges.**
 
+## Information architecture (2026-06-30) — gear lives across three verbs
+
+Gear has three distinct jobs that map onto the app's sections, so it isn't a
+single destination:
+
+- **Log → *use* gear.** The picker (what you brought). Inline in log forms; no
+  page needed. (Phase 1 above.)
+- **Plan → *prep* gear.** Checklists + loadouts (packing list / "winter run
+  kit"). Plan = "get ready", so the gear-lists feature lands here — a strong
+  backpacking payoff (tick off your pack before a trip; reuse a saved loadout).
+- **Stats → *review* gear.** Inventory + usage rollups (miles/nights/days,
+  retire). The "see all my kit" surface.
+
+Candidate nav reframe (separate, bigger effort — do NOT couple to the gear
+build): rename **Activities → "Stats"** and make it a tabbed review hub —
+**Activity · Body · Gear** — giving the whole app a clean three-verb model:
+**Log** (record) · **Plan** (prep) · **Stats** (review). Body gets a more
+deliberate home; Gear's inventory/usage sits alongside it.
+
+None of this blocks Phase 1, which is entirely inside the Log forms.
+
 ---
 
 ## Core data model
