@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
-import { isUniversalGearType, resolveGearTypeSlug } from "@/lib/gear-types";
-import type { SavedGear } from "@/lib/gear-pick-types";
+import { gearTypeMeta, isUniversalGearType, resolveGearTypeSlug } from "@/lib/gear-types";
+import type { GearPick, SavedGear } from "@/lib/gear-pick-types";
+
+const GRAMS_PER_OZ = 28.349523125;
 
 // Server-side gear helpers: the visible-inventory read for the picker, and the
 // resolve-on-save that turns picked lines into Gear rows (create-or-reuse).
@@ -109,4 +111,42 @@ export async function resolveGearPicks(picks: GearPickInput[], activitySlug: str
     out.push({ gearId, type: typeSlug, name, weightGrams, quantity, consumable });
   }
   return out;
+}
+
+// Set the gear linked to a snapshot-less log (cardio / sport session): resolve
+// picks to inventory, then replace the log's RoutineLogGear links. Best-effort.
+export async function setLogGear(logId: string, picks: GearPickInput[], activitySlug: string): Promise<void> {
+  try {
+    const resolved = await resolveGearPicks(picks, activitySlug);
+    await prisma.routineLogGear.deleteMany({ where: { routineLogId: logId } });
+    const links = resolved
+      .filter((r) => r.gearId)
+      .map((r) => ({ routineLogId: logId, gearId: r.gearId as string }));
+    if (links.length > 0) {
+      await prisma.routineLogGear.createMany({ data: links, skipDuplicates: true });
+    }
+  } catch {
+    // best-effort — gear linking must never break a save.
+  }
+}
+
+// The gear linked to a log, as picker values (for prefilling an edit form).
+export async function getLogGearPicks(logId: string): Promise<GearPick[]> {
+  try {
+    const links = await prisma.routineLogGear.findMany({
+      where: { routineLogId: logId },
+      select: { gear: { select: { id: true, type: true, name: true, weightGrams: true, consumable: true } } },
+    });
+    return links.map((l) => ({
+      localId: Math.random().toString(36).slice(2),
+      gearId: l.gear.id,
+      type: gearTypeMeta(l.gear.type).label,
+      name: l.gear.name,
+      weightOz: l.gear.weightGrams != null ? String(Math.round((l.gear.weightGrams / GRAMS_PER_OZ) * 10) / 10) : "",
+      quantity: "1",
+      consumable: l.gear.consumable,
+    }));
+  } catch {
+    return [];
+  }
 }

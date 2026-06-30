@@ -17,6 +17,7 @@ function parseSupportsSports(raw: string[]): string[] {
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { stampLogWeather } from "@/lib/weather-stamp";
+import { setLogGear, type GearPickInput } from "@/lib/gear";
 import { createActivityZoneActivitiesForLog, createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { clampEffort } from "@/lib/strain";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
@@ -2238,6 +2239,8 @@ export async function logCardio(params: {
    *  model estimates a value downstream via effectiveEffort(). */
   effort?: number | null;
   painCheck?: PainCheckInput;
+  /** Gear used (e.g. footwear) — linked to the log for usage rollups. */
+  gearPicks?: GearPickInput[];
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   // Distance is optional (walks are often logged by time alone); duration is
@@ -2300,6 +2303,7 @@ export async function logCardio(params: {
   await createActivityZoneActivitiesForLog(prisma, log.id);
   await applyPainCheckToLog(log.id, params.painCheck);
   await stampLogWeather(log.id);
+  await setLogGear(log.id, params.gearPicks ?? [], params.activitySlug ?? "running");
 
   revalidateRoutineSurfaces(params.routineId);
   return log.id;
@@ -2332,6 +2336,7 @@ export async function logRun(params: {
   newActivitySpotOsmId?: string | null;
   effort?: number | null;
   painCheck?: PainCheckInput;
+  gearPicks?: GearPickInput[];
 }) {
   return logCardio(params);
 }
@@ -2743,6 +2748,8 @@ export type UpdateCardioLogParams = {
   newClimbLocationLongitude?: number | null;
   newClimbLocationOsmType?: string | null;
   newClimbLocationOsmId?: string | null;
+  /** Gear used. Omit to leave links untouched; pass [] to clear. */
+  gearPicks?: GearPickInput[];
 };
 
 export async function updateCardioLog(params: UpdateCardioLogParams) {
@@ -2832,6 +2839,9 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
   await recalculateRoutineLogStimulus(params.logId);
   await createExerciseZoneActivitiesForLog(prisma, params.logId);
   await createActivityZoneActivitiesForLog(prisma, params.logId);
+  if (params.gearPicks !== undefined) {
+    await setLogGear(params.logId, params.gearPicks, params.activitySlug ?? "running");
+  }
 
   revalidateRoutineSurfaces(params.routineId);
 }

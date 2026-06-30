@@ -714,6 +714,7 @@ model RoutineLog {
   zoneActivities      ZoneActivity[]
   painLogs            PainLog[]
   climbAttempts       ClimbAttempt[]
+  gearLinks           RoutineLogGear[]
 
   createdAt DateTime @default(now())
 
@@ -788,7 +789,24 @@ model Gear {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  logLinks RoutineLogGear[]
+
   @@index([profileKey, retiredAt])
+}
+
+// Gear ↔ log link — records which gear was used on a log so usage rolls up
+// (shoe miles, board days, …). Backpacking keeps its own trip snapshot; this is
+// for snapshot-less logs (cardio, sport sessions).
+model RoutineLogGear {
+  routineLogId String
+  gearId       String
+  createdAt    DateTime @default(now())
+
+  routineLog RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  gear       Gear       @relation(fields: [gearId], references: [id], onDelete: Cascade)
+
+  @@id([routineLogId, gearId])
+  @@index([gearId])
 }
 
 model BodyZone {

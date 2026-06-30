@@ -45,6 +45,29 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
             <WeatherBadge weather={data.weather} detailed />
           </div>
         ) : null}
+        {data.gear.length > 0 ? (
+          <div style={{ marginBottom: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {data.gear.map((g, i) => (
+              <span
+                key={`${g.name}-${i}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(128,128,128,0.3)",
+                  background: "rgba(128,128,128,0.06)",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                }}
+              >
+                <span aria-hidden>{gearTypeMeta(g.type).icon}</span>
+                {g.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div style={summaryGrid}>
           {isCompletionKind(logKind) && (
             <div style={statCard}>

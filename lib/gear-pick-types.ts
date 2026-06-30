@@ -22,3 +22,27 @@ export type SavedGear = {
   weightGrams: number | null;
   consumable: boolean;
 };
+
+const GRAMS_PER_OZ = 28.349523125;
+
+/** Convert picker values to the resolve-on-save input shape (drops blank rows,
+ *  oz → grams). Matches `GearPickInput` in lib/gear.ts structurally. */
+export function gearToPickInput(picks: GearPick[]): Array<{
+  gearId: string | null;
+  type: string;
+  name: string;
+  weightGrams: number | null;
+  quantity: number;
+  consumable: boolean;
+}> {
+  return picks
+    .filter((p) => p.name.trim().length > 0)
+    .map((p) => ({
+      gearId: p.gearId,
+      type: p.type,
+      name: p.name.trim(),
+      weightGrams: p.weightOz.trim() === "" ? null : Math.round(Number(p.weightOz) * GRAMS_PER_OZ),
+      quantity: p.quantity.trim() === "" ? 1 : Number(p.quantity),
+      consumable: p.consumable,
+    }));
+}

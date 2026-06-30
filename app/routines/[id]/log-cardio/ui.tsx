@@ -24,6 +24,8 @@ import {
   saveDraftToStorage,
 } from "@/lib/log-draft";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
+import GearPicker from "@/app/components/log/GearPicker";
+import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
 import {
   type SpotPickerItem,
   getActivitySpotConfig,
@@ -77,6 +79,7 @@ export default function LogRunForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const [gear, setGear] = useState<GearPick[]>([]);
   // Active activity type. Defaults to whatever the legacy routine maps to;
   // null for synthetic routine (user must pick). Drives form field
   // visibility (elevation hidden when !hasElevation) and goes through to
@@ -317,6 +320,7 @@ export default function LogRunForm({
         activitySlug: derivedActivitySlug ?? undefined,
         activityTypeId: activityTypeId ?? undefined,
         intervalsConfig: intervalsConfig ?? undefined,
+        gearPicks: gearToPickInput(gear),
         ...spotParams,
         painCheck:
           activePainZones.length > 0
@@ -523,6 +527,17 @@ export default function LogRunForm({
         <DateTimeField
           value={performedAtLocal}
           onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+        />
+      </FormSection>
+
+      <FormSection title="Gear">
+        <GearPicker
+          activitySlug={derivedActivitySlug ?? "running"}
+          value={gear}
+          onChange={(g) => { markDirty(); setGear(g); }}
+          showWeight={false}
+          showConsumable={false}
+          showQuantity={false}
         />
       </FormSection>
 

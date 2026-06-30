@@ -12,6 +12,7 @@ import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 import GearPicker from "@/app/components/log/GearPicker";
 import type { GearPick } from "@/lib/gear-pick-types";
+import { gearTypeMeta } from "@/lib/gear-types";
 
 // Dedicated multi-day backpacking trip sheet. A trip is logged as a parent
 // BackpackingTrip + one day-log per day, so it spans the calendar natively.
@@ -99,7 +100,7 @@ function draftFromEdit(e: BackpackingEditData): Draft {
     gear: e.gear.map((g) => ({
       localId: rid(),
       gearId: g.gearId,
-      type: g.type,
+      type: g.type ? gearTypeMeta(g.type).label : "",
       name: g.name,
       weightOz: g.weightGrams != null ? String(Math.round((g.weightGrams / GRAMS_PER_OZ) * 10) / 10) : "",
       quantity: String(g.quantity),

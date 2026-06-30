@@ -166,6 +166,9 @@ export type LogSummaryData = {
   /** Backpacking trip rollup — present on every day-log of a trip. null
    *  otherwise. */
   backpacking: LogSummaryBackpacking | null;
+  /** Gear linked to this log (footwear etc.) via RoutineLogGear. Empty for
+   *  backpacking (its gear lives in the trip snapshot above). */
+  gear: Array<{ type: string; name: string }>;
   /** ActivitySpot link — name + region for the detail-page heading
    *  when the Spot Picker was used at log time. */
   spot: LogSummarySpot | null;
@@ -374,6 +377,8 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       // mode, surfing wave count, etc.). Discriminated by `sport`.
       // See RoutineLog.sportData in prisma/schema.prisma for shape.
       sportData: true,
+      // Gear linked to this log (footwear etc.) for the detail's gear line.
+      gearLinks: { select: { gear: { select: { type: true, name: true } } } },
       // Parent backpacking trip (if this is a trip day-log). Pulls the
       // trip-level rollup + all sibling day-logs so any day shows the trip.
       backpackingTrip: {
@@ -491,6 +496,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     intervals: parseIntervalsConfig(log.intervalsConfig),
     sportData: parseSportData(log.sportData),
     backpacking: parseBackpackingTrip(log.backpackingTrip),
+    gear: log.gearLinks.map((l) => ({ type: l.gear.type, name: l.gear.name })),
     spot: log.activitySpot
       ? {
           id: log.activitySpot.id,

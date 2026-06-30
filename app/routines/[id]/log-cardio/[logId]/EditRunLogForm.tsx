@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { updateRunLog } from "../../../actions";
 import { Field, FieldGrid, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
+import GearPicker from "@/app/components/log/GearPicker";
+import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
 import {
   type SpotPickerItem,
   getActivitySpotConfig,
@@ -68,6 +70,7 @@ export default function EditRunLogForm({
   availableActivityTypes = [],
   initialActivityTypeId = null,
   initialIntervals = null,
+  initialGear = [],
   onComplete,
   onCancel,
 }: {
@@ -93,6 +96,7 @@ export default function EditRunLogForm({
     workDurationSec: number | null;
     restSec: number | null;
   } | null;
+  initialGear?: GearPick[];
   // When provided (drawer-mounted edit), called after a successful save
   // instead of navigating to `returnTo`. Lets the drawer close + refresh
   // the page in place.
@@ -109,6 +113,7 @@ export default function EditRunLogForm({
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
+  const [gear, setGear] = useState<GearPick[]>(initialGear);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
   // Activity type — switchable via the dropdown below so a mis-categorized
@@ -209,6 +214,7 @@ export default function EditRunLogForm({
         // through to the action. Server overwrites both atomically.
         activityTypeId: activityTypeId ?? null,
         intervalsConfig,
+        gearPicks: gearToPickInput(gear),
         ...spotParams,
       });
       if (onComplete) onComplete();
@@ -330,6 +336,17 @@ export default function EditRunLogForm({
         <Field label="Performed at">
           <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
         </Field>
+      </FormSection>
+
+      <FormSection title="Gear">
+        <GearPicker
+          activitySlug={activitySlug ?? "running"}
+          value={gear}
+          onChange={setGear}
+          showWeight={false}
+          showConsumable={false}
+          showQuantity={false}
+        />
       </FormSection>
 
       <FormSection title="Notes">

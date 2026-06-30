@@ -28,12 +28,14 @@ export default function GearPicker({
   onChange,
   showWeight = true,
   showConsumable = true,
+  showQuantity = true,
 }: {
   activitySlug: string;
   value: GearPick[];
   onChange: (next: GearPick[]) => void;
   showWeight?: boolean;
   showConsumable?: boolean;
+  showQuantity?: boolean;
 }) {
   const [saved, setSaved] = useState<SavedGear[]>([]);
   useEffect(() => {
@@ -62,7 +64,8 @@ export default function GearPicker({
   function addSaved(g: SavedGear) {
     onChange([
       ...value,
-      { localId: rid(), gearId: g.id, type: g.type, name: g.name, weightOz: ozFromGrams(g.weightGrams), quantity: "1", consumable: g.consumable },
+      // Seed the type box with the friendly label, not the raw slug.
+      { localId: rid(), gearId: g.id, type: gearTypeMeta(g.type).label, name: g.name, weightOz: ozFromGrams(g.weightGrams), quantity: "1", consumable: g.consumable },
     ]);
   }
   function addBlank() {
@@ -115,7 +118,7 @@ export default function GearPicker({
                 ✕
               </button>
             </div>
-            <div style={fieldGrid(showWeight)}>
+            <div style={fieldGrid(showWeight, showQuantity)}>
               <label style={field}>
                 <span style={fieldLabel}>Name</span>
                 <input
@@ -137,16 +140,18 @@ export default function GearPicker({
                   />
                 </label>
               ) : null}
-              <label style={{ ...field, maxWidth: showWeight ? 72 : undefined }}>
-                <span style={fieldLabel}>Qty</span>
-                <input
-                  inputMode="numeric"
-                  style={{ ...inputStyle, textAlign: "center" }}
-                  value={p.quantity}
-                  onChange={(e) => setPick(p.localId, { quantity: e.target.value })}
-                  placeholder="1"
-                />
-              </label>
+              {showQuantity ? (
+                <label style={field}>
+                  <span style={fieldLabel}>Qty</span>
+                  <input
+                    inputMode="numeric"
+                    style={{ ...inputStyle, textAlign: "center" }}
+                    value={p.quantity}
+                    onChange={(e) => setPick(p.localId, { quantity: e.target.value })}
+                    placeholder="1"
+                  />
+                </label>
+              ) : null}
             </div>
             {showConsumable ? (
               <button
@@ -211,12 +216,11 @@ const gearCard: CSSProperties = {
 };
 const cardTop: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
 const typeIcon: CSSProperties = { fontSize: 18, flexShrink: 0, width: 24, textAlign: "center" };
-function fieldGrid(showWeight: boolean): CSSProperties {
-  return {
-    display: "grid",
-    gridTemplateColumns: showWeight ? "minmax(0,1fr) 90px 72px" : "minmax(0,1fr) 72px",
-    gap: 8,
-  };
+function fieldGrid(showWeight: boolean, showQuantity: boolean): CSSProperties {
+  const cols = ["minmax(0,1fr)"];
+  if (showWeight) cols.push("90px");
+  if (showQuantity) cols.push("72px");
+  return { display: "grid", gridTemplateColumns: cols.join(" "), gap: 8 };
 }
 const field: CSSProperties = { display: "grid", gap: 4, minWidth: 0 };
 const fieldLabel: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.72 };

@@ -1,5 +1,6 @@
 import { getLogEditData } from "@/lib/log-edit-data";
 import { prisma } from "@/lib/prisma";
+import { getLogGearPicks } from "@/lib/gear";
 import BackpackingEditLauncher from "./BackpackingEditLauncher";
 import EditWorkoutLogForm from "../../../log/[logId]/EditWorkoutLogForm";
 import EditRunLogForm from "../../../log-cardio/[logId]/EditRunLogForm";
@@ -48,6 +49,9 @@ export default async function EditRoutineLogPage(props: {
     return <div style={{ padding: 20 }}>Log not found for this routine.</div>;
   }
 
+  // Gear linked to this log (footwear etc.) — prefilled into the cardio editor.
+  const initialGear = data.kind === "CARDIO" ? await getLogGearPicks(logId) : [];
+
   const kindLabel =
     data.kind === "WORKOUT" ? "Workout"
     : data.kind === "CARDIO" ? "Cardio"
@@ -94,6 +98,7 @@ export default async function EditRoutineLogPage(props: {
               availableActivityTypes={data.availableActivityTypes}
               initialActivityTypeId={data.initialActivityTypeId}
               initialIntervals={data.initialIntervals}
+              initialGear={initialGear}
             />
           ) : data.kind === "GUIDED" ? (
             <EditGuidedLogForm
