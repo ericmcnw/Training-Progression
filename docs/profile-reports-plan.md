@@ -254,8 +254,11 @@ The 12w activity-world loaders return week-series shapes tuned for their own bar
 **Phase 4 — Per-sport drill-downs + printable mode. ✅ DONE (pending on-device verify).**
 `lib/reports/drilldown.ts` (`loadDrilldowns(window, logs)` → climbing grade pyramid via `buildPyramidRows` + sends/hardest, endurance-by-family sessions/miles/time, strength top exercises by volume, non-climbing sport sessions-by-name; each section only runs when its domain appears). `app/reports/DrilldownSections.tsx` renders a "BREAKDOWN" panel of native `<details>` drawers (zero client JS, forced open in print). Wired into Month + Year (Week keeps its per-day list as its detail view). **Printable mode:** `PrintButton` (client, `window.print()`) + scoped `@media print` CSS in ReportShell — drops nav chrome, forces drawers open, reveals a print-only period header, keeps colors faithful (`print-color-adjust: exact`). Light "paper" theme remains the deferred refinement (inline-rgba override is a separate pass). Typecheck + clean build verified.
 
-**Phase 5 — Profile redesign + Settings route.**
-Additive `AppProfile` migration (`displayName`, `avatarEmoji`, `avatarColor`). Rebuild `/profile` per §7 (identity header + gear, tappable domain split, compact pulse, ways-in row); remove inline W/M/Y and inline settings. New `/profile/settings` per §8 (hub that links out) with the identity editor. Remove now-dead inline summary usage.
+**Phase 5a — Profile slim-down + Settings route. ✅ DONE (pending on-device verify).**
+New `/profile/settings` (hub: `ProfileSettings` + link-out to endurance type config). Slimmed `/profile`: dropped inline Month/Year modules (now at /reports) + inline settings; kept the WeeklySummary "last 7 days" pulse; added a ⚙ Settings link in the ways-in row; made the domain split tappable into filtered history. Deleted the now-dead `MonthlySummary`/`YearlySummary` modules. No DB changes. Clean build verified.
+
+**Phase 5b — Identity editor. ⏳ NEXT (careful DB).**
+Additive `AppProfile` migration (`displayName`, `avatarEmoji`, `avatarColor`) + identity editor in Settings → Account + wire into `ProfileHeader`. Migration done cautiously given the repo's drift history (additive nullable columns only).
 
 **Deferred / revisit:** Units Imperial/Metric (own focused pass); settings modal vs frozen-header entry; week-start Sun/Mon toggle; "week in review" notification/cadence; share artifact (link/image); auth-backed real account identity.
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatAppDate } from "@/lib/dates";
 import { domainColor } from "@/lib/routines";
 import type { ProfileStats } from "@/lib/profile-stats";
@@ -72,7 +73,11 @@ export default function ProfileHeader({ stats }: { stats: ProfileStats }) {
             {stats.domainSplit.map((d) => {
               const pct = Math.round((d.count / totalSplit) * 100);
               return (
-                <div key={d.domain} style={legendItemStyle}>
+                <Link
+                  key={d.domain}
+                  href={`/profile?view=history&domain=${d.domain}`}
+                  style={{ ...legendItemStyle, textDecoration: "none", color: "inherit" }}
+                >
                   <span
                     style={{
                       width: 8,
@@ -84,7 +89,7 @@ export default function ProfileHeader({ stats }: { stats: ProfileStats }) {
                   />
                   <span style={{ fontWeight: 800 }}>{DOMAIN_LABELS[d.domain] ?? d.domain}</span>
                   <span style={{ opacity: 0.55 }}>{pct}%</span>
-                </div>
+                </Link>
               );
             })}
           </div>

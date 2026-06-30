@@ -15,17 +15,10 @@ import {
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getLogDisplayName } from "@/lib/routine-display";
-import { getAppSession } from "@/lib/auth";
-import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
-import { getHomeLocation } from "@/lib/home-location";
-import { getActivityEntry } from "@/lib/activity-families";
 import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
-import MonthlySummary from "./MonthlySummary";
-import YearlySummary from "./YearlySummary";
 import ProfileHeader from "@/app/profile/ProfileHeader";
 import ProfileMilestones from "@/app/profile/ProfileMilestones";
-import ProfileSettings from "@/app/profile/ProfileSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -95,9 +88,8 @@ export default async function ManualLogPageContent({
   }));
 
   // ── Stats ────────────────────────────────────────────────────────────────────
-  // Weekly / monthly aggregates now live inside WeeklySummary +
-  // MonthlySummary (richer modules); the bare session counts that used to
-  // be rendered here are gone.
+  // The profile keeps only the WeeklySummary pulse; full week/month/year
+  // reports moved to /reports (navigable + evaluative).
   const now = new Date();
 
   // ── Calendar (current month in app timezone) ─────────────────────────────────
@@ -105,20 +97,7 @@ export default async function ManualLogPageContent({
 
   // Profile-view-only data: lifetime stats + milestones + sport settings.
   // Skipped on the history view since none of it renders there.
-  const [profileStats, selectedSportsRaw, availableSports, session, homeLocation] = showHistory
-    ? [null, [], [], null, null]
-    : await Promise.all([
-        loadProfileStats(todayYmd),
-        listSelectedSports(),
-        listUnselectedSports(),
-        getAppSession(),
-        getHomeLocation(),
-      ]);
-  const selectedSports = selectedSportsRaw.map((s) => ({
-    slug: s.slug,
-    label: s.label,
-    eyebrow: getActivityEntry(s.slug)?.eyebrow ?? "",
-  }));
+  const profileStats = showHistory ? null : await loadProfileStats(todayYmd);
   const [calYear, calMonthNum] = todayYmd.split("-").slice(0, 2).map(Number);
   const calMonthIdx = calMonthNum - 1;
   const daysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate();
@@ -191,6 +170,7 @@ export default async function ManualLogPageContent({
             <Link href="/log" style={linkBtn}>Routines</Link>
             <Link href="/goals" style={linkBtn}>Goals</Link>
             <Link href="/reports/week" style={linkBtn}>Reports</Link>
+            <Link href="/profile/settings" style={linkBtn}>⚙ Settings</Link>
           </div>
 
           <div style={summaryGrid}>
@@ -229,13 +209,9 @@ export default async function ManualLogPageContent({
         </section>
       )}
 
-      {/* Weekly + monthly summary modules. Replace the old "This Week / This
-          Month" single-number cards above with richer at-a-glance modules
-          (rhythm + composition + highlights for the week; heatmap + top
-          routines + composition for the month). */}
+      {/* Last-7-days pulse — a rolling glance. The full navigable + evaluative
+          week/month/year reports live at /reports; the profile keeps only this. */}
       {!showHistory && <WeeklySummary logs={enrichedLogs} today={now} />}
-      {!showHistory && <MonthlySummary today={now} />}
-      {!showHistory && <YearlySummary today={now} />}
 
       {/* ── Recent Activity (profile view only) ── */}
       {!showHistory && (
@@ -253,21 +229,6 @@ export default async function ManualLogPageContent({
         </section>
       )}
 
-      {/* ── Settings ── */}
-      {!showHistory && (
-        <section className="mobileSectionCard" style={panel}>
-          <div className="mobileSectionHeader" style={panelHeader}>SETTINGS</div>
-          <div className="mobileSectionBody" style={{ padding: 14 }}>
-            <ProfileSettings
-              selectedSports={selectedSports}
-              availableSports={availableSports}
-              authMode={session?.mode ?? "single-user-dev"}
-              isAuthenticated={session?.isAuthenticated ?? false}
-              homeLocation={homeLocation}
-            />
-          </div>
-        </section>
-      )}
 
       {/* ── Full History ── */}
       {showHistory && (
