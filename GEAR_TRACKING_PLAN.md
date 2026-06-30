@@ -95,6 +95,82 @@ Backpacking reads as **cardio under the hiking umbrella**, so:
 
 ---
 
+## Refined gear spec (2026-06-30) — typed inventory + picker
+
+This supersedes the inline `sportData.gear` list in the backpacking v0 sheet:
+that list is replaced by a **picker backed by a real `Gear` inventory**, so gear
+is entered once and reused. Driven by Eric's ask: a typeable **type** dropdown,
+a **name**, a **weight**, saved + reusable, with footwear carrying across log
+types.
+
+### The gear row → a picker
+Each gear line becomes:
+- **Type** — a *typeable dropdown* (combobox / `<input list>`): presets +
+  free-type your own. Presets: Footwear, Pack, Tent, Sleeping bag, Sleeping pad,
+  Stove, Cookware, Water (filter/bottles), Clothing, Electronics, Other.
+- **Name** — free text ("Hyperlite 2400", "Brooks Ghost 16").
+- **Weight** — number (oz in the UI, stored grams).
+- Plus **select-from-saved**: typing/opening shows your existing gear of relevant
+  types to pick instead of re-entering; "＋ Save new" creates an inventory row.
+
+### Model
+Refines the `Gear` table below. Key fields for this ask:
+```prisma
+model Gear {
+  id           String   @id @default(cuid())
+  profileKey   String
+  type         String   // "footwear" | "tent" | "sleeping-bag" | "pack" | … (free)
+  name         String
+  weightGrams  Int?
+  // Where it was created — drives cross-activity visibility together with
+  // type scope. Universal-type gear ignores this.
+  activitySlug String?
+  consumable   Boolean  @default(false)
+  retiredAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([profileKey, type])
+}
+```
+
+### Cross-log-type visibility ("footwear saves over log types")
+A small **type → scope** config (`GEAR_TYPE_PRESETS`):
+- **Universal** types (footwear, watch, headlamp, sunglasses, clothing) show on
+  *any* gear-enabled log regardless of `activitySlug`.
+- **Activity-scoped** types (pack, tent, sleeping bag, sleeping pad, stove,
+  cookware, water) show only where `activitySlug ∈ compatibleActivitySlugs(current)`.
+- Free-typed custom types default to **activity-scoped** (the activity they were
+  created on); can be promoted to universal later.
+
+Picker query for activity A:
+`type ∈ UNIVERSAL_TYPES  OR  activitySlug ∈ compatibleActivitySlugs(A)` — reuses
+the existing compat graph from `lib/activity-spots.ts`. So footwear logged on a
+run surfaces on a backpacking trip; a tent stays out of the run picker.
+
+### Trip ↔ inventory link
+On a backpacking save, the picked gear writes a **snapshot** into the trip
+(`sportData.gear` keeps `{ gearId?, name, weightGrams, quantity, consumable }`)
+so pack-weight history is stable even if the inventory item is later edited —
+exactly the snapshot pattern already used for `packWeightGrams`. New gear created
+inline also lands in the `Gear` table for reuse.
+
+### Phasing
+1. **Backpacking form** — `Gear` table + `GearPicker` (type/name/weight +
+   select-from-saved) replacing the inline rows. Delivers the whole ask within
+   backpacking.
+2. **Cardio logs (footwear)** — add the picker to run/hike (`log-cardio/ui.tsx`)
+   so footwear carries across. This is the "saves over log types" payoff and the
+   original Phase-1 footwear-mileage hook.
+3. **Gear management page** (`/gear`) + retire + mileage/usage rollups — the rest
+   of this plan below.
+
+### Open calls (decide at build time)
+- A dedicated `/gear` management screen vs. manage-inline-only for v1.
+- Whether `quantity` lives on the trip's snapshot only (yes) or also on `Gear`.
+- Retire flow + whether the picker hides retired gear (yes).
+
+---
+
 ## Core data model
 
 ### `Gear` — generalized from day one

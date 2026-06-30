@@ -1,4 +1,6 @@
 import { getLogEditData } from "@/lib/log-edit-data";
+import { prisma } from "@/lib/prisma";
+import BackpackingEditLauncher from "./BackpackingEditLauncher";
 import EditWorkoutLogForm from "../../../log/[logId]/EditWorkoutLogForm";
 import EditRunLogForm from "../../../log-cardio/[logId]/EditRunLogForm";
 import EditGuidedLogForm from "../../../log-guided/[logId]/EditGuidedLogForm";
@@ -29,6 +31,17 @@ export default async function EditRoutineLogPage(props: {
   const defaultReturnTo = `/routines/${routineId}/log`;
   const returnTo = returnToRaw.startsWith("/") ? returnToRaw : defaultReturnTo;
   if (!routineId || !logId) return <div style={{ padding: 20 }}>Missing routine/log id.</div>;
+
+  // Backpacking day-logs belong to a multi-day trip — the generic per-log
+  // editors can't represent the trip, so route Edit to the dedicated trip
+  // editor (which edits all days + gear via the trip, not one day in isolation).
+  const backpackingLog = await prisma.routineLog.findUnique({
+    where: { id: logId },
+    select: { routineId: true, backpackingTripId: true },
+  });
+  if (backpackingLog?.backpackingTripId && backpackingLog.routineId === routineId) {
+    return <BackpackingEditLauncher tripId={backpackingLog.backpackingTripId} returnTo={returnTo} />;
+  }
 
   const data = await getLogEditData(logId);
   if (!data || data.routineId !== routineId) {
