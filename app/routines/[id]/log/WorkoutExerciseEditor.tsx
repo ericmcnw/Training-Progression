@@ -80,6 +80,61 @@ function setGridColumns(block: WorkoutBlock): string {
   return block.supportsWeight ? "32px 1fr 1fr 68px" : "32px 1fr 68px";
 }
 
+function hasCellValue(value?: string | null) {
+  return value != null && String(value).trim() !== "";
+}
+
+// A row only counts as a set when it carries the exercise's primary metric
+// (reps for REPS, seconds for TIME). Weight alone is not a loggable set — it's
+// the difference between "confirmed & saved" and a green check that stores
+// nothing. Confirm, the progress count, and save all gate on this one rule.
+function rowIsLoggable(block: WorkoutBlock, row: SetRow) {
+  return hasCellValue(block.unit === "REPS" ? row.reps : row.seconds);
+}
+
+// Reps/time hint: match this set to last session's same-numbered set, else the
+// set directly above in this session (carry-forward for sets added beyond what
+// last time had). Anchored to the last log — it does NOT chase this session's
+// edits, so reps/time stay a memory of last time.
+function metricSuggestionFor(block: WorkoutBlock, rowIdx: number): SetRow | undefined {
+  const setNumber = block.rows[rowIdx]?.setNumber;
+  const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
+  if (fromLast && (hasCellValue(fromLast.reps) || hasCellValue(fromLast.seconds))) return fromLast;
+  return rowIdx > 0 ? block.rows[rowIdx - 1] : undefined;
+}
+
+// Weight hint: prefer the nearest weight entered *this session* above this row,
+// so changing a set's weight carries forward to the remaining sets. Only when
+// nothing's been entered above does it fall back to last session's matching set.
+function weightSuggestionFor(block: WorkoutBlock, rowIdx: number): string | undefined {
+  for (let i = rowIdx - 1; i >= 0; i -= 1) {
+    const w = block.rows[i]?.weightLb;
+    if (hasCellValue(w)) return w ?? undefined;
+  }
+  const setNumber = block.rows[rowIdx]?.setNumber;
+  const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
+  return hasCellValue(fromLast?.weightLb) ? fromLast?.weightLb : undefined;
+}
+
+// Fill a row's blank cells from the hints — weight from weightSuggestionFor, the
+// primary metric from metricSuggestionFor. Never overwrites what the user typed.
+function fillRowFromSuggestions(block: WorkoutBlock, rowIdx: number, row: SetRow): SetRow {
+  const next: SetRow = { ...row };
+  if (block.supportsWeight && !hasCellValue(next.weightLb)) {
+    const w = weightSuggestionFor(block, rowIdx);
+    if (w !== undefined) next.weightLb = w;
+  }
+  if (block.unit === "REPS" && !hasCellValue(next.reps)) {
+    const hint = metricSuggestionFor(block, rowIdx);
+    if (hasCellValue(hint?.reps)) next.reps = hint?.reps;
+  }
+  if (block.unit === "TIME" && !hasCellValue(next.seconds)) {
+    const hint = metricSuggestionFor(block, rowIdx);
+    if (hasCellValue(hint?.seconds)) next.seconds = hint?.seconds;
+  }
+  return next;
+}
+
 export default function WorkoutExerciseEditor({
   routineId,
   routineName,
@@ -141,6 +196,7 @@ export default function WorkoutExerciseEditor({
   const [effort] = useState<number | null>(initialEffort);
   const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt || localDateTimeNow);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [creatingExercise, startCreateExercise] = useTransition();
   const [exerciseQuery, setExerciseQuery] = useState("");
   const [customUnit, setCustomUnit] = useState<"REPS" | "TIME">("REPS");
@@ -252,35 +308,23 @@ export default function WorkoutExerciseEditor({
   function advanceFocus(block: WorkoutBlock, rowIdx: number, field: "weightLb" | "reps" | "seconds") {
     const nextKey =
       field === "weightLb"
-        ? `${rowIdx}-${block.unit === "REPS" ? "reps" : "seconds"}`
-        : `${rowIdx + 1}-${block.supportsWeight ? "weightLb" : block.unit === "REPS" ? "reps" : "seconds"}`;
+        ? `${block.exerciseId}-${rowIdx}-${block.unit === "REPS" ? "reps" : "seconds"}`
+        : `${block.exerciseId}-${rowIdx + 1}-${block.supportsWeight ? "weightLb" : block.unit === "REPS" ? "reps" : "seconds"}`;
     inputRefs.current.get(nextKey)?.focus();
   }
 
-  function rowHasValue(row: SetRow) {
-    return (row.reps ?? row.seconds ?? row.weightLb ?? "").toString().trim() !== "";
-  }
-
-  // What a set fills from when confirmed (and what its grey hint shows):
-  // last session's matching set if we have it, otherwise the set directly
-  // above in this session (carry-forward fallback for added sets).
-  function suggestionFor(block: WorkoutBlock, rowIdx: number): SetRow | undefined {
-    const setNumber = block.rows[rowIdx]?.setNumber;
-    const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
-    if (fromLast && (fromLast.reps || fromLast.seconds || fromLast.weightLb)) return fromLast;
-    return rowIdx > 0 ? block.rows[rowIdx - 1] : undefined;
-  }
-
   // Mark any typed-but-unconfirmed set in `exerciseId` as done. Fired when
-  // leaving an exercise so "typed a set, moved on" still counts it.
+  // leaving an exercise so "typed a set, moved on" still counts it — but only
+  // for rows that actually carry a savable value, so a stray weight with no
+  // reps never turns green (and then silently drops on save).
   function commitTypedSets(source: WorkoutBlock[], exerciseId: string | null): WorkoutBlock[] {
     if (!exerciseId) return source;
     return source.map((block) => {
       if (block.exerciseId !== exerciseId) return block;
-      if (!block.rows.some((r) => rowHasValue(r) && !r.done)) return block;
+      if (!block.rows.some((r) => rowIsLoggable(block, r) && !r.done)) return block;
       return {
         ...block,
-        rows: block.rows.map((r) => (rowHasValue(r) && !r.done ? { ...r, done: true } : r)),
+        rows: block.rows.map((r) => (rowIsLoggable(block, r) && !r.done ? { ...r, done: true } : r)),
       };
     });
   }
@@ -297,46 +341,46 @@ export default function WorkoutExerciseEditor({
     setExpandedId(nextId);
   }
 
-  // Confirm (or un-confirm) a set. Confirming an empty set fills it from its
-  // suggestion first; confirming the last set auto-advances to the next
-  // exercise. Pure client state — no network, so it's instant.
+  // Confirm (or un-confirm) a set. Confirming fills blank cells from the hints
+  // first (weight from what you've entered this session, reps/time from the last
+  // log); confirming the last set auto-advances to the next exercise. A row that
+  // still has no savable value after filling is left un-confirmed — no green
+  // check that saves nothing. Pure client state — no network, so it's instant.
   function confirmSet(exerciseId: string, rowIdx: number) {
-    markDirty();
     const block = blocks.find((b) => b.exerciseId === exerciseId);
     const row = block?.rows[rowIdx];
     if (!block || !row) return;
-    const togglingOff = !!row.done;
 
-    const newBlocks = blocks.map((b) => {
-      if (b.exerciseId !== exerciseId) return b;
-      return {
-        ...b,
-        rows: b.rows.map((r, i) => {
-          if (i !== rowIdx) return r;
-          if (togglingOff) return { ...r, done: false };
-          if (rowHasValue(r)) return { ...r, done: true };
-          const src = suggestionFor(b, i);
-          return {
-            ...r,
-            reps: r.reps ?? src?.reps,
-            seconds: r.seconds ?? src?.seconds,
-            weightLb: r.weightLb ?? src?.weightLb,
-            done: true,
-          };
-        }),
-      };
-    });
+    if (row.done) {
+      markDirty();
+      setBlocks((prev) =>
+        prev.map((b) =>
+          b.exerciseId !== exerciseId
+            ? b
+            : { ...b, rows: b.rows.map((r, i) => (i === rowIdx ? { ...r, done: false } : r)) }
+        )
+      );
+      return;
+    }
+
+    const filled = fillRowFromSuggestions(block, rowIdx, row);
+    if (!rowIsLoggable(block, filled)) return;
+
+    markDirty();
+    const newBlocks = blocks.map((b) =>
+      b.exerciseId !== exerciseId
+        ? b
+        : { ...b, rows: b.rows.map((r, i) => (i === rowIdx ? { ...filled, done: true } : r)) }
+    );
     setBlocks(newBlocks);
 
     // Auto-advance only once EVERY set here is confirmed — so checking the
     // last set while a middle set is still open keeps you put instead of
     // skipping it. The exercise being "done" is the trigger, not the row.
-    if (!togglingOff) {
-      const updated = newBlocks.find((b) => b.exerciseId === exerciseId);
-      if (updated && updated.rows.every((r) => r.done)) {
-        const bi = newBlocks.findIndex((b) => b.exerciseId === exerciseId);
-        changeExpanded(newBlocks[bi + 1]?.exerciseId ?? null, newBlocks);
-      }
+    const updated = newBlocks.find((b) => b.exerciseId === exerciseId);
+    if (updated && updated.rows.every((r) => r.done)) {
+      const bi = newBlocks.findIndex((b) => b.exerciseId === exerciseId);
+      changeExpanded(newBlocks[bi + 1]?.exerciseId ?? null, newBlocks);
     }
   }
 
@@ -506,7 +550,7 @@ export default function WorkoutExerciseEditor({
     }
     setBlocks(initialBlocks);
     setNotes(initialNotes);
-    setPerformedAtLocal(initialPerformedAt);
+    setPerformedAtLocal(initialPerformedAt || localDateTimeNow());
     setExpandedId(initialExpandedId ?? initialBlocks[0]?.exerciseId ?? null);
     isDirtyRef.current = false;
     draftStartedAtRef.current = new Date().toISOString();
@@ -535,6 +579,7 @@ export default function WorkoutExerciseEditor({
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     try {
       await onSave({
         notes,
@@ -542,18 +587,27 @@ export default function WorkoutExerciseEditor({
         effort,
         exercises: blocks.map((block) => ({
           exerciseId: block.exerciseId,
-          sets: block.rows.map((row) => ({
-            setNumber: row.setNumber,
-            reps: toNumOrNull(row.reps),
-            seconds: toNumOrNull(row.seconds),
-            weightLb: toNumOrNull(row.weightLb),
-          })),
+          // Only send rows with the primary metric — a weight-only row is not a
+          // set. Keeps volume/PR math clean and matches what the green check
+          // (and the "X/Y done" count) already gate on.
+          sets: block.rows
+            .filter((row) => rowIsLoggable(block, row))
+            .map((row) => ({
+              setNumber: row.setNumber,
+              reps: toNumOrNull(row.reps),
+              seconds: toNumOrNull(row.seconds),
+              weightLb: toNumOrNull(row.weightLb),
+            })),
         })),
       });
       if (draftEnabled && routineId) {
         clearDraftFromStorage(routineId);
         contextClearDraft(routineId);
       }
+    } catch (err) {
+      // Surface the failure instead of silently resetting — the draft is left
+      // intact so a network blip doesn't cost the user the whole session.
+      setSaveError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -754,7 +808,8 @@ export default function WorkoutExerciseEditor({
                   {/* Set rows */}
                   <div style={{ display: "grid", gap: 6 }}>
                     {block.rows.map((row, rowIdx) => {
-                      const suggestion = suggestionFor(block, rowIdx);
+                      const weightHint = weightSuggestionFor(block, rowIdx);
+                      const metricHint = metricSuggestionFor(block, rowIdx);
                       const rowIsEmpty = !row.reps && !row.seconds && !row.weightLb;
                       return (
                         <SwipeableRow
@@ -777,12 +832,12 @@ export default function WorkoutExerciseEditor({
 
                           {block.supportsWeight && (
                             <input
-                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-weightLb`, el); else inputRefs.current.delete(`${rowIdx}-weightLb`); }}
+                              ref={(el) => { if (el) inputRefs.current.set(`${block.exerciseId}-${rowIdx}-weightLb`, el); else inputRefs.current.delete(`${block.exerciseId}-${rowIdx}-weightLb`); }}
                               className="ghostInput"
                               style={styles.bigInput}
                               value={row.weightLb ?? ""}
                               inputMode="decimal"
-                              placeholder={suggestion?.weightLb ?? "—"}
+                              placeholder={weightHint ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "weightLb", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "weightLb"); } }}
                             />
@@ -790,12 +845,12 @@ export default function WorkoutExerciseEditor({
 
                           {block.unit === "REPS" && (
                             <input
-                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-reps`, el); else inputRefs.current.delete(`${rowIdx}-reps`); }}
+                              ref={(el) => { if (el) inputRefs.current.set(`${block.exerciseId}-${rowIdx}-reps`, el); else inputRefs.current.delete(`${block.exerciseId}-${rowIdx}-reps`); }}
                               className="ghostInput"
                               style={styles.bigInput}
                               value={row.reps ?? ""}
                               inputMode="numeric"
-                              placeholder={suggestion?.reps ?? "—"}
+                              placeholder={metricHint?.reps ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "reps", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "reps"); } }}
                             />
@@ -803,12 +858,12 @@ export default function WorkoutExerciseEditor({
 
                           {block.unit === "TIME" && (
                             <input
-                              ref={(el) => { if (el) inputRefs.current.set(`${rowIdx}-seconds`, el); else inputRefs.current.delete(`${rowIdx}-seconds`); }}
+                              ref={(el) => { if (el) inputRefs.current.set(`${block.exerciseId}-${rowIdx}-seconds`, el); else inputRefs.current.delete(`${block.exerciseId}-${rowIdx}-seconds`); }}
                               className="ghostInput"
                               style={styles.bigInput}
                               value={row.seconds ?? ""}
                               inputMode="numeric"
-                              placeholder={suggestion?.seconds ?? "—"}
+                              placeholder={metricHint?.seconds ?? "—"}
                               onChange={(e) => updateCell(block.exerciseId, row.setNumber, "seconds", e.target.value)}
                               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advanceFocus(block, rowIdx, "seconds"); } }}
                             />
@@ -952,6 +1007,23 @@ export default function WorkoutExerciseEditor({
       </Field>
 
       {bottomSlot}
+
+      {saveError ? (
+        <div
+          role="alert"
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "rgba(252,165,165,0.98)",
+            background: "rgba(248,113,113,0.1)",
+            border: "1px solid rgba(248,113,113,0.32)",
+            borderRadius: 10,
+            padding: "8px 12px",
+          }}
+        >
+          {saveError}
+        </div>
+      ) : null}
 
       {/* Action bar */}
       <div className="mobileActionRow" style={styles.stickyBar}>
