@@ -307,6 +307,128 @@ auto-retire — the user decides (matches the retire flow already specced).
 
 ---
 
+## Gear lists — loadouts + checklists (full plan, 2026-06-30)
+
+One model, two uses. A **gear list** is a named collection of items; you *pack*
+against it (interactive checklist) and you *apply* it to a log (loadout). The
+loadout and the checklist are not two features — they're two verbs on the same
+list.
+
+### The pivotal idea: the list is a template, the log is the instance
+"Keep an item on the checklist but don't bring it on a trip" is the crux. Solved
+by never conflating the two:
+- The **list** is your reusable master ("Backpacking kit"). It doesn't know about
+  any single trip.
+- **Applying** a list to a trip **copies** its items into that log's gear picker
+  (a snapshot). The list is *not* mutated.
+- So per-trip exclusion = **remove it in the log picker** after applying (or leave
+  it unchecked when you apply "checked only"). Either way the master list keeps
+  the item for next time.
+
+That means we need **no per-trip instance table** — the existing log gear
+snapshot already *is* the per-trip record. The list just seeds it.
+
+### Model
+```prisma
+model GearList {
+  id           String   @id @default(cuid())
+  profileKey   String
+  name         String
+  activitySlug String?   // primary activity (backpacking, running…) — scopes
+                         // which logs it can seed + filters the /gear list view
+  notes        String?
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  items        GearListItem[]
+  @@index([profileKey, isDeleted])
+}
+
+model GearListItem {
+  id                  String  @id @default(cuid())
+  listId              String
+  // `label` is ALWAYS present (the display text) so deleting the linked Gear
+  // never blanks the row. `gearId` is the optional inventory link (carries
+  // weight/type/usage). A pure non-inventory item (sunscreen, permit) has a
+  // label + no gearId.
+  label               String
+  gearId              String?
+  weightGramsOverride Int?
+  quantity            Int     @default(1)
+  checked             Boolean @default(true)  // "in my pack / bringing"
+  sortOrder           Int     @default(0)
+  list GearList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  gear Gear?    @relation(fields: [gearId], references: [id], onDelete: SetNull)
+  @@index([listId])
+}
+```
+- **No `kind` field** — a list is a list. "Loadout" vs "checklist" is how you use
+  it, not a type. A list heavy on non-inventory items reads as a checklist; one
+  that's all gear reads as a loadout. Same rows.
+- `checked` = your working "bringing" state, persisted (your usual kit stays
+  checked). Interactive-checklist toggles it. Gear delete → `gearId` SetNull, row
+  survives via `label`.
+
+### Where it lives + links
+- **Editor**: `/gear/lists/[id]` (lists live with gear). `/gear/lists` index +
+  the `/gear` hub grows a **"Your lists"** section with cards ("Backpacking kit ·
+  7 items · 4.2 lb").
+- **Plan**: a **"Packing lists"** entry — prep is Plan's job. Surface upcoming-
+  trip lists there. (Links to the same `/gear/lists` editor.)
+- **Log form**: the gear picker grows a **"＋ From a list"** button (see below).
+- So the list is reachable from **/gear** (review) and **Plan** (prep); the
+  editor has one home under `/gear/lists`.
+
+### The editor (interactive checklist)
+- Header: editable **name**, **activity** dropdown, notes.
+- Rows: **checkbox (bringing)** · type icon · name · qty · weight · **✕ remove**.
+  Reorderable (`sortOrder`). Tapping the checkbox toggles `checked` live
+  (optimistic + server action).
+- **Add item**: **"＋ From your gear"** (the inventory picker → creates a gear-ref
+  item) or **"＋ Add other"** (free-text label + optional weight → non-inventory
+  item).
+- **Remove item**: ✕ deletes the `GearListItem`.
+- **Weight readout**: "Packing **4.2 lb**" (sum of *checked* items) + a faint
+  "6.1 lb total" — base/total split when consumables are flagged, same math as
+  the backpacking picker.
+- **Progress**: "8 / 12 packed" from checked count — the checklist feel.
+
+### Apply a loadout in the log form (add/remove per trip)
+- The `GearPicker` gains **"＋ From a list"** → a menu of your lists scoped to the
+  log's activity (`activitySlug` compatible). Pick one →
+  **it appends the list's *checked*, gear-ref items** as picker rows (each with
+  `gearId`, so weight/usage carry). Pure label items are skipped for logs (they
+  aren't tracked gear) — noted in the menu ("brings 6 of 8 items; 2 are checklist-
+  only").
+- After applying, the picker is **fully editable** — the existing add/remove/qty
+  controls handle every per-trip tweak. "Didn't bring the stove this trip" =
+  remove that row; the list is untouched.
+- Apply is **additive + dedupes** (won't double-add gear already in the picker by
+  gearId/name), so you can apply two lists or apply-then-tweak.
+
+### Server actions
+`createGearList`, `renameGearList`, `deleteGearList` (soft), `addGearListItem`
+(from gear or ad-hoc), `updateGearListItem` (checked / qty / weight / label),
+`removeGearListItem`, `reorderGearListItems`. `getGearListsForActivity(slug)` +
+`getGearListForApply(listId)` (returns checked gear-ref items as `GearPick[]`).
+
+### Phasing
+1. `GearList` / `GearListItem` tables + migration.
+2. List CRUD + the editor (`/gear/lists/[id]`) + "Your lists" on `/gear`.
+3. Interactive checklist (toggle + progress + weight readout).
+4. **"＋ From a list"** on the backpacking gear picker (then cardio/sport).
+5. Plan entry point; "make a list from this trip's gear" convenience.
+
+### Open calls (decide at build)
+- Apply **checked-only** (recommended) vs **all** items.
+- Whether a list can span multiple activities (v1: single `activitySlug`; universal
+  gear like footwear still fits any list).
+- Per-trip *independent* checklist state — NOT needed given the log-is-instance
+  model above; only revisit if you want to pack against the master without ever
+  touching its checkboxes.
+
+---
+
 ## Core data model
 
 ### `Gear` — generalized from day one
