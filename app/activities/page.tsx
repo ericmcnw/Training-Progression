@@ -73,9 +73,14 @@ export default async function ActivitiesPage() {
     <div style={pageStyle}>
       <header style={headerStyle}>
         <h1 style={titleStyle}>Activities</h1>
-        <Link href="/activities/map" style={mapLinkStyle}>
-          🗺 Map
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/gear" style={mapLinkStyle}>
+            🎒 Gear
+          </Link>
+          <Link href="/activities/map" style={mapLinkStyle}>
+            🗺 Map
+          </Link>
+        </div>
       </header>
 
       <div style={{ display: "grid", gap: 10 }}>

@@ -31,6 +31,30 @@ export async function getVisibleGear(activitySlug: string): Promise<SavedGear[]>
   }
 }
 
+export type GearRow = {
+  id: string;
+  type: string;
+  name: string;
+  weightGrams: number | null;
+  activitySlug: string | null;
+  consumable: boolean;
+  retiredAt: Date | null;
+};
+
+// All of the user's gear (active + retired) for the /gear hub. Best-effort.
+export async function getAllGear(): Promise<GearRow[]> {
+  try {
+    const session = await getAppSession();
+    return await prisma.gear.findMany({
+      where: { profileKey: session.profileKey },
+      orderBy: [{ retiredAt: "asc" }, { name: "asc" }],
+      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, retiredAt: true },
+    });
+  } catch {
+    return [];
+  }
+}
+
 export type GearPickInput = {
   gearId: string | null;
   type: string;
