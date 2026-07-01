@@ -56,6 +56,9 @@ export default function GearListEditor({
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [items, setItems] = useState(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
+  // Server-persisted labels, to detect a real change on blur (local `items`
+  // already reflects the in-progress edit, so it can't be the comparison base).
+  const serverLabels = useMemo(() => new Map(initialItems.map((i) => [i.id, i.label])), [initialItems]);
 
   const [showGear, setShowGear] = useState(false);
   const [adhocOpen, setAdhocOpen] = useState(false);
@@ -211,7 +214,7 @@ export default function GearListEditor({
                   style={itemNameInput}
                   value={it.label}
                   onChange={(e) => setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, label: e.target.value } : p)))}
-                  onBlur={(e) => e.target.value.trim() !== it.label && patchItem(it, { label: e.target.value })}
+                  onBlur={(e) => e.target.value.trim() !== (serverLabels.get(it.id) ?? "") && patchItem(it, { label: e.target.value })}
                   aria-label="Item name"
                 />
                 <div style={itemMeta}>
