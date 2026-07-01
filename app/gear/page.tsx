@@ -128,7 +128,7 @@ function GearCard({
   const last = fmtDate(usage?.lastUsed ?? null);
   const sessions = usage?.sessions ?? 0;
   return (
-    <div style={{ ...card, opacity: retired ? 0.55 : 1 }}>
+    <Link href={`/gear/${gear.id}`} style={{ ...card, opacity: retired ? 0.55 : 1, textDecoration: "none", color: "inherit" }}>
       <span aria-hidden style={cardIcon}>{meta.icon}</span>
       <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
         <div style={cardName}>{gear.name}</div>
@@ -141,7 +141,7 @@ function GearCard({
           {last ? ` · ${last}` : ""}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

@@ -55,6 +55,19 @@ export async function getAllGear(): Promise<GearRow[]> {
   }
 }
 
+// One gear item (profile-scoped) for the /gear/[id] detail + edit page.
+export async function getGear(id: string): Promise<GearRow | null> {
+  try {
+    const session = await getAppSession();
+    return await prisma.gear.findFirst({
+      where: { id, profileKey: session.profileKey },
+      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, retiredAt: true },
+    });
+  } catch {
+    return null;
+  }
+}
+
 export type GearPickInput = {
   gearId: string | null;
   type: string;
