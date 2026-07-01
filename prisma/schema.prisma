@@ -1096,6 +1096,11 @@ model AppProfile {
   id                         String   @id @default(cuid())
   key                        String   @unique @default("default")
   selectedStimulusPresetKeys String[] @default([])
+  // Lightweight identity (single-user today; migrates to the real user record
+  // when auth lands). All null until set in profile settings.
+  displayName                String?
+  avatarEmoji                String?
+  avatarColor                String?
   // Home base — default location for weather when a log has no picked spot,
   // and the anchor for the home-page live-conditions widget + per-day WaG
   // chips. Null until the user sets it in profile settings.
