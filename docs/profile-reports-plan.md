@@ -257,9 +257,8 @@ The 12w activity-world loaders return week-series shapes tuned for their own bar
 **Phase 5a — Profile slim-down + Settings route. ✅ DONE (pending on-device verify).**
 New `/profile/settings` (hub: `ProfileSettings` + link-out to endurance type config). Slimmed `/profile`: dropped inline Month/Year modules (now at /reports) + inline settings; kept the WeeklySummary "last 7 days" pulse; added a ⚙ Settings link in the ways-in row; made the domain split tappable into filtered history. Deleted the now-dead `MonthlySummary`/`YearlySummary` modules. No DB changes. Clean build verified.
 
-**Phase 5b — Identity editor. 🟡 PARTIAL.**
-✅ Additive migration `20260630160000_add_profile_identity` (`displayName`, `avatarEmoji`, `avatarColor` — all nullable) applied via `migrate deploy` (never resets); `migrate status` confirms DB up to date (58 migrations).
-⏳ Editor UI + `ProfileHeader` wiring BLOCKED locally: `prisma generate` can't rewrite the query-engine DLL while the user's `next dev` server holds it (EPERM). Needs the dev server paused once to regenerate the client, then: `lib/profile-identity.ts` (get) + `app/profile/identity-actions.ts` (server action, home-location pattern) + `app/profile/IdentitySetting.tsx` (name + emoji + color) in Settings + pass identity into `ProfileHeader` (replace the 🏔/"Your Training" stub).
+**Phase 5b — Identity editor. ✅ DONE (pending on-device verify).**
+Additive migration `20260630160000_add_profile_identity` (`displayName`, `avatarEmoji`, `avatarColor` — nullable) applied via `migrate deploy`; DB up to date (58 migrations). `lib/profile-identity.ts` (`getProfileIdentity`) + `app/profile/identity-actions.ts` (`setProfileIdentity`, sanitized at boundary, home-location pattern) + `app/profile/IdentitySetting.tsx` (name input + emoji picker + color swatches, live preview, fontSize-16 input per rule 3a) rendered atop `/profile/settings`. `ProfileHeader` now shows the chosen name + emoji-on-color avatar, falling back to "Your Training" / 🏔 when unset. Typecheck + clean build verified. (Client regen required pausing the dev server — remember to `npm run dev` again.)
 
 **Deferred / revisit:** Units Imperial/Metric (own focused pass); settings modal vs frozen-header entry; week-start Sun/Mon toggle; "week in review" notification/cadence; share artifact (link/image); auth-backed real account identity.
 

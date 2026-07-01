@@ -4,7 +4,9 @@ import { getAppSession } from "@/lib/auth";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getHomeLocation } from "@/lib/home-location";
 import { getActivityEntry } from "@/lib/activity-families";
+import { getProfileIdentity } from "@/lib/profile-identity";
 import ProfileSettings from "@/app/profile/ProfileSettings";
+import IdentitySetting from "@/app/profile/IdentitySetting";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +14,12 @@ export const dynamic = "force-dynamic";
 // sports / data via ProfileSettings) and links out to the deep per-domain
 // config that already lives in its own context, rather than absorbing it.
 export default async function SettingsPage() {
-  const [selectedSportsRaw, availableSports, session, homeLocation] = await Promise.all([
+  const [selectedSportsRaw, availableSports, session, homeLocation, identity] = await Promise.all([
     listSelectedSports(),
     listUnselectedSports(),
     getAppSession(),
     getHomeLocation(),
+    getProfileIdentity(),
   ]);
   const selectedSports = selectedSportsRaw.map((s) => ({
     slug: s.slug,
@@ -30,6 +33,8 @@ export default async function SettingsPage() {
         <Link href="/profile" style={backLink}>← Profile</Link>
       </div>
       <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Settings</h1>
+
+      <IdentitySetting initial={identity} />
 
       <ProfileSettings
         selectedSports={selectedSports}

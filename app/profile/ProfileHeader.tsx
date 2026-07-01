@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatAppDate } from "@/lib/dates";
 import { domainColor } from "@/lib/routines";
 import type { ProfileStats } from "@/lib/profile-stats";
+import type { ProfileIdentity } from "@/lib/profile-identity";
 
 const DOMAIN_LABELS: Record<string, string> = {
   strength: "Strength",
@@ -14,11 +15,20 @@ const DOMAIN_LABELS: Record<string, string> = {
 // Athlete card — the identity anchor of the Profile page. Avatar + lifetime
 // totals + a per-domain composition bar. Name/avatar are placeholders until
 // auth lands; the numbers are real from day one.
-export default function ProfileHeader({ stats }: { stats: ProfileStats }) {
+export default function ProfileHeader({
+  stats,
+  identity,
+}: {
+  stats: ProfileStats;
+  identity?: ProfileIdentity;
+}) {
   const totalSplit = stats.domainSplit.reduce((sum, d) => sum + d.count, 0);
   const since = stats.firstLogDate
     ? formatAppDate(stats.firstLogDate, { month: "long", year: "numeric" })
     : null;
+  const avatarEmoji = identity?.avatarEmoji || "🏔";
+  const avatarBg = identity?.avatarColor || "rgba(255,255,255,0.06)";
+  const displayName = identity?.displayName || "Your Training";
 
   const topStats: Array<{ label: string; value: string }> = [
     { label: "Sessions", value: stats.totalSessions.toLocaleString() },
@@ -33,11 +43,11 @@ export default function ProfileHeader({ stats }: { stats: ProfileStats }) {
   return (
     <div style={cardStyle}>
       <div style={topRowStyle}>
-        <div style={avatarStyle} aria-hidden>
-          🏔
+        <div style={{ ...avatarStyle, background: avatarBg }} aria-hidden>
+          {avatarEmoji}
         </div>
         <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
-          <div style={titleStyle}>Your Training</div>
+          <div style={titleStyle}>{displayName}</div>
           <div style={subtitleStyle}>
             {since ? `Tracking since ${since}` : "Log a session to start tracking"}
             {stats.longestStreak > 0 ? ` · Best streak ${stats.longestStreak}d` : ""}

@@ -14,6 +14,7 @@ import {
   isWorkoutKind,
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
+import { getProfileIdentity } from "@/lib/profile-identity";
 import { getLogDisplayName } from "@/lib/routine-display";
 import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
@@ -97,7 +98,9 @@ export default async function ManualLogPageContent({
 
   // Profile-view-only data: lifetime stats + milestones + sport settings.
   // Skipped on the history view since none of it renders there.
-  const profileStats = showHistory ? null : await loadProfileStats(todayYmd);
+  const [profileStats, identity] = showHistory
+    ? [null, null]
+    : await Promise.all([loadProfileStats(todayYmd), getProfileIdentity()]);
   const [calYear, calMonthNum] = todayYmd.split("-").slice(0, 2).map(Number);
   const calMonthIdx = calMonthNum - 1;
   const daysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate();
@@ -160,7 +163,7 @@ export default async function ManualLogPageContent({
       {/* ── Athlete card + quick nav (profile view only) ── */}
       {!showHistory && profileStats && (
         <section style={{ display: "grid", gap: 14 }}>
-          <ProfileHeader stats={profileStats} />
+          <ProfileHeader stats={profileStats} identity={identity ?? undefined} />
 
           <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
             <Link href="/profile?view=history" style={primaryLinkBtn}>
