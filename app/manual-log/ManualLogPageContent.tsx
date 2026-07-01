@@ -167,11 +167,8 @@ export default async function ManualLogPageContent({
 
           <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
             <Link href="/profile?view=history" style={primaryLinkBtn}>
-              Log History
+              History
             </Link>
-            <Link href="/activities" style={linkBtn}>Activities</Link>
-            <Link href="/log" style={linkBtn}>Routines</Link>
-            <Link href="/goals" style={linkBtn}>Goals</Link>
             <Link href="/reports/week" style={linkBtn}>Reports</Link>
             <Link href="/profile/settings" style={linkBtn}>⚙ Settings</Link>
           </div>
