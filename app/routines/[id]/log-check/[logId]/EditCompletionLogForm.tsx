@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateCompletionLog } from "../../../actions";
-import { Field, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
+import { Field, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -37,15 +37,17 @@ export default function EditCompletionLogForm({
   const [notes, setNotes] = useState(initialNotes);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSave() {
     const parsedCount = completionCount.trim() ? Number(completionCount) : null;
     if (parsedCount !== null && (!Number.isFinite(parsedCount) || parsedCount <= 0)) {
-      alert("Count must be greater than 0.");
+      setError("Count must be greater than 0.");
       return;
     }
 
     setSaving(true);
+    setError(null);
     try {
       await updateCompletionLog({
         routineId,
@@ -56,6 +58,8 @@ export default function EditCompletionLogForm({
       });
       if (onComplete) onComplete();
       else window.location.href = returnTo;
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Couldn't save changes. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -84,6 +88,8 @@ export default function EditCompletionLogForm({
           <textarea style={textareaStyle} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </FormSection>
+
+      <FormError message={error} />
 
       <FormActions
         primaryLabel="Save Changes"

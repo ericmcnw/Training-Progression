@@ -196,6 +196,7 @@ export default function EditSessionLogForm({
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // ── Climbing per-climb state ────────────────────────────────────────────────
   // Default to per-climb mode when attempts exist (so the user sees the real
@@ -283,7 +284,7 @@ export default function EditSessionLogForm({
     const trimmedDuration = durationMin.trim();
     const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
     if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
-      alert("Enter a valid duration in minutes or leave it blank.");
+      setError("Enter a valid duration in minutes or leave it blank.");
       return;
     }
     const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
@@ -311,7 +312,7 @@ export default function EditSessionLogForm({
         const draft = sessionMetricValues[definition.id] ?? {};
         if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
           const numberValue = parseSessionMetricNumber(draft.numberValue ?? "", definition.valueType);
-          if (definition.isRequired && numberValue === null) throw new Error(`${definition.label} is required.`);
+          if (definition.isRequired && numberValue === null) { setError(`${definition.label} is required.`); return; }
           if (numberValue !== null) {
             structuredValues.push({ metricDefinitionId: definition.id, numberValue });
           }
@@ -324,7 +325,7 @@ export default function EditSessionLogForm({
           continue;
         }
         const textValue = normalizeSessionMetricText(draft.textValue ?? "");
-        if (definition.isRequired && !textValue) throw new Error(`${definition.label} is required.`);
+        if (definition.isRequired && !textValue) { setError(`${definition.label} is required.`); return; }
         if (textValue) {
           structuredValues.push({ metricDefinitionId: definition.id, textValue });
         }
@@ -332,6 +333,7 @@ export default function EditSessionLogForm({
     }
 
     setSaving(true);
+    setError(null);
     try {
       const spotParams = spotParamsForUpdate(spotValue, isClimbing, initialSpot !== null);
       await updateSessionLog({
@@ -349,8 +351,8 @@ export default function EditSessionLogForm({
       });
       if (onComplete) onComplete();
       else window.location.href = returnTo;
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save session.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save session.");
     } finally {
       setSaving(false);
     }
@@ -442,6 +444,8 @@ export default function EditSessionLogForm({
           </Field>
         )}
       </FormSection>
+
+      <FormError message={error} />
 
       <FormActions
         primaryLabel="Save Changes"

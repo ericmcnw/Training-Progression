@@ -304,7 +304,8 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 12,
   background: "#111827",
   color: "#fff",
-  fontSize: 14,
+  // 16px min — iOS Safari auto-zooms on focus below this. See CLAUDE.md §3a.
+  fontSize: 16,
 };
 
 const textareaStyle: React.CSSProperties = {
@@ -320,7 +321,8 @@ const weightInputStyle: React.CSSProperties = {
   borderRadius: 10,
   background: "#111827",
   color: "#fff",
-  fontSize: 13,
+  // 16px min — iOS Safari auto-zooms on focus below this. See CLAUDE.md §3a.
+  fontSize: 16,
 };
 
 const skipBtn: React.CSSProperties = {

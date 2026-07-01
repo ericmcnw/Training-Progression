@@ -3,7 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { createCompletionLog } from "../../actions";
-import { Field, FormActions, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
+import { Field, FormActions, FormError, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
 
 export default function CompletionLogForm({ routineId }: { routineId: string }) {
   const [completionCount, setCompletionCount] = useState("");
@@ -59,9 +59,7 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
         {quickSaving ? "Saving..." : "✓ Mark Done"}
       </button>
 
-      {error ? (
-        <div role="alert" style={errorStyle}>{error}</div>
-      ) : null}
+      <FormError message={error} />
 
       {/* Detailed entry */}
       <FormSection title="Log with details" description="Add a count or notes when you want to track more than just completion.">
@@ -109,14 +107,4 @@ const quickSaveBtn: React.CSSProperties = {
   fontSize: 18,
   cursor: "pointer",
   letterSpacing: 0.3,
-};
-
-const errorStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: "rgba(252,165,165,0.98)",
-  background: "rgba(248,113,113,0.1)",
-  border: "1px solid rgba(248,113,113,0.32)",
-  borderRadius: 10,
-  padding: "8px 12px",
 };
