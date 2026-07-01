@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { listGearForActivity } from "@/app/log/gear-actions";
+import { listGearForActivity, listGearListsForActivity, applyGearList } from "@/app/log/gear-actions";
 import type { GearPick, SavedGear } from "@/lib/gear-pick-types";
+import type { GearListSummary } from "@/lib/gear-lists";
 import { gearTypeMeta, gearTypesForActivity, resolveGearTypeSlug } from "@/lib/gear-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 
@@ -38,11 +39,18 @@ export default function GearPicker({
   showQuantity?: boolean;
 }) {
   const [saved, setSaved] = useState<SavedGear[]>([]);
+  const [lists, setLists] = useState<GearListSummary[]>([]);
+  const [listMenuOpen, setListMenuOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     listGearForActivity(activitySlug)
       .then((rows) => {
         if (!cancelled) setSaved(rows);
+      })
+      .catch(() => {});
+    listGearListsForActivity(activitySlug)
+      .then((rows) => {
+        if (!cancelled) setLists(rows.filter((l) => l.applyGearCount > 0));
       })
       .catch(() => {});
     return () => {
@@ -70,6 +78,31 @@ export default function GearPicker({
   }
   function addBlank() {
     onChange([...value, { localId: rid(), gearId: null, type: "", name: "", weightOz: "", quantity: "1", consumable: false }]);
+  }
+  // Append a list's checked, inventory-backed items. Additive + deduped by
+  // gearId then name, so applying twice (or apply-then-tweak) never doubles up.
+  async function applyList(listId: string) {
+    setListMenuOpen(false);
+    try {
+      const picks = await applyGearList(listId);
+      if (picks.length === 0) return;
+      const ids = new Set(value.map((p) => p.gearId).filter(Boolean) as string[]);
+      const names = new Set(value.map((p) => norm(p.name)).filter(Boolean));
+      const additions: GearPick[] = picks
+        .filter((p) => !(p.gearId && ids.has(p.gearId)) && !names.has(norm(p.name)))
+        .map((p) => ({
+          localId: rid(),
+          gearId: p.gearId,
+          type: gearTypeMeta(p.type).label,
+          name: p.name,
+          weightOz: ozFromGrams(p.weightGrams),
+          quantity: String(p.quantity > 0 ? p.quantity : 1),
+          consumable: p.consumable,
+        }));
+      if (additions.length > 0) onChange([...value, ...additions]);
+    } catch {
+      // best-effort — applying a list must never break the form.
+    }
   }
   function setPick(localId: string, patch: Partial<GearPick>) {
     onChange(value.map((p) => (p.localId === localId ? { ...p, ...patch, gearId: patch.gearId ?? p.gearId } : p)));
@@ -166,6 +199,29 @@ export default function GearPicker({
           </div>
         );
       })}
+
+      {lists.length > 0 ? (
+        <div style={{ display: "grid", gap: 6 }}>
+          <button type="button" style={fromListBtn} onClick={() => setListMenuOpen((v) => !v)}>
+            ＋ From a list
+          </button>
+          {listMenuOpen ? (
+            <div style={listMenu}>
+              {lists.map((l) => (
+                <button key={l.id} type="button" style={listMenuItem} onClick={() => applyList(l.id)}>
+                  <span style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {l.name}
+                  </span>
+                  <span style={listMenuMeta}>
+                    brings {l.applyGearCount}
+                    {l.checkedCount > l.applyGearCount ? ` of ${l.checkedCount}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <button type="button" style={addBtn} onClick={addBlank}>
         + Add gear
@@ -269,3 +325,31 @@ const addBtn: CSSProperties = {
   cursor: "pointer",
   width: "100%",
 };
+const fromListBtn: CSSProperties = {
+  padding: "10px 12px",
+  border: "1px solid rgba(132,204,120,0.32)",
+  borderRadius: 12,
+  background: "rgba(132,204,120,0.08)",
+  color: "inherit",
+  fontWeight: 800,
+  fontSize: 14,
+  cursor: "pointer",
+  width: "100%",
+};
+const listMenu: CSSProperties = { display: "grid", gap: 6 };
+const listMenuItem: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.28)",
+  background: "rgba(128,128,128,0.05)",
+  color: "inherit",
+  fontSize: 13,
+  cursor: "pointer",
+  minHeight: 44,
+  textAlign: "left",
+};
+const listMenuMeta: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, flexShrink: 0, whiteSpace: "nowrap" };

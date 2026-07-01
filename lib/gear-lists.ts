@@ -34,6 +34,7 @@ export type GearListSummary = {
   activitySlug: string | null;
   itemCount: number;
   checkedCount: number;
+  applyGearCount: number; // checked items backed by inventory (what "apply" adds)
   totalGrams: number; // all items × qty
   checkedGrams: number; // checked items × qty
   hasConsumable: boolean;
@@ -70,6 +71,7 @@ function summarize(list: { id: string; name: string; activitySlug: string | null
   let totalGrams = 0;
   let checkedGrams = 0;
   let checkedCount = 0;
+  let applyGearCount = 0;
   let hasConsumable = false;
   for (const it of list.items) {
     const per = it.weightGramsOverride ?? it.gear?.weightGrams ?? 0;
@@ -80,6 +82,7 @@ function summarize(list: { id: string; name: string; activitySlug: string | null
     if (it.checked) {
       checkedGrams += g;
       checkedCount += 1;
+      if (it.gearId) applyGearCount += 1;
     }
   }
   return {
@@ -88,6 +91,7 @@ function summarize(list: { id: string; name: string; activitySlug: string | null
     activitySlug: list.activitySlug,
     itemCount: list.items.length,
     checkedCount,
+    applyGearCount,
     totalGrams,
     checkedGrams,
     hasConsumable,

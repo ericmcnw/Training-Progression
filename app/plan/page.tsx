@@ -4,10 +4,12 @@
 // stacked than siloed. Each section fetches its own data (server components),
 // and the jump-nav anchors let you skip straight to one on a long page.
 
+import Link from "next/link";
 import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
 import GoalsTab from "./goals/GoalsTab";
 import RotationTab from "./cycles/RotationTab";
+import PackingListsTab from "./PackingListsTab";
 import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +20,7 @@ const JUMP_LINKS = [
   { href: "#goals", label: "Goals" },
   { href: "#schedule", label: "Schedule" },
   { href: "#rotation", label: "Rotation" },
+  { href: "#packing", label: "Packing" },
 ];
 
 export default async function PlanPage(props: {
@@ -67,6 +70,15 @@ export default async function PlanPage(props: {
         subtitle="Your training cycle — what you did last and what's up next."
       >
         <RotationTab />
+      </PlanSection>
+
+      <PlanSection
+        id="packing"
+        title="Packing lists"
+        subtitle="Reusable kits — pack against one before a trip, apply it to a log."
+        action={<Link href="/gear/lists" style={ctaStyle}>Open lists →</Link>}
+      >
+        <PackingListsTab />
       </PlanSection>
     </div>
   );

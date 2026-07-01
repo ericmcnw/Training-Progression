@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { getAllGear } from "@/lib/gear";
 import { getGearUsage, type GearUsage } from "@/lib/gear-usage";
+import { getGearLists, type GearListSummary } from "@/lib/gear-lists";
 import { gearTypeMeta } from "@/lib/gear-types";
 import { getActivityEntry } from "@/lib/activity-families";
 
 export const dynamic = "force-dynamic";
+
+const GRAMS_PER_LB = 453.59237;
+const GRAMS_PER_OZ = 28.349523125;
+
+function fmtListWeight(grams: number): string {
+  if (grams <= 0) return "—";
+  if (grams < GRAMS_PER_LB) return `${Math.round(grams / GRAMS_PER_OZ)} oz`;
+  return `${(grams / GRAMS_PER_LB).toFixed(1)} lb`;
+}
 
 function fmtUsage(u: GearUsage | undefined): string {
   if (!u) return "—";
@@ -26,7 +36,7 @@ function groupLabel(activitySlug: string | null): string {
 }
 
 export default async function GearPage() {
-  const gear = await getAllGear();
+  const [gear, lists] = await Promise.all([getAllGear(), getGearLists()]);
   const usage = await getGearUsage(gear.map((g) => g.id));
 
   const active = gear.filter((g) => !g.retiredAt);
@@ -53,6 +63,26 @@ export default async function GearPage() {
           No gear yet. Pick or add gear when you log a run, sport, or backpacking trip — it lands here with its usage.
         </div>
       ) : null}
+
+      <section>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <div style={groupHeading}>Your lists</div>
+          <Link href="/gear/lists" style={manageLink}>
+            {lists.length > 0 ? "Manage →" : "New list →"}
+          </Link>
+        </div>
+        {lists.length === 0 ? (
+          <Link href="/gear/lists" style={listEmpty}>
+            Build a packing list or loadout — pack against it before a trip, apply it to a log to fill in your gear.
+          </Link>
+        ) : (
+          <div style={cardGrid}>
+            {lists.map((l) => (
+              <ListCard key={l.id} list={l} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <div style={{ display: "grid", gap: 18 }}>
         {orderedKeys.map((key) => (
@@ -115,6 +145,40 @@ function GearCard({
   );
 }
 
+function ListCard({ list }: { list: GearListSummary }) {
+  const activity = list.activitySlug ? getActivityEntry(list.activitySlug) : null;
+  return (
+    <Link href={`/gear/lists/${list.id}`} style={{ ...card, textDecoration: "none", color: "inherit" }}>
+      <span aria-hidden style={cardIcon}>{activity?.icon ?? "🎒"}</span>
+      <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+        <div style={cardName}>{list.name}</div>
+        <div style={cardSub}>
+          {activity ? activity.label : "Any activity"} · {list.itemCount} item{list.itemCount === 1 ? "" : "s"}
+        </div>
+      </div>
+      <div style={cardUsage}>
+        <div style={cardUsageValue}>{fmtListWeight(list.checkedGrams)}</div>
+        <div style={cardUsageSub}>
+          {list.checkedCount}/{list.itemCount} packed
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+const manageLink: React.CSSProperties = { fontSize: 12, fontWeight: 800, color: "rgba(147,197,253,0.9)", textDecoration: "none" };
+const listEmpty: React.CSSProperties = {
+  display: "block",
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px dashed rgba(132,204,120,0.35)",
+  background: "rgba(132,204,120,0.05)",
+  fontSize: 12.5,
+  opacity: 0.85,
+  lineHeight: 1.5,
+  textDecoration: "none",
+  color: "inherit",
+};
 const page: React.CSSProperties = { maxWidth: 720, margin: "0 auto", padding: "18px 14px 60px", display: "grid", gap: 16 };
 const header: React.CSSProperties = { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 };
 const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: -0.4 };
