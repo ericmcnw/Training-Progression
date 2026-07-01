@@ -253,6 +253,60 @@ None of this blocks Phase 1, which is entirely inside the Log forms.
 
 ---
 
+## Usage rollups — build plan (2026-06-30)
+
+The payoff: per-gear lifetime stats ("247 mi on these shoes", "18 nights in the
+tent", "24 days on the board"), computed on demand from the links we now record.
+
+### Data sources (both already exist)
+- **`RoutineLogGear`** (cardio + sport logs) — join to `RoutineLog` for
+  `distanceMi` / `durationSec` / `performedAt`.
+- **`BackpackingTrip.gear`** snapshot (`gearId` per item) — join to the trip's
+  day-logs for miles + nights (`days − 1`).
+
+### Compute (`lib/gear-usage.ts`)
+`getGearUsage(gearIds: string[]): Map<gearId, GearUsage>` where
+```ts
+type GearUsage = {
+  unit: "miles" | "nights" | "days" | "sessions"; // from gearTypeMeta(type).unit
+  value: number;        // miles / nights / days / sessions per the unit
+  sessions: number;     // # of logs/trips it appears on
+  firstUsed: string | null;
+  lastUsed: string | null;
+};
+```
+Per unit:
+- **miles** → Σ `distanceMi` of linked cardio/sport logs **＋** Σ backpacking day
+  miles for trips whose snapshot lists the gear.
+- **nights** → Σ trip nights for trips listing the gear.
+- **days** → count of **distinct days** with a linked log (boards/skis).
+- **sessions** → count of linked logs/trips.
+
+One batched query per source (links by `gearId IN (...)`, trips by profile then
+filter snapshots in Node — trips are few), grouped in memory. Sub-100ms at real
+scale; add a cached `lifetimeAccrued` column only if the `/gear` hub feels slow.
+
+### Retire threshold
+Add optional `lifetimeCap Float?` to `Gear` (unit implied by type). Usage view
+shows a progress bar; ≥90 % amber "approaching", ≥100 % red "retire?". No
+auto-retire — the user decides (matches the retire flow already specced).
+
+### Surfacing (in priority order)
+1. **`/gear` hub or Gear tab** — cards: icon · name · "247 / 500 mi" + bar +
+   last-used. Grouped by activity. The home for usage.
+2. **Endurance world** — a Footwear strip (shoe miles + retire nudge).
+3. **Sport worlds** — that sport's boards/skis + days/sessions.
+4. **Backpacking / trip** — tent nights, pack-weight trend.
+5. **`/gear/[id]`** — usage timeline + trend + "replaces" relation.
+
+### Phase order
+1. `lib/gear-usage.ts` + a minimal usage read.
+2. `/gear` hub (or Gear tab) rendering the cards.
+3. World-page widgets (footwear on Endurance first).
+4. `lifetimeCap` + retire warnings + `/gear/[id]` detail.
+
+---
+
 ## Core data model
 
 ### `Gear` — generalized from day one
