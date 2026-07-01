@@ -13,8 +13,6 @@ import type { HomeLocation } from "@/lib/home-location";
 //     once authenticated.
 //   • Sports — see what's enabled and add/remove (reuses the SPORT-section
 //     picker so there's one source of truth).
-//   • Units — display preference placeholder; becomes a real per-account
-//     setting alongside multi-user (see docs/auth-implementation-checklist.md).
 //   • Data — full JSON export (a real backup, downloads from /profile/export).
 export default function ProfileSettings({
   selectedSports,
@@ -60,17 +58,6 @@ export default function ProfileSettings({
               Sign in
             </span>
           )}
-        </div>
-      </div>
-
-      <div style={rowStyle}>
-        <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
-          <div style={rowTitleStyle}>Units</div>
-          <div style={rowMetaStyle}>Per-account display preference — arrives with sign-in.</div>
-        </div>
-        <div style={segmentedStyle} role="radiogroup" aria-label="Units" aria-disabled>
-          <span style={{ ...segmentStyle, ...segmentActiveStyle }}>Imperial</span>
-          <span style={segmentStyle}>Metric</span>
         </div>
       </div>
 
@@ -166,22 +153,3 @@ const disabledBtnStyle: React.CSSProperties = {
   cursor: "not-allowed",
 };
 
-const segmentedStyle: React.CSSProperties = {
-  display: "inline-flex",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.12)",
-  overflow: "hidden",
-  opacity: 0.5,
-  flexShrink: 0,
-};
-
-const segmentStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  fontSize: 12.5,
-  fontWeight: 800,
-  whiteSpace: "nowrap",
-};
-
-const segmentActiveStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.12)",
-};

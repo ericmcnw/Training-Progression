@@ -239,6 +239,7 @@ export default function WeeklyBarChartWithSessions({
                 aria-selected={isSecondaryView}
                 onClick={() => setView("secondary")}
                 style={isSecondaryView ? toggleBtnActive : toggleBtn}
+                title={hasSecondaryValue ? undefined : "Training load — total volume moved (sets × reps × weight)."}
               >
                 {secondaryName}
               </button>

@@ -79,7 +79,30 @@ const styles = {
     whiteSpace: "nowrap" as const,
     cursor: "pointer",
   },
+  emptyCta: {
+    width: "100%",
+    minHeight: 44,
+    padding: "12px 14px",
+    border: "1px dashed rgba(128,128,128,0.5)",
+    borderRadius: 12,
+    background: "transparent",
+    color: "inherit",
+    opacity: 0.75,
+    fontWeight: 800,
+    fontSize: 13,
+    textAlign: "center" as const,
+    cursor: "pointer",
+  },
 };
+
+// Only these domains have a preset flow in the routine creator; others
+// (skill/general/recovery/habit) fall through to the generic picker.
+const PRESET_DOMAINS = new Set(["strength", "cardio", "mobility", "sport", "lifestyle"]);
+function presetDomainFor(domain: string) {
+  return PRESET_DOMAINS.has(domain)
+    ? (domain as "strength" | "cardio" | "mobility" | "sport" | "lifestyle")
+    : undefined;
+}
 
 export default async function RoutinesPageContent(props: {
   searchParams?: Promise<SearchParams>;
@@ -432,6 +455,17 @@ export default async function RoutinesPageContent(props: {
                   habitStats={habitStatsByRoutineId.get(routine.id)}
                 />
               ))}
+              {/* First-run nudge: a domain with no routines (and no pinned
+                  quick-log rows, i.e. not endurance) gets a create CTA rather
+                  than a blank section. */}
+              {list.length === 0 && !isCardio ? (
+                <NewRoutineDrawerButton
+                  presetDomain={presetDomainFor(domain)}
+                  style={styles.emptyCta}
+                >
+                  + Create your first {label.toLowerCase()} routine
+                </NewRoutineDrawerButton>
+              ) : null}
             </RoutineSection>
           );
         })}

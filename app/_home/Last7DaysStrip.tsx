@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import type { Last7DaysStats } from "./types";
 import type { WeatherSnapshot } from "@/lib/weather";
 import HomeWeatherControl from "./HomeWeatherControl";
@@ -15,6 +16,7 @@ export default function Last7DaysStrip({
   homeWeather: { label: string | null; current: WeatherSnapshot | null; isOverride: boolean };
 }) {
   const minutes = Math.round(stats.totalDurationSec / 60);
+  const isEmpty = stats.sessions === 0 && minutes === 0 && stats.totalCardioMi === 0;
   return (
     <section style={shellStyle} aria-label="Last 7 days summary">
       <div style={eyebrowRowStyle}>
@@ -25,22 +27,28 @@ export default function Last7DaysStrip({
           isOverride={homeWeather.isOverride}
         />
       </div>
-      <div style={gridStyle}>
-        <Stat
-          value={String(stats.sessions)}
-          label={stats.sessions === 1 ? "session" : "sessions"}
-        />
-        <Stat
-          value={formatMinutes(minutes)}
-          label="active"
-          dim={minutes === 0}
-        />
-        <Stat
-          value={formatCardio(stats.totalCardioMi)}
-          label="mi cardio"
-          dim={stats.totalCardioMi === 0}
-        />
-      </div>
+      {isEmpty ? (
+        <Link href="/log" style={emptyCtaStyle}>
+          Nothing logged yet — <span style={emptyCtaAccent}>log your first activity →</span>
+        </Link>
+      ) : (
+        <div style={gridStyle}>
+          <Stat
+            value={String(stats.sessions)}
+            label={stats.sessions === 1 ? "session" : "sessions"}
+          />
+          <Stat
+            value={formatMinutes(minutes)}
+            label="active"
+            dim={minutes === 0}
+          />
+          <Stat
+            value={formatCardio(stats.totalCardioMi)}
+            label="mi cardio"
+            dim={stats.totalCardioMi === 0}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -122,4 +130,20 @@ const labelStyle: CSSProperties = {
   letterSpacing: 0.4,
   textTransform: "uppercase",
   opacity: 0.55,
+};
+
+const emptyCtaStyle: CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "inherit",
+  opacity: 0.7,
+  textDecoration: "none",
+  padding: "2px 0",
+};
+
+const emptyCtaAccent: CSSProperties = {
+  color: "rgba(147,197,253,0.95)",
+  fontWeight: 900,
+  opacity: 1,
 };
