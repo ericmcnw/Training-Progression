@@ -119,7 +119,7 @@ export async function fetchWeatherSnapshot({
   }
 
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     const data = (await res.json()) as { hourly?: HourlyBlock };
     if (!data.hourly) return null;
@@ -144,7 +144,7 @@ export async function fetchCurrentWeather({
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m` +
     `&timezone=GMT&${IMPERIAL}`;
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" }, next: { revalidate: 1800 } });
+    const res = await fetch(url, { headers: { Accept: "application/json" }, next: { revalidate: 1800 }, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     const data = (await res.json()) as {
       current?: {
@@ -202,6 +202,7 @@ export async function fetchDailyWeather({
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
       next: { revalidate: 1800 },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return {};
     const data = (await res.json()) as {

@@ -21,7 +21,7 @@ import { subtleTextStyle } from "../ui";
 import { getFrequencyConsistency } from "@/lib/frequency-consistency";
 import GoalConsistencyPanel from "./GoalConsistencyPanel";
 import GoalRecentSessions from "./GoalRecentSessions";
-import { getFrequencyRenderMode, type FrequencyTarget } from "@/lib/frequency-state";
+import { getFrequencyRenderMode, formatMaskLabel, type FrequencyTarget } from "@/lib/frequency-state";
 import { getTypeAccent, TYPE_ICON, type GoalTypeAccent } from "@/app/plan/goals/goal-type-accent";
 
 function getFrequencyRenderModeLabel(target: FrequencyTarget): string {
@@ -303,6 +303,12 @@ function Hero({
       ? entry.summaryLabel.split("|").pop()?.trim() ?? null
       : null;
 
+  // Which specific days the goal targets (Mon·Wed·Fri / Weekdays / …) when a
+  // weekday mask is set. `consistency` carries the mask for FREQUENCY goals;
+  // formatMaskLabel returns null for no-mask goals so the row simply drops.
+  const weekdayLabel =
+    type === "FREQUENCY" ? formatMaskLabel(consistency?.weekdayMask) : null;
+
   let bigPrefix: string | null = null;
   let tinyLine: string | null = null;
 
@@ -376,6 +382,7 @@ function Hero({
             ? { label: "Target", value: entry.targetLabel, href: entry.targetHref, accentColor: accent.color }
             : { label: "Target", value: entry.targetLabel },
           type === "FREQUENCY" && cadenceLabel ? { label: "Cadence", value: cadenceLabel } : null,
+          type === "FREQUENCY" && weekdayLabel ? { label: "Days", value: weekdayLabel } : null,
           { label: "Window", value: entry.timeframeWindowLabel },
           { label: "Start", value: formatGoalDate(entry.goal.startDate) },
           entry.goal.endDate ? { label: "End", value: formatGoalDate(entry.goal.endDate) } : null,

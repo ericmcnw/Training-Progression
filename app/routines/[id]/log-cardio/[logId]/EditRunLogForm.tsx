@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { updateRunLog } from "../../../actions";
-import { Field, FieldGrid, FormActions, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
+import { Field, FieldGrid, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
 import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
@@ -116,6 +116,7 @@ export default function EditRunLogForm({
   const [gear, setGear] = useState<GearPick[]>(initialGear);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Activity type — switchable via the dropdown below so a mis-categorized
   // log (Trail Run that should be Long Run, e.g.) can be fixed in place.
   const [activityTypeId, setActivityTypeId] = useState<string | null>(initialActivityTypeId);
@@ -166,15 +167,15 @@ export default function EditRunLogForm({
     const hasDistance = distance !== null && Number.isFinite(distance) && distance > 0;
     const hasDuration = Number.isFinite(durationSec) && durationSec > 0;
     if (distanceProvided && !hasDistance) {
-      alert("Enter a valid distance in miles, or leave it blank.");
+      setError("Enter a valid distance in miles, or leave it blank.");
       return;
     }
     if (!hasDistance && !hasDuration) {
-      alert("Add a distance or a duration.");
+      setError("Add a distance or a duration.");
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
-      alert("Enter a valid elevation gain in feet.");
+      setError("Enter a valid elevation gain in feet.");
       return;
     }
 
@@ -199,6 +200,7 @@ export default function EditRunLogForm({
     }
 
     setSaving(true);
+    setError(null);
     try {
       const spotParams = spotParamsForUpdate(spotValue, initialSpot !== null);
       await updateRunLog({
@@ -220,7 +222,7 @@ export default function EditRunLogForm({
       if (onComplete) onComplete();
       else window.location.href = returnTo;
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Couldn't save changes. Please try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save changes. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -354,6 +356,8 @@ export default function EditRunLogForm({
           <textarea style={textareaStyle} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </FormSection>
+
+      <FormError message={error} />
 
       <FormActions
         primaryLabel="Save Changes"

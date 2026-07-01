@@ -105,6 +105,74 @@ function PainChart({ logs }: { logs: Array<{ id: string; level: number; loggedAt
   );
 }
 
+type PainHistoryEntry = {
+  id: string;
+  level: number;
+  loggedAt: Date;
+  context: string;
+  notes: string | null;
+  aggravatingFactors: string[];
+};
+
+const PAIN_CONTEXT_LABEL: Record<string, string> = {
+  AT_REST: "At rest",
+  DURING_ACTIVITY: "During activity",
+  AFTER_ACTIVITY: "After activity",
+  MORNING: "Morning",
+};
+
+function contextLabel(context: string) {
+  return (
+    PAIN_CONTEXT_LABEL[context] ??
+    context.charAt(0).toUpperCase() + context.slice(1).toLowerCase().replace(/_/g, " ")
+  );
+}
+
+// The chart plots level over time as context-colored dots; on their own those
+// colors are undecodable and the factors/notes the user typed never surface.
+// This legend + per-entry list is where that captured detail actually shows.
+function PainContextLegend({ logs }: { logs: PainHistoryEntry[] }) {
+  const present = Array.from(new Set(logs.map((entry) => entry.context)));
+  if (present.length === 0) return null;
+  return (
+    <div style={legendRow}>
+      {present.map((context) => (
+        <span key={context} style={legendItem}>
+          <span style={{ width: 9, height: 9, borderRadius: 999, background: contextColor(context), flexShrink: 0 }} />
+          {contextLabel(context)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function PainEntryList({ logs }: { logs: PainHistoryEntry[] }) {
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {logs.map((entry) => (
+        <div key={entry.id} style={painEntryRow}>
+          <div style={painEntryTop}>
+            <span style={painLevelBadge}>{entry.level}/10</span>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: contextColor(entry.context), flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 800 }}>{contextLabel(entry.context)}</span>
+            <span style={painEntryDate}>
+              {formatAppDateTime(entry.loggedAt, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+            </span>
+          </div>
+          {entry.aggravatingFactors.length > 0 ? (
+            <div style={factorRow}>
+              {entry.aggravatingFactors.map((factor) => (
+                <span key={factor} style={factorChip}>{factor}</span>
+              ))}
+            </div>
+          ) : null}
+          {entry.notes?.trim() ? <div style={mutedLine}>&ldquo;{entry.notes.trim()}&rdquo;</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function BodyZoneDetailPage(props: {
   params: Promise<Params>;
   searchParams?: Promise<SearchParams>;
@@ -254,6 +322,12 @@ export default async function BodyZoneDetailPage(props: {
           <div style={panelHeader}>PAIN HISTORY</div>
           <div style={panelBody}>
             <PainChart logs={detail.painHistory} />
+            {detail.painHistory.length > 0 ? (
+              <>
+                <PainContextLegend logs={detail.painHistory} />
+                <PainEntryList logs={detail.painHistory} />
+              </>
+            ) : null}
           </div>
         </section>
       </div>
@@ -472,6 +546,71 @@ const dangerLink: React.CSSProperties = {
   ...primaryLink,
   border: "1px solid rgba(248,113,113,0.35)",
   background: "rgba(248,113,113,0.10)",
+};
+
+const legendRow: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const legendItem: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.66)",
+};
+
+const painEntryRow: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  borderRadius: 12,
+  padding: "10px 12px",
+  border: "1px solid rgba(255,255,255,0.07)",
+  background: "rgba(255,255,255,0.025)",
+};
+
+const painEntryTop: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const painLevelBadge: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 900,
+  padding: "2px 7px",
+  borderRadius: 8,
+  border: "1px solid rgba(248,113,113,0.3)",
+  background: "rgba(248,113,113,0.1)",
+  color: "rgba(252,165,165,0.98)",
+  whiteSpace: "nowrap",
+};
+
+const painEntryDate: React.CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 11,
+  color: "rgba(255,255,255,0.55)",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const factorRow: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const factorChip: React.CSSProperties = {
+  border: "1px solid rgba(245,158,11,0.28)",
+  borderRadius: 999,
+  padding: "3px 8px",
+  fontSize: 11,
+  fontWeight: 700,
+  background: "rgba(245,158,11,0.10)",
+  color: "rgba(253,230,138,0.96)",
 };
 
 const emptyState: React.CSSProperties = {

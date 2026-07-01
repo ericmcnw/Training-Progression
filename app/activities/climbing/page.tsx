@@ -38,6 +38,7 @@ import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import {
   climbOutcomeColor,
   climbOutcomeLabel,
@@ -542,14 +543,12 @@ export default async function ClimbingHubPage(props: {
           sport lead red, top rope sky), shade = venue (indoor light,
           outdoor deep). Only combos with data render. */}
       {chartHasData ? (
-        <WeeklyBarChartWithSessions
+        <WeeklyEffortChart
           title={`Climbing Sessions per Week — Last ${chartWeeks} Weeks`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}
-          unit=""
-          decimals={0}
-          compact={false}
+          defaultLens="bars"
         />
       ) : null}
 

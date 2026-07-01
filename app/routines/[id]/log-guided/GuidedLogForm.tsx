@@ -105,6 +105,7 @@ export default function GuidedLogForm({
   );
 
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
   );
@@ -204,7 +205,7 @@ export default function GuidedLogForm({
       parsedDurationMin !== null &&
       (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)
     ) {
-      alert("Enter a valid duration in minutes or leave it blank.");
+      setError("Enter a valid duration in minutes or leave it blank.");
       return;
     }
 
@@ -243,6 +244,7 @@ export default function GuidedLogForm({
         : null;
 
     setSaving(true);
+    setError(null);
     try {
       await logGuided({
         routineId,
@@ -264,8 +266,8 @@ export default function GuidedLogForm({
       clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
       finish();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save guided session.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save guided session.");
     } finally {
       setSaving(false);
     }
@@ -323,6 +325,7 @@ export default function GuidedLogForm({
       completedDurationSec={completedDurationSec}
       mode={reviewMode}
       saving={saving}
+      error={error}
       onSave={onSave}
       onBack={() => setScreen(reviewMode === "review" ? "player" : "entry")}
       bottomSlot={

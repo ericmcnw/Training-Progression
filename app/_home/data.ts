@@ -160,7 +160,6 @@ export async function getHomeData(): Promise<HomeData> {
     routines,
     allLogs,
     dayTodosRaw,
-    planEntriesRaw,
     manualEntriesRaw,
     movementPatterns,
     wagWeather,
@@ -245,9 +244,6 @@ export async function getHomeData(): Promise<HomeData> {
       orderBy: [{ done: "asc" }, { createdAt: "asc" }],
       select: { id: true, ymd: true, label: true, done: true },
     }),
-    prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; sortOrder: number; startDate: string; cycleLengthDays: number }>>(
-      'SELECT e."routineId", e."dayOffset", e."sortOrder", a."startDate", p."cycleLengthDays" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
-    ),
     prisma.$queryRawUnsafe<Array<{ routineId: string; activityTypeId: string | null; scheduledDate: string; sortOrder: number }>>(
       'SELECT "routineId","activityTypeId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
     ),
@@ -329,13 +325,7 @@ export async function getHomeData(): Promise<HomeData> {
   const routinesWithTargets = routines.map(routineWithFrequencyTarget);
   const routineMap = new Map(routinesWithTargets.map((r) => [r.id, r]));
 
-  // ── Plan-for-day builder (manual + cycle entries, plus daily-habit auto-schedule) ──
-  const cycleEntries = planEntriesRaw.map((entry) => ({
-    routineId: entry.routineId,
-    dayOffset: Number(entry.dayOffset),
-    startDate: toAppYmd(new Date(entry.startDate)),
-    cycleLengthDays: Number(entry.cycleLengthDays),
-  }));
+  // ── Plan-for-day builder (manual entries + daily-habit auto-schedule) ──
   // Manual schedule entries grouped by day. Typed endurance slots
   // (activityTypeId set) live alongside legacy routine slots — they're
   // pulled into the WaG plan list as a separate path below so a single
@@ -372,12 +362,6 @@ export async function getHomeData(): Promise<HomeData> {
 
   function plannedRoutineIdsForDay(ymd: string): Set<string> {
     const set = new Set<string>(manualByDay.get(ymd) ?? []);
-    for (const cycle of cycleEntries) {
-      if (cycle.cycleLengthDays <= 0) continue;
-      const diff = diffYmdDays(ymd, cycle.startDate);
-      if (diff < 0) continue;
-      if (diff % cycle.cycleLengthDays === cycle.dayOffset) set.add(cycle.routineId);
-    }
     for (const r of autoScheduledRoutines) {
       if (isRoutineAutoScheduledOnDay(r, ymd, null)) set.add(r.id);
     }

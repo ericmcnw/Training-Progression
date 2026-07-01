@@ -18,6 +18,7 @@ import {
   DateTimeField,
   Field,
   FormActions,
+  FormError,
   FormSection,
   FormStack,
   inputStyle,
@@ -108,8 +109,8 @@ export default function SessionLogForm({
   const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
-  const [effortRating, setEffortRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Inline post-log state — submitted alongside the log instead of via a
   // follow-up screen. Defaults pre-tick the template-derived zones; pain
@@ -290,7 +291,7 @@ export default function SessionLogForm({
     const trimmedDuration = durationMin.trim();
     const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
     if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
-      alert("Enter a valid duration in minutes or leave it blank.");
+      setError("Enter a valid duration in minutes or leave it blank.");
       return;
     }
     const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
@@ -315,7 +316,7 @@ export default function SessionLogForm({
         const draft = sessionMetricValues[definition.id] ?? {};
         if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
           const numberValue = parseSessionMetricNumber(draft.numberValue ?? "", definition.valueType);
-          if (definition.isRequired && numberValue === null) throw new Error(`${definition.label} is required.`);
+          if (definition.isRequired && numberValue === null) { setError(`${definition.label} is required.`); return; }
           if (numberValue !== null) sessionMetricValuesToSend.push({ metricDefinitionId: definition.id, numberValue });
           continue;
         }
@@ -324,7 +325,7 @@ export default function SessionLogForm({
           continue;
         }
         const textValue = normalizeSessionMetricText(draft.textValue ?? "");
-        if (definition.isRequired && !textValue) throw new Error(`${definition.label} is required.`);
+        if (definition.isRequired && !textValue) { setError(`${definition.label} is required.`); return; }
         if (textValue) sessionMetricValuesToSend.push({ metricDefinitionId: definition.id, textValue });
       }
     }
@@ -337,13 +338,13 @@ export default function SessionLogForm({
       : undefined;
 
     setSaving(true);
+    setError(null);
     try {
-      const effortPrefix = !isClimbing && effortRating !== null ? `Effort: ${effortRating}/5\n` : "";
       const spotParams = spotParamsForSession(spotValue, isClimbing);
       await logSession({
         routineId,
         durationSec,
-        notes: effortPrefix ? `${effortPrefix}${notes}`.trim() : notes,
+        notes,
         performedAtLocal: performedAtLocal || undefined,
         sessionMetricValues: sessionMetricValuesToSend,
         preferredClimbingGrades: isClimbing ? selectedClimbingGrades : undefined,
@@ -373,8 +374,8 @@ export default function SessionLogForm({
       contextClearDraft(routineId);
       drawer?.clearDirty();
       finish();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save session.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save session.");
     } finally {
       setSaving(false);
     }
@@ -511,24 +512,6 @@ export default function SessionLogForm({
         )}
       </FormSection>
 
-      {!isClimbing && (
-        <FormSection title="How did it feel?">
-          <div style={effortRowStyle}>
-            {[1, 2, 3, 4, 5].map((level) => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setEffortRating(effortRating === level ? null : level)}
-                style={effortBtnStyle(effortRating === level)}
-              >
-                <span style={{ fontSize: 20 }}>{effortEmoji(level)}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.75 }}>{level}</span>
-              </button>
-            ))}
-          </div>
-        </FormSection>
-      )}
-
       {availableZones.length > 0 && (
         <InlineMusclesWorked
           availableZones={availableZones}
@@ -549,6 +532,8 @@ export default function SessionLogForm({
           onContextChange={(next) => { markDirty(); setPainContext(next); }}
         />
       )}
+
+      <FormError message={error} />
 
       <FormActions
         primaryLabel={isClimbing ? "Save Session" : "Save Session"}
@@ -581,8 +566,6 @@ const draftBannerBtnStyle: React.CSSProperties = {
   background: "rgba(128,128,128,0.12)", color: "inherit", fontWeight: 800, fontSize: 12,
   cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
 };
-
-const effortRowStyle: React.CSSProperties = { display: "flex", gap: 8 };
 
 // Climbing exposes GYM/CRAG as its spot-types, defaulting to whichever
 // suits the template (outdoor templates default to CRAG). The picker
@@ -667,24 +650,4 @@ function restoreSpotFromDraft(
     };
   }
   return undefined;
-}
-
-
-function effortBtnStyle(active: boolean): React.CSSProperties {
-  return {
-    flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-    padding: "10px 6px",
-    border: active ? "1px solid rgba(167,139,250,0.6)" : "1px solid rgba(128,128,128,0.35)",
-    borderRadius: 12,
-    background: active ? "rgba(167,139,250,0.15)" : "rgba(128,128,128,0.06)",
-    color: "inherit", cursor: "pointer", transition: "border-color 120ms, background 120ms",
-  };
-}
-
-function effortEmoji(level: number) {
-  if (level === 1) return "😴";
-  if (level === 2) return "🙂";
-  if (level === 3) return "💪";
-  if (level === 4) return "🔥";
-  return "⚡";
 }

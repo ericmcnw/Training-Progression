@@ -22,6 +22,10 @@ export type SessionChartInput = {
    *  sportData.sessionType: "Pickup" vs "Shoot around"). routineId still
    *  drives the panel-row href. */
   seriesKey?: string;
+  /** Perceived effort 1-10 for this session, if rated. Surfaces the
+   *  per-session effort chip + the Effort lens when rendered through
+   *  WeeklyEffortChart. Omit on surfaces without effort capture. */
+  effort?: number | null;
 };
 
 export type SessionChartData = {
@@ -128,6 +132,7 @@ export function buildSessionsChartData(
       // lifestyle log = one session, no volume/distance/pace). Empty
       // string suppresses the metric column in the chart panel rows.
       metricFormatted: "",
+      effort: s.effort ?? undefined,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }

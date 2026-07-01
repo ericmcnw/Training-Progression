@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function ScheduleError({
+export default function LogError({
   error,
   reset,
 }: {
@@ -15,7 +15,7 @@ export default function ScheduleError({
 
   return (
     <div style={{
-      maxWidth: 1180,
+      maxWidth: 980,
       margin: "0 auto",
       padding: "32px 16px",
       display: "grid",
@@ -25,9 +25,9 @@ export default function ScheduleError({
       textAlign: "center",
     }}>
       <div style={{ display: "grid", gap: 12, maxWidth: 420 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0 }}>Couldn't load schedule</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0 }}>Couldn&apos;t load the logging page</h2>
         <p style={{ opacity: 0.7, margin: 0, fontSize: 14, lineHeight: 1.6 }}>
-          There was a problem loading your schedule. Try refreshing the page.
+          There was a problem here. Nothing you&apos;ve already logged is affected.
         </p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button

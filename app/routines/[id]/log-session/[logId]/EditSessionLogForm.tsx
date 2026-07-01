@@ -14,6 +14,7 @@ import { COLOR } from "@/lib/design-tokens";
 import {
   Field,
   FormActions,
+  FormError,
   FormSection,
   FormStack,
   helperTextStyle,
@@ -40,8 +41,6 @@ import {
   synthesizeAttemptsFromQuickRows,
   synthesizeClimbingMetrics,
 } from "@/lib/climb-session-synth";
-import { EffortSlider } from "@/app/components/strain/EffortSlider";
-import { predictEffortDefault } from "@/lib/strain";
 
 function toLocalInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -189,7 +188,9 @@ export default function EditSessionLogForm({
 
   const [durationMin, setDurationMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [notes, setNotes] = useState(initialNotes);
-  const [effort, setEffort] = useState<number | null>(initialEffort);
+  // Effort is captured only on sport logs now; preserve any stored value
+  // through edits rather than wiping it. The save payload still carries it.
+  const [effort] = useState<number | null>(initialEffort);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>(initialValues);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
@@ -419,14 +420,6 @@ export default function EditSessionLogForm({
           />
         </FormSection>
       ) : null}
-
-      <FormSection title="Effort">
-        <EffortSlider
-          value={effort}
-          predicted={predictEffortDefault(Number(durationMin) > 0 ? Number(durationMin) : null)}
-          onChange={setEffort}
-        />
-      </FormSection>
 
       <FormSection title="Notes">
         {templateNotesDefinition ? (

@@ -789,9 +789,54 @@ model Gear {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  logLinks RoutineLogGear[]
+  logLinks  RoutineLogGear[]
+  listItems GearListItem[]
 
   @@index([profileKey, retiredAt])
+}
+
+// A named, reusable collection of gear. Used two ways with no `kind` field —
+// it's a distinction of verb, not type: you *pack* against it (interactive
+// checklist) and you *apply* it to a log (loadout). The list is a template; the
+// log's gear snapshot is the per-trip instance, so applying copies items into
+// the picker and never mutates the list. `activitySlug` scopes which logs it can
+// seed (universal gear like footwear still fits any list).
+model GearList {
+  id           String   @id @default(cuid())
+  profileKey   String
+  name         String
+  activitySlug String?
+  notes        String?
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items GearListItem[]
+
+  @@index([profileKey, isDeleted])
+}
+
+// One row in a gear list. `label` is ALWAYS present (the display text) so
+// deleting a linked Gear never blanks the row — gearId goes null, label stays.
+// `gearId` is the optional inventory link (carries weight/type/usage); a pure
+// non-inventory item (sunscreen, permit, 2 L water) has a label + no gearId.
+// `checked` is the persisted "bringing / in my pack" state the checklist toggles.
+model GearListItem {
+  id                  String  @id @default(cuid())
+  listId              String
+  label               String
+  gearId              String?
+  weightGramsOverride Int?
+  consumable          Boolean @default(false)
+  quantity            Int     @default(1)
+  checked             Boolean @default(true)
+  sortOrder           Int     @default(0)
+
+  list GearList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  gear Gear?    @relation(fields: [gearId], references: [id], onDelete: SetNull)
+
+  @@index([listId])
+  @@index([gearId])
 }
 
 // Gear ↔ log link — records which gear was used on a log so usage rolls up

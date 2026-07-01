@@ -74,7 +74,6 @@ export type MonthData = {
     daysWithActivity: number;  // total past+today days the user could've logged on
     totalSessions: number;     // total log count in the month
     topDomain: string | null;  // domain label with most sessions ("Strength")
-    activeCycles: number;      // count of SchedulePlanActivation rows with isEnabled
   };
 };
 
@@ -127,7 +126,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   const monthEnd = addDaysYmd(monthEndExclusive, -1);
 
   // ── Queries ─────────────────────────────────────────────────────────────
-  const [rawRoutines, manualRaw, logsRaw, planEntriesRaw, activeCyclesRaw, activityTypesRaw] = await Promise.all([
+  const [rawRoutines, manualRaw, logsRaw, activityTypesRaw] = await Promise.all([
     // NOTE: isPlaceholder filter intentionally removed. Synthetic-endurance
     // and synthetic-sport routines carry isPlaceholder=true (see
     // lib/synthetic-sport-routines.ts + lib/activity-types.ts). They're
@@ -188,12 +187,6 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         activityType: { select: { name: true } },
       },
     }),
-    prisma.$queryRawUnsafe<Array<{ routineId: string; dayOffset: number; startDate: Date; cycleLengthDays: number; activityTypeId: string | null }>>(
-      'SELECT e."routineId", e."dayOffset", a."startDate", p."cycleLengthDays", e."activityTypeId" FROM "ScheduleEntry" e INNER JOIN "SchedulePlanActivation" a ON a."schedulePlanId" = e."schedulePlanId" INNER JOIN "SchedulePlan" p ON p."id" = e."schedulePlanId" WHERE a."isEnabled" = true'
-    ),
-    prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-      'SELECT COUNT(*) as count FROM "SchedulePlanActivation" WHERE "isEnabled" = true'
-    ),
     // Resolves activity type ids → names so scheduled-but-unlogged typed
     // slots ("Trail Run on Tuesday") can render with their type label.
     prisma.activityType.findMany({ select: { id: true, name: true } }),
@@ -225,14 +218,6 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       activityTypeId: entry.activityTypeId,
     });
   }
-
-  const cycleEntries = planEntriesRaw.map((entry) => ({
-    routineId: entry.routineId,
-    activityTypeId: entry.activityTypeId,
-    dayOffset: Number(entry.dayOffset),
-    startDate: toAppYmd(new Date(entry.startDate)),
-    cycleLengthDays: Number(entry.cycleLengthDays),
-  }));
 
   // Per-day buckets keyed by entryKey so "trail run on synthetic" and
   // "hike on synthetic" stay distinct. Each bucket carries enough info to
@@ -306,20 +291,6 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
 
     for (const slot of manualByDay.get(ymd) ?? []) {
       bumpSlot(slot.routineId, slot.activityTypeId, 1);
-    }
-    for (const cycle of cycleEntries) {
-      if (cycle.cycleLengthDays <= 0) continue;
-      const diff = Math.floor(
-        (new Date(`${ymd}T00:00:00.000Z`).getTime() - new Date(`${cycle.startDate}T00:00:00.000Z`).getTime()) /
-          (24 * 60 * 60 * 1000)
-      );
-      if (diff < 0) continue;
-      if (diff % cycle.cycleLengthDays === cycle.dayOffset) {
-        const key = entryKey(cycle.routineId, cycle.activityTypeId);
-        if (!plannedSlots.has(key)) {
-          plannedSlots.set(key, { routineId: cycle.routineId, activityTypeId: cycle.activityTypeId, planned: 1 });
-        }
-      }
     }
     for (const r of autoScheduledRoutines) {
       if (isRoutineAutoScheduledOnDay(r, ymd, null)) {
@@ -419,8 +390,6 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       topDomain = DOMAIN_LABEL[domain] ?? domain;
     }
   }
-  const activeCyclesCount = Number(activeCyclesRaw[0]?.count ?? 0);
-
   return {
     today,
     monthYmd,
@@ -437,7 +406,6 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       daysWithActivity: daysInPastOrToday,
       totalSessions,
       topDomain,
-      activeCycles: activeCyclesCount,
     },
   };
 }

@@ -6,7 +6,7 @@ import { logGuided, updateGuidedLog } from "../../actions";
 import { EXERCISE_LIBRARY_KIND_LABELS, guidedPreferredLibraryKinds, orderExercisesForLibraryContext } from "@/lib/exercise-library";
 import { buildGuidedRunnerSegments, formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
-import { Field, FieldGrid, FormActions, FormSection, FormStack, OptionalDateSection, helperTextStyle, inputStyle, pillButtonStyle, textareaStyle } from "../log/form-ui";
+import { Field, FieldGrid, FormActions, FormError, FormSection, FormStack, OptionalDateSection, helperTextStyle, inputStyle, pillButtonStyle, textareaStyle } from "../log/form-ui";
 
 type ExerciseOption = { id: string; name: string; unit: "REPS" | "TIME"; supportsWeight: boolean; libraryKind: ExerciseLibraryKind };
 type InitialStep = {
@@ -196,6 +196,7 @@ export default function GuidedSessionEditor({
   const [isRunning, setIsRunning] = useState(false);
   const [remainingSec, setRemainingSec] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
 
   const activeDraftSteps = useMemo(() => draftSteps.filter((step) => step.includeInLog), [draftSteps]);
@@ -281,12 +282,13 @@ export default function GuidedSessionEditor({
   async function onSave() {
     const parsedDurationMin = durationOverrideMin.trim() ? Number(durationOverrideMin) : null;
     if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
-      alert("Enter a valid duration override in minutes or leave it blank.");
+      setError("Enter a valid duration override in minutes or leave it blank.");
       return;
     }
     const steps = draftSteps.filter((step) => step.includeInLog).map((step, index) => payloadStep(step, index, exerciseById));
     const durationSec = parsedDurationMin !== null ? Math.round(parsedDurationMin * 60) : completedDurationSec > 0 ? completedDurationSec : estimatedDurationSec > 0 ? estimatedDurationSec : null;
     setSaving(true);
+    setError(null);
     try {
       if (logId) {
         await updateGuidedLog({ routineId, logId, durationSec, notes, performedAtLocal: performedAtLocal || undefined, steps });
@@ -295,8 +297,8 @@ export default function GuidedSessionEditor({
       }
       if (onComplete) onComplete();
       else window.location.href = backHref;
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save guided session.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save guided session.");
     } finally {
       setSaving(false);
     }
@@ -546,6 +548,7 @@ export default function GuidedSessionEditor({
 
       {mode === "LOG_AFTER" ? null : <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />}
 
+      <FormError message={error} />
       <FormActions primaryLabel={saveLabel} primaryPendingLabel={savePendingLabel} saving={saving} onPrimary={onSave} backHref={backHref} onBack={onCancel} />
     </FormStack>
   );

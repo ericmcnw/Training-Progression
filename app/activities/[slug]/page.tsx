@@ -32,7 +32,7 @@ import { loadActivityCoverage } from "@/app/progress/details/activity-coverage-l
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
-import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
+import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import SportPeopleStats from "./SportPeopleStats";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 import { formatRoutineSubtype } from "@/lib/routines";
@@ -177,6 +177,7 @@ export default async function SportWorldPage(props: {
           routineId: l.routineId,
           routineName: label,
           seriesKey: fuzzyDuplicateKey(label) || l.routineId,
+          effort: l.effort,
         };
       }),
     { accentFirst: accent, now, weeks: chartWeeks }
@@ -239,14 +240,12 @@ export default async function SportWorldPage(props: {
               </Link>
             ))}
           </div>
-          <WeeklyBarChartWithSessions
+          <WeeklyEffortChart
             title={`${title} Sessions per Week — Last ${chartWeeks} Weeks`}
             weekLabels={chartData.weekLabels}
             series={chartData.series}
             sessionsByWeek={chartData.sessionsByWeek}
-            unit=""
-            decimals={0}
-            compact={false}
+            defaultLens="bars"
           />
         </>
       ) : null}

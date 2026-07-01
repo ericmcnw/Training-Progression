@@ -77,6 +77,10 @@ export default function GoalRow({
       <div style={textBlockStyle}>
         <div style={nameLineStyle}>
           <span className="goalRowName" style={nameStyle}>{insight.goal.name}</span>
+          <TriggerBadge
+            exerciseCount={insight.triggerExerciseCount ?? 0}
+            subtypeCount={insight.triggerSubtypeCount ?? 0}
+          />
           {!insight.goal.isActive ? <span style={inactiveChipStyle}>Inactive</span> : null}
         </div>
         <div className="goalRowMeta" style={metaLineStyle}>
@@ -210,6 +214,30 @@ function ScalarVisual({
   );
 }
 
+// Harvested from the retired FrequencyGoalRow — a compact chip signalling the
+// goal counts more than its enrolled routines (trigger exercises / activity
+// types). Hover spells out what's matched. Zero counts render nothing, so it's
+// inert for non-frequency goals.
+function TriggerBadge({
+  exerciseCount,
+  subtypeCount,
+}: {
+  exerciseCount: number;
+  subtypeCount: number;
+}) {
+  if (exerciseCount === 0 && subtypeCount === 0) return null;
+  const parts: string[] = [];
+  if (exerciseCount > 0) parts.push(`${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}`);
+  if (subtypeCount > 0) parts.push(`${subtypeCount} activity type${subtypeCount === 1 ? "" : "s"}`);
+  const title = `Also counts logs matching: ${parts.join(" + ")}`;
+  const label = exerciseCount + subtypeCount === 1 ? "+1 trigger" : `+${exerciseCount + subtypeCount} triggers`;
+  return (
+    <span title={title} aria-label={title} style={triggerBadgeStyle}>
+      {label}
+    </span>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────
 
 function rowStyle(accent: typeof TYPE_ACCENT[string], status: HabitRow["status"]): CSSProperties {
@@ -282,6 +310,19 @@ const inactiveChipStyle: CSSProperties = {
   opacity: 0.7,
   letterSpacing: 0.3,
   textTransform: "uppercase",
+};
+
+const triggerBadgeStyle: CSSProperties = {
+  flexShrink: 0,
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(129,140,248,0.42)",
+  background: "rgba(129,140,248,0.13)",
+  color: "rgb(199,210,254)",
+  whiteSpace: "nowrap",
 };
 
 const metaLineStyle: CSSProperties = {

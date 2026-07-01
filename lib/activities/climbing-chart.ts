@@ -207,6 +207,7 @@ export function buildClimbingChartData(
       metricFormatted: "",
       load: sessionLoad(s.effort, s.durationSec),
       loadEstimated: s.effort == null,
+      effort: s.effort ?? undefined,
       href: `/routines/${s.routineId}/logs/${s.id}/details`,
     });
   }

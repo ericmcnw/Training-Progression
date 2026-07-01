@@ -56,12 +56,17 @@ export default function LogPainButton({
             <div style={{ display: "grid", gap: 6 }}>
               <div style={miniLabel}>An active injury</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {injuries.map((injury) =>
-                  injury.zones[0] ? (
-                    <button key={injury.id} type="button" onClick={() => logFor(injury.zones[0])} style={chooserChip}>
-                      {injury.name}
+                {injuries.flatMap((injury) =>
+                  injury.zones.map((zone) => (
+                    <button
+                      key={`${injury.id}:${zone.slug}`}
+                      type="button"
+                      onClick={() => logFor(zone)}
+                      style={chooserChip}
+                    >
+                      {injury.zones.length > 1 ? `${injury.name} · ${zone.label}` : injury.name}
                     </button>
-                  ) : null
+                  ))
                 )}
               </div>
             </div>

@@ -4,6 +4,8 @@ import {
 } from "@/generated/prisma";
 import { formatAppDate, formatAppDateTime, toAppYmd } from "@/lib/dates";
 import { getFrequencyGoalProgressList, getFrequencyGoalWindowDays } from "@/lib/frequency-goals";
+import { gradeSort, isSendOutcome, venueOf, type ClimbOutcome } from "@/lib/climb-types";
+import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 import {
   GOAL_METRIC_LABELS,
   GOAL_TARGET_TYPE_LABELS,
@@ -576,12 +578,33 @@ async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnTy
   const sessionTemplateIds = descriptor.filter.sessionTemplateIds;
   const activityTypeIds = descriptor.filter.activityTypeIds;
   const activityFamilyIds = descriptor.filter.activityFamilyIds;
+  // Bilingual: V-grade goals target a climbing SESSION_TEMPLATE, but climbing
+  // logged via the sport tile lands on the synthetic climbing routine (no
+  // template link) so it misses the sessionDetails filter below. Build a
+  // venue-matched clause (indoor→GYM, outdoor→CRAG) so those logs — and their
+  // ClimbAttempt send grades (read in sessionMetricValueForGoal) — count.
+  let climbingGradeClause:
+    | { routineId: string; climbLocation?: { is: { type: "GYM" | "CRAG" } } }
+    | null = null;
+  if (isBoulderGradeGoal(goal) && sessionTemplateIds.length > 0) {
+    const template = await prisma.sessionTemplate.findUnique({
+      where: { id: sessionTemplateIds[0] },
+      select: { key: true },
+    });
+    const venue = venueOf(template?.key, null);
+    const syntheticClimbingId = getSyntheticSportRoutineId("climbing");
+    climbingGradeClause = venue
+      ? { routineId: syntheticClimbingId, climbLocation: { is: { type: venue } } }
+      : { routineId: syntheticClimbingId };
+  }
+
   const targetFilters = [
     ...(routineIds.length > 0 ? [{ routineId: { in: routineIds } }] : []),
     ...(exerciseIds.length > 0 ? [{ exercises: { some: { exerciseId: { in: exerciseIds } } } }] : []),
     ...(sessionTemplateIds.length > 0
       ? [{ routine: { sessionDetails: { templateId: { in: sessionTemplateIds } } } }]
       : []),
+    ...(climbingGradeClause ? [climbingGradeClause] : []),
     // Bilingual fix (Phase 3b): catch post-T2 synthetic-Endurance logs that
     // don't have a metadata-tagged routine but carry an activityType matching
     // the goal's CARDIO_ACTIVITY group slug. Family + Type are ORed as
@@ -634,6 +657,9 @@ async function getLogsForGoal(goal: GoalWithConfig, descriptor: Awaited<ReturnTy
           metricDefinition: true,
         },
       },
+      climbAttempts: {
+        select: { grade: true, gradeSystem: true, outcome: true },
+      },
     },
     orderBy: { performedAt: "desc" },
   });
@@ -670,13 +696,49 @@ function metricForExerciseEntry(goal: GoalWithConfig, entry: GoalExerciseEntry) 
   return 0;
 }
 
+// A V-grade PERFORMANCE goal — its value is the hardest V-grade sent. Mirrors
+// the detection used by formatMetricValue below (label "V Grade" or a V-shaped
+// target text).
+function isBoulderGradeGoal(goal: GoalWithConfig): boolean {
+  if (goal.metricType !== "SESSION_METRIC") return false;
+  const targetText = goal.config?.sessionMetricTargetText?.trim();
+  return goal.config?.sessionMetricDefinitionLabel === "V Grade" || /^v\d+/i.test(targetText ?? "");
+}
+
+// Best clean-send V-grade among a log's climb attempts, on the SAME integer
+// scale as the "V Grade" session metric (gradeSort: V4 → 4, V4+ → 4.5). Only
+// bouldering (BOULDER_V) sends count.
+function climbAttemptGradeValue(log: GoalLog): number {
+  let best = 0;
+  for (const attempt of log.climbAttempts) {
+    if (attempt.gradeSystem !== "BOULDER_V") continue;
+    if (!isSendOutcome(attempt.outcome as ClimbOutcome)) continue;
+    const value = gradeSort(attempt.grade, "BOULDER_V");
+    if (value > best) best = value;
+  }
+  return best;
+}
+
 function sessionMetricValueForGoal(goal: GoalWithConfig, log: GoalLog) {
   const definitionId = goal.config?.sessionMetricDefinitionId;
-  if (!definitionId) return null;
-  const metricValue = log.sessionMetricValues.find((value) => value.metricDefinitionId === definitionId);
-  if (!metricValue) return null;
-  const definition = withSessionMetricConfig(metricValue.metricDefinition);
-  return sessionMetricNumericValue(definition, metricValue);
+  let legacy: number | null = null;
+  if (definitionId) {
+    const metricValue = log.sessionMetricValues.find((value) => value.metricDefinitionId === definitionId);
+    if (metricValue) {
+      const definition = withSessionMetricConfig(metricValue.metricDefinition);
+      legacy = sessionMetricNumericValue(definition, metricValue);
+    }
+  }
+  // Bilingual: climbing logged via the newer ClimbLogSheet writes ClimbAttempt
+  // rows, not "V Grade" session metrics — fold those send grades in so those
+  // logs count toward grade goals too. Max of both so either path works.
+  if (isBoulderGradeGoal(goal)) {
+    const fromAttempts = climbAttemptGradeValue(log);
+    if (fromAttempts > 0) {
+      return legacy != null ? Math.max(legacy, fromAttempts) : fromAttempts;
+    }
+  }
+  return legacy;
 }
 
 function metricForLog(goal: GoalWithConfig, log: GoalLog, exerciseIds: Set<string>) {

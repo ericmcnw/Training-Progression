@@ -166,6 +166,28 @@ export function FormActions({
   );
 }
 
+// Inline save/validation error. Replaces alert() across the log forms so a
+// failed save (or a bad field) surfaces in-sheet instead of a modal dialog
+// that loses the user's place. Renders nothing when message is falsy.
+export function FormError({ message }: { message: string | null | undefined }) {
+  if (!message) return null;
+  return (
+    <div role="alert" style={formErrorStyle}>
+      {message}
+    </div>
+  );
+}
+
+const formErrorStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "rgba(252,165,165,0.98)",
+  background: "rgba(248,113,113,0.1)",
+  border: "1px solid rgba(248,113,113,0.32)",
+  borderRadius: 10,
+  padding: "8px 12px",
+};
+
 export const inputStyle: React.CSSProperties = {
   width: "100%",
   // iOS Safari renders <input type="datetime-local"> at the intrinsic

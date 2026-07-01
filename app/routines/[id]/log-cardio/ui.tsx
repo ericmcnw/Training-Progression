@@ -9,6 +9,7 @@ import {
   DateTimeField,
   Field,
   FormActions,
+  FormError,
   FormSection,
   FormStack,
   inputStyle,
@@ -78,6 +79,7 @@ export default function LogRunForm({
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
   const [gear, setGear] = useState<GearPick[]>([]);
   // Active activity type. Defaults to whatever the legacy routine maps to;
@@ -254,7 +256,7 @@ export default function LogRunForm({
     // against the synthetic Endurance routine with no type, which would
     // disappear from family rollups.
     if (routineIsSynthetic && !activityTypeId) {
-      alert("Pick an activity type first (Run, Hike, Bike, etc.).");
+      setError("Pick an activity type first (Run, Hike, Bike, etc.).");
       return;
     }
 
@@ -264,16 +266,16 @@ export default function LogRunForm({
     // Distance is optional (a walk is often logged by time only) — but if
     // they typed something, it has to be a real number.
     if (distanceProvided && !hasDistance) {
-      alert("Enter a valid distance in miles, or leave it blank.");
+      setError("Enter a valid distance in miles, or leave it blank.");
       return;
     }
     // Need at least one of distance / duration so the log means something.
     if (!hasDistance && !hasDuration) {
-      alert("Add a distance or a duration.");
+      setError("Add a distance or a duration.");
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
-      alert("Enter a valid elevation gain in feet.");
+      setError("Enter a valid elevation gain in feet.");
       return;
     }
 
@@ -302,6 +304,7 @@ export default function LogRunForm({
     }
 
     setSaving(true);
+    setError(null);
     try {
       // Map the picker's value to action params. Cardio activities use
       // the ActivitySpot table; cross-activity ClimbLocation picks are
@@ -340,7 +343,7 @@ export default function LogRunForm({
       drawer?.clearDirty();
       finish();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Couldn't save this cardio log. Please try again.");
+      setError(e instanceof Error ? e.message : "Couldn't save this cardio log. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -563,6 +566,8 @@ export default function LogRunForm({
           onContextChange={(next) => { markDirty(); setPainContext(next); }}
         />
       )}
+
+      <FormError message={error} />
 
       <FormActions
         primaryLabel="Save Cardio"

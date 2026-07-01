@@ -53,7 +53,6 @@ export default function MonthHeader({ data }: { data: MonthData }) {
         />
         <Stat label="Sessions" value={String(data.stats.totalSessions)} />
         <Stat label="Top" value={data.stats.topDomain ?? "—"} />
-        <Stat label="Cycles" value={String(data.stats.activeCycles)} />
       </div>
     </header>
   );

@@ -11,12 +11,16 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
   const [performedAtLocal, setPerformedAtLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [quickSaving, setQuickSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function quickSave() {
     setQuickSaving(true);
+    setError(null);
     try {
       await createCompletionLog({ routineId, completionCount: null, notes: "", performedAtLocal: undefined });
       window.location.href = "/log";
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
     } finally {
       setQuickSaving(false);
     }
@@ -25,11 +29,12 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
   async function onSave() {
     const parsedCount = completionCount.trim() ? Number(completionCount) : null;
     if (parsedCount !== null && (!Number.isFinite(parsedCount) || parsedCount <= 0)) {
-      alert("Count must be greater than 0.");
+      setError("Count must be greater than 0.");
       return;
     }
 
     setSaving(true);
+    setError(null);
     try {
       await createCompletionLog({
         routineId,
@@ -38,6 +43,8 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
         performedAtLocal: performedAtLocal || undefined,
       });
       window.location.href = "/log";
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -51,6 +58,10 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
       <button type="button" onClick={quickSave} disabled={anyPending} style={quickSaveBtn}>
         {quickSaving ? "Saving..." : "✓ Mark Done"}
       </button>
+
+      {error ? (
+        <div role="alert" style={errorStyle}>{error}</div>
+      ) : null}
 
       {/* Detailed entry */}
       <FormSection title="Log with details" description="Add a count or notes when you want to track more than just completion.">
@@ -98,4 +109,14 @@ const quickSaveBtn: React.CSSProperties = {
   fontSize: 18,
   cursor: "pointer",
   letterSpacing: 0.3,
+};
+
+const errorStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "rgba(252,165,165,0.98)",
+  background: "rgba(248,113,113,0.1)",
+  border: "1px solid rgba(248,113,113,0.32)",
+  borderRadius: 10,
+  padding: "8px 12px",
 };

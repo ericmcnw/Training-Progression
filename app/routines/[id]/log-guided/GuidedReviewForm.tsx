@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { GuidedStepKind } from "@/generated/prisma";
 import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
+import { FormError } from "../log/form-ui";
 
 export type ReviewTemplateStep = {
   id: string;
@@ -49,6 +50,7 @@ export default function GuidedReviewForm({
   completedDurationSec,
   mode,
   saving,
+  error,
   onSave,
   onBack,
   bottomSlot,
@@ -59,6 +61,7 @@ export default function GuidedReviewForm({
   completedDurationSec: number;
   mode: "review" | "log-after";
   saving: boolean;
+  error?: string | null;
   onSave: (data: ReviewSaveData) => void;
   onBack: () => void;
   bottomSlot?: ReactNode;
@@ -235,6 +238,8 @@ export default function GuidedReviewForm({
       </div>
 
       {bottomSlot}
+
+      <FormError message={error} />
 
       {/* Save */}
       <div className="mobileStickyActions guidedStickyActions" style={{ display: "flex", gap: 10 }}>
