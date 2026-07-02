@@ -10,7 +10,9 @@ import MonthTab from "./month/MonthTab";
 import GoalsTab from "./goals/GoalsTab";
 import RotationTab from "./cycles/RotationTab";
 import PackingListsTab from "./PackingListsTab";
+import MarkTimeAwayButton from "./month/MarkTimeAwayButton";
 import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
+import { todayAppYmd } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +61,12 @@ export default async function PlanPage(props: {
         id="schedule"
         title="Schedule"
         subtitle="What's planned and logged this month. Tap any day for detail."
-        action={<NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>}
+        action={
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <MarkTimeAwayButton today={todayAppYmd()} />
+            <NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>
+          </div>
+        }
       >
         <MonthTab searchParams={searchParams} />
       </PlanSection>

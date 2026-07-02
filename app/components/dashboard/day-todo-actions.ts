@@ -25,18 +25,21 @@ export async function createDayTodo(formData: FormData) {
   const label = normalizeLabel(String(formData.get("label") ?? ""));
   await prisma.dayTodo.create({ data: { ymd, label } });
   revalidatePath("/");
+  revalidatePath("/plan");
 }
 
 export async function toggleDayTodo(id: string, done: boolean) {
   if (!id) throw new Error("Missing id");
   await prisma.dayTodo.update({ where: { id }, data: { done } });
   revalidatePath("/");
+  revalidatePath("/plan");
 }
 
 export async function deleteDayTodo(id: string) {
   if (!id) throw new Error("Missing id");
   await prisma.dayTodo.delete({ where: { id } });
   revalidatePath("/");
+  revalidatePath("/plan");
 }
 
 // "Carry forward" suggestions — when the user adds a new todo, we look

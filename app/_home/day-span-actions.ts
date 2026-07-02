@@ -35,9 +35,11 @@ export async function createDaySpan(input: {
     },
   });
   revalidatePath("/");
+  revalidatePath("/plan");
 }
 
 export async function deleteDaySpan(id: string): Promise<void> {
   await prisma.daySpan.delete({ where: { id } }).catch(() => {});
   revalidatePath("/");
+  revalidatePath("/plan");
 }

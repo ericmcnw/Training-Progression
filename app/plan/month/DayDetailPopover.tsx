@@ -11,6 +11,7 @@ import { useState, type CSSProperties } from "react";
 import Popover from "@/app/_home/Popover";
 import SchedulePicker from "@/app/_home/SchedulePicker";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
+import DayTodoList from "@/app/components/dashboard/DayTodoList";
 import { domainAccent } from "@/app/_home/client-utils";
 import { formatUtcDateLabel } from "@/lib/dates";
 import type { MonthDayCell, DayEntry } from "./data";
@@ -68,6 +69,18 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
       <Popover open onClose={onClose} title={fullDate} subtitle={sub} desktopWidth={420}>
         {headerActions ? <div style={actionsRow}>{headerActions}</div> : null}
 
+        {day.spans.length > 0 ? (
+          <div style={awayList}>
+            {day.spans.map((s) => (
+              <div key={s.id} style={awayRow}>
+                <span style={{ ...awayDot, background: `rgba(${spanTone(s.kind)},0.9)` }} aria-hidden />
+                <span style={awayLabel}>{s.label}</span>
+                <span style={awayKind}>{s.kind}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {isEmpty ? (
           <div style={emptyHint}>
             {isFuture
@@ -94,6 +107,8 @@ export default function DayDetailPopover({ day, today, schedulableRoutines, sche
             ) : null}
           </div>
         )}
+
+        <DayTodoList ymd={day.ymd} todos={day.todos} mode="panel" />
       </Popover>
 
       {canSchedule ? (
@@ -165,6 +180,59 @@ function DayEntryRow({
 }
 
 // ─────────────────────── styles
+
+// Away/travel span colors by kind — kept in sync with MonthCalendar's SPAN_TONE.
+const SPAN_TONE: Record<string, string> = {
+  vacation: "251,191,36",
+  travel: "96,165,250",
+  away: "148,163,184",
+  sick: "244,114,182",
+  rest: "52,211,153",
+};
+function spanTone(kind: string): string {
+  return SPAN_TONE[kind] ?? "148,163,184";
+}
+
+const awayList: CSSProperties = {
+  display: "grid",
+  gap: 4,
+  marginBottom: 4,
+};
+
+const awayRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.02)",
+};
+
+const awayDot: CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+
+const awayLabel: CSSProperties = {
+  flex: 1,
+  fontSize: 13,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.92)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const awayKind: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.45)",
+};
 
 const actionsRow: CSSProperties = {
   display: "flex",

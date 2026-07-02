@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import RoutinesPageContent from "@/app/routines/RoutinesPageContent";
+import LogHistory from "./LogHistory";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,11 @@ export default async function LogPage(props: {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <LogTabs current={view} />
-      <RoutinesPageContent searchParams={Promise.resolve(searchParams)} />
+      {view === "history" ? (
+        <LogHistory />
+      ) : (
+        <RoutinesPageContent searchParams={Promise.resolve(searchParams)} />
+      )}
     </div>
   );
 }
@@ -47,6 +52,12 @@ function LogTabs({ current }: { current: string }) {
       description: "Your training templates",
     },
     {
+      key: "history",
+      label: "History",
+      href: "/log?view=history",
+      description: "Past sessions",
+    },
+    {
       key: "exercises",
       label: "Exercises",
       href: "/log?view=exercises",
@@ -55,15 +66,7 @@ function LogTabs({ current }: { current: string }) {
   ];
 
   return (
-    <nav
-      aria-label="Log views"
-      style={{
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        padding: "4px 4px",
-      }}
-    >
+    <nav aria-label="Log views" className="logTabStrip">
       {tabs.map((tab) => {
         const active = current === tab.key;
         return (
@@ -71,18 +74,13 @@ function LogTabs({ current }: { current: string }) {
             key={tab.key}
             href={tab.href}
             aria-current={active ? "page" : undefined}
+            className="logTab"
             style={{
-              padding: "8px 14px",
-              borderRadius: 12,
-              fontSize: 13,
-              fontWeight: 800,
-              textDecoration: "none",
               border: active
                 ? "1px solid rgba(51,255,122,0.45)"
                 : "1px solid rgba(255,255,255,0.12)",
               background: active ? "rgba(51,255,122,0.10)" : "rgba(255,255,255,0.04)",
               color: active ? "rgba(51,255,122,0.95)" : "inherit",
-              transition: "border-color 120ms ease, background 120ms ease",
             }}
           >
             {tab.label}

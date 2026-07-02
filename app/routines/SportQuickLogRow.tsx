@@ -12,7 +12,7 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
-import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { HoursMinutesField, inputStyle, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
@@ -64,7 +64,8 @@ export default function SportQuickLogRow({ sport }: { sport: SportRowData }) {
 
 type GenericDraft = {
   performedAt: string;
-  duration: string;
+  hours: string;
+  minutes: string;
   notes: string;
   sessionType: string;
   spot: SpotPickerValue;
@@ -90,7 +91,8 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
     `sport-log-draft-${sport.slug}`,
     {
       performedAt: formatLocalDateTime(new Date()),
-      duration: "",
+      hours: "",
+      minutes: "",
       notes: "",
       sessionType: "",
       spot: null,
@@ -139,9 +141,9 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
       setError("Invalid date/time.");
       return;
     }
-    const minutes = draft.duration.trim() === "" ? undefined : Number(draft.duration);
-    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
-      setError("Duration must be a positive number.");
+    const { minutes, valid } = parseHoursMinutes(draft.hours, draft.minutes);
+    if (!valid) {
+      setError("Enter a valid duration.");
       return;
     }
 
@@ -178,7 +180,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
 
   const predictedEffort = useLearnedEffortPrefill({
     routineId: `sports-${sport.slug}-synthetic`,
-    durationMin: Number(draft.duration) > 0 ? Number(draft.duration) : null,
+    durationMin: (Number(draft.hours) || 0) * 60 + (Number(draft.minutes) || 0) || null,
   });
 
   return (
@@ -243,17 +245,13 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
         </div>
       ) : null}
 
-      <label style={fieldLabel}>
-        Duration (minutes)
-        <input
-          type="number"
-          inputMode="numeric"
-          placeholder="optional"
-          value={draft.duration}
-          onChange={(e) => setDraft((d) => ({ ...d, duration: e.target.value }))}
-          style={fieldInput}
-        />
-      </label>
+      <HoursMinutesField
+        hours={draft.hours}
+        minutes={draft.minutes}
+        onHours={(v) => setDraft((d) => ({ ...d, hours: v }))}
+        onMinutes={(v) => setDraft((d) => ({ ...d, minutes: v }))}
+        label="How long?"
+      />
 
       {/* Per-sport extra fields — surfing wave count, basketball score,
           spikeball format + teammate/opponents, etc. Conditional fields

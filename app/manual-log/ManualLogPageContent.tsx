@@ -538,11 +538,13 @@ function ActivityCard({
 }: {
   log: {
     id: string;
+    routineId: string;
     performedAt: Date;
     distanceMi: number | null;
     durationSec: number | null;
     completionCount: number | null;
     domain: Domain;
+    sportData?: unknown;
     routine: { name: string; kind: string | null; subtype: string | null };
     exercises: { id: string; sets: { id: string }[] }[];
   };
@@ -561,7 +563,7 @@ function ActivityCard({
         paddingLeft: 12,
       }}
     >
-      <div style={{ fontWeight: 800 }}>{log.routine.name}</div>
+      <div style={{ fontWeight: 800 }}>{getLogDisplayName(log)}</div>
       <div style={{ marginTop: 3, fontSize: 12, opacity: 0.72 }}>
         {typeLabel} ·{" "}
         {formatAppDateTime(log.performedAt, {

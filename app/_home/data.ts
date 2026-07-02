@@ -205,6 +205,9 @@ export async function getHomeData(): Promise<HomeData> {
         id: true,
         routineId: true,
         performedAt: true,
+        // Freeform "Activity" logs render their tags ("Swim · Walk") via the
+        // display-name helper — needs sportData present on the log.
+        sportData: true,
         // Exercises + routine.subtype are pulled here so the frequency-goal
         // builder below can evaluate trigger-exercise / trigger-subtype
         // matches without a second roundtrip. `_count.sets` gives us the
@@ -972,6 +975,8 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
         id: true,
         routineId: true,
         performedAt: true,
+        // Freeform "Activity" logs render their tags via the display-name helper.
+        sportData: true,
         activityTypeId: true,
         activityType: { select: { name: true, familyId: true } },
         routine: {

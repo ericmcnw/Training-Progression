@@ -71,6 +71,73 @@ export function FieldGrid({
   return <div className="mobileFormGrid" style={{ display: "grid", gap: 12, gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))` }}>{children}</div>;
 }
 
+// Separate Hours + Minutes inputs — so a 90-minute session is "1 h 30 m"
+// instead of forcing the user to convert to total minutes in their head.
+// Controlled: the parent owns the hours/minutes strings. Reusable across
+// every session-style log form.
+export function HoursMinutesField({
+  hours,
+  minutes,
+  onHours,
+  onMinutes,
+  label = "How long?",
+  hint,
+}: {
+  hours: string;
+  minutes: string;
+  onHours: (v: string) => void;
+  onMinutes: (v: string) => void;
+  label?: string;
+  hint?: string;
+}) {
+  return (
+    <Field label={label} hint={hint}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={hmColStyle}>
+          <input
+            type="number"
+            inputMode="numeric"
+            placeholder="0"
+            value={hours}
+            onChange={(e) => onHours(e.target.value)}
+            style={inputStyle}
+            aria-label="Hours"
+          />
+          <span style={hmSubStyle}>hours</span>
+        </div>
+        <div style={hmColStyle}>
+          <input
+            type="number"
+            inputMode="numeric"
+            placeholder="0"
+            value={minutes}
+            onChange={(e) => onMinutes(e.target.value)}
+            style={inputStyle}
+            aria-label="Minutes"
+          />
+          <span style={hmSubStyle}>minutes</span>
+        </div>
+      </div>
+    </Field>
+  );
+}
+
+// Parse the hours/minutes strings into total minutes. `valid` is false only
+// when a field holds a non-numeric / negative value; empty fields read as 0
+// and a 0 total returns `minutes: undefined` (no duration attached).
+export function parseHoursMinutes(hours: string, minutes: string): { minutes: number | undefined; valid: boolean } {
+  const h = hours.trim() === "" ? 0 : Number(hours);
+  const m = minutes.trim() === "" ? 0 : Number(minutes);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0) {
+    return { minutes: undefined, valid: false };
+  }
+  const total = h * 60 + m;
+  return { minutes: total > 0 ? total : undefined, valid: true };
+}
+
+const hmColStyle: React.CSSProperties = { flex: 1, display: "grid", gap: 4, minWidth: 0 };
+const hmSubStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textAlign: "center" };
+
 export function localDateTimeNow(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");

@@ -1,46 +1,25 @@
 "use client";
 
-// Fab — single floating action button bottom-right. Tap → QuickAddMenu.
-// Persistent across scroll; respects mobile bottom-nav safe area so it
-// doesn't get hidden under the nav bar.
+// Fab — single floating action button, bottom-right. One tap opens the
+// quick-log workout drawer directly (no menu). The old grab-bag QuickAddMenu
+// duplicated the Log tab and buried planning actions; those moved to /log and
+// /plan respectively. Persistent across scroll; respects the mobile bottom-nav
+// safe area so it doesn't hide under the nav bar.
 
-import { useState, type CSSProperties } from "react";
-import type { QuickPickRoutine } from "./types";
+import type { CSSProperties } from "react";
+import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
+import { QUICK_LOG_ROUTINE_ID } from "@/app/components/LogDrawer";
 import { SHADOW } from "./tokens";
-import QuickAddMenu from "./QuickAddMenu";
-import type { ScheduleActivityType, ScheduleSport } from "./SchedulePicker";
-import ClimbLogSheet from "@/app/routines/ClimbLogSheet";
-import GolfLogSheet from "@/app/routines/GolfLogSheet";
-import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
-import { GenericSportLogSheet } from "@/app/routines/SportQuickLogRow";
-import { ActivityLogSheet } from "@/app/routines/ActivityLogSheet";
 
-type Props = {
-  routines: QuickPickRoutine[];
-  activityTypes?: ScheduleActivityType[];
-  sports?: ScheduleSport[];
-  today: string;
-};
-
-export default function Fab({ routines, activityTypes, sports, today }: Props) {
-  const [open, setOpen] = useState(false);
-  // Active sport sheet — set when the user picks a sport tile in the
-  // FAB menu. Renders the right sport-specific log form (climbing,
-  // golf, or the generic per-sport sheet). Same sheets the /log SPORT
-  // section uses — single source of truth for sport logging UX.
-  const [activeSport, setActiveSport] = useState<ScheduleSport | null>(null);
-  // Freeform "Activity" sheet — opened from the QuickAddMenu item.
-  const [activityOpen, setActivityOpen] = useState(false);
-  // Backpacking trip sheet — endurance pursuit with its own direct entry
-  // (no "add it as a sport" hop), opened straight from the QuickAddMenu.
-  const [backpackingOpen, setBackpackingOpen] = useState(false);
+export default function Fab() {
+  const { openDrawer } = useLogDrawer();
 
   return (
     <>
       <button
         type="button"
-        aria-label="Quick add"
-        onClick={() => setOpen(true)}
+        aria-label="Log a quick workout"
+        onClick={() => openDrawer(QUICK_LOG_ROUTINE_ID)}
         style={fabButton}
         className="homeV2Fab"
       >
@@ -48,32 +27,6 @@ export default function Fab({ routines, activityTypes, sports, today }: Props) {
           <path d="M11 4v14M4 11h14" stroke="#0b1220" strokeWidth="2.5" strokeLinecap="round" />
         </svg>
       </button>
-
-      <QuickAddMenu
-        open={open}
-        onClose={() => setOpen(false)}
-        routines={routines}
-        activityTypes={activityTypes}
-        sports={sports}
-        onSportSelected={(sport) => setActiveSport(sport)}
-        onLogActivity={() => setActivityOpen(true)}
-        onLogBackpacking={() => setBackpackingOpen(true)}
-        today={today}
-      />
-
-      {/* Sport log sheets mount at the FAB level so they portal to
-          document.body and overlay correctly. Each sheet handles its
-          own form chrome via SportLogModal. */}
-      {activeSport?.slug === "climbing" ? (
-        <ClimbLogSheet onClose={() => setActiveSport(null)} />
-      ) : activeSport?.slug === "golf" ? (
-        <GolfLogSheet onClose={() => setActiveSport(null)} />
-      ) : activeSport ? (
-        <GenericSportLogSheet sport={activeSport} onClose={() => setActiveSport(null)} />
-      ) : null}
-
-      {activityOpen ? <ActivityLogSheet onClose={() => setActivityOpen(false)} /> : null}
-      {backpackingOpen ? <BackpackingLogSheet onClose={() => setBackpackingOpen(false)} /> : null}
 
       <style>{`
         .homeV2Fab {

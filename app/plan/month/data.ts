@@ -8,6 +8,7 @@
 // scoped to a single calendar month rather than 12 weeks of WaG history.
 
 import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/auth";
 import { addDaysYmd, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import type { RoutineDomain } from "@/lib/routines";
@@ -49,6 +50,23 @@ export type DayEntry = {
   isHabit: boolean;
 };
 
+// A multi-day away/travel span covering this cell. `isStart` marks the first
+// covered day within the visible month — the only cell that shows the label;
+// the rest render a bare colored strip so the span reads as one band.
+export type DaySpanBand = {
+  id: string;
+  kind: string;
+  label: string;
+  isStart: boolean;
+};
+
+export type DayTodoCell = {
+  id: string;
+  ymd: string;
+  label: string;
+  done: boolean;
+};
+
 export type MonthDayCell = {
   ymd: string;
   dayNumber: number;
@@ -56,6 +74,8 @@ export type MonthDayCell = {
   isPast: boolean;
   isFuture: boolean;
   entries: DayEntry[];
+  spans: DaySpanBand[];
+  todos: DayTodoCell[];
 };
 
 export type MonthData = {
@@ -126,7 +146,10 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   const monthEnd = addDaysYmd(monthEndExclusive, -1);
 
   // ── Queries ─────────────────────────────────────────────────────────────
-  const [rawRoutines, manualRaw, logsRaw, activityTypesRaw] = await Promise.all([
+  // Spans are profile-scoped (createDaySpan writes profileKey); todos are not
+  // (the DayTodo model carries none). Both use YMD string overlap on the month.
+  const session = await getAppSession();
+  const [rawRoutines, manualRaw, logsRaw, activityTypesRaw, spansRaw, todosRaw] = await Promise.all([
     // NOTE: isPlaceholder filter intentionally removed. Synthetic-endurance
     // and synthetic-sport routines carry isPlaceholder=true (see
     // lib/synthetic-sport-routines.ts + lib/activity-types.ts). They're
@@ -190,7 +213,25 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     // Resolves activity type ids → names so scheduled-but-unlogged typed
     // slots ("Trail Run on Tuesday") can render with their type label.
     prisma.activityType.findMany({ select: { id: true, name: true } }),
+    // Away/travel spans overlapping the month → rendered as bands on the grid.
+    prisma.daySpan.findMany({
+      where: { profileKey: session.profileKey, startYmd: { lte: monthEnd }, endYmd: { gte: monthStart } },
+      orderBy: { startYmd: "asc" },
+      select: { id: true, kind: true, label: true, startYmd: true, endYmd: true },
+    }),
+    // Day to-dos in the month → surfaced in the day-detail popover.
+    prisma.dayTodo.findMany({
+      where: { ymd: { gte: monthStart, lte: monthEnd } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, ymd: true, label: true, done: true },
+    }),
   ]);
+
+  const todosByYmd = new Map<string, DayTodoCell[]>();
+  for (const t of todosRaw) {
+    if (!todosByYmd.has(t.ymd)) todosByYmd.set(t.ymd, []);
+    todosByYmd.get(t.ymd)!.push({ id: t.id, ymd: t.ymd, label: t.label, done: t.done });
+  }
 
   // ── Build maps ──────────────────────────────────────────────────────────
   const routines = rawRoutines.map(routineWithFrequencyTarget);
@@ -366,6 +407,17 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       return a.routineName.localeCompare(b.routineName);
     });
 
+    // Spans covering this day. Label rides the first covered day within the
+    // visible month (clamped to monthStart when the span began earlier).
+    const spans: DaySpanBand[] = spansRaw
+      .filter((s) => s.startYmd <= ymd && s.endYmd >= ymd)
+      .map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        label: s.label,
+        isStart: ymd === (s.startYmd < monthStart ? monthStart : s.startYmd),
+      }));
+
     days.push({
       ymd,
       dayNumber: i + 1,
@@ -373,6 +425,8 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       isPast,
       isFuture,
       entries,
+      spans,
+      todos: todosByYmd.get(ymd) ?? [],
     });
   }
 

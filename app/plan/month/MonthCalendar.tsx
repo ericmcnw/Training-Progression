@@ -135,6 +135,26 @@ function DayCell({
     >
       <span style={dayNumber(cell.isToday)}>{cell.dayNumber}</span>
 
+      {/* Away/travel bands. A bare colored strip on every covered cell; the
+          label rides only the span's first covered day so it reads as one
+          continuous band rather than repeating the name across the week. */}
+      {cell.spans.length > 0 ? (
+        <div style={spanBandCol}>
+          {cell.spans.map((s) => {
+            const tone = spanTone(s.kind);
+            return (
+              <span
+                key={s.id}
+                style={{ ...spanBand, background: `rgba(${tone},0.16)`, borderColor: `rgba(${tone},0.42)`, color: `rgba(${tone},0.98)` }}
+                title={`${s.label} · ${s.kind}`}
+              >
+                {s.isStart ? s.label : ""}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
       {/* Entry lane. Mobile = glyph dots; desktop = full word chips. Only
           one renders per viewport (CSS toggle below). */}
       <div style={workoutLane}>
@@ -271,10 +291,10 @@ function cellShell(cell: MonthDayCell, isSelected: boolean): CSSProperties {
     cursor: "pointer",
     boxSizing: "border-box",
     display: "grid",
-    // grid-template-rows: day number (auto) | workout lane (1fr). The lane
-    // takes the remaining height so cells stay a uniform size across the
-    // grid regardless of how many dots a day has.
-    gridTemplateRows: "auto 1fr",
+    // grid-template-rows: day number (auto) | span bands (auto) | workout
+    // lane (1fr). The band row collapses to 0 when a day has no spans; the
+    // lane takes the remaining height so cells stay a uniform size.
+    gridTemplateRows: "auto auto 1fr",
     gap: 4,
     minHeight: "var(--plan-cell-min-h, 70px)",
     padding: "5px 5px 6px",
@@ -357,6 +377,42 @@ function entryTone(status: DayEntryStatus, domain: string): { bg: string; border
       return { bg: `rgba(${rgb},0.08)`, border: `rgba(${rgb},0.30)`, glyph: `rgba(${rgb},0.9)`, name: nameDim };
   }
 }
+
+// Away/travel span colors by kind. Mirrors the AWAY_KINDS emoji set; unknown
+// kinds fall back to slate. RGB triples so the band can tint bg/border/text.
+const SPAN_TONE: Record<string, string> = {
+  vacation: "251,191,36",  // amber
+  travel: "96,165,250",    // blue
+  away: "148,163,184",     // slate
+  sick: "244,114,182",     // pink
+  rest: "52,211,153",      // green
+};
+function spanTone(kind: string): string {
+  return SPAN_TONE[kind] ?? "148,163,184";
+}
+
+const spanBandCol: CSSProperties = {
+  display: "grid",
+  gap: 2,
+  minWidth: 0,
+};
+
+const spanBand: CSSProperties = {
+  height: 13,
+  lineHeight: "12px",
+  borderRadius: 3,
+  borderWidth: 1,
+  borderStyle: "solid",
+  boxSizing: "border-box",
+  padding: "0 4px",
+  fontSize: 8.5,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  minWidth: 0,
+};
 
 // Icon status by opacity — bare emoji can't take a fill, so logged reads at
 // full strength and planned/future/missed fade back.
