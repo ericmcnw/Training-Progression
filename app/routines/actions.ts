@@ -24,6 +24,7 @@ import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
 import { prisma } from "@/lib/prisma";
+import { recordBarRaise } from "@/lib/goal-milestones";
 import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
 import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
 import {
@@ -267,6 +268,10 @@ async function syncRoutineFrequencyGoal(
     return;
   }
 
+  const existing = await prisma.frequencyGoal.findUnique({
+    where: { id: goalId },
+    select: { targetCount: true },
+  });
   await prisma.frequencyGoal.upsert({
     where: { id: goalId },
     update: {
@@ -285,6 +290,9 @@ async function syncRoutineFrequencyGoal(
       isActive: true,
     },
   });
+  if (existing && existing.targetCount !== target.targetFrequencyCount) {
+    await recordBarRaise(goalId, target.targetFrequencyCount!);
+  }
   // Ensure the primary join exists. Composite PK makes this idempotent. Force
   // role=PRIMARY in case a stale row had been demoted.
   await prisma.frequencyGoalRoutine.upsert({
@@ -1586,6 +1594,10 @@ export async function updateFrequencyGoal(formData: FormData) {
     triggerMinSets,
   } = parseFrequencyGoalFields(formData);
 
+  const existing = await prisma.frequencyGoal.findUnique({
+    where: { id },
+    select: { targetCount: true },
+  });
   await prisma.frequencyGoal.update({
     where: { id },
     data: {
@@ -1600,6 +1612,9 @@ export async function updateFrequencyGoal(formData: FormData) {
       triggerMinSets,
     },
   });
+  if (existing && existing.targetCount !== targetCount) {
+    await recordBarRaise(id, targetCount);
+  }
   await syncFrequencyGoalRoutines(id, routineIds, substituteRoutineIds);
   await syncFrequencyGoalTriggerExercises(id, triggerExerciseIds);
 

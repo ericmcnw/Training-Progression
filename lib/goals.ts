@@ -19,6 +19,7 @@ import {
   metricIsLowerBetter,
 } from "@/lib/goals-config";
 import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferGuidedStepMetadataSlugs, inferRoutineMetadataSlugs } from "@/lib/metadata";
+import { latchAchievedMilestones } from "@/lib/goal-milestones";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
 import { formatRoutineSubtype } from "@/lib/routines";
@@ -1886,6 +1887,10 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
     if (filters.active === "inactive") return !entry.goal.isActive;
     return true;
   });
+
+  // Goal memory: persist ACHIEVED rows for milestone goals that read as hit.
+  // Idempotent (unique-constraint latch), so the overview read is the hook.
+  await latchAchievedMilestones(manualInsights);
 
   return [...groupFrequencyInsights, ...filteredRoutineInsights, ...manualInsights].sort((left, right) => {
     if (left.goal.isActive !== right.goal.isActive) return left.goal.isActive ? -1 : 1;

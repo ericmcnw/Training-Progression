@@ -1444,6 +1444,38 @@ enum FrequencyGoalRole {
   SUBSTITUTE
 }
 
+// Persistent goal history — the record that goals "remember". One row per
+// event; `lineageId` groups a goal's promotion ladder (45×5 → 60×5) into one
+// track for step-charts and history timelines. `goalId` is a plain string
+// spanning BOTH goal stores (Goal cuids and FrequencyGoal ids incl. the
+// deterministic `fg_<routineId>` companions) — intentionally no FK so one
+// table covers the split storage.
+//   ACHIEVED   — a milestone (one-time) goal's target was reached; value is
+//                the target at that moment. Latched idempotently on read via
+//                the unique constraint.
+//   BAR_RAISED — the goal's target changed to `value` (promotion on a
+//                milestone track, or a recurring goal's standing bar moving
+//                3×/wk → 4×/wk). Written by the update paths.
+model GoalMilestone {
+  id         String            @id @default(cuid())
+  goalId     String
+  lineageId  String
+  kind       GoalMilestoneKind
+  value      Float
+  valueLabel String?
+  achievedAt DateTime          @default(now())
+  createdAt  DateTime          @default(now())
+
+  @@unique([goalId, kind, value])
+  @@index([lineageId, achievedAt])
+  @@index([goalId])
+}
+
+enum GoalMilestoneKind {
+  ACHIEVED
+  BAR_RAISED
+}
+
 // Lightweight, date-bound to-do items for "random not-important" things the
 // user wants to check off for a specific day (e.g., laundry, doctor's
 // appointment). Distinct from routines/habits — no streak math, no history

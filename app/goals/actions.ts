@@ -11,6 +11,7 @@ import {
   metricUsesPaceInput,
 } from "@/lib/goals-config";
 import { getAllowedMetricTypes } from "@/lib/goals-config";
+import { recordBarRaise } from "@/lib/goal-milestones";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -252,6 +253,10 @@ async function upsertPerRoutineFrequencyGoal(formData: FormData) {
   if (!routine) throw new Error("Routine not found.");
 
   const goalId = `fg_${routineId}`;
+  const existing = await prisma.frequencyGoal.findUnique({
+    where: { id: goalId },
+    select: { targetCount: true },
+  });
   const data = {
     name: `${routine.name} frequency goal`,
     targetCount,
@@ -264,6 +269,9 @@ async function upsertPerRoutineFrequencyGoal(formData: FormData) {
     update: data,
     create: { id: goalId, ...data },
   });
+  if (existing && existing.targetCount !== targetCount) {
+    await recordBarRaise(goalId, targetCount);
+  }
   await prisma.frequencyGoalRoutine.upsert({
     where: { goalId_routineId: { goalId, routineId } },
     update: { role: "PRIMARY" },
@@ -307,6 +315,7 @@ export async function updateGoal(formData: FormData) {
       targetType: true,
       targetId: true,
       metricType: true,
+      targetValue: true,
     },
   });
   if (!existingGoal) throw new Error("Goal not found.");
@@ -315,6 +324,9 @@ export async function updateGoal(formData: FormData) {
     where: { id: goalId },
     data: input,
   });
+  if (input.targetValue !== existingGoal.targetValue) {
+    await recordBarRaise(goalId, input.targetValue);
+  }
   revalidateGoals();
   if (formData.get("noRedirect") === "1") return;
   redirect(`/goals/${goalId}`);
