@@ -5,6 +5,7 @@ import { useFormDrawer } from "@/app/contexts/FormDrawerContext";
 import NewRoutineForm from "@/app/routines/new/NewRoutineForm";
 import EditRoutineForm from "@/app/routines/[id]/edit/EditRoutineForm";
 import GoalForm, { type GoalFormInitial } from "@/app/goals/GoalForm";
+import GoalCreatorEntry from "@/app/goals/GoalCreatorEntry";
 import { createGoal, updateGoal } from "@/app/goals/actions";
 import { createFrequencyGoal, updateFrequencyGoal } from "@/app/routines/actions";
 import type { GoalFormOptions } from "@/lib/goals";
@@ -230,16 +231,29 @@ export default function FormDrawer() {
                   onSuccess={handleSuccess}
                 />
               )}
+              {/* Fresh creates go through the guided subject-first entry;
+                  prefilled creates ("add a goal for THIS routine") keep the
+                  direct form so contextual flows stay one step. */}
               {mode.kind === "new-goal" && goalData?.mode === "new" && (
-                <GoalForm
-                  action={createGoal}
-                  groupFrequencyAction={createFrequencyGoal}
-                  options={goalData.options}
-                  submitLabel="Save Goal"
-                  initial={goalData.initial}
-                  inDrawer
-                  onSuccess={handleSuccess}
-                />
+                mode.prefill?.routineId || mode.prefill?.goalType ? (
+                  <GoalForm
+                    action={createGoal}
+                    groupFrequencyAction={createFrequencyGoal}
+                    options={goalData.options}
+                    submitLabel="Save Goal"
+                    initial={goalData.initial}
+                    inDrawer
+                    onSuccess={handleSuccess}
+                  />
+                ) : (
+                  <GoalCreatorEntry
+                    options={goalData.options}
+                    defaultInitial={goalData.initial}
+                    createAction={createGoal}
+                    createFrequencyAction={createFrequencyGoal}
+                    onSuccess={handleSuccess}
+                  />
+                )
               )}
               {mode.kind === "edit-goal" && goalData?.mode === "edit" && (
                 <GoalForm
