@@ -22,7 +22,7 @@ import { formatMetadataGroupKind, inferExerciseMetadataSlugs, inferGuidedStepMet
 import { latchAchievedMilestones } from "@/lib/goal-milestones";
 import { prisma } from "@/lib/prisma";
 import { fillWeeklySeries, formatWeekLabel } from "@/lib/progress-v2";
-import { formatRoutineSubtype } from "@/lib/routines";
+import { effectiveRoutineDomain, formatRoutineSubtype } from "@/lib/routines";
 import { getActivityEntry } from "@/lib/activity-families";
 import { sportAccent } from "@/lib/sport-accent";
 import { formatRoutineTargetLabel, getRoutineFrequencyStatus, getRoutineTargetWindow, normalizeRoutineFrequencyTarget } from "@/lib/routine-frequency";
@@ -214,6 +214,12 @@ type GroupFrequencyGoalRow = {
       name: string;
     };
   }>;
+  /** Domain-wide targeting — counts any log in the domain ("any" = every
+   *  training log). See FrequencyGoal model docs. */
+  targetDomain?: string | null;
+  /** Sport-tag targeting — counts logs whose routine trains FOR one of
+   *  these sports (routine.supportsSports overlap). */
+  triggerSupportedSports?: string[];
   /** Subtypes that broaden the match — see FrequencyGoal model docs. */
   triggerSubtypes?: string[];
   /** Endurance activity type ids — exact-match triggers for typed
@@ -1406,7 +1412,14 @@ type GroupFrequencyLogRow = {
   id: string;
   routineId: string;
   performedAt: Date;
-  routine: { id: string; name: string; subtype?: string | null };
+  routine: {
+    id: string;
+    name: string;
+    subtype?: string | null;
+    kind?: string | null;
+    domain?: string | null;
+    supportsSports?: string[];
+  };
   exercises?: Array<{ exerciseId: string; _count: { sets: number } }>;
 };
 
@@ -1426,6 +1439,8 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
         triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
         triggerExerciseIds: goal.triggerExerciseIds,
         triggerMinSets: goal.triggerMinSets,
+        targetDomain: goal.targetDomain,
+        triggerSupportedSports: goal.triggerSupportedSports,
       },
     ],
     logs: logs.map((log) => ({
@@ -1437,6 +1452,8 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
         exerciseId: e.exerciseId,
         setCount: e._count.sets,
       })) ?? [],
+      routineDomain: effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype),
+      routineSupportsSports: log.routine.supportsSports ?? [],
     })),
     now,
   })[0];
@@ -1467,8 +1484,14 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
       createdAt: goal.createdAt,
       updatedAt: goal.updatedAt,
     },
-    targetLabel: goal.name,
-    targetKindLabel: GOAL_TARGET_TYPE_LABELS.GROUP,
+    targetLabel: goal.targetDomain
+      ? goal.targetDomain === "any"
+        ? "Any training"
+        : goal.targetDomain === "cardio"
+        ? "Endurance"
+        : goal.targetDomain.charAt(0).toUpperCase() + goal.targetDomain.slice(1)
+      : goal.name,
+    targetKindLabel: goal.targetDomain ? "Domain" : GOAL_TARGET_TYPE_LABELS.GROUP,
     targetHref: null,
     detailHref: `/goals/group-frequency:${goal.id}?mode=edit`,
     editHref: `/goals/group-frequency:${goal.id}?mode=edit`,
@@ -1519,10 +1542,18 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
   const allRoutineIds = Array.from(new Set(goals.flatMap((g) => g.routines.map((r) => r.routineId))));
   const allTriggerSubtypes = Array.from(new Set(goals.flatMap((g) => g.triggerSubtypes ?? [])));
   const allTriggerExerciseIds = Array.from(new Set(goals.flatMap((g) => g.triggerExerciseIds ?? [])));
-  const hasTriggers = allTriggerSubtypes.length > 0 || allTriggerExerciseIds.length > 0;
+  const allSupportedSports = Array.from(new Set(goals.flatMap((g) => g.triggerSupportedSports ?? [])));
+  // Domain goals match on the routine's EFFECTIVE domain (stored ?? derived),
+  // which isn't expressible as a where-clause — fetch the whole window and
+  // let the in-memory matcher decide.
+  const anyDomainGoal = goals.some((g) => Boolean(g.targetDomain));
+  const hasTriggers =
+    allTriggerSubtypes.length > 0 || allTriggerExerciseIds.length > 0 || allSupportedSports.length > 0;
 
   const windowStart = new Date(now.getTime() - maxWindowDays * 24 * 60 * 60 * 1000);
-  const logWhere: import("@/generated/prisma").Prisma.RoutineLogWhereInput = hasTriggers
+  const logWhere: import("@/generated/prisma").Prisma.RoutineLogWhereInput = anyDomainGoal
+    ? { performedAt: { gte: windowStart } }
+    : hasTriggers
     ? {
         performedAt: { gte: windowStart },
         OR: [
@@ -1532,6 +1563,9 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
             : []),
           ...(allTriggerExerciseIds.length > 0
             ? [{ exercises: { some: { exerciseId: { in: allTriggerExerciseIds } } } }]
+            : []),
+          ...(allSupportedSports.length > 0
+            ? [{ routine: { supportsSports: { hasSome: allSupportedSports } } }]
             : []),
         ],
       }
@@ -1546,7 +1580,9 @@ async function batchBuildGroupFrequencyGoalInsights(goals: GroupFrequencyGoalRow
       id: true,
       routineId: true,
       performedAt: true,
-      routine: { select: { id: true, name: true, subtype: true } },
+      routine: {
+        select: { id: true, name: true, subtype: true, kind: true, domain: true, supportsSports: true },
+      },
       // Per-exercise set counts so the matcher can honor triggerMinSets.
       exercises: {
         select: {
@@ -1873,6 +1909,8 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
       routineId: r.routineId,
       routine: r.routine,
     })),
+    targetDomain: g.targetDomain,
+    triggerSupportedSports: g.triggerSupportedSports,
     triggerSubtypes: g.triggerSubtypes,
     triggerExerciseIds: g.triggerExercises.map((e) => e.exerciseId),
     triggerMinSets: g.triggerMinSets,
@@ -1958,7 +1996,11 @@ export async function getGoalInsight(goalId: string) {
         },
       },
     });
-    if (!goal || goal.routines.length === 0) return null;
+    if (!goal) return null;
+    // Domain / sport-tag goals legitimately have no routine roster — their
+    // membership is the tag itself. Everything else still needs one.
+    const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+    if (goal.routines.length === 0 && !isTagTargeted) return null;
     const shape: GroupFrequencyGoalRow = {
       id: goal.id,
       name: goal.name,
@@ -1972,6 +2014,8 @@ export async function getGoalInsight(goalId: string) {
       routines: goal.routines
         .filter((r): r is typeof r & { routine: { id: string; name: string } } => Boolean(r.routine))
         .map((r) => ({ routineId: r.routineId, routine: { id: r.routine.id, name: r.routine.name } })),
+      targetDomain: goal.targetDomain,
+      triggerSupportedSports: goal.triggerSupportedSports,
       triggerSubtypes: goal.triggerSubtypes,
       triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
       triggerMinSets: goal.triggerMinSets,

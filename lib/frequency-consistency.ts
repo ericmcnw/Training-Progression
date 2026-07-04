@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd as toAppYmdShared } from "@/lib/dates";
 import { computeFrequencyState, type FrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
+import { effectiveRoutineDomain } from "@/lib/routines";
 
 export type FrequencyContributionLog = {
   logId: string;
@@ -75,6 +76,8 @@ export async function getFrequencyConsistency(
       triggerSubtypes: goal.triggerSubtypes,
       triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
       triggerMinSets: goal.triggerMinSets,
+      targetDomain: goal.targetDomain,
+      triggerSupportedSports: goal.triggerSupportedSports,
     });
   }
 
@@ -165,9 +168,16 @@ async function loadAndCompute(params: {
   /** Minimum trigger-exercise set count required for an exercise-trigger
    *  match. Defaults to 1 (any set counts). */
   triggerMinSets?: number;
+  /** Domain-wide targeting — see FrequencyGoal.targetDomain. */
+  targetDomain?: string | null;
+  /** Sport-tag targeting — lowercase sport slugs. */
+  triggerSupportedSports?: string[];
 }): Promise<FrequencyConsistency | null> {
   const { target, routines, today, windowDays } = params;
-  if (routines.length === 0) return null;
+  const targetDomain = params.targetDomain ?? null;
+  const triggerSupportedSports = (params.triggerSupportedSports ?? []).map((s) => s.toLowerCase());
+  const isTagTargeted = Boolean(targetDomain) || triggerSupportedSports.length > 0;
+  if (routines.length === 0 && !isTagTargeted) return null;
 
   // Only PRIMARY routines count for the visible "this is what the goal tracks"
   // surfaces (back-date links, recent-sessions list). Substitutes are silent
@@ -195,13 +205,18 @@ async function loadAndCompute(params: {
   const hasTriggers =
     triggerSubtypes.length > 0 ||
     triggerExerciseIds.length > 0 ||
-    triggerActivityTypeIds.length > 0;
+    triggerActivityTypeIds.length > 0 ||
+    triggerSupportedSports.length > 0;
 
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
   // Widen the query when triggers are present so trigger-matched logs are
   // included in the in-memory matcher below. Without this, the heatmap
-  // shows trigger-matched days as missed.
-  const where: import("@/generated/prisma").Prisma.RoutineLogWhereInput = hasTriggers
+  // shows trigger-matched days as missed. Domain goals match on the
+  // routine's EFFECTIVE domain (stored ?? derived) — not expressible as a
+  // where-clause, so fetch the whole window.
+  const where: import("@/generated/prisma").Prisma.RoutineLogWhereInput = targetDomain
+    ? { performedAt: { gte: since } }
+    : hasTriggers
     ? {
         performedAt: { gte: since },
         OR: [
@@ -214,6 +229,9 @@ async function loadAndCompute(params: {
             : []),
           ...(triggerActivityTypeIds.length > 0
             ? [{ activityTypeId: { in: triggerActivityTypeIds } }]
+            : []),
+          ...(triggerSupportedSports.length > 0
+            ? [{ routine: { supportsSports: { hasSome: triggerSupportedSports } } }]
             : []),
         ],
       }
@@ -231,8 +249,9 @@ async function loadAndCompute(params: {
       activityTypeId: true,
       // routine.name + subtype: name powers the contributingLogs surface
       // (week-expansion popovers, day-cell click), subtype is used by the
-      // trigger matcher below.
-      routine: { select: { name: true, subtype: true } },
+      // trigger matcher below. kind/domain/supportsSports feed the domain
+      // and sport-tag matchers.
+      routine: { select: { name: true, subtype: true, kind: true, domain: true, supportsSports: true } },
       exercises: {
         select: {
           exerciseId: true,
@@ -264,11 +283,35 @@ async function loadAndCompute(params: {
     performedAt: raw.performedAt,
     isPrimary,
   });
+  const supportedSportsSet = new Set(triggerSupportedSports);
   for (const log of logs) {
     if (seen.has(log.id)) continue;
     if (routineIdSet.has(log.routineId)) {
       seen.add(log.id);
       matched.push(enrich(log, primaryRoutineIds.has(log.routineId)));
+      continue;
+    }
+    // Domain-wide match — any log whose routine's effective domain matches
+    // ("any" counts every training log). Claims primary.
+    if (targetDomain) {
+      const logDomain = effectiveRoutineDomain(
+        log.routine?.domain,
+        log.routine?.kind,
+        log.routine?.subtype
+      );
+      if (targetDomain === "any" || logDomain === targetDomain) {
+        seen.add(log.id);
+        matched.push(enrich(log, true));
+        continue;
+      }
+    }
+    // Sport-tag match — routine trains FOR one of the goal's sports.
+    if (
+      supportedSportsSet.size > 0 &&
+      (log.routine?.supportsSports ?? []).some((s) => supportedSportsSet.has(s.toLowerCase()))
+    ) {
+      seen.add(log.id);
+      matched.push(enrich(log, true));
       continue;
     }
     if (!hasTriggers) continue;

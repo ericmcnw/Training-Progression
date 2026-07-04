@@ -19,6 +19,7 @@ import type { GoalFormOptions } from "@/lib/goals";
 import { formInputStyle } from "./ui";
 
 type Subject =
+  | { kind: "domain"; id: string; label: string; color: string }
   | { kind: "sport"; id: string; label: string; color: string }
   | { kind: "family"; id: string; label: string }
   | { kind: "activityType"; id: string; label: string; familyName: string }
@@ -26,6 +27,16 @@ type Subject =
   | { kind: "exercise"; id: string; label: string }
   | { kind: "grade"; id: string; label: string; isTemplate: boolean }
   | { kind: "template"; id: string; label: string };
+
+// Domain subjects — first-class "Strength 3×/week" targets. Sport-domain and
+// Lifestyle ship later (freeform-Activity edge case + design call); "any"
+// covers the "just work out N times a week" mental model.
+const DOMAIN_SUBJECTS: Array<Extract<Subject, { kind: "domain" }>> = [
+  { kind: "domain", id: "strength", label: "Strength", color: "rgba(129,140,248,0.9)" },
+  { kind: "domain", id: "cardio", label: "Endurance", color: "rgba(56,189,248,0.9)" },
+  { kind: "domain", id: "mobility", label: "Mobility", color: "rgba(192,132,252,0.9)" },
+  { kind: "domain", id: "any", label: "Any training", color: "rgba(148,163,184,0.9)" },
+];
 
 type Intent = "habit" | "total" | "best";
 
@@ -36,6 +47,7 @@ const INTENT_META: Record<Intent, { label: string; tagline: string; icon: string
 };
 
 const GROUP_ORDER: Array<{ key: Subject["kind"] | "grade"; title: string }> = [
+  { key: "domain", title: "Training domains" },
   { key: "sport", title: "Sports" },
   { key: "family", title: "Activities" },
   { key: "routine", title: "Routines" },
@@ -77,6 +89,8 @@ function baseInitial(): GoalFormInitial {
 // single intent, so the intent stage auto-skips for them.
 function intentsFor(subject: Subject): Intent[] {
   switch (subject.kind) {
+    case "domain":
+      return ["habit"];
     case "sport":
       return ["habit"];
     case "family":
@@ -181,7 +195,9 @@ export default function GoalCreatorEntry({
   createFrequencyAction: (formData: FormData) => void | Promise<void>;
   onSuccess?: () => void;
 }) {
-  const [stage, setStage] = useState<"subject" | "intent" | "form" | "routineHabit" | "manual">("subject");
+  const [stage, setStage] = useState<
+    "subject" | "intent" | "form" | "routineHabit" | "domainHabit" | "manual"
+  >("subject");
   const [subject, setSubject] = useState<Subject | null>(null);
   const [formInitial, setFormInitial] = useState<GoalFormInitial | null>(null);
   const [query, setQuery] = useState("");
@@ -196,7 +212,9 @@ export default function GoalCreatorEntry({
       s.label.toLowerCase().includes(q) ||
       (s.kind === "activityType" && s.familyName.toLowerCase().includes(q)) ||
       // grade-ish queries ("v7", "v grade", "5.11") should surface Grades
-      (s.kind === "grade" && /^v\s?\d|^5\.|grade|boulder|climb/.test(q));
+      (s.kind === "grade" && /^v\s?\d|^5\.|grade|boulder|climb/.test(q)) ||
+      // "work out 4x a week" style queries surface the domain chips
+      (s.kind === "domain" && /work\s?out|train|exercise|fitness|domain/.test(q));
     return subjects.filter(matches);
   }, [subjects, query]);
 
@@ -214,6 +232,11 @@ export default function GoalCreatorEntry({
     if (intent === "habit" && forSubject.kind === "routine") {
       setSubject(forSubject);
       setStage("routineHabit");
+      return;
+    }
+    if (forSubject.kind === "domain") {
+      setSubject(forSubject);
+      setStage("domainHabit");
       return;
     }
     setFormInitial(buildInitial(forSubject, intent));
@@ -261,6 +284,17 @@ export default function GoalCreatorEntry({
           onSuccess={onSuccess}
         />
       </div>
+    );
+  }
+
+  if (stage === "domainHabit" && subject && subject.kind === "domain") {
+    return (
+      <DomainHabitPane
+        domain={subject}
+        createFrequencyAction={createFrequencyAction}
+        onBack={reset}
+        onSuccess={onSuccess}
+      />
     );
   }
 
@@ -344,7 +378,7 @@ export default function GoalCreatorEntry({
           const expanded = expandedGroups.has(key) || query.trim().length > 0;
           const visible = expanded ? items : items.slice(0, VISIBLE_PER_GROUP);
           const hidden = items.length - visible.length;
-          const chipStyleGroups = key === "sport" || key === "grade";
+          const chipStyleGroups = key === "domain" || key === "sport" || key === "grade";
           return (
             <div key={key} style={{ display: "grid", gap: 7 }}>
               <div style={groupHeader}>{title}</div>
@@ -356,7 +390,7 @@ export default function GoalCreatorEntry({
                     style={chipStyleGroups ? subjectChip : subjectRow}
                     onClick={() => pickSubject(s)}
                   >
-                    {s.kind === "sport" ? (
+                    {s.kind === "sport" || s.kind === "domain" ? (
                       <span style={{ ...sportDot, background: s.color }} aria-hidden />
                     ) : null}
                     <span style={{ fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -388,6 +422,99 @@ export default function GoalCreatorEntry({
 
       <button type="button" style={manualLink} onClick={() => setStage("manual")}>
         Build it manually instead →
+      </button>
+    </div>
+  );
+}
+
+// Domain habit — "Strength 3×/week" counts every log in the domain. Posts to
+// createFrequencyGoal with targetDomain set; no routine roster needed (the
+// matcher resolves membership from each log's effective domain).
+function DomainHabitPane({
+  domain,
+  createFrequencyAction,
+  onBack,
+  onSuccess,
+}: {
+  domain: Extract<Subject, { kind: "domain" }>;
+  createFrequencyAction: (formData: FormData) => void | Promise<void>;
+  onBack: () => void;
+  onSuccess?: () => void;
+}) {
+  const [count, setCount] = useState("3");
+  const [unit, setUnit] = useState<"DAY" | "WEEK" | "MONTH">("WEEK");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    const parsed = Math.floor(Number(count));
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setError("Set how many times (1 or more).");
+      return;
+    }
+    setError(null);
+    const unitWord = unit === "DAY" ? "day" : unit === "WEEK" ? "week" : "month";
+    const fd = new FormData();
+    fd.set("name", `${domain.label} ${parsed}×/${unitWord}`);
+    fd.set("targetCount", String(parsed));
+    fd.set("targetInterval", "1");
+    fd.set("targetUnit", unit);
+    fd.set("targetDomain", domain.id);
+    fd.set("noRedirect", "1");
+    startTransition(async () => {
+      try {
+        await createFrequencyAction(fd);
+        onSuccess?.();
+      } catch (err) {
+        setError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
+      }
+    });
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <button type="button" onClick={onBack} style={backLink}>
+        ‹ Back
+      </button>
+      <div style={stageTitle}>
+        <span style={{ ...sportDot, background: domain.color, marginRight: 8, display: "inline-block" }} aria-hidden />
+        How often for {domain.label.toLowerCase() === "any training" ? "any training" : domain.label}?
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <input
+          value={count}
+          onChange={(e) => setCount(e.target.value)}
+          inputMode="numeric"
+          style={{ ...formInputStyle, width: 84, textAlign: "center", fontWeight: 800, fontSize: 16 }}
+          aria-label="Times per period"
+        />
+        <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.7 }}>times per</span>
+        <div style={chipWrap}>
+          {(["DAY", "WEEK", "MONTH"] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => setUnit(u)}
+              style={u === unit ? { ...unitPill, ...unitPillOn } : unitPill}
+            >
+              {u === "DAY" ? "day" : u === "WEEK" ? "week" : "month"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={helperNote}>
+        {domain.id === "any"
+          ? "Every logged session counts — any routine, sport, or activity."
+          : `Every ${domain.label.toLowerCase()} session counts — no need to pick routines. New ones count automatically.`}{" "}
+        It shows on your home grid with streaks.
+      </div>
+
+      {error ? <div style={errorNote} role="alert">{error}</div> : null}
+
+      <button type="button" onClick={save} disabled={pending} style={savePrimary}>
+        {pending ? "Saving…" : "Save Goal"}
       </button>
     </div>
   );
@@ -545,14 +672,16 @@ function buildSubjectCatalog(options: GoalFormOptions): Subject[] {
   }));
   // Activity types fold in after families so search finds "Trail Run" while
   // the unqueried Activities group leads with the broader families.
-  return [...sports, ...families, ...types, ...routines, ...exercises, ...grades, ...templates];
+  return [...DOMAIN_SUBJECTS, ...sports, ...families, ...types, ...routines, ...exercises, ...grades, ...templates];
 }
 
 function buildGallery(subjects: Subject[]): Array<{ key: string; label: string; subject: Subject }> {
-  const sports = subjects.filter((s) => s.kind === "sport").slice(0, 3);
+  const strengthDomain = subjects.find((s) => s.kind === "domain" && s.id === "strength");
+  const sports = subjects.filter((s) => s.kind === "sport").slice(0, 2);
   const families = subjects.filter((s) => s.kind === "family").slice(0, 2);
   const routines = subjects.filter((s) => s.kind === "routine").slice(0, 2);
   return [
+    ...(strengthDomain ? [{ key: "g-strength", label: "Strength 3×/week", subject: strengthDomain }] : []),
     ...sports.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 2×/week`, subject: s })),
     ...families.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 3×/week`, subject: s })),
     ...routines.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 3×/week`, subject: s })),

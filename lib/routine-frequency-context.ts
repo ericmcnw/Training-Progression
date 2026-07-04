@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
 import { buildFrequencyGoalMembership, classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
+import { effectiveRoutineDomain } from "@/lib/routines";
 
 export type RoutineGoalContribution = {
   goalId: string;
@@ -44,12 +45,19 @@ export async function getRoutineGoalContributions(
   const routine = await prisma.routine.findUnique({
     where: { id: routineId },
     select: {
+      kind: true,
+      domain: true,
       subtype: true,
+      supportsSports: true,
       exercises: { select: { exerciseId: true } },
     },
   });
   const routineSubtype = routine?.subtype ? routine.subtype.toUpperCase() : null;
   const routineExerciseIds = routine?.exercises.map((e) => e.exerciseId) ?? [];
+  const routineDomain = routine
+    ? effectiveRoutineDomain(routine.domain, routine.kind, routine.subtype)
+    : null;
+  const routineSupportsSports = routine?.supportsSports ?? [];
 
   // Endurance-specific lookup: load the routine's activityType so a typed
   // endurance routine can match goals targeting its type or family. Non-
@@ -76,6 +84,15 @@ export async function getRoutineGoalContributions(
   }
   if (routineExerciseIds.length > 0) {
     orClauses.push({ triggerExercises: { some: { exerciseId: { in: routineExerciseIds } } } });
+  }
+  // Domain / sport-tag goals: any log from this routine counts when the
+  // goal targets the routine's effective domain ("any" targets everything)
+  // or one of the sports this routine trains for.
+  if (routineDomain) {
+    orClauses.push({ targetDomain: { in: [routineDomain, "any"] } });
+  }
+  if (routineSupportsSports.length > 0) {
+    orClauses.push({ triggerSupportedSports: { hasSome: routineSupportsSports } });
   }
 
   const goals = await prisma.frequencyGoal.findMany({
@@ -134,16 +151,26 @@ export async function getRoutineGoalContributions(
   const allTriggerExerciseIds = Array.from(
     new Set(goals.flatMap((g) => g.triggerExercises.map((e) => e.exerciseId)))
   );
+  const allSupportedSports = Array.from(
+    new Set(goals.flatMap((g) => g.triggerSupportedSports ?? []))
+  );
+  // Domain goals match on the routine's EFFECTIVE domain (stored ?? derived)
+  // — not expressible as a where-clause, so fetch the whole window and let
+  // the in-memory matcher decide.
+  const anyDomainGoal = goals.some((g) => Boolean(g.targetDomain));
   const hasAnyTriggers =
     allTriggerSubtypes.length > 0 ||
     allTriggerActivityTypeIds.length > 0 ||
     allTriggerActivityFamilyIds.length > 0 ||
-    allTriggerExerciseIds.length > 0;
+    allTriggerExerciseIds.length > 0 ||
+    allSupportedSports.length > 0;
 
   const sinceMs = new Date(`${today}T00:00:00.000Z`).getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const since = new Date(sinceMs);
   const logs = await prisma.routineLog.findMany({
-    where: hasAnyTriggers
+    where: anyDomainGoal
+      ? { performedAt: { gte: since } }
+      : hasAnyTriggers
       ? {
           performedAt: { gte: since },
           OR: [
@@ -160,6 +187,9 @@ export async function getRoutineGoalContributions(
             ...(allTriggerExerciseIds.length > 0
               ? [{ exercises: { some: { exerciseId: { in: allTriggerExerciseIds } } } }]
               : []),
+            ...(allSupportedSports.length > 0
+              ? [{ routine: { supportsSports: { hasSome: allSupportedSports } } }]
+              : []),
           ],
         }
       : { routineId: { in: allMemberRoutineIds }, performedAt: { gte: since } },
@@ -169,7 +199,7 @@ export async function getRoutineGoalContributions(
       routineId: true,
       activityTypeId: true,
       activityType: { select: { familyId: true } },
-      routine: { select: { subtype: true } },
+      routine: { select: { kind: true, domain: true, subtype: true, supportsSports: true } },
       // Per-exercise set counts so the min-sets gate works for exercise
       // triggers (e.g. a goal with triggerMinSets=2 ignores a single
       // warmup rep of a trigger exercise).
@@ -208,6 +238,8 @@ export async function getRoutineGoalContributions(
           triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
           triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
           triggerMinSets: goal.triggerMinSets,
+          targetDomain: goal.targetDomain,
+          triggerSupportedSports: goal.triggerSupportedSports,
         },
       });
 
@@ -226,6 +258,10 @@ export async function getRoutineGoalContributions(
             activityTypeId: log.activityTypeId ?? null,
             activityFamilyId: log.activityType?.familyId ?? null,
             exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+            routineDomain: log.routine
+              ? effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype)
+              : null,
+            routineSupportsSports: log.routine?.supportsSports ?? [],
           },
           membership
         );

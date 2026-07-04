@@ -228,6 +228,9 @@ export async function getHomeData(): Promise<HomeData> {
         routine: {
           select: {
             id: true, name: true, kind: true, domain: true, subtype: true,
+            // supportsSports feeds the sport-tag goal matcher ("training
+            // FOR climbing 2×/wk") — see triggerSupportedSports.
+            supportsSports: true,
             // Activity type on the routine itself — used by the display-
             // name helper to resolve a name for legacy endurance routine
             // logs that don't have activityType set on the log yet.
@@ -660,7 +663,10 @@ export async function getHomeData(): Promise<HomeData> {
       );
       const primaryLinks = liveLinks.filter((rel) => rel.role !== "SUBSTITUTE");
       const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
-      if (primaryLinks.length === 0) return null; // Goal exists but has no primary routine; skip
+      // Domain / sport-tag goals legitimately have no routine roster — their
+      // membership is the tag itself. Everything else still needs a primary.
+      const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+      if (primaryLinks.length === 0 && !isTagTargeted) return null;
 
       const primaryRoutines = primaryLinks.map((rel) => ({
         id: rel.routine!.id,
@@ -673,12 +679,14 @@ export async function getHomeData(): Promise<HomeData> {
         name: rel.routine!.name,
         domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
       }));
-      const isGroup = primaryRoutines.length > 1;
+      // Tag-targeted rows behave like group rows (no single "Log today"
+      // routine CTA — any matching log in the domain counts).
+      const isGroup = primaryRoutines.length > 1 || (isTagTargeted && primaryRoutines.length === 0);
       // For per-routine goals (`fg_*`), the goal's name is generic
       // ("X frequency goal") — prefer the routine name. For group goals,
       // the goal's name is what the user picked.
       const isPerRoutine = goal.id.startsWith("fg_");
-      const displayName = isPerRoutine ? primaryRoutines[0].name : goal.name;
+      const displayName = isPerRoutine && primaryRoutines.length > 0 ? primaryRoutines[0].name : goal.name;
 
       const target: FrequencyTarget = {
         targetCount: goal.targetCount,
@@ -703,6 +711,8 @@ export async function getHomeData(): Promise<HomeData> {
           triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
           triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
           triggerMinSets: goal.triggerMinSets,
+          targetDomain: goal.targetDomain,
+          triggerSupportedSports: goal.triggerSupportedSports,
         },
       });
 
@@ -725,6 +735,10 @@ export async function getHomeData(): Promise<HomeData> {
             activityTypeId: log.activityTypeId ?? null,
             activityFamilyId: log.activityType?.familyId ?? null,
             exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+            routineDomain: log.routine
+              ? effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype)
+              : null,
+            routineSupportsSports: log.routine?.supportsSports ?? [],
           },
           membership
         );
@@ -792,11 +806,14 @@ export async function getHomeData(): Promise<HomeData> {
         goalId: goal.id,
         goalName: displayName,
         isGroup,
-        routineId: primaryRoutines[0].id,
+        routineId: primaryRoutines[0]?.id ?? "",
         routineName: displayName,
         primaryRoutines,
         substituteRoutines,
-        domain: primaryRoutines[0].domain,
+        domain:
+          goal.targetDomain && goal.targetDomain !== "any"
+            ? (goal.targetDomain as DomainTone)
+            : primaryRoutines[0]?.domain ?? ("strength" as DomainTone),
         state,
         target,
         trailing30,
@@ -982,6 +999,7 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
         routine: {
           select: {
             id: true, name: true, kind: true, domain: true, subtype: true,
+            supportsSports: true,
             activityType: { select: { name: true } },
           },
         },
@@ -1002,7 +1020,8 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
       );
       const primaryLinks = liveLinks.filter((rel) => rel.role !== "SUBSTITUTE");
       const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
-      if (primaryLinks.length === 0) return null;
+      const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+      if (primaryLinks.length === 0 && !isTagTargeted) return null;
 
       const primaryRoutines = primaryLinks.map((rel) => ({
         id: rel.routine!.id,
@@ -1015,9 +1034,9 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
         name: rel.routine!.name,
         domain: effectiveRoutineDomain(rel.routine!.domain, rel.routine!.kind, rel.routine!.subtype) as DomainTone,
       }));
-      const isGroup = primaryRoutines.length > 1;
+      const isGroup = primaryRoutines.length > 1 || (isTagTargeted && primaryRoutines.length === 0);
       const isPerRoutine = goal.id.startsWith("fg_");
-      const displayName = isPerRoutine ? primaryRoutines[0].name : goal.name;
+      const displayName = isPerRoutine && primaryRoutines.length > 0 ? primaryRoutines[0].name : goal.name;
 
       const target: FrequencyTarget = {
         targetCount: goal.targetCount,
@@ -1035,6 +1054,8 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
           triggerActivityFamilyIds: goal.triggerActivityFamilyIds,
           triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
           triggerMinSets: goal.triggerMinSets,
+          targetDomain: goal.targetDomain,
+          triggerSupportedSports: goal.triggerSupportedSports,
         },
       });
 
@@ -1057,6 +1078,10 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
             activityTypeId: log.activityTypeId ?? null,
             activityFamilyId: log.activityType?.familyId ?? null,
             exerciseSets: log.exercises.map((ex) => ({ exerciseId: ex.exerciseId, setCount: ex._count.sets })),
+            routineDomain: log.routine
+              ? effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype)
+              : null,
+            routineSupportsSports: log.routine?.supportsSports ?? [],
           },
           membership
         );
@@ -1119,11 +1144,14 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
         goalId: goal.id,
         goalName: displayName,
         isGroup,
-        routineId: primaryRoutines[0].id,
+        routineId: primaryRoutines[0]?.id ?? "",
         routineName: displayName,
         primaryRoutines,
         substituteRoutines,
-        domain: primaryRoutines[0].domain,
+        domain:
+          goal.targetDomain && goal.targetDomain !== "any"
+            ? (goal.targetDomain as DomainTone)
+            : primaryRoutines[0]?.domain ?? ("strength" as DomainTone),
         state,
         target,
         trailing30,

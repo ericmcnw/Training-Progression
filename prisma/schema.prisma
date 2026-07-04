@@ -1400,6 +1400,18 @@ model FrequencyGoal {
   // Strength session. Ignored for routine-id and subtype matches —
   // they're already routine-level claims.
   triggerMinSets   Int                            @default(1)
+  // Domain-wide targeting: a log counts when its routine's effective domain
+  // matches ("strength" | "cardio" | "mobility" | "sport" | "lifestyle"),
+  // or "any" to count every training log. Null = not a domain goal.
+  targetDomain     String?
+  // Sport-tag targeting: a log counts when its routine's supportsSports
+  // overlaps this list — "training FOR climbing, 2×/wk" without listing
+  // each routine by hand.
+  triggerSupportedSports String[]                 @default([])
+  // Per-session aim, display-only (show-don't-gate): "5×/wk aiming ~30
+  // reps" renders each session as 20/30, 34/30 — a session below the aim
+  // still counts toward the frequency target.
+  sessionAim       Int?
 
   routines FrequencyGoalRoutine[]
 

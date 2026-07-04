@@ -35,6 +35,15 @@ export type FrequencyGoalShape = {
    *  if omitted. Routine-id and subtype matches ignore this — they're
    *  already routine-level claims. */
   triggerMinSets?: number;
+  /** Domain-wide targeting: a log counts when its routine's effective
+   *  domain equals this ("strength" | "cardio" | "mobility" | "sport" |
+   *  "lifestyle"), or "any" to count every training log. Null/absent =
+   *  not a domain goal. */
+  targetDomain?: string | null;
+  /** Sport-tag targeting: a log counts when its routine's supportsSports
+   *  overlaps this list — "training FOR climbing" without enumerating
+   *  routines. Slugs, lowercase. */
+  triggerSupportedSports?: string[];
 };
 
 export type FrequencyGoalExerciseSet = {
@@ -71,6 +80,11 @@ export type FrequencyGoalLogShape = {
   /** Back-compat shorthand: ids only, treated as 1 set each. New callers
    *  should populate `exerciseSets` so `triggerMinSets > 1` works. */
   exerciseIds?: string[];
+  /** Effective domain of the log's routine (via effectiveRoutineDomain).
+   *  Optional — callers that don't resolve it just skip the domain path. */
+  routineDomain?: string | null;
+  /** supportsSports slugs on the log's routine. Optional same as above. */
+  routineSupportsSports?: string[];
 };
 
 export type FrequencyGoalProgress = {
@@ -101,6 +115,20 @@ function caseInsensitive(value: string | null | undefined) {
 // without recomputing window counts.
 export function logMatchesFrequencyGoal(goal: FrequencyGoalShape, log: FrequencyGoalLogShape): boolean {
   if (goal.routineIds.includes(log.routineId)) return true;
+
+  // Domain-wide match — "Strength 3×/wk" counts any log whose routine's
+  // effective domain matches; "any" counts every training log.
+  if (goal.targetDomain) {
+    if (goal.targetDomain === "any") return true;
+    if (log.routineDomain && log.routineDomain === goal.targetDomain) return true;
+  }
+
+  // Sport-tag match — routine declared it trains FOR one of these sports.
+  const supportedSports = goal.triggerSupportedSports ?? [];
+  if (supportedSports.length > 0 && log.routineSupportsSports && log.routineSupportsSports.length > 0) {
+    const wanted = new Set(supportedSports.map((s) => s.toLowerCase()));
+    if (log.routineSupportsSports.some((s) => wanted.has(s.toLowerCase()))) return true;
+  }
 
   const subtypes = goal.triggerSubtypes ?? [];
   if (subtypes.length > 0 && log.routineSubtype) {
@@ -221,6 +249,10 @@ export type FrequencyGoalMembership = {
   /** Minimum trigger-exercise sets a log needs to claim a session.
    *  Clamped to ≥ 1 by the caller; pass 1 to mean "any set counts." */
   triggerMinSets: number;
+  /** Domain-wide targeting — see FrequencyGoalShape.targetDomain. */
+  targetDomain: string | null;
+  /** Sport-tag targeting — lowercase slugs. */
+  triggerSupportedSports: Set<string>;
 };
 
 // Centralized membership builder. Three surfaces — home data, routine-frequency
@@ -251,6 +283,8 @@ export function buildFrequencyGoalMembership(input: {
     triggerActivityFamilyIds?: ReadonlyArray<string> | null;
     triggerExerciseIds?: ReadonlyArray<string> | null;
     triggerMinSets?: number | null;
+    targetDomain?: string | null;
+    triggerSupportedSports?: ReadonlyArray<string> | null;
   };
 }): FrequencyGoalMembership {
   const triggerActivityTypeIds = new Set<string>(input.explicit.triggerActivityTypeIds ?? []);
@@ -265,6 +299,10 @@ export function buildFrequencyGoalMembership(input: {
     triggerActivityFamilyIds: new Set(input.explicit.triggerActivityFamilyIds ?? []),
     triggerExerciseIds: new Set(input.explicit.triggerExerciseIds ?? []),
     triggerMinSets: Math.max(1, input.explicit.triggerMinSets ?? 1),
+    targetDomain: input.explicit.targetDomain ?? null,
+    triggerSupportedSports: new Set(
+      (input.explicit.triggerSupportedSports ?? []).map((s) => s.toLowerCase())
+    ),
   };
 }
 
@@ -274,6 +312,20 @@ export function classifyLogAgainstFrequencyGoal(
 ): { isPrimary: boolean } | null {
   if (goal.primaryRoutineIds.has(log.routineId)) return { isPrimary: true };
   if (goal.substituteRoutineIds.has(log.routineId)) return { isPrimary: false };
+
+  // Domain-wide match claims PRIMARY — the user did training in the domain,
+  // which is exactly what the goal asks for.
+  if (goal.targetDomain) {
+    if (goal.targetDomain === "any") return { isPrimary: true };
+    if (log.routineDomain && log.routineDomain === goal.targetDomain) return { isPrimary: true };
+  }
+
+  // Sport-tag match — routine trains FOR one of the goal's sports.
+  if (goal.triggerSupportedSports.size > 0 && log.routineSupportsSports) {
+    if (log.routineSupportsSports.some((s) => goal.triggerSupportedSports.has(s.toLowerCase()))) {
+      return { isPrimary: true };
+    }
+  }
 
   const hasTriggers =
     goal.triggerSubtypes.size > 0 ||
