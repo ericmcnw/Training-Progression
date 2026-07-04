@@ -190,17 +190,6 @@ async function parseGoalInput(formData: FormData) {
     throw new Error("That metric is not supported for the selected goal.");
   }
 
-  // Phase 4: per-routine FREQUENCY/SESSIONS goals live exclusively on
-  // FrequencyGoal (id `fg_<routineId>`), edited via the routine's own form.
-  // Reject any attempt to write one through this Goal-table path so we
-  // can't accidentally re-create the stranded rows the migration cleaned up.
-  if (goalType === "FREQUENCY" && targetType === "ROUTINE" && metricType === "SESSIONS") {
-    throw new Error(
-      "Per-routine frequency goals are set on the routine itself. " +
-      "Open the routine's edit page and use the Frequency goal block."
-    );
-  }
-
   const startDate = parseDateInput(startDateRaw, "Start date");
   const endDate = endDateRaw ? parseDateInput(endDateRaw, "End date") : null;
   if (endDate && endDate.getTime() < startDate.getTime()) {
@@ -231,7 +220,65 @@ function revalidateGoals() {
   revalidatePath("/");
 }
 
+// Per-routine FREQUENCY/SESSIONS goals live on FrequencyGoal (deterministic id
+// `fg_<routineId>`), not the Goal table — that's the same record the routine
+// form's frequency block writes. Route the combo there instead of erroring so
+// every creation door lands on the one canonical row. Leaves existing
+// substitute links untouched (only the routine form manages those).
+function isPerRoutineFrequencyCombo(formData: FormData) {
+  return (
+    String(formData.get("goalType") ?? "") === "FREQUENCY" &&
+    String(formData.get("targetType") ?? "") === "ROUTINE" &&
+    String(formData.get("metricType") ?? "") === "SESSIONS"
+  );
+}
+
+async function upsertPerRoutineFrequencyGoal(formData: FormData) {
+  const routineId = parseRequiredString(formData, "targetId", "Routine");
+  const timeframe = parseRequiredString(formData, "timeframe", "Timeframe");
+  if (!["DAY", "WEEK", "MONTH"].includes(timeframe)) {
+    throw new Error("Frequency goals need a daily, weekly, or monthly timeframe.");
+  }
+  const rawCount = String(formData.get("targetValue") ?? "").trim();
+  const targetCount = Math.floor(Number(rawCount));
+  if (!Number.isFinite(targetCount) || targetCount < 1) {
+    throw new Error("Set how many times per period (1 or more).");
+  }
+
+  const routine = await prisma.routine.findUnique({
+    where: { id: routineId },
+    select: { id: true, name: true },
+  });
+  if (!routine) throw new Error("Routine not found.");
+
+  const goalId = `fg_${routineId}`;
+  const data = {
+    name: `${routine.name} frequency goal`,
+    targetCount,
+    targetInterval: 1,
+    targetUnit: timeframe as "DAY" | "WEEK" | "MONTH",
+    isActive: true,
+  };
+  await prisma.frequencyGoal.upsert({
+    where: { id: goalId },
+    update: data,
+    create: { id: goalId, ...data },
+  });
+  await prisma.frequencyGoalRoutine.upsert({
+    where: { goalId_routineId: { goalId, routineId } },
+    update: { role: "PRIMARY" },
+    create: { goalId, routineId, role: "PRIMARY" },
+  });
+  return goalId;
+}
+
 export async function createGoal(formData: FormData) {
+  if (isPerRoutineFrequencyCombo(formData)) {
+    const goalId = await upsertPerRoutineFrequencyGoal(formData);
+    revalidateGoals();
+    if (formData.get("noRedirect") === "1") return;
+    redirect(`/goals/${goalId}`);
+  }
   const input = await parseGoalInput(formData);
   const goal = await prisma.goal.create({
     data: input,
@@ -244,6 +291,13 @@ export async function createGoal(formData: FormData) {
 
 export async function updateGoal(formData: FormData) {
   const goalId = parseRequiredString(formData, "goalId", "Goal");
+  if (isPerRoutineFrequencyCombo(formData)) {
+    // No Goal-table row can hold this combo (Phase 4 cleaned them) — an
+    // update reaching here means the client sent a stale/invalid shape.
+    throw new Error(
+      "Per-routine frequency goals are edited on the routine itself or via their goal page."
+    );
+  }
   const input = await parseGoalInput(formData);
   const existingGoal = await prisma.goal.findUnique({
     where: { id: goalId },
