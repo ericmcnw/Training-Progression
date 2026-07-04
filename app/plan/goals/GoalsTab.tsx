@@ -104,7 +104,17 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
 
   entries.sort((a, b) => a.sortKey - b.sortKey);
 
-  const hasEntries = entries.length > 0;
+  // One-time achieved milestones latch forever — parking them in a collapsed
+  // trophy shelf keeps the active list about what's in play, without hiding
+  // the wins. Recurring "complete" goals stay in the main list (they refill
+  // next window).
+  const achieved = entries.filter(
+    (e) => e.insight.isAchieved && e.insight.goal.timeframe === "ONE_TIME" && e.insight.goal.isActive
+  );
+  const achievedIds = new Set(achieved.map((e) => e.insight.goal.id));
+  const activeEntries = entries.filter((e) => !achievedIds.has(e.insight.goal.id));
+
+  const hasEntries = activeEntries.length > 0 || achieved.length > 0;
 
   return (
     <div style={wrapStyle}>
@@ -137,7 +147,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
         <div style={subtleTextStyle}>No goals match the current filters.</div>
       ) : (
         <div style={listStyle}>
-          {entries.map((entry) => (
+          {activeEntries.map((entry) => (
             <GoalRow
               key={entry.insight.goal.id}
               insight={entry.insight}
@@ -147,6 +157,25 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
           ))}
         </div>
       )}
+
+      {achieved.length > 0 ? (
+        <details style={achievedShellStyle}>
+          <summary style={achievedSummaryStyle}>
+            🏆 Achieved
+            <span style={achievedCountStyle}>{achieved.length}</span>
+          </summary>
+          <div style={{ ...listStyle, marginTop: 8 }}>
+            {achieved.map((entry) => (
+              <GoalRow
+                key={entry.insight.goal.id}
+                insight={entry.insight}
+                habitRow={entry.habitRow}
+                today={habitData.today}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -211,5 +240,33 @@ const inactivePillActiveStyle: CSSProperties = {
 const listStyle: CSSProperties = {
   display: "grid",
   gap: 8,
+};
+
+const achievedShellStyle: CSSProperties = {
+  border: "1px solid rgba(74,222,128,0.22)",
+  borderRadius: 12,
+  padding: "10px 12px",
+  background: "rgba(74,222,128,0.04)",
+};
+
+const achievedSummaryStyle: CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 900,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  listStyle: "none",
+  minHeight: 28,
+};
+
+const achievedCountStyle: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 900,
+  padding: "1px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(74,222,128,0.4)",
+  background: "rgba(74,222,128,0.1)",
+  color: "rgba(134,239,172,0.95)",
 };
 

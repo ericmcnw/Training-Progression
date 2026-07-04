@@ -68,6 +68,18 @@ export default function GoalRow({
 
   const detailHref = insight.detailHref ?? `/plan/goals/${encodeURIComponent(insight.goal.id)}`;
 
+  // Stalled = active, older than two weeks, and nothing has EVER counted
+  // toward it — usually a mis-aimed target. Quiet hint, not an alarm.
+  const ageDays = (Date.now() - insight.goal.createdAt.getTime()) / (24 * 60 * 60 * 1000);
+  const isStalled = insight.goal.isActive && !insight.hasData && ageDays > 14;
+
+  // One-time achieved milestones read "Achieved" (they latch forever);
+  // recurring goals keep "Hit" (the window refills next cycle).
+  const statusLabel =
+    statusKey === "complete" && insight.goal.timeframe === "ONE_TIME"
+      ? "Achieved"
+      : STATUS_LABEL[statusKey];
+
   return (
     <Link href={detailHref} className="goalRow" style={rowStyle(accent, statusKey)}>
       <div className="goalRowIcon" style={iconBlockStyle(accent)} aria-hidden>
@@ -81,6 +93,14 @@ export default function GoalRow({
             exerciseCount={insight.triggerExerciseCount ?? 0}
             subtypeCount={insight.triggerSubtypeCount ?? 0}
           />
+          {isStalled ? (
+            <span
+              style={stalledChipStyle}
+              title="Nothing has counted toward this goal yet — its target may not match how you log. Tap to review."
+            >
+              No data yet
+            </span>
+          ) : null}
           {!insight.goal.isActive ? <span style={inactiveChipStyle}>Inactive</span> : null}
         </div>
         <div className="goalRowMeta" style={metaLineStyle}>
@@ -112,9 +132,9 @@ export default function GoalRow({
         <span
           className="goalRowStatusLabel"
           style={statusLabelStyle}
-          aria-label={STATUS_LABEL[statusKey]}
+          aria-label={statusLabel}
         >
-          {STATUS_LABEL[statusKey]}
+          {statusLabel}
         </span>
       </div>
     </Link>
@@ -310,6 +330,20 @@ const inactiveChipStyle: CSSProperties = {
   opacity: 0.7,
   letterSpacing: 0.3,
   textTransform: "uppercase",
+};
+
+// Quiet "this goal never started" hint — dashed border reads as unfinished
+// rather than alarming (no red per the gentle-lens decision).
+const stalledChipStyle: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px dashed rgba(251,191,36,0.45)",
+  background: "rgba(251,191,36,0.07)",
+  color: "rgba(253,230,138,0.9)",
+  letterSpacing: 0.3,
+  whiteSpace: "nowrap",
 };
 
 const triggerBadgeStyle: CSSProperties = {

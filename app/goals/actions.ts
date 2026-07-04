@@ -332,6 +332,36 @@ export async function updateGoal(formData: FormData) {
   redirect(`/goals/${goalId}`);
 }
 
+// Promote-on-hit: raise an achieved milestone goal's bar in place. The goal
+// keeps its id (the lineage stays intact — the ACHIEVED row for the old bar
+// is already latched) and recordBarRaise stamps the new rung. Quick-promote
+// covers numeric metrics only; SESSION_METRIC (grade) goals keep their
+// target in config text, so those edit through the full form instead.
+export async function promoteGoal(formData: FormData) {
+  const goalId = parseRequiredString(formData, "goalId", "Goal");
+  const raw = parseRequiredString(formData, "newTarget", "New target");
+  const newTarget = Number(raw);
+  if (!Number.isFinite(newTarget) || newTarget <= 0) throw new Error("New target must be greater than 0.");
+
+  const goal = await prisma.goal.findUnique({
+    where: { id: goalId },
+    select: { targetValue: true, metricType: true },
+  });
+  if (!goal) throw new Error("Goal not found.");
+  if (goal.metricType === "SESSION_METRIC") {
+    throw new Error("Grade goals promote through Edit Goal (the target is a grade, not a number).");
+  }
+  if (newTarget <= goal.targetValue) {
+    throw new Error("The new bar should be higher than the one you just hit.");
+  }
+
+  await prisma.goal.update({ where: { id: goalId }, data: { targetValue: newTarget } });
+  await recordBarRaise(goalId, newTarget);
+  revalidateGoals();
+  revalidatePath(`/plan/goals/${goalId}`);
+  redirect(`/plan/goals/${encodeURIComponent(goalId)}`);
+}
+
 export async function deleteGoalEntry(input: { goalId: string }) {
   const goalId = input.goalId?.trim();
   if (!goalId) throw new Error("Goal id is required.");

@@ -15,6 +15,8 @@ import MetricLineChart from "@/app/progress/MetricLineChart";
 import { SectionBackButton, SectionCard } from "@/app/progress/ui";
 import { todayAppYmd } from "@/lib/dates";
 import { getGoalInsight, formatGoalDate } from "@/lib/goals";
+import { getGoalLineage, type MilestoneEvent } from "@/lib/goal-milestones";
+import { promoteGoal } from "../actions";
 import DeleteGoalButton from "../DeleteGoalButton";
 import { EditGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { subtleTextStyle } from "../ui";
@@ -112,6 +114,27 @@ export default async function GoalDetailPage(props: {
     entry.goal.targetType === "EXERCISE" &&
     entry.goal.metricType === "MAX_WEIGHT";
 
+  // Goal memory — the promotion ladder (ACHIEVED latches + BAR_RAISED rungs).
+  // Spans both goal stores via the plain string id, so fg_/group frequency
+  // goals show their bar-raise history here too.
+  const lineage = await getGoalLineage(entry.goal.id);
+
+  // Promote-on-hit: offered once, at the moment the milestone reads as hit.
+  // Milestone cadence = ONE_TIME (recurring goals refill, they don't latch).
+  // SESSION_METRIC (grade) targets live in config text — those promote via
+  // Edit Goal, so the quick form stays numeric-only.
+  const canPromote =
+    entry.isAchieved &&
+    entry.goal.isActive &&
+    entry.goal.timeframe === "ONE_TIME" &&
+    entry.goal.metricType !== "SESSION_METRIC" &&
+    !entry.goal.id.startsWith("fg_") &&
+    !entry.goal.id.startsWith("group-frequency:");
+  const suggestedNext =
+    entry.goal.metricType === "MAX_WEIGHT"
+      ? entry.targetValue + 5
+      : Math.max(entry.targetValue + 1, Math.ceil(entry.targetValue * 1.1));
+
   return (
     <div className="goalDetailPage" style={pageStyle}>
       <div className="goalDetailHeader" style={headerRowStyle}>
@@ -140,6 +163,34 @@ export default async function GoalDetailPage(props: {
           </EditGoalDrawerButton>
         </div>
       </div>
+
+      {/* Promote-on-hit — a single gentle offer at the moment the milestone
+          reads as achieved. Raising the bar keeps the goal's id (and its
+          lineage); the old bar stays latched as an ACHIEVED milestone. */}
+      {canPromote ? (
+        <div style={promoteCardStyle}>
+          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <div style={promoteTitleStyle}>🎉 You hit {entry.targetDisplay}</div>
+            <div style={promoteSubStyle}>
+              Nice. Want to raise the bar? Your {entry.targetDisplay} stays on this goal’s history.
+            </div>
+          </div>
+          <form action={promoteGoal} style={promoteFormStyle}>
+            <input type="hidden" name="goalId" value={entry.goal.id} />
+            <input
+              name="newTarget"
+              type="number"
+              inputMode="decimal"
+              min={entry.targetValue + 1}
+              step="any"
+              defaultValue={suggestedNext}
+              aria-label="New target"
+              style={promoteInputStyle}
+            />
+            <button type="submit" style={promoteBtnStyle}>Raise the bar</button>
+          </form>
+        </div>
+      ) : null}
 
       {/* Top row: Current Progress + Consistency side-by-side on desktop,
           stacked on mobile. Auto-fit minmax means a one-child case (no
@@ -193,6 +244,15 @@ export default async function GoalDetailPage(props: {
           accent={accent.color}
         />
       </SectionCard>
+
+      {lineage.length > 0 ? (
+        <SectionCard
+          title="Milestones"
+          subtitle="Every bar this goal has hit or raised — the goal's ladder over time."
+        >
+          <MilestoneTimeline events={lineage} accent={accent} currentTargetDisplay={entry.targetDisplay} />
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Recent Contributing Sessions">
         <GoalRecentSessions items={entry.recentItems} accent={accent} goalName={entry.goal.name} />
@@ -896,4 +956,151 @@ const editGoalCtaStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   cursor: "pointer",
   minHeight: 40,
+};
+
+// ── Milestone timeline (goal memory) ────────────────────────────────────────
+// Renders the promotion ladder oldest → newest: 🏆 for a latched achievement,
+// ↑ for a raised bar, with the current chase as the open rung at the bottom.
+function MilestoneTimeline({
+  events,
+  accent,
+  currentTargetDisplay,
+}: {
+  events: MilestoneEvent[];
+  accent: GoalTypeAccent;
+  currentTargetDisplay: string;
+}) {
+  return (
+    <ol style={timelineListStyle}>
+      {events.map((event) => (
+        <li key={event.id} style={timelineRowStyle}>
+          <span
+            aria-hidden
+            style={{
+              ...timelineIconStyle,
+              background: event.kind === "ACHIEVED" ? "rgba(74,222,128,0.14)" : accent.bg,
+              border: `1px solid ${event.kind === "ACHIEVED" ? "rgba(74,222,128,0.45)" : accent.border}`,
+            }}
+          >
+            {event.kind === "ACHIEVED" ? "🏆" : "↑"}
+          </span>
+          <span style={timelineLabelStyle}>
+            {event.kind === "ACHIEVED" ? "Hit " : "Raised to "}
+            <strong>{event.valueLabel ?? formatMilestoneValue(event.value)}</strong>
+          </span>
+          <span style={timelineDateStyle}>{formatGoalDate(event.achievedAt)}</span>
+        </li>
+      ))}
+      <li style={timelineRowStyle}>
+        <span aria-hidden style={{ ...timelineIconStyle, border: "1px dashed rgba(255,255,255,0.25)" }}>
+          ◌
+        </span>
+        <span style={{ ...timelineLabelStyle, opacity: 0.75 }}>
+          Chasing <strong>{currentTargetDisplay}</strong>
+        </span>
+      </li>
+    </ol>
+  );
+}
+
+function formatMilestoneValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+const timelineListStyle: CSSProperties = {
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "grid",
+  gap: 8,
+};
+
+const timelineRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  minHeight: 34,
+};
+
+const timelineIconStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 28,
+  height: 28,
+  borderRadius: 999,
+  fontSize: 13,
+  flexShrink: 0,
+};
+
+const timelineLabelStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  minWidth: 0,
+};
+
+const timelineDateStyle: CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 11,
+  opacity: 0.55,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+// ── Promote-on-hit card ─────────────────────────────────────────────────────
+const promoteCardStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 14,
+  flexWrap: "wrap",
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(74,222,128,0.35)",
+  background: "linear-gradient(180deg, rgba(74,222,128,0.10), rgba(74,222,128,0.04))",
+};
+
+const promoteTitleStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 900,
+};
+
+const promoteSubStyle: CSSProperties = {
+  fontSize: 12,
+  opacity: 0.7,
+  fontWeight: 600,
+  lineHeight: 1.45,
+};
+
+const promoteFormStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexShrink: 0,
+};
+
+const promoteInputStyle: CSSProperties = {
+  width: 92,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "#111827",
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: 800,
+  textAlign: "center",
+};
+
+const promoteBtnStyle: CSSProperties = {
+  padding: "11px 16px",
+  border: "none",
+  borderRadius: 12,
+  background: "rgba(34,197,94,0.88)",
+  color: "#000",
+  fontWeight: 900,
+  fontSize: 13.5,
+  cursor: "pointer",
+  minHeight: 44,
+  whiteSpace: "nowrap",
 };
