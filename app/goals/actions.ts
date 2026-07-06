@@ -362,6 +362,35 @@ export async function promoteGoal(formData: FormData) {
   redirect(`/plan/goals/${encodeURIComponent(goalId)}`);
 }
 
+// Recurring-goal promotion: "2×/week held for a month → make it 3". Same
+// lineage mechanics as milestone promotion — the goal keeps its id, the
+// raise stamps a BAR_RAISED rung. Accepts the display id (`fg_<routineId>`
+// or `group-frequency:<id>`) and resolves to the FrequencyGoal row.
+export async function promoteFrequencyGoal(formData: FormData) {
+  const displayId = parseRequiredString(formData, "goalId", "Goal");
+  const raw = parseRequiredString(formData, "newTarget", "New target");
+  const newTarget = Math.floor(Number(raw));
+  if (!Number.isFinite(newTarget) || newTarget < 1) throw new Error("New target must be at least 1.");
+
+  const id = displayId.startsWith("group-frequency:")
+    ? displayId.slice("group-frequency:".length)
+    : displayId;
+  const goal = await prisma.frequencyGoal.findUnique({
+    where: { id },
+    select: { targetCount: true },
+  });
+  if (!goal) throw new Error("Goal not found.");
+  if (newTarget <= goal.targetCount) {
+    throw new Error("The new target should be higher than the current one.");
+  }
+
+  await prisma.frequencyGoal.update({ where: { id }, data: { targetCount: newTarget } });
+  await recordBarRaise(id, newTarget);
+  revalidateGoals();
+  revalidatePath(`/plan/goals/${displayId}`);
+  redirect(`/plan/goals/${encodeURIComponent(displayId)}`);
+}
+
 export async function deleteGoalEntry(input: { goalId: string }) {
   const goalId = input.goalId?.trim();
   if (!goalId) throw new Error("Goal id is required.");

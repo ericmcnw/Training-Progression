@@ -16,7 +16,7 @@ import { SectionBackButton, SectionCard } from "@/app/progress/ui";
 import { todayAppYmd } from "@/lib/dates";
 import { getGoalInsight, formatGoalDate } from "@/lib/goals";
 import { getGoalLineage, type MilestoneEvent } from "@/lib/goal-milestones";
-import { promoteGoal } from "../actions";
+import { promoteGoal, promoteFrequencyGoal } from "../actions";
 import DeleteGoalButton from "../DeleteGoalButton";
 import { EditGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { subtleTextStyle } from "../ui";
@@ -115,25 +115,62 @@ export default async function GoalDetailPage(props: {
     entry.goal.metricType === "MAX_WEIGHT";
 
   // Goal memory — the promotion ladder (ACHIEVED latches + BAR_RAISED rungs).
-  // Spans both goal stores via the plain string id, so fg_/group frequency
-  // goals show their bar-raise history here too.
-  const lineage = await getGoalLineage(entry.goal.id);
+  // Milestones are recorded under the storage id: the Goal cuid, the
+  // `fg_<routineId>` companion id, or the RAW FrequencyGoal id (group goals'
+  // `group-frequency:` prefix is a URL affordance, not a storage id) — so the
+  // lineage key comes from the URL id with that prefix stripped, NOT from
+  // entry.goal.id (which for per-routine goals is the routine id).
+  const lineageKey = normalizedGoalId.startsWith("group-frequency:")
+    ? normalizedGoalId.slice("group-frequency:".length)
+    : normalizedGoalId;
+  const lineage = await getGoalLineage(lineageKey);
 
-  // Promote-on-hit: offered once, at the moment the milestone reads as hit.
-  // Milestone cadence = ONE_TIME (recurring goals refill, they don't latch).
-  // SESSION_METRIC (grade) targets live in config text — those promote via
-  // Edit Goal, so the quick form stays numeric-only.
+  // Promote-on-hit (milestones): offered once, at the moment the one-time
+  // goal reads as hit. SESSION_METRIC (grade) targets live in config text —
+  // those promote via Edit Goal, so the quick form stays numeric-only.
+  const isFrequencyStoreGoal =
+    normalizedGoalId.startsWith("fg_") || normalizedGoalId.startsWith("group-frequency:");
   const canPromote =
     entry.isAchieved &&
     entry.goal.isActive &&
     entry.goal.timeframe === "ONE_TIME" &&
     entry.goal.metricType !== "SESSION_METRIC" &&
-    !entry.goal.id.startsWith("fg_") &&
-    !entry.goal.id.startsWith("group-frequency:");
+    !isFrequencyStoreGoal;
   const suggestedNext =
     entry.goal.metricType === "MAX_WEIGHT"
       ? entry.targetValue + 5
       : Math.max(entry.targetValue + 1, Math.ceil(entry.targetValue * 1.1));
+
+  // Promote-on-consistency (recurring goals): "you've held 2×/week for a
+  // month — make it 3?" Frequency goals earn the offer via window/day
+  // streaks; recurring Goal-table goals (weekly volume etc.) via their last
+  // three completed history windows all meeting the target. Gentle: one
+  // quiet card on the detail page, never a nag.
+  const freqStreakWindows = consistency?.state.windowStreak ?? 0;
+  const freqStreakDays = consistency?.state.currentDayStreak ?? 0;
+  const freqConsistentEnough = freqStreakWindows >= 3 || freqStreakDays >= 7;
+  const canPromoteFrequency =
+    isFrequencyStoreGoal &&
+    entry.goal.isActive &&
+    consistency != null &&
+    freqConsistentEnough;
+  const freqStreakLabel =
+    freqStreakWindows >= 3
+      ? `${freqStreakWindows} ${consistency?.target.targetUnit === "MONTH" ? "months" : "weeks"} in a row`
+      : `${freqStreakDays} days in a row`;
+  const freqNextTarget = (consistency?.target.targetCount ?? 0) + 1;
+
+  const completedHistory = entry.history.slice(0, -1);
+  const recurringVolumeConsistent =
+    completedHistory.length >= 3 &&
+    completedHistory.slice(-3).every((point) => point.value >= entry.targetValue) &&
+    entry.targetValue > 0;
+  const canPromoteRecurring =
+    !isFrequencyStoreGoal &&
+    entry.goal.isActive &&
+    entry.goal.timeframe !== "ONE_TIME" &&
+    entry.goal.metricType !== "SESSION_METRIC" &&
+    recurringVolumeConsistent;
 
   return (
     <div className="goalDetailPage" style={pageStyle}>
@@ -173,6 +210,61 @@ export default async function GoalDetailPage(props: {
             <div style={promoteTitleStyle}>🎉 You hit {entry.targetDisplay}</div>
             <div style={promoteSubStyle}>
               Nice. Want to raise the bar? Your {entry.targetDisplay} stays on this goal’s history.
+            </div>
+          </div>
+          <form action={promoteGoal} style={promoteFormStyle}>
+            <input type="hidden" name="goalId" value={entry.goal.id} />
+            <input
+              name="newTarget"
+              type="number"
+              inputMode="decimal"
+              min={entry.targetValue + 1}
+              step="any"
+              defaultValue={suggestedNext}
+              aria-label="New target"
+              style={promoteInputStyle}
+            />
+            <button type="submit" style={promoteBtnStyle}>Raise the bar</button>
+          </form>
+        </div>
+      ) : null}
+
+      {/* Promote-on-consistency — the recurring-goal version of the ladder:
+          hold the bar long enough and the app offers the next rung. The old
+          cadence stays on the Milestones timeline as a BAR_RAISED rung. */}
+      {canPromoteFrequency ? (
+        <div style={promoteCardStyle}>
+          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <div style={promoteTitleStyle}>🔥 {freqStreakLabel}</div>
+            <div style={promoteSubStyle}>
+              You’ve been holding {consistency!.target.targetCount}× consistently. Ready to make it{" "}
+              {freqNextTarget}×? The old bar stays on this goal’s history.
+            </div>
+          </div>
+          <form action={promoteFrequencyGoal} style={promoteFormStyle}>
+            <input type="hidden" name="goalId" value={normalizedGoalId} />
+            <input
+              name="newTarget"
+              type="number"
+              inputMode="numeric"
+              min={(consistency!.target.targetCount ?? 0) + 1}
+              step="1"
+              defaultValue={freqNextTarget}
+              aria-label="New times per period"
+              style={promoteInputStyle}
+            />
+            <button type="submit" style={promoteBtnStyle}>Raise the bar</button>
+          </form>
+        </div>
+      ) : null}
+
+      {canPromoteRecurring ? (
+        <div style={promoteCardStyle}>
+          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <div style={promoteTitleStyle}>🔥 3 straight {entry.goal.timeframe === "MONTH" ? "months" : entry.goal.timeframe === "DAY" ? "days" : "weeks"} at target</div>
+            <div style={promoteSubStyle}>
+              You’ve been clearing {entry.targetDisplay} consistently. Raise the bar? The old target
+              stays on this goal’s history.
             </div>
           </div>
           <form action={promoteGoal} style={promoteFormStyle}>

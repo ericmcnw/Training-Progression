@@ -202,12 +202,18 @@ export default function GoalCreatorEntry({
   const [formInitial, setFormInitial] = useState<GoalFormInitial | null>(null);
   const [query, setQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Intent-first entry: tapping "Build a habit" up front filters the catalog
+  // to habit-able subjects and skips the intent step after the subject pick.
+  // Serves the "I want a habit… for what?" mental model alongside
+  // subject-first — both converge on the same handoff.
+  const [intentFilter, setIntentFilter] = useState<Intent | null>(null);
 
   const subjects = useMemo(() => buildSubjectCatalog(options), [options]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return subjects;
+    const pool = intentFilter ? subjects.filter((s) => intentsFor(s).includes(intentFilter)) : subjects;
+    if (!q) return pool;
     const matches = (s: Subject) =>
       s.label.toLowerCase().includes(q) ||
       (s.kind === "activityType" && s.familyName.toLowerCase().includes(q)) ||
@@ -215,11 +221,15 @@ export default function GoalCreatorEntry({
       (s.kind === "grade" && /^v\s?\d|^5\.|grade|boulder|climb/.test(q)) ||
       // "work out 4x a week" style queries surface the domain chips
       (s.kind === "domain" && /work\s?out|train|exercise|fitness|domain/.test(q));
-    return subjects.filter(matches);
-  }, [subjects, query]);
+    return pool.filter(matches);
+  }, [subjects, query, intentFilter]);
 
   function pickSubject(next: Subject) {
     setSubject(next);
+    if (intentFilter && intentsFor(next).includes(intentFilter)) {
+      pickIntent(next, intentFilter);
+      return;
+    }
     const intents = intentsFor(next);
     if (intents.length === 1) {
       pickIntent(next, intents[0]);
@@ -247,6 +257,7 @@ export default function GoalCreatorEntry({
     setStage("subject");
     setSubject(null);
     setFormInitial(null);
+    setIntentFilter(null);
   }
 
   if (stage === "form" && formInitial) {
@@ -344,10 +355,21 @@ export default function GoalCreatorEntry({
 
   // ── subject stage ──────────────────────────────────────────────────────────
   const gallery = buildGallery(subjects);
-  const showGallery = !query.trim() && gallery.length > 0;
+  const showGallery = !query.trim() && !intentFilter && gallery.length > 0;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "grid", gap: 3 }}>
+        <div style={stageTitle}>
+          {intentFilter ? `${INTENT_META[intentFilter].label} — for what?` : "What do you want to work on?"}
+        </div>
+        <div style={stageSubStyle}>
+          {intentFilter
+            ? "Pick the thing this goal is about."
+            : "Grab a ready-made goal, pick a subject, or start from the kind of goal you want."}
+        </div>
+      </div>
+
       <input
         autoFocus={false}
         value={query}
@@ -369,6 +391,31 @@ export default function GoalCreatorEntry({
           </div>
         </div>
       ) : null}
+
+      {/* Intent-first lane — for the "I want a habit… for what?" mental
+          model. Selecting one filters the catalog below and skips the
+          intent step after the subject pick. */}
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={groupHeader}>{intentFilter ? "Kind of goal" : "Or start from the kind of goal"}</div>
+        <div style={chipWrap}>
+          {(Object.keys(INTENT_META) as Intent[]).map((intent) => {
+            const active = intentFilter === intent;
+            return (
+              <button
+                key={intent}
+                type="button"
+                onClick={() => setIntentFilter(active ? null : intent)}
+                style={active ? { ...intentChip, ...intentChipOn } : intentChip}
+                aria-pressed={active}
+              >
+                <span aria-hidden>{INTENT_META[intent].icon}</span>
+                {INTENT_META[intent].label}
+                {active ? <span aria-hidden style={{ opacity: 0.7 }}>×</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gap: 8 }}>
         {showGallery ? <div style={groupHeader}>Or pick what you’re working on</div> : null}
@@ -691,6 +738,29 @@ function buildGallery(subjects: Subject[]): Array<{ key: string; label: string; 
 // ── styles — same dark theme tokens as the drawer + goal form ──────────────
 
 const stageTitle: CSSProperties = { fontSize: 15, fontWeight: 900 };
+
+const stageSubStyle: CSSProperties = { fontSize: 12, opacity: 0.6, fontWeight: 600, lineHeight: 1.45 };
+
+const intentChip: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "9px 13px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 800,
+  minHeight: 40,
+};
+
+const intentChipOn: CSSProperties = {
+  border: "1px solid rgba(147,197,253,0.55)",
+  background: "rgba(147,197,253,0.14)",
+  color: "rgba(191,219,254,0.98)",
+};
 
 const backLink: CSSProperties = {
   justifySelf: "start",
