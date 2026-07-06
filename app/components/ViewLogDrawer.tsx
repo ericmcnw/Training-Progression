@@ -11,7 +11,6 @@
 // CSS classes so the responsive sheet-on-mobile / modal-on-desktop
 // behavior comes for free.
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import RoutineLogSummary from "@/app/components/RoutineLogSummary";
@@ -244,8 +243,6 @@ function LogCard({
   onDelete: () => void;
   onEdit: () => void;
 }) {
-  const fullViewHref = `/routines/${log.routineId}/logs/${log.id}?returnTo=${encodeURIComponent("/")}`;
-
   return (
     <div style={cardStyle}>
       <div style={cardHeader}>
@@ -256,9 +253,6 @@ function LogCard({
           <span style={cardHeaderTime}>{formatAppDateTime(log.performedAt)}</span>
         </div>
         <div style={cardHeaderActions}>
-          <Link href={fullViewHref} style={ghostBtn}>
-            Full view
-          </Link>
           <button type="button" onClick={onEdit} style={editBtnStyle}>
             Edit
           </button>
@@ -416,17 +410,6 @@ const cardBody: React.CSSProperties = {
   padding: 14,
   display: "grid",
   gap: 12,
-};
-
-const ghostBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  border: "1px solid rgba(128,128,128,0.6)",
-  borderRadius: 8,
-  textDecoration: "none",
-  color: "inherit",
-  fontWeight: 700,
-  fontSize: 12,
-  background: "transparent",
 };
 
 const editBtnStyle: React.CSSProperties = {

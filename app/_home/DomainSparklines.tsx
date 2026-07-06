@@ -11,6 +11,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { DomainSeries, DomainTone, DomainWeek } from "./types";
 import { COLOR, cardSurface, cardHeader, cardTitle, cardHint, DOMAIN_LABEL } from "./tokens";
 import { domainAccent } from "./client-utils";
@@ -348,6 +349,7 @@ export function LogDetailPopover({
   const [report, setReport] = useState<LogReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pathname = usePathname();
 
   // Fetch the full log report when the popover opens. Resets between opens.
   useEffect(() => {
@@ -408,8 +410,15 @@ export function LogDetailPopover({
         <LogReportBody report={report} />
       ) : null}
 
-      <Link href={`/routines/${log.routineId}/logs/${log.logId}`} style={popAction} onClick={onClose}>
-        View full log →
+      {/* The popover already renders the full report — the only action the
+          old "View full log" page added was its Edit button, so link there
+          directly. returnTo brings the user back to this page after save. */}
+      <Link
+        href={`/routines/${log.routineId}/logs/${log.logId}/edit?returnTo=${encodeURIComponent(pathname ?? "/")}`}
+        style={popAction}
+        onClick={onClose}
+      >
+        Edit log →
       </Link>
     </Popover>
   );
