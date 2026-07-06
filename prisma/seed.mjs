@@ -601,6 +601,7 @@ const starterExercises = [
   { name: "Good Morning", unit: "REPS", supportsWeight: true, metadata: ["hamstrings", "glutes", "back", "legs", "lower-body", "hinge"] },
   { name: "Hip Thrust", unit: "REPS", supportsWeight: true, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge"] },
   { name: "Barbell Hip Thrust", unit: "REPS", supportsWeight: true, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge"] },
+  { name: "Single-Leg Hip Thrust", unit: "REPS", supportsWeight: true, isUnilateral: true, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge"] },
   { name: "Kettlebell Swing", unit: "REPS", supportsWeight: true, metadata: ["glutes", "hamstrings", "core", "legs", "lower-body", "hinge"] },
   { name: "Cable Pull-Through", unit: "REPS", supportsWeight: true, metadata: ["glutes", "hamstrings", "legs", "lower-body", "hinge"] },
   { name: "Bench Press", unit: "REPS", supportsWeight: true, metadata: ["chest", "triceps", "shoulders", "push", "upper-body", "horizontal-push"] },
