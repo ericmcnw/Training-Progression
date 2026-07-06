@@ -176,14 +176,19 @@ export default function EditSessionLogForm({
   onComplete?: () => void;
   onCancel?: () => void;
 }) {
-  const isClimbing = isClimbingTemplateKey(templateKey);
+  // climbDefaultDiscipline is non-null exactly when the loader classified
+  // this as a climbing session — covers synthetic quick logs, whose routine
+  // has no session template and so fails the template-key check.
+  const isClimbing = isClimbingTemplateKey(templateKey) || climbDefaultDiscipline != null;
   const isOutdoorClimbing = isClimbing && (templateKey ?? "").startsWith("outdoor-");
   const climbDiscipline = isClimbing
     ? climbDefaultDiscipline ?? climbingDisciplineForTemplateKey(templateKey)
     : null;
   const climbDisciplineLabel = climbDiscipline ? climbingDisciplineLabel(climbDiscipline) : null;
   const climbSectionTitle = isClimbing
-    ? `${isOutdoorClimbing ? "Outdoor" : "Indoor"} ${climbDisciplineLabel}`
+    ? templateKey
+      ? `${isOutdoorClimbing ? "Outdoor" : "Indoor"} ${climbDisciplineLabel}`
+      : "Climbs"
     : null;
 
   const [durationMin, setDurationMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
@@ -343,7 +348,9 @@ export default function EditSessionLogForm({
         notes,
         performedAtLocal,
         sessionMetricValues: structuredValues,
-        preferredClimbingGrades: isClimbing ? preferredClimbingGrades : undefined,
+        // Template config lives on sessionDetails, which synthetic routines
+        // don't have — only send grades for template-based climbing routines.
+        preferredClimbingGrades: isClimbing && templateKey ? preferredClimbingGrades : undefined,
         climbAttempts: attemptsToPersist,
         activitySlug: activitySlug ?? undefined,
         effort,
@@ -383,10 +390,11 @@ export default function EditSessionLogForm({
         {templateName ? <div style={helperTextStyle}>Template: {templateName}</div> : null}
       </FormSection>
 
-      {isClimbing && templateKey ? (
+      {isClimbing ? (
         <FormSection title={climbSectionTitle ?? "Climbing"}>
           <ClimbSessionLogger
             templateKey={templateKey}
+            defaultDiscipline={climbDiscipline ?? undefined}
             climbMode={climbMode}
             onModeChange={setClimbMode}
             attempts={climbAttempts}

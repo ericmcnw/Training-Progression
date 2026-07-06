@@ -419,8 +419,14 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
 
   if (isCardioKind(logKind) || isSessionKind(logKind)) {
     const isSessionLog = isSessionKind(logKind);
+    // Climbing sessions come in two shapes: template-based routines
+    // (indoor-bouldering etc.) and quick logs against the synthetic
+    // sports-climbing-synthetic routine, which has no session template.
+    // Both need the ClimbAttempt editor.
     const isClimbingSession =
-      isSessionLog && isClimbingTemplateKey(routine.sessionDetails?.template?.key);
+      isSessionLog &&
+      (isClimbingTemplateKey(routine.sessionDetails?.template?.key) ||
+        sportSlugFromRoutineId(log.routineId) === "climbing");
     let editSpotActivitySlug = isClimbingSession
       ? "climbing"
       : resolveRoutineActivitySlug(routine.metadataGroups, routine.subtype);
@@ -597,9 +603,6 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
     // edit's per-climb mode. The DB id doubles as the localId — fresh nanoids
     // are only needed for attempts the user adds in the editor.
     const templateKey = routine.sessionDetails?.template?.key ?? null;
-    const climbDefaultDiscipline = isClimbingSession
-      ? climbingDisciplineForTemplateKey(templateKey)
-      : null;
     const climbAttemptRows = isClimbingSession
       ? await prisma.climbAttempt.findMany({
           where: { sessionLogId: log.id },
@@ -622,6 +625,13 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           },
         })
       : [];
+    // Template-less (synthetic) climbing logs derive the default discipline
+    // from what was actually climbed; quick logs are mostly bouldering.
+    const climbDefaultDiscipline = isClimbingSession
+      ? templateKey
+        ? climbingDisciplineForTemplateKey(templateKey)
+        : climbAttemptRows[0]?.discipline ?? "BOULDER"
+      : null;
     const initialClimbAttempts: ClimbAttemptDraft[] = climbAttemptRows.map((row) => ({
       localId: row.id,
       discipline: row.discipline,

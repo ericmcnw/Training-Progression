@@ -509,6 +509,7 @@ function AttemptRow({
 
 export default function ClimbSessionLogger({
   templateKey,
+  defaultDiscipline,
   climbMode,
   onModeChange,
   attempts,
@@ -520,7 +521,13 @@ export default function ClimbSessionLogger({
   onMarkDirty,
   onUpdateProblemNotes,
 }: {
-  templateKey: string;
+  /** Session template key when the routine has one; null for synthetic
+   *  quick-log routines. Drives indoor/outdoor labels only —
+   *  `defaultDiscipline` wins for the discipline seed. */
+  templateKey: string | null;
+  /** Explicit starting discipline. Template-less climbing logs pass the
+   *  discipline of what was actually climbed. */
+  defaultDiscipline?: ClimbingDiscipline;
   climbMode: "quick" | "per-climb";
   onModeChange: (mode: "quick" | "per-climb") => void;
   attempts: ClimbAttemptDraft[];
@@ -535,7 +542,7 @@ export default function ClimbSessionLogger({
   onMarkDirty: () => void;
   onUpdateProblemNotes?: (id: string, notes: string | null) => void;
 }) {
-  const templateDiscipline = climbingDisciplineForTemplateKey(templateKey);
+  const templateDiscipline = defaultDiscipline ?? climbingDisciplineForTemplateKey(templateKey);
   const templateGradeSystem = gradeSystemForTemplateKey(templateKey);
 
   // Per-climb mode local UI state. activeDiscipline starts from the session

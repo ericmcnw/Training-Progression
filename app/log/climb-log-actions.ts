@@ -118,6 +118,9 @@ export type ClimbLogInput = {
     grade: string;
     gradeSystem: ClimbGradeSystem;
     outcome: ClimbOutcome;
+    /** Existing ClimbProblem picked from the name combobox — wins over
+     *  `name` so repeats link by id regardless of grade edits. */
+    problemId?: string;
     /** Optional climb/route name. Resolved server-side: if a problem
      *  with this name+grade already exists at this location, link by
      *  id; otherwise create a new ClimbProblem row. */
@@ -172,7 +175,8 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
       grade: a.grade.trim(),
       gradeSystem: a.gradeSystem,
       outcome: a.outcome,
-      newProblemName: a.name?.trim() || undefined,
+      problemId: a.problemId || undefined,
+      newProblemName: a.problemId ? undefined : a.name?.trim() || undefined,
       // Prefer an existing area pick over a typed name — the picker
       // returns areaId when the user tapped a saved chip.
       areaId: a.areaId || undefined,

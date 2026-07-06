@@ -14,10 +14,12 @@ import {
   type ClimbingDiscipline,
   type ClimbGradeSystem,
   type ClimbOutcome,
+  type ClimbProblemBasic,
 } from "@/lib/climb-types";
 import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
 import SportLogModal from "./SportLogModal";
 import AreaCombobox from "./AreaCombobox";
+import ProblemCombobox, { type ProblemPick } from "./ProblemCombobox";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
@@ -53,9 +55,12 @@ type Attempt = {
   discipline: ClimbingDiscipline;
   grade: string;
   outcome: ClimbOutcome;
-  /** Climb / route / problem name. Server resolves against existing
-   *  ClimbProblem rows at the picked location, creates a new one
-   *  otherwise. */
+  /** Existing ClimbProblem picked from the combobox — links by id so a
+   *  repeat lands on the same problem regardless of grade edits. */
+  problemId: string;
+  /** OR a typed climb / route / problem name. Server resolves against
+   *  existing ClimbProblem rows at the picked location, creates a new
+   *  one otherwise. Ignored when problemId is set. */
   name: string;
   /** Pick a saved area at the location. */
   areaId: string;
@@ -103,6 +108,7 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
     discipline: d,
     grade: "",
     outcome: defaultOutcome(d),
+    problemId: "",
     name: "",
     areaId: "",
     area: "",
@@ -161,23 +167,33 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Saved areas for the picked location — fed into the per-attempt
-  // area picker as quick-tap chips. Re-fetches when locationId
-  // changes (different gym → different areas). When the location
-  // changes, also clear any picked areaId on existing attempts so a
+  // Saved areas + problems for the picked location — fed into the
+  // per-attempt area/name pickers. Re-fetches when locationId changes
+  // (different gym → different areas/climbs). When the location changes,
+  // also clear any picked areaId/problemId on existing attempts so a
   // chip for "Cave Wall @ Gym A" doesn't carry over and FK-violate
-  // when saving against Gym B (ClimbArea is scoped per-location).
+  // when saving against Gym B (both are scoped per-location).
   const [savedAreas, setSavedAreas] = useState<Array<{ id: string; name: string }>>([]);
+  const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
   useEffect(() => {
     let cancelled = false;
-    setAttempts((arr) => arr.map((a) => (a.areaId ? { ...a, areaId: "" } : a)));
+    setAttempts((arr) =>
+      arr.map((a) => (a.areaId || a.problemId ? { ...a, areaId: "", problemId: "" } : a))
+    );
     if (!pickedLocationId) {
       setSavedAreas([]);
+      setSavedProblems([]);
       return;
     }
     listAreasForClimbLocation(pickedLocationId)
       .then((rows) => {
         if (!cancelled) setSavedAreas(rows);
+      })
+      .catch(() => {});
+    fetch(`/api/climb-problems?locationId=${pickedLocationId}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (!cancelled) setSavedProblems(rows);
       })
       .catch(() => {});
     return () => {
@@ -192,13 +208,14 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
         const merged = { ...a, ...patch };
         // When discipline changes, also flip the outcome to a valid
         // option for the new discipline (BOULDER's FLASH isn't valid
-        // on SPORT_LEAD, etc.).
+        // on SPORT_LEAD, etc.) — unless the patch already supplies one.
         if (patch.discipline && patch.discipline !== a.discipline) {
-          merged.outcome = defaultOutcome(patch.discipline);
+          if (patch.outcome === undefined) merged.outcome = defaultOutcome(patch.discipline);
           // Grade scale changes with discipline (V-scale ↔ YDS), so a
           // carried-over grade would be invalid for the new dropdown —
-          // clear it and let the user re-pick.
-          merged.grade = "";
+          // clear it and let the user re-pick. A patch that sets the
+          // grade alongside the discipline (saved-problem pick) keeps it.
+          if (patch.grade === undefined) merged.grade = "";
         }
         return merged;
       })
@@ -214,6 +231,61 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     // sessions are mono-discipline so this saves taps.
     const last = attempts[attempts.length - 1];
     setAttempts((arr) => [...arr, newAttempt(last?.discipline ?? "BOULDER")]);
+  }
+
+  // One-tap repeat: clone the climb's identity (discipline / grade /
+  // name / area) into a fresh card right below it. Outcome defaults to
+  // the discipline's send outcome — a repeat lap is by definition not a
+  // flash/onsight, and tries/notes are per-lap so they start empty.
+  function repeatAttempt(localId: string) {
+    setAttempts((arr) => {
+      const idx = arr.findIndex((a) => a.localId === localId);
+      if (idx === -1) return arr;
+      const src = arr[idx];
+      const clone: Attempt = {
+        ...newAttempt(src.discipline),
+        grade: src.grade,
+        outcome: src.discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND",
+        problemId: src.problemId,
+        name: src.name,
+        areaId: src.areaId,
+        area: src.area,
+      };
+      return [...arr.slice(0, idx + 1), clone, ...arr.slice(idx + 1)];
+    });
+  }
+
+  // Wire a combobox pick into the attempt. Picking a saved problem also
+  // autofills its grade / discipline / latest area; picking a name typed
+  // earlier this session copies that card's grade + discipline so both
+  // laps resolve to the same ClimbProblem on save.
+  function applyProblemPick(localId: string, pick: ProblemPick) {
+    const patch: Partial<Attempt> = { problemId: pick.problemId, name: pick.name };
+    if (pick.problemId) {
+      const p = savedProblems.find((sp) => sp.id === pick.problemId);
+      if (p) {
+        patch.grade = p.grade;
+        if (p.gradeSystem === "BOULDER_V") {
+          patch.discipline = "BOULDER";
+        } else {
+          const current = attempts.find((a) => a.localId === localId);
+          patch.discipline = current?.discipline === "SPORT_LEAD" ? "SPORT_LEAD" : "TOP_ROPE";
+        }
+        if (p.areaId && savedAreas.some((s) => s.id === p.areaId)) {
+          patch.areaId = p.areaId;
+          patch.area = "";
+        }
+      }
+    } else if (pick.name) {
+      const src = attempts.find(
+        (a) => a.localId !== localId && a.name.trim().toLowerCase() === pick.name.toLowerCase()
+      );
+      if (src) {
+        patch.grade = src.grade;
+        patch.discipline = src.discipline;
+      }
+    }
+    updateAttempt(localId, patch);
   }
 
   function submit() {
@@ -284,7 +356,8 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               grade: a.grade.trim(),
               gradeSystem: gradeSystemFor(a.discipline),
               outcome: a.outcome,
-              name: a.name.trim() || undefined,
+              problemId: a.problemId || undefined,
+              name: a.problemId ? undefined : a.name.trim() || undefined,
               areaId: a.areaId || undefined,
               area: a.areaId ? undefined : a.area.trim() || undefined,
               triesCount: Number.isFinite(triesNum) ? triesNum : undefined,
@@ -304,6 +377,29 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const sessionAreas = Array.from(
     new Set(attempts.map((a) => a.area.trim()).filter((n) => n.length > 0))
   );
+
+  // Same for climb names — a name typed on climb #1 becomes a pickable
+  // option on climb #2+, so a repeat lap links to the same problem.
+  const sessionNames = Array.from(
+    new Map(
+      attempts
+        .map((a) => a.name.trim())
+        .filter((n) => n.length > 0)
+        .map((n) => [n.toLowerCase(), n] as const)
+    ).values()
+  );
+
+  // Earlier attempt this session on the same climb (linked id, or same
+  // typed name) — drives the ↻ badge so a repeat reads as one at a glance.
+  function repeatOfIndex(idx: number): number {
+    const a = attempts[idx];
+    return attempts.findIndex(
+      (b, j) =>
+        j < idx &&
+        ((a.problemId !== "" && b.problemId === a.problemId) ||
+          (a.name.trim() !== "" && b.name.trim().toLowerCase() === a.name.trim().toLowerCase()))
+    );
+  }
 
   return (
     <SportLogModal
@@ -351,6 +447,11 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               {attempts.map((a, idx) => {
                 const outcomes = OUTCOMES_BY_DISCIPLINE[a.discipline];
                 const showTries = outcomeUsesTriesCount(a.outcome);
+                const repeatIdx = repeatOfIndex(idx);
+                const linkedProblem = a.problemId
+                  ? savedProblems.find((p) => p.id === a.problemId)
+                  : undefined;
+                const isPriorSend = (linkedProblem?.priorSendCount ?? 0) > 0;
                 return (
                   <div
                     key={a.localId}
@@ -362,17 +463,41 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                     }}
                   >
                     <div style={attemptHeader}>
-                      <span style={attemptIndex}>#{idx + 1}</span>
-                      {attempts.length > 1 ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                        <span style={attemptIndex}>#{idx + 1}</span>
+                        {repeatIdx >= 0 ? (
+                          <span style={repeatBadge} title={`Same climb as #${repeatIdx + 1}`}>
+                            ↻ repeat of #{repeatIdx + 1}
+                          </span>
+                        ) : isPriorSend ? (
+                          <span
+                            style={repeatBadge}
+                            title={`Previously sent ${linkedProblem!.priorSendCount}×`}
+                          >
+                            ↻ sent {linkedProblem!.priorSendCount}× before
+                          </span>
+                        ) : null}
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <button
                           type="button"
-                          style={removeAttemptBtn}
-                          onClick={() => removeAttempt(a.localId)}
-                          aria-label={`Remove climb ${idx + 1}`}
+                          style={repeatAttemptBtn}
+                          onClick={() => repeatAttempt(a.localId)}
+                          aria-label={`Log climb ${idx + 1} again`}
                         >
-                          ✕
+                          ↻ Repeat
                         </button>
-                      ) : null}
+                        {attempts.length > 1 ? (
+                          <button
+                            type="button"
+                            style={removeAttemptBtn}
+                            onClick={() => removeAttempt(a.localId)}
+                            aria-label={`Remove climb ${idx + 1}`}
+                          >
+                            ✕
+                          </button>
+                        ) : null}
+                      </span>
                     </div>
 
                     {/* Discipline + grade (+ tries when SEND/REDPOINT) */}
@@ -447,18 +572,20 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
 
                     {/* Climb identity — name + area. Optional but
                         recommended; the server resolves them into
-                        ClimbProblem / ClimbArea rows so a future "this
-                        route again" picker can find them. The area
-                        combobox searches saved areas + areas typed
-                        earlier this session, creating one when nothing
-                        matches. */}
+                        ClimbProblem / ClimbArea rows. Both comboboxes
+                        search saved rows at the location + values typed
+                        earlier this session, creating fresh ones when
+                        nothing matches — so a repeat lap links to the
+                        same climb instead of duplicating it. */}
                     <div style={attemptRow}>
-                      <input
-                        type="text"
-                        placeholder="Climb / route name (optional)"
-                        value={a.name}
-                        onChange={(e) => updateAttempt(a.localId, { name: e.target.value })}
-                        style={{ ...fieldInput, flex: "2 1 160px", minWidth: 0 }}
+                      <ProblemCombobox
+                        problemId={a.problemId}
+                        name={a.name}
+                        savedProblems={savedProblems}
+                        sessionNames={sessionNames.filter(
+                          (n) => n.toLowerCase() !== a.name.trim().toLowerCase()
+                        )}
+                        onPick={(pick) => applyProblemPick(a.localId, pick)}
                       />
                       <AreaCombobox
                         areaId={a.areaId}
@@ -575,6 +702,28 @@ const attemptIndex: CSSProperties = {
   letterSpacing: 0.6,
   textTransform: "uppercase",
   opacity: 0.55,
+};
+const repeatBadge: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  padding: "1px 5px",
+  borderRadius: 6,
+  background: "rgba(74,222,128,0.12)",
+  border: "1px solid rgba(74,222,128,0.35)",
+  color: "rgba(74,222,128,0.95)",
+  whiteSpace: "nowrap",
+  lineHeight: 1,
+};
+const repeatAttemptBtn: CSSProperties = {
+  minHeight: 26,
+  padding: "0 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(255,255,255,0.8)",
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
 };
 const removeAttemptBtn: CSSProperties = {
   width: 26,
