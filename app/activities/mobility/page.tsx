@@ -18,6 +18,8 @@ import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
+import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
+import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +84,7 @@ export default async function MobilityWorldPage(props: {
   // Unbounded is intentional — the pulse strip's "All time" stat and
   // the "View all" recent-sessions expansion both need every log. At
   // single-user scale this is small enough to JS-filter in-memory.
-  const [allActiveRoutines, candidateLogs] = await Promise.all([
+  const [allActiveRoutines, candidateLogs, domainGoals] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true, isDeleted: false, isPlaceholder: false },
       select: { id: true, name: true, domain: true, kind: true, subtype: true },
@@ -109,6 +111,9 @@ export default async function MobilityWorldPage(props: {
       },
       orderBy: { performedAt: "desc" },
     }),
+    // Goals pointed at the mobility domain (incl. "Mobility 3×/week"
+    // domain goals) — powers the header chip + Active Goals section.
+    getDomainGoals("mobility"),
   ]);
 
   const mobilityRoutines = allActiveRoutines.filter(
@@ -164,6 +169,7 @@ export default async function MobilityWorldPage(props: {
       <ActivityHeader
         title="Mobility"
         accent={ACCENT}
+        frequencyChip={frequencyChipFor(domainGoals)}
         actions={
           <NewRoutineDrawerButton presetDomain="mobility" style={primaryCtaStyle}>
             + New routine
@@ -180,6 +186,13 @@ export default async function MobilityWorldPage(props: {
         <span style={pulseDividerStyle} aria-hidden />
         <PulseStat label="All time" value={sessionsAllTime} />
       </div>
+
+      <ActivityGoalsSection
+        goals={domainGoals}
+        activitySlug="mobility"
+        activityLabel="Mobility"
+        showWhenEmpty={false}
+      />
 
       {/* Per-chart range pill — only this chart responds to it. */}
       <div style={chartPillRowStyle}>

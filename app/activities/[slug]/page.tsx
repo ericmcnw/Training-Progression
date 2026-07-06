@@ -24,7 +24,7 @@ import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { formatDuration } from "@/lib/progress";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
-import { getActivityGoals } from "@/lib/activity-goals";
+import { getActivityGoals, frequencyChipFor } from "@/lib/activity-goals";
 import { sportAccent } from "@/lib/sport-accent";
 import { getRoutineIndex, getRoutineLogs, resolveGroupTarget } from "@/app/progress/data";
 import { getVirtualSportCategory, isSportGroup, isVirtualSportSlug } from "@/app/progress/sports";
@@ -204,6 +204,7 @@ export default async function SportWorldPage(props: {
       <ActivityHeader
         title={title}
         accent={accent}
+        frequencyChip={frequencyChipFor(sportGoals)}
         actions={
           <>
             <Link href="/log" style={headerPillStyle}>📋 Log</Link>

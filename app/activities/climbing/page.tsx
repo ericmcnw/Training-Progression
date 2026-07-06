@@ -65,6 +65,8 @@ import {
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { sportAccent } from "@/lib/sport-accent";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
+import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
+import { getActivityGoals, frequencyChipFor } from "@/lib/activity-goals";
 import TrainingTagsPanel from "./TrainingTagsPanel";
 import { startOfWeekMonday } from "@/lib/week";
 
@@ -130,7 +132,7 @@ export default async function ClimbingHubPage(props: {
   // ── Data loading ────────────────────────────────────────────────────────
   // Parallel: all attempts + named-problem rows (for project rollup) +
   // supporting-training logs (violet series on the weekly chart).
-  const [attempts, problems, trainingLogs] = await Promise.all([
+  const [attempts, problems, trainingLogs, climbingGoals] = await Promise.all([
     prisma.climbAttempt.findMany({
       orderBy: { sessionLog: { performedAt: "desc" } },
       select: {
@@ -203,6 +205,9 @@ export default async function ClimbingHubPage(props: {
       },
       take: 400,
     }),
+    // Goals pointed at climbing — grade PRs, session-frequency goals, and
+    // "training FOR climbing" tag goals. Powers the header chip + section.
+    getActivityGoals("climbing"),
   ]);
 
   if (attempts.length === 0) {
@@ -498,6 +503,7 @@ export default async function ClimbingHubPage(props: {
       <ActivityHeader
         title="Climbing"
         accent={ACCENT}
+        frequencyChip={frequencyChipFor(climbingGoals)}
         actions={
           <NewRoutineDrawerButton presetDomain="sport" style={primaryCtaStyle}>
             + Log session
@@ -524,6 +530,13 @@ export default async function ClimbingHubPage(props: {
         <HubTile href="/activities/climbing/climbs?outcome=project" label="Projects" stat={`${tileTotals.projects} active`} icon="🎯" />
         <HubTile href="/activities/climbing/map" label="Map" stat={`${tileTotals.locations} location${tileTotals.locations === 1 ? "" : "s"}`} icon="🗺" />
       </div>
+
+      <ActivityGoalsSection
+        goals={climbingGoals}
+        activitySlug="climbing"
+        activityLabel="Climbing"
+        showWhenEmpty={false}
+      />
 
       {/* ── Chart range — applies to both weekly charts below ──────── */}
       <div style={chartPillRowStyle}>

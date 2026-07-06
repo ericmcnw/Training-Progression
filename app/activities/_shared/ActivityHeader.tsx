@@ -21,18 +21,31 @@ export default function ActivityHeader({
   backHref = "/activities",
   backLabel = "← Activities",
   actions,
+  frequencyChip,
 }: {
   title: string;
   accent: string;
   backHref?: string;
   backLabel?: string;
   actions?: React.ReactNode;
+  /** Rolling frequency-goal readout ("2/3 this week") linking to the goal.
+   *  Rolling-window only — vs-previous evaluation belongs to /reports. */
+  frequencyChip?: { label: string; href: string } | null;
 }) {
   return (
     <header style={shellStyle}>
       <Link href={backHref} style={backStyle}>{backLabel}</Link>
       <div style={mainRowStyle}>
         <h1 style={{ ...titleStyle, color: accent }}>{title}</h1>
+        {frequencyChip ? (
+          <Link
+            href={frequencyChip.href}
+            style={{ ...chipStyle, borderColor: `${accent}55`, color: accent }}
+            title="Frequency goal — tap for detail"
+          >
+            {frequencyChip.label}
+          </Link>
+        ) : null}
         {actions ? <div style={actionsStyle}>{actions}</div> : null}
       </div>
     </header>
@@ -74,4 +87,20 @@ const actionsStyle: React.CSSProperties = {
   gap: 6,
   flexWrap: "wrap",
   alignItems: "center",
+};
+
+const chipStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid",
+  background: "rgba(255,255,255,0.03)",
+  fontSize: 11.5,
+  fontWeight: 900,
+  letterSpacing: 0.2,
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+  minHeight: 28,
+  flexShrink: 0,
 };

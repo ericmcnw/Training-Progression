@@ -20,6 +20,8 @@ import { loadEnduranceChartData } from "@/lib/activities/endurance-chart";
 import { loadEndurancePaceChart } from "@/lib/activities/endurance-pace";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import PaceLineChart from "@/app/activities/_shared/PaceLineChart";
+import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
+import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +86,7 @@ export default async function EnduranceWorldPage(props: {
 
   const cutoff = cutoffForRange(range);
 
-  const [families, logs, chartData, paceData] = await Promise.all([
+  const [families, logs, chartData, paceData, domainGoals] = await Promise.all([
     prisma.enduranceFamily.findMany({
       orderBy: [{ sortOrder: "asc" }],
       include: {
@@ -131,6 +133,9 @@ export default async function EnduranceWorldPage(props: {
     // 12w pace chart — multi-line by type on Overview / family tabs,
     // switches to per-session points when a specific type is selected.
     loadEndurancePaceChart({ familySlug, typeSlug }),
+    // Goals pointed at the endurance domain (incl. "Endurance 3×/week"
+    // domain goals) — powers the header chip + Active Goals section.
+    getDomainGoals("cardio"),
   ]);
 
   // Resolve each log's family — prefer log.activityType, fall back to
@@ -188,6 +193,7 @@ export default async function EnduranceWorldPage(props: {
         <ActivityHeader
           title="Endurance"
           accent={domainColor("cardio")}
+          frequencyChip={frequencyChipFor(domainGoals)}
           actions={
             <>
               <SectionLinkButton href="/log" label="📋 Log" />
@@ -286,6 +292,13 @@ export default async function EnduranceWorldPage(props: {
             data={paceData}
           />
         ) : null}
+
+        <ActivityGoalsSection
+          goals={domainGoals}
+          activitySlug="endurance"
+          activityLabel="Endurance"
+          showWhenEmpty={false}
+        />
 
         {/* Range pill row */}
         <div style={rangeRowStyle}>

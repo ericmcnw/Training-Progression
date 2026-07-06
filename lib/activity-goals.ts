@@ -63,13 +63,29 @@ export const getActivityGoals = cache(async function getActivityGoals(
       .filter((e) => e.goal.targetType === "GROUP")
       .map((e) => e.goal.targetId)
   );
-  const groupGoalRoutineLinks =
+  const [groupGoalRoutineLinks, sportTaggedGoalRows, sportTaggedRoutineRows] = await Promise.all([
     groupGoalIds.length > 0
-      ? await prisma.frequencyGoalRoutine.findMany({
+      ? prisma.frequencyGoalRoutine.findMany({
           where: { goalId: { in: groupGoalIds } },
           select: { goalId: true, routineId: true },
         })
-      : [];
+      : Promise.resolve([]),
+    // Sport-tag goals — "training FOR climbing 2×/wk" belongs on the
+    // climbing hub even with zero linked routines.
+    groupGoalIds.length > 0
+      ? prisma.frequencyGoal.findMany({
+          where: { id: { in: groupGoalIds }, triggerSupportedSports: { has: activitySlug } },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    // ROUTINE-target goals whose routine declares it trains for this sport.
+    prisma.routine.findMany({
+      where: { supportsSports: { has: activitySlug } },
+      select: { id: true },
+    }),
+  ]);
+  const sportTaggedGoalIds = new Set(sportTaggedGoalRows.map((r) => r.id));
+  const sportTaggedRoutineIds = new Set(sportTaggedRoutineRows.map((r) => r.id));
   const groupGoalRoutineMap = new Map<string, string[]>();
   for (const link of groupGoalRoutineLinks) {
     const list = groupGoalRoutineMap.get(link.goalId) ?? [];
@@ -108,7 +124,10 @@ export const getActivityGoals = cache(async function getActivityGoals(
       // metadata-group id). Resolve via the goal's linked routines:
       // the goal belongs to this activity if any linked routine is
       // tagged with a matching metadata group OR is the synthetic
-      // sport routine for this activity.
+      // sport routine for this activity — or the goal itself carries
+      // this sport in triggerSupportedSports (tag-targeted goals have
+      // no roster at all).
+      if (sportTaggedGoalIds.has(targetId)) return true;
       const linkedRoutines = groupGoalRoutineMap.get(targetId) ?? [];
       for (const routineId of linkedRoutines) {
         if (routineId === syntheticSportRoutineId) return true;
@@ -117,6 +136,7 @@ export const getActivityGoals = cache(async function getActivityGoals(
       return false;
     }
     if (targetType === "ROUTINE") {
+      if (sportTaggedRoutineIds.has(targetId)) return true;
       return intersectsActivity(routineMembership.get(targetId), activityGroupIds);
     }
     if (targetType === "SESSION_TEMPLATE") {
@@ -142,16 +162,20 @@ function intersectsActivity(memberships: Set<string> | undefined, activityGroupI
 }
 
 /**
- * Active goals for the strength domain. Strength has no metadata-group slug
- * (it's a domain derived from kind+subtype), so getActivityGoals can't be
- * used. This filter includes:
- *   - ROUTINE-target goals where the routine's effective domain is strength
- *   - EXERCISE-target goals where the exercise was performed in any strength
- *     session (covers per-exercise PR goals like "185 RDL")
- *   - Group-frequency goals where every linked routine is a strength routine
- *     (so a "lift 3x/wk" group goal across Push/Pull/Legs surfaces here)
+ * Active goals for a training DOMAIN (strength/cardio/mobility/lifestyle).
+ * Domains have no metadata-group slug (they derive from kind+subtype), so
+ * getActivityGoals can't be used. This filter includes:
+ *   - ROUTINE-target goals where the routine's effective domain matches
+ *   - EXERCISE-target goals where the exercise was performed in a session
+ *     of that domain (covers per-exercise PR goals like "185 RDL")
+ *   - Group-frequency goals where every linked routine is in the domain
+ *     ("lift 3x/wk" across Push/Pull/Legs), OR whose targetDomain IS the
+ *     domain (first-class domain goals — "Strength 3×/week"). "Any training"
+ *     goals stay home-only; they'd be noise repeated on every hub.
  */
-export const getStrengthGoals = cache(async function getStrengthGoals(): Promise<GoalInsight[]> {
+export const getDomainGoals = cache(async function getDomainGoals(
+  domain: "strength" | "cardio" | "mobility" | "lifestyle"
+): Promise<GoalInsight[]> {
   const allInsights = await getGoalsOverview({ active: "active" });
 
   const routineTargetIds = unique(allInsights.filter((e) => e.goal.targetType === "ROUTINE").map((e) => e.goal.targetId));
@@ -160,7 +184,7 @@ export const getStrengthGoals = cache(async function getStrengthGoals(): Promise
     .filter((e) => e.goal.id.startsWith("group-frequency:"))
     .map((e) => e.goal.id.replace("group-frequency:", ""));
 
-  const [routineRows, exerciseSessionRows, freqGoalLinks] = await Promise.all([
+  const [routineRows, exerciseSessionRows, freqGoalLinks, freqGoalRows] = await Promise.all([
     routineTargetIds.length > 0
       ? prisma.routine.findMany({
           where: { id: { in: routineTargetIds } },
@@ -171,7 +195,9 @@ export const getStrengthGoals = cache(async function getStrengthGoals(): Promise
       ? prisma.sessionExercise.findMany({
           where: {
             exerciseId: { in: exerciseTargetIds },
-            routineLog: { routine: { kind: "WORKOUT" } },
+            // Strength keeps the cheap kind pre-filter (WORKOUT ⊂ strength ∪
+            // mobility-rehab); other domains JS-filter on effective domain.
+            ...(domain === "strength" ? { routineLog: { routine: { kind: "WORKOUT" } } } : {}),
           },
           select: {
             exerciseId: true,
@@ -188,44 +214,74 @@ export const getStrengthGoals = cache(async function getStrengthGoals(): Promise
           },
         })
       : Promise.resolve([]),
+    groupFreqIds.length > 0
+      ? prisma.frequencyGoal.findMany({
+          where: { id: { in: groupFreqIds } },
+          select: { id: true, targetDomain: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const strengthRoutineIds = new Set(
-    routineRows.filter((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength").map((r) => r.id)
+  const domainRoutineIds = new Set(
+    routineRows.filter((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === domain).map((r) => r.id)
   );
 
-  const strengthExerciseIds = new Set<string>();
+  const domainExerciseIds = new Set<string>();
   for (const row of exerciseSessionRows) {
-    if (effectiveRoutineDomain(row.routineLog.routine.domain, row.routineLog.routine.kind, row.routineLog.routine.subtype) === "strength") {
-      strengthExerciseIds.add(row.exerciseId);
+    if (effectiveRoutineDomain(row.routineLog.routine.domain, row.routineLog.routine.kind, row.routineLog.routine.subtype) === domain) {
+      domainExerciseIds.add(row.exerciseId);
     }
   }
 
-  // A group-frequency goal counts as strength when every linked routine is a
-  // strength routine. This is the strict definition — a mixed-domain group
-  // goal would surface elsewhere too if we relaxed it.
+  // A group-frequency goal counts when every linked routine is in the domain
+  // (strict — mixed-domain groups would double-surface if relaxed) OR when
+  // it's a first-class domain goal targeting this domain.
   const groupFreqRoutinesByGoal = new Map<string, Array<{ kind: string; subtype: string | null; domain: string }>>();
   for (const link of freqGoalLinks) {
     const list = groupFreqRoutinesByGoal.get(link.goalId) ?? [];
     list.push(link.routine);
     groupFreqRoutinesByGoal.set(link.goalId, list);
   }
-  const strengthGroupFreqIds = new Set<string>();
+  const domainGroupFreqIds = new Set<string>();
   for (const [goalId, routines] of groupFreqRoutinesByGoal) {
     if (routines.length === 0) continue;
-    if (routines.every((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === "strength")) {
-      strengthGroupFreqIds.add(`group-frequency:${goalId}`);
+    if (routines.every((r) => effectiveRoutineDomain(r.domain, r.kind, r.subtype) === domain)) {
+      domainGroupFreqIds.add(`group-frequency:${goalId}`);
     }
+  }
+  for (const row of freqGoalRows) {
+    if (row.targetDomain === domain) domainGroupFreqIds.add(`group-frequency:${row.id}`);
   }
 
   return allInsights.filter((insight) => {
     const goal = insight.goal;
-    if (goal.id.startsWith("group-frequency:")) return strengthGroupFreqIds.has(goal.id);
-    if (goal.targetType === "ROUTINE") return strengthRoutineIds.has(goal.targetId);
-    if (goal.targetType === "EXERCISE") return strengthExerciseIds.has(goal.targetId);
+    if (goal.id.startsWith("group-frequency:")) return domainGroupFreqIds.has(goal.id);
+    if (goal.targetType === "ROUTINE") return domainRoutineIds.has(goal.targetId);
+    if (goal.targetType === "EXERCISE") return domainExerciseIds.has(goal.targetId);
     return false;
   });
 });
+
+/** Back-compat alias — the strength hub predates the generalized loader. */
+export const getStrengthGoals = () => getDomainGoals("strength");
+
+/**
+ * The hub header's frequency chip — "2/3 this week". Prefers a first-class
+ * domain goal (targetKindLabel "Domain"), falls back to any frequency goal
+ * pointed at the hub. Rolling window only (world-page rule) — no
+ * vs-previous-period language here.
+ */
+export function frequencyChipFor(goals: GoalInsight[]): { label: string; href: string } | null {
+  const frequency = goals.filter((g) => g.goal.goalType === "FREQUENCY" && g.goal.isActive);
+  if (frequency.length === 0) return null;
+  const pick = frequency.find((g) => g.targetKindLabel === "Domain") ?? frequency[0];
+  const unitWord =
+    pick.goal.timeframe === "DAY" ? "today" : pick.goal.timeframe === "MONTH" ? "this month" : "this week";
+  return {
+    label: `${pick.actualDisplay}/${pick.targetDisplay} ${unitWord}`,
+    href: pick.detailHref ?? `/plan/goals/${encodeURIComponent(pick.goal.id)}`,
+  };
+}
 
 async function fetchGroupMembership(
   ids: string[],

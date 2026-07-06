@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatAppDate } from "@/lib/dates";
-import { getStrengthGoals } from "@/lib/activity-goals";
+import { getStrengthGoals, frequencyChipFor } from "@/lib/activity-goals";
 import { startOfWeekMonday } from "@/lib/week";
 import { loadStrengthWorld } from "@/app/progress/details/strength-world-loader";
 import { buildStrengthPulse } from "@/app/progress/details/sport-pulse";
@@ -141,6 +141,7 @@ export default async function StrengthWorldPage() {
         <ActivityHeader
           title="Strength"
           accent={domainColor("strength")}
+          frequencyChip={frequencyChipFor(strengthGoals)}
           actions={
             <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
               + New routine
