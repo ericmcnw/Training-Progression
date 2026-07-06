@@ -125,9 +125,12 @@ const todayBtn: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+// Three tiles, three columns — this was repeat(4) from when a fourth stat
+// existed, which squeezed each tile to quarter-width and truncated values
+// ("Mobility" → "Mobi…") on phones.
 const statsRow: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   gap: 8,
 };
 

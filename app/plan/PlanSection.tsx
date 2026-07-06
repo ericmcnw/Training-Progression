@@ -75,13 +75,30 @@ export default function PlanSection({
             {subtitle ? <span style={subtitleStyle}>{subtitle}</span> : null}
           </span>
         </button>
-        {action ? <div style={actionsStyle}>{action}</div> : null}
+        {action ? (
+          <div className="planSectionActions" style={actionsStyle}>
+            {action}
+          </div>
+        ) : null}
       </div>
       {open ? (
         <div id={bodyId} style={bodyStyle}>
           {children}
         </div>
       ) : null}
+      {/* On phones the action pills (up to two per section) can't share a
+          row with the title without crushing the subtitle into a sliver —
+          drop them to their own full-width row instead. Plain <style> tag
+          matches the repo pattern (HabitGrid) — no styled-jsx registry in
+          the app-router setup. */}
+      <style>{`
+        @media (max-width: 560px) {
+          .planSectionActions {
+            flex-basis: 100%;
+            justify-content: flex-start;
+          }
+        }
+      `}</style>
     </section>
   );
 }
