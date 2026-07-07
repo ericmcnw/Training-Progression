@@ -64,8 +64,12 @@ export async function loadEndurancePaceChart(input: {
   familySlug: string; // "overview" or a family slug
   typeSlug: string | null;
   now?: Date;
+  /** Chart window in weeks (4 or 12). The page's range filter drives this
+   *  so the graphs actually narrow with the filter. Default 12. */
+  weeks?: number;
 }): Promise<PaceChartData> {
   const now = input.now ?? new Date();
+  const weeks = input.weeks === 4 ? 4 : 12;
 
   // Always a 12-week window so the weekly view stays comparable across
   // visits. Session mode uses the same window so a typed log retyped
@@ -161,8 +165,9 @@ export async function loadEndurancePaceChart(input: {
 
   // ── Session mode (a specific type is selected) ─────────────────────────
   if (activeType) {
+    const windowCutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
     const points: SessionPacePoint[] = logs
-      .filter((l) => l.distanceMi && l.durationSec)
+      .filter((l) => l.distanceMi && l.durationSec && l.performedAt >= windowCutoff)
       .map((l) => ({
         id: l.id,
         performedAt: l.performedAt,
@@ -279,6 +284,16 @@ export async function loadEndurancePaceChart(input: {
     const [, m, d] = k.split("-");
     return `${Number(m)}/${Number(d)}`;
   });
+
+  // Narrower window: slice the always-computed 12 weeks to the last N and
+  // drop series that go silent in the shorter window.
+  if (weeks < 12) {
+    const slicedSeries = series
+      .map((s) => ({ ...s, weeklyPaceSec: s.weeklyPaceSec.slice(-weeks) }))
+      .filter((s) => s.weeklyPaceSec.some((v) => v != null));
+    if (slicedSeries.length === 0) return null;
+    return { mode: "weekly", weekLabels: weekLabels.slice(-weeks), series: slicedSeries };
+  }
 
   return { mode: "weekly", weekLabels, series };
 }

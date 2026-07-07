@@ -23,6 +23,7 @@ import PaceLineChart from "@/app/activities/_shared/PaceLineChart";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
 import EnduranceQuickLogButton from "@/app/routines/EnduranceQuickLogButton";
+import EnduranceFilterBar from "./EnduranceFilterBar";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +34,22 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-// Range filter applied via Prisma where-clause so the dataset stays
-// bounded even before in-memory rollup.
-type RangeFilter = "7d" | "4w" | "12w" | "1y" | "all";
+// Range filter — ONE control that drives the charts AND the stats/lists
+// below (4w/12w narrow the charts; "all" widens stats/lists to all-time
+// while charts stay at their 12-week max). Yearly evaluation lives on
+// /reports, so the old 7d/1y options collapsed into this set; legacy URLs
+// normalize.
+type RangeFilter = "4w" | "12w" | "all";
 
 const RANGE_DAYS: Record<Exclude<RangeFilter, "all">, number> = {
-  "7d": 7,
   "4w": 28,
   "12w": 84,
-  "1y": 365,
 };
 
 function parseRange(value: string | undefined): RangeFilter {
-  if (value === "7d" || value === "4w" || value === "12w" || value === "1y" || value === "all") return value;
+  if (value === "4w" || value === "12w" || value === "all") return value;
+  if (value === "7d") return "4w";
+  if (value === "1y") return "all";
   return "4w";
 }
 
@@ -57,10 +61,8 @@ function cutoffForRange(range: RangeFilter): Date | null {
 }
 
 function rangeLabel(range: RangeFilter): string {
-  if (range === "7d") return "Last 7 days";
   if (range === "4w") return "Last 4 weeks";
   if (range === "12w") return "Last 12 weeks";
-  if (range === "1y") return "Last year";
   return "All time";
 }
 
@@ -86,6 +88,8 @@ export default async function EnduranceWorldPage(props: {
   const range = parseRange(getParam(searchParams, "range"));
 
   const cutoff = cutoffForRange(range);
+  // Charts follow the range: 4w → 4-week charts; 12w/all → the 12-week max.
+  const chartWeeks = range === "4w" ? 4 : 12;
 
   const [families, logs, chartData, paceData, domainGoals, prPool] = await Promise.all([
     prisma.enduranceFamily.findMany({
@@ -127,13 +131,12 @@ export default async function EnduranceWorldPage(props: {
         },
       },
     }),
-    // 12w stacked-bar chart data, fetched in parallel — always 12 weeks
-    // regardless of the page range filter, but narrows by the active
-    // family/type filter so the chart matches what's below it.
-    loadEnduranceChartData({ familySlug, typeSlug }),
-    // 12w pace chart — multi-line by type on Overview / family tabs,
-    // switches to per-session points when a specific type is selected.
-    loadEndurancePaceChart({ familySlug, typeSlug }),
+    // Stacked-bar chart data — narrows by the active family/type filter AND
+    // the range (4w → 4-week window).
+    loadEnduranceChartData({ familySlug, typeSlug, weeks: chartWeeks }),
+    // Pace chart — multi-line by type on Overview / family views, switches
+    // to per-session points when a specific type is selected.
+    loadEndurancePaceChart({ familySlug, typeSlug, weeks: chartWeeks }),
     // Goals pointed at the endurance domain (incl. "Endurance 3×/week"
     // domain goals) — powers the header chip + Active Goals section.
     getDomainGoals("cardio"),
@@ -248,58 +251,30 @@ export default async function EnduranceWorldPage(props: {
             </>
           }
         />
-        {/* Family tabs — lifted above the charts so the user sees the
-            cause (filter pills) above the effect (charts narrowing). */}
-        <div style={tabRowStyle}>
-          <FamilyTab
-            label="Overview"
-            href={buildHref(searchParams, { family: "overview", type: undefined })}
-            active={familySlug === "overview"}
-          />
-          {rollups.map((r) => (
-            <FamilyTab
-              key={r.id}
-              label={`${r.name}${r.sessions > 0 ? ` (${r.sessions})` : ""}`}
-              href={buildHref(searchParams, { family: r.slug, type: undefined })}
-              active={familySlug === r.slug}
-            />
-          ))}
-        </div>
+        {/* ONE filter bar — activity (family+type merged) + range, and the
+            range drives the charts too. Replaces the old stacked family-tab
+            row + type sub-pill row + separate range row. */}
+        <EnduranceFilterBar
+          families={rollups.map((r) => ({
+            slug: r.slug,
+            name: r.name,
+            sessions: r.sessions,
+            types: r.types.map((t) => ({ slug: t.slug, name: t.name })),
+          }))}
+          familySlug={familySlug}
+          typeSlug={activeType?.slug ?? null}
+          range={range}
+        />
 
-        {/* Type sub-filter — only visible when a family is active.
-            Sits right under the family tabs so the cascade reads
-            top-to-bottom: family → type → charts. */}
-        {activeFamily && activeFamily.types.length > 0 && (
-          <div style={subFilterRowStyle}>
-            <Link
-              href={buildHref(searchParams, { type: undefined })}
-              style={!activeType ? subFilterPillActive : subFilterPill}
-            >
-              All {activeFamily.name}
-            </Link>
-            {activeFamily.types.map((t) => (
-              <Link
-                key={t.id}
-                href={buildHref(searchParams, { type: t.slug })}
-                style={activeType?.slug === t.slug ? subFilterPillActive : subFilterPill}
-              >
-                {t.name}
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {/* Interactive 12w stacked bar chart — always 12 weeks regardless
-            of the page range filter below, since cadence trends need
-            a stable window to compare against. */}
+        {/* Interactive stacked bar chart — follows the activity + range filters. */}
         {chartData.series.length > 0 ? (
           <WeeklyBarChartWithSessions
             title={
               activeType
-                ? `Miles per Week — ${activeType.name} · Last 12 Weeks`
+                ? `Miles per Week — ${activeType.name} · Last ${chartWeeks} Weeks`
                 : activeFamily
-                ? `Miles per Week — ${activeFamily.name} · Last 12 Weeks`
-                : "Miles per Week by Activity — Last 12 Weeks"
+                ? `Miles per Week — ${activeFamily.name} · Last ${chartWeeks} Weeks`
+                : `Miles per Week by Activity — Last ${chartWeeks} Weeks`
             }
             weekLabels={chartData.weekLabels}
             series={chartData.series}
@@ -318,18 +293,17 @@ export default async function EnduranceWorldPage(props: {
           />
         ) : null}
 
-        {/* Pace chart — also fixed at 12 weeks. Multi-line when the
-            page is unscoped or scoped to a family; switches to one
-            point per session when the user picks a specific type via
-            the sub-pill row below. */}
+        {/* Pace chart — follows the same filters. Multi-line when the page
+            is unscoped or scoped to a family; one point per session when a
+            specific type is selected. */}
         {paceData ? (
           <PaceLineChart
             title={
               paceData.mode === "weekly"
                 ? activeFamily
-                  ? `Average Pace per Week — ${activeFamily.name} · Last 12 Weeks`
-                  : "Average Pace per Week — Last 12 Weeks"
-                : `${paceData.typeName} · Pace per Session — Last 12 Weeks`
+                  ? `Average Pace per Week — ${activeFamily.name} · Last ${chartWeeks} Weeks`
+                  : `Average Pace per Week — Last ${chartWeeks} Weeks`
+                : `${paceData.typeName} · Pace per Session — Last ${chartWeeks} Weeks`
             }
             subtitle={
               paceData.mode === "weekly"
@@ -346,20 +320,6 @@ export default async function EnduranceWorldPage(props: {
           activityLabel="Endurance"
           showWhenEmpty={false}
         />
-
-        {/* Range pill row */}
-        <div style={rangeRowStyle}>
-          <span style={rangeLabelStyle}>Range</span>
-          {(["7d", "4w", "12w", "1y", "all"] as const).map((r) => (
-            <Link
-              key={r}
-              href={buildHref(searchParams, { range: r === "4w" ? undefined : r })}
-              style={range === r ? rangePillActive : rangePill}
-            >
-              {r === "all" ? "All" : r}
-            </Link>
-          ))}
-        </div>
 
         {/* Overview tab: side-by-side family cards */}
         {familySlug === "overview" ? (
@@ -400,15 +360,7 @@ export default async function EnduranceWorldPage(props: {
   );
 }
 
-// ── Tab + chip components ───────────────────────────────────────────────────
-
-function FamilyTab({ label, href, active }: { label: string; href: string; active: boolean }) {
-  return (
-    <Link href={href} style={active ? tabActiveStyle : tabStyle} aria-current={active ? "page" : undefined}>
-      {label}
-    </Link>
-  );
-}
+// ── Chip components ─────────────────────────────────────────────────────────
 
 function FamilyStatCard({
   rollup,
@@ -618,108 +570,6 @@ const headerLogBtnStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
   cursor: "pointer",
   fontFamily: "inherit",
-};
-
-const tabRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-  padding: "4px 0",
-};
-
-const tabStyle: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 999,
-  // Split into long-hand props so `tabActiveStyle` can override just the
-  // color without mixing shorthand `border` with non-shorthand
-  // `borderColor` — React warns on that combo during rerender because it
-  // can't reconcile which value should win when toggling between the
-  // two style objects.
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "rgba(255,255,255,0.78)",
-  fontSize: 12.5,
-  fontWeight: 800,
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-};
-
-const tabActiveStyle: React.CSSProperties = {
-  ...tabStyle,
-  background: "rgba(120,190,255,0.18)",
-  borderColor: "rgba(120,190,255,0.45)",
-  color: "rgba(191,219,254,0.98)",
-};
-
-const rangeRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  alignItems: "center",
-  flexWrap: "wrap",
-};
-
-const rangeLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: 0.5,
-  opacity: 0.55,
-  textTransform: "uppercase",
-  marginRight: 4,
-};
-
-const rangePill: React.CSSProperties = {
-  padding: "5px 10px",
-  borderRadius: 999,
-  // Split long-hand so `rangePillActive` can override `borderColor`
-  // without React warning about mixing shorthand `border` with the
-  // non-shorthand override during rerender.
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 12,
-  fontWeight: 800,
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-};
-
-const rangePillActive: React.CSSProperties = {
-  ...rangePill,
-  background: "rgba(120,190,255,0.15)",
-  borderColor: "rgba(120,190,255,0.45)",
-  color: "rgba(191,219,254,0.98)",
-};
-
-const subFilterRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-const subFilterPill: React.CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: 999,
-  // Split long-hand so `subFilterPillActive` can override `borderColor`
-  // without React's mixed-shorthand warning during rerender.
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  fontSize: 12,
-  fontWeight: 800,
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-};
-
-const subFilterPillActive: React.CSSProperties = {
-  ...subFilterPill,
-  background: "rgba(120,190,255,0.15)",
-  borderColor: "rgba(120,190,255,0.45)",
-  color: "rgba(191,219,254,0.98)",
 };
 
 const statCardStyle: React.CSSProperties = {

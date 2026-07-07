@@ -125,7 +125,7 @@ rolling/all-time so it complements (not duplicates) reports' calendar evaluation
 DEMOTED from original plan: pulse-strip vs-prior-window arrows everywhere —
 reports own vs-previous evaluation. Optional garnish later, not a phase item.
 
-## Phase 2.5 — Endurance filter unification (USER-ELEVATED 2026-07-06)
+## Phase 2.5 — Endurance filter unification (USER-ELEVATED 2026-07-06) — BUILT 2026-07-06
 
 The endurance page has four stacked control layers: family tabs, type
 sub-pills, per-chart Miles/Time/Elevation toggles, and range pills — and the

@@ -38,10 +38,14 @@ export async function loadEnduranceChartData(input?: {
   familySlug?: string;
   typeSlug?: string | null;
   now?: Date;
+  /** Chart window in weeks (4 or 12). The page's range filter drives this
+   *  so the graphs actually narrow with the filter. Default 12. */
+  weeks?: number;
 }): Promise<EnduranceChartData> {
   const now = input?.now ?? new Date();
   const familySlug = input?.familySlug ?? "overview";
   const typeSlug = input?.typeSlug ?? null;
+  const weeks = input?.weeks === 4 ? 4 : 12;
   const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
 
   // Resolve the endurance-tagged routine ids in a small first round-trip
@@ -270,6 +274,23 @@ export async function loadEnduranceChartData(input?: {
   // panel reads top-down as the week unfolded.
   for (const weekSessions of sessionsByWeek) {
     weekSessions.sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime());
+  }
+
+  // Narrower window: slice the always-computed 12 weeks down to the last N
+  // and drop series that go empty in the shorter window.
+  if (weeks < 12) {
+    const slicedSeries = series
+      .map((s) => ({
+        ...s,
+        weeklyValues: s.weeklyValues.slice(-weeks),
+        weeklyMinutes: s.weeklyMinutes?.slice(-weeks),
+      }))
+      .filter((s) => s.weeklyValues.some((v) => v > 0));
+    return {
+      weekLabels: weekLabels.slice(-weeks),
+      series: slicedSeries,
+      sessionsByWeek: sessionsByWeek.slice(-weeks),
+    };
   }
 
   return { weekLabels, series, sessionsByWeek };
