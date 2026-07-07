@@ -1,62 +1,85 @@
 "use client";
 
-// Guided front door for goal creation (Goal System v2, P2). Subject-first:
-// pick the thing you're working on → only the intents valid for it → hand off
-// to the full GoalForm with everything prefilled. The form itself is unchanged,
-// so every advanced capability (weekday masks, substitutes, triggers, rep
-// floors, pace benchmarks) survives — this layer only removes the scope
-// indirection on the way in. Prefill flows ("add a goal for THIS routine")
-// bypass this and land on the form directly, as before.
+// Guided goal creator (Goal System v2.2) — intent-first with a global search.
 //
-// Per-routine habits are the one path that skips the form: they post straight
-// to createGoal, which routes FREQUENCY/ROUTINE/SESSIONS to the canonical
-// fg_<routineId> FrequencyGoal (see app/goals/actions.ts).
+// Structure (small fan-out → large fan-out):
+//   1. Home: search + data-driven quick-start + THREE intent tiles. No
+//      catalog — the wall lives behind a choice, never in front of one.
+//   2. Subject: only the subjects valid for the chosen intent, small groups
+//      first, long groups as top-5-by-recency + "Search all N…" (focuses the
+//      search — expand-in-place is banned).
+//   3. Habit intents end in a 3-field pane (stepper, unit chips, save) with
+//      a live "counted last 7 days" preview and a gentle overlap note.
+//      Total/Best hand off to GoalForm prefilled.
+//   4. Saved: one confirmation beat saying where the goal now lives.
+//
+// Searching from Home is the subject-first path for people who think in
+// subjects ("bench", "V7") — picking a single-intent match skips ahead;
+// multi-intent matches show the three tiles scoped to that subject.
+// Prefilled contextual flows ("goal for THIS routine") bypass this entirely
+// (see FormDrawer).
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import type { CSSProperties } from "react";
 import GoalForm, { type GoalFormInitial } from "./GoalForm";
 import type { GoalFormOptions } from "@/lib/goals";
 import { formInputStyle } from "./ui";
 
+// ── Subjects + intents ──────────────────────────────────────────────────────
+
 type Subject =
   | { kind: "domain"; id: string; label: string; color: string }
-  | { kind: "sport"; id: string; label: string; color: string }
+  | { kind: "sport"; id: string; label: string; slug: string; color: string }
   | { kind: "family"; id: string; label: string }
-  | { kind: "activityType"; id: string; label: string; familyName: string }
+  | { kind: "activityType"; id: string; label: string; familyId: string; familyName: string }
   | { kind: "routine"; id: string; label: string; sub?: string; hasMetrics: boolean }
   | { kind: "exercise"; id: string; label: string }
   | { kind: "grade"; id: string; label: string; isTemplate: boolean }
   | { kind: "template"; id: string; label: string };
 
-// Domain subjects — first-class "Strength 3×/week" targets. Sport-domain and
-// Lifestyle ship later (freeform-Activity edge case + design call); "any"
-// covers the "just work out N times a week" mental model.
+type Intent = "habit" | "total" | "best";
+
+const INTENT_META: Record<Intent, { label: string; tagline: string; icon: string }> = {
+  habit: { label: "Build a habit", tagline: "Show up N times a week", icon: "🔁" },
+  total: { label: "Hit a total", tagline: "Add up miles, reps, or sets", icon: "📈" },
+  best: { label: "Beat my best", tagline: "Set a personal record", icon: "🏆" },
+};
+
 const DOMAIN_SUBJECTS: Array<Extract<Subject, { kind: "domain" }>> = [
   { kind: "domain", id: "strength", label: "Strength", color: "rgba(129,140,248,0.9)" },
   { kind: "domain", id: "cardio", label: "Endurance", color: "rgba(56,189,248,0.9)" },
   { kind: "domain", id: "mobility", label: "Mobility", color: "rgba(192,132,252,0.9)" },
+  { kind: "domain", id: "lifestyle", label: "Lifestyle", color: "rgba(84,203,130,0.9)" },
   { kind: "domain", id: "any", label: "Any training", color: "rgba(148,163,184,0.9)" },
 ];
 
-type Intent = "habit" | "total" | "best";
-
-const INTENT_META: Record<Intent, { label: string; tagline: string; icon: string }> = {
-  habit: { label: "Build a habit", tagline: "Show up N times per week", icon: "🔁" },
-  total: { label: "Hit a total", tagline: "Accumulate an amount over time", icon: "📈" },
-  best: { label: "Beat my best", tagline: "A new personal record", icon: "🏆" },
+const DOMAIN_HUB: Record<string, string | null> = {
+  strength: "the Strength page",
+  cardio: "the Endurance page",
+  mobility: "the Mobility page",
+  lifestyle: "the Lifestyle page",
+  any: null,
 };
 
-const GROUP_ORDER: Array<{ key: Subject["kind"] | "grade"; title: string }> = [
-  { key: "domain", title: "Training domains" },
-  { key: "sport", title: "Sports" },
-  { key: "family", title: "Activities" },
-  { key: "routine", title: "Routines" },
-  { key: "exercise", title: "Exercises" },
-  { key: "grade", title: "Grades" },
-  { key: "template", title: "Session types" },
-];
+function intentsFor(subject: Subject): Intent[] {
+  switch (subject.kind) {
+    case "domain":
+    case "sport":
+    case "template":
+      return ["habit"];
+    case "family":
+    case "activityType":
+      return ["habit", "total", "best"];
+    case "routine":
+      return subject.hasMetrics ? ["habit", "total", "best"] : ["habit", "total"];
+    case "exercise":
+      return ["best", "total", "habit"];
+    case "grade":
+      return ["best"];
+  }
+}
 
-const VISIBLE_PER_GROUP = 6;
+// ── Handoff mapping (total / best → GoalForm) ───────────────────────────────
 
 function localTodayYmd(): string {
   const now = new Date();
@@ -85,74 +108,31 @@ function baseInitial(): GoalFormInitial {
   };
 }
 
-// Which intents make sense for a subject. Grades and session types have a
-// single intent, so the intent stage auto-skips for them.
-function intentsFor(subject: Subject): Intent[] {
-  switch (subject.kind) {
-    case "domain":
-      return ["habit"];
-    case "sport":
-      return ["habit"];
-    case "family":
-    case "activityType":
-      return ["habit", "total", "best"];
-    case "routine":
-      return subject.hasMetrics ? ["habit", "total", "best"] : ["habit", "total"];
-    case "exercise":
-      return ["best", "total", "habit"];
-    case "grade":
-      return ["best"];
-    case "template":
-      return ["habit"];
-  }
-}
-
-// Map subject + intent onto a prefilled GoalFormInitial. deriveInitialScope
-// inside GoalForm turns these shapes into the right scope UI.
 function buildInitial(subject: Subject, intent: Intent): GoalFormInitial {
   const init = baseInitial();
-  if (intent === "habit") {
-    init.goalType = "FREQUENCY";
-    if (subject.kind === "template") {
-      init.targetType = "SESSION_TEMPLATE";
-      init.targetId = subject.id;
-      init.name = `${subject.label} 3×/week`;
-      return init;
-    }
-    init.name = `${subject.label} ${subject.kind === "sport" ? 2 : 3}×/week`;
-    init.groupFrequency = {
-      targetCount: subject.kind === "sport" ? 2 : 3,
-      targetInterval: 1,
-      targetUnit: "WEEK",
-      routineIds: subject.kind === "sport" ? [subject.id] : [],
-      triggerActivityFamilyIds: subject.kind === "family" ? [subject.id] : [],
-      triggerActivityTypeIds: subject.kind === "activityType" ? [subject.id] : [],
-      triggerExerciseIds: subject.kind === "exercise" ? [subject.id] : [],
-    };
-    return init;
-  }
   if (intent === "total") {
     init.goalType = "VOLUME";
+    init.targetValue = 0;
     if (subject.kind === "exercise") {
       init.targetType = "EXERCISE";
       init.targetId = subject.id;
       init.metricType = "VOLUME";
-      init.targetValue = 0;
       init.name = `${subject.label} weekly volume`;
       return init;
     }
     if (subject.kind === "family" || subject.kind === "activityType") {
+      // The endurance target is a metadata group, not a family — the form
+      // keeps its target dropdown visible for this one path (locked-mode
+      // exception; see the creator audit).
       init.targetType = "CARDIO";
       init.targetId = "";
       init.metricType = "DISTANCE";
-      init.targetValue = 0;
       init.name = `${subject.label} weekly distance`;
       return init;
     }
     init.targetType = "ROUTINE";
     init.targetId = subject.id;
     init.metricType = "SETS";
-    init.targetValue = 0;
     init.name = `${subject.label} weekly total`;
     return init;
   }
@@ -174,13 +154,16 @@ function buildInitial(subject: Subject, intent: Intent): GoalFormInitial {
     init.name = `${subject.label} pace PR`;
     return init;
   }
-  // grade targets + metric-carrying routines → the form's grade scope
   init.targetType = subject.kind === "grade" && subject.isTemplate ? "SESSION_TEMPLATE" : "ROUTINE";
   init.targetId = subject.id;
   init.metricType = "SESSION_METRIC";
   init.name = `${subject.label} PR`;
   return init;
 }
+
+// ── Component ───────────────────────────────────────────────────────────────
+
+type SavedInfo = { name: string; where: string };
 
 export default function GoalCreatorEntry({
   options,
@@ -195,72 +178,97 @@ export default function GoalCreatorEntry({
   createFrequencyAction: (formData: FormData) => void | Promise<void>;
   onSuccess?: () => void;
 }) {
-  const [stage, setStage] = useState<
-    "subject" | "intent" | "form" | "routineHabit" | "domainHabit" | "manual"
-  >("subject");
+  const [stage, setStage] = useState<"home" | "subject" | "intent" | "pane" | "form" | "manual" | "saved">("home");
+  const [intentFilter, setIntentFilter] = useState<Intent | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [formInitial, setFormInitial] = useState<GoalFormInitial | null>(null);
+  const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [query, setQuery] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  // Intent-first entry: tapping "Build a habit" up front filters the catalog
-  // to habit-able subjects and skips the intent step after the subject pick.
-  // Serves the "I want a habit… for what?" mental model alongside
-  // subject-first — both converge on the same handoff.
-  const [intentFilter, setIntentFilter] = useState<Intent | null>(null);
+  const [searchHint, setSearchHint] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const subjects = useMemo(() => buildSubjectCatalog(options), [options]);
+  const subjects = useMemo(() => buildCatalog(options), [options]);
+  const quickStart = useMemo(() => buildQuickStart(subjects, options), [subjects, options]);
 
-  const filtered = useMemo(() => {
+  const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q) return [];
     const pool = intentFilter ? subjects.filter((s) => intentsFor(s).includes(intentFilter)) : subjects;
-    if (!q) return pool;
-    const matches = (s: Subject) =>
-      s.label.toLowerCase().includes(q) ||
-      (s.kind === "activityType" && s.familyName.toLowerCase().includes(q)) ||
-      // grade-ish queries ("v7", "v grade", "5.11") should surface Grades
-      (s.kind === "grade" && /^v\s?\d|^5\.|grade|boulder|climb/.test(q)) ||
-      // "work out 4x a week" style queries surface the domain chips
-      (s.kind === "domain" && /work\s?out|train|exercise|fitness|domain/.test(q));
-    return pool.filter(matches);
+    return pool
+      .filter(
+        (s) =>
+          s.label.toLowerCase().includes(q) ||
+          (s.kind === "activityType" && s.familyName.toLowerCase().includes(q)) ||
+          (s.kind === "grade" && /^v\s?\d|^5\.|grade|boulder|climb/.test(q)) ||
+          (s.kind === "domain" && /work\s?out|train|exercise|fitness/.test(q))
+      )
+      .slice(0, 24);
   }, [subjects, query, intentFilter]);
 
-  function pickSubject(next: Subject) {
-    setSubject(next);
-    if (intentFilter && intentsFor(next).includes(intentFilter)) {
-      pickIntent(next, intentFilter);
-      return;
-    }
-    const intents = intentsFor(next);
-    if (intents.length === 1) {
-      pickIntent(next, intents[0]);
-      return;
-    }
-    setStage("intent");
+  function reset() {
+    setStage("home");
+    setIntentFilter(null);
+    setSubject(null);
+    setFormInitial(null);
+    setSaved(null);
+    setQuery("");
+    setSearchHint(null);
   }
 
-  function pickIntent(forSubject: Subject, intent: Intent) {
-    if (intent === "habit" && forSubject.kind === "routine") {
-      setSubject(forSubject);
-      setStage("routineHabit");
+  function pickIntent(intent: Intent) {
+    setIntentFilter(intent);
+    setQuery("");
+    setStage("subject");
+  }
+
+  function pickSubject(next: Subject, intent?: Intent | null) {
+    const valid = intentsFor(next);
+    const chosen = intent && valid.includes(intent) ? intent : valid.length === 1 ? valid[0] : null;
+    setSubject(next);
+    setQuery("");
+    if (!chosen) {
+      setStage("intent");
       return;
     }
-    if (forSubject.kind === "domain") {
-      setSubject(forSubject);
-      setStage("domainHabit");
+    if (chosen === "habit") {
+      setStage("pane");
       return;
     }
-    setFormInitial(buildInitial(forSubject, intent));
+    setFormInitial(buildInitial(next, chosen));
     setStage("form");
   }
 
-  function reset() {
-    setStage("subject");
-    setSubject(null);
-    setFormInitial(null);
-    setIntentFilter(null);
+  function focusSearch(hint: string) {
+    setSearchHint(hint);
+    searchRef.current?.focus();
   }
 
-  if (stage === "form" && formInitial) {
+  function handleSaved(info: SavedInfo) {
+    setSaved(info);
+    setStage("saved");
+  }
+
+  // ── Saved beat ─────────────────────────────────────────────────────────
+  if (stage === "saved" && saved) {
+    return (
+      <div style={{ display: "grid", gap: 14, padding: "10px 2px" }}>
+        <div style={{ fontSize: 30 }} aria-hidden>✓</div>
+        <div style={stageTitle}>Added</div>
+        <div style={savedBody}>
+          <strong>{saved.name}</strong> is live — see it on {saved.where}.
+        </div>
+        <button type="button" style={savePrimary} onClick={() => onSuccess?.()}>
+          Done
+        </button>
+        <button type="button" style={quietLink} onClick={reset}>
+          Create another →
+        </button>
+      </div>
+    );
+  }
+
+  // ── Handoff / manual form ──────────────────────────────────────────────
+  if ((stage === "form" && formInitial) || stage === "manual") {
     return (
       <div style={{ display: "grid", gap: 10 }}>
         <button type="button" onClick={reset} style={backLink}>
@@ -271,7 +279,7 @@ export default function GoalCreatorEntry({
           groupFrequencyAction={createFrequencyAction}
           options={options}
           submitLabel="Save Goal"
-          initial={formInitial}
+          initial={stage === "manual" ? defaultInitial : formInitial!}
           inDrawer
           onSuccess={onSuccess}
         />
@@ -279,264 +287,545 @@ export default function GoalCreatorEntry({
     );
   }
 
-  if (stage === "manual") {
+  // ── Habit pane ─────────────────────────────────────────────────────────
+  if (stage === "pane" && subject) {
     return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <button type="button" onClick={reset} style={backLink}>
-          ‹ Start over
-        </button>
-        <GoalForm
-          action={createAction}
-          groupFrequencyAction={createFrequencyAction}
-          options={options}
-          submitLabel="Save Goal"
-          initial={defaultInitial}
-          inDrawer
-          onSuccess={onSuccess}
-        />
-      </div>
-    );
-  }
-
-  if (stage === "domainHabit" && subject && subject.kind === "domain") {
-    return (
-      <DomainHabitPane
-        domain={subject}
-        createFrequencyAction={createFrequencyAction}
-        onBack={reset}
-        onSuccess={onSuccess}
-      />
-    );
-  }
-
-  if (stage === "routineHabit" && subject && subject.kind === "routine") {
-    return (
-      <RoutineHabitPane
-        routine={subject}
+      <HabitPane
+        subject={subject}
+        options={options}
         createAction={createAction}
-        onBack={() => setStage("intent")}
-        onManualCompletion={() => {
-          const init = baseInitial();
-          init.goalType = "COMPLETION";
-          init.targetType = "ROUTINE";
-          init.targetId = subject.id;
-          init.metricType = "COMPLETED";
-          init.timeframe = "ONE_TIME";
-          init.targetValue = 10;
-          init.name = `Complete ${subject.label}`;
-          setFormInitial(init);
-          setStage("form");
-        }}
-        onSuccess={onSuccess}
+        createFrequencyAction={createFrequencyAction}
+        onBack={() => setStage(intentFilter ? "subject" : "home")}
+        onSaved={handleSaved}
+        onCompletionInstead={
+          subject.kind === "routine"
+            ? () => {
+                const init = baseInitial();
+                init.goalType = "COMPLETION";
+                init.targetType = "ROUTINE";
+                init.targetId = subject.id;
+                init.metricType = "COMPLETED";
+                init.timeframe = "ONE_TIME";
+                init.targetValue = 10;
+                init.name = `Complete ${subject.label}`;
+                setFormInitial(init);
+                setStage("form");
+              }
+            : undefined
+        }
       />
     );
   }
 
+  // ── Intent picker for a multi-intent subject (arrived via search) ──────
   if (stage === "intent" && subject) {
-    const intents = intentsFor(subject);
+    const valid = intentsFor(subject);
     return (
       <div style={{ display: "grid", gap: 14 }}>
         <button type="button" onClick={reset} style={backLink}>
-          ‹ {subject.label}
+          ‹ Start over
         </button>
         <div style={stageTitle}>What kind of goal for {subject.label}?</div>
-        <div style={intentGrid}>
-          {intents.map((intent) => (
-            <button key={intent} type="button" style={intentTile} onClick={() => pickIntent(subject, intent)}>
-              <span style={{ fontSize: 18 }} aria-hidden>{INTENT_META[intent].icon}</span>
-              <span style={intentLabel}>{INTENT_META[intent].label}</span>
-              <span style={intentTagline}>{INTENT_META[intent].tagline}</span>
-            </button>
+        <div style={{ display: "grid", gap: 8 }}>
+          {valid.map((intent) => (
+            <IntentTile key={intent} intent={intent} onPick={() => pickSubject(subject, intent)} />
           ))}
         </div>
       </div>
     );
   }
 
-  // ── subject stage ──────────────────────────────────────────────────────────
-  const gallery = buildGallery(subjects);
-  const showGallery = !query.trim() && !intentFilter && gallery.length > 0;
+  // ── Subject screen (intent chosen) ─────────────────────────────────────
+  if (stage === "subject" && intentFilter) {
+    const pool = subjects.filter((s) => intentsFor(s).includes(intentFilter));
+    const showingSearch = query.trim().length > 0;
+    return (
+      <div style={{ display: "grid", gap: 14 }}>
+        <button type="button" onClick={reset} style={backLink}>
+          ‹ {INTENT_META[intentFilter].icon} {INTENT_META[intentFilter].label}
+        </button>
+        <div style={stageTitle}>…for what?</div>
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={searchHint ?? "Search"}
+          style={{ ...formInputStyle, fontSize: 16 }}
+          aria-label="Search subjects"
+        />
+        {showingSearch ? (
+          <SearchResults results={searchResults} onPick={(s) => pickSubject(s, intentFilter)} query={query} onManual={() => setStage("manual")} />
+        ) : (
+          <SubjectGroups
+            pool={pool}
+            intent={intentFilter}
+            options={options}
+            onPick={(s) => pickSubject(s, intentFilter)}
+            onFocusSearch={focusSearch}
+            onMixOfRoutines={() => {
+              const init = baseInitial();
+              init.goalType = "FREQUENCY";
+              init.name = "";
+              init.groupFrequency = {
+                targetCount: 2,
+                targetInterval: 1,
+                targetUnit: "WEEK",
+                routineIds: [],
+              };
+              setFormInitial(init);
+              setStage("form");
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
+  // ── Home ───────────────────────────────────────────────────────────────
+  const showingSearch = query.trim().length > 0;
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "grid", gap: 3 }}>
-        <div style={stageTitle}>
-          {intentFilter ? `${INTENT_META[intentFilter].label} — for what?` : "What do you want to work on?"}
-        </div>
-        <div style={stageSubStyle}>
-          {intentFilter
-            ? "Pick the thing this goal is about."
-            : "Grab a ready-made goal, pick a subject, or start from the kind of goal you want."}
-        </div>
-      </div>
-
       <input
-        autoFocus={false}
+        ref={searchRef}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search sports, routines, exercises…"
+        placeholder="Search — try “bench”, “climbing”, “V7”…"
         style={{ ...formInputStyle, fontSize: 16 }}
-        aria-label="Search goal subjects"
+        aria-label="Search anything"
       />
 
-      {showGallery ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={groupHeader}>Quick start</div>
+      {showingSearch ? (
+        <SearchResults results={searchResults} onPick={(s) => pickSubject(s, null)} query={query} onManual={() => setStage("manual")} />
+      ) : (
+        <>
+          {quickStart.length > 0 ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={groupHeader}>Quick start</div>
+              <div style={chipWrap}>
+                {quickStart.map((qs) => (
+                  <button key={qs.key} type="button" style={galleryChip} onClick={() => pickSubject(qs.subject, "habit")}>
+                    {qs.label}
+                  </button>
+                ))}
+                <button type="button" style={galleryChipQuiet} onClick={() => pickIntent("best")}>
+                  🏆 New PR…
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={stageTitle}>What kind of goal?</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {(Object.keys(INTENT_META) as Intent[]).map((intent) => (
+                <IntentTile key={intent} intent={intent} onPick={() => pickIntent(intent)} />
+              ))}
+            </div>
+          </div>
+
+          <button type="button" style={quietLink} onClick={() => setStage("manual")}>
+            Build it manually →
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Pieces ──────────────────────────────────────────────────────────────────
+
+function IntentTile({ intent, onPick }: { intent: Intent; onPick: () => void }) {
+  const meta = INTENT_META[intent];
+  return (
+    <button type="button" style={intentTile} onClick={onPick}>
+      <span style={{ fontSize: 20 }} aria-hidden>{meta.icon}</span>
+      <span style={{ display: "grid", gap: 2, textAlign: "left" }}>
+        <span style={intentLabel}>{meta.label}</span>
+        <span style={intentTagline}>{meta.tagline}</span>
+      </span>
+    </button>
+  );
+}
+
+function SearchResults({
+  results,
+  query,
+  onPick,
+  onManual,
+}: {
+  results: Subject[];
+  query: string;
+  onPick: (s: Subject) => void;
+  onManual: () => void;
+}) {
+  if (results.length === 0) {
+    return (
+      <div style={emptyNote}>
+        Nothing matches “{query.trim()}”. Try another word — or{" "}
+        <button type="button" style={inlineLink} onClick={onManual}>
+          build it manually
+        </button>
+        .
+      </div>
+    );
+  }
+  return (
+    <div style={rowList}>
+      {results.map((s) => (
+        <SubjectRow key={`${s.kind}:${s.id}`} subject={s} onPick={() => onPick(s)} />
+      ))}
+    </div>
+  );
+}
+
+const KIND_TAG: Record<Subject["kind"], string> = {
+  domain: "category",
+  sport: "sport",
+  family: "activity",
+  activityType: "activity",
+  routine: "routine",
+  exercise: "exercise",
+  grade: "grade",
+  template: "session type",
+};
+
+function SubjectRow({ subject, onPick }: { subject: Subject; onPick: () => void }) {
+  return (
+    <button type="button" style={subjectRow} onClick={onPick}>
+      {"color" in subject ? <span style={{ ...dot, background: subject.color }} aria-hidden /> : null}
+      <span style={rowLabel}>{subject.label}</span>
+      <span style={rowSub}>
+        {subject.kind === "activityType"
+          ? subject.familyName
+          : subject.kind === "family"
+          ? "any type counts"
+          : "sub" in subject && subject.sub
+          ? subject.sub
+          : KIND_TAG[subject.kind]}
+      </span>
+    </button>
+  );
+}
+
+const VISIBLE = 5;
+
+function SubjectGroups({
+  pool,
+  intent,
+  options,
+  onPick,
+  onFocusSearch,
+  onMixOfRoutines,
+}: {
+  pool: Subject[];
+  intent: Intent;
+  options: GoalFormOptions;
+  onPick: (s: Subject) => void;
+  onFocusSearch: (hint: string) => void;
+  onMixOfRoutines: () => void;
+}) {
+  const domains = pool.filter((s) => s.kind === "domain");
+  const sports = pool.filter((s) => s.kind === "sport");
+  const families = pool.filter((s) => s.kind === "family");
+  const routines = pool.filter((s) => s.kind === "routine");
+  const exercises = pool.filter((s) => s.kind === "exercise");
+  const grades = pool.filter((s) => s.kind === "grade");
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      {domains.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Whole categories</div>
+          <div style={groupHint}>Every matching session counts, automatically — even from new routines.</div>
           <div style={chipWrap}>
-            {gallery.map((g) => (
-              <button key={g.key} type="button" style={galleryChip} onClick={() => pickSubject(g.subject)}>
-                {g.label}
+            {domains.map((s) => (
+              <button key={s.id} type="button" style={subjectChip} onClick={() => onPick(s)}>
+                <span style={{ ...dot, background: (s as { color: string }).color }} aria-hidden />
+                <span style={{ fontWeight: 800 }}>{s.label}</span>
               </button>
             ))}
           </div>
         </div>
       ) : null}
 
-      {/* Intent-first lane — for the "I want a habit… for what?" mental
-          model. Selecting one filters the catalog below and skips the
-          intent step after the subject pick. */}
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={groupHeader}>{intentFilter ? "Kind of goal" : "Or start from the kind of goal"}</div>
-        <div style={chipWrap}>
-          {(Object.keys(INTENT_META) as Intent[]).map((intent) => {
-            const active = intentFilter === intent;
-            return (
-              <button
-                key={intent}
-                type="button"
-                onClick={() => setIntentFilter(active ? null : intent)}
-                style={active ? { ...intentChip, ...intentChipOn } : intentChip}
-                aria-pressed={active}
-              >
-                <span aria-hidden>{INTENT_META[intent].icon}</span>
-                {INTENT_META[intent].label}
-                {active ? <span aria-hidden style={{ opacity: 0.7 }}>×</span> : null}
+      {sports.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Sports</div>
+          <div style={chipWrap}>
+            {sports.map((s) => (
+              <button key={s.id} type="button" style={subjectChip} onClick={() => onPick(s)}>
+                <span style={{ ...dot, background: (s as { color: string }).color }} aria-hidden />
+                <span style={{ fontWeight: 800 }}>{s.label}</span>
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gap: 8 }}>
-        {showGallery ? <div style={groupHeader}>Or pick what you’re working on</div> : null}
-        {GROUP_ORDER.map(({ key, title }) => {
-          const items = filtered.filter((s) => s.kind === key);
-          if (items.length === 0) return null;
-          const expanded = expandedGroups.has(key) || query.trim().length > 0;
-          const visible = expanded ? items : items.slice(0, VISIBLE_PER_GROUP);
-          const hidden = items.length - visible.length;
-          const chipStyleGroups = key === "domain" || key === "sport" || key === "grade";
-          return (
-            <div key={key} style={{ display: "grid", gap: 7 }}>
-              <div style={groupHeader}>{title}</div>
-              <div style={chipStyleGroups ? chipWrap : rowList}>
-                {visible.map((s) => (
-                  <button
-                    key={`${s.kind}:${s.id}`}
-                    type="button"
-                    style={chipStyleGroups ? subjectChip : subjectRow}
-                    onClick={() => pickSubject(s)}
-                  >
-                    {s.kind === "sport" || s.kind === "domain" ? (
-                      <span style={{ ...sportDot, background: s.color }} aria-hidden />
-                    ) : null}
-                    <span style={{ fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {s.label}
-                    </span>
-                    {"sub" in s && s.sub ? <span style={rowSub}>{s.sub}</span> : null}
-                    {s.kind === "activityType" ? <span style={rowSub}>{s.familyName}</span> : null}
-                  </button>
-                ))}
-              </div>
-              {hidden > 0 ? (
-                <button
-                  type="button"
-                  style={moreLink}
-                  onClick={() => setExpandedGroups((prev) => new Set(prev).add(key))}
-                >
-                  Show {hidden} more
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
-        {query.trim() && filtered.length === 0 ? (
-          <div style={emptyNote}>
-            Nothing matches “{query.trim()}”. Try another word — or build the goal manually below.
+            ))}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <button type="button" style={manualLink} onClick={() => setStage("manual")}>
-        Build it manually instead →
-      </button>
+      {grades.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Grades</div>
+          <div style={chipWrap}>
+            {grades.map((s) => (
+              <button key={s.id} type="button" style={subjectChip} onClick={() => onPick(s)}>
+                🧗 <span style={{ fontWeight: 800 }}>{s.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {families.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Activities</div>
+          <div style={rowList}>
+            {families.map((s) => (
+              <SubjectRow key={s.id} subject={s} onPick={() => onPick(s)} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {routines.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Routines</div>
+          <div style={rowList}>
+            {routines.slice(0, VISIBLE).map((s) => (
+              <SubjectRow key={s.id} subject={s} onPick={() => onPick(s)} />
+            ))}
+          </div>
+          {routines.length > VISIBLE ? (
+            <button type="button" style={quietLink} onClick={() => onFocusSearch(`Search ${routines.length} routines…`)}>
+              Search all {routines.length} routines…
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {exercises.length > 0 ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          <div style={groupHeader}>Exercises</div>
+          <div style={rowList}>
+            {exercises.slice(0, VISIBLE).map((s) => (
+              <SubjectRow key={s.id} subject={s} onPick={() => onPick(s)} />
+            ))}
+          </div>
+          {exercises.length > VISIBLE ? (
+            <button type="button" style={quietLink} onClick={() => onFocusSearch(`Search ${exercises.length} exercises…`)}>
+              Search all {exercises.length} exercises…
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {intent === "habit" ? (
+        <button type="button" style={mixChip} onClick={onMixOfRoutines}>
+          🔗 A mix of routines → <span style={rowSub}>build a custom group</span>
+        </button>
+      ) : null}
     </div>
   );
 }
 
-// Domain habit — "Strength 3×/week" counts every log in the domain. Posts to
-// createFrequencyGoal with targetDomain set; no routine roster needed (the
-// matcher resolves membership from each log's effective domain).
-function DomainHabitPane({
-  domain,
+// ── The habit pane — every habit ends here ─────────────────────────────────
+
+function HabitPane({
+  subject,
+  options,
+  createAction,
   createFrequencyAction,
   onBack,
-  onSuccess,
+  onSaved,
+  onCompletionInstead,
 }: {
-  domain: Extract<Subject, { kind: "domain" }>;
+  subject: Subject;
+  options: GoalFormOptions;
+  createAction: (formData: FormData) => void | Promise<void>;
   createFrequencyAction: (formData: FormData) => void | Promise<void>;
   onBack: () => void;
-  onSuccess?: () => void;
+  onSaved: (info: SavedInfo) => void;
+  onCompletionInstead?: () => void;
 }) {
-  const [count, setCount] = useState("3");
+  const [count, setCount] = useState(subject.kind === "sport" ? "2" : "3");
   const [unit, setUnit] = useState<"DAY" | "WEEK" | "MONTH">("WEEK");
+  // Sport goals come in two flavors — doing the sport vs training for it.
+  const [sportMode, setSportMode] = useState<"sessions" | "training">("sessions");
+  const [aim, setAim] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const accent = "color" in subject ? subject.color : "rgba(147,197,253,0.9)";
+  const unitWord = unit === "DAY" ? "day" : unit === "WEEK" ? "week" : "month";
+  const parsedCount = Math.floor(Number(count));
+  const countOk = Number.isFinite(parsedCount) && parsedCount >= 1;
+
+  // Live "what would count" preview — the anti-landmine. Shows the matcher's
+  // last-7-days view of this subject BEFORE the goal exists.
+  const preview = useMemo(() => {
+    if (subject.kind === "domain") return options.recentCounts.domains[subject.id] ?? null;
+    if (subject.kind === "sport" && sportMode === "training")
+      return options.recentCounts.sports[subject.slug] ?? { count: 0, names: [] };
+    if (subject.kind === "sport") return options.recentCounts.sports[subject.slug] ?? null;
+    if (subject.kind === "family") return options.recentCounts.families[subject.id] ?? null;
+    return null;
+  }, [subject, sportMode, options.recentCounts]);
+
+  // Gentle overlap note — informational, never blocking.
+  const overlap = useMemo(() => {
+    const goals = options.activeFrequencyGoals;
+    if (subject.kind === "domain") {
+      return goals.find((g) => g.targetDomain === subject.id || g.targetDomain === "any") ?? null;
+    }
+    if (subject.kind === "sport") {
+      return goals.find((g) => g.sports.includes(subject.slug) || g.routineIds.includes(subject.id)) ?? null;
+    }
+    if (subject.kind === "family") {
+      return goals.find((g) => g.familyIds.includes(subject.id) || g.targetDomain === "cardio" || g.targetDomain === "any") ?? null;
+    }
+    if (subject.kind === "activityType") {
+      return goals.find((g) => g.typeIds.includes(subject.id) || g.familyIds.includes(subject.familyId)) ?? null;
+    }
+    if (subject.kind === "routine") {
+      return goals.find((g) => g.id !== `fg_${subject.id}` && g.routineIds.includes(subject.id)) ?? null;
+    }
+    return null;
+  }, [subject, options.activeFrequencyGoals]);
+
   function save() {
-    const parsed = Math.floor(Number(count));
-    if (!Number.isFinite(parsed) || parsed < 1) {
+    if (!countOk) {
       setError("Set how many times (1 or more).");
       return;
     }
     setError(null);
-    const unitWord = unit === "DAY" ? "day" : unit === "WEEK" ? "week" : "month";
-    const fd = new FormData();
-    fd.set("name", `${domain.label} ${parsed}×/${unitWord}`);
-    fd.set("targetCount", String(parsed));
-    fd.set("targetInterval", "1");
-    fd.set("targetUnit", unit);
-    fd.set("targetDomain", domain.id);
-    fd.set("noRedirect", "1");
+    const name = `${subject.label} ${parsedCount}×/${unitWord}`;
+    const where =
+      subject.kind === "domain"
+        ? DOMAIN_HUB[subject.id]
+          ? `Home → Goals and ${DOMAIN_HUB[subject.id]}`
+          : "Home → Goals"
+        : subject.kind === "sport"
+        ? `Home → Goals and the ${subject.label} page`
+        : subject.kind === "family" || subject.kind === "activityType"
+        ? "Home → Goals and the Endurance page"
+        : "Home → Goals";
+
     startTransition(async () => {
       try {
+        if (subject.kind === "routine") {
+          // Per-routine habits post through createGoal, which routes to the
+          // canonical fg_<routineId> record.
+          const fd = new FormData();
+          fd.set("goalType", "FREQUENCY");
+          fd.set("targetType", "ROUTINE");
+          fd.set("metricType", "SESSIONS");
+          fd.set("targetId", subject.id);
+          fd.set("timeframe", unit);
+          fd.set("targetValue", String(parsedCount));
+          fd.set("noRedirect", "1");
+          await createAction(fd);
+          onSaved({ name: `${subject.label} ${parsedCount}×/${unitWord}`, where });
+          return;
+        }
+        const fd = new FormData();
+        fd.set("name", name);
+        fd.set("targetCount", String(parsedCount));
+        fd.set("targetInterval", "1");
+        fd.set("targetUnit", unit);
+        fd.set("noRedirect", "1");
+        if (subject.kind === "domain") fd.set("targetDomain", subject.id);
+        if (subject.kind === "sport" && sportMode === "sessions") fd.append("routineIds", subject.id);
+        if (subject.kind === "sport" && sportMode === "training") fd.append("triggerSupportedSports", subject.slug);
+        if (subject.kind === "family") fd.append("triggerActivityFamilyIds", subject.id);
+        if (subject.kind === "activityType") fd.append("triggerActivityTypeIds", subject.id);
+        if (subject.kind === "template") {
+          // Session-template habits live on the Goal table.
+          const goalFd = new FormData();
+          goalFd.set("name", name);
+          goalFd.set("goalType", "FREQUENCY");
+          goalFd.set("targetType", "SESSION_TEMPLATE");
+          goalFd.set("targetId", subject.id);
+          goalFd.set("metricType", "SESSIONS");
+          goalFd.set("timeframe", unit);
+          goalFd.set("targetValue", String(parsedCount));
+          goalFd.set("startDate", localTodayYmd());
+          goalFd.set("isActive", "on");
+          goalFd.set("noRedirect", "1");
+          await createAction(goalFd);
+          onSaved({ name, where });
+          return;
+        }
+        if (subject.kind === "exercise") {
+          fd.append("triggerExerciseIds", subject.id);
+          if (aim.trim()) fd.set("sessionAim", aim.trim());
+        }
         await createFrequencyAction(fd);
-        onSuccess?.();
+        onSaved({ name, where });
       } catch (err) {
         setError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
       }
     });
   }
 
+  const sentence = `${subject.label} · ${countOk ? parsedCount : "?"}× per ${unitWord}`;
+
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <button type="button" onClick={onBack} style={backLink}>
         ‹ Back
       </button>
-      <div style={stageTitle}>
-        <span style={{ ...sportDot, background: domain.color, marginRight: 8, display: "inline-block" }} aria-hidden />
-        How often for {domain.label.toLowerCase() === "any training" ? "any training" : domain.label}?
+
+      {/* Live sentence — the goal IS the preview. */}
+      <div style={{ ...stageTitle, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ ...dot, width: 10, height: 10, background: accent }} aria-hidden />
+        {sentence}
       </div>
 
+      {subject.kind === "sport" ? (
+        <div style={chipWrap}>
+          <button
+            type="button"
+            style={sportMode === "sessions" ? { ...modeChip, ...modeChipOn } : modeChip}
+            onClick={() => setSportMode("sessions")}
+          >
+            Sessions of {subject.label}
+          </button>
+          <button
+            type="button"
+            style={sportMode === "training" ? { ...modeChip, ...modeChipOn } : modeChip}
+            onClick={() => setSportMode("training")}
+          >
+            Training for {subject.label}
+          </button>
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <input
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-          inputMode="numeric"
-          style={{ ...formInputStyle, width: 84, textAlign: "center", fontWeight: 800, fontSize: 16 }}
-          aria-label="Times per period"
-        />
-        <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.7 }}>times per</span>
+        <div style={stepperWrap}>
+          <button
+            type="button"
+            style={stepBtn}
+            aria-label="Fewer"
+            onClick={() => setCount(String(Math.max(1, (countOk ? parsedCount : 3) - 1)))}
+          >
+            −
+          </button>
+          <input
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+            inputMode="numeric"
+            style={stepInput}
+            aria-label="Times per period"
+          />
+          <button
+            type="button"
+            style={stepBtn}
+            aria-label="More"
+            onClick={() => setCount(String((countOk ? parsedCount : 2) + 1))}
+          >
+            +
+          </button>
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.7 }}>per</span>
         <div style={chipWrap}>
           {(["DAY", "WEEK", "MONTH"] as const).map((u) => (
             <button
@@ -551,102 +840,49 @@ function DomainHabitPane({
         </div>
       </div>
 
-      <div style={helperNote}>
-        {domain.id === "any"
-          ? "Every logged session counts — any routine, sport, or activity."
-          : `Every ${domain.label.toLowerCase()} session counts — no need to pick routines. New ones count automatically.`}{" "}
-        It shows on your home grid with streaks.
-      </div>
-
-      {error ? <div style={errorNote} role="alert">{error}</div> : null}
-
-      <button type="button" onClick={save} disabled={pending} style={savePrimary}>
-        {pending ? "Saving…" : "Save Goal"}
-      </button>
-    </div>
-  );
-}
-
-// Per-routine habit — posts straight to createGoal, which routes
-// FREQUENCY/ROUTINE/SESSIONS to the canonical fg_<routineId> record (the same
-// row the routine form's frequency block manages).
-function RoutineHabitPane({
-  routine,
-  createAction,
-  onBack,
-  onManualCompletion,
-  onSuccess,
-}: {
-  routine: Extract<Subject, { kind: "routine" }>;
-  createAction: (formData: FormData) => void | Promise<void>;
-  onBack: () => void;
-  onManualCompletion: () => void;
-  onSuccess?: () => void;
-}) {
-  const [count, setCount] = useState("3");
-  const [unit, setUnit] = useState<"DAY" | "WEEK" | "MONTH">("WEEK");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function save() {
-    const parsed = Math.floor(Number(count));
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      setError("Set how many times (1 or more).");
-      return;
-    }
-    setError(null);
-    const fd = new FormData();
-    fd.set("goalType", "FREQUENCY");
-    fd.set("targetType", "ROUTINE");
-    fd.set("metricType", "SESSIONS");
-    fd.set("targetId", routine.id);
-    fd.set("timeframe", unit);
-    fd.set("targetValue", String(parsed));
-    fd.set("noRedirect", "1");
-    startTransition(async () => {
-      try {
-        await createAction(fd);
-        onSuccess?.();
-      } catch (err) {
-        setError(err instanceof Error && err.message ? err.message : "Couldn't save. Please try again.");
-      }
-    });
-  }
-
-  return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <button type="button" onClick={onBack} style={backLink}>
-        ‹ Back
-      </button>
-      <div style={stageTitle}>How often for {routine.label}?</div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <input
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-          inputMode="numeric"
-          style={{ ...formInputStyle, width: 84, textAlign: "center", fontWeight: 800, fontSize: 16 }}
-          aria-label="Times per period"
-        />
-        <span style={{ fontSize: 13, fontWeight: 800, opacity: 0.7 }}>times per</span>
-        <div style={chipWrap}>
-          {(["DAY", "WEEK", "MONTH"] as const).map((u) => (
-            <button
-              key={u}
-              type="button"
-              onClick={() => setUnit(u)}
-              style={u === unit ? { ...unitPill, ...unitPillOn } : unitPill}
-            >
-              {u === "DAY" ? "day" : u === "WEEK" ? "week" : "month"}
-            </button>
-          ))}
+      {subject.kind === "exercise" ? (
+        <div style={{ display: "grid", gap: 5 }}>
+          <label style={aimLabel}>
+            Aiming for about{" "}
+            <input
+              value={aim}
+              onChange={(e) => setAim(e.target.value)}
+              inputMode="numeric"
+              placeholder="30"
+              style={aimInput}
+              aria-label="Per-session aim"
+            />{" "}
+            per session <span style={{ opacity: 0.55 }}>(optional)</span>
+          </label>
+          <div style={groupHint}>Sessions always count — the aim just shows on each one (e.g. 20/30).</div>
         </div>
-      </div>
+      ) : null}
 
-      <div style={helperNote}>
-        This becomes the routine’s frequency goal — it shows on your home grid with streaks.
-        Weekday scheduling and substitute routines live on the routine’s edit page.
-      </div>
+      {preview ? (
+        <div style={previewNote}>
+          {preview.count > 0 ? (
+            <>
+              Counted last 7 days: <strong>{preview.names.join(", ")}</strong> — {preview.count} session
+              {preview.count === 1 ? "" : "s"} ✓
+            </>
+          ) : (
+            <>Nothing in the last 7 days would have counted yet — that&apos;s okay, it starts now.</>
+          )}
+        </div>
+      ) : null}
+
+      {overlap ? (
+        <div style={overlapNote}>
+          Overlaps “{overlap.name}” — sessions can count toward both.
+        </div>
+      ) : null}
+
+      {subject.kind === "routine" ? (
+        <div style={groupHint}>
+          This becomes the routine&apos;s frequency goal — weekday scheduling and substitutes live on the
+          routine&apos;s edit page.
+        </div>
+      ) : null}
 
       {error ? <div style={errorNote} role="alert">{error}</div> : null}
 
@@ -654,16 +890,18 @@ function RoutineHabitPane({
         {pending ? "Saving…" : "Save Goal"}
       </button>
 
-      <button type="button" onClick={onManualCompletion} style={manualLink}>
-        Want a one-time “complete it N times” goal instead? →
-      </button>
+      {onCompletionInstead ? (
+        <button type="button" style={quietLink} onClick={onCompletionInstead}>
+          Want a one-time “complete it N times” goal instead? →
+        </button>
+      ) : null}
     </div>
   );
 }
 
-// ── catalog + gallery builders ─────────────────────────────────────────────
+// ── Catalog + quick start ───────────────────────────────────────────────────
 
-function buildSubjectCatalog(options: GoalFormOptions): Subject[] {
+function buildCatalog(options: GoalFormOptions): Subject[] {
   const gradeRoutineIds = new Set(
     Object.entries(options.sessionMetricsByRoutineId)
       .filter(([, metrics]) => metrics.length > 0)
@@ -674,10 +912,13 @@ function buildSubjectCatalog(options: GoalFormOptions): Subject[] {
       .filter(([, metrics]) => metrics.length > 0)
       .map(([id]) => id)
   );
+  const routineRank = new Map(options.recentRoutineIds.map((id, i) => [id, i]));
+  const exerciseRank = new Map(options.recentExerciseIds.map((id, i) => [id, i]));
 
   const sports: Subject[] = options.sportTargets.map((s) => ({
     kind: "sport",
     id: s.id,
+    slug: s.slug,
     label: s.label,
     color: s.color,
   }));
@@ -690,20 +931,21 @@ function buildSubjectCatalog(options: GoalFormOptions): Subject[] {
     kind: "activityType",
     id: t.id,
     label: t.name,
+    familyId: t.familyId,
     familyName: t.familyName,
   }));
-  const routines: Subject[] = options.routines.map((r) => ({
-    kind: "routine",
-    id: r.id,
-    label: r.label,
-    sub: r.subtitle ?? undefined,
-    hasMetrics: gradeRoutineIds.has(r.id),
-  }));
-  const exercises: Subject[] = options.exercises.map((e) => ({
-    kind: "exercise",
-    id: e.id,
-    label: e.label,
-  }));
+  const routines: Subject[] = options.routines
+    .map((r): Subject => ({
+      kind: "routine",
+      id: r.id,
+      label: r.label,
+      sub: r.subtitle ?? undefined,
+      hasMetrics: gradeRoutineIds.has(r.id),
+    }))
+    .sort((a, b) => (routineRank.get(a.id) ?? 9999) - (routineRank.get(b.id) ?? 9999));
+  const exercises: Subject[] = options.exercises
+    .map((e): Subject => ({ kind: "exercise", id: e.id, label: e.label }))
+    .sort((a, b) => (exerciseRank.get(a.id) ?? 9999) - (exerciseRank.get(b.id) ?? 9999));
   const grades: Subject[] = [
     ...options.routines
       .filter((r) => gradeRoutineIds.has(r.id))
@@ -712,55 +954,50 @@ function buildSubjectCatalog(options: GoalFormOptions): Subject[] {
       .filter((t) => gradeTemplateIds.has(t.id))
       .map((t): Subject => ({ kind: "grade", id: t.id, label: t.label, isTemplate: true })),
   ];
-  const templates: Subject[] = options.sessionTemplates.map((t) => ({
-    kind: "template",
-    id: t.id,
-    label: t.label,
-  }));
-  // Activity types fold in after families so search finds "Trail Run" while
-  // the unqueried Activities group leads with the broader families.
+  // Session templates stay searchable but never render as a browse group —
+  // Grades already covers the metric-carrying ones (dedupe).
+  const templates: Subject[] = options.sessionTemplates
+    .filter((t) => !gradeTemplateIds.has(t.id))
+    .map((t) => ({ kind: "template", id: t.id, label: t.label }));
+
   return [...DOMAIN_SUBJECTS, ...sports, ...families, ...types, ...routines, ...exercises, ...grades, ...templates];
 }
 
-function buildGallery(subjects: Subject[]): Array<{ key: string; label: string; subject: Subject }> {
-  const strengthDomain = subjects.find((s) => s.kind === "domain" && s.id === "strength");
-  const sports = subjects.filter((s) => s.kind === "sport").slice(0, 2);
-  const families = subjects.filter((s) => s.kind === "family").slice(0, 2);
-  const routines = subjects.filter((s) => s.kind === "routine").slice(0, 2);
-  return [
-    ...(strengthDomain ? [{ key: "g-strength", label: "Strength 3×/week", subject: strengthDomain }] : []),
-    ...sports.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 2×/week`, subject: s })),
-    ...families.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 3×/week`, subject: s })),
-    ...routines.map((s) => ({ key: `g-${s.id}`, label: `${s.label} 3×/week`, subject: s })),
-  ].slice(0, 6);
+function buildQuickStart(
+  subjects: Subject[],
+  options: GoalFormOptions
+): Array<{ key: string; label: string; subject: Subject }> {
+  const chips: Array<{ key: string; label: string; subject: Subject }> = [];
+  // Top domain by last-7-days activity (skip "any" — it's a fallback, not a suggestion).
+  const topDomain = Object.entries(options.recentCounts.domains)
+    .filter(([key]) => key !== "any")
+    .sort((a, b) => b[1].count - a[1].count)[0];
+  if (topDomain) {
+    const s = subjects.find((x) => x.kind === "domain" && x.id === topDomain[0]);
+    if (s) chips.push({ key: `d-${s.id}`, label: `${s.label} 3×/week`, subject: s });
+  }
+  // Top sports by recent activity, then any remaining sports.
+  const sportsByActivity = subjects
+    .filter((s): s is Extract<Subject, { kind: "sport" }> => s.kind === "sport")
+    .sort(
+      (a, b) =>
+        (options.recentCounts.sports[b.slug]?.count ?? 0) - (options.recentCounts.sports[a.slug]?.count ?? 0)
+    );
+  for (const s of sportsByActivity.slice(0, 2)) {
+    chips.push({ key: `s-${s.id}`, label: `${s.label} 2×/week`, subject: s });
+  }
+  // Top endurance family by recent activity.
+  const topFamily = Object.entries(options.recentCounts.families).sort((a, b) => b[1].count - a[1].count)[0];
+  if (topFamily) {
+    const s = subjects.find((x) => x.kind === "family" && x.id === topFamily[0]);
+    if (s) chips.push({ key: `f-${s.id}`, label: `${s.label} 3×/week`, subject: s });
+  }
+  return chips.slice(0, 4);
 }
 
-// ── styles — same dark theme tokens as the drawer + goal form ──────────────
+// ── Styles ──────────────────────────────────────────────────────────────────
 
 const stageTitle: CSSProperties = { fontSize: 15, fontWeight: 900 };
-
-const stageSubStyle: CSSProperties = { fontSize: 12, opacity: 0.6, fontWeight: 600, lineHeight: 1.45 };
-
-const intentChip: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 7,
-  padding: "9px 13px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 800,
-  minHeight: 40,
-};
-
-const intentChipOn: CSSProperties = {
-  border: "1px solid rgba(147,197,253,0.55)",
-  background: "rgba(147,197,253,0.14)",
-  color: "rgba(191,219,254,0.98)",
-};
 
 const backLink: CSSProperties = {
   justifySelf: "start",
@@ -780,6 +1017,8 @@ const groupHeader: CSSProperties = {
   textTransform: "uppercase",
   opacity: 0.5,
 };
+
+const groupHint: CSSProperties = { fontSize: 11.5, opacity: 0.55, fontWeight: 600, lineHeight: 1.45 };
 
 const chipWrap: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
 
@@ -804,6 +1043,18 @@ const galleryChip: CSSProperties = {
   fontWeight: 800,
 };
 
+const galleryChipQuiet: CSSProperties = {
+  ...subjectChip,
+  fontWeight: 800,
+  opacity: 0.85,
+};
+
+const mixChip: CSSProperties = {
+  ...subjectChip,
+  justifySelf: "start",
+  fontWeight: 800,
+};
+
 const rowList: CSSProperties = { display: "grid", gap: 6 };
 
 const subjectRow: CSSProperties = {
@@ -821,22 +1072,36 @@ const subjectRow: CSSProperties = {
   width: "100%",
 };
 
-const rowSub: CSSProperties = { fontSize: 11, opacity: 0.55, fontWeight: 700, flexShrink: 0, marginLeft: "auto" };
-
-const sportDot: CSSProperties = { width: 9, height: 9, borderRadius: 999, flexShrink: 0 };
-
-const moreLink: CSSProperties = {
-  justifySelf: "start",
-  border: "none",
-  background: "none",
-  padding: "2px 0",
-  color: "rgba(255,255,255,0.5)",
-  fontSize: 12,
+const rowLabel: CSSProperties = {
   fontWeight: 800,
-  cursor: "pointer",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
-const manualLink: CSSProperties = {
+const rowSub: CSSProperties = { fontSize: 11, opacity: 0.55, fontWeight: 700, flexShrink: 0, marginLeft: "auto" };
+
+const dot: CSSProperties = { width: 9, height: 9, borderRadius: 999, flexShrink: 0 };
+
+const intentTile: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.035)",
+  color: "inherit",
+  cursor: "pointer",
+  minHeight: 64,
+  width: "100%",
+};
+
+const intentLabel: CSSProperties = { fontSize: 15, fontWeight: 900 };
+const intentTagline: CSSProperties = { fontSize: 12, opacity: 0.6, fontWeight: 700 };
+
+const quietLink: CSSProperties = {
   justifySelf: "start",
   border: "none",
   background: "none",
@@ -847,35 +1112,49 @@ const manualLink: CSSProperties = {
   cursor: "pointer",
 };
 
-const emptyNote: CSSProperties = {
-  fontSize: 12.5,
-  opacity: 0.65,
-  lineHeight: 1.5,
-  padding: "6px 2px",
-};
-
-const intentGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: 10,
-};
-
-const intentTile: CSSProperties = {
-  display: "grid",
-  gap: 4,
-  justifyItems: "start",
-  textAlign: "left",
-  padding: "14px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.035)",
-  color: "inherit",
+const inlineLink: CSSProperties = {
+  border: "none",
+  background: "none",
+  padding: 0,
+  color: "rgba(147,197,253,0.9)",
+  fontSize: "inherit",
+  fontWeight: 800,
   cursor: "pointer",
-  minHeight: 84,
 };
 
-const intentLabel: CSSProperties = { fontSize: 14.5, fontWeight: 900 };
-const intentTagline: CSSProperties = { fontSize: 11.5, opacity: 0.6, fontWeight: 700 };
+const emptyNote: CSSProperties = { fontSize: 12.5, opacity: 0.7, lineHeight: 1.5, padding: "6px 2px" };
+
+const stepperWrap: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+};
+
+const stepBtn: CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.05)",
+  color: "inherit",
+  fontSize: 20,
+  fontWeight: 900,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const stepInput: CSSProperties = {
+  width: 64,
+  height: 44,
+  padding: "0 8px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "#111827",
+  color: "#fff",
+  fontSize: 18,
+  fontWeight: 900,
+  textAlign: "center",
+};
 
 const unitPill: CSSProperties = {
   padding: "9px 14px",
@@ -894,10 +1173,62 @@ const unitPillOn: CSSProperties = {
   borderColor: "rgba(147,197,253,0.5)",
 };
 
-const helperNote: CSSProperties = {
-  fontSize: 12,
-  opacity: 0.6,
+const modeChip: CSSProperties = {
+  padding: "9px 13px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "transparent",
+  color: "inherit",
+  cursor: "pointer",
+  fontSize: 12.5,
+  fontWeight: 800,
+  minHeight: 40,
+};
+
+const modeChipOn: CSSProperties = {
+  background: "rgba(147,197,253,0.16)",
+  borderColor: "rgba(147,197,253,0.5)",
+};
+
+const aimLabel: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const aimInput: CSSProperties = {
+  width: 64,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "#111827",
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: 800,
+  textAlign: "center",
+};
+
+const previewNote: CSSProperties = {
+  fontSize: 12.5,
   lineHeight: 1.5,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(74,222,128,0.22)",
+  background: "rgba(74,222,128,0.05)",
+  color: "rgba(220,252,231,0.9)",
+};
+
+const overlapNote: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.5,
+  padding: "8px 12px",
+  borderRadius: 12,
+  border: "1px dashed rgba(251,191,36,0.35)",
+  background: "rgba(251,191,36,0.05)",
+  color: "rgba(253,230,138,0.85)",
 };
 
 const errorNote: CSSProperties = {
@@ -921,4 +1252,10 @@ const savePrimary: CSSProperties = {
   fontWeight: 900,
   fontSize: 15,
   cursor: "pointer",
+};
+
+const savedBody: CSSProperties = {
+  fontSize: 13.5,
+  lineHeight: 1.6,
+  opacity: 0.85,
 };
