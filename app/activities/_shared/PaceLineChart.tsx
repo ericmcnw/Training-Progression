@@ -380,21 +380,56 @@ export default function PaceLineChart({
         )}
       </div>
 
-      {/* Legend — one chip per series, color-matched. */}
+      {/* Legend — one chip per series, color-matched, with a trend arrow
+          when the window's pace is clearly moving (lower sec/mi = faster). */}
       {data.mode === "weekly" && (
         <div style={legendRowStyle}>
-          {data.series.map((s) => (
-            <span key={s.label} style={legendChipStyle}>
-              <span style={{ ...legendDotStyle, background: s.color }} />
-              {s.label}
-            </span>
-          ))}
+          {data.series.map((s) => {
+            const trend = paceTrend(s.weeklyPaceSec);
+            return (
+              <span key={s.label} style={legendChipStyle}>
+                <span style={{ ...legendDotStyle, background: s.color }} />
+                {s.label}
+                {trend === "faster" ? (
+                  <span style={{ color: "#86EFAC", fontWeight: 900 }} title="Trending faster across the window">▼</span>
+                ) : trend === "slower" ? (
+                  <span style={{ color: "#FCA5A5", fontWeight: 900 }} title="Trending slower across the window">▲</span>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
       )}
 
       <LogDetailPopover open={openLog} onClose={() => setOpenLog(null)} />
     </div>
   );
+}
+
+// Direction of a series' pace across the window — least-squares slope over
+// the non-null weeks, flagged only when the projected change across the
+// window is a meaningful share (>3%) of the average pace. Needs 3+ weeks.
+function paceTrend(weeklyPaceSec: Array<number | null>): "faster" | "slower" | null {
+  const pts: Array<{ x: number; y: number }> = [];
+  weeklyPaceSec.forEach((v, i) => {
+    if (v != null) pts.push({ x: i, y: v });
+  });
+  if (pts.length < 3) return null;
+  const n = pts.length;
+  const meanX = pts.reduce((s, p) => s + p.x, 0) / n;
+  const meanY = pts.reduce((s, p) => s + p.y, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (const p of pts) {
+    num += (p.x - meanX) * (p.y - meanY);
+    den += (p.x - meanX) ** 2;
+  }
+  if (den === 0 || meanY === 0) return null;
+  const slope = num / den;
+  const spanChangePct = (slope * (pts[pts.length - 1].x - pts[0].x)) / meanY;
+  if (spanChangePct <= -0.03) return "faster";
+  if (spanChangePct >= 0.03) return "slower";
+  return null;
 }
 
 function Header({ title, subtitle }: { title: string; subtitle?: string }) {

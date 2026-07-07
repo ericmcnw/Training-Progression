@@ -87,7 +87,7 @@ export default async function EnduranceWorldPage(props: {
 
   const cutoff = cutoffForRange(range);
 
-  const [families, logs, chartData, paceData, domainGoals] = await Promise.all([
+  const [families, logs, chartData, paceData, domainGoals, prPool] = await Promise.all([
     prisma.enduranceFamily.findMany({
       orderBy: [{ sortOrder: "asc" }],
       include: {
@@ -137,6 +137,25 @@ export default async function EnduranceWorldPage(props: {
     // Goals pointed at the endurance domain (incl. "Endurance 3×/week"
     // domain goals) — powers the header chip + Active Goals section.
     getDomainGoals("cardio"),
+    // All-time slim pool for the Bests tiles — deliberately NOT range
+    // filtered (a PR is a PR regardless of the page's range pills).
+    prisma.routineLog.findMany({
+      where: {
+        OR: [
+          { activityTypeId: { not: null } },
+          { routine: { kind: "CARDIO", isPlaceholder: false } },
+        ],
+      },
+      select: {
+        performedAt: true,
+        distanceMi: true,
+        durationSec: true,
+        elevationGainFt: true,
+        activityTypeId: true,
+        activityType: { select: { familyId: true } },
+        routine: { select: { activityType: { select: { familyId: true } } } },
+      },
+    }),
   ]);
 
   // Resolve each log's family — prefer log.activityType, fall back to
@@ -187,6 +206,31 @@ export default async function EnduranceWorldPage(props: {
         return true;
       })
     : [];
+
+  // All-time bests for the active family/type slice. Pace requires ≥1 mi so a
+  // 0.2-mi jog can't fake a PR.
+  type Best = { value: number; date: Date } | null;
+  let bestLongest: Best = null;
+  let bestPace: Best = null;
+  let bestElevation: Best = null;
+  if (activeFamily) {
+    for (const l of prPool) {
+      const famId = l.activityType?.familyId ?? l.routine.activityType?.familyId ?? null;
+      if (famId !== activeFamily.id) continue;
+      if (activeType && l.activityTypeId !== activeType.id) continue;
+      if (l.distanceMi && l.distanceMi > 0 && (!bestLongest || l.distanceMi > bestLongest.value)) {
+        bestLongest = { value: l.distanceMi, date: l.performedAt };
+      }
+      if (l.distanceMi && l.distanceMi >= 1 && l.durationSec && l.durationSec > 0) {
+        const pace = l.durationSec / l.distanceMi;
+        if (!bestPace || pace < bestPace.value) bestPace = { value: pace, date: l.performedAt };
+      }
+      if (l.elevationGainFt && l.elevationGainFt > 0 && (!bestElevation || l.elevationGainFt > bestElevation.value)) {
+        bestElevation = { value: l.elevationGainFt, date: l.performedAt };
+      }
+    }
+  }
+  const bests = { longest: bestLongest, pace: bestPace, elevation: bestElevation };
 
   return (
     <>
@@ -344,6 +388,7 @@ export default async function EnduranceWorldPage(props: {
             logs={scopedLogs}
             searchParams={searchParams}
             range={range}
+            bests={bests}
           />
         ) : (
           <SectionCard title="Family not found">
@@ -409,6 +454,7 @@ function FamilyDetailView({
   logs,
   searchParams,
   range,
+  bests,
 }: {
   family: { id: string; slug: string; name: string; types: Array<{ id: string; slug: string; name: string }> };
   rollup: { sessions: number; distanceMi: number; durationSec: number; elevationGainFt: number };
@@ -427,6 +473,11 @@ function FamilyDetailView({
   }>;
   searchParams: SearchParams;
   range: RangeFilter;
+  bests: {
+    longest: { value: number; date: Date } | null;
+    pace: { value: number; date: Date } | null;
+    elevation: { value: number; date: Date } | null;
+  };
 }) {
   // Scoped stats reflect the active type filter (if set), otherwise the
   // whole family.
@@ -445,8 +496,42 @@ function FamilyDetailView({
   void activeTypeSlug;
   void searchParams;
 
+  const hasBests = bests.longest || bests.pace || bests.elevation;
+
   return (
     <>
+      {/* All-time bests — independent of the range filter. */}
+      {hasBests ? (
+        <SectionCard
+          title={activeTypeId ? `Bests · ${family.types.find((t) => t.id === activeTypeId)?.name ?? ""}` : `Bests · All ${family.name}`}
+          subtitle="all time"
+        >
+          <div style={statRowStyle}>
+            {bests.longest ? (
+              <Stat
+                label="Longest"
+                value={`${bests.longest.value.toFixed(1)} mi`}
+                sub={formatAppDate(bests.longest.date, { month: "short", day: "numeric", year: "numeric" })}
+              />
+            ) : null}
+            {bests.pace ? (
+              <Stat
+                label="Fastest pace"
+                value={formatPaceSec(bests.pace.value)}
+                sub={formatAppDate(bests.pace.date, { month: "short", day: "numeric", year: "numeric" })}
+              />
+            ) : null}
+            {bests.elevation ? (
+              <Stat
+                label="Most elevation"
+                value={`${Math.round(bests.elevation.value)} ft`}
+                sub={formatAppDate(bests.elevation.date, { month: "short", day: "numeric", year: "numeric" })}
+              />
+            ) : null}
+          </div>
+        </SectionCard>
+      ) : null}
+
       {/* Stats */}
       <SectionCard
         title={activeTypeId ? `Stats · ${family.types.find((t) => t.id === activeTypeId)?.name ?? ""}` : `Stats · All ${family.name}`}
@@ -494,13 +579,20 @@ function FamilyDetailView({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div style={statBoxStyle}>
       <div style={statLabelStyle}>{label}</div>
       <div style={statValueStyle}>{value}</div>
+      {sub ? <div style={{ fontSize: 10, opacity: 0.5, fontWeight: 700, marginTop: 2 }}>{sub}</div> : null}
     </div>
   );
+}
+
+function formatPaceSec(secPerMi: number): string {
+  const m = Math.floor(secPerMi / 60);
+  const s = Math.round(secPerMi % 60);
+  return `${m}:${String(s).padStart(2, "0")}/mi`;
 }
 
 function formatHM(totalSec: number): string {

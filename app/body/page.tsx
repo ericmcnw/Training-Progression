@@ -10,6 +10,8 @@ import { getHomeInjuries } from "@/lib/home-injuries";
 import HomeInjuriesSection from "@/app/_home/HomeInjuriesSection";
 import LogPainButton from "@/app/components/injuries/LogPainButton";
 import type { ZoneFreshness, ZoneState } from "@/app/components/body-map/types";
+import { prisma } from "@/lib/prisma";
+import { formatAppDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +39,39 @@ export default async function BodyPage(props: {
   const lens = normalizeBodyLens(getParam(searchParams, "lens"));
   const range = normalizeBodyRange(getParam(searchParams, "range"));
 
-  const [zones, coverageOverview, homeInjuries, factorSuggestions] = await Promise.all([
+  const [zones, coverageOverview, homeInjuries, factorSuggestions, recentPain] = await Promise.all([
     getAllZonesWithState(),
     getCoverageOverviewModel(range),
     getHomeInjuries(),
     getAggravatingFactorSuggestions(),
+    // Last-7-days pain logs → the hotspot list. Surfaces NEW spots (not yet
+    // an injury) before they become one.
+    prisma.painLog.findMany({
+      where: { loggedAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+      orderBy: { loggedAt: "desc" },
+      select: { level: true, loggedAt: true, zone: { select: { slug: true, label: true } } },
+    }),
   ]);
+
+  // Zones already tracked by an active injury are excluded — those live in
+  // the injuries card; this list is for emerging spots.
+  const injuryZoneSlugs = new Set(homeInjuries.flatMap((i) => i.zones.map((z) => z.slug)));
+  const hotspotMap = new Map<string, { label: string; count: number; maxLevel: number; lastAt: Date }>();
+  for (const p of recentPain) {
+    if (injuryZoneSlugs.has(p.zone.slug)) continue;
+    const cur = hotspotMap.get(p.zone.slug);
+    if (cur) {
+      cur.count += 1;
+      cur.maxLevel = Math.max(cur.maxLevel, p.level);
+      if (p.loggedAt > cur.lastAt) cur.lastAt = p.loggedAt;
+    } else {
+      hotspotMap.set(p.zone.slug, { label: p.zone.label, count: 1, maxLevel: p.level, lastAt: p.loggedAt });
+    }
+  }
+  const hotspots = [...hotspotMap.entries()]
+    .map(([slug, h]) => ({ slug, ...h }))
+    .sort((a, b) => b.maxLevel - a.maxLevel || b.lastAt.getTime() - a.lastAt.getTime())
+    .slice(0, 6);
 
   const pickerZones = zones.map((z) => ({ slug: z.slug, label: z.label ?? z.slug }));
   const freshnessCounts = countByFreshness(zones);
@@ -72,6 +101,30 @@ export default async function BodyPage(props: {
         <div style={cardDivider} />
         <HomeInjuriesSection injuries={homeInjuries} factorSuggestions={factorSuggestions} zones={pickerZones} embedded />
       </section>
+
+      {/* Emerging pain spots — logged pain in the last 7 days on zones NOT
+          already tracked as an injury. Early-warning list. */}
+      {hotspots.length > 0 ? (
+        <section style={hotspotsCard}>
+          <div style={{ display: "grid", gap: 3 }}>
+            <h2 style={cardTitle}>Recent pain spots</h2>
+            <div style={{ fontSize: 12, color: COLOR.textDim }}>
+              Logged in the last 7 days, not yet tracked as an injury.
+            </div>
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {hotspots.map((h) => (
+              <div key={h.slug} style={hotspotRow}>
+                <span style={hotspotLabel}>{h.label}</span>
+                <span style={hotspotMeta}>
+                  {h.count} log{h.count === 1 ? "" : "s"} · {formatAppDate(h.lastAt, { month: "short", day: "numeric" })}
+                </span>
+                <span style={{ ...hotspotLevel, color: hotspotColor(h.maxLevel) }}>{h.maxLevel}/10</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <BodyPageClient zones={zones} factorSuggestions={factorSuggestions} />
 
@@ -225,6 +278,54 @@ const statusInjuryCard: React.CSSProperties = {
   ...cardSurface,
   display: "grid",
   gap: 12,
+};
+
+function hotspotColor(level: number): string {
+  if (level >= 7) return "#F87171";
+  if (level >= 4) return "#FBBF24";
+  return "#86EFAC";
+}
+
+const hotspotsCard: React.CSSProperties = {
+  ...cardSurface,
+  display: "grid",
+  gap: 12,
+  borderColor: "rgba(251,146,60,0.28)",
+};
+
+const hotspotRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.02)",
+};
+
+const hotspotLabel: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: 13,
+  fontWeight: 800,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const hotspotMeta: React.CSSProperties = {
+  flexShrink: 0,
+  fontSize: 11,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+  whiteSpace: "nowrap",
+};
+
+const hotspotLevel: React.CSSProperties = {
+  flexShrink: 0,
+  fontSize: 14,
+  fontWeight: 900,
+  fontVariantNumeric: "tabular-nums",
 };
 
 const cardDivider: React.CSSProperties = {

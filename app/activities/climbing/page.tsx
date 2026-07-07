@@ -145,6 +145,7 @@ export default async function ClimbingHubPage(props: {
         problemId: true,
         movesCompleted: true,
         totalMoves: true,
+        triesCount: true,
         notes: true,
         sessionLog: {
           select: {
@@ -409,6 +410,15 @@ export default async function ClimbingHubPage(props: {
     ? Math.round((pyramidSendCount / pyramidAttempts.length) * 100)
     : null;
 
+  // Avg tries-to-send — efficiency metric (1.0 = flashing everything).
+  // Only sends carry a meaningful triesCount; gated at 3 so one lucky
+  // flash doesn't read as a trend. Respects the discipline filter.
+  const sendTries = pyramidAttempts.filter((a) => SENT_OUTCOMES.has(a.outcome) && (a.triesCount ?? 0) > 0);
+  const avgTriesToSend =
+    sendTries.length >= 3
+      ? Math.round((sendTries.reduce((s, a) => s + (a.triesCount ?? 0), 0) / sendTries.length) * 10) / 10
+      : null;
+
   // ── Indoor / Outdoor split — feeds the pyramid column headers ───────────
   const gymSessions = sessions.filter((s) => s.venue === "GYM");
   const cragSessions = sessions.filter((s) => s.venue === "CRAG");
@@ -600,7 +610,8 @@ export default async function ClimbingHubPage(props: {
           (disciplineFilter === "all"
             ? "All sends and falls by grade · all time."
             : `${DISCIPLINE_LABEL[disciplineFilter]} only · all time.`) +
-          (sendRatePct !== null ? ` ${sendRatePct}% send rate.` : "")
+          (sendRatePct !== null ? ` ${sendRatePct}% send rate.` : "") +
+          (avgTriesToSend !== null ? ` Avg ${avgTriesToSend} tries to send.` : "")
         }
       >
         {/* Discipline filter pill row — only shows pills for disciplines
