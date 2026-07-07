@@ -32,6 +32,7 @@ import { loadActivityCoverage } from "@/app/progress/details/activity-coverage-l
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
+import LogSessionCTA from "@/app/activities/_shared/LogSessionCTA";
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import SportPeopleStats from "./SportPeopleStats";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
@@ -207,7 +208,14 @@ export default async function SportWorldPage(props: {
         frequencyChip={frequencyChipFor(sportGoals)}
         actions={
           <>
-            <Link href="/log" style={headerPillStyle}>📋 Log</Link>
+            {/* Opens THIS sport's log sheet directly — no detour through /log. */}
+            <LogSessionCTA
+              slug={params.slug}
+              label={title}
+              eyebrow={entry?.eyebrow ?? "Sport"}
+              color={accent}
+              style={headerPillStyle}
+            />
             {supportsMap ? (
               <Link href={`/activities/${params.slug}/map`} style={headerPillStyle}>🗺 Map</Link>
             ) : null}

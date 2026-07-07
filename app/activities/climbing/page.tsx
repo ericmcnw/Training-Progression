@@ -36,7 +36,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
-import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
+import LogSessionCTA from "@/app/activities/_shared/LogSessionCTA";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import {
@@ -505,9 +505,14 @@ export default async function ClimbingHubPage(props: {
         accent={ACCENT}
         frequencyChip={frequencyChipFor(climbingGoals)}
         actions={
-          <NewRoutineDrawerButton presetDomain="sport" style={primaryCtaStyle}>
-            + Log session
-          </NewRoutineDrawerButton>
+          // Opens the climb log sheet directly — this previously opened the
+          // NEW-ROUTINE builder, which is the wrong action for "Log session".
+          <LogSessionCTA
+            slug="climbing"
+            label="Climbing"
+            buttonLabel="+ Log session"
+            style={primaryCtaStyle}
+          />
         }
       />
 

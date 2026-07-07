@@ -14,6 +14,7 @@ import { domainColor } from "@/lib/routines";
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
+import QuickLogDrawerButton from "@/app/routines/QuickLogDrawerButton";
 import { domainRgb } from "@/lib/routines";
 
 export const dynamic = "force-dynamic";
@@ -143,9 +144,14 @@ export default async function StrengthWorldPage() {
           accent={domainColor("strength")}
           frequencyChip={frequencyChipFor(strengthGoals)}
           actions={
-            <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
-              + New routine
-            </NewRoutineDrawerButton>
+            <>
+              {/* Logging is the everyday action — it leads. Routine creation
+                  stays available but secondary. */}
+              <QuickLogDrawerButton label="📋 Log workout" style={strengthCtaStyle} />
+              <NewRoutineDrawerButton presetDomain="strength" style={strengthCtaStyle}>
+                + New routine
+              </NewRoutineDrawerButton>
+            </>
           }
         />
 

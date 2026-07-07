@@ -64,7 +64,7 @@ export default function HomeInjuriesSection({
           {injuries.map((injury) => (
             <div key={injury.id} style={injuryRow}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <Link href={`/injuries/${injury.id}`} style={injuryLink}>
+                <Link href={`/injuries/${injury.id}`} style={{ ...injuryLink, flex: 1 }}>
                   <div style={injuryName}>{injury.name} <span style={{ opacity: 0.5, fontWeight: 800 }}>›</span></div>
                   <div style={injurySub}>
                     {injury.zones.map((z) => z.label).join(" · ")}
@@ -75,6 +75,19 @@ export default function HomeInjuriesSection({
                   {injury.recentPainScore != null ? injury.recentPainScore : "—"}
                   <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.5 }}>/10</span>
                 </div>
+                {/* One-tap daily reading — opens the pain sheet pre-scoped to
+                    this injury's zone. The daily rehab action shouldn't hide
+                    behind the Details toggle or a chooser popover. */}
+                {injury.zones[0] ? (
+                  <button
+                    type="button"
+                    onClick={() => logFor(injury.zones[0])}
+                    style={quickLogBtn}
+                    aria-label={`Log pain for ${injury.name}`}
+                  >
+                    Log
+                  </button>
+                ) : null}
               </div>
 
               {expanded ? (
@@ -270,6 +283,15 @@ const rowLogBtn: CSSProperties = {
   minHeight: 40,
   justifySelf: "start",
   padding: "8px 13px",
+};
+
+// Compact per-row variant — sits beside the pain score in the collapsed row.
+const quickLogBtn: CSSProperties = {
+  ...logPainBtn,
+  fontSize: 11.5,
+  minHeight: 36,
+  padding: "7px 12px",
+  flexShrink: 0,
 };
 
 const chooserChip: CSSProperties = {

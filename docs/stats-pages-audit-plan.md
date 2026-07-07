@@ -125,6 +125,25 @@ rolling/all-time so it complements (not duplicates) reports' calendar evaluation
 DEMOTED from original plan: pulse-strip vs-prior-window arrows everywhere —
 reports own vs-previous evaluation. Optional garnish later, not a phase item.
 
+## Phase 2.5 — Endurance filter unification (USER-ELEVATED 2026-07-06)
+
+The endurance page has four stacked control layers: family tabs, type
+sub-pills, per-chart Miles/Time/Elevation toggles, and range pills — and the
+range pills only filter the stats/recent-sessions list, NOT the charts
+(the 12w charts ignore them). User: "crazy amount of toggles… I want to filter
+the graphs by those things but it's messy."
+
+Design direction:
+1. **One filter bar, two controls**: Activity (family+type merged into a single
+   hierarchical picker — "All · Running ▾ · Trail Run") and Range. Kills the
+   two-row pill stack.
+2. **Range drives EVERYTHING** — charts included. Feasible now: reports Phase 0
+   refactored the endurance loaders to explicit {start,end} windows. 4w range →
+   4 weekly bars; 1y → monthly buckets (or 52 weekly, decide at build).
+3. Metric toggles (Miles/Time/Elevation) stay ON the chart — chart-level, not
+   page-level; they're not the mess.
+4. Same pattern later applies to any world page that grows filters.
+
 ## Phase 3 — Surface the hidden data ("show me what I logged")
 
 1. **Sport extras** (app/activities/[slug]): render `sportData.extras` in Recent

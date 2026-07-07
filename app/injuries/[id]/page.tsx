@@ -223,7 +223,10 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
       title={injury.name}
       toolbar={<HistoryBackButton fallbackHref="/body" label="← Back" style={linkStyle} />}
     >
-      {/* ── Hero: identity, state, map, factors, actions ─────────────────── */}
+      {/* ── Hero: slim daily strip. A returning user needs "how is it +
+          log today's reading" first — the identity block (map, factors,
+          notes, status changes) collapses below since they already know
+          their own injury. ─────────────────────────────────────────────── */}
       <section style={heroCard}>
         <div style={chipRow}>
           <span style={{ ...statusPill, background: status.bg, borderColor: status.border, color: status.color }}>{status.label}</span>
@@ -232,30 +235,36 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
           <span style={metaChip}>since {startedLabel}</span>
         </div>
 
-        <BodyMap
-          zones={zoneSlugs.map((slug) => ({ slug, freshness: isResolved ? "RECOVERING" : "INJURED" }))}
-          selectedSlugs={zoneSlugs}
-          view={defaultBodyView}
-          size="md"
-        />
-
-        {injury.aggravatingFactors.length > 0 ? (
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={miniLabel}>Aggravating factors</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {injury.aggravatingFactors.map((f) => (
-                <span key={f} style={factorChip}>{f}</span>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {injury.notes ? <div style={muted}>{injury.notes}</div> : null}
-
         {!isResolved && (
           <LogPainButton zones={painZones} factorSuggestions={factorSuggestions} style={logPainButtonStyle} />
         )}
-        <InjuryStatusButtons id={injury.id} />
+
+        <details style={heroDetails}>
+          <summary style={heroDetailsSummary}>Details, body map &amp; status</summary>
+          <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
+            <BodyMap
+              zones={zoneSlugs.map((slug) => ({ slug, freshness: isResolved ? "RECOVERING" : "INJURED" }))}
+              selectedSlugs={zoneSlugs}
+              view={defaultBodyView}
+              size="md"
+            />
+
+            {injury.aggravatingFactors.length > 0 ? (
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={miniLabel}>Aggravating factors</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {injury.aggravatingFactors.map((f) => (
+                    <span key={f} style={factorChip}>{f}</span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {injury.notes ? <div style={muted}>{injury.notes}</div> : null}
+
+            <InjuryStatusButtons id={injury.id} />
+          </div>
+        </details>
       </section>
 
       {/* ── Pain + training load (shared timeline) ───────────────────────── */}
@@ -424,6 +433,19 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
 const panel: React.CSSProperties = { ...cardSurface, gap: 14 };
 const heroCard: React.CSSProperties = { ...cardSurface, gap: 14 };
 const muted: React.CSSProperties = { fontSize: 13, color: COLOR.textDim, lineHeight: 1.45 };
+
+const heroDetails: React.CSSProperties = {
+  border: `1px solid ${COLOR.border}`,
+  borderRadius: 12,
+  padding: "10px 12px",
+  background: "rgba(255,255,255,0.02)",
+};
+const heroDetailsSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontWeight: 800,
+  fontSize: 13,
+  color: COLOR.textDim,
+};
 
 const chipRow: React.CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" };
 

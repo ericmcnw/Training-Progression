@@ -22,6 +22,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import PaceLineChart from "@/app/activities/_shared/PaceLineChart";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
+import EnduranceQuickLogButton from "@/app/routines/EnduranceQuickLogButton";
 
 export const dynamic = "force-dynamic";
 
@@ -196,7 +197,9 @@ export default async function EnduranceWorldPage(props: {
           frequencyChip={frequencyChipFor(domainGoals)}
           actions={
             <>
-              <SectionLinkButton href="/log" label="📋 Log" />
+              {/* Opens the endurance log drawer directly (type picker inside)
+                  instead of detouring through /log. */}
+              <EnduranceQuickLogButton label="📋 Log" style={headerLogBtnStyle} />
               <SectionLinkButton href="/activities/endurance/settings" label="⚙ Settings" />
             </>
           }
@@ -509,6 +512,21 @@ function formatHM(totalSec: number): string {
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
+
+// Mirrors app/progress/ui's SectionLinkButton pill so the Log button sits
+// visually identical next to the Settings link.
+const headerLogBtnStyle: React.CSSProperties = {
+  padding: "6px 11px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 999,
+  color: "inherit",
+  fontSize: 12,
+  fontWeight: 800,
+  background: "rgba(255,255,255,0.06)",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
 
 const tabRowStyle: React.CSSProperties = {
   display: "flex",
