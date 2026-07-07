@@ -236,7 +236,19 @@ export default function GoalCreatorEntry({
       setStage("pane");
       return;
     }
-    setFormInitial(buildInitial(next, chosen));
+    const init = buildInitial(next, chosen);
+    // Endurance handoffs target a cardio metadata group, not the family —
+    // preselect by label match when one clearly corresponds ("Running" →
+    // the Running group). No match → leave empty so the form's dropdown
+    // stays visible and the user picks.
+    if (init.targetType === "CARDIO" && !init.targetId) {
+      const label = next.label.toLowerCase();
+      const match = options.cardioTargets.find(
+        (t) => t.label.toLowerCase() === label || t.label.toLowerCase().includes(label) || label.includes(t.label.toLowerCase())
+      );
+      if (match) init.targetId = match.id;
+    }
+    setFormInitial(init);
     setLockedMeta({ icon: INTENT_META[chosen].icon, summary: `${INTENT_META[chosen].label} · ${next.label}` });
     setStage("form");
   }

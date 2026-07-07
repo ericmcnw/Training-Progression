@@ -926,6 +926,7 @@ export default function GoalForm({
                 <span style={fieldLabelStyle}>{targetTypeLabel}</span>
                 <select
                   name="targetId"
+                  required
                   value={effectiveTargetId}
                   onChange={e => {
                     const id = e.target.value;
