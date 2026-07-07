@@ -182,6 +182,7 @@ export default function GoalCreatorEntry({
   const [intentFilter, setIntentFilter] = useState<Intent | null>(null);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [formInitial, setFormInitial] = useState<GoalFormInitial | null>(null);
+  const [lockedMeta, setLockedMeta] = useState<{ icon: string; summary: string } | null>(null);
   const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [query, setQuery] = useState("");
   const [searchHint, setSearchHint] = useState<string | null>(null);
@@ -210,6 +211,7 @@ export default function GoalCreatorEntry({
     setIntentFilter(null);
     setSubject(null);
     setFormInitial(null);
+    setLockedMeta(null);
     setSaved(null);
     setQuery("");
     setSearchHint(null);
@@ -235,6 +237,7 @@ export default function GoalCreatorEntry({
       return;
     }
     setFormInitial(buildInitial(next, chosen));
+    setLockedMeta({ icon: INTENT_META[chosen].icon, summary: `${INTENT_META[chosen].label} · ${next.label}` });
     setStage("form");
   }
 
@@ -282,6 +285,9 @@ export default function GoalCreatorEntry({
           initial={stage === "manual" ? defaultInitial : formInitial!}
           inDrawer
           onSuccess={onSuccess}
+          lockedContext={
+            stage === "form" && lockedMeta ? { ...lockedMeta, onChange: reset } : undefined
+          }
         />
       </div>
     );
@@ -309,6 +315,7 @@ export default function GoalCreatorEntry({
                 init.targetValue = 10;
                 init.name = `Complete ${subject.label}`;
                 setFormInitial(init);
+                setLockedMeta({ icon: "☑️", summary: `Finish it · ${subject.label}` });
                 setStage("form");
               }
             : undefined

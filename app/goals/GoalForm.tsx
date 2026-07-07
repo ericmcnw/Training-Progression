@@ -263,6 +263,7 @@ export default function GoalForm({
   initial,
   inDrawer = false,
   onSuccess,
+  lockedContext,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   groupFrequencyAction?: (formData: FormData) => void | Promise<void>;
@@ -273,6 +274,11 @@ export default function GoalForm({
    *  redirecting and onSuccess is called so the host can close the drawer. */
   inDrawer?: boolean;
   onSuccess?: () => void;
+  /** Guided-creator arrivals: type/scope/target were already answered
+   *  upstream, so they collapse into a summary line instead of being
+   *  re-asked (and silently re-answerable). Goal-table flow only — the
+   *  frequency flow's value section is inseparable from its group UI. */
+  lockedContext?: { icon: string; summary: string; onChange: () => void };
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -456,6 +462,12 @@ export default function GoalForm({
     effectiveTargetType === "SESSION_TEMPLATE"? "Session type" :
     effectiveTargetType === "GROUP"           ? "Group" : "Routine";
 
+  // Locked (guided) mode — hide the already-answered questions. Target
+  // hides only when the handoff actually carried one (the endurance
+  // family→CARDIO path arrives target-less and keeps its dropdown).
+  const locked = !!lockedContext && !isFrequencyGoalFlow;
+  const lockTarget = locked && effectiveTargetId !== "";
+
   const baseAction = isFrequencyGoalFlow && groupFrequencyAction ? groupFrequencyAction : action;
   const formAction = inDrawer
     ? (formData: FormData) => {
@@ -484,10 +496,25 @@ export default function GoalForm({
         <input type="hidden" name="timeframe"  value={timeframe} />
         <input type="hidden" name="targetValue" value={canonicalTargetValue} />
         <input type="hidden" name="sessionMetricDefinitionId" value={validSessionMetricId} />
+        {/* The target selects are hidden in locked mode — carry the id. */}
+        {lockTarget ? <input type="hidden" name="targetId" value={effectiveTargetId} /> : null}
       </>}
 
+      {/* ── Locked summary — the guided flow's answers, not re-asked ── */}
+      {locked ? (
+        <div style={lockedBarStyle}>
+          <span aria-hidden>{lockedContext!.icon}</span>
+          <span style={{ fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {lockedContext!.summary}
+          </span>
+          <button type="button" onClick={lockedContext!.onChange} style={lockedChangeStyle}>
+            change
+          </button>
+        </div>
+      ) : null}
+
       {/* ── Step 1: Goal type ────────────────────────────────────── */}
-      <div>
+      <div style={locked ? { display: "none" } : undefined}>
         <div style={stepLabelStyle}>Goal type</div>
         <div style={typeGridStyle}>
           {GOAL_TYPE_ORDER.map(type => {
@@ -516,7 +543,7 @@ export default function GoalForm({
       </div>
 
       {/* ── Step 2: Scope (activity-first tile picker) ──────────── */}
-      <div>
+      <div style={locked ? { display: "none" } : undefined}>
         <div style={stepLabelStyle}>What are you tracking?</div>
         <div style={scopeGridStyle}>
           {visibleScopes.map(s => {
@@ -813,10 +840,12 @@ export default function GoalForm({
               />
             </label>
 
-            {/* Grade scope: combined routine + session template picker */}
+            {/* Grade scope: combined routine + session template picker.
+                Locked arrivals already picked the target — the metric +
+                grade inputs below stay (they ARE the value). */}
             {isGradeScope ? (
               <>
-                {gradeTargets.length > 0 ? (
+                {gradeTargets.length > 0 && !lockTarget ? (
                   <label style={fieldStyle}>
                     <span style={fieldLabelStyle}>Routine or session type</span>
                     <select
@@ -844,9 +873,9 @@ export default function GoalForm({
                       ))}
                     </select>
                   </label>
-                ) : (
+                ) : gradeTargets.length === 0 ? (
                   <div style={emptyStateStyle}>No session metric targets found. Add metrics to a routine or session type first.</div>
-                )}
+                ) : null}
 
                 {sessionMetricOptions.length > 0 ? (
                   <label style={fieldStyle}>
@@ -891,7 +920,7 @@ export default function GoalForm({
                   </div>
                 ) : null}
               </>
-            ) : (
+            ) : lockTarget ? null : (
               /* Standard target picker */
               <label style={fieldStyle}>
                 <span style={fieldLabelStyle}>{targetTypeLabel}</span>
@@ -1000,8 +1029,10 @@ export default function GoalForm({
             </label>
           ) : null}
 
-          {/* Timeframe — pills (hidden for grade scope since it's always one-time) */}
-          {!isGradeScope ? (
+          {/* Timeframe — pills (hidden for grade scope since it's always
+              one-time, and for locked PERFORMANCE arrivals — a single
+              "One-time" pill is noise when it can't change) */}
+          {!isGradeScope && !(locked && goalType === "PERFORMANCE") ? (
             <div style={{ marginTop: 16 }}>
               <div style={fieldLabelStyle}>Timeframe</div>
               <div style={{ ...pillRowStyle, marginTop: 7 }}>
@@ -2362,4 +2393,28 @@ const minSetsHintStyle: React.CSSProperties = {
   lineHeight: 1.4,
   flex: "1 1 220px",
   minWidth: 0,
+};
+
+// Locked-mode summary bar — the guided creator's answers shown, not re-asked.
+const lockedBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(147,197,253,0.3)",
+  background: "rgba(147,197,253,0.07)",
+  fontSize: 13,
+};
+
+const lockedChangeStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  border: "none",
+  background: "none",
+  padding: "4px 6px",
+  color: "rgba(147,197,253,0.9)",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+  flexShrink: 0,
 };
