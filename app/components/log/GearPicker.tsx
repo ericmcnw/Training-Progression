@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { listGearForActivity, listGearListsForActivity, applyGearList } from "@/app/log/gear-actions";
-import type { GearPick, SavedGear } from "@/lib/gear-pick-types";
+import { createGearListFromPicks } from "@/app/gear/lists/actions";
+import { gearToPickInput, type GearPick, type SavedGear } from "@/lib/gear-pick-types";
 import type { GearListSummary } from "@/lib/gear-lists";
 import { gearTypeMeta, gearTypesForActivity, resolveGearTypeSlug } from "@/lib/gear-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
@@ -41,6 +42,8 @@ export default function GearPicker({
   const [saved, setSaved] = useState<SavedGear[]>([]);
   const [lists, setLists] = useState<GearListSummary[]>([]);
   const [listMenuOpen, setListMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     listGearForActivity(activitySlug)
@@ -104,6 +107,28 @@ export default function GearPicker({
       // best-effort — applying a list must never break the form.
     }
   }
+  // Save the current gear as a reusable list — "make a list from this trip's
+  // gear". Resolves picks to inventory server-side, so the list links to real
+  // gear. Non-disruptive: no navigation, just an inline confirmation.
+  async function saveAsList() {
+    const picks = gearToPickInput(value);
+    if (picks.length === 0) return;
+    setSaving(true);
+    setSavedMsg(null);
+    try {
+      const res = await createGearListFromPicks(activitySlug, picks);
+      if (res) {
+        setSavedMsg("Saved to Gear › Lists ✓");
+        const rows = await listGearListsForActivity(activitySlug);
+        setLists(rows.filter((l) => l.applyGearCount > 0));
+      }
+    } catch {
+      // best-effort — saving a list must never break the form.
+    } finally {
+      setSaving(false);
+    }
+  }
+  const hasNamedGear = value.some((p) => p.name.trim().length > 0);
   function setPick(localId: string, patch: Partial<GearPick>) {
     onChange(value.map((p) => (p.localId === localId ? { ...p, ...patch, gearId: patch.gearId ?? p.gearId } : p)));
   }
@@ -227,6 +252,15 @@ export default function GearPicker({
         + Add gear
       </button>
 
+      {hasNamedGear ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" style={saveListBtn} onClick={saveAsList} disabled={saving}>
+            {saving ? "Saving…" : "＋ Save these as a list"}
+          </button>
+          {savedMsg ? <span style={savedMsgStyle}>{savedMsg}</span> : null}
+        </div>
+      ) : null}
+
       <datalist id={listId}>
         {presets.map((t) => (
           <option key={t.value} value={t.label} />
@@ -336,6 +370,18 @@ const fromListBtn: CSSProperties = {
   cursor: "pointer",
   width: "100%",
 };
+const saveListBtn: CSSProperties = {
+  padding: "8px 12px",
+  border: "1px solid rgba(128,128,128,0.4)",
+  borderRadius: 10,
+  background: "transparent",
+  color: "inherit",
+  fontWeight: 700,
+  fontSize: 12.5,
+  cursor: "pointer",
+  opacity: 0.85,
+};
+const savedMsgStyle: CSSProperties = { fontSize: 12, fontWeight: 800, color: "rgba(170,224,150,0.95)" };
 const listMenu: CSSProperties = { display: "grid", gap: 6 };
 const listMenuItem: CSSProperties = {
   display: "flex",

@@ -56,9 +56,44 @@ export default function GearListEditor({
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [items, setItems] = useState(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
-  // Server-persisted labels, to detect a real change on blur (local `items`
+  // Server-persisted snapshot, to detect a real change on blur (local `items`
   // already reflects the in-progress edit, so it can't be the comparison base).
-  const serverLabels = useMemo(() => new Map(initialItems.map((i) => [i.id, i.label])), [initialItems]);
+  const serverById = useMemo(() => new Map(initialItems.map((i) => [i.id, i])), [initialItems]);
+
+  // Per-field edit drafts for the weight/qty inputs (freeform while typing;
+  // committed on blur, then cleared so the input falls back to refreshed data).
+  const [drafts, setDrafts] = useState<Record<string, { weightOz?: string; qty?: string }>>({});
+  const draftWeight = (it: GearListItemRow) => drafts[it.id]?.weightOz ?? ozFromGrams(it.weightGrams);
+  const draftQty = (it: GearListItemRow) => drafts[it.id]?.qty ?? String(it.quantity);
+  function setDraft(id: string, patch: { weightOz?: string; qty?: string }) {
+    setDrafts((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
+  }
+  function clearDraft(id: string, field: "weightOz" | "qty") {
+    setDrafts((d) => {
+      const next = { ...d, [id]: { ...d[id] } };
+      delete next[id][field];
+      return next;
+    });
+  }
+  function commitWeight(it: GearListItemRow) {
+    const draft = drafts[it.id]?.weightOz;
+    if (draft === undefined) return;
+    clearDraft(it.id, "weightOz");
+    const v = draft.trim();
+    if (v === ozFromGrams(serverById.get(it.id)?.weightGrams ?? null)) return;
+    const grams = v === "" ? null : Math.round(Number(v) * GRAMS_PER_OZ);
+    setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, weightGrams: grams } : p)));
+    run(() => updateGearListItem(it.id, { weightOz: v }));
+  }
+  function commitQty(it: GearListItemRow) {
+    const draft = drafts[it.id]?.qty;
+    if (draft === undefined) return;
+    clearDraft(it.id, "qty");
+    const n = Math.max(1, Math.round(Number(draft.trim()) || 1));
+    if (n === (serverById.get(it.id)?.quantity ?? 1)) return;
+    setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, quantity: n } : p)));
+    run(() => updateGearListItem(it.id, { quantity: n }));
+  }
 
   const [showGear, setShowGear] = useState(false);
   const [adhocOpen, setAdhocOpen] = useState(false);
@@ -209,19 +244,38 @@ export default function GearListEditor({
               <span aria-hidden style={itemIcon}>
                 {meta ? meta.icon : "📝"}
               </span>
-              <div style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
+              <div style={{ display: "grid", gap: 4, minWidth: 0, flex: 1 }}>
                 <input
                   style={itemNameInput}
                   value={it.label}
                   onChange={(e) => setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, label: e.target.value } : p)))}
-                  onBlur={(e) => e.target.value.trim() !== (serverLabels.get(it.id) ?? "") && patchItem(it, { label: e.target.value })}
+                  onBlur={(e) => e.target.value.trim() !== (serverById.get(it.id)?.label ?? "") && patchItem(it, { label: e.target.value })}
                   aria-label="Item name"
                 />
-                <div style={itemMeta}>
-                  {meta ? meta.label : "Checklist item"}
-                  {it.weightGrams != null ? ` · ${ozFromGrams(it.weightGrams)} oz` : ""}
-                  {it.quantity > 1 ? ` · ×${it.quantity}` : ""}
-                  {it.consumable ? " · consumable" : ""}
+                <div style={subRow}>
+                  <input
+                    inputMode="decimal"
+                    style={smallInput}
+                    value={draftWeight(it)}
+                    onChange={(e) => setDraft(it.id, { weightOz: e.target.value })}
+                    onBlur={() => commitWeight(it)}
+                    placeholder="oz"
+                    aria-label="Weight (oz)"
+                  />
+                  <span style={unitTag}>oz</span>
+                  <span style={qtyTag}>×</span>
+                  <input
+                    inputMode="numeric"
+                    style={smallQty}
+                    value={draftQty(it)}
+                    onChange={(e) => setDraft(it.id, { qty: e.target.value })}
+                    onBlur={() => commitQty(it)}
+                    aria-label="Quantity"
+                  />
+                  <span style={itemMeta}>
+                    {meta ? meta.label : "Checklist item"}
+                    {it.consumable ? " · consumable" : ""}
+                  </span>
                 </div>
               </div>
               <div style={itemControls}>
@@ -408,7 +462,12 @@ const itemNameInput: CSSProperties = {
   border: "1px solid transparent",
   background: "transparent",
 };
-const itemMeta: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.55, paddingLeft: 6 };
+const itemMeta: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.55, whiteSpace: "nowrap" };
+const subRow: CSSProperties = { display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", paddingLeft: 6 };
+const smallInput: CSSProperties = { ...inputStyle, width: 52, padding: "3px 6px", textAlign: "center" };
+const smallQty: CSSProperties = { ...inputStyle, width: 40, padding: "3px 4px", textAlign: "center" };
+const unitTag: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.5 };
+const qtyTag: CSSProperties = { fontSize: 12, fontWeight: 800, opacity: 0.5, marginLeft: 4 };
 const itemControls: CSSProperties = { display: "flex", gap: 4, flexShrink: 0 };
 const miniBtn: CSSProperties = {
   width: 30,

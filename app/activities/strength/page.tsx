@@ -8,13 +8,14 @@ import { applyGoalsToPulseSlots } from "@/app/progress/details/pulse-goal-slots"
 import ActivityPulseStrip from "@/app/progress/details/ActivityPulseStrip";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
-import { SectionCard, SectionLinkButton, EmptyState } from "@/app/progress/ui";
+import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import { domainColor } from "@/lib/routines";
 import { buildStrengthChartData } from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import QuickLogDrawerButton from "@/app/routines/QuickLogDrawerButton";
+import StrengthSearch from "./StrengthSearch";
 import { domainRgb } from "@/lib/routines";
 
 export const dynamic = "force-dynamic";
@@ -206,17 +207,40 @@ export default async function StrengthWorldPage() {
           </SectionCard>
         ) : null}
 
-        {/* Top exercises */}
+        {/* Top exercises — with an inline finder so ANY lift's progression
+            (not just the top-8) is reachable without leaving for /exercises.
+            Rehab lifts rarely crack the top-8 by session count. */}
         {strength.topExercises.length > 0 ? (
           <SectionCard
             title="Top Exercises"
-            subtitle="Your most-trained lifts, with all-time top weight and recent progression."
-            actions={<SectionLinkButton href="/exercises" label="All exercises" />}
+            subtitle="Your most-trained lifts, with all-time top weight and recent progression. Search finds any exercise or routine."
           >
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-              {strength.topExercises.slice(0, 8).map((ex) => (
-                <ExerciseCard key={ex.exerciseId} exercise={ex} />
-              ))}
+            <div style={{ display: "grid", gap: 12 }}>
+              <StrengthSearch
+                exercises={strength.allExercises
+                  .slice()
+                  .sort((a, b) => b.totalSessions - a.totalSessions)
+                  .map((ex) => ({
+                    id: ex.exerciseId,
+                    name: ex.name,
+                    href: ex.routineLink,
+                    meta: `${ex.totalSessions} session${ex.totalSessions === 1 ? "" : "s"}${
+                      ex.allTimePR && ex.allTimePR.weightLb > 0 ? ` · top ${ex.allTimePR.weightLb} lb` : ""
+                    }`,
+                  }))}
+                routines={strength.routines.map((r) => ({
+                  id: r.routineId,
+                  name: r.name,
+                  href: `/routines/${r.routineId}`,
+                  meta: `${r.totalSessions} session${r.totalSessions === 1 ? "" : "s"}`,
+                }))}
+                accentRgb={STRENGTH_RGB}
+              />
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+                {strength.topExercises.slice(0, 8).map((ex) => (
+                  <ExerciseCard key={ex.exerciseId} exercise={ex} />
+                ))}
+              </div>
             </div>
           </SectionCard>
         ) : null}
@@ -226,7 +250,6 @@ export default async function StrengthWorldPage() {
           <SectionCard
             title="Strength Routines"
             subtitle="Click a routine to dive into per-exercise progression and recent sessions."
-            actions={<SectionLinkButton href="/log" label="All routines" />}
           >
             <div style={{ display: "grid", gap: 8 }}>
               {strength.routines.map((r) => (

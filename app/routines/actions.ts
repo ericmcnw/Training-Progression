@@ -1457,6 +1457,14 @@ function parseFrequencyGoalFields(formData: FormData) {
   const rawDomain = String(formData.get("targetDomain") ?? "").trim().toLowerCase();
   const targetDomain = VALID_DOMAINS.has(rawDomain) ? rawDomain : null;
 
+  // Per-session aim, display-only (show-don't-gate): "5×/wk aiming ~30 reps"
+  // renders sessions as 20/30 without ever refusing to count one. Same
+  // posted-only rule as targetDomain so unaware forms can't wipe it.
+  const sessionAimPosted = formData.has("sessionAim");
+  const rawAim = String(formData.get("sessionAim") ?? "").trim();
+  const parsedAim = Math.floor(Number(rawAim));
+  const sessionAim = rawAim && Number.isFinite(parsedAim) && parsedAim >= 1 ? Math.min(9999, parsedAim) : null;
+
   if (!name) throw new Error("Goal name is required.");
   if (!Number.isFinite(targetCount) || targetCount <= 0) throw new Error("Target count must be greater than 0.");
   if (!Number.isFinite(targetInterval) || targetInterval <= 0) throw new Error("Target interval must be greater than 0.");
@@ -1477,6 +1485,8 @@ function parseFrequencyGoalFields(formData: FormData) {
     triggerMinSets,
     targetDomain,
     targetDomainPosted,
+    sessionAim,
+    sessionAimPosted,
   };
 }
 
@@ -1562,6 +1572,7 @@ export async function createFrequencyGoal(formData: FormData) {
     triggerActivityFamilyIds,
     triggerMinSets,
     targetDomain,
+    sessionAim,
   } = parseFrequencyGoalFields(formData);
 
   const goal = await prisma.frequencyGoal.create({
@@ -1576,6 +1587,7 @@ export async function createFrequencyGoal(formData: FormData) {
       triggerActivityFamilyIds,
       triggerMinSets,
       targetDomain,
+      sessionAim,
     },
     select: { id: true },
   });
@@ -1606,6 +1618,8 @@ export async function updateFrequencyGoal(formData: FormData) {
     triggerMinSets,
     targetDomain,
     targetDomainPosted,
+    sessionAim,
+    sessionAimPosted,
   } = parseFrequencyGoalFields(formData);
 
   const existing = await prisma.frequencyGoal.findUnique({
@@ -1624,9 +1638,11 @@ export async function updateFrequencyGoal(formData: FormData) {
       triggerActivityTypeIds,
       triggerActivityFamilyIds,
       triggerMinSets,
-      // Only touch targetDomain when the form actually posted it — the
-      // group-goal editor doesn't know about domains and must not wipe one.
+      // Only touch targetDomain / sessionAim when the form actually posted
+      // them — the group-goal editor doesn't know about these fields and
+      // must not wipe them.
       ...(targetDomainPosted ? { targetDomain } : {}),
+      ...(sessionAimPosted ? { sessionAim } : {}),
     },
   });
   if (existing && existing.targetCount !== targetCount) {

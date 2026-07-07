@@ -665,7 +665,12 @@ export async function getHomeData(): Promise<HomeData> {
       const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
       // Domain / sport-tag goals legitimately have no routine roster — their
       // membership is the tag itself. Everything else still needs a primary.
-      const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+      const isTagTargeted =
+        Boolean(goal.targetDomain) ||
+        goal.triggerSupportedSports.length > 0 ||
+        // Trigger-exercise goals ("30 pull-ups 5×/wk") are rosterless too —
+        // their membership is the exercise, not a routine list.
+        goal.triggerExercises.length > 0;
       if (primaryLinks.length === 0 && !isTagTargeted) return null;
 
       const primaryRoutines = primaryLinks.map((rel) => ({
@@ -1020,7 +1025,12 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
       );
       const primaryLinks = liveLinks.filter((rel) => rel.role !== "SUBSTITUTE");
       const subLinks = liveLinks.filter((rel) => rel.role === "SUBSTITUTE");
-      const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+      const isTagTargeted =
+        Boolean(goal.targetDomain) ||
+        goal.triggerSupportedSports.length > 0 ||
+        // Trigger-exercise goals ("30 pull-ups 5×/wk") are rosterless too —
+        // their membership is the exercise, not a routine list.
+        goal.triggerExercises.length > 0;
       if (primaryLinks.length === 0 && !isTagTargeted) return null;
 
       const primaryRoutines = primaryLinks.map((rel) => ({

@@ -63,12 +63,20 @@ export default function InjuryTrainingLoad({
   const [sel, setSel] = useState<{ category: string; weekIdx: number } | null>(null);
   const [view, setView] = useState<"sessions" | "load" | "miles">("sessions");
   const [painSel, setPainSel] = useState<number | null>(null);
+  // Shared window for BOTH the pain line and the bars. Default 4w — a
+  // months-old injury otherwise stretches 12 weeks of bars under a few days
+  // of recent pain dots, squeezing the pain into the right edge. null = the
+  // full injury window (capped at the 12-week cache).
+  const [rangeWeeks, setRangeWeeks] = useState<number | null>(4);
 
-  // Crop the 12-week cache to the injury window.
-  const cropStart = windowStartYmd
+  // Crop the 12-week cache to the injury window, narrowed further by the
+  // range pills. Pain + bars crop together so the timescale always matches.
+  const windowCrop = windowStartYmd
     ? Math.max(0, data.weekStarts.findIndex((ws) => ws >= windowStartYmd))
     : 0;
-  const weekStarts = data.weekStarts.slice(cropStart < 0 ? 0 : cropStart);
+  const rangeCrop = rangeWeeks != null ? Math.max(0, data.weekStarts.length - rangeWeeks) : 0;
+  const cropStart = Math.max(windowCrop, rangeCrop);
+  const weekStarts = data.weekStarts.slice(cropStart);
   const weekCount = weekStarts.length;
 
   const pain = painPoints.filter((p) => weekCount === 0 || p.ymd >= weekStarts[0]);
@@ -85,9 +93,9 @@ export default function InjuryTrainingLoad({
   const isLoad = view === "load";
   const isMiles = view === "miles";
   const catWeeks = (c: InjuryHeatmapData["categories"][number]) =>
-    (isMiles ? c.milesWeeks : isLoad ? c.loadWeeks : c.weeks).slice(cropStart < 0 ? 0 : cropStart);
+    (isMiles ? c.milesWeeks : isLoad ? c.loadWeeks : c.weeks).slice(cropStart);
   const drWeeks = (dr: InjuryHeatmapData["categories"][number]["domains"][number]) =>
-    (isMiles ? dr.milesWeeks : isLoad ? dr.loadWeeks : dr.weeks).slice(cropStart < 0 ? 0 : cropStart);
+    (isMiles ? dr.milesWeeks : isLoad ? dr.loadWeeks : dr.weeks).slice(cropStart);
   const anyLoad = data.categories.some((c) => c.loadWeeks.some((n) => n > 0));
   // Miles view only appears when cardio distance actually hit this injury's
   // muscles — a shoulder injury with no mileage never shows the toggle.
@@ -103,7 +111,7 @@ export default function InjuryTrainingLoad({
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
-      {/* legend + toggle */}
+      {/* legend + range + metric toggle */}
       <div style={topRow}>
         {presentDomains.length > 0 ? (
           <div style={legendRow}>
@@ -115,6 +123,20 @@ export default function InjuryTrainingLoad({
             ))}
           </div>
         ) : <span />}
+        <div style={toggleGroup} role="tablist" aria-label="Window">
+          {([[2, "2w"], [4, "4w"], [null, "All"]] as Array<[number | null, string]>).map(([w, lbl]) => (
+            <button
+              key={lbl}
+              type="button"
+              role="tab"
+              aria-selected={rangeWeeks === w}
+              onClick={() => { setRangeWeeks(w); setSel(null); setPainSel(null); }}
+              style={rangeWeeks === w ? toggleBtnActive : toggleBtn}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
         {anyLoad || anyMiles ? (
           <div style={toggleGroup} role="tablist" aria-label="Bar metric">
             <button type="button" role="tab" aria-selected={!isLoad && !isMiles} onClick={() => setView("sessions")} style={!isLoad && !isMiles ? toggleBtnActive : toggleBtn}>Sessions</button>
@@ -129,7 +151,14 @@ export default function InjuryTrainingLoad({
       </div>
 
       {/* ── Pain line ──────────────────────────────────────────────────────── */}
-      <PainLine pain={pain} xFor={xFor} sel={painSel} onSel={setPainSel} hasPain={hasPain} />
+      <PainLine
+        pain={pain}
+        xFor={xFor}
+        sel={painSel}
+        onSel={setPainSel}
+        hasPain={hasPain}
+        weekXs={weekStarts.slice(1).map((ws) => xFor(ws))}
+      />
 
       {/* ── Load bars per muscle group, same date axis ─────────────────────── */}
       {noMuscleMap ? (
@@ -190,7 +219,7 @@ export default function InjuryTrainingLoad({
                   </div>
 
                   {sel?.category === category.slug && (
-                    <WeekRoutines category={category} weekIdx={sel.weekIdx + (cropStart < 0 ? 0 : cropStart)} weekStarts={data.weekStarts} />
+                    <WeekRoutines category={category} weekIdx={sel.weekIdx + cropStart} weekStarts={data.weekStarts} />
                   )}
                 </>
               )}
@@ -223,12 +252,16 @@ function PainLine({
   sel,
   onSel,
   hasPain,
+  weekXs = [],
 }: {
   pain: PainTrendPoint[];
   xFor: (ymd: string) => number;
   sel: number | null;
   onSel: (i: number | null) => void;
   hasPain: boolean;
+  /** X positions of week boundaries — faint gridlines that visually tie the
+   *  pain plot to the weekly bar columns below (shared timescale). */
+  weekXs?: number[];
 }) {
   if (!hasPain) {
     return <div style={painEmpty}>No pain logged in this window.</div>;
@@ -259,6 +292,9 @@ function PainLine({
         <svg viewBox={`0 0 ${PAIN_W} ${PAIN_H}`} width="100%" height="auto" style={{ display: "block", overflow: "visible" }} role="img" aria-label="Pain trend">
           {gridLevels.map((g) => (
             <line key={g} x1={0} x2={PAIN_W} y1={y(g)} y2={y(g)} stroke="rgba(255,255,255,0.06)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          ))}
+          {weekXs.map((x, i) => (
+            <line key={`wk-${i}`} x1={x} x2={x} y1={padY} y2={PAIN_H - padY} stroke="rgba(255,255,255,0.05)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
           ))}
           {line ? (
             <polyline points={line} fill="none" stroke="rgba(248,113,113,0.7)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
+import { resolveGearPicks, type GearPickInput } from "@/lib/gear";
+import { getActivityEntry } from "@/lib/activity-families";
 
 const GRAMS_PER_OZ = 28.349523125;
 
@@ -37,6 +39,46 @@ export async function createGearList(input: { name: string; activitySlug?: strin
   const name = input.name.trim() || "New list";
   const list = await prisma.gearList.create({
     data: { profileKey: session.profileKey, name, activitySlug: input.activitySlug || null },
+    select: { id: true },
+  });
+  revalidate(list.id);
+  return { id: list.id };
+}
+
+// Build a reusable list from a log's current gear picks — "save this trip's
+// gear as a list". Resolves the picks to inventory (create-or-reuse) so the
+// list's items link to real gear (weight/usage carry), then creates the list
+// with everything checked. Returns the new list id, or null if nothing named.
+export async function createGearListFromPicks(
+  activitySlug: string,
+  picks: GearPickInput[],
+  name?: string
+): Promise<{ id: string } | null> {
+  const named = picks.filter((p) => p.name.trim());
+  if (named.length === 0) return null;
+  const session = await getAppSession();
+  const resolved = await resolveGearPicks(named, activitySlug);
+  const fallback = getActivityEntry(activitySlug)?.label;
+  const listName = name?.trim() || (fallback ? `${fallback} kit` : "Gear list");
+  const list = await prisma.gearList.create({
+    data: {
+      profileKey: session.profileKey,
+      name: listName,
+      activitySlug: activitySlug || null,
+      items: {
+        create: resolved.map((r, i) => ({
+          label: r.name,
+          gearId: r.gearId,
+          consumable: r.consumable,
+          quantity: r.quantity > 0 ? r.quantity : 1,
+          // Gear-ref items inherit the gear's weight (null = inherit); only
+          // ad-hoc items that never resolved carry a snapshot override.
+          weightGramsOverride: r.gearId ? null : r.weightGrams,
+          sortOrder: i,
+          checked: true,
+        })),
+      },
+    },
     select: { id: true },
   });
   revalidate(list.id);

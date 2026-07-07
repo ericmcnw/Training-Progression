@@ -106,6 +106,31 @@ export type GoalFormOptions = {
     name: string;
     sortOrder: number;
   }>;
+  /** Routine ids ordered most-recently-logged first — the creator ranks its
+   *  routine list by these instead of alphabetically. */
+  recentRoutineIds: string[];
+  /** Exercise ids seen in recent sessions, most recent first — ranks the
+   *  creator's exercise suggestions. */
+  recentExerciseIds: string[];
+  /** Last-7-days matcher preview for the creator's habit panes — "what
+   *  would count if this goal existed today". Keyed by domain value, sport
+   *  slug, and endurance family id. */
+  recentCounts: {
+    domains: Record<string, { count: number; names: string[] }>;
+    sports: Record<string, { count: number; names: string[] }>;
+    families: Record<string, { count: number; names: string[] }>;
+  };
+  /** Active frequency goals, summarized for creation-time overlap notes
+   *  ("overlaps 'Cardio 3×/wk' — runs count toward both"). */
+  activeFrequencyGoals: Array<{
+    id: string;
+    name: string;
+    targetDomain: string | null;
+    sports: string[];
+    familyIds: string[];
+    typeIds: string[];
+    routineIds: string[];
+  }>;
 };
 
 export type GoalHistoryPoint = {
@@ -1681,6 +1706,79 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
     }),
   ]);
 
+  // Creator support data — recency ranking, last-7-days matcher previews,
+  // and overlap summaries. One extra parallel batch; all cheap windowed or
+  // grouped queries.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [routineRecency, recentExerciseRows, recentLogs, activeFreqGoals] = await Promise.all([
+    prisma.routineLog.groupBy({
+      by: ["routineId"],
+      _max: { performedAt: true },
+    }),
+    prisma.sessionExercise.findMany({
+      orderBy: { routineLog: { performedAt: "desc" } },
+      take: 200,
+      select: { exerciseId: true },
+    }),
+    prisma.routineLog.findMany({
+      where: { performedAt: { gte: sevenDaysAgo } },
+      select: {
+        activityType: { select: { familyId: true } },
+        routine: {
+          select: { id: true, name: true, kind: true, domain: true, subtype: true, supportsSports: true },
+        },
+      },
+    }),
+    prisma.frequencyGoal.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        targetDomain: true,
+        triggerSupportedSports: true,
+        triggerActivityFamilyIds: true,
+        triggerActivityTypeIds: true,
+        routines: { select: { routineId: true } },
+      },
+    }),
+  ]);
+
+  const recentRoutineIds = routineRecency
+    .filter((row) => row._max.performedAt != null)
+    .sort((a, b) => b._max.performedAt!.getTime() - a._max.performedAt!.getTime())
+    .map((row) => row.routineId);
+  const recentExerciseIds = Array.from(new Set(recentExerciseRows.map((row) => row.exerciseId)));
+
+  const recentCounts: GoalFormOptions["recentCounts"] = { domains: {}, sports: {}, families: {} };
+  const bump = (bucket: Record<string, { count: number; names: string[] }>, key: string, name: string) => {
+    const entry = (bucket[key] ??= { count: 0, names: [] });
+    entry.count += 1;
+    if (entry.names.length < 3 && !entry.names.includes(name)) entry.names.push(name);
+  };
+  for (const log of recentLogs) {
+    if (!log.routine) continue;
+    const name = log.routine.name;
+    const domain = effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype);
+    bump(recentCounts.domains, domain, name);
+    bump(recentCounts.domains, "any", name);
+    for (const sport of log.routine.supportsSports) bump(recentCounts.sports, sport.toLowerCase(), name);
+    // Synthetic sport routines ARE the sport — count them under their slug.
+    if (log.routine.id.startsWith("sports-") && log.routine.id.endsWith("-synthetic")) {
+      bump(recentCounts.sports, log.routine.id.slice("sports-".length, -"-synthetic".length), name);
+    }
+    if (log.activityType?.familyId) bump(recentCounts.families, log.activityType.familyId, name);
+  }
+
+  const activeFrequencyGoals: GoalFormOptions["activeFrequencyGoals"] = activeFreqGoals.map((g) => ({
+    id: g.id,
+    name: g.name,
+    targetDomain: g.targetDomain,
+    sports: g.triggerSupportedSports,
+    familyIds: g.triggerActivityFamilyIds,
+    typeIds: g.triggerActivityTypeIds,
+    routineIds: g.routines.map((r) => r.routineId),
+  }));
+
   const cardioTargets = groups.filter((group) => cardioKinds.includes(group.kind));
   const standardGroups = groups.filter((group) => !cardioKinds.includes(group.kind));
 
@@ -1789,6 +1887,10 @@ export async function getGoalFormOptions(): Promise<GoalFormOptions> {
       name: fam.name,
       sortOrder: fam.sortOrder,
     })),
+    recentRoutineIds,
+    recentExerciseIds,
+    recentCounts,
+    activeFrequencyGoals,
   };
 }
 
@@ -1999,7 +2101,11 @@ export async function getGoalInsight(goalId: string) {
     if (!goal) return null;
     // Domain / sport-tag goals legitimately have no routine roster — their
     // membership is the tag itself. Everything else still needs one.
-    const isTagTargeted = Boolean(goal.targetDomain) || goal.triggerSupportedSports.length > 0;
+    const isTagTargeted =
+      Boolean(goal.targetDomain) ||
+      goal.triggerSupportedSports.length > 0 ||
+      // Trigger-exercise goals are rosterless — membership is the exercise.
+      goal.triggerExercises.length > 0;
     if (goal.routines.length === 0 && !isTagTargeted) return null;
     const shape: GroupFrequencyGoalRow = {
       id: goal.id,

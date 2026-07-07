@@ -176,7 +176,11 @@ async function loadAndCompute(params: {
   const { target, routines, today, windowDays } = params;
   const targetDomain = params.targetDomain ?? null;
   const triggerSupportedSports = (params.triggerSupportedSports ?? []).map((s) => s.toLowerCase());
-  const isTagTargeted = Boolean(targetDomain) || triggerSupportedSports.length > 0;
+  const isTagTargeted =
+    Boolean(targetDomain) ||
+    triggerSupportedSports.length > 0 ||
+    // Trigger-exercise goals are rosterless — membership is the exercise.
+    (params.triggerExerciseIds ?? []).length > 0;
   if (routines.length === 0 && !isTagTargeted) return null;
 
   // Only PRIMARY routines count for the visible "this is what the goal tracks"

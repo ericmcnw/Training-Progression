@@ -224,6 +224,10 @@ Phase 2 — by then the remaining cost is visible.
 - People&Records for more sports; per-sport performance lenses.
 - Habit velocity chart (lifestyle); mobility "what got worked" chips.
 - Sends-by-grade-over-time; area rollups; project progress dashboards (climbing).
+- **Exercises page cleanup (user 2026-07-06: "the exercises page is messy")** —
+  /exercises library: layout/density pass, better grouping (library kind /
+  muscle), search prominence, tighter cards. Note: the strength page now has
+  its own inline exercise search, so /exercises is browse/manage-only.
 
 ---
 
