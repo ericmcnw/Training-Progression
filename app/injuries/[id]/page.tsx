@@ -15,7 +15,8 @@ import { cardSurface, cardTitle, COLOR, RADIUS } from "@/lib/design-tokens";
 import { getInjury, updateInjury, getAggravatingFactorSuggestions } from "../actions";
 import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
-import { formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, diffYmdDays } from "@/lib/dates";
+import { addDaysYmd, formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, diffYmdDays } from "@/lib/dates";
+import type { CoverageDetailLog } from "@/app/progress/coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,94 @@ function buildPostActivitySpikes(rows: PainLogRow[], baseline: number): PostSpik
     }));
 }
 
+type Trajectory = { dir: "improving" | "stable" | "worsening"; label: string };
+
+// Least-squares slope of the last two weeks of daily pain peaks → is this
+// injury trending better or worse? Needs ≥3 recent points to say anything.
+function computeTrajectory(points: PainTrendPoint[], todayYmd: string): Trajectory | null {
+  const cutoff = addDaysYmd(todayYmd, -14);
+  const recent = points.filter((p) => p.ymd >= cutoff);
+  if (recent.length < 3) return null;
+  const x0 = Date.parse(`${recent[0].ymd}T00:00:00Z`) / 86_400_000;
+  const xs = recent.map((p) => Date.parse(`${p.ymd}T00:00:00Z`) / 86_400_000 - x0);
+  const ys = recent.map((p) => p.level);
+  const n = xs.length;
+  const meanX = xs.reduce((s, v) => s + v, 0) / n;
+  const meanY = ys.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - meanX) * (ys[i] - meanY);
+    den += (xs[i] - meanX) ** 2;
+  }
+  if (den === 0) return null;
+  const slopePerDay = num / den;
+  if (slopePerDay <= -0.08) return { dir: "improving", label: "↓ improving" };
+  if (slopePerDay >= 0.08) return { dir: "worsening", label: "↑ worsening" };
+  return { dir: "stable", label: "→ stable" };
+}
+
+const TRAJECTORY_META: Record<Trajectory["dir"], { bg: string; border: string; color: string }> = {
+  improving: { bg: "rgba(134,239,172,0.14)", border: "rgba(134,239,172,0.4)", color: "#86EFAC" },
+  stable:    { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.16)", color: "rgba(255,255,255,0.7)" },
+  worsening: { bg: "rgba(248,113,113,0.14)", border: "rgba(248,113,113,0.42)", color: "#FCA5A5" },
+};
+
+type NextMorningRow = {
+  logId: string;
+  routineName: string;
+  performedAtLabel: string;
+  metric: string | null;
+  reading: number | null;
+};
+
+// Recent zone-loading sessions × the NEXT morning's reading — the monitored-
+// loading rule ("load is OK if it settles by the next morning") as a list.
+// Prefers an explicit MORNING-context log the following day, else that day's
+// earliest reading.
+function buildNextMorningRows(
+  heatmapCategories: Array<{ domains: Array<{ contributingLogs: CoverageDetailLog[] }> }>,
+  painRows: Array<{ level: number; context: string; loggedAt: Date }>,
+): NextMorningRow[] {
+  const seen = new Set<string>();
+  const pooled: CoverageDetailLog[] = [];
+  for (const cat of heatmapCategories)
+    for (const dr of cat.domains)
+      for (const dl of dr.contributingLogs) {
+        if (seen.has(dl.logId)) continue;
+        seen.add(dl.logId);
+        pooled.push(dl);
+      }
+  pooled.sort((a, b) => b.performedAt.localeCompare(a.performedAt));
+
+  const byYmd = new Map<string, Array<{ level: number; context: string; loggedAt: Date }>>();
+  for (const l of [...painRows].sort((a, b) => a.loggedAt.getTime() - b.loggedAt.getTime())) {
+    const ymd = toAppYmd(l.loggedAt);
+    const arr = byYmd.get(ymd) ?? [];
+    arr.push(l);
+    byYmd.set(ymd, arr);
+  }
+
+  return pooled.slice(0, 6).map((dl) => {
+    const nextYmd = addDaysYmd(toAppYmd(new Date(dl.performedAt)), 1);
+    const dayLogs = byYmd.get(nextYmd) ?? [];
+    const reading = dayLogs.find((l) => l.context === "MORNING") ?? dayLogs[0] ?? null;
+    const metric =
+      dl.distanceMi && dl.distanceMi > 0
+        ? `${dl.distanceMi >= 10 ? dl.distanceMi.toFixed(0) : dl.distanceMi.toFixed(1)} mi`
+        : dl.durationSec && dl.durationSec > 0
+          ? `${Math.round(dl.durationSec / 60)}m`
+          : null;
+    return {
+      logId: dl.logId,
+      routineName: dl.routineName,
+      performedAtLabel: dl.performedAtLabel,
+      metric,
+      reading: reading ? reading.level : null,
+    };
+  });
+}
+
 const STATUS_META: Record<string, { label: string; bg: string; border: string; color: string }> = {
   ACTIVE:     { label: "Active",     bg: "rgba(248,113,113,0.16)", border: "rgba(248,113,113,0.42)", color: "#FCA5A5" },
   FLARED:     { label: "Flared",     bg: "rgba(251,146,60,0.16)",  border: "rgba(251,146,60,0.42)",  color: "#FED7AA" },
@@ -196,6 +285,8 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
   const loadWindowStartYmd = getWeekBoundsSunday(injury.startedAt).startYmd;
   const trendPoints = dailyPainPeaks(painLogs);
   const baselineMedian = median(painLogs.map((l) => l.level));
+  const trajectory = computeTrajectory(trendPoints, today);
+  const nextMorningRows = buildNextMorningRows(trainingHeatmap.categories, painLogs);
   const factorCorrelations = buildFactorCorrelations(painLogs);
   const postSpikes = buildPostActivitySpikes(painLogs, baselineMedian);
   const hasAggravatorData = factorCorrelations.length > 0 || postSpikes.length > 0;
@@ -230,6 +321,19 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
       <section style={heroCard}>
         <div style={chipRow}>
           <span style={{ ...statusPill, background: status.bg, borderColor: status.border, color: status.color }}>{status.label}</span>
+          {trajectory ? (
+            <span
+              style={{
+                ...statusPill,
+                background: TRAJECTORY_META[trajectory.dir].bg,
+                borderColor: TRAJECTORY_META[trajectory.dir].border,
+                color: TRAJECTORY_META[trajectory.dir].color,
+              }}
+              title="Trend of the last 2 weeks of daily pain readings"
+            >
+              {trajectory.label}
+            </span>
+          ) : null}
           <span style={metaChip}>{"●".repeat(injury.severity)}{"○".repeat(Math.max(0, 5 - injury.severity))} severity</span>
           <span style={metaChip}>{daysInjured === 0 ? "started today" : `${daysInjured} day${daysInjured === 1 ? "" : "s"}`}</span>
           <span style={metaChip}>since {startedLabel}</span>
@@ -288,6 +392,38 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
           windowStartYmd={loadWindowStartYmd}
         />
       </section>
+
+      {/* ── Next-morning response — the monitored-loading rule as a list ── */}
+      {nextMorningRows.length > 0 && painLogs.length > 0 && (
+        <section style={panel}>
+          <div style={cardTitle}>Next-morning response</div>
+          <div style={{ fontSize: 12, color: COLOR.textDim, fontWeight: 600, lineHeight: 1.45 }}>
+            Load is OK if it settles by the next morning. Each recent session that hit this area, against the
+            following morning&rsquo;s reading (baseline {baselineMedian}/10).
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {nextMorningRows.map((row) => (
+              <div key={row.logId} style={nextMorningRow}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {row.routineName}
+                  </div>
+                  <div style={{ fontSize: 11, color: COLOR.textFaint, fontWeight: 700, marginTop: 2 }}>
+                    {row.performedAtLabel}{row.metric ? ` · ${row.metric}` : ""}
+                  </div>
+                </div>
+                {row.reading == null ? (
+                  <span style={verdictNone}>no reading</span>
+                ) : row.reading <= baselineMedian ? (
+                  <span style={verdictSettled}>settled · {row.reading}/10</span>
+                ) : (
+                  <span style={verdictElevated}>↑ {row.reading}/10</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── What aggravates it ───────────────────────────────────────────── */}
       {hasAggravatorData && (
@@ -501,6 +637,43 @@ const factorChipSm: React.CSSProperties = {
 };
 
 const statChipRow: React.CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
+const nextMorningRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.02)",
+};
+
+const verdictBase: React.CSSProperties = {
+  flexShrink: 0,
+  fontSize: 11.5,
+  fontWeight: 900,
+  padding: "4px 10px",
+  borderRadius: 999,
+  whiteSpace: "nowrap",
+};
+const verdictSettled: React.CSSProperties = {
+  ...verdictBase,
+  border: "1px solid rgba(134,239,172,0.4)",
+  background: "rgba(134,239,172,0.10)",
+  color: "#86EFAC",
+};
+const verdictElevated: React.CSSProperties = {
+  ...verdictBase,
+  border: "1px solid rgba(248,113,113,0.42)",
+  background: "rgba(248,113,113,0.12)",
+  color: "#FCA5A5",
+};
+const verdictNone: React.CSSProperties = {
+  ...verdictBase,
+  border: `1px solid ${COLOR.border}`,
+  background: "rgba(255,255,255,0.03)",
+  color: COLOR.textFaint,
+};
+
 const statChip: React.CSSProperties = {
   flex: "1 1 90px",
   minWidth: 90,
