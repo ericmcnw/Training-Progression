@@ -74,6 +74,7 @@ export type InjuryHeatmapDomainRow = {
   recentCount: number;
   weeks: number[]; // length WEEKS, oldest → newest — session counts
   loadWeeks: number[]; // length WEEKS — summed training load
+  milesWeeks: number[]; // length WEEKS — summed distance (mi); non-cardio rows stay 0
   contributingLogs: CoverageDetailLog[]; // sorted newest → oldest
 };
 
@@ -84,6 +85,7 @@ export type InjuryHeatmapCategory = {
   recentCount: number;
   weeks: number[]; // combined session counts across all domains, length WEEKS
   loadWeeks: number[]; // combined training load across all domains, length WEEKS
+  milesWeeks: number[]; // combined weekly miles — the native cardio metric vs pain
   domains: InjuryHeatmapDomainRow[]; // only domains with at least one log
 };
 
@@ -148,19 +150,28 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
     // Bucket by domain (honoring the routine's explicit domain override —
     // a PT routine marked "mobility" stays mobility), then by week. Habit-
     // domain logs are dropped here since they're not training load.
-    const byDomain = new Map<HeatmapDomain, { logs: CoverageDetailLog[]; weeks: number[]; loadWeeks: number[] }>();
+    const byDomain = new Map<
+      HeatmapDomain,
+      { logs: CoverageDetailLog[]; weeks: number[]; loadWeeks: number[]; milesWeeks: number[] }
+    >();
     for (const dl of pooled) {
       if (!isHeatmapDomain(dl.routineDomain)) continue;
       const domain = dl.routineDomain;
       const entry =
         byDomain.get(domain) ??
-        { logs: [], weeks: new Array<number>(WEEKS).fill(0), loadWeeks: new Array<number>(WEEKS).fill(0) };
+        {
+          logs: [],
+          weeks: new Array<number>(WEEKS).fill(0),
+          loadWeeks: new Array<number>(WEEKS).fill(0),
+          milesWeeks: new Array<number>(WEEKS).fill(0),
+        };
       entry.logs.push(dl);
       const ymd = toAppYmd(new Date(dl.performedAt));
       const idx = bucketIndex(ymd);
       if (idx >= 0) {
         entry.weeks[idx] += 1;
         entry.loadWeeks[idx] += dl.load;
+        entry.milesWeeks[idx] += dl.distanceMi ?? 0;
       }
       byDomain.set(domain, entry);
     }
@@ -179,6 +190,7 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
           recentCount,
           weeks: entry.weeks,
           loadWeeks: entry.loadWeeks.map((n) => Math.round(n)),
+          milesWeeks: entry.milesWeeks.map((n) => Math.round(n * 10) / 10),
           contributingLogs: entry.logs,
         };
       })
@@ -187,10 +199,12 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
     // Combined weekly totals for the category header strip.
     const combinedWeeks = new Array<number>(WEEKS).fill(0);
     const combinedLoadWeeks = new Array<number>(WEEKS).fill(0);
+    const combinedMilesWeeks = new Array<number>(WEEKS).fill(0);
     for (const row of domains) {
       for (let i = 0; i < WEEKS; i++) {
         combinedWeeks[i] += row.weeks[i];
         combinedLoadWeeks[i] += row.loadWeeks[i];
+        combinedMilesWeeks[i] += row.milesWeeks[i];
       }
     }
     const totalCount = combinedWeeks.reduce((s, n) => s + n, 0);
@@ -207,6 +221,7 @@ export async function getInjuryTrainingHeatmap(metadataGroupSlugs: string[]): Pr
       recentCount,
       weeks: combinedWeeks,
       loadWeeks: combinedLoadWeeks.map((n) => Math.round(n)),
+      milesWeeks: combinedMilesWeeks.map((n) => Math.round(n * 10) / 10),
       domains,
     };
   });

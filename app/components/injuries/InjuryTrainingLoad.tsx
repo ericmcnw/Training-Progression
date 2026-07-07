@@ -61,7 +61,7 @@ export default function InjuryTrainingLoad({
   windowStartYmd?: string;
 }) {
   const [sel, setSel] = useState<{ category: string; weekIdx: number } | null>(null);
-  const [view, setView] = useState<"sessions" | "load">("sessions");
+  const [view, setView] = useState<"sessions" | "load" | "miles">("sessions");
   const [painSel, setPainSel] = useState<number | null>(null);
 
   // Crop the 12-week cache to the injury window.
@@ -83,11 +83,15 @@ export default function InjuryTrainingLoad({
     Math.max(0, Math.min(1, (dayNum(ymd) - axisStartNum) / axisSpan)) * PAIN_W;
 
   const isLoad = view === "load";
+  const isMiles = view === "miles";
   const catWeeks = (c: InjuryHeatmapData["categories"][number]) =>
-    (isLoad ? c.loadWeeks : c.weeks).slice(cropStart < 0 ? 0 : cropStart);
+    (isMiles ? c.milesWeeks : isLoad ? c.loadWeeks : c.weeks).slice(cropStart < 0 ? 0 : cropStart);
   const drWeeks = (dr: InjuryHeatmapData["categories"][number]["domains"][number]) =>
-    (isLoad ? dr.loadWeeks : dr.weeks).slice(cropStart < 0 ? 0 : cropStart);
+    (isMiles ? dr.milesWeeks : isLoad ? dr.loadWeeks : dr.weeks).slice(cropStart < 0 ? 0 : cropStart);
   const anyLoad = data.categories.some((c) => c.loadWeeks.some((n) => n > 0));
+  // Miles view only appears when cardio distance actually hit this injury's
+  // muscles — a shoulder injury with no mileage never shows the toggle.
+  const anyMiles = data.categories.some((c) => c.milesWeeks.some((n) => n > 0));
   const globalPeak = Math.max(1, ...data.categories.flatMap((c) => catWeeks(c)));
 
   const presentDomains = STACK_ORDER.filter((d) =>
@@ -111,10 +115,15 @@ export default function InjuryTrainingLoad({
             ))}
           </div>
         ) : <span />}
-        {anyLoad ? (
+        {anyLoad || anyMiles ? (
           <div style={toggleGroup} role="tablist" aria-label="Bar metric">
-            <button type="button" role="tab" aria-selected={!isLoad} onClick={() => setView("sessions")} style={!isLoad ? toggleBtnActive : toggleBtn}>Sessions</button>
-            <button type="button" role="tab" aria-selected={isLoad} onClick={() => setView("load")} style={isLoad ? toggleBtnActive : toggleBtn}>Load</button>
+            <button type="button" role="tab" aria-selected={!isLoad && !isMiles} onClick={() => setView("sessions")} style={!isLoad && !isMiles ? toggleBtnActive : toggleBtn}>Sessions</button>
+            {anyLoad ? (
+              <button type="button" role="tab" aria-selected={isLoad} onClick={() => setView("load")} style={isLoad ? toggleBtnActive : toggleBtn}>Load</button>
+            ) : null}
+            {anyMiles ? (
+              <button type="button" role="tab" aria-selected={isMiles} onClick={() => setView("miles")} style={isMiles ? toggleBtnActive : toggleBtn}>Miles</button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -162,9 +171,11 @@ export default function InjuryTrainingLoad({
                           onClick={() => setSel(isSel ? null : { category: category.slug, weekIdx: i })}
                           style={{ ...colBtn, ...(isSel ? colBtnSelected : null) }}
                           aria-pressed={isSel}
-                          title={`Week of ${weekShort(ws)}: ${total}${isLoad ? " load" : ` session${total === 1 ? "" : "s"}`}`}
+                          title={`Week of ${weekShort(ws)}: ${total}${isLoad ? " load" : isMiles ? " mi" : ` session${total === 1 ? "" : "s"}`}`}
                         >
-                          <span style={colCount}>{total > 0 ? (isLoad ? compactLoad(total) : total) : ""}</span>
+                          <span style={colCount}>
+                            {total > 0 ? (isLoad ? compactLoad(total) : isMiles ? compactMiles(total) : total) : ""}
+                          </span>
                           <span style={track}>
                             {STACK_ORDER.map((d) => {
                               const v = weekDomainVals[i][d] ?? 0;
@@ -316,6 +327,7 @@ function WeekRoutines({
             <Link key={log.logId} href={`/routines/${log.routineId}/logs/${log.logId}`} style={logRow}>
               <span style={logName}>{log.routineName}</span>
               {log.relevantParts.length > 0 && <span style={logHint}>{log.relevantParts[0]}</span>}
+              {sessionMetric(log) ? <span style={logMetric}>{sessionMetric(log)}</span> : null}
               <span style={logDate}>{log.performedAtLabel}</span>
             </Link>
           ))}
@@ -336,6 +348,16 @@ function addDaysYmd(ymd: string, days: number): string {
 function compactLoad(load: number): string {
   if (load >= 1000) return `${(load / 1000).toFixed(1)}k`;
   return String(load);
+}
+function compactMiles(mi: number): string {
+  return mi >= 10 ? mi.toFixed(0) : mi.toFixed(1);
+}
+// Native per-session metric for the drilldown row — distance when present
+// (the number that matters for cardio on an injury), else duration.
+function sessionMetric(log: CoverageDetailLog): string | null {
+  if (log.distanceMi && log.distanceMi > 0) return `${compactMiles(log.distanceMi)} mi`;
+  if (log.durationSec && log.durationSec > 0) return `${Math.round(log.durationSec / 60)}m`;
+  return null;
 }
 function formatWeekRange(startYmd: string, endYmdExclusive: string): string {
   const endYmd = addDaysYmd(endYmdExclusive, -1);
@@ -433,8 +455,9 @@ const painFactorChip: CSSProperties = {
 const expandedPanel: CSSProperties = { padding: "8px 10px 10px", borderRadius: RADIUS.inner, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLOR.border}`, display: "grid", gap: 6 };
 const weekRangeLabel: CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.4, color: COLOR.textFaint, textTransform: "uppercase" };
 const emptyLogs: CSSProperties = { fontSize: 12, color: COLOR.textFaint, fontStyle: "italic" };
-const logRow: CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLOR.border}`, color: "inherit", textDecoration: "none", fontSize: 12, minWidth: 0 };
-const logName: CSSProperties = { fontWeight: 800, color: COLOR.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const logHint: CSSProperties = { fontSize: 11, color: COLOR.textDim, fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const logDate: CSSProperties = { fontSize: 11, color: COLOR.textFaint, fontWeight: 700, whiteSpace: "nowrap" };
+const logRow: CSSProperties = { display: "flex", gap: 8, alignItems: "center", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLOR.border}`, color: "inherit", textDecoration: "none", fontSize: 12, minWidth: 0 };
+const logName: CSSProperties = { flex: 1, fontWeight: 800, color: COLOR.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const logMetric: CSSProperties = { flexShrink: 0, fontSize: 11, color: "rgba(186,230,253,0.9)", fontWeight: 800, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+const logHint: CSSProperties = { flexShrink: 1, fontSize: 11, color: COLOR.textDim, fontWeight: 600, maxWidth: 200, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const logDate: CSSProperties = { flexShrink: 0, fontSize: 11, color: COLOR.textFaint, fontWeight: 700, whiteSpace: "nowrap" };
 const moreNote: CSSProperties = { fontSize: 11, color: COLOR.textFaint, fontStyle: "italic", textAlign: "center", padding: "4px 0" };

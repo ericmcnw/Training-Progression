@@ -40,6 +40,11 @@ export type CoverageDetailLog = {
    *  load-weighted views (injury training-load chart) sum real strain
    *  rather than raw session counts. */
   load: number;
+  /** Native session metrics, carried through so injury/body views can
+   *  correlate against what actually matters per domain (weekly MILES for
+   *  a runner's hamstring, not just session counts). Null when absent. */
+  distanceMi: number | null;
+  durationSec: number | null;
 };
 
 export type CoverageCategoryRow = {
@@ -484,6 +489,8 @@ export async function getCoverageOverviewModel(range: CoverageRange = "4w"): Pro
           performedAt: log.performedAt.toISOString(),
           performedAtLabel: formatAppDate(log.performedAt, { month: "short", day: "numeric" }),
           load: sessionLoad(log.effort, log.durationSec, log.distanceMi),
+          distanceMi: log.distanceMi ?? null,
+          durationSec: log.durationSec ?? null,
           relevantParts: relevantPartsForLog({
             log,
             targetGroupId: group.id,
