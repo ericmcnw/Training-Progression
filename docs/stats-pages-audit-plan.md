@@ -27,10 +27,30 @@ is a shippable PR-sized chunk (CLAUDE.md rule 6): ship → verify → continue.
 
 **User-lens framing — the question each phase answers:**
 - P1: "Is my training hurting my injury?" (can I keep running?)
-- P2: "Am I getting better?"
+- P1.5: "Stop making me tap so much for daily actions."
+- P2: "Am I getting better?" (+ "is anything new/worse?")
 - P3: "Show me what I actually logged."
 - P4: "Make it clean."
 - P5: "Let me compose my own view" (and later, ask the AI to).
+
+**USER-FLOW AUDIT (2026-07-06) — walked the actual daily flows (active rehab:
+hamstring tendinopathy + knee flare, daily morning reading protocol, Session
+A/B/C plan). Findings folded into phases below:**
+1. Daily morning pain reading = ~5 taps + a zone pick via FAB→/body/log-pain.
+   The app's most important daily rehab action needs 1 tap (→P1.5).
+2. The rehab decision rule is NEXT-MORNING response ("settles by morning"), but
+   the injury chart is weekly-only. Lightweight session→next-morning delta
+   promoted from later-pool (→P2).
+3. Rehab lift progression invisible: strength page = top-8 by session count;
+   rehab lifts may never surface; no path to an arbitrary exercise's
+   progression (→P2). PLUS a live logging bug: TIME exercises w/
+   supportsWeight=false can't record load (his iso stack number) — make
+   weight-support editable on an exercise (→P1.5, tiny).
+4. World-page Log CTAs are generic: sport pages link to /log instead of opening
+   THAT sport's sheet; strength has no Log CTA at all (→P1.5).
+5. "New pain hotspot" surfacing (his 7/5 medial spot) promoted P4→P2.
+6. Stale-audit note: strength page has since gained the goals frequency chip +
+   recent/all-time PR pulse slots (parallel branch work) — trim items softened.
 
 **The unifying finding:** the app logs far more than it surfaces. Most gaps are
 wiring, not new capture: `triesCount` never queried, sport `extras` (waves/runs/
@@ -62,6 +82,21 @@ consumed inside `sessionLoad()` at coverage.ts:486).
 
 Effort: S-M. One data shape + one chart component. Unlocks body-page uses later.
 
+## Phase 1.5 — Buttons & taps quick pass (small, daily-felt; can ride with P1)
+
+1. **One-tap daily pain reading**: home injury card (and/or injury page hero)
+   gets a direct "log today's reading" that opens pre-scoped to the active
+   injury's zone — level slider + save. Kills the daily 5-tap FAB→zone-picker trip.
+2. **Direct-log CTAs on world pages**: sport page "Log" opens THAT sport's
+   sheet (not /log); endurance page CTA opens the endurance form; strength
+   header gains a "Log workout" CTA (quick-log drawer). Most-frequent action
+   becomes the primary button everywhere.
+3. **Exercise weight-support edit**: allow enabling supportsWeight on an
+   existing TIME exercise so loads (cable stack) are recordable on isometrics.
+   Tiny; unblocks real rehab logging today.
+4. **Injury hero reorder**: returning-user layout — trajectory + latest reading
+   first; identity block (name/zones/map/start date/factors) collapses below.
+
 ## Phase 2 — "Am I getting better?" (rolling improvement metrics, world pages)
 
 User-lens: this is THE question a returning user asks a stats page. Scoped to
@@ -69,12 +104,22 @@ rolling/all-time so it complements (not duplicates) reports' calendar evaluation
 
 1. **Injury trajectory**: improving/stable/worsening arrow next to status
    (slope of daily pain peaks). Cheap, and it's the #1 injury question.
-2. **Endurance PRs/bests**: fastest pace, longest distance, most elevation per
+2. **Session → next-morning response** (PROMOTED from later-pool — it's the
+   user's actual load-decision rule): on the injury page, recent zone-loading
+   sessions each show the next-morning pain reading beside them ("settled" vs
+   "elevated"). Simple join of session dates × next-day pain logs.
+3. **Pain hotspots** (PROMOTED from P4): body page "new/recent pain spots
+   (7d)" list — surfaces emerging spots (e.g. a new medial-knee signal) before
+   they're injuries.
+4. **Per-exercise progression reachability**: any exercise (not just top-8) →
+   its load/reps trend. Search or "all exercises" path from the strength page;
+   rehab lifts must be findable.
+5. **Endurance PRs/bests**: fastest pace, longest distance, most elevation per
    type/family (+ date). All-time stat tiles on family tabs. Data already loaded.
-3. **Climbing improvement stats** (the file's own TODOs): **send-rate promoted
-   to headline** + **tries-to-send avg** (query `triesCount` — currently never
-   selected). These are progression metrics, not data-surfacing.
-4. **Pace trend direction**: ↑/↓ per series on the pace chart legend (rolling
+6. **Climbing tries-to-send avg** (query `triesCount` — currently never
+   selected). NOTE: send-rate headline promotion TABLED by user 2026-07-06
+   (moved to later-pool; user unsure about the stat).
+7. **Pace trend direction**: ↑/↓ per series on the pace chart legend (rolling
    12w slope — direction only; period comparisons stay in reports).
 
 DEMOTED from original plan: pulse-strip vs-prior-window arrows everywhere —
@@ -145,6 +190,15 @@ Phase 2 — by then the remaining cost is visible.
 - **Injury "what's been SAFE"** — inverse correlation: activities done since
   injury with no pain spike ("surfing 6× since, never spiked"). Answers "what
   can I still do?" — pairs with the AI coach later.
+- **Descent tracking** — only elevation GAIN is captured; downhill (the big
+  eccentric load, e.g. a 4800ft descent) is invisible. New capture field;
+  weigh before adding.
+- **Left/right + test-battery support** — side-to-side rehab tests (calf-raise
+  counts, bridge-to-failure per leg) have no model; per-set side tagging or a
+  simple "test" log type. Niche; notes work meanwhile.
+- **Injury ↔ rehab-routine link** — "Rehab this week: iso 5/7, curls 2/3" on
+  the injury page needs an ActiveInjury↔routine association (additive). Interim:
+  frequency goals on rehab routines already show on the home grid.
 - Session-to-pain lag analysis (pain spikes 1-3 days after which loads).
 - Strength per-lift PR history + e1RM trends (own build; reports P4 covers
   period PRs first — see how far that gets).
