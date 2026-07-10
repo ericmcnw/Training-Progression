@@ -70,6 +70,27 @@ export function parseAppDateTimeLocal(value: string) {
   );
 }
 
+const appDateTimeLocalFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+// Inverse of parseAppDateTimeLocal: format an instant as the app-timezone
+// wall clock (YYYY-MM-DDTHH:mm). Never derive this string from Date getters —
+// those use the server's timezone, which differs from APP_TIME_ZONE in prod.
+export function toAppDateTimeLocal(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = appDateTimeLocalFormatter.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
 export function toAppYmd(value: Date | string) {
   return ymdFormatter.format(value instanceof Date ? value : new Date(value));
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logSession } from "@/app/routines/actions";
 import { getSyntheticSportRoutineId, ensureSportSelected } from "@/lib/synthetic-sport-routines";
 import { buildSpotPickerItems, type SpotPickerItem } from "@/lib/activity-spots";
+import { toAppDateTimeLocal } from "@/lib/dates";
 import type { ClimbingDiscipline, ClimbGradeSystem, ClimbOutcome } from "@/lib/climb-types";
 
 // Surfaces the user's most-recently-used climb locations for the
@@ -156,9 +157,10 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
 
   const logId = await logSession({
     routineId,
-    // logSession expects a local-time YYYY-MM-DDTHH:mm string. Hand it
-    // the same shape the form uses — no offset math needed.
-    performedAtLocal: toLocalDateTimeString(performedAt),
+    // logSession expects an APP_TIME_ZONE wall-clock YYYY-MM-DDTHH:mm string
+    // (parseAppDateTimeLocal re-interprets it in that zone), so the string
+    // must be formatted in that zone too — not the server's.
+    performedAtLocal: toAppDateTimeLocal(performedAt),
     durationSec: input.durationMinutes ? Math.round(input.durationMinutes * 60) : null,
     notes: input.notes?.trim() || undefined,
     effort: input.effort ?? null,
@@ -193,9 +195,4 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
   revalidatePath("/activities/climbing/climbs");
 
   return { logId: logId ?? "" };
-}
-
-function toLocalDateTimeString(d: Date): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
