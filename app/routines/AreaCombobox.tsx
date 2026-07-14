@@ -30,6 +30,9 @@ export default function AreaCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // Set by choose() so the blur it triggers doesn't run commit() with the
+  // stale typed query and overwrite the just-picked area.
+  const skipCommit = useRef(false);
 
   const selectedName = areaId ? savedAreas.find((s) => s.id === areaId)?.name ?? "" : area;
 
@@ -48,6 +51,7 @@ export default function AreaCombobox({
   const showCreate = query.trim().length > 0 && !exactExists;
 
   function choose(pick: AreaPick) {
+    skipCommit.current = true;
     onPick(pick);
     setOpen(false);
     setQuery("");
@@ -58,6 +62,10 @@ export default function AreaCombobox({
   // area, an exact saved-name match links the id, anything else becomes
   // a free-text area to create on save.
   function commit() {
+    if (skipCommit.current) {
+      skipCommit.current = false;
+      return;
+    }
     const trimmed = query.trim();
     if (!trimmed) {
       if (selectedName) onPick({ areaId: "", area: "" });

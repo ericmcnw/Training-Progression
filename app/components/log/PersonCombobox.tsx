@@ -61,8 +61,13 @@ export default function PersonCombobox({
               role="option"
               aria-selected={p.toLowerCase() === query}
               style={optionStyle}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(p)}
+              // Pick on mousedown (fires before the input's blur) so a mobile
+              // tap always registers — deferring to onClick drops the tap on
+              // iOS when the blur closes the list first.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(p);
+              }}
             >
               {p}
             </button>
@@ -71,8 +76,10 @@ export default function PersonCombobox({
             <button
               type="button"
               style={{ ...optionStyle, opacity: 0.9 }}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(value.trim())}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(value.trim());
+              }}
             >
               <span style={{ opacity: 0.6 }}>Add</span> “{value.trim()}”
             </button>

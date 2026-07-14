@@ -31,6 +31,9 @@ export default function ProblemCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // Set by choose() so the blur it triggers doesn't run commit() with the
+  // stale typed query and overwrite the just-picked climb.
+  const skipCommit = useRef(false);
 
   const selectedName = problemId
     ? savedProblems.find((p) => p.id === problemId)?.name ?? ""
@@ -60,6 +63,7 @@ export default function ProblemCombobox({
   const showCreate = query.trim().length > 0 && !exactExists;
 
   function choose(pick: ProblemPick) {
+    skipCommit.current = true;
     onPick(pick);
     setOpen(false);
     setQuery("");
@@ -70,6 +74,10 @@ export default function ProblemCombobox({
   // name, an exact saved-name match links the id, anything else becomes
   // a free-text name resolved on save.
   function commit() {
+    if (skipCommit.current) {
+      skipCommit.current = false;
+      return;
+    }
     const trimmed = query.trim();
     if (!trimmed) {
       if (selectedName) onPick({ problemId: "", name: "" });

@@ -39,6 +39,8 @@ import {
 } from "@/lib/activity-spots";
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
+import { getLogGearPicks } from "@/lib/gear";
+import type { GearPick } from "@/lib/gear-pick-types";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import {
   climbingDisciplineForTemplateKey,
@@ -57,10 +59,15 @@ function inferLogKind(log: {
   exercises: Array<{ id: string }>;
   guidedSteps: Array<{ id: string }>;
   sessionMetricValues: Array<{ id: string }>;
+  climbAttempts: Array<{ id: string }>;
 }, routineKind: string): RoutineKind {
   if (log.distanceMi !== null) return "CARDIO";
   if (log.exercises.length > 0) return "WORKOUT";
-  if (log.location || log.sessionMetricValues.length > 0) return "SESSION";
+  // climbAttempts is the definitive climbing-session signal: a quick climb
+  // log carries no duration, no `location` string (it uses climbLocationId),
+  // and no session-metric values, so without this check a durationless climb
+  // falls through to COMPLETION and its attempts become uneditable.
+  if (log.climbAttempts.length > 0 || log.location || log.sessionMetricValues.length > 0) return "SESSION";
   if (log.durationSec !== null && log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
   if (log.durationSec !== null && isSessionKind(routineKind)) return "SESSION";
   if (log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
@@ -137,6 +144,8 @@ export type EditCardioData = {
   // pre-fills the slider with this (null → slider sits at the predicted
   // guess, untouched, so historical logs can be backfilled).
   initialEffort: number | null;
+  // Gear linked to this log (footwear/boards) — pre-filled into the picker.
+  initialGear: GearPick[];
 };
 
 export type EditGuidedData = {
@@ -228,6 +237,8 @@ export type EditSportData = {
   initialSpot: SpotPickerValue;
   /** Stored perceived effort 1-10, or null if never rated. */
   initialEffort: number | null;
+  /** Gear linked to this log (footwear/boards) — pre-fills the picker. */
+  initialGear: GearPick[];
 };
 
 export type LogEditData =
@@ -273,6 +284,10 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       // mode/extras, etc.). Powers the edit-time per-sport panels.
       sportData: true,
       metrics: { select: { id: true } },
+      // Lightweight presence signal for kind inference — a climbing quick
+      // log with attempts but no duration must classify as SESSION, not
+      // COMPLETION. Full attempt rows are fetched separately below.
+      climbAttempts: { select: { id: true } },
       sessionMetricValues: {
         include: { metricDefinition: true },
       },
@@ -548,6 +563,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         initialActivityTypeId: log.activityTypeId ?? null,
         initialIntervals: intervals,
         initialEffort: log.effort ?? null,
+        initialGear: await getLogGearPicks(logId),
       };
     }
 
@@ -573,6 +589,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           savedSpots: editSavedSpots,
           initialSpot: initialEditSpot,
           initialEffort: log.effort ?? null,
+          initialGear: await getLogGearPicks(logId),
         };
       }
     }
