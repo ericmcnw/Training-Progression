@@ -305,6 +305,9 @@ export async function saveFocus(input: {
   linkedInjuryId?: string | null;
   targetDate?: string | null;
   targetKind?: "SOFT" | "HARD";
+  season?: string | null;
+  phase?: "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN" | "" | null;
+  handoffNote?: string | null;
   milestones: MilestoneFormRow[];
 }): Promise<{ id: string }> {
   const name = input.name.trim();
@@ -318,6 +321,9 @@ export async function saveFocus(input: {
     pursuitKey: input.pursuitKey?.trim() || null,
     targetDate: parseTargetDate(input.targetDate),
     targetKind: input.targetKind ?? "SOFT",
+    season: input.season?.trim() || null,
+    phase: input.phase ? input.phase : null,
+    handoffNote: input.handoffNote?.trim() || null,
     // Only touch the injury link when the caller explicitly provides one —
     // the edit form doesn't manage it, so an undefined must NOT unlink.
     ...(input.linkedInjuryId !== undefined ? { linkedInjuryId: input.linkedInjuryId || null } : {}),

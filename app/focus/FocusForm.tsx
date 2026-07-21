@@ -20,6 +20,9 @@ export type FocusFormInitial = {
   status: FocusStatus;
   targetDate: string; // YYYY-MM-DD or ""
   targetKind: "SOFT" | "HARD";
+  season: string;
+  phase: "" | "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN";
+  handoffNote: string;
   milestones: MilestoneFormRow[];
 };
 
@@ -70,6 +73,9 @@ export default function FocusForm({
   const [status, setStatus] = useState<FocusStatus>(initial.status);
   const [targetDate, setTargetDate] = useState(initial.targetDate);
   const [targetKind, setTargetKind] = useState<"SOFT" | "HARD">(initial.targetKind);
+  const [season, setSeason] = useState(initial.season);
+  const [phase, setPhase] = useState<FocusFormInitial["phase"]>(initial.phase);
+  const [handoffNote, setHandoffNote] = useState(initial.handoffNote);
   const [rows, setRows] = useState<Row[]>(
     initial.milestones.length
       ? initial.milestones.map((m, i) => ({ ...m, key: m.id ?? `init-${i}` }))
@@ -112,6 +118,9 @@ export default function FocusForm({
           status,
           targetDate,
           targetKind,
+          season,
+          phase,
+          handoffNote,
           milestones: rows.map((r) => ({
             id: r.id,
             scopeKind: r.scopeKind,
@@ -198,6 +207,25 @@ export default function FocusForm({
             </div>
           </Field>
         </div>
+
+        <div style={twoCol}>
+          <Field label="Season" hint="e.g. Summer '26">
+            <input style={inputStyle} value={season} onChange={(e) => setSeason(e.target.value)} placeholder="optional" />
+          </Field>
+          <Field label="Phase">
+            <select style={inputStyle} value={phase} onChange={(e) => setPhase(e.target.value as FocusFormInitial["phase"])}>
+              <option value="">— none —</option>
+              <option value="BUILD">Build</option>
+              <option value="PEAK">In season</option>
+              <option value="OFFSEASON">Offseason</option>
+              <option value="MAINTAIN">Maintain</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Hands off to" hint="What this becomes next — e.g. “→ Fall: send season”">
+          <input style={inputStyle} value={handoffNote} onChange={(e) => setHandoffNote(e.target.value)} placeholder="optional" />
+        </Field>
 
         <div style={twoCol}>
           <Field label="Target date" hint="Optional">

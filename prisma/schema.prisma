@@ -1532,6 +1532,17 @@ enum FocusTargetKind {
   HARD
 }
 
+enum FocusPhase {
+  // Capacity-building (milestones are progressions).
+  BUILD
+  // In-season / peak (milestones are outcomes — sends, etc.).
+  PEAK
+  // Down / recovery period.
+  OFFSEASON
+  // Hold steady (frequency, not progression).
+  MAINTAIN
+}
+
 enum FocusContributorKind {
   ACTIVITY_FAMILY
   ACTIVITY_TYPE
@@ -1580,6 +1591,11 @@ model Focus {
   // whether that slides with the plan (SOFT) or is world-fixed (HARD).
   targetDate     DateTime?
   targetKind     FocusTargetKind @default(SOFT)
+  // Seasonality. season = free label ("Summer '26"); phase = build/peak/etc;
+  // handoffNote = what this becomes next ("→ Fall: send season").
+  season         String?
+  phase          FocusPhase?
+  handoffNote    String?
   // Sport slug / activity-family / domain this focus belongs to; renders its
   // seasonal arc on that world page. Null for cross-cutting focuses.
   pursuitKey     String?

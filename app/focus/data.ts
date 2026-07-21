@@ -3,6 +3,25 @@
 
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
+
+// Display label for a focus phase. Isomorphic — safe to import into client
+// components (no DB, no server-only deps).
+export function phaseLabel(phase: string | null): string | null {
+  switch (phase) {
+    case "BUILD": return "Build";
+    case "PEAK": return "In season";
+    case "OFFSEASON": return "Offseason";
+    case "MAINTAIN": return "Maintain";
+    default: return null;
+  }
+}
+
+// "Summer '26 · Build" from season + phase (either may be absent).
+export function seasonPhaseLabel(season: string | null, phase: string | null): string | null {
+  const p = phaseLabel(phase);
+  if (season && p) return `${season} · ${p}`;
+  return season || p || null;
+}
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
 import { evaluatePainGate, type GateReading } from "@/lib/focus-gates";
 
@@ -137,6 +156,9 @@ export type FocusDetail = {
   status: string;
   pursuitKey: string | null;
   linkedInjuryId: string | null;
+  season: string | null;
+  phase: string | null;
+  handoffNote: string | null;
   todayYmd: string;
   milestonesDone: number;
   milestonesTotal: number;
@@ -150,7 +172,7 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
     select: {
       id: true, name: true, description: true, icon: true, color: true,
       status: true, pursuitKey: true, targetDate: true, targetKind: true,
-      linkedInjuryId: true,
+      linkedInjuryId: true, season: true, phase: true, handoffNote: true,
     },
   });
   if (!focus) return null;
@@ -327,6 +349,9 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
     status: focus.status,
     pursuitKey: focus.pursuitKey,
     linkedInjuryId: focus.linkedInjuryId,
+    season: focus.season,
+    phase: focus.phase,
+    handoffNote: focus.handoffNote,
     todayYmd: today,
     milestonesDone: done,
     milestonesTotal: total,
@@ -353,6 +378,8 @@ export type FocusBandItem = {
   icon: string | null;
   color: string | null;
   status: string;
+  season: string | null;
+  phase: string | null;
   // Milestone progress across the whole roadmap (all tracks).
   milestonesDone: number;
   milestonesTotal: number;
@@ -365,7 +392,7 @@ export async function getFocusBandData(): Promise<FocusBandItem[]> {
   const focuses = await prisma.focus.findMany({
     where: { status: "ACTIVE" },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, name: true, icon: true, color: true, status: true },
+    select: { id: true, name: true, icon: true, color: true, status: true, season: true, phase: true },
   });
   if (focuses.length === 0) return [];
 
@@ -410,6 +437,8 @@ export async function getFocusBandData(): Promise<FocusBandItem[]> {
       icon: f.icon,
       color: f.color,
       status: f.status,
+      season: f.season,
+      phase: f.phase,
       milestonesDone: done,
       milestonesTotal: total,
       currentAims,

@@ -27,7 +27,7 @@ export default async function NewFocusPage() {
       </div>
       <h1 style={title}>New focus</h1>
       <FocusForm
-        initial={{ name: "", description: "", icon: "", color: "#84cc78", status: "ACTIVE", targetDate: "", targetKind: "SOFT", milestones: [] }}
+        initial={{ name: "", description: "", icon: "", color: "#84cc78", status: "ACTIVE", targetDate: "", targetKind: "SOFT", season: "", phase: "", handoffNote: "", milestones: [] }}
         routines={routines}
         exercises={exercises}
       />

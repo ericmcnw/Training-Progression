@@ -20,7 +20,7 @@ export default async function EditFocusPage({
   const [focus, milestones, routines, exercises] = await Promise.all([
     prisma.focus.findUnique({
       where: { id },
-      select: { id: true, name: true, description: true, icon: true, color: true, status: true, targetDate: true, targetKind: true },
+      select: { id: true, name: true, description: true, icon: true, color: true, status: true, targetDate: true, targetKind: true, season: true, phase: true, handoffNote: true },
     }),
     prisma.progressionMilestone.findMany({
       where: { ownerKind: "FOCUS", ownerId: id },
@@ -51,6 +51,9 @@ export default async function EditFocusPage({
           status: focus.status as FocusStatus,
           targetDate: focus.targetDate ? focus.targetDate.toISOString().slice(0, 10) : "",
           targetKind: focus.targetKind as "SOFT" | "HARD",
+          season: focus.season ?? "",
+          phase: (focus.phase ?? "") as "" | "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN",
+          handoffNote: focus.handoffNote ?? "",
           milestones: milestones.map((m) => ({
             id: m.id,
             scopeKind: m.scopeKind,

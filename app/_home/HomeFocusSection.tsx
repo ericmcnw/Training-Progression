@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import CollapsibleSection from "./CollapsibleSection";
 import { COLOR, withAlpha } from "./tokens";
-import type { FocusBandItem } from "@/app/focus/data";
+import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/data";
 
 export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[] }) {
   if (focuses.length === 0) return null;
@@ -54,6 +54,12 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
           </span>
         ) : null}
       </div>
+
+      {seasonPhaseLabel(focus.season, focus.phase) ? (
+        <span style={{ ...seasonChip, color: withAlpha(accent, 0.95), borderColor: withAlpha(accent, 0.3) }}>
+          {seasonPhaseLabel(focus.season, focus.phase)}
+        </span>
+      ) : null}
 
       {focus.milestonesTotal > 0 ? (
         <div style={track} aria-hidden>
@@ -115,6 +121,18 @@ const nameWrap: CSSProperties = {
 };
 
 const iconStyle: CSSProperties = { fontSize: 16, lineHeight: 1, flexShrink: 0 };
+
+const seasonChip: CSSProperties = {
+  justifySelf: "start",
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: "1px solid",
+  background: "rgba(255,255,255,0.03)",
+};
 
 const nameStyle: CSSProperties = {
   fontSize: 14,

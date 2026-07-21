@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFocusDetail, getInjuryPanelData } from "@/app/focus/data";
+import { getFocusDetail, getInjuryPanelData, seasonPhaseLabel } from "@/app/focus/data";
 import { formatUtcDateLabel } from "@/lib/dates";
 import FocusRoadmap from "./FocusRoadmap";
 import InjuryPanel from "./InjuryPanel";
@@ -42,6 +42,16 @@ export default async function FocusDetailPage({
           {focus.icon ? <span aria-hidden style={{ fontSize: 26, lineHeight: 1 }}>{focus.icon}</span> : null}
           <h1 style={title}>{focus.name}</h1>
         </div>
+        {seasonPhaseLabel(focus.season, focus.phase) || focus.handoffNote ? (
+          <div style={seasonRow}>
+            {seasonPhaseLabel(focus.season, focus.phase) ? (
+              <span style={{ ...seasonChipD, color: accent, borderColor: `${accent}66` }}>
+                {seasonPhaseLabel(focus.season, focus.phase)}
+              </span>
+            ) : null}
+            {focus.handoffNote ? <span style={handoff}>{focus.handoffNote}</span> : null}
+          </div>
+        ) : null}
         {focus.description ? <p style={desc}>{focus.description}</p> : null}
         {focus.milestonesTotal > 0 ? (
           <div style={progressWrap}>
@@ -178,6 +188,25 @@ const bannerText = {
 const header = { display: "grid", gap: 10 } as const;
 
 const titleRow = { display: "flex", alignItems: "center", gap: 10 } as const;
+
+const seasonRow = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" } as const;
+
+const seasonChipD = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  padding: "3px 10px",
+  borderRadius: 999,
+  border: "1px solid",
+  background: "rgba(255,255,255,0.03)",
+} as const;
+
+const handoff = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.55)",
+} as const;
 
 const title = {
   fontSize: 22,
