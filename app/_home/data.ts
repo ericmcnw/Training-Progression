@@ -4,6 +4,7 @@
 // Prisma queries here.
 
 import { prisma } from "@/lib/prisma";
+import { getRoutineAims } from "@/app/focus/aims";
 import { addDaysYmd, diffYmdDays, toAppYmd, todayAppYmd } from "@/lib/dates";
 import {
   effectiveRoutineDomain,
@@ -633,6 +634,24 @@ export async function getHomeData(): Promise<HomeData> {
       span: spansByYmd.get(ymd),
       todos: todosByYmd.get(ymd) ?? [],
     });
+  }
+
+  // ── Focus-layer aim snippets ─────────────────────────────────────────────
+  // Attach each planned routine's current-milestone label so the WaG can show
+  // "Legs A · progress ham curls". One batched lookup across every routine in
+  // the window; a no-op (empty map) when the user has no focuses yet.
+  {
+    const routineIds = Array.from(
+      new Set(legacyGlanceDays.flatMap((d) => d.planned.map((p) => p.routineId)))
+    );
+    const aims = await getRoutineAims(routineIds);
+    if (aims.size > 0) {
+      for (const day of legacyGlanceDays) {
+        for (const row of day.planned) {
+          row.aim = aims.get(row.routineId)?.label ?? null;
+        }
+      }
+    }
   }
 
   // ── Frequency goal rows ──────────────────────────────────────────────────

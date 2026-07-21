@@ -918,6 +918,10 @@ model ActiveInjury {
   // previously-used factors, but stored as plain strings so it stays flexible.
   aggravatingFactors String[] @default([])
   zones      InjuryZone[]
+  // Focuses that "nod" to this injury (a rehab focus links here). The injury
+  // itself can also own a continuous progression roadmap — see
+  // ProgressionMilestone.ownerKind = INJURY.
+  focuses    Focus[]
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
@@ -1502,4 +1506,140 @@ model DayTodo {
 
   @@index([ymd, done])
   @@index([done, ymd])
+}
+
+// ── Focus + Progression roadmap (Phase 1) ────────────────────────────────
+// A Focus is a strategic, time-bound objective (e.g. "Fall Climbing Prep")
+// that groups existing routines/activities/goals via FocusContributor and
+// auto-aggregates their logs. Its progression roadmap is a set of
+// ProgressionMilestones. Milestones can also belong to an ActiveInjury
+// (continuous rehab path) — see ownerKind. Phase 1 is deliberately minimal:
+// no gates, projection, seasons, or structured targets yet.
+
+enum FocusStatus {
+  PLANNED
+  ACTIVE
+  ACHIEVED
+  PAUSED
+  ABANDONED
+}
+
+enum FocusTargetKind {
+  // Slides automatically as the roadmap projects forward.
+  SOFT
+  // World-driven deadline (first snow, a trip date). Never slides from the
+  // roadmap; the user drags it when reality changes. Drift past it is surfaced.
+  HARD
+}
+
+enum FocusContributorKind {
+  ACTIVITY_FAMILY
+  ACTIVITY_TYPE
+  SPORT
+  ROUTINE
+  EXERCISE
+  FREQUENCY_GOAL
+}
+
+enum MilestoneOwnerKind {
+  FOCUS
+  INJURY
+}
+
+enum MilestoneScopeKind {
+  ROUTINE
+  EXERCISE
+  CAPACITY
+}
+
+enum MilestoneStatus {
+  ACTIVE
+  ACHIEVED
+  SKIPPED
+}
+
+enum MilestoneGateKind {
+  // No advance condition — advance whenever you decide.
+  NONE
+  // Free-text criteria you self-assess ("nerve line quiet").
+  FREE_TEXT
+  // Pain-reading condition, auto-evaluated from PainLog: reading stays ≤
+  // threshold across the last N days for a zone.
+  PAIN
+}
+
+model Focus {
+  id             String        @id @default(cuid())
+  name           String
+  description    String?
+  status         FocusStatus   @default(ACTIVE)
+  sortOrder      Int           @default(0)
+  color          String?
+  icon           String?
+  // Timeline (Phase 2). targetDate = when it should be done; targetKind says
+  // whether that slides with the plan (SOFT) or is world-fixed (HARD).
+  targetDate     DateTime?
+  targetKind     FocusTargetKind @default(SOFT)
+  // Sport slug / activity-family / domain this focus belongs to; renders its
+  // seasonal arc on that world page. Null for cross-cutting focuses.
+  pursuitKey     String?
+  // Optional link to an ActiveInjury the focus "nods" to (rehab focuses).
+  linkedInjuryId String?
+  linkedInjury   ActiveInjury? @relation(fields: [linkedInjuryId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  contributors FocusContributor[]
+
+  @@index([status, sortOrder])
+}
+
+model FocusContributor {
+  id      String               @id @default(cuid())
+  focusId String
+  focus   Focus                @relation(fields: [focusId], references: [id], onDelete: Cascade)
+  kind    FocusContributorKind
+  // Polymorphic id whose meaning depends on kind: activityFamilyId /
+  // activityTypeId / sport slug / routineId / exerciseId / frequencyGoalId.
+  refId   String
+  createdAt DateTime @default(now())
+
+  @@unique([focusId, kind, refId])
+  @@index([focusId])
+}
+
+model ProgressionMilestone {
+  id        String             @id @default(cuid())
+  // Polymorphic owner — a roadmap belongs to a Focus (seasonal) OR an
+  // ActiveInjury (continuous rehab path). ownerId is intentionally NOT a hard
+  // FK (it points at two tables); integrity is enforced in the app layer.
+  ownerKind MilestoneOwnerKind
+  ownerId   String
+  // Scope groups milestones into implicit tracks and drives the WaG aim
+  // lookup: a routine's aim = its first ACTIVE milestone scoped to it.
+  scopeKind MilestoneScopeKind
+  // routineId / exerciseId / free-text capacity label, per scopeKind.
+  scopeRef  String?
+  label      String
+  targetText String?
+  status     MilestoneStatus @default(ACTIVE)
+  sortOrder  Int             @default(0)
+  // Timeline (Phase 2). estDurationDays drives the forward projection; a
+  // milestone can also wait on another (cross-track) via dependsOnMilestoneId
+  // — its projected start is max(prior-in-track end, dependency end).
+  estDurationDays     Int?
+  dependsOnMilestoneId String?
+  // Advance gate (Phase 2). PAIN gates auto-evaluate from PainLog; FREE_TEXT is
+  // self-assessed. gatePain* only meaningful when gateKind = PAIN.
+  gateKind          MilestoneGateKind @default(NONE)
+  gateNote          String?
+  gatePainZoneId    String?
+  gatePainThreshold Int?
+  gatePainDays      Int?
+  achievedAt DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([ownerKind, ownerId, sortOrder])
+  @@index([scopeKind, scopeRef, status])
 }

@@ -37,6 +37,11 @@ export type LegacyGlanceDay = {
     // recent log's durationSec (seconds) so the pill can display existing
     // minutes. Null/undefined = day done but no duration recorded yet.
     durationSec?: number | null;
+    // Focus-layer aim: the label of this routine's current progression
+    // milestone ("progress ham curls"), shown next to the routine name so the
+    // strategy is visible at the point of execution. Absent when the routine
+    // isn't scoped by any active roadmap.
+    aim?: string | null;
   }>;
   logs: Array<{
     id: string;

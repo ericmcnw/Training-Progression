@@ -10,6 +10,7 @@ import Link from "next/link";
 import Popover from "./Popover";
 import PainLogSheet from "@/app/body/PainLogSheet";
 import PainTrendLine from "@/app/components/injuries/PainTrendLine";
+import TodayReadingControl from "@/app/focus/TodayReadingControl";
 import type { HomeInjury } from "@/lib/home-injuries";
 
 type ZoneTarget = { slug: string; label: string };
@@ -48,6 +49,9 @@ export default function HomeInjuriesSection({
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={title}>Injuries</span>
           {injuries.length > 0 ? <span style={countPill}>{injuries.length}</span> : null}
+          {injuries.some((i) => i.primaryZoneId && i.todayReadingLevel == null) ? (
+            <span style={logTodayBadge} title="You haven't logged a reading today">log today</span>
+          ) : null}
         </div>
         {injuries.length > 0 ? (
           <button type="button" onClick={() => setExpanded((v) => !v)} style={toggleBtn} aria-expanded={expanded}>
@@ -75,20 +79,16 @@ export default function HomeInjuriesSection({
                   {injury.recentPainScore != null ? injury.recentPainScore : "—"}
                   <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.5 }}>/10</span>
                 </div>
-                {/* One-tap daily reading — opens the pain sheet pre-scoped to
-                    this injury's zone. The daily rehab action shouldn't hide
-                    behind the Details toggle or a chooser popover. */}
-                {injury.zones[0] ? (
-                  <button
-                    type="button"
-                    onClick={() => logFor(injury.zones[0])}
-                    style={quickLogBtn}
-                    aria-label={`Log pain for ${injury.name}`}
-                  >
-                    Log
-                  </button>
-                ) : null}
               </div>
+
+              {/* Fast one-tap daily reading — the primary rehab action, right
+                  in the row. Tapping a number logs today's reading instantly
+                  (no sheet). The full sheet (notes/factors) stays in Details. */}
+              {injury.primaryZoneId ? (
+                <div style={{ marginTop: 9 }}>
+                  <TodayReadingControl zoneId={injury.primaryZoneId} current={injury.todayReadingLevel} />
+                </div>
+              ) : null}
 
               {expanded ? (
                 <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
@@ -108,7 +108,7 @@ export default function HomeInjuriesSection({
                   ) : null}
                   {injury.zones[0] ? (
                     <button type="button" onClick={() => logFor(injury.zones[0])} style={rowLogBtn}>
-                      Log pain · {injury.zones[0].label}
+                      Log with notes · {injury.zones[0].label}
                     </button>
                   ) : null}
                 </div>
@@ -197,6 +197,19 @@ const countPill: CSSProperties = {
   color: "#FCA5A5",
 };
 
+// Subtle "log today" nudge — amber, quiet, gone the moment a reading lands.
+const logTodayBadge: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.2,
+  textTransform: "uppercase",
+  padding: "2px 8px",
+  borderRadius: 999,
+  background: "rgba(251,191,36,0.12)",
+  border: "1px solid rgba(251,191,36,0.35)",
+  color: "rgba(253,224,150,0.95)",
+};
+
 const toggleBtn: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -283,15 +296,6 @@ const rowLogBtn: CSSProperties = {
   minHeight: 40,
   justifySelf: "start",
   padding: "8px 13px",
-};
-
-// Compact per-row variant — sits beside the pain score in the collapsed row.
-const quickLogBtn: CSSProperties = {
-  ...logPainBtn,
-  fontSize: 11.5,
-  minHeight: 36,
-  padding: "7px 12px",
-  flexShrink: 0,
 };
 
 const chooserChip: CSSProperties = {

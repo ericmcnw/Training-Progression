@@ -149,6 +149,10 @@ type Props = {
   /** Sports the user has added — populates the SPORTS section in the
    *  schedule picker with tappable sport tiles. */
   scheduleSports?: import("./SchedulePicker").ScheduleSport[];
+  /** Today's pain reading for the injury indicator on the "today" cell.
+   *  Absent = no active injury (no indicator). `level: null` = injury but not
+   *  logged today (shows the empty nudge ring). */
+  todayPain?: { level: number | null };
 };
 
 // Default fallbacks — actual day width is computed from viewport width so
@@ -164,7 +168,7 @@ const DAY_WIDTH_MOBILE_MIN = 56;
 const DAY_WIDTH_MOBILE_MAX = 76;
 const DAY_GAP = 6;
 
-export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
+export default function WeekAtGlance({ days, today, currentWeekStart: _currentWeekStart, schedulableRoutines, scheduleActivityTypes, scheduleSports, todayPain }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedYmd, setSelectedYmd] = useState<string>(today);
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DESKTOP);
@@ -329,6 +333,7 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
                 isSelected={isSelected}
                 isPast={isPast}
                 isFuture={isFuture}
+                todayPain={isToday ? todayPain : undefined}
                 onClick={() => {
                   if (didDragRef.current) return;
                   setSelectedYmd(day.ymd);
@@ -371,6 +376,7 @@ function DayCard({
   isSelected,
   isPast,
   isFuture,
+  todayPain,
   onClick,
 }: {
   day: LegacyGlanceDay;
@@ -379,6 +385,7 @@ function DayCard({
   isSelected: boolean;
   isPast: boolean;
   isFuture: boolean;
+  todayPain?: { level: number | null };
   onClick: () => void;
 }) {
   // Compute the visual summary from the legacy planned/logs arrays. We include
@@ -426,6 +433,18 @@ function DayCard({
           <span aria-hidden style={weatherEmoji}>{describeWeatherCode(day.weather.code).emoji}</span>
           <span style={weatherTemp}>{day.weather.highF}°</span>
         </span>
+      ) : null}
+      {todayPain ? (
+        todayPain.level != null ? (
+          <span
+            style={{ ...painDot, background: painDotColor(todayPain.level), color: "#0b1220" }}
+            title={`Today's reading: ${todayPain.level}/10`}
+          >
+            {todayPain.level}
+          </span>
+        ) : (
+          <span style={painDotEmpty} title="No reading logged today — log it below" aria-label="Pain reading not logged" />
+        )
       ) : null}
       {day.span ? (
         <>
@@ -586,6 +605,14 @@ function DetailPanel({
                 <span style={{ ...domainBar, background: domainAccent(item.domain) }} aria-hidden />
                 <div style={detailRowText}>
                   <span style={detailRowName}>{item.routineName}</span>
+                  {/* Aim is what you're working TOWARD — only meaningful on
+                      today + future days, never on days already past. */}
+                  {item.aim && day.ymd >= today ? (
+                    <span style={detailRowAim} title={`Focus aim: ${item.aim}`}>
+                      <span aria-hidden style={aimArrow}>→</span>
+                      {item.aim}
+                    </span>
+                  ) : null}
                   <span style={detailRowMeta}>
                     {item.logged > 0
                       ? `${Math.min(item.logged, item.planned || item.logged)}/${item.planned || item.logged} done`
@@ -779,6 +806,43 @@ const weatherChip: CSSProperties = {
   pointerEvents: "none",
 };
 
+// Pain reading indicator — top-right of the "today" cell only. A filled dot
+// with the number when logged; a faint dashed ring (nudge) when not.
+function painDotColor(level: number): string {
+  if (level >= 7) return "#F87171";
+  if (level >= 4) return "#FBBF24";
+  return "#86EFAC";
+}
+
+const painDot: CSSProperties = {
+  position: "absolute",
+  top: 4,
+  right: 4,
+  width: 16,
+  height: 16,
+  borderRadius: 999,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 10,
+  fontWeight: 900,
+  lineHeight: 1,
+  pointerEvents: "none",
+  zIndex: 3,
+};
+
+const painDotEmpty: CSSProperties = {
+  position: "absolute",
+  top: 4,
+  right: 4,
+  width: 14,
+  height: 14,
+  borderRadius: 999,
+  border: "1.5px dashed rgba(255,255,255,0.32)",
+  pointerEvents: "none",
+  zIndex: 3,
+};
+
 const weatherEmoji: CSSProperties = { fontSize: 11 };
 
 const weatherTemp: CSSProperties = {
@@ -955,6 +1019,28 @@ const detailRowMeta: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: COLOR.textDim,
+};
+
+// Focus aim — the current-milestone label under the routine name. Accent-
+// colored + arrow-prefixed so it reads as "what I'm working toward here"
+// rather than metadata. Ellipsizes on narrow phones.
+const detailRowAim: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  fontSize: 11.5,
+  fontWeight: 800,
+  color: COLOR.success,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const aimArrow: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  opacity: 0.7,
+  flexShrink: 0,
 };
 
 const detailRowActions: CSSProperties = {

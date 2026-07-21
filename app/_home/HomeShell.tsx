@@ -26,9 +26,11 @@ import Last7DaysStrip from "./Last7DaysStrip";
 import LocationPingCapture from "./LocationPingCapture";
 import HomeInjuriesSection from "./HomeInjuriesSection";
 import HomeRotationSection from "./HomeRotationSection";
+import HomeFocusSection from "./HomeFocusSection";
 import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
 import type { HomeRotation } from "@/lib/home-rotation";
+import type { FocusBandItem } from "@/app/focus/data";
 
 export default function HomeShell({
   data,
@@ -37,6 +39,7 @@ export default function HomeShell({
   zones,
   otherGoals,
   rotation,
+  focuses,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
@@ -44,6 +47,7 @@ export default function HomeShell({
   zones: { slug: string; label: string }[];
   otherGoals: HomeOtherGoal[];
   rotation: HomeRotation | null;
+  focuses: FocusBandItem[];
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -57,7 +61,23 @@ export default function HomeShell({
         schedulableRoutines={data.quickPickRoutines}
         scheduleActivityTypes={data.scheduleActivityTypes}
         scheduleSports={data.scheduleSports}
+        todayPain={
+          injuries.length > 0
+            ? {
+                level: (() => {
+                  const ls = injuries
+                    .map((i) => i.todayReadingLevel)
+                    .filter((l): l is number => l != null);
+                  return ls.length ? Math.max(...ls) : null;
+                })(),
+              }
+            : undefined
+        }
       />
+
+      {/* Focus band — the strategic layer, full-width below the WaG. Renders
+          nothing when the user has no active focuses. */}
+      <HomeFocusSection focuses={focuses} />
 
       {/* Two independent columns on desktop. Each column flows its cards
           top-to-bottom with align-content:start, so expanding a collapsible

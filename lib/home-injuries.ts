@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { toAppYmd } from "@/lib/dates";
+import { toAppYmd, todayAppYmd } from "@/lib/dates";
 
 export type HomeInjury = {
   id: string;
@@ -8,9 +8,14 @@ export type HomeInjury = {
   /** Affected zones — first one is used as the default target for logging
    *  pain against this injury. */
   zones: { slug: string; label: string }[];
+  /** Primary zone id — what the one-tap daily reading logs against. */
+  primaryZoneId: string | null;
   aggravatingFactors: string[];
   /** Latest logged pain level on any of the injury's zones, 0-10, or null. */
   recentPainScore: number | null;
+  /** Today's reading (max across zones), or null if none logged today. Drives
+   *  the one-tap control's selected state + the "unlogged" nudge. */
+  todayReadingLevel: number | null;
   /** Per-day max pain across the injury's zones, oldest → newest, for the
    *  expanded sparkline. */
   painTrend: { ymd: string; level: number }[];
@@ -59,14 +64,17 @@ export async function getHomeInjuries(): Promise<HomeInjury[]> {
       .map(([ymd, level]) => ({ ymd, level }))
       .slice(-16);
     const recentPainScore = painTrend.length ? painTrend[painTrend.length - 1].level : null;
+    const todayReadingLevel = dayMax.get(todayAppYmd()) ?? null;
 
     return {
       id: injury.id,
       name: injury.name,
       status: injury.status,
       zones: injury.zones.map((z) => ({ slug: z.zone.slug, label: z.zone.label })),
+      primaryZoneId: injury.zones[0]?.zone.id ?? null,
       aggravatingFactors: injury.aggravatingFactors,
       recentPainScore,
+      todayReadingLevel,
       painTrend,
     };
   });
