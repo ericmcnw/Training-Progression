@@ -12,6 +12,26 @@ export type GateVerdict = {
   summary: string;
 };
 
+// FREQUENCY gate: the routine averaged ≥ perWeek sessions/week over the last
+// `weeks` weeks. weeklyCounts arrives oldest → newest (the same 8-bucket array
+// TrackActivity computes); we evaluate the trailing `weeks` buckets. Answers
+// "have I been doing it enough to advance?" from real logs.
+export function evaluateFrequencyGate(
+  weeklyCounts: number[],
+  perWeek: number,
+  weeks: number
+): GateVerdict {
+  const w = Math.max(1, Math.min(weeks, weeklyCounts.length));
+  const window = weeklyCounts.slice(-w);
+  const total = window.reduce((s, n) => s + n, 0);
+  const avg = total / w;
+  const avgLabel = (Math.round(avg * 10) / 10).toString();
+  if (avg >= perWeek - 1e-9) {
+    return { met: true, summary: `${avgLabel}×/wk over ${w}wk ✓` };
+  }
+  return { met: false, summary: `${avgLabel}×/wk over ${w}wk · need ${perWeek}×` };
+}
+
 // PAIN gate: every reading in the trailing `days`-day window is ≤ threshold,
 // and there's at least one reading in that window (so it isn't vacuously true
 // with no data). Forgiving of missed days — it checks the readings that exist,

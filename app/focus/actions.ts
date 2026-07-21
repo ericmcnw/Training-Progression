@@ -279,10 +279,12 @@ export type MilestoneFormRow = {
   // Gate: NONE | FREE_TEXT | PAIN. Pain gates auto-target the focus's linked
   // injury zone (resolved server-side), so the form only supplies threshold +
   // days.
-  gateKind?: "NONE" | "FREE_TEXT" | "PAIN";
+  gateKind?: "NONE" | "FREE_TEXT" | "PAIN" | "FREQUENCY";
   gateNote?: string | null;
   gatePainThreshold?: number | null;
   gatePainDays?: number | null;
+  gateFreqPerWeek?: number | null;
+  gateFreqWeeks?: number | null;
 };
 
 // Parse a <input type="date"> value (YYYY-MM-DD) to a UTC-midnight Date, or
@@ -400,6 +402,12 @@ export async function saveFocus(input: {
           : null,
       gatePainDays:
         gk === "PAIN" && m.gatePainDays != null ? Math.max(1, Math.round(m.gatePainDays)) : null,
+      gateFreqPerWeek:
+        gk === "FREQUENCY" && m.gateFreqPerWeek != null && m.gateFreqPerWeek > 0
+          ? Math.min(14, m.gateFreqPerWeek)
+          : null,
+      gateFreqWeeks:
+        gk === "FREQUENCY" && m.gateFreqWeeks != null ? Math.max(1, Math.min(8, Math.round(m.gateFreqWeeks))) : null,
       sortOrder: index,
     };
     if (m.id) {

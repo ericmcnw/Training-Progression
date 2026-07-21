@@ -23,7 +23,7 @@ export function seasonPhaseLabel(season: string | null, phase: string | null): s
   return season || p || null;
 }
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
-import { evaluatePainGate, type GateReading } from "@/lib/focus-gates";
+import { evaluatePainGate, evaluateFrequencyGate, type GateReading } from "@/lib/focus-gates";
 
 // ── Injury panel (for injury-linked focuses) ──────────────────────────────
 // Rehab focuses show the real signal — the pain trend from PainLog — instead
@@ -97,7 +97,7 @@ export async function getInjuryPanelData(injuryId: string): Promise<InjuryPanelD
 }
 
 export type MilestoneGateView = {
-  kind: "NONE" | "FREE_TEXT" | "PAIN";
+  kind: "NONE" | "FREE_TEXT" | "PAIN" | "FREQUENCY";
   // Free-text criteria, or a label for a pain gate.
   note: string | null;
   // PAIN only: evaluated verdict. null for FREE_TEXT (self-assessed) / NONE.
@@ -186,6 +186,7 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
       estDurationDays: true, dependsOnMilestoneId: true,
       gateKind: true, gateNote: true, gatePainZoneId: true,
       gatePainThreshold: true, gatePainDays: true,
+      gateFreqPerWeek: true, gateFreqWeeks: true,
     },
   });
 
@@ -214,6 +215,49 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
     }
   }
 
+  // ── Track activity (computed early so FREQUENCY gates can evaluate) ──────
+  // How often each ROUTINE-scoped track's routine was actually logged, over
+  // the last 8 weeks, bucketed per week (oldest → newest).
+  const WEEKS = 8;
+  const trackRoutineIds = Array.from(
+    new Set(
+      milestones
+        .filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef)
+        .map((m) => m.scopeRef!)
+    )
+  );
+  const activityByRoutine = new Map<string, TrackActivity>();
+  if (trackRoutineIds.length) {
+    const since = new Date(Date.now() - WEEKS * 7 * 86_400_000);
+    const logs = await prisma.routineLog.findMany({
+      where: { routineId: { in: trackRoutineIds }, performedAt: { gte: since } },
+      orderBy: { performedAt: "desc" },
+      select: { routineId: true, performedAt: true },
+    });
+    const grouped = new Map<string, string[]>(); // routineId → ymds (desc)
+    for (const l of logs) {
+      const list = grouped.get(l.routineId) ?? [];
+      list.push(toAppYmd(l.performedAt));
+      grouped.set(l.routineId, list);
+    }
+    for (const rid of trackRoutineIds) {
+      const ymds = grouped.get(rid) ?? [];
+      const weeklyCounts = new Array(WEEKS).fill(0);
+      for (const ymd of ymds) {
+        const daysAgo = diffYmdDays(today, ymd);
+        const bucket = Math.floor(daysAgo / 7);
+        if (bucket >= 0 && bucket < WEEKS) weeklyCounts[WEEKS - 1 - bucket] += 1; // oldest→newest
+      }
+      const lastYmd = ymds[0] ?? null;
+      activityByRoutine.set(rid, {
+        totalSessions: ymds.length,
+        lastYmd,
+        daysSinceLast: lastYmd ? diffYmdDays(today, lastYmd) : null,
+        weeklyCounts,
+      });
+    }
+  }
+
   function buildGate(m: (typeof milestones)[number]): MilestoneGateView {
     if (m.gateKind === "PAIN" && m.gatePainZoneId && m.gatePainThreshold != null && m.gatePainDays != null) {
       const verdict = evaluatePainGate(
@@ -223,6 +267,17 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
         today
       );
       return { kind: "PAIN", note: m.gateNote, met: verdict.met, summary: verdict.summary };
+    }
+    if (
+      m.gateKind === "FREQUENCY" &&
+      m.gateFreqPerWeek != null &&
+      m.gateFreqWeeks != null &&
+      m.scopeKind === "ROUTINE" &&
+      m.scopeRef
+    ) {
+      const counts = activityByRoutine.get(m.scopeRef)?.weeklyCounts ?? [];
+      const verdict = evaluateFrequencyGate(counts, m.gateFreqPerWeek, m.gateFreqWeeks);
+      return { kind: "FREQUENCY", note: m.gateNote, met: verdict.met, summary: verdict.summary };
     }
     if (m.gateKind === "FREE_TEXT") {
       return { kind: "FREE_TEXT", note: m.gateNote, met: null, summary: null };
@@ -293,48 +348,6 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
       projectedEndYmd: projection.byMilestone[m.id]?.endYmd ?? null,
       gate: buildGate(m),
     });
-  }
-
-  // ── Track activity: how often each ROUTINE track has actually been done ──
-  // One batched query over the last 8 weeks, bucketed per routine per week.
-  const WEEKS = 8;
-  const trackRoutineIds = Array.from(
-    new Set(
-      Array.from(trackMap.values())
-        .filter((t) => t.scopeKind === "ROUTINE" && t.scopeRef)
-        .map((t) => t.scopeRef!)
-    )
-  );
-  const activityByRoutine = new Map<string, TrackActivity>();
-  if (trackRoutineIds.length) {
-    const since = new Date(Date.now() - WEEKS * 7 * 86_400_000);
-    const logs = await prisma.routineLog.findMany({
-      where: { routineId: { in: trackRoutineIds }, performedAt: { gte: since } },
-      orderBy: { performedAt: "desc" },
-      select: { routineId: true, performedAt: true },
-    });
-    const grouped = new Map<string, string[]>(); // routineId → ymds (desc)
-    for (const l of logs) {
-      const list = grouped.get(l.routineId) ?? [];
-      list.push(toAppYmd(l.performedAt));
-      grouped.set(l.routineId, list);
-    }
-    for (const rid of trackRoutineIds) {
-      const ymds = grouped.get(rid) ?? [];
-      const weeklyCounts = new Array(WEEKS).fill(0);
-      for (const ymd of ymds) {
-        const daysAgo = diffYmdDays(today, ymd);
-        const bucket = Math.floor(daysAgo / 7);
-        if (bucket >= 0 && bucket < WEEKS) weeklyCounts[WEEKS - 1 - bucket] += 1; // oldest→newest
-      }
-      const lastYmd = ymds[0] ?? null;
-      activityByRoutine.set(rid, {
-        totalSessions: ymds.length,
-        lastYmd,
-        daysSinceLast: lastYmd ? diffYmdDays(today, lastYmd) : null,
-        weeklyCounts,
-      });
-    }
   }
 
   const done = milestones.filter((m) => m.status === "ACHIEVED").length;

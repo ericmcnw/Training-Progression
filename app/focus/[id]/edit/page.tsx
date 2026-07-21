@@ -28,6 +28,7 @@ export default async function EditFocusPage({
       select: {
         id: true, scopeKind: true, scopeRef: true, label: true, targetText: true, estDurationDays: true,
         gateKind: true, gateNote: true, gatePainThreshold: true, gatePainDays: true,
+        gateFreqPerWeek: true, gateFreqWeeks: true,
       },
     }),
     prisma.routine.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -65,6 +66,8 @@ export default async function EditFocusPage({
             gateNote: m.gateNote,
             gatePainThreshold: m.gatePainThreshold,
             gatePainDays: m.gatePainDays,
+            gateFreqPerWeek: m.gateFreqPerWeek,
+            gateFreqWeeks: m.gateFreqWeeks,
           })),
         }}
         routines={routines}

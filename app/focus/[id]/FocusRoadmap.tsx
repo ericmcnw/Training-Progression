@@ -22,43 +22,54 @@ function TrackActivityChip({ activity, accent }: { activity: TrackActivity; acce
       : activity.daysSinceLast === 0
         ? "today"
         : activity.daysSinceLast === 1
-          ? "1d ago"
+          ? "yesterday"
           : `${activity.daysSinceLast}d ago`;
   return (
-    <span style={activityWrap} title={`${activity.totalSessions} sessions in 8 weeks · last ${lastLabel}`}>
+    <div style={activityWrap} title="Sessions per week, last 8 weeks (oldest → newest)">
       <span style={activitySpark} aria-hidden>
         {activity.weeklyCounts.map((c, i) => (
           <span
             key={i}
             style={{
               ...activityBar,
-              height: `${Math.max(12, (c / max) * 100)}%`,
-              background: c > 0 ? accent : "rgba(255,255,255,0.14)",
+              height: `${Math.max(14, (c / max) * 100)}%`,
+              background: c > 0 ? accent : "rgba(255,255,255,0.12)",
+              opacity: c > 0 ? 0.45 + 0.55 * (c / max) : 1,
             }}
           />
         ))}
       </span>
       <span style={activityText}>
-        {activity.totalSessions}× · {lastLabel}
+        {activity.totalSessions} sessions · 8wk &nbsp;·&nbsp; last {lastLabel}
       </span>
-    </span>
+    </div>
   );
 }
 
-const activityWrap: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 };
-const activitySpark: CSSProperties = { display: "flex", alignItems: "flex-end", gap: 1.5, height: 16 };
-const activityBar: CSSProperties = { width: 3, borderRadius: 1, flexShrink: 0 };
+// Its own quiet row under the track title — sparkline + summary, room to
+// breathe instead of fighting the title for header space.
+const activityWrap: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "2px 0 8px",
+  minWidth: 0,
+};
+const activitySpark: CSSProperties = { display: "flex", alignItems: "flex-end", gap: 2, height: 18, flexShrink: 0 };
+const activityBar: CSSProperties = { width: 4, borderRadius: 1.5, flexShrink: 0 };
 const activityText: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 800,
-  color: "rgba(255,255,255,0.55)",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.5)",
   whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 // Gate chip: green "ready" when an auto-evaluated pain gate is met, amber while
 // pending, neutral for a self-assessed free-text gate.
 function GateChip({ gate }: { gate: MilestoneGateView }) {
-  if (gate.kind === "PAIN") {
+  if (gate.kind === "PAIN" || gate.kind === "FREQUENCY") {
     const met = gate.met === true;
     return (
       <span
@@ -126,8 +137,9 @@ function Track({ track, accent }: { track: FocusTrackView; accent: string }) {
     <section style={trackCard}>
       <div style={trackHead}>
         <span style={trackTitle}>{track.title}</span>
-        {track.activity ? <TrackActivityChip activity={track.activity} accent={accent} /> : <span style={trackScope}>{track.scopeKind.toLowerCase()}</span>}
+        <span style={trackScope}>{track.scopeKind.toLowerCase()}</span>
       </div>
+      {track.activity ? <TrackActivityChip activity={track.activity} accent={accent} /> : null}
       <div style={{ display: "grid", gap: 2 }}>
         {track.milestones.map((m, i) => (
           <MilestoneRow
@@ -197,17 +209,20 @@ function MilestoneRow({
           {milestone.label}
           {isCurrent ? <span style={{ ...currentTag, color: accent, borderColor: accent }}>now</span> : null}
         </span>
-        <span style={metaLine}>
-          {milestone.targetText ? <span style={target}>{milestone.targetText}</span> : null}
-          {!done && !skipped && milestone.projectedEndYmd ? (
-            <span style={projChip} title="Projected finish at current pace">
-              ~{formatUtcDateLabel(milestone.projectedEndYmd, { month: "short", day: "numeric" })}
-            </span>
-          ) : null}
-          {!done && !skipped && milestone.gate.kind !== "NONE" ? (
-            <GateChip gate={milestone.gate} />
-          ) : null}
-        </span>
+        {milestone.targetText ? <span style={target}>{milestone.targetText}</span> : null}
+        {/* Status chips only on the CURRENT milestone — that's the only place
+            "am I ready?" and "when?" are live questions. Upcoming milestones
+            stay clean; the timeline chart carries their dates. */}
+        {isCurrent && !done && !skipped && (milestone.gate.kind !== "NONE" || milestone.projectedEndYmd) ? (
+          <span style={metaLine}>
+            {milestone.gate.kind !== "NONE" ? <GateChip gate={milestone.gate} /> : null}
+            {milestone.projectedEndYmd ? (
+              <span style={projChip} title="Projected finish at current pace">
+                ~{formatUtcDateLabel(milestone.projectedEndYmd, { month: "short", day: "numeric" })}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
         {err ? <span style={errText}>Couldn&apos;t update — tap again</span> : null}
       </div>
 

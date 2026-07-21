@@ -407,9 +407,36 @@ function MilestoneEditor({
           <option value="NONE">No gate</option>
           <option value="FREE_TEXT">Gate: I decide</option>
           <option value="PAIN">Gate: pain ≤</option>
+          <option value="FREQUENCY">Gate: frequency</option>
         </select>
 
-        {row.gateKind === "FREE_TEXT" ? (
+        {row.gateKind === "FREQUENCY" ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0.5}
+              step={0.5}
+              style={{ ...inputStyle, width: 76 }}
+              value={row.gateFreqPerWeek ?? ""}
+              onChange={(e) => onChange({ gateFreqPerWeek: e.target.value === "" ? null : Number(e.target.value) })}
+              placeholder="2×"
+              aria-label="Sessions per week"
+            />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.55)" }}>/wk for</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={8}
+              style={{ ...inputStyle, width: 80 }}
+              value={row.gateFreqWeeks ?? ""}
+              onChange={(e) => onChange({ gateFreqWeeks: e.target.value === "" ? null : Number(e.target.value) })}
+              placeholder="3 wks"
+              aria-label="Weeks"
+            />
+          </div>
+        ) : row.gateKind === "FREE_TEXT" ? (
           <input
             style={{ ...inputStyle, flex: 1 }}
             value={row.gateNote ?? ""}
@@ -445,6 +472,8 @@ function MilestoneEditor({
       </div>
       {row.gateKind === "PAIN" ? (
         <span style={scopeHint}>Auto-checks your logged readings for the linked injury. Shows &ldquo;ready to advance&rdquo; when met.</span>
+      ) : row.gateKind === "FREQUENCY" ? (
+        <span style={scopeHint}>Auto-checks how often you&apos;ve logged this milestone&apos;s routine. Needs a Routine scope.</span>
       ) : null}
     </div>
   );

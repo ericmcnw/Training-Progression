@@ -1577,6 +1577,9 @@ enum MilestoneGateKind {
   // Pain-reading condition, auto-evaluated from PainLog: reading stays ≤
   // threshold across the last N days for a zone.
   PAIN
+  // Frequency condition, auto-evaluated from RoutineLog: the track's routine
+  // averaged ≥ N sessions/week over the last M weeks ("done it enough").
+  FREQUENCY
 }
 
 model Focus {
@@ -1652,6 +1655,9 @@ model ProgressionMilestone {
   gatePainZoneId    String?
   gatePainThreshold Int?
   gatePainDays      Int?
+  // FREQUENCY only: sessions/week target + evaluation window in weeks.
+  gateFreqPerWeek   Float?
+  gateFreqWeeks     Int?
   achievedAt DateTime?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
