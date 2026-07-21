@@ -100,6 +100,15 @@ export type FocusMilestoneView = {
   gate: MilestoneGateView;
 };
 
+export type TrackActivity = {
+  // Sessions logged for this track's routine over the last 8 weeks.
+  totalSessions: number;
+  lastYmd: string | null;
+  daysSinceLast: number | null;
+  // Per-week counts, 8 buckets, oldest → newest (this week last), for a bar.
+  weeklyCounts: number[];
+};
+
 export type FocusTrackView = {
   key: string;
   scopeKind: "ROUTINE" | "EXERCISE" | "CAPACITY";
@@ -107,6 +116,8 @@ export type FocusTrackView = {
   // Human label for the track header (routine/exercise name, or capacity text).
   title: string;
   milestones: FocusMilestoneView[];
+  // Real logged activity for ROUTINE tracks (null for exercise/capacity).
+  activity: TrackActivity | null;
 };
 
 export type FocusProjectionView = {
@@ -244,6 +255,7 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
         scopeRef: m.scopeRef,
         title: trackTitle(m.scopeKind, m.scopeRef),
         milestones: [],
+        activity: null,
       };
       trackMap.set(key, track);
     }
@@ -261,6 +273,48 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
     });
   }
 
+  // ── Track activity: how often each ROUTINE track has actually been done ──
+  // One batched query over the last 8 weeks, bucketed per routine per week.
+  const WEEKS = 8;
+  const trackRoutineIds = Array.from(
+    new Set(
+      Array.from(trackMap.values())
+        .filter((t) => t.scopeKind === "ROUTINE" && t.scopeRef)
+        .map((t) => t.scopeRef!)
+    )
+  );
+  const activityByRoutine = new Map<string, TrackActivity>();
+  if (trackRoutineIds.length) {
+    const since = new Date(Date.now() - WEEKS * 7 * 86_400_000);
+    const logs = await prisma.routineLog.findMany({
+      where: { routineId: { in: trackRoutineIds }, performedAt: { gte: since } },
+      orderBy: { performedAt: "desc" },
+      select: { routineId: true, performedAt: true },
+    });
+    const grouped = new Map<string, string[]>(); // routineId → ymds (desc)
+    for (const l of logs) {
+      const list = grouped.get(l.routineId) ?? [];
+      list.push(toAppYmd(l.performedAt));
+      grouped.set(l.routineId, list);
+    }
+    for (const rid of trackRoutineIds) {
+      const ymds = grouped.get(rid) ?? [];
+      const weeklyCounts = new Array(WEEKS).fill(0);
+      for (const ymd of ymds) {
+        const daysAgo = diffYmdDays(today, ymd);
+        const bucket = Math.floor(daysAgo / 7);
+        if (bucket >= 0 && bucket < WEEKS) weeklyCounts[WEEKS - 1 - bucket] += 1; // oldest→newest
+      }
+      const lastYmd = ymds[0] ?? null;
+      activityByRoutine.set(rid, {
+        totalSessions: ymds.length,
+        lastYmd,
+        daysSinceLast: lastYmd ? diffYmdDays(today, lastYmd) : null,
+        weeklyCounts,
+      });
+    }
+  }
+
   const done = milestones.filter((m) => m.status === "ACHIEVED").length;
   const total = milestones.filter((m) => m.status !== "SKIPPED").length;
 
@@ -276,7 +330,13 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
     todayYmd: today,
     milestonesDone: done,
     milestonesTotal: total,
-    tracks: Array.from(trackMap.values()),
+    tracks: Array.from(trackMap.values()).map((t) => ({
+      ...t,
+      activity:
+        t.scopeKind === "ROUTINE" && t.scopeRef
+          ? activityByRoutine.get(t.scopeRef) ?? null
+          : null,
+    })),
     projection: {
       targetYmd: target?.ymd ?? null,
       targetKind: focus.targetKind as "SOFT" | "HARD",

@@ -9,7 +9,51 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type CSSProperties } from "react";
 import { markMilestoneMet, reopenMilestone } from "@/app/focus/actions";
 import { formatUtcDateLabel } from "@/lib/dates";
-import type { FocusTrackView, FocusMilestoneView, MilestoneGateView } from "@/app/focus/data";
+import type { FocusTrackView, FocusMilestoneView, MilestoneGateView, TrackActivity } from "@/app/focus/data";
+
+// Real logged activity for a routine track: a weekly-count sparkline + a
+// "N× in 8wk · last Xd" summary. Makes the roadmap reactive to what you've
+// actually been doing, not just the plan.
+function TrackActivityChip({ activity, accent }: { activity: TrackActivity; accent: string }) {
+  const max = Math.max(1, ...activity.weeklyCounts);
+  const lastLabel =
+    activity.daysSinceLast == null
+      ? "none logged"
+      : activity.daysSinceLast === 0
+        ? "today"
+        : activity.daysSinceLast === 1
+          ? "1d ago"
+          : `${activity.daysSinceLast}d ago`;
+  return (
+    <span style={activityWrap} title={`${activity.totalSessions} sessions in 8 weeks · last ${lastLabel}`}>
+      <span style={activitySpark} aria-hidden>
+        {activity.weeklyCounts.map((c, i) => (
+          <span
+            key={i}
+            style={{
+              ...activityBar,
+              height: `${Math.max(12, (c / max) * 100)}%`,
+              background: c > 0 ? accent : "rgba(255,255,255,0.14)",
+            }}
+          />
+        ))}
+      </span>
+      <span style={activityText}>
+        {activity.totalSessions}× · {lastLabel}
+      </span>
+    </span>
+  );
+}
+
+const activityWrap: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 };
+const activitySpark: CSSProperties = { display: "flex", alignItems: "flex-end", gap: 1.5, height: 16 };
+const activityBar: CSSProperties = { width: 3, borderRadius: 1, flexShrink: 0 };
+const activityText: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.55)",
+  whiteSpace: "nowrap",
+};
 
 // Gate chip: green "ready" when an auto-evaluated pain gate is met, amber while
 // pending, neutral for a self-assessed free-text gate.
@@ -82,7 +126,7 @@ function Track({ track, accent }: { track: FocusTrackView; accent: string }) {
     <section style={trackCard}>
       <div style={trackHead}>
         <span style={trackTitle}>{track.title}</span>
-        <span style={trackScope}>{track.scopeKind.toLowerCase()}</span>
+        {track.activity ? <TrackActivityChip activity={track.activity} accent={accent} /> : <span style={trackScope}>{track.scopeKind.toLowerCase()}</span>}
       </div>
       <div style={{ display: "grid", gap: 2 }}>
         {track.milestones.map((m, i) => (
