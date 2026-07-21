@@ -9,6 +9,7 @@ import { formatUtcDateLabel } from "@/lib/dates";
 import FocusRoadmap from "./FocusRoadmap";
 import InjuryPanel from "./InjuryPanel";
 import FocusTimeline from "./FocusTimeline";
+import CollapsibleSection from "@/app/_home/CollapsibleSection";
 
 export const dynamic = "force-dynamic";
 
@@ -70,15 +71,18 @@ export default async function FocusDetailPage({
       <FocusRoadmap tracks={focus.tracks} accent={accent} />
 
       {/* Timeline chart — the whole plan as bands over time. Only for
-          effort-driven (non-injury) focuses, where the projection is honest. */}
+          effort-driven (non-injury) focuses, where the projection is honest.
+          Collapsible (persistent) so it can tuck away, esp. on mobile. */}
       {!injury ? (
-        <FocusTimeline
-          tracks={focus.tracks}
-          todayYmd={focus.todayYmd}
-          targetYmd={focus.projection.targetYmd}
-          projectedEndYmd={focus.projection.projectedCompletionYmd}
-          accent={accent}
-        />
+        <CollapsibleSection title="Timeline" storageKey="focus:timeline:open" defaultOpen>
+          <FocusTimeline
+            tracks={focus.tracks}
+            todayYmd={focus.todayYmd}
+            targetYmd={focus.projection.targetYmd}
+            projectedEndYmd={focus.projection.projectedCompletionYmd}
+            accent={accent}
+          />
+        </CollapsibleSection>
       ) : null}
 
       <style>{`

@@ -7,6 +7,7 @@
 import Link from "next/link";
 import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
+import YearTab from "./year/YearTab";
 import GoalsTab from "./goals/GoalsTab";
 import RotationTab from "./cycles/RotationTab";
 import PackingListsTab from "./PackingListsTab";
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const JUMP_LINKS = [
+  { href: "#year", label: "Year" },
   { href: "#goals", label: "Goals" },
   { href: "#schedule", label: "Schedule" },
   { href: "#rotation", label: "Rotation" },
@@ -47,6 +49,14 @@ export default async function PlanPage(props: {
           ))}
         </nav>
       </header>
+
+      <PlanSection
+        id="year"
+        title="Year"
+        subtitle="Your focuses across the seasons. Tap a month to zoom in."
+      >
+        <YearTab />
+      </PlanSection>
 
       <PlanSection
         id="goals"
