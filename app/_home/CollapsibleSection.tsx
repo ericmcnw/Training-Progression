@@ -18,6 +18,7 @@ export default function CollapsibleSection({
   count,
   countTone = "neutral",
   hint,
+  headerExtra,
   storageKey,
   defaultOpen = true,
   children,
@@ -27,6 +28,8 @@ export default function CollapsibleSection({
   countTone?: CountTone;
   /** Small right-aligned hint shown only when expanded (e.g. "tap a row"). */
   hint?: string;
+  /** Extra element rendered next to the title/count (e.g. a nudge badge). */
+  headerExtra?: ReactNode;
   /** localStorage key — omit to make the section non-persistent (always
    *  starts at defaultOpen). */
   storageKey?: string;
@@ -69,6 +72,7 @@ export default function CollapsibleSection({
           {typeof count === "number" && count > 0 ? (
             <span style={countPill(countTone)}>{count}</span>
           ) : null}
+          {headerExtra}
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           {open && hint ? <span style={hintStyle}>{hint}</span> : null}

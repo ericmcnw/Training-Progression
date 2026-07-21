@@ -61,18 +61,6 @@ export default function HomeShell({
         schedulableRoutines={data.quickPickRoutines}
         scheduleActivityTypes={data.scheduleActivityTypes}
         scheduleSports={data.scheduleSports}
-        todayPain={
-          injuries.length > 0
-            ? {
-                level: (() => {
-                  const ls = injuries
-                    .map((i) => i.todayReadingLevel)
-                    .filter((l): l is number => l != null);
-                  return ls.length ? Math.max(...ls) : null;
-                })(),
-              }
-            : undefined
-        }
       />
 
       {/* Focus band — the strategic layer, full-width below the WaG. Renders

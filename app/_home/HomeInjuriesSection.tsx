@@ -5,9 +5,10 @@
 // body part). Expanded: per injury, a pain-trend sparkline + its aggravating
 // factors + its own log-pain button. Resting state when nothing's active.
 
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import Popover from "./Popover";
+import CollapsibleSection from "./CollapsibleSection";
 import PainLogSheet from "@/app/body/PainLogSheet";
 import PainTrendLine from "@/app/components/injuries/PainTrendLine";
 import TodayReadingControl from "@/app/focus/TodayReadingControl";
@@ -43,24 +44,10 @@ export default function HomeInjuriesSection({
     setPainZone(zone);
   }
 
-  return (
-    <section style={embedded ? embeddedCard : card}>
-      <div style={headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={title}>Injuries</span>
-          {injuries.length > 0 ? <span style={countPill}>{injuries.length}</span> : null}
-          {injuries.some((i) => i.primaryZoneId && i.todayReadingLevel == null) ? (
-            <span style={logTodayBadge} title="You haven't logged a reading today">log today</span>
-          ) : null}
-        </div>
-        {injuries.length > 0 ? (
-          <button type="button" onClick={() => setExpanded((v) => !v)} style={toggleBtn} aria-expanded={expanded}>
-            {expanded ? "Hide details" : "Details"}
-            <span style={{ ...chevron, transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden>▾</span>
-          </button>
-        ) : null}
-      </div>
+  const unloggedToday = injuries.some((i) => i.primaryZoneId && i.todayReadingLevel == null);
 
+  const body: ReactNode = (
+    <>
       {injuries.length === 0 ? (
         <div style={resting}>No active injuries. Nice.</div>
       ) : (
@@ -116,9 +103,15 @@ export default function HomeInjuriesSection({
             </div>
           ))}
 
-          <button type="button" onClick={() => setChooserOpen(true)} style={logPainBtn}>
-            + Log pain
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button type="button" onClick={() => setChooserOpen(true)} style={{ ...logPainBtn, flex: 1 }}>
+              + Log pain
+            </button>
+            <button type="button" onClick={() => setExpanded((v) => !v)} style={toggleBtn} aria-expanded={expanded}>
+              {expanded ? "Hide details" : "Details"}
+              <span style={{ ...chevron, transform: expanded ? "rotate(180deg)" : "none" }} aria-hidden>▾</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -159,20 +152,44 @@ export default function HomeInjuriesSection({
       </Popover>
 
       <PainLogSheet zone={painZone} onClose={() => setPainZone(null)} factorSuggestions={factorSuggestions} />
-    </section>
+    </>
+  );
+
+  // Embedded (e.g. /body page): chrome-less, always open, own mini header.
+  if (embedded) {
+    return (
+      <section style={embeddedCard}>
+        <div style={headerRow}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={title}>Injuries</span>
+            {injuries.length > 0 ? <span style={countPill}>{injuries.length}</span> : null}
+          </div>
+        </div>
+        {body}
+      </section>
+    );
+  }
+
+  // Home: fully collapsible card, persistent per-user, matching the Focus band.
+  return (
+    <CollapsibleSection
+      title="Injuries"
+      count={injuries.length}
+      countTone="danger"
+      headerExtra={
+        unloggedToday ? (
+          <span style={logTodayBadge} title="You haven't logged a reading today">log today</span>
+        ) : null
+      }
+      storageKey="home:injuries:open"
+      defaultOpen
+    >
+      {body}
+    </CollapsibleSection>
   );
 }
 
 // ── styles ──────────────────────────────────────────────────────────────────
-const card: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: 16,
-  background: "rgba(255,255,255,0.028)",
-  padding: 14,
-  display: "grid",
-  gap: 12,
-};
-
 const embeddedCard: CSSProperties = {
   display: "grid",
   gap: 12,
