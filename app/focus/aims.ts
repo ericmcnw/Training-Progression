@@ -20,7 +20,10 @@ export type RoutineAim = {
 // Injury-path aims rank alongside a top-priority focus. Rehab is usually the
 // priority when a routine serves both, and it keeps the common single-owner
 // case unambiguous.
-const INJURY_PRIORITY = 0;
+// Injury-path aims outrank any focus when a routine serves both — rehab wins.
+// Focus sortOrders trend negative (new focuses = min-1), so this must be below
+// all of them.
+const INJURY_PRIORITY = Number.NEGATIVE_INFINITY;
 
 export async function getRoutineAims(
   routineIds: string[]

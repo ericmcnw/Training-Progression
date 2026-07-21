@@ -132,6 +132,8 @@ export default function FocusForm({
             gateNote: r.gateNote,
             gatePainThreshold: r.gatePainThreshold,
             gatePainDays: r.gatePainDays,
+            gateFreqPerWeek: r.gateFreqPerWeek,
+            gateFreqWeeks: r.gateFreqWeeks,
           })),
         });
         router.push(`/focus/${id}`);

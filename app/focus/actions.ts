@@ -320,15 +320,15 @@ export async function saveFocus(input: {
     description: input.description?.trim() || null,
     color: input.color?.trim() || null,
     icon: input.icon?.trim() || null,
-    pursuitKey: input.pursuitKey?.trim() || null,
     targetDate: parseTargetDate(input.targetDate),
     targetKind: input.targetKind ?? "SOFT",
     season: input.season?.trim() || null,
     phase: input.phase ? input.phase : null,
     handoffNote: input.handoffNote?.trim() || null,
-    // Only touch the injury link when the caller explicitly provides one —
-    // the edit form doesn't manage it, so an undefined must NOT unlink.
+    // Only touch these when the caller explicitly provides them — the edit
+    // form doesn't manage them, so an undefined must NOT wipe the value.
     ...(input.linkedInjuryId !== undefined ? { linkedInjuryId: input.linkedInjuryId || null } : {}),
+    ...(input.pursuitKey !== undefined ? { pursuitKey: input.pursuitKey?.trim() || null } : {}),
   };
 
   // Create or update the focus first so we have its id for milestone ownership.

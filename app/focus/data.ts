@@ -57,7 +57,10 @@ export async function getInjuryPanelData(injuryId: string): Promise<InjuryPanelD
       name: true,
       status: true,
       startedAt: true,
-      zones: { select: { zone: { select: { id: true, label: true } } } },
+      zones: {
+        select: { zone: { select: { id: true, label: true } } },
+        orderBy: { zone: { sortOrder: "asc" } },
+      },
     },
   });
   if (!injury) return null;

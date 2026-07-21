@@ -76,8 +76,7 @@ export default function FocusTimeline({
       cursor = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
     }
   }
-  const dayOf = (ymd: string) => Math.max(0, diffYmdDays(ymd, rangeStart));
-  const targetDay = targetYmd ? dayOf(targetYmd) : null;
+  const targetDay = targetYmd ? dayOf0(targetYmd) : null;
 
   const activeTracks = tracks.filter((t) => bars.some((b) => b.trackKey === t.key));
 
