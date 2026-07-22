@@ -57,6 +57,11 @@ export type DaySpanBand = {
   id: string;
   kind: string;
   label: string;
+  icon: string | null;
+  // Full range carried on every covered cell so tapping any band segment can
+  // open the editor prefilled without a refetch.
+  startYmd: string;
+  endYmd: string;
   isStart: boolean;
 };
 
@@ -217,7 +222,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     prisma.daySpan.findMany({
       where: { profileKey: session.profileKey, startYmd: { lte: monthEnd }, endYmd: { gte: monthStart } },
       orderBy: { startYmd: "asc" },
-      select: { id: true, kind: true, label: true, startYmd: true, endYmd: true },
+      select: { id: true, kind: true, label: true, icon: true, startYmd: true, endYmd: true },
     }),
     // Day to-dos in the month → surfaced in the day-detail popover.
     prisma.dayTodo.findMany({
@@ -415,6 +420,9 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         id: s.id,
         kind: s.kind,
         label: s.label,
+        icon: s.icon,
+        startYmd: s.startYmd,
+        endYmd: s.endYmd,
         isStart: ymd === (s.startYmd < monthStart ? monthStart : s.startYmd),
       }));
 

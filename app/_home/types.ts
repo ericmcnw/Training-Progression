@@ -66,6 +66,7 @@ export type LegacyGlanceDay = {
     source: "backpacking" | "dayspan";
     kind: string;
     label: string;
+    icon: string | null;
     startYmd: string;
     endYmd: string;
     isStart: boolean;

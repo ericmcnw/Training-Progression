@@ -11,6 +11,7 @@ export type WagSpan = {
   source: "backpacking" | "dayspan";
   kind: string;
   label: string;
+  icon: string | null;
   startYmd: string;
   endYmd: string;
 };
@@ -27,7 +28,7 @@ export async function getWagSpans(wagStart: string, wagEnd: string): Promise<Wag
       }),
       prisma.daySpan.findMany({
         where: { profileKey: session.profileKey, ...overlap },
-        select: { id: true, kind: true, label: true, startYmd: true, endYmd: true },
+        select: { id: true, kind: true, label: true, icon: true, startYmd: true, endYmd: true },
       }),
     ]);
     return [
@@ -36,6 +37,7 @@ export async function getWagSpans(wagStart: string, wagEnd: string): Promise<Wag
         source: "dayspan" as const,
         kind: s.kind,
         label: s.label,
+        icon: s.icon,
         startYmd: s.startYmd,
         endYmd: s.endYmd,
       })),
@@ -45,6 +47,7 @@ export async function getWagSpans(wagStart: string, wagEnd: string): Promise<Wag
         source: "backpacking" as const,
         kind: "backpacking",
         label: t.trail || t.location || "Backpacking trip",
+        icon: null,
         startYmd: t.startYmd,
         endYmd: t.endYmd,
       })),

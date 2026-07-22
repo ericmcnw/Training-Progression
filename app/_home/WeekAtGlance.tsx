@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { LegacyGlanceDay, QuickPickRoutine } from "./types";
 import { deleteDaySpan } from "./day-span-actions";
+import TripEditorPopover, { type TripEditorTarget } from "./TripEditorPopover";
 import DrawerLogButton from "@/app/routines/DrawerLogButton";
 import ViewButton from "@/app/components/ViewButton";
 import { COLOR, cardSurface } from "./tokens";
@@ -118,6 +119,18 @@ const spanBannerRemove: CSSProperties = {
   border: "1px solid rgba(248,113,113,0.3)",
   background: "rgba(248,113,113,0.08)",
   color: "rgba(248,160,160,0.95)",
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const spanBannerEdit: CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 9,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.05)",
+  color: "rgba(255,255,255,0.8)",
   fontSize: 11,
   fontWeight: 800,
   cursor: "pointer",
@@ -431,7 +444,7 @@ function DayCard({
         <>
           <span style={spanBarStyle(day.span)} aria-hidden />
           {day.span.isStart ? (
-            <span style={spanStartIcon} aria-hidden>{spanIcon(day.span.kind)}</span>
+            <span style={spanStartIcon} aria-hidden>{day.span.icon?.trim() || spanIcon(day.span.kind)}</span>
           ) : null}
         </>
       ) : null}
@@ -485,6 +498,7 @@ function buildDots(day: LegacyGlanceDay): DotSpec[] {
 function SpanBanner({ span }: { span: NonNullable<LegacyGlanceDay["span"]> }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
   const range =
     span.startYmd === span.endYmd
       ? formatUtcDateLabel(span.startYmd)
@@ -497,15 +511,35 @@ function SpanBanner({ span }: { span: NonNullable<LegacyGlanceDay["span"]> }) {
   }
   return (
     <div style={{ ...spanBanner, borderColor: spanColor(span.kind).replace(/0\.9\d?\)$/, "0.4)") }}>
-      <span aria-hidden style={{ fontSize: 15 }}>{spanIcon(span.kind)}</span>
+      <span aria-hidden style={{ fontSize: 15 }}>{span.icon?.trim() || spanIcon(span.kind)}</span>
       <span style={{ display: "grid", gap: 1, minWidth: 0, flex: 1 }}>
         <span style={spanBannerLabel}>{span.label}</span>
         <span style={spanBannerRange}>{range}</span>
       </span>
       {span.source === "dayspan" ? (
-        <button type="button" onClick={remove} disabled={pending} style={spanBannerRemove}>
-          {pending ? "…" : "Remove"}
-        </button>
+        <>
+          <button type="button" onClick={() => setEditing(true)} disabled={pending} style={spanBannerEdit}>
+            Edit
+          </button>
+          <button type="button" onClick={remove} disabled={pending} style={spanBannerRemove}>
+            {pending ? "…" : "Remove"}
+          </button>
+          {editing ? (
+            <TripEditorPopover
+              key={span.id}
+              open
+              existing={{
+                id: span.id,
+                kind: span.kind,
+                label: span.label,
+                icon: span.icon,
+                startYmd: span.startYmd,
+                endYmd: span.endYmd,
+              } satisfies TripEditorTarget}
+              onClose={() => setEditing(false)}
+            />
+          ) : null}
+        </>
       ) : (
         <span style={spanBannerKind}>Trip</span>
       )}

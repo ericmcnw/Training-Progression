@@ -764,6 +764,7 @@ model DaySpan {
   profileKey String
   kind       String   // "vacation" | "travel" | "away" | "sick" | "rest" | "other"
   label      String
+  icon       String?  // optional custom emoji, overrides the kind's default glyph
   startYmd   String
   endYmd     String
   notes      String?

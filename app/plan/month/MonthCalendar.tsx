@@ -17,6 +17,8 @@ import type { MonthData, MonthDayCell, DayEntry, DayEntryStatus } from "./data";
 import { domainRgb } from "@/lib/routines";
 import DayDetailPopover from "./DayDetailPopover";
 import type { QuickPickRoutine } from "@/app/_home/types";
+import TripEditorPopover, { type TripEditorTarget } from "@/app/_home/TripEditorPopover";
+import { daySpanDisplayIcon } from "@/lib/day-span-kinds";
 
 type Props = {
   data: MonthData;
@@ -32,6 +34,7 @@ const MAX_CHIPS_DESKTOP = 4;
 
 export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
+  const [editSpan, setEditSpan] = useState<TripEditorTarget | null>(null);
   const selectedDay = selectedYmd ? data.days.find((d) => d.ymd === selectedYmd) ?? null : null;
 
   // Pad leading + trailing cells so the calendar always starts on Sun and
@@ -60,6 +63,7 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
               key={cell.ymd}
               cell={cell}
               onSelect={() => setSelectedYmd(cell.ymd)}
+              onEditSpan={setEditSpan}
               isSelected={cell.ymd === selectedYmd}
             />
           );
@@ -75,6 +79,10 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
           scheduleSports={scheduleSports}
           onClose={() => setSelectedYmd(null)}
         />
+      ) : null}
+
+      {editSpan ? (
+        <TripEditorPopover key={editSpan.id} open existing={editSpan} onClose={() => setEditSpan(null)} />
       ) : null}
 
       <style>{`
@@ -103,10 +111,12 @@ function capWithOverflow<T>(items: T[], max: number): { shown: T[]; overflow: nu
 function DayCell({
   cell,
   onSelect,
+  onEditSpan,
   isSelected,
 }: {
   cell: MonthDayCell;
   onSelect: () => void;
+  onEditSpan: (target: TripEditorTarget) => void;
   isSelected: boolean;
 }) {
   // Only workouts get dots on the grid; habits are surfaced in the popover.
@@ -142,13 +152,23 @@ function DayCell({
         <div style={spanBandCol}>
           {cell.spans.map((s) => {
             const tone = spanTone(s.kind);
+            const target: TripEditorTarget = {
+              id: s.id, kind: s.kind, label: s.label, icon: s.icon, startYmd: s.startYmd, endYmd: s.endYmd,
+            };
+            const editTrip = () => onEditSpan(target);
             return (
               <span
                 key={s.id}
-                style={{ ...spanBand, background: `rgba(${tone},0.16)`, borderColor: `rgba(${tone},0.42)`, color: `rgba(${tone},0.98)` }}
-                title={`${s.label} · ${s.kind}`}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); editTrip(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); editTrip(); }
+                }}
+                style={{ ...spanBand, cursor: "pointer", background: `rgba(${tone},0.16)`, borderColor: `rgba(${tone},0.42)`, color: `rgba(${tone},0.98)` }}
+                title={`${s.label} · ${s.kind} — tap to edit`}
               >
-                {s.isStart ? s.label : ""}
+                {s.isStart ? `${daySpanDisplayIcon(s.kind, s.icon)} ${s.label}` : ""}
               </span>
             );
           })}

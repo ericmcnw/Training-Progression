@@ -321,6 +321,7 @@ export async function getHomeData(): Promise<HomeData> {
         source: sp.source,
         kind: sp.kind,
         label: sp.label,
+        icon: sp.icon,
         startYmd: sp.startYmd,
         endYmd: sp.endYmd,
         isStart: ymd === sp.startYmd,
