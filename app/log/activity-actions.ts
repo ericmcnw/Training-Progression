@@ -41,6 +41,9 @@ async function ensureFreeformActivityRoutine(): Promise<void> {
 
 export type LogActivityInput = {
   performedAtIso: string;
+  /** Optional custom name for this activity (e.g. "Concert dancing"). Becomes
+   *  the log's display name, overriding the tag-derived name. */
+  title?: string;
   /** What you did — tag keys from ACTIVITY_TAGS. Unknown keys are dropped. */
   tags?: string[];
   /** Total session length in minutes (from a bucket or exact entry). */
@@ -68,11 +71,13 @@ export async function logActivityAction(input: LogActivityInput): Promise<{ logI
 
   const tags = (input.tags ?? []).filter((t) => VALID_TAG_KEYS.has(t));
   const bodyParts = (input.bodyParts ?? []).filter((p) => VALID_BODY_PART_KEYS.has(p));
+  const title = input.title?.trim().slice(0, 80) || undefined;
 
   // sportData always carries the `sport: "activity"` discriminator so
   // surfaces can recognize a freeform log even when it has no tags.
   const sportData = {
     sport: "activity",
+    ...(title ? { title } : {}),
     ...(tags.length > 0 ? { tags } : {}),
     ...(bodyParts.length > 0 ? { bodyParts } : {}),
   };
@@ -99,7 +104,8 @@ export async function logActivityAction(input: LogActivityInput): Promise<{ logI
   // recently-worked view. Intensity follows the session's effort if rated,
   // else a sensible "moderate" (the user said it got worked).
   const zoneLabel =
-    tags.length > 0 ? `Activity — ${tags.map(activityTagLabel).join(", ")}` : "Activity";
+    title ??
+    (tags.length > 0 ? `Activity — ${tags.map(activityTagLabel).join(", ")}` : "Activity");
   await createManualZoneActivitiesForLog(
     prisma,
     log.id,

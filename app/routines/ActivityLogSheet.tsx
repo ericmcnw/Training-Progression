@@ -23,6 +23,7 @@ const ACCENT_TEXT = "rgba(153,246,228,0.98)";
 
 type ActivityDraft = {
   performedAt: string;
+  name: string;
   tags: string[];
   hours: string;
   minutes: string;
@@ -55,6 +56,7 @@ export default function ActivityQuickLogRow() {
 export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
   const [draft, setDraft, clearDraft] = useSportLogDraft<ActivityDraft>("activity-log-draft", {
     performedAt: formatLocalDateTime(new Date()),
+    name: "",
     tags: [],
     hours: "",
     minutes: "",
@@ -107,6 +109,7 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
       try {
         await logActivityAction({
           performedAtIso: new Date(ms).toISOString(),
+          title: draft.name.trim() || undefined,
           tags: draft.tags,
           durationMinutes: minutes,
           effort: draft.effort,
@@ -143,6 +146,18 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
         Capture anything that got you moving — a beach day, the pool, a long walk. It counts as an
         active day even without a structured workout.
       </div>
+
+      <label style={fieldLabel}>
+        Name (optional)
+        <input
+          type="text"
+          placeholder="e.g. Concert dancing, beach day"
+          value={draft.name}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+          style={inputStyle}
+          maxLength={80}
+        />
+      </label>
 
       <label style={fieldLabel}>
         When

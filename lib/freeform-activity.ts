@@ -119,9 +119,19 @@ export function bodyPartLabel(key: string): string {
   return PART_LABEL.get(key) ?? key;
 }
 
-/** Display name for a freeform log — its tags joined ("Swim · Walk"), or null
- *  to fall back to the routine name ("Activity") when there are no tags. */
+/** User-given custom title for a freeform log, or null if none. */
+export function freeformActivityTitle(sportData: unknown): string | null {
+  if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return null;
+  const title = (sportData as Record<string, unknown>).title;
+  return typeof title === "string" && title.trim() ? title.trim() : null;
+}
+
+/** Display name for a freeform log — a user-given title if set, else its tags
+ *  joined ("Swim · Walk"), or null to fall back to the routine name
+ *  ("Activity") when there's neither. */
 export function freeformActivityName(sportData: unknown): string | null {
+  const title = freeformActivityTitle(sportData);
+  if (title) return title;
   if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return null;
   const tags = (sportData as Record<string, unknown>).tags;
   if (!Array.isArray(tags) || tags.length === 0) return null;
