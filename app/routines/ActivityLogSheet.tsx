@@ -3,7 +3,7 @@
 import { useState, useTransition, type CSSProperties } from "react";
 import SportLogModal from "./SportLogModal";
 import { useSportLogDraft } from "./useSportLogDraft";
-import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { inputStyle, textareaStyle, MAX_SESSION_MINUTES } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { logActivityAction } from "@/app/log/activity-actions";
 import { ACTIVITY_TAGS, BODY_PART_OPTIONS, DURATION_BUCKETS } from "@/lib/freeform-activity";
@@ -103,6 +103,10 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
       return;
     }
     const totalMin = h * 60 + m;
+    if (totalMin > MAX_SESSION_MINUTES) {
+      setError("Enter a valid duration (under 24 hours).");
+      return;
+    }
     const minutes = totalMin > 0 ? totalMin : undefined;
 
     startTransition(async () => {

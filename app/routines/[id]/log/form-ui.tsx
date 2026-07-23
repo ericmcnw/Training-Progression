@@ -98,6 +98,8 @@ export function HoursMinutesField({
             type="number"
             inputMode="numeric"
             placeholder="0"
+            min={0}
+            max={24}
             value={hours}
             onChange={(e) => onHours(e.target.value)}
             style={inputStyle}
@@ -122,9 +124,14 @@ export function HoursMinutesField({
   );
 }
 
-// Parse the hours/minutes strings into total minutes. `valid` is false only
-// when a field holds a non-numeric / negative value; empty fields read as 0
-// and a 0 total returns `minutes: undefined` (no duration attached).
+// A single session over 24h is virtually always a fat-finger (e.g. "60" typed
+// into hours = a 60-hour session that wrecks weekly-total stats). Reject it.
+export const MAX_SESSION_MINUTES = 24 * 60;
+
+// Parse the hours/minutes strings into total minutes. `valid` is false when a
+// field holds a non-numeric / negative value OR the total exceeds a sane
+// single-session ceiling; empty fields read as 0 and a 0 total returns
+// `minutes: undefined` (no duration attached).
 export function parseHoursMinutes(hours: string, minutes: string): { minutes: number | undefined; valid: boolean } {
   const h = hours.trim() === "" ? 0 : Number(hours);
   const m = minutes.trim() === "" ? 0 : Number(minutes);
@@ -132,6 +139,9 @@ export function parseHoursMinutes(hours: string, minutes: string): { minutes: nu
     return { minutes: undefined, valid: false };
   }
   const total = h * 60 + m;
+  if (total > MAX_SESSION_MINUTES) {
+    return { minutes: undefined, valid: false };
+  }
   return { minutes: total > 0 ? total : undefined, valid: true };
 }
 

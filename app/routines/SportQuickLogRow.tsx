@@ -143,7 +143,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
     }
     const { minutes, valid } = parseHoursMinutes(draft.hours, draft.minutes);
     if (!valid) {
-      setError("Enter a valid duration.");
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
 
