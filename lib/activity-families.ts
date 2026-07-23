@@ -68,6 +68,7 @@ const SPORT_ACTIVITIES: ActivityRegistryEntry[] = [
   { slug: "climbing", label: "Climbing", family: "sports", eyebrow: "Sport", icon: "🧗", sortHint: 5, hasDeepWorld: true },
   { slug: "surfing", label: "Surfing", family: "sports", eyebrow: "Board sport", icon: "🏄", sortHint: 10 },
   { slug: "bodysurfing", label: "Bodysurfing", family: "sports", eyebrow: "Water sport", icon: "🤙", sortHint: 10.5 },
+  { slug: "wakesurfing", label: "Wake Surfing", family: "sports", eyebrow: "Water sport", icon: "🚤", sortHint: 10.6 },
   { slug: "snowboarding", label: "Snowboarding", family: "sports", eyebrow: "Board sport", icon: "🏂", sortHint: 11 },
   { slug: "skiing", label: "Skiing", family: "sports", eyebrow: "Board sport", icon: "🎿", sortHint: 12 },
   { slug: "skateboarding", label: "Skateboarding", family: "sports", eyebrow: "Board sport", icon: "🛹", sortHint: 13 },

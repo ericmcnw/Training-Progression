@@ -95,6 +95,15 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { key: "gear", label: "Fins / handplane", type: "text", placeholder: "e.g. DaFin swim fins, handplane" },
     ],
   },
+  wakesurfing: {
+    locationPlaceholder: "Lake / river",
+    extras: [
+      { key: "rides", label: "Rides / sets", type: "number", numericHint: "integer" },
+      { key: "board", label: "Board", type: "text", placeholder: "e.g. 4'6 surf-style" },
+      { key: "boat", label: "Boat", type: "text", placeholder: "e.g. Malibu, Axis" },
+      { key: "conditions", label: "Conditions", type: "text", placeholder: "e.g. clean wake, glassy" },
+    ],
+  },
   snowboarding: {
     locationPlaceholder: "Mountain / resort",
     sessionTypeLabel: "Terrain",

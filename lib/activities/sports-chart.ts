@@ -41,6 +41,7 @@ const SPORT_ACTIVITY_COLORS: Record<string, string> = {
   climbing:       "rgba(251,146,60,0.9)",   // orange — the deep-world sport
   surfing:        "rgba(56,189,248,0.9)",   // cyan
   bodysurfing:    "rgba(2,132,199,0.9)",    // ocean blue — deeper than surf cyan
+  wakesurfing:    "rgba(20,184,166,0.9)",   // teal — boat wake
   snowboarding:   "rgba(168,85,247,0.9)",   // violet
   skiing:         "rgba(99,102,241,0.9)",   // indigo — clear blue-purple, distinct from violet + cyan
   skateboarding:  "rgba(244,114,182,0.9)",  // pink

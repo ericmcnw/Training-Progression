@@ -32,7 +32,7 @@ export const GEAR_TYPES: GearTypePreset[] = [
   { value: "water", label: "Water / filter", icon: "💧", scope: "activity", activities: ["backpacking"], unit: "nights" },
   { value: "snowboard", label: "Snowboard", icon: "🏂", scope: "activity", activities: ["snowboarding"], unit: "days" },
   { value: "skis", label: "Skis", icon: "🎿", scope: "activity", activities: ["skiing"], unit: "days" },
-  { value: "surfboard", label: "Surfboard", icon: "🏄", scope: "activity", activities: ["surfing", "bodysurfing"], unit: "sessions" },
+  { value: "surfboard", label: "Surfboard", icon: "🏄", scope: "activity", activities: ["surfing", "bodysurfing", "wakesurfing"], unit: "sessions" },
   { value: "skateboard", label: "Skateboard", icon: "🛹", scope: "activity", activities: ["skateboarding"], unit: "sessions" },
   { value: "other", label: "Other", icon: "📦", scope: "universal", unit: "sessions" },
 ];

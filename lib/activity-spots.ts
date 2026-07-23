@@ -63,6 +63,7 @@ const PER_SLUG_OVERRIDES: Record<string, Partial<ActivitySpotConfig>> = {
   hiking:     { spotTypes: HIKING_TYPES, spotNoun: "trail" },
   surfing:    { spotTypes: SURF_TYPES, spotNoun: "spot" },
   bodysurfing: { spotTypes: SURF_TYPES, spotNoun: "spot" },
+  wakesurfing: { spotTypes: [], spotNoun: "spot" },
   snowboarding: { spotTypes: SNOW_TYPES, spotNoun: "mountain" },
   skiing:     { spotTypes: SNOW_TYPES, spotNoun: "mountain" },
   // Single-type activities — keep the noun specific but skip the type buttons.
@@ -228,6 +229,8 @@ const COMPATIBLE_ACTIVITY_SPOTS_RAW: Record<string, string[]> = {
   "surfing":           ["open-water-swimming"],
   // Bodysurfing happens at the same beaches as surfing + open-water swims.
   "bodysurfing":       ["surfing", "open-water-swimming", "swimming"],
+  // Wake surfing is lake/river — shares spots with open-water + pool swims.
+  "wakesurfing":       ["open-water-swimming", "swimming"],
 
   // Facility-bound sports + standalone — own only.
   "rowing":            [],

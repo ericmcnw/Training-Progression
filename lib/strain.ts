@@ -146,6 +146,7 @@ export const ACTIVITY_MUSCLE_MAP: Record<string, string[]> = {
   climbing: ["lats", "upper-back", "shoulders", "biceps", "forearms", "fingers", "abs", "obliques"],
   surfing: ["lats", "shoulders", "upper-back", "triceps", "abs", "obliques"],
   bodysurfing: ["lats", "shoulders", "calves", "glutes", "abs"],
+  wakesurfing: ["quads", "glutes", "calves", "abs", "obliques", "hip-flexors", "lats"],
   snowboarding: ["quads", "glutes", "calves", "abs", "obliques", "hip-flexors"],
   skiing: ["quads", "glutes", "calves", "abs", "hip-flexors", "adductors"],
   skateboarding: ["quads", "calves", "glutes", "abs"],
