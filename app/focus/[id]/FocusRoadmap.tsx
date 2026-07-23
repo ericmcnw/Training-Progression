@@ -96,13 +96,15 @@ function GateChip({ gate }: { gate: MilestoneGateView }) {
 const gateChipBase: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 800,
-  padding: "1px 8px",
-  borderRadius: 999,
+  lineHeight: 1.3,
+  padding: "2px 9px",
+  borderRadius: 10,
   border: "1px solid",
   maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  // Wrap long gate summaries ("load/edge progressed across 3+ consecutive
+  // sessions") instead of forcing the column wide and clipping at the edge.
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
 };
 
 export default function FocusRoadmap({
@@ -337,6 +339,7 @@ function labelStyle(done: boolean, skipped: boolean, isCurrent: boolean): CSSPro
     alignItems: "center",
     gap: 7,
     flexWrap: "wrap",
+    minWidth: 0,
     fontSize: 13.5,
     fontWeight: isCurrent ? 900 : 700,
     color: done
@@ -363,6 +366,8 @@ const metaLine: CSSProperties = {
   alignItems: "center",
   gap: 8,
   flexWrap: "wrap",
+  minWidth: 0,
+  marginTop: 2,
 };
 
 const target: CSSProperties = {
