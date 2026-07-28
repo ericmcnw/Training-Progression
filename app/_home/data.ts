@@ -18,6 +18,7 @@ import {
 } from "@/lib/frequency-state";
 import { buildFrequencyGoalMembership, classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 import { getLogDisplayName } from "@/lib/routine-display";
+import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import {
   routineWithFrequencyTarget,
   shouldAutoScheduleRoutine,
@@ -649,7 +650,15 @@ export async function getHomeData(): Promise<HomeData> {
     if (aims.size > 0) {
       for (const day of legacyGlanceDays) {
         for (const row of day.planned) {
-          row.aim = aims.get(row.routineId)?.label ?? null;
+          // The synthetic Endurance routine hosts every endurance TYPE
+          // (run/walk/swim/bike), so a single routine-level aim can't be
+          // accurate per type — it would stamp e.g. "flat trail, walk" onto a
+          // swim. Skip the aim on endurance rows; it lives on the endurance
+          // focus, not the per-type WaG row.
+          row.aim =
+            row.routineId === SYNTHETIC_ENDURANCE_ROUTINE_ID
+              ? null
+              : aims.get(row.routineId)?.label ?? null;
         }
       }
     }
