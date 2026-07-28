@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type MouseEvent, type TouchEvent } from "rea
 import { formatPace } from "@/lib/progress";
 import type { PaceChartData } from "@/lib/activities/endurance-pace";
 import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
+import { toAppYmd } from "@/lib/dates";
 
 // Interactive SVG line chart for pace data. Two modes:
 //
@@ -200,7 +201,7 @@ export default function PaceLineChart({
 
   function handleSessionDotClick(pt: { id: string; performedAt: Date; routineName: string; href: string }) {
     if (data.mode !== "session") return;
-    const ymd = pt.performedAt.toISOString().slice(0, 10);
+    const ymd = toAppYmd(pt.performedAt);
     const timeLabel = pt.performedAt.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",

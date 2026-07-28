@@ -8,6 +8,7 @@
 import { useState, type CSSProperties } from "react";
 import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
 import type { GoalRecentItem } from "@/lib/goals";
+import { toAppYmd } from "@/lib/dates";
 import type { GoalTypeAccent } from "@/app/plan/goals/goal-type-accent";
 
 // Compact "Aug 15 · 6:30 PM" formatter — drops the year for current-year
@@ -56,7 +57,7 @@ export default function GoalRecentSessions({
                 logId: item.id,
                 routineId: item.routineId,
                 routineName: item.routineName,
-                performedYmd: item.performedAt.toISOString().slice(0, 10),
+                performedYmd: toAppYmd(item.performedAt),
                 performedTimeLabel: item.performedAt.toLocaleTimeString("en-US", {
                   hour: "numeric",
                   minute: "2-digit",

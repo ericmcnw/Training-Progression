@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { formatAppDate, relativeFromNow } from "@/lib/dates";
+import { formatAppDate, relativeFromNow, toAppYmd } from "@/lib/dates";
 import {
   climbOutcomeBg,
   climbOutcomeColor,
@@ -447,7 +447,7 @@ function ClimbList({
 }) {
   const byDate = new Map<string, BrowserAttempt[]>();
   for (const a of attempts) {
-    const key = a.performedAt.toISOString().slice(0, 10);
+    const key = toAppYmd(a.performedAt);
     const list = byDate.get(key) ?? [];
     list.push(a);
     byDate.set(key, list);

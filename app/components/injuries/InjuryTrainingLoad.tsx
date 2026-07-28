@@ -13,6 +13,7 @@ import Link from "next/link";
 import { COLOR, RADIUS } from "@/lib/design-tokens";
 import type { HeatmapDomain, InjuryHeatmapData } from "@/app/injuries/[id]/training-heatmap";
 import type { CoverageDetailLog } from "@/app/progress/coverage";
+import { toAppYmd } from "@/lib/dates";
 import type { PainTrendPoint } from "@/app/components/injuries/PainTrendLine";
 
 const DOMAIN_ACCENT: Record<HeatmapDomain, string> = {
@@ -343,7 +344,7 @@ function WeekRoutines({
   for (const dr of category.domains) {
     for (const log of dr.contributingLogs) {
       if (seen.has(log.logId)) continue;
-      const ymd = log.performedAt.slice(0, 10);
+      const ymd = toAppYmd(new Date(log.performedAt));
       if (ymd >= weekStart && ymd < weekEndExclusive) {
         seen.add(log.logId);
         logs.push(log);

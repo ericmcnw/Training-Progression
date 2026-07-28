@@ -3,6 +3,7 @@
 import { useState, useMemo, type CSSProperties } from "react";
 import StackedWeeklyBarChart, { type StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
+import { toAppYmd } from "@/lib/dates";
 
 // One per-week session entry shown in the panel under the chart when
 // the user clicks a week. Pre-formatted by the chart-data helper so
@@ -296,7 +297,7 @@ export default function WeeklyBarChartWithSessions({
 // expectations.
 function buildOpenLogFromSession(session: WeekSession): OpenLog {
   const routineId = session.href ? session.href.split("/")[2] ?? "" : "";
-  const ymd = session.performedAt.toISOString().slice(0, 10);
+  const ymd = toAppYmd(session.performedAt);
   const timeLabel = session.performedAt.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",

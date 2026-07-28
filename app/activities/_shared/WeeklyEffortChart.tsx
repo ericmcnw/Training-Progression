@@ -15,6 +15,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import StackedWeeklyBarChart, { type StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import { LogDetailPopover, type OpenLog } from "@/app/_home/DomainSparklines";
 import { clampEffort, effortColor } from "@/lib/strain";
+import { toAppYmd } from "@/lib/dates";
 import type { SessionsByWeek, WeekSession } from "./WeeklyBarChartWithSessions";
 
 type Lens = "magnitude" | "bars" | "lines";
@@ -314,7 +315,7 @@ function WeekPanel({
 // ── helpers ──────────────────────────────────────────────────────────────────
 function buildOpenLog(session: WeekSession): OpenLog {
   const routineId = session.href ? session.href.split("/")[2] ?? "" : "";
-  const ymd = session.performedAt.toISOString().slice(0, 10);
+  const ymd = toAppYmd(session.performedAt);
   const timeLabel = session.performedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return {
     log: { logId: session.id, routineId, routineName: session.routineName, performedYmd: ymd, performedTimeLabel: timeLabel },
