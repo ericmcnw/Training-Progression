@@ -1666,3 +1666,31 @@ model ProgressionMilestone {
   @@index([ownerKind, ownerId, sortOrder])
   @@index([scopeKind, scopeRef, status])
 }
+
+// ── AI coach (Slice 3) ─────────────────────────────────────────────────────
+// Conversation persistence so coach chats survive refresh. One thread = one
+// conversation; summary holds a rolling compression of messages older than
+// the live window (summarizedCount = how many messages the summary covers).
+
+model CoachThread {
+  id              String         @id @default(cuid())
+  title           String?
+  summary         String?
+  summarizedCount Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  messages        CoachMessage[]
+
+  @@index([updatedAt])
+}
+
+model CoachMessage {
+  id        String      @id @default(cuid())
+  threadId  String
+  thread    CoachThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime    @default(now())
+
+  @@index([threadId, createdAt])
+}

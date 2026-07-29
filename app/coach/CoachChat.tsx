@@ -34,6 +34,7 @@ export default function CoachChat({
   variant?: "page" | "fill";
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [streamText, setStreamText] = useState<string | null>(null);
   const [toolNote, setToolNote] = useState<string | null>(null);
@@ -52,6 +53,35 @@ export default function CoachChat({
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Restore the latest conversation on open — chats survive refresh now.
+  useEffect(() => {
+    if (!configured) return;
+    const key = localStorage.getItem(KEY_STORAGE) ?? "";
+    if (!key) return;
+    let cancelled = false;
+    fetch("/api/coach", { headers: { "x-coach-key": key } })
+      .then(async (res) => {
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as { threadId: string | null; messages: ChatMessage[] };
+        if (cancelled || !data.threadId) return;
+        setThreadId((prev) => prev ?? data.threadId);
+        setMessages((prev) => (prev.length ? prev : data.messages));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [configured]);
+
+  function newChat() {
+    abortRef.current?.abort();
+    setMessages([]);
+    setStreamText(null);
+    setToolNote(null);
+    setPending(false);
+    setThreadId("new");
+  }
+
   async function send(raw: string) {
     const content = raw.trim();
     if (!content || pending) return;
@@ -64,11 +94,6 @@ export default function CoachChat({
     }
 
     const history = [...messages.filter((m) => !m.failed), { role: "user" as const, content }];
-    // The endpoint caps history at 40 messages — send a trimmed window (the
-    // full transcript stays on screen) and keep the window starting on a
-    // user turn.
-    const sendWindow = history.slice(-36);
-    while (sendWindow.length && sendWindow[0].role === "assistant") sendWindow.shift();
     setMessages(history);
     setDraft("");
     setPending(true);
@@ -84,7 +109,7 @@ export default function CoachChat({
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-coach-key": key },
-        body: JSON.stringify({ messages: sendWindow.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ message: content, threadId: threadId ?? undefined }),
         signal: controller.signal,
       });
 
@@ -111,7 +136,7 @@ export default function CoachChat({
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          let evt: { type?: string; text?: string; name?: string; message?: string };
+          let evt: { type?: string; text?: string; name?: string; message?: string; threadId?: string };
           try {
             evt = JSON.parse(line);
           } catch {
@@ -121,6 +146,8 @@ export default function CoachChat({
             assistantText += evt.text;
             setToolNote(null);
             setStreamText(assistantText);
+          } else if (evt.type === "meta" && evt.threadId) {
+            setThreadId(evt.threadId);
           } else if (evt.type === "tool") {
             setToolNote(TOOL_LABELS[evt.name ?? ""] ?? "Looking things up…");
           } else if (evt.type === "error") {
@@ -178,6 +205,11 @@ export default function CoachChat({
       {variant === "page" ? <Header /> : null}
 
       <div ref={scrollRef} style={threadStyle}>
+        {messages.length > 0 ? (
+          <button type="button" style={newChatStyle} onClick={newChat}>
+            ↺ New chat
+          </button>
+        ) : null}
         {messages.length === 0 && !pending ? (
           <div style={emptyStyle}>
             <div style={{ fontSize: 34 }}>🧠</div>
@@ -353,6 +385,18 @@ const coachBubbleStyle: CSSProperties = {
   alignSelf: "flex-start",
   background: "var(--panel)",
   border: "1px solid var(--border)",
+};
+
+const newChatStyle: CSSProperties = {
+  alignSelf: "flex-end",
+  background: "transparent",
+  border: "1px solid var(--border)",
+  color: "var(--muted)",
+  borderRadius: 999,
+  padding: "6px 12px",
+  fontSize: 13,
+  minHeight: 32,
+  cursor: "pointer",
 };
 
 const toolNoteStyle: CSSProperties = {
