@@ -6,6 +6,7 @@ import LogDrawer from "./components/LogDrawer";
 import FormDrawer from "./components/FormDrawer";
 import ViewLogDrawer from "./components/ViewLogDrawer";
 import EditLogDrawer from "./components/EditLogDrawer";
+import CoachWidget from "./coach/CoachWidget";
 import ClientProviders from "./ClientProviders";
 import "./globals.css";
 
@@ -52,6 +53,8 @@ export default function RootLayout({
           <ViewLogDrawer />
           <EditLogDrawer />
           <FormDrawer />
+          {/* Floating coach — global, only when the deployment is configured. */}
+          {process.env.ANTHROPIC_API_KEY && process.env.COACH_SECRET ? <CoachWidget /> : null}
           <MobileBottomNavigation />
         </ClientProviders>
       </body>

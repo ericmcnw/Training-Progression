@@ -24,7 +24,15 @@ const STARTERS = [
 
 type ChatMessage = { role: "user" | "assistant"; content: string; failed?: boolean };
 
-export default function CoachChat({ configured }: { configured: boolean }) {
+export default function CoachChat({
+  configured,
+  variant = "page",
+}: {
+  configured: boolean;
+  /** "page" renders its own header + viewport height; "fill" stretches to
+   *  the parent (the floating-widget sheet supplies the chrome). */
+  variant?: "page" | "fill";
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [streamText, setStreamText] = useState<string | null>(null);
@@ -146,10 +154,12 @@ export default function CoachChat({ configured }: { configured: boolean }) {
     if (retry) void send(retry);
   }
 
+  const rootStyle = variant === "fill" ? fillStyle : pageStyle;
+
   if (!configured) {
     return (
-      <div style={pageStyle}>
-        <Header />
+      <div style={rootStyle}>
+        {variant === "page" ? <Header /> : null}
         <div style={panelStyle}>
           The coach isn&apos;t configured on this deployment yet — set{" "}
           <code>ANTHROPIC_API_KEY</code> and <code>COACH_SECRET</code>, then redeploy.
@@ -159,8 +169,8 @@ export default function CoachChat({ configured }: { configured: boolean }) {
   }
 
   return (
-    <div style={pageStyle}>
-      <Header />
+    <div style={rootStyle}>
+      {variant === "page" ? <Header /> : null}
 
       <div ref={scrollRef} style={threadStyle}>
         {messages.length === 0 && !pending ? (
@@ -280,6 +290,14 @@ const pageStyle: CSSProperties = {
   margin: "0 auto",
   height: "calc(100dvh - var(--app-mobile-bottom-offset, 0px) - 70px)",
   minHeight: 420,
+};
+
+const fillStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  minHeight: 0,
+  padding: "0 12px",
 };
 
 const headerStyle: CSSProperties = {
