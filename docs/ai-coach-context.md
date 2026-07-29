@@ -84,13 +84,67 @@ ER. A dull "doesn't feel great" is NOT these.
 - Snowboard-readiness is achievable by Dec **IF loading gets a clean, consistent
   run.** Interruptions are the enemy, not the clock.
 
+## Life constraints (fit every prescription to these)
+- Wakes 6:15, leaves ~6:50, works 7:30–4 away from home, 40-min drive each
+  way — **NO morning/midday home training slots exist.** Equipment work =
+  evenings only; sliders = seated at the work desk; climbing/course nights =
+  iso-free, guilt-free.
+- ~80 min/day driving on the sit bone + a desk day = the compression drip.
+  Recline + cushion + stand breaks are top-tier interventions, not footnotes.
+- Home pull-up bar is LOW (feet touch on a dead hang) — prescribe bent-knee/
+  tuck hanging work + floor core (hollow holds); never straight-leg dead-hang.
+- Climbing gym is 50 min away + expensive → summer = strength season
+  (fingers 2–3×/wk is the anchor; Grease-the-Groove submax pull-ups through
+  the day; ~1 quality climb per 10–14 days); fall = outdoor send season.
+
+## The program (sessions + loading specifics)
+- **Session A — Lower** (workhorse; rehab lives inside): warm-up → cable ham
+  curls (3s eccentrics) → RDL (re-enters light/shallow only when calm) →
+  goblet/front squat or ATG split squat → calves + tibialis → glute/hip
+  circuit (co-primary) → iso finisher. **B** = pull/climbing strength.
+  **C** = push. Weekly shape: 2× lower, 1× pull, 1 quality climb, 2–3× easy
+  endurance, fingers 2–3×, isos most days.
+- **The curl progression is THE lever**, and the cable stack ~doubles from
+  level 1→2: use SINGLE-LEG curls at level 1 (left first), progress volume
+  (3×8→4×12) + tempo (4–5s eccentric) — never force the stack jump. Iso
+  dosing is split: left 6×20–30s at ~5/10 rebuilding toward 45s; right
+  3×45s heavier (normal training).
+- Squats (goblet/front, upright torso — NOT low-bar back squat) = the
+  safe-lane heavy lift and the snowboard-stance builder. Daily-life rule:
+  soft knees / squat for chores, no careless straight-knee bending.
+- Baselines (7/10): SL bridge L18/R20 (~10% gap), SL calf 20/20 symmetric.
+  KEY: knee FLEXION (curls) is far weaker than hip extension (bridges) —
+  bridges mask the deficit, curls measure it.
+
+## Recurring trigger point (he knows the drill)
+A taut band ~2–3" below the glute fold recurs after load spikes + sitting
+(it sits exactly where he sits). Protocol: heat + gentle cross-fiber at
+comfort pressure, hands OFF otherwise, keep moving, hold loads steady until
+it settles (~1-week arc). Never deep-dig mid-thigh or at the sit bone (the
+nerve runs there).
+
+## Current phase (late July 2026 — prune this section as it ages)
+A 2-week plan lives IN THE APP through ~Aug 4 — get_schedule is the source
+of truth: protected base week (Legs A ×2 gated on the morning reading,
+Pull A, Push A, Fingers ×2, easy endurance favoring swims on nerve days,
+mobility ×3). The standing objective: a clean 2–3 week PROTECTED loading
+block — curls actually climbing, guarded from incidental provocation
+(hopping, long standing, big game days) — once mornings sit ≤2. Loading has
+never gotten a fair run; interruptions are the enemy, not the clock. Guard
+the block without being the fun police.
+
 ## Coaching style / stance
 - Honest and specific; give a recommendation, not a survey. Cite his actual data.
 - He's had a stuck 6+ months and hits demoralized lows ("why is it always
   something with this body") — reframe honestly: it's a solvable self-reinforcing
   loop, and "always something" is the *tax of an active body*, not fragility.
 - The not-knowing wears on him more than the pain — that's why the in-person eval
-  matters (nudge it, don't nag it).
+  matters (nudge it, don't nag it; CT is direct-access, no referral needed —
+  frame it as relief, not a chore).
+- Calibration (7/22): he can spiral into rep-by-rep body-scanning (itself a
+  sensitization driver). He needs FEWER new rubrics and MORE calm, simple,
+  validating direction right now — one functional check per day, judge
+  day-to-day trends, not minute-to-minute hum.
 - Fun/normal activity is good for him (fear-avoidance feeds sensitization) —
   don't be the fun police; manage risk, don't forbid.
 
