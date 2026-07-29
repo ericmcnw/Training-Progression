@@ -44,6 +44,12 @@ function recordFor(extras: Record<string, unknown>, rec: PeopleStatsRecord | und
     if (g == null || g <= 0 || w == null) return { games: 0, won: 0 };
     return { games: g, won: Math.min(w, g) };
   }
+  if (rec.kind === "pointsCompare") {
+    const f = toInt(extras[rec.forKey]);
+    const a = toInt(extras[rec.againstKey]);
+    if (f == null || a == null) return { games: 0, won: 0 };
+    return { games: 1, won: f > a ? 1 : 0 };
+  }
   // resultField
   const v = (extras[rec.key] ?? "").toString().trim();
   if (v === "") return { games: 0, won: 0 };

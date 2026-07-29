@@ -1,4 +1,4 @@
-// Lifestyle world page — Phase 2.
+// Lifestyle world page.
 //
 // Same structural model as /activities/mobility:
 //   - Pulse strip: recent windows + all-time

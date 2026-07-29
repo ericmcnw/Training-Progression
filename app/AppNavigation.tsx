@@ -14,7 +14,7 @@ const desktopNavItems = [
   { href: "/", label: "Home", match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
   { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
-  { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") || pathname.startsWith("/progress") },
+  { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") },
   { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
   { href: "/profile", label: "Profile", match: (pathname: string) => pathname.startsWith("/profile") },
 ];
@@ -23,7 +23,7 @@ const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
   { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
-  { href: "/activities", label: "Activities", icon: <ActivitiesIcon />, match: (pathname: string) => pathname.startsWith("/activities") || pathname.startsWith("/progress") },
+  { href: "/activities", label: "Activities", icon: <ActivitiesIcon />, match: (pathname: string) => pathname.startsWith("/activities") },
   { href: "/body", label: "Body", icon: <BodyIcon />, match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
 ];
 

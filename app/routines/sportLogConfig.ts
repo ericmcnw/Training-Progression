@@ -34,7 +34,10 @@ export type ExtraFieldConfig = {
 //   • resultField — one match with a Win/Loss select (Tennis).
 export type PeopleStatsRecord =
   | { kind: "gamesWonOfPlayed"; playedKey: string; wonKey: string }
-  | { kind: "resultField"; key: string; winValue: string };
+  | { kind: "resultField"; key: string; winValue: string }
+  //   • pointsCompare — one game scored as points-for vs points-against
+  //     (Basketball). Counts only when both numbers are present.
+  | { kind: "pointsCompare"; forKey: string; againstKey: string };
 
 // Declares that a sport tracks people (teammates / opponents) so the world
 // page can render a win-rate ring + with/against leaderboards from sportData.
@@ -76,6 +79,11 @@ export const SPORT_LOG_CONFIG: Record<string, SportLogConfig> = {
       { key: "pointsAgainst", label: "Points (them)", type: "number", numericHint: "integer" },
       { key: "opponent", label: "Opponent / team", type: "text" },
     ],
+    peopleStats: {
+      opponentKeys: ["opponent"],
+      record: { kind: "pointsCompare", forKey: "pointsFor", againstKey: "pointsAgainst" },
+      unit: "game",
+    },
   },
   surfing: {
     locationPlaceholder: "Spot",

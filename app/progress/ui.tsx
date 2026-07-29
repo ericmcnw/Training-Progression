@@ -3,59 +3,6 @@ import type { ProgressRange, ProgressSection, ProgressTab } from "@/lib/progress
 import { progressRanges, progressSections, progressTabDescription, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
 
-export function ProgressShell({
-  section,
-  title,
-  subtitle,
-  children,
-  actions,
-  displayTitle,
-  navLabel,
-  navHint,
-  navItems,
-}: {
-  section: ProgressSection;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  actions?: React.ReactNode;
-  displayTitle?: string;
-  navLabel?: string;
-  navHint?: string;
-  navItems?: Array<{ href: string; label: string; active?: boolean }>;
-}) {
-  const sectionItem = progressSections().find((item) => item.key === section);
-  const resolvedTitle = displayTitle ?? `Progress - ${sectionItem?.label ?? title}`;
-  const resolvedNavItems = navItems ?? progressSections().map((item) => ({ ...item, active: item.key === section }));
-
-  return (
-    <div className="mobileProgressPage mobilePageShell" style={styles.container}>
-      <div className="mobileProgressTopRow mobilePageHeader" style={styles.progressTopBar}>
-        <div style={styles.progressTitleRow}>
-          <div style={styles.progressTitleStack}>
-            <h1 className="mobilePageTitle" style={styles.progressH1}>{resolvedTitle}</h1>
-            {subtitle ? <div className="mobilePageSubtitle" style={styles.progressSub}>{subtitle}</div> : null}
-          </div>
-          {section !== "overview" ? (
-            <Link href="/progress" scroll={false} prefetch={true} style={styles.backBtn}>
-              Back
-            </Link>
-          ) : null}
-        </div>
-        {actions ? <div className="mobileActionRow" style={styles.progressTopActions}>{actions}</div> : null}
-      </div>
-
-      <NavCluster
-        label={navLabel ?? ""}
-        hint={navHint}
-        items={resolvedNavItems}
-      />
-
-      <div className="mobileListStack" style={styles.content}>{children}</div>
-    </div>
-  );
-}
-
 export function TargetHeader({
   section,
   title,

@@ -93,6 +93,14 @@ export default function GoalRow({
             exerciseCount={insight.triggerExerciseCount ?? 0}
             subtypeCount={insight.triggerSubtypeCount ?? 0}
           />
+          {insight.sessionAim ? (
+            <span
+              style={triggerBadgeStyle}
+              title={`Aiming for ${insight.sessionAim} per session — any session still counts.`}
+            >
+              aim {insight.sessionAim}
+            </span>
+          ) : null}
           {isStalled ? (
             <span
               style={stalledChipStyle}

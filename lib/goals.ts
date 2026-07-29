@@ -181,6 +181,9 @@ export type GoalInsight = {
   triggerExerciseCount?: number;
   /** Count of trigger-subtype values on the goal (group frequency only). */
   triggerSubtypeCount?: number;
+  /** Display-only per-session aim for exercise habits ("30 pull-ups per
+   *  session"). Shown, never gating — a session counts regardless. */
+  sessionAim?: number | null;
 };
 
 export type GoalChartReference = {
@@ -259,6 +262,8 @@ type GroupFrequencyGoalRow = {
   /** Minimum sets of a trigger exercise required in a single log for it
    *  to claim a session via the exercise-trigger path. Defaults to 1. */
   triggerMinSets?: number;
+  /** Display-only per-session aim (exercise habits). */
+  sessionAim?: number | null;
 };
 
 function isRoutineFrequencyGoalLike(goal: Pick<Goal, "goalType" | "targetType" | "metricType" | "targetId">) {
@@ -1550,6 +1555,7 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
     })),
     triggerExerciseCount: goal.triggerExerciseIds?.length ?? 0,
     triggerSubtypeCount: goal.triggerSubtypes?.length ?? 0,
+    sessionAim: goal.sessionAim ?? null,
   } satisfies GoalInsight;
 }
 
@@ -2016,6 +2022,7 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
     triggerSubtypes: g.triggerSubtypes,
     triggerExerciseIds: g.triggerExercises.map((e) => e.exerciseId),
     triggerMinSets: g.triggerMinSets,
+    sessionAim: g.sessionAim,
   }));
   const [manualInsights, routineInsights, groupFrequencyInsights] = await Promise.all([
     batchBuildGoalInsights(goals),

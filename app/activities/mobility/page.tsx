@@ -1,4 +1,4 @@
-// Mobility world page — Phase 2.
+// Mobility world page.
 //
 // Structure follows the new activity-page model:
 //   - Pulse strip mixes a recent window with all-time so the user sees

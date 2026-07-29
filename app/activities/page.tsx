@@ -19,9 +19,7 @@ import SectionStrip from "./_shared/SectionStrip";
 
 export const dynamic = "force-dynamic";
 
-// The dashboard route for each family's hub page. Endurance + Strength
-// already exist; Sports + Body Work ship as stub pages in this PR and
-// flesh out in phase 2.
+// The dashboard route for each family's hub page.
 const FAMILY_DASHBOARD_HREF: Record<ActivityFamily, string> = {
   endurance: "/activities/endurance",
   sports: "/activities/sports",
@@ -74,6 +72,9 @@ export default async function ActivitiesPage() {
       <header style={headerStyle}>
         <h1 style={titleStyle}>Activities</h1>
         <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/reports/week" style={mapLinkStyle}>
+            📊 Reports
+          </Link>
           <Link href="/gear" style={mapLinkStyle}>
             🎒 Gear
           </Link>
