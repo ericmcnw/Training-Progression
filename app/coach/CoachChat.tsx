@@ -54,20 +54,26 @@ export default function CoachChat({
   useEffect(() => () => abortRef.current?.abort(), []);
 
   // Restore the latest conversation on open — chats survive refresh now.
+  // Also called after first-time passphrase entry so a fresh device shows
+  // the existing thread instead of invisibly continuing it.
+  function restoreThread(key: string, isCancelled?: () => boolean) {
+    fetch("/api/coach", { headers: { "x-coach-key": key } })
+      .then(async (res) => {
+        if (isCancelled?.() || !res.ok) return;
+        const data = (await res.json()) as { threadId: string | null; messages: ChatMessage[] };
+        if (isCancelled?.() || !data.threadId) return;
+        setThreadId((prev) => prev ?? data.threadId);
+        setMessages((prev) => (prev.length ? prev : data.messages));
+      })
+      .catch(() => {});
+  }
+
   useEffect(() => {
     if (!configured) return;
     const key = localStorage.getItem(KEY_STORAGE) ?? "";
     if (!key) return;
     let cancelled = false;
-    fetch("/api/coach", { headers: { "x-coach-key": key } })
-      .then(async (res) => {
-        if (cancelled || !res.ok) return;
-        const data = (await res.json()) as { threadId: string | null; messages: ChatMessage[] };
-        if (cancelled || !data.threadId) return;
-        setThreadId((prev) => prev ?? data.threadId);
-        setMessages((prev) => (prev.length ? prev : data.messages));
-      })
-      .catch(() => {});
+    restoreThread(key, () => cancelled);
     return () => {
       cancelled = true;
     };
@@ -128,6 +134,7 @@ export default function CoachChat({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let finished = false;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -152,7 +159,15 @@ export default function CoachChat({
             setToolNote(TOOL_LABELS[evt.name ?? ""] ?? "Looking things up…");
           } else if (evt.type === "error") {
             throw new Error(evt.message ?? "Coach request failed.");
+          } else if (evt.type === "done") {
+            // The server may keep the stream open a few extra seconds doing
+            // best-effort summarization after this — don't hold the UI on it.
+            finished = true;
           }
+        }
+        if (finished) {
+          void reader.cancel().catch(() => {});
+          break;
         }
       }
 
@@ -183,7 +198,11 @@ export default function CoachChat({
     setNeedKey(false);
     const retry = retryRef.current;
     retryRef.current = null;
-    if (retry) void send(retry);
+    if (retry) {
+      void send(retry);
+    } else if (!threadId && messages.length === 0) {
+      restoreThread(trimmed);
+    }
   }
 
   const rootStyle = variant === "fill" ? fillStyle : pageStyle;

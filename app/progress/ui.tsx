@@ -308,28 +308,6 @@ function CompactSegmentedNav({
   );
 }
 
-function NavCluster({
-  label,
-  hint,
-  items,
-}: {
-  label: string;
-  hint?: string;
-  items: Array<{ href: string; label: string; active?: boolean }>;
-}) {
-  return (
-    <div style={styles.navCluster}>
-      {(label || hint) ? (
-        <div style={styles.navHeader}>
-          {label ? <div style={styles.navLabel}>{label}</div> : null}
-          {hint ? <div style={styles.navHint}>{hint}</div> : null}
-        </div>
-      ) : null}
-      <SegmentedNav items={items} />
-    </div>
-  );
-}
-
 function SegmentedNav({
   items,
 }: {
