@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The coach route reads the coaching brief from docs/ at runtime; make sure
+  // the serverless bundle traces the file in.
+  outputFileTracingIncludes: {
+    "/api/coach": ["./docs/ai-coach-context.md"],
+  },
   async redirects() {
     // The /progress route system was retired in favor of /activities,
     // /routines, /exercises, /body, and /log. These redirects catch any

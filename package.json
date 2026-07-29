@@ -15,6 +15,7 @@
     "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@mjcdev/react-body-highlighter": "^0.0.4",
     "@prisma/client": "^6.19.2",
     "@supabase/ssr": "^0.10.2",

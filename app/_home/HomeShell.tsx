@@ -15,6 +15,7 @@
 // Week chip duplicates Week at a Glance.
 
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import type { HomeData } from "./types";
 import { COLOR, SECTION_GAP } from "./tokens";
 import HomeGoalsSection from "./HomeGoalsSection";
@@ -66,6 +67,16 @@ export default function HomeShell({
       {/* Focus band — the strategic layer, full-width below the WaG. Renders
           nothing when the user has no active focuses. */}
       <HomeFocusSection focuses={focuses} />
+
+      {/* Coach entry — only when the deployment has the coach configured. */}
+      {process.env.ANTHROPIC_API_KEY && process.env.COACH_SECRET ? (
+        <Link href="/coach" style={coachEntryStyle}>
+          <span aria-hidden>🧠</span>
+          <span style={{ fontWeight: 700 }}>Ask your coach</span>
+          <span style={coachEntrySubStyle}>grounded in your logs + pain trend</span>
+          <span style={{ marginLeft: "auto", color: "var(--muted)" }}>›</span>
+        </Link>
+      ) : null}
 
       {/* Two independent columns on desktop. Each column flows its cards
           top-to-bottom with align-content:start, so expanding a collapsible
@@ -152,4 +163,26 @@ const pageRoot: CSSProperties = {
   paddingInline: "var(--home-edge, 0px)",
   paddingBlock: 4,
   position: "relative",
+};
+
+const coachEntryStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "12px 14px",
+  minHeight: 44,
+  borderRadius: 14,
+  border: "1px solid rgba(251,191,36,0.3)",
+  background: "rgba(251,191,36,0.08)",
+  color: COLOR.text,
+  textDecoration: "none",
+  fontSize: 14,
+};
+
+const coachEntrySubStyle: CSSProperties = {
+  color: "var(--muted)",
+  fontSize: 13,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
