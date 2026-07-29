@@ -221,6 +221,7 @@ async function getPainTrend(input: Record<string, unknown>) {
 }
 
 async function getInjuryStatus() {
+  await getAppSession(); // scope seam — no-op in single-user mode
   const injuries = await getHomeInjuries();
   return {
     activeInjuries: injuries.map((injury) => ({

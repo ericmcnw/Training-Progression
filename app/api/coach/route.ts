@@ -18,7 +18,12 @@ const MAX_MESSAGE_CHARS = 8000;
 // other file. Read once per server instance.
 let contextBriefPromise: Promise<string> | null = null;
 function getContextBrief(): Promise<string> {
-  contextBriefPromise ??= fs.readFile(path.join(process.cwd(), "docs", "ai-coach-context.md"), "utf8");
+  contextBriefPromise ??= fs
+    .readFile(path.join(process.cwd(), "docs", "ai-coach-context.md"), "utf8")
+    .catch((err) => {
+      contextBriefPromise = null; // don't cache the failure past a transient
+      throw err;
+    });
   return contextBriefPromise;
 }
 

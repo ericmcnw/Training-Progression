@@ -64,6 +64,11 @@ export default function CoachChat({
     }
 
     const history = [...messages.filter((m) => !m.failed), { role: "user" as const, content }];
+    // The endpoint caps history at 40 messages — send a trimmed window (the
+    // full transcript stays on screen) and keep the window starting on a
+    // user turn.
+    const sendWindow = history.slice(-36);
+    while (sendWindow.length && sendWindow[0].role === "assistant") sendWindow.shift();
     setMessages(history);
     setDraft("");
     setPending(true);
@@ -79,7 +84,7 @@ export default function CoachChat({
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-coach-key": key },
-        body: JSON.stringify({ messages: history.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ messages: sendWindow.map(({ role, content }) => ({ role, content })) }),
         signal: controller.signal,
       });
 
@@ -238,6 +243,7 @@ export default function CoachChat({
           }}
           placeholder="Ask your coach…"
           rows={2}
+          maxLength={7500}
           style={composerInputStyle}
         />
         <button
