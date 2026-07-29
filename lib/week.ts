@@ -9,21 +9,23 @@ export function getWeekBoundsSunday(date: Date) {
   return { start, end, startYmd };
 }
 
-/** Returns the Monday-aligned start of the given date's week, in local time
- *  (midnight). Used by activity-world pulse + heatmap aggregates. */
-export function startOfWeekMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Monday (app-timezone) of the week containing `date`, as YYYY-MM-DD. */
+export function mondayYmdOf(date: Date): string {
+  const ymd = toAppYmd(date);
+  const day = new Date(`${ymd}T00:00:00.000Z`).getUTCDay();
+  return addDaysYmd(ymd, day === 0 ? -6 : 1 - day);
 }
 
-/** Returns midnight `days` days before `now`, in local time. */
+/** Returns the instant the given date's Monday-aligned week starts, in the
+ *  app timezone. Used by activity-world pulse + heatmap aggregates.
+ *  App-tz midnight sits at 04:00/05:00 UTC, so `.toISOString().slice(0,10)`
+ *  on the result still yields the Monday's calendar date — callers that
+ *  build week keys that way stay correct. */
+export function startOfWeekMonday(date: Date): Date {
+  return getAppDayRange(mondayYmdOf(date)).start;
+}
+
+/** Returns the app-timezone start of the day `days` days before `now`. */
 export function daysAgoMidnight(now: Date, days: number): Date {
-  const d = new Date(now);
-  d.setDate(d.getDate() - days);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return getAppDayRange(addDaysYmd(toAppYmd(now), -days)).start;
 }

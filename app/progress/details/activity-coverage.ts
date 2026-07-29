@@ -1,3 +1,5 @@
+import { startOfWeekMonday as getMondayOf } from "@/lib/week";
+
 export type HeatmapEvent = {
   date: Date;
   label: string;
@@ -26,15 +28,6 @@ export type TrainingEventInput = {
   performedAt: Date;
   routineName: string;
 };
-
-export function getMondayOf(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function logHref(routineId: string, logId: string) {
   return `/routines/${routineId}/logs/${logId}/details`;

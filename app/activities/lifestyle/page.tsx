@@ -10,6 +10,7 @@
 // "habit consistency heatmap."
 
 import Link from "next/link";
+import { startOfWeekMonday } from "@/lib/week";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate, toAppYmd } from "@/lib/dates";
 import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
@@ -313,15 +314,6 @@ export default async function LifestyleWorldPage(props: {
       </div>
     </div>
   );
-}
-
-function startOfWeekMonday(d: Date) {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const diff = (day + 6) % 7;
-  date.setDate(date.getDate() - diff);
-  return date;
 }
 
 function PulseStat({ label, value }: { label: string; value: number }) {

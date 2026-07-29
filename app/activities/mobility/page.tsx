@@ -13,6 +13,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate } from "@/lib/dates";
+import { startOfWeekMonday } from "@/lib/week";
 import { effectiveRoutineDomain, domainColor } from "@/lib/routines";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
@@ -295,15 +296,6 @@ export default async function MobilityWorldPage(props: {
       </div>
     </div>
   );
-}
-
-function startOfWeekMonday(d: Date) {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const diff = (day + 6) % 7;
-  date.setDate(date.getDate() - diff);
-  return date;
 }
 
 function PulseStat({ label, value }: { label: string; value: number }) {

@@ -21,6 +21,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatAppDate, relativeFromNow } from "@/lib/dates";
+import { startOfWeekMonday } from "@/lib/week";
 import { formatDuration } from "@/lib/progress";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
@@ -68,15 +69,6 @@ function buildHref(slug: string, searchParams: SearchParams, overrides: Record<s
   }
   const qs = new URLSearchParams(next).toString();
   return `/activities/${slug}${qs ? `?${qs}` : ""}`;
-}
-
-function startOfWeekMonday(d: Date) {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const diff = (day + 6) % 7;
-  date.setDate(date.getDate() - diff);
-  return date;
 }
 
 export default async function SportWorldPage(props: {
