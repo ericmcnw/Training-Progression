@@ -237,8 +237,22 @@ export async function logInjuryReading(zoneId: string, level: number): Promise<v
   const lvl = Math.max(0, Math.min(10, Math.round(level)));
   const { start, end } = getAppDayRange(todayAppYmd());
 
+  // Re-tapping the control should CORRECT today's quick reading, not stack a
+  // second row. But it must never overwrite a substantive log — a morning
+  // reading with notes/factors/a real context is ground truth for "did
+  // yesterday's load settle", and silently changing its level corrupts the
+  // next-morning analysis. Only rows this control could have written (bare
+  // GENERAL, no notes/factors, not attached to a workout) are updated in
+  // place; anything richer gets a new row alongside it.
   const existing = await prisma.painLog.findFirst({
-    where: { zoneId, loggedAt: { gte: start, lt: end } },
+    where: {
+      zoneId,
+      loggedAt: { gte: start, lt: end },
+      context: "GENERAL",
+      notes: null,
+      routineLogId: null,
+      aggravatingFactors: { isEmpty: true },
+    },
     orderBy: { loggedAt: "desc" },
     select: { id: true },
   });
