@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import Popover from "@/app/_home/Popover";
 import { logPain } from "@/app/body/actions";
 import FactorSearchField from "@/app/components/injuries/FactorSearchField";
+import { todayAppYmd } from "@/lib/dates";
 import type { PainContext } from "@/generated/prisma";
 
 const CONTEXTS: Array<{ value: PainContext; label: string }> = [
@@ -36,10 +37,12 @@ export default function PainLogSheet({
   onClose: () => void;
   factorSuggestions?: string[];
 }) {
+  const today = todayAppYmd();
   const [level, setLevel] = useState(3);
   const [context, setContext] = useState<PainContext>("GENERAL");
   const [notes, setNotes] = useState("");
   const [factors, setFactors] = useState<string[]>([]);
+  const [when, setWhen] = useState(today);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -50,6 +53,7 @@ export default function PainLogSheet({
     setContext("GENERAL");
     setNotes("");
     setFactors([]);
+    setWhen(today);
     setError(null);
     onClose();
   }
@@ -59,7 +63,7 @@ export default function PainLogSheet({
     setError(null);
     startTransition(async () => {
       try {
-        await logPain([{ zoneSlug: zone.slug, level, context, notes: notes.trim() || undefined, aggravatingFactors: factors }]);
+        await logPain([{ zoneSlug: zone.slug, level, context, notes: notes.trim() || undefined, aggravatingFactors: factors, loggedAtYmd: when }]);
         close();
         router.refresh();
       } catch (e) {
@@ -103,6 +107,24 @@ export default function PainLogSheet({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Backdating — catch up on days you missed. Capped at today. */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={fieldLabel}>Day</span>
+            <input
+              type="date"
+              value={when}
+              max={today}
+              onChange={(e) => setWhen(e.target.value)}
+              style={input}
+              aria-label="Day this reading is for"
+            />
+            {when !== today ? (
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(251,191,36,0.9)" }}>
+                Backdating to {when}
+              </span>
+            ) : null}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>

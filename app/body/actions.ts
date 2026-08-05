@@ -2,10 +2,22 @@
 
 import type { ActivitySource, PainContext } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { getAppDayRange, todayAppYmd } from "@/lib/dates";
 import { revalidatePath } from "next/cache";
 
 const painContexts = new Set<PainContext>(["AT_REST", "DURING_ACTIVITY", "AFTER_ACTIVITY", "MORNING", "GENERAL"]);
 const activitySources = new Set<ActivitySource>(["EXERCISE", "SPORT_TAG", "MANUAL"]);
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Backdated readings land at noon of the chosen app-timezone day, so they
+// bucket onto that calendar day regardless of DST. Undefined → the column
+// default (now), which is the normal "logging today" path. Future days are
+// rejected rather than silently accepted.
+function resolveLoggedAt(ymd: string | undefined): Date | undefined {
+  if (!ymd || !YMD_RE.test(ymd)) return undefined;
+  if (ymd > todayAppYmd()) return undefined;
+  return new Date(getAppDayRange(ymd).start.getTime() + 12 * 60 * 60 * 1000);
+}
 
 function sanitizeFactors(arr?: string[]): string[] {
   const seen = new Set<string>();
@@ -21,7 +33,7 @@ function sanitizeFactors(arr?: string[]): string[] {
 }
 
 export async function logPain(
-  input: { zoneSlug: string; level: number; context: PainContext; notes?: string; routineLogId?: string; aggravatingFactors?: string[] }[]
+  input: { zoneSlug: string; level: number; context: PainContext; notes?: string; routineLogId?: string; aggravatingFactors?: string[]; loggedAtYmd?: string }[]
 ) {
   const rows = input
     .map((entry) => ({
@@ -31,6 +43,7 @@ export async function logPain(
       notes: entry.notes?.trim() || null,
       routineLogId: entry.routineLogId?.trim() || null,
       aggravatingFactors: sanitizeFactors(entry.aggravatingFactors),
+      loggedAt: resolveLoggedAt(entry.loggedAtYmd),
     }))
     .filter((entry) => entry.zoneSlug && entry.level > 0 && painContexts.has(entry.context));
 
@@ -54,6 +67,7 @@ export async function logPain(
           notes: entry.notes,
           routineLogId: entry.routineLogId,
           aggravatingFactors: entry.aggravatingFactors,
+          ...(entry.loggedAt ? { loggedAt: entry.loggedAt } : {}),
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
