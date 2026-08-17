@@ -275,8 +275,12 @@ enum InjuryStatus {
 // becomes a habit by attaching a FrequencyGoal. The Habits view is a lens
 // over routines with FrequencyGoals, regardless of kind or domain.
 model Routine {
-  id           String      @id @default(cuid())
-  name         String
+  id   String @id @default(cuid())
+  name String
+  // Free-text protocol note — what this routine actually is and how you do it
+  // (edge sizes, grip rotation, intent). Shown while logging so the method
+  // travels with the routine instead of living in your head.
+  description  String?
   subtype      String?
   domain       String      @default("general")
   kind         RoutineKind @default(COMPLETION)

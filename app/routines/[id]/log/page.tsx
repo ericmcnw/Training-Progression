@@ -98,6 +98,7 @@ export default async function LogRoutinePage(props: {
     select: {
       id: true,
       name: true,
+      description: true,
       kind: true,
       subtype: true,
       metadataGroups: {
@@ -538,7 +539,7 @@ export default async function LogRoutinePage(props: {
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (
-            <CompletionLogForm routineId={routineId} />
+            <CompletionLogForm routineId={routineId} description={routine.description} />
           )}
         </div>
       </section>
