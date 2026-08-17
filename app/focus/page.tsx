@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-// Focus has no index surface — the Plan page's Year band is where focuses
-// live. This catches the bare URL so it doesn't 404.
+// Focus is the schema noun; Programs is the surfaced one. This catches the
+// bare URL and sends it to the real index.
 export default function FocusIndexPage() {
-  redirect("/plan");
+  redirect("/programs");
 }

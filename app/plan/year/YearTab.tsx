@@ -147,7 +147,7 @@ export default async function YearTab() {
               </div>
               <div style={{ position: "relative", height: LANE_H, flex: 1 }}>
                 <Link
-                  href={`/focus/${lane.id}`}
+                  href={`/programs/${lane.id}`}
                   style={{
                     ...band,
                     left: lane.startX,

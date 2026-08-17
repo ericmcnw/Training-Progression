@@ -136,7 +136,7 @@ export default function FocusForm({
             gateFreqWeeks: r.gateFreqWeeks,
           })),
         });
-        router.push(`/focus/${id}`);
+        router.push(`/programs/${id}`);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save. Try again.");

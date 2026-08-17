@@ -34,7 +34,7 @@ export default async function FocusDetailPage({
   return (
     <main style={page} className="focusDetail">
       <div style={topBar}>
-        <Link href="/" style={backLink}>← Home</Link>
+        <Link href="/programs" style={backLink}>← Programs</Link>
         <Link href={`/focus/${focus.id}/edit`} style={editLink}>Edit</Link>
       </div>
 

@@ -53,7 +53,7 @@ export default async function PlanPage(props: {
       <PlanSection
         id="year"
         title="Year"
-        subtitle="Your focuses across the seasons. Tap a month to zoom in."
+        subtitle="Your programs across the seasons. Tap a month to zoom in."
       >
         <YearTab />
       </PlanSection>

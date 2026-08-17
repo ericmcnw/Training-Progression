@@ -39,7 +39,7 @@ export default async function EditFocusPage({
   return (
     <main style={page} className="focusForm">
       <div style={topBar}>
-        <Link href={`/focus/${id}`} style={backLink}>← Back</Link>
+        <Link href={`/programs/${id}`} style={backLink}>← Back</Link>
       </div>
       <h1 style={title}>Edit focus</h1>
       <FocusForm

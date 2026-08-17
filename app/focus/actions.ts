@@ -25,6 +25,7 @@ function revalidateFocusSurfaces() {
   revalidatePath("/"); // dashboard: Focus band + WaG aims
   revalidatePath("/plan");
   revalidatePath("/focus");
+  revalidatePath("/programs");
 }
 
 // ── Focus CRUD ───────────────────────────────────────────────────────────
