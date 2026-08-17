@@ -567,6 +567,10 @@ model ClimbProblem {
   gradeSystem ClimbGradeSystem
   notes       String?
   locationId  String?
+  // Named target you're deliberately chasing. Whether it's *done* is derived
+  // from attempts (any clean send), so this flag only ever means "I want this"
+  // — nothing to keep in sync when you finally tick it.
+  onTickList  Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -576,6 +580,7 @@ model ClimbProblem {
 
   @@index([locationId, grade])
   @@index([name])
+  @@index([onTickList])
 }
 
 // Photos and external links attached to a ClimbLocation, ClimbArea, or

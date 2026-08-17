@@ -34,7 +34,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(curl -s \"http://localhost:3000/api/routines/cmmecqrm00011bvdgr2dg25k0/log-data\")",
       "Bash(awk '/^model \\(SessionExercise|SetEntry|Exercise|GuidedStep|GuidedStepLog|RoutineExercise\\) \\\\{/{p=1} p{print} /^}/{p=0}' prisma/schema.prisma)",
-      "Bash(grep -vE '^\\\\s*\\(//|@@|$\\)')"
+      "Bash(grep -vE '^\\\\s*\\(//|@@|$\\)')",
+      "Bash(npx prisma *)"
     ]
   }
 }
