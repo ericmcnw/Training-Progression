@@ -9,6 +9,7 @@ import {
   loadDraftFromStorage,
   saveDraftToStorage,
 } from "@/lib/log-draft";
+import { formatPrescription, prescriptionHints, type PrescriptionShape } from "@/lib/prescription";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
@@ -42,6 +43,7 @@ export type WorkoutBlock = {
   rows: SetRow[];
   lastRows?: SetRow[];
   lastDate?: string;
+  prescription?: PrescriptionShape;
 };
 
 type SavePayload = {
@@ -92,25 +94,33 @@ function rowIsLoggable(block: WorkoutBlock, row: SetRow) {
   return hasCellValue(block.unit === "REPS" ? row.reps : row.seconds);
 }
 
-// Reps/time hint: match this set to last session's same-numbered set, else the
-// set directly above in this session (carry-forward for sets added beyond what
-// last time had). Anchored to the last log — it does NOT chase this session's
-// edits, so reps/time stay a memory of last time.
+// Reps/time hint: the prescribed target wins, because that's what you're meant
+// to hit today. Without one, fall back to last session's same-numbered set, then
+// to the set directly above in this session (carry-forward for sets added beyond
+// what last time had). The history fallback does NOT chase this session's edits,
+// so reps/time stay a memory of last time.
 function metricSuggestionFor(block: WorkoutBlock, rowIdx: number): SetRow | undefined {
   const setNumber = block.rows[rowIdx]?.setNumber;
+  const target = prescriptionHints(block.prescription);
+  const targetMetric = block.unit === "REPS" ? target?.reps : target?.seconds;
+  if (hasCellValue(targetMetric)) {
+    return { setNumber: setNumber ?? rowIdx + 1, reps: target?.reps, seconds: target?.seconds };
+  }
   const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
   if (fromLast && (hasCellValue(fromLast.reps) || hasCellValue(fromLast.seconds))) return fromLast;
   return rowIdx > 0 ? block.rows[rowIdx - 1] : undefined;
 }
 
-// Weight hint: prefer the nearest weight entered *this session* above this row,
-// so changing a set's weight carries forward to the remaining sets. Only when
-// nothing's been entered above does it fall back to last session's matching set.
+// Weight hint: the nearest weight entered *this session* above this row still
+// wins over the target — dropping set 1 to 75 should carry to sets 2-3 rather
+// than keep insisting on the prescribed 85. Below that, target beats history.
 function weightSuggestionFor(block: WorkoutBlock, rowIdx: number): string | undefined {
   for (let i = rowIdx - 1; i >= 0; i -= 1) {
     const w = block.rows[i]?.weightLb;
     if (hasCellValue(w)) return w ?? undefined;
   }
+  const target = prescriptionHints(block.prescription);
+  if (hasCellValue(target?.weightLb)) return target?.weightLb;
   const setNumber = block.rows[rowIdx]?.setNumber;
   const fromLast = (block.lastRows ?? []).find((r) => r.setNumber === setNumber);
   return hasCellValue(fromLast?.weightLb) ? fromLast?.weightLb : undefined;
@@ -229,8 +239,15 @@ export default function WorkoutExerciseEditor({
     draftStartedAtRef.current = draft.startedAt;
     const restored = draft.blocks.map((draftBlock) => {
       const initial = initialBlocks.find((b) => b.exerciseId === draftBlock.exerciseId);
-      return initial?.lastRows
-        ? { ...draftBlock, lastRows: initial.lastRows, lastDate: initial.lastDate }
+      // History and targets are server-owned — always take the fresh copy, or a
+      // restored draft shows a stale (or missing) target.
+      return initial
+        ? {
+            ...draftBlock,
+            lastRows: initial.lastRows,
+            lastDate: initial.lastDate,
+            prescription: initial.prescription,
+          }
         : draftBlock;
     });
     setBlocks(restored);
@@ -703,6 +720,8 @@ export default function WorkoutExerciseEditor({
           const isExpanded = expandedId === block.exerciseId;
           const isDragging = draggingId === block.exerciseId;
           const doneSets = block.rows.filter((r) => r.done).length;
+          const targetLine = formatPrescription(block.prescription, block.unit);
+          const cue = block.prescription?.cue?.trim();
 
           return (
             <div
@@ -742,6 +761,11 @@ export default function WorkoutExerciseEditor({
               >
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={{ fontWeight: 900, fontSize: 15 }}>{block.name}</div>
+                  {targetLine && (
+                    <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.85, marginTop: 3 }}>
+                      {targetLine}
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                     {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
                     {doneSets > 0
@@ -787,6 +811,24 @@ export default function WorkoutExerciseEditor({
               {/* Expanded content */}
               {isExpanded && (
                 <div style={{ padding: "4px 14px 14px" }}>
+
+                  {cue && (
+                    <details style={{ marginBottom: 10 }}>
+                      <summary
+                        data-collapsible-summary
+                        style={{
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          opacity: 0.75,
+                          minHeight: 44,
+                        }}
+                      >
+                        Cue
+                      </summary>
+                      <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.45, paddingBottom: 4 }}>{cue}</div>
+                    </details>
+                  )}
 
                   {/* Column headers */}
                   <div

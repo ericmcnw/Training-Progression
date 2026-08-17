@@ -3,10 +3,13 @@
 import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/lib/exercise-library";
 import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
+import type { LoadUnit } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 type ExerciseUnit = "REPS" | "TIME";
+
+const LOAD_UNITS: LoadUnit[] = ["LB", "KG", "PCT_1RM", "RPE", "STACK", "BODYWEIGHT"];
 
 function baseExerciseName(name: string) {
   return name.replace(/\s+\((Reps|Time)\)$/i, "").trim();
@@ -272,6 +275,99 @@ export async function updateDefaultSetsQuiet(routineId: string, routineExerciseI
     data: { defaultSets },
   });
   revalidatePath(`/routines/${routineId}/template`);
+}
+
+// Empty string must not coerce to 0 — restSec allows 0, so Number("") === 0
+// would silently store a real "0s rest" target for a field left blank.
+function isBlank(value: unknown) {
+  return value == null || (typeof value === "string" && value.trim() === "");
+}
+
+function clampInt(value: unknown, min: number, max: number): number | null {
+  if (isBlank(value)) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < min || rounded > max) return null;
+  return rounded;
+}
+
+function clampFloat(value: unknown, min: number, max: number): number | null {
+  if (isBlank(value)) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (n < min || n > max) return null;
+  return n;
+}
+
+function clampText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
+export async function updatePrescriptionQuiet(
+  routineId: string,
+  routineExerciseId: string,
+  input: {
+    sets?: unknown;
+    repsMin?: unknown;
+    repsMax?: unknown;
+    seconds?: unknown;
+    load?: unknown;
+    loadUnit?: unknown;
+    tempo?: unknown;
+    restSec?: unknown;
+    cue?: unknown;
+  }
+) {
+  const owner = await prisma.routineExercise.findUnique({
+    where: { id: routineExerciseId },
+    select: { routineId: true },
+  });
+  if (!owner || owner.routineId !== routineId) return;
+
+  let repsMin = clampInt(input.repsMin, 1, 999);
+  let repsMax = clampInt(input.repsMax, 1, 999);
+  if (repsMin != null && repsMax != null && repsMin > repsMax) {
+    [repsMin, repsMax] = [repsMax, repsMin];
+  }
+
+  const data = {
+    sets: clampInt(input.sets, 1, 20),
+    repsMin,
+    repsMax,
+    seconds: clampInt(input.seconds, 1, 86_400),
+    load: clampFloat(input.load, 0, 10_000),
+    loadUnit: LOAD_UNITS.includes(input.loadUnit as LoadUnit) ? (input.loadUnit as LoadUnit) : "LB",
+    tempo: clampText(input.tempo, 40),
+    restSec: clampInt(input.restSec, 0, 3_600),
+    cue: clampText(input.cue, 500),
+  };
+
+  const isEmpty =
+    data.sets == null &&
+    data.repsMin == null &&
+    data.repsMax == null &&
+    data.seconds == null &&
+    data.load == null &&
+    data.tempo == null &&
+    data.restSec == null &&
+    data.cue == null;
+
+  if (isEmpty) {
+    await prisma.prescription.deleteMany({ where: { routineExerciseId } });
+  } else {
+    await prisma.prescription.upsert({
+      where: { routineExerciseId },
+      create: { routineExerciseId, ...data },
+      update: data,
+    });
+  }
+
+  revalidatePath(`/routines/${routineId}/template`);
+  revalidatePath(`/routines/${routineId}/log`);
 }
 
 export async function moveRoutineExercise(formData: FormData) {

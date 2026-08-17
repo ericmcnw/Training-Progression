@@ -13,6 +13,7 @@ import { moveRoutineExercise, removeRoutineExercise } from "../template/actions"
 import ExercisePicker from "../template/ExercisePicker";
 import TemplateMetricControl from "../template/TemplateMetricControl";
 import DefaultSetsControl from "../template/DefaultSetsControl";
+import PrescriptionControl from "../template/PrescriptionControl";
 import RoutineInjuryWarningBanner from "@/app/components/injuries/RoutineInjuryWarningBanner";
 import { getRoutineInjuryLoadWarning } from "@/lib/injury-warnings";
 
@@ -42,7 +43,7 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
   const attached = await prisma.routineExercise.findMany({
     where: { routineId },
     orderBy: [{ sortOrder: "asc" }],
-    include: { exercise: true },
+    include: { exercise: true, prescription: true },
   });
 
   const allExercises = await (async () => {
@@ -161,6 +162,15 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
                   <input type="hidden" name="routineExerciseId" value={re.id} />
                   <button type="submit" style={removeBtn} title="Remove exercise">✕</button>
                 </form>
+              </div>
+
+              <div style={{ flexBasis: "100%", borderTop: "1px solid rgba(128,128,128,0.2)", paddingTop: 4 }}>
+                <PrescriptionControl
+                  routineId={routineId}
+                  routineExerciseId={re.id}
+                  unit={re.exercise.unit}
+                  initial={re.prescription}
+                />
               </div>
             </div>
           ))}
