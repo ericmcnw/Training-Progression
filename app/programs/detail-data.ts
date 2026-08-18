@@ -174,6 +174,15 @@ export async function getProgramDetailData(id: string) {
       : Promise.resolve([]),
   ]);
   const goalInsightById = new Map(allGoalInsights.map((insight) => [insight.goal.id, insight]));
+  const frequencyGoalInsightBySourceId = new Map(
+    allGoalInsights.flatMap((insight) => {
+      if (insight.goal.id.startsWith("group-frequency:")) {
+        return [[insight.goal.id.slice("group-frequency:".length), insight] as const];
+      }
+      if (insight.goal.id.startsWith("fg_")) return [[insight.goal.id, insight] as const];
+      return [];
+    })
+  );
 
   const explicitRoutineIds = program.routineLinks.map((link) => link.routine.id);
   const fallbackRoutineIds = milestones
@@ -267,9 +276,7 @@ export async function getProgramDetailData(id: string) {
     })),
     frequencyGoalLinks: program.frequencyGoalLinks.map((link) => ({
       ...link,
-      progress: compactGoalInsight(
-        goalInsightById.get(`group-frequency:${link.frequencyGoal.id}`) ?? null
-      ),
+      progress: compactGoalInsight(frequencyGoalInsightBySourceId.get(link.frequencyGoal.id) ?? null),
     })),
     routines: [
       ...program.routineLinks.map((link) => ({ ...link.routine, role: link.role, source: "LINK" as const })),
