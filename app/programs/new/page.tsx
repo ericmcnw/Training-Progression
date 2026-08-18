@@ -3,12 +3,12 @@
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import FocusForm from "@/app/focus/FocusForm";
+import ProgramCreator from "./ProgramCreator";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewProgramPage() {
-  const [routines, exercises] = await Promise.all([
+  const [routines, exercises, injuries] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -16,6 +16,11 @@ export default async function NewProgramPage() {
     }),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.activeInjury.findMany({
+      where: { status: { in: ["ACTIVE", "FLARED"] } },
+      orderBy: { startedAt: "desc" },
       select: { id: true, name: true },
     }),
   ]);
@@ -30,11 +35,7 @@ export default async function NewProgramPage() {
         An objective with a deadline. Add milestones underneath it for the path —
         each one can point at a routine, an exercise, or a capacity you&apos;re building.
       </p>
-      <FocusForm
-        initial={{ name: "", description: "", icon: "", color: "#84cc78", status: "ACTIVE", targetDate: "", targetKind: "SOFT", season: "", phase: "", handoffNote: "", milestones: [] }}
-        routines={routines}
-        exercises={exercises}
-      />
+      <ProgramCreator routines={routines} exercises={exercises} injuries={injuries} />
       <style>{`
         .focusForm { --edge: clamp(14px, 4vw, 28px); }
         @media (max-width: 720px) { .focusForm { --edge: 14px; } }

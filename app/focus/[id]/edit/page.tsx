@@ -17,10 +17,10 @@ export default async function EditFocusPage({
 }) {
   const { id } = await params;
 
-  const [focus, milestones, routines, exercises] = await Promise.all([
+  const [focus, milestones, routines, exercises, injuries] = await Promise.all([
     prisma.focus.findUnique({
       where: { id },
-      select: { id: true, name: true, description: true, icon: true, color: true, status: true, targetDate: true, targetKind: true, season: true, phase: true, handoffNote: true },
+      select: { id: true, name: true, description: true, icon: true, color: true, status: true, targetDate: true, targetKind: true, season: true, phase: true, handoffNote: true, pursuitKey: true, linkedInjuryId: true },
     }),
     prisma.progressionMilestone.findMany({
       where: { ownerKind: "FOCUS", ownerId: id },
@@ -33,6 +33,7 @@ export default async function EditFocusPage({
     }),
     prisma.routine.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.exercise.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.activeInjury.findMany({ where: { status: { in: ["ACTIVE", "FLARED"] } }, orderBy: { startedAt: "desc" }, select: { id: true, name: true } }),
   ]);
   if (!focus) notFound();
 
@@ -41,7 +42,7 @@ export default async function EditFocusPage({
       <div style={topBar}>
         <Link href={`/programs/${id}`} style={backLink}>← Back</Link>
       </div>
-      <h1 style={title}>Edit focus</h1>
+      <h1 style={title}>Edit program</h1>
       <FocusForm
         initial={{
           id: focus.id,
@@ -55,6 +56,8 @@ export default async function EditFocusPage({
           season: focus.season ?? "",
           phase: (focus.phase ?? "") as "" | "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN",
           handoffNote: focus.handoffNote ?? "",
+          pursuitKey: focus.pursuitKey ?? "",
+          linkedInjuryId: focus.linkedInjuryId ?? "",
           milestones: milestones.map((m) => ({
             id: m.id,
             scopeKind: m.scopeKind,
@@ -72,6 +75,7 @@ export default async function EditFocusPage({
         }}
         routines={routines}
         exercises={exercises}
+        injuries={injuries}
       />
       <style>{`
         .focusForm { --edge: clamp(14px, 4vw, 28px); }

@@ -85,7 +85,7 @@ export default function ProfileHeader({
               return (
                 <Link
                   key={d.domain}
-                  href={`/profile?view=history&domain=${d.domain}`}
+                  href={`/profile/history?domain=${d.domain}`}
                   style={{ ...legendItemStyle, textDecoration: "none", color: "inherit" }}
                 >
                   <span

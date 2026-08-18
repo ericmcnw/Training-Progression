@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import AppNavigation, { MobileBottomNavigation, MobileProfileButton } from "./AppNavigation";
+import AppNavigation, { MobileBottomNavigation } from "./AppNavigation";
 import ActiveSessionTray from "./components/ActiveSessionTray";
 import LogDrawer from "./components/LogDrawer";
 import FormDrawer from "./components/FormDrawer";
@@ -43,7 +43,6 @@ export default function RootLayout({
               </Link>
 
               <AppNavigation />
-              <MobileProfileButton />
             </div>
           </header>
 

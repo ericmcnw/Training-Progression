@@ -9,8 +9,6 @@ import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
 import YearTab from "./year/YearTab";
 import GoalsTab from "./goals/GoalsTab";
-import RotationTab from "./cycles/RotationTab";
-import PackingListsTab from "./PackingListsTab";
 import MarkTimeAwayButton from "./month/MarkTimeAwayButton";
 import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { todayAppYmd } from "@/lib/dates";
@@ -20,11 +18,9 @@ export const dynamic = "force-dynamic";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const JUMP_LINKS = [
-  { href: "#year", label: "Year" },
+  { href: "#programs", label: "Programs" },
   { href: "#goals", label: "Goals" },
-  { href: "#schedule", label: "Schedule" },
-  { href: "#rotation", label: "Rotation" },
-  { href: "#packing", label: "Packing" },
+  { href: "#schedule", label: "Calendar" },
 ];
 
 export default async function PlanPage(props: {
@@ -38,7 +34,7 @@ export default async function PlanPage(props: {
         <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
           <h1 className="mobilePageTitle" style={h1Style}>Plan</h1>
           <p className="mobilePageSubtitle" style={subStyle}>
-            Your goals, schedule, and training rotation — all in one place.
+            Programs set direction; goals and the calendar make the work concrete.
           </p>
         </div>
         <nav aria-label="Jump to section" style={jumpNavStyle}>
@@ -51,9 +47,10 @@ export default async function PlanPage(props: {
       </header>
 
       <PlanSection
-        id="year"
-        title="Year"
-        subtitle="Your programs across the seasons. Tap a month to zoom in."
+        id="programs"
+        title="Programs"
+        subtitle="Your active programs across the year. Open one for its plan and progress."
+        action={<Link href="/programs" style={ctaStyle}>Open programs</Link>}
       >
         <YearTab />
       </PlanSection>
@@ -69,7 +66,7 @@ export default async function PlanPage(props: {
 
       <PlanSection
         id="schedule"
-        title="Schedule"
+        title="Calendar"
         subtitle="What's planned and logged this month. Tap any day for detail."
         action={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -81,22 +78,6 @@ export default async function PlanPage(props: {
         <MonthTab searchParams={searchParams} />
       </PlanSection>
 
-      <PlanSection
-        id="rotation"
-        title="Rotation"
-        subtitle="Your training cycle — what you did last and what's up next."
-      >
-        <RotationTab />
-      </PlanSection>
-
-      <PlanSection
-        id="packing"
-        title="Packing lists"
-        subtitle="Reusable kits — pack against one before a trip, apply it to a log."
-        action={<Link href="/gear/lists" style={ctaStyle}>Open lists →</Link>}
-      >
-        <PackingListsTab />
-      </PlanSection>
     </div>
   );
 }

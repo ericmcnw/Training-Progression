@@ -212,6 +212,7 @@ model ActivityType {
   scheduleEntries       ScheduleEntry[]
   manualScheduleEntries ScheduleManualEntry[]
   userPreferences       UserActivityTypePreference[]
+  programBlockItems     ProgramBlockItem[]
 
   @@index([familyId, sortOrder])
   @@index([slug])
@@ -334,6 +335,8 @@ model Routine {
   metadataGroups        RoutineMetadataGroup[]
   tagAssignments        RoutineTagAssignment[]
   frequencyGoalRoutines FrequencyGoalRoutine[]
+  programLinks          ProgramRoutine[]
+  programBlockItems     ProgramBlockItem[]
   activityType          ActivityType? @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
@@ -577,6 +580,7 @@ model ClimbProblem {
   location ClimbLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   attempts ClimbAttempt[]
   media    ClimbMedia[]
+  targetListItems ProgramTargetListItem[]
 
   @@index([locationId, grade])
   @@index([name])
@@ -1318,6 +1322,7 @@ model RoutineExercise {
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
   prescription Prescription?
+  blockPrescriptions ProgramBlockPrescription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1409,6 +1414,9 @@ model Goal {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  programLinks ProgramGoal[]
+  stageGates   ProgramStageGate[]
+
   @@index([isActive, goalType])
   @@index([targetType, targetId])
   @@index([timeframe, startDate, endDate])
@@ -1462,6 +1470,7 @@ model FrequencyGoal {
   sessionAim       Int?
 
   routines FrequencyGoalRoutine[]
+  programLinks ProgramFrequencyGoal[]
 
   @@index([isActive])
 }
@@ -1626,6 +1635,61 @@ enum MilestoneGateKind {
   FREQUENCY
 }
 
+enum ProgramRelationRole {
+  PRIMARY
+  SUPPORTING
+}
+
+enum ProgramStageStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  SKIPPED
+}
+
+enum ProgramGateMode {
+  ALL
+  ANY
+}
+
+enum ProgramStageGateKind {
+  MANUAL
+  DATE
+  MILESTONE
+  GOAL
+  FREE_TEXT
+}
+
+enum ProgramBlockStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProgramScheduleMode {
+  CALENDAR
+  FLEXIBLE
+  ROTATION
+}
+
+enum ProgramBlockItemKind {
+  ROUTINE
+  ACTIVITY_TYPE
+  SPORT
+}
+
+enum ProgramTargetListKind {
+  CHECKLIST
+  PROGRESSION
+}
+
+enum ProgramTargetItemStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
 model Focus {
   id             String        @id @default(cuid())
   name           String
@@ -1649,12 +1713,22 @@ model Focus {
   // Optional link to an ActiveInjury the focus "nods" to (rehab focuses).
   linkedInjuryId String?
   linkedInjury   ActiveInjury? @relation(fields: [linkedInjuryId], references: [id], onDelete: SetNull)
+  // Ownership seam for new Program data. Existing single-user rows backfill
+  // to "default"; authenticated profiles use getAppSession().profileKey.
+  profileKey     String        @default("default")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   contributors FocusContributor[]
+  goalLinks          ProgramGoal[]
+  frequencyGoalLinks ProgramFrequencyGoal[]
+  routineLinks       ProgramRoutine[]
+  stages             ProgramStage[]
+  blocks             ProgramBlock[]
+  targetLists        ProgramTargetList[]
 
   @@index([status, sortOrder])
+  @@index([profileKey, status, sortOrder])
 }
 
 model FocusContributor {
@@ -1706,6 +1780,8 @@ model ProgressionMilestone {
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
+  stageGates ProgramStageGate[]
+
   @@index([ownerKind, ownerId, sortOrder])
   @@index([scopeKind, scopeRef, status])
 }
@@ -1714,6 +1790,229 @@ model ProgressionMilestone {
 // Conversation persistence so coach chats survive refresh. One thread = one
 // conversation; summary holds a rolling compression of messages older than
 // the live window (summarizedCount = how many messages the summary covers).
+
+// Program is the user-facing name for Focus. These tables add structure around
+// the existing Focus rows without copying or rewriting their milestones.
+model ProgramGoal {
+  id        String              @id @default(cuid())
+  programId String
+  goalId    String
+  role      ProgramRelationRole @default(PRIMARY)
+  sortOrder Int                 @default(0)
+  createdAt DateTime            @default(now())
+
+  program Focus @relation(fields: [programId], references: [id], onDelete: Cascade)
+  goal    Goal  @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, goalId])
+  @@index([programId, sortOrder])
+  @@index([goalId])
+}
+
+model ProgramFrequencyGoal {
+  id              String              @id @default(cuid())
+  programId       String
+  frequencyGoalId String
+  role            ProgramRelationRole @default(SUPPORTING)
+  sortOrder       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+
+  program       Focus         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  frequencyGoal FrequencyGoal @relation(fields: [frequencyGoalId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, frequencyGoalId])
+  @@index([programId, sortOrder])
+  @@index([frequencyGoalId])
+}
+
+model ProgramRoutine {
+  id        String              @id @default(cuid())
+  programId String
+  routineId String
+  role      ProgramRelationRole @default(SUPPORTING)
+  sortOrder Int                 @default(0)
+  createdAt DateTime            @default(now())
+
+  program Focus   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, routineId])
+  @@index([programId, sortOrder])
+  @@index([routineId])
+}
+
+model ProgramStage {
+  id           String             @id @default(cuid())
+  programId    String
+  name         String
+  description  String?
+  status       ProgramStageStatus @default(PLANNED)
+  sortOrder    Int                @default(0)
+  gateMode     ProgramGateMode    @default(ALL)
+  notBeforeYmd String?
+  targetEndYmd String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  program Focus              @relation(fields: [programId], references: [id], onDelete: Cascade)
+  gates   ProgramStageGate[]
+  blocks  ProgramBlock[]
+
+  @@index([programId, sortOrder])
+  @@index([programId, status])
+}
+
+model ProgramStageGate {
+  id          String               @id @default(cuid())
+  stageId     String
+  kind        ProgramStageGateKind
+  label       String
+  sortOrder   Int                  @default(0)
+  milestoneId String?
+  goalId      String?
+  dateYmd     String?
+  createdAt   DateTime             @default(now())
+
+  stage     ProgramStage          @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  milestone ProgressionMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  goal      Goal?                 @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  @@index([stageId, sortOrder])
+  @@index([milestoneId])
+  @@index([goalId])
+}
+
+model ProgramBlock {
+  id           String              @id @default(cuid())
+  programId    String
+  stageId      String?
+  name         String
+  description  String?
+  status       ProgramBlockStatus  @default(DRAFT)
+  scheduleMode ProgramScheduleMode @default(FLEXIBLE)
+  lengthWeeks  Int?
+  startYmd     String?
+  endYmd       String?
+  sortOrder    Int                 @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  program Focus         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  stage   ProgramStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  items   ProgramBlockItem[]
+
+  @@index([programId, sortOrder])
+  @@index([stageId])
+  @@index([programId, status])
+}
+
+model ProgramBlockItem {
+  id             String               @id @default(cuid())
+  blockId        String
+  kind           ProgramBlockItemKind
+  routineId      String?
+  activityTypeId String?
+  sportSlug      String?
+  label          String
+  minPerWeek     Float?
+  targetPerWeek  Float?
+  maxPerWeek     Float?
+  weekdayMask    Int?
+  priority       Int                  @default(0)
+  notes          String?
+  sortOrder      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  block         ProgramBlock               @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  routine       Routine?                   @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  activityType  ActivityType?              @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
+  prescriptions ProgramBlockPrescription[]
+
+  @@index([blockId, sortOrder])
+  @@index([routineId])
+  @@index([activityTypeId])
+}
+
+model ProgramBlockPrescription {
+  id                String   @id @default(cuid())
+  blockItemId       String
+  routineExerciseId String
+  // 0 applies to every week; a positive number overrides that week only.
+  weekNumber        Int      @default(0)
+  sets              Int?
+  repsMin           Int?
+  repsMax           Int?
+  seconds           Int?
+  loadValue         Float?
+  loadUnit           LoadUnit?
+  tempo              String?
+  restSec            Int?
+  cue                String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  blockItem      ProgramBlockItem @relation(fields: [blockItemId], references: [id], onDelete: Cascade)
+  routineExercise RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([blockItemId, routineExerciseId, weekNumber])
+  @@index([routineExerciseId])
+}
+
+model ProgramTargetList {
+  id          String                @id @default(cuid())
+  programId   String
+  name        String
+  description String?
+  kind        ProgramTargetListKind @default(CHECKLIST)
+  sportSlug   String?
+  sortOrder   Int                   @default(0)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  program Focus                   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  items   ProgramTargetListItem[]
+
+  @@index([programId, sortOrder])
+}
+
+model ProgramTargetListItem {
+  id             String                  @id @default(cuid())
+  listId         String
+  label          String
+  description    String?
+  status         ProgramTargetItemStatus @default(ACTIVE)
+  climbProblemId String?
+  refKind        String?
+  refId          String?
+  sortOrder      Int                     @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  list         ProgramTargetList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  climbProblem ClimbProblem?     @relation(fields: [climbProblemId], references: [id], onDelete: SetNull)
+
+  @@index([listId, sortOrder])
+  @@index([climbProblemId])
+  @@index([refKind, refId])
+}
+
+model BodyMeasurement {
+  id         String   @id @default(cuid())
+  profileKey String   @default("default")
+  measuredAt DateTime
+  weightKg   Float?
+  bodyFatPct Float?
+  waistCm    Float?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([profileKey, measuredAt])
+}
 
 model CoachThread {
   id              String         @id @default(cuid())

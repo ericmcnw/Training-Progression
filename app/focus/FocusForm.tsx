@@ -23,10 +23,13 @@ export type FocusFormInitial = {
   season: string;
   phase: "" | "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN";
   handoffNote: string;
+  pursuitKey: string;
+  linkedInjuryId: string;
   milestones: MilestoneFormRow[];
 };
 
 type PickItem = { id: string; name: string };
+type InjuryPick = { id: string; name: string };
 
 const COLOR_PRESETS = [
   { label: "Green", value: "#84cc78" },
@@ -57,10 +60,12 @@ export default function FocusForm({
   initial,
   routines,
   exercises,
+  injuries = [],
 }: {
   initial: FocusFormInitial;
   routines: PickItem[];
   exercises: PickItem[];
+  injuries?: InjuryPick[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -76,6 +81,8 @@ export default function FocusForm({
   const [season, setSeason] = useState(initial.season);
   const [phase, setPhase] = useState<FocusFormInitial["phase"]>(initial.phase);
   const [handoffNote, setHandoffNote] = useState(initial.handoffNote);
+  const [pursuitKey, setPursuitKey] = useState(initial.pursuitKey);
+  const [linkedInjuryId, setLinkedInjuryId] = useState(initial.linkedInjuryId);
   const [rows, setRows] = useState<Row[]>(
     initial.milestones.length
       ? initial.milestones.map((m, i) => ({ ...m, key: m.id ?? `init-${i}` }))
@@ -104,7 +111,7 @@ export default function FocusForm({
   function submit() {
     setError(null);
     if (!name.trim()) {
-      setError("Give your focus a name.");
+      setError("Give your program a name.");
       return;
     }
     startTransition(async () => {
@@ -121,6 +128,8 @@ export default function FocusForm({
           season,
           phase,
           handoffNote,
+          pursuitKey,
+          linkedInjuryId,
           milestones: rows.map((r) => ({
             id: r.id,
             scopeKind: r.scopeKind,
@@ -146,7 +155,7 @@ export default function FocusForm({
 
   function onDelete() {
     if (!initial.id) return;
-    if (!window.confirm("Delete this focus and its roadmap? This can't be undone.")) return;
+    if (!window.confirm("Delete this program and its roadmap? Training logs will be kept.")) return;
     startTransition(async () => {
       try {
         await deleteFocus(initial.id!);
@@ -160,7 +169,7 @@ export default function FocusForm({
 
   return (
     <FormStack>
-      <FormSection title="Focus">
+      <FormSection title="Program">
         <Field label="Name">
           <input
             style={inputStyle}
@@ -179,6 +188,20 @@ export default function FocusForm({
             placeholder="Optional — target date, the goal, key constraints"
           />
         </Field>
+
+        <div style={twoCol}>
+          <Field label="Sport or pursuit" hint="Optional key used for sport-specific progress">
+            <input style={inputStyle} value={pursuitKey} onChange={(e) => setPursuitKey(e.target.value)} placeholder="climbing, snowboarding, strength" />
+          </Field>
+          {injuries.length ? (
+            <Field label="Related injury" hint="Optional">
+              <select style={inputStyle} value={linkedInjuryId} onChange={(e) => setLinkedInjuryId(e.target.value)}>
+                <option value="">None</option>
+                {injuries.map((injury) => <option key={injury.id} value={injury.id}>{injury.name}</option>)}
+              </select>
+            </Field>
+          ) : <div />}
+        </div>
 
         <div style={twoCol}>
           <Field label="Icon" hint="An emoji">

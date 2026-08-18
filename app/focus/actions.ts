@@ -11,6 +11,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/auth";
 import { todayAppYmd, getAppDayRange } from "@/lib/dates";
 import type {
   Prisma,
@@ -41,6 +42,7 @@ export type FocusInput = {
 };
 
 export async function createFocus(input: FocusInput): Promise<{ id: string }> {
+  const session = await getAppSession();
   const name = input.name.trim();
   if (!name) throw new Error("Focus needs a name.");
 
@@ -57,6 +59,7 @@ export async function createFocus(input: FocusInput): Promise<{ id: string }> {
       icon: input.icon?.trim() || null,
       pursuitKey: input.pursuitKey?.trim() || null,
       linkedInjuryId: input.linkedInjuryId || null,
+      profileKey: session.profileKey,
       sortOrder,
     },
     select: { id: true },
@@ -327,6 +330,7 @@ export async function saveFocus(input: {
   handoffNote?: string | null;
   milestones: MilestoneFormRow[];
 }): Promise<{ id: string }> {
+  const session = await getAppSession();
   const name = input.name.trim();
   if (!name) throw new Error("Focus needs a name.");
 
@@ -349,8 +353,10 @@ export async function saveFocus(input: {
   // Create or update the focus first so we have its id for milestone ownership.
   let focusId: string;
   if (input.id) {
+    const existing = await prisma.focus.findFirst({ where: { id: input.id, profileKey: session.profileKey }, select: { id: true } });
+    if (!existing) throw new Error("Program not found.");
     await prisma.focus.update({
-      where: { id: input.id },
+      where: { id: existing.id },
       data: { ...focusData, status: input.status },
     });
     focusId = input.id;
@@ -359,6 +365,7 @@ export async function saveFocus(input: {
     const created = await prisma.focus.create({
       data: {
         ...focusData,
+        profileKey: session.profileKey,
         status: input.status ?? "ACTIVE",
         sortOrder: (min._min.sortOrder ?? 0) - 1,
       },

@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
+import { getAppSession } from "@/lib/auth";
 
 const ACTIVITY_WINDOW_DAYS = 14;
 const MAX_AIMS = 3;
@@ -62,7 +63,9 @@ const STATUS_ORDER: Record<string, number> = {
 };
 
 export async function getProgramCards(): Promise<ProgramCard[]> {
+  const session = await getAppSession();
   const focuses = await prisma.focus.findMany({
+    where: { profileKey: session.profileKey },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true, name: true, description: true, icon: true, color: true,
