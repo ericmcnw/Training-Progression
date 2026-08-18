@@ -3,25 +3,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
-
-// Display label for a focus phase. Isomorphic — safe to import into client
-// components (no DB, no server-only deps).
-export function phaseLabel(phase: string | null): string | null {
-  switch (phase) {
-    case "BUILD": return "Build";
-    case "PEAK": return "In season";
-    case "OFFSEASON": return "Offseason";
-    case "MAINTAIN": return "Maintain";
-    default: return null;
-  }
-}
-
-// "Summer '26 · Build" from season + phase (either may be absent).
-export function seasonPhaseLabel(season: string | null, phase: string | null): string | null {
-  const p = phaseLabel(phase);
-  if (season && p) return `${season} · ${p}`;
-  return season || p || null;
-}
+import { getAppSession } from "@/lib/auth";
+import type { FocusBandItem } from "@/app/focus/shared";
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
 import { evaluatePainGate, evaluateFrequencyGate, type GateReading } from "@/lib/focus-gates";
 
@@ -170,8 +153,9 @@ export type FocusDetail = {
 };
 
 export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
-  const focus = await prisma.focus.findUnique({
-    where: { id },
+  const session = await getAppSession();
+  const focus = await prisma.focus.findFirst({
+    where: { id, profileKey: session.profileKey },
     select: {
       id: true, name: true, description: true, icon: true, color: true,
       status: true, pursuitKey: true, targetDate: true, targetKind: true,
@@ -388,25 +372,10 @@ export async function getFocusDetail(id: string): Promise<FocusDetail | null> {
   };
 }
 
-export type FocusBandItem = {
-  id: string;
-  name: string;
-  icon: string | null;
-  color: string | null;
-  status: string;
-  season: string | null;
-  phase: string | null;
-  // Milestone progress across the whole roadmap (all tracks).
-  milestonesDone: number;
-  milestonesTotal: number;
-  // The current aim per track — the first ACTIVE milestone in each scope,
-  // deduped, capped for display. "What am I working on right now."
-  currentAims: string[];
-};
-
 export async function getFocusBandData(): Promise<FocusBandItem[]> {
+  const session = await getAppSession();
   const focuses = await prisma.focus.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", profileKey: session.profileKey },
     orderBy: { sortOrder: "asc" },
     select: { id: true, name: true, icon: true, color: true, status: true, season: true, phase: true },
   });

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFocusDetail, getInjuryPanelData, seasonPhaseLabel } from "@/app/focus/data";
+import { getFocusDetail, getInjuryPanelData } from "@/app/focus/data";
+import { seasonPhaseLabel } from "@/app/focus/shared";
 import { getProgramDetailData } from "@/app/programs/detail-data";
 import { ProgramOverview, ProgramPlan, ProgramProgress } from "@/app/programs/[id]/ProgramDetailViews";
 

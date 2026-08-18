@@ -16,7 +16,6 @@ import {
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
 import { getLogDisplayName } from "@/lib/routine-display";
-import DeleteLogButton from "./DeleteLogButton";
 import WeeklySummary from "./WeeklySummary";
 import ProfileHeader from "@/app/profile/ProfileHeader";
 import ProfileMilestones from "@/app/profile/ProfileMilestones";
@@ -163,7 +162,7 @@ export default async function ManualLogPageContent({
       notes: log.notes ?? null,
       searchText: [name, log.notes ?? "", ...exerciseNames].join(" ").toLowerCase(),
       editHref: `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(
-        filterDomain ? `/profile?view=history&domain=${filterDomain}` : "/profile?view=history",
+        filterDomain ? `/profile/history?domain=${filterDomain}` : "/profile/history",
       )}`,
     };
   });
@@ -242,7 +241,7 @@ export default async function ManualLogPageContent({
           <ProfileHeader stats={profileStats} identity={identity ?? undefined} />
 
           <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
-            <Link href="/profile?view=history" style={primaryLinkBtn}>
+            <Link href="/profile/history" style={primaryLinkBtn}>
               History
             </Link>
             <Link href="/reports/week" style={linkBtn}>Reports</Link>
@@ -298,7 +297,7 @@ export default async function ManualLogPageContent({
             {enrichedLogs.slice(0, 5).map((log) => (
               <ActivityCard key={log.id} log={log} />
             ))}
-            <Link href="/profile?view=history" style={linkBtn}>
+            <Link href="/profile/history" style={linkBtn}>
               Open Full Log History
             </Link>
           </div>
@@ -583,17 +582,6 @@ const activityCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.24)",
   borderRadius: 16,
   padding: 14,
-  background: "rgba(128,128,128,0.06)",
-};
-
-const historyCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.28)",
-  borderRadius: 16,
-  padding: 14,
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 8,
-  flexWrap: "wrap",
   background: "rgba(128,128,128,0.06)",
 };
 

@@ -9,7 +9,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
-import { phaseLabel } from "@/app/focus/data";
+import { phaseLabel } from "@/app/focus/shared";
+import { getAppSession } from "@/lib/auth";
 
 const PX_PER_DAY = 1.6;
 const LABEL_W = 84;
@@ -17,9 +18,10 @@ const LANE_H = 40;
 
 export default async function YearTab() {
   const today = todayAppYmd();
+  const session = await getAppSession();
 
   const focuses = await prisma.focus.findMany({
-    where: { status: { in: ["ACTIVE", "PLANNED"] } },
+    where: { status: { in: ["ACTIVE", "PLANNED"] }, profileKey: session.profileKey },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true, name: true, icon: true, color: true, status: true,

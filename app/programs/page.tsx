@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { getProgramCards, type ProgramCard } from "./data";
-import { seasonPhaseLabel } from "@/app/focus/data";
+import { seasonPhaseLabel } from "@/app/focus/shared";
 import { formatUtcDateLabel } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";

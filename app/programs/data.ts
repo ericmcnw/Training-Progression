@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
 import { getAppSession } from "@/lib/auth";
+import { getActivityEntry } from "@/lib/activity-families";
+import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 
 const ACTIVITY_WINDOW_DAYS = 14;
 const MAX_AIMS = 3;
@@ -71,6 +73,7 @@ export async function getProgramCards(): Promise<ProgramCard[]> {
       id: true, name: true, description: true, icon: true, color: true,
       status: true, season: true, phase: true, pursuitKey: true,
       targetDate: true, targetKind: true, linkedInjuryId: true,
+      routineLinks: { select: { routineId: true } },
     },
   });
   if (focuses.length === 0) return [];
@@ -94,22 +97,43 @@ export async function getProgramCards(): Promise<ProgramCard[]> {
 
   const today = todayAppYmd();
 
-  // ── Activity, one query for every program's routines ──────────────────
-  const allRoutineIds = Array.from(
-    new Set(milestones.filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef).map((m) => m.scopeRef!))
-  );
-  const logsByRoutine = new Map<string, string[]>();
-  if (allRoutineIds.length) {
+  // Activity includes the sport itself, explicitly connected routines, and
+  // routine-scoped roadmap milestones. Keep log ids so overlapping rules do
+  // not count a climbing session twice.
+  const sportRoutineIdByFocus = new Map<string, string>();
+  for (const focus of focuses) {
+    const slug = focus.pursuitKey?.trim().toLowerCase();
+    if (!slug || getActivityEntry(slug)?.family !== "sports") continue;
+    sportRoutineIdByFocus.set(focus.id, getSyntheticSportRoutineId(slug));
+  }
+  const allRoutineIds = Array.from(new Set([
+    ...milestones.filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef).map((m) => m.scopeRef!),
+    ...focuses.flatMap((focus) => focus.routineLinks.map((link) => link.routineId)),
+    ...sportRoutineIdByFocus.values(),
+  ]));
+  type ActivityLogRef = { id: string; ymd: string };
+  const logsByRoutine = new Map<string, ActivityLogRef[]>();
+  const climbingLogs: ActivityLogRef[] = [];
+  const hasClimbingProgram = focuses.some((focus) => focus.pursuitKey?.trim().toLowerCase() === "climbing");
+  if (allRoutineIds.length || hasClimbingProgram) {
     const since = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86_400_000);
     const logs = await prisma.routineLog.findMany({
-      where: { routineId: { in: allRoutineIds }, performedAt: { gte: since } },
+      where: {
+        performedAt: { gte: since },
+        OR: [
+          ...(allRoutineIds.length ? [{ routineId: { in: allRoutineIds } }] : []),
+          ...(hasClimbingProgram ? [{ climbAttempts: { some: {} } }] : []),
+        ],
+      },
       orderBy: { performedAt: "desc" },
-      select: { routineId: true, performedAt: true },
+      select: { id: true, routineId: true, performedAt: true, _count: { select: { climbAttempts: true } } },
     });
     for (const l of logs) {
       const list = logsByRoutine.get(l.routineId) ?? [];
-      list.push(toAppYmd(l.performedAt));
+      const ref = { id: l.id, ymd: toAppYmd(l.performedAt) };
+      list.push(ref);
       logsByRoutine.set(l.routineId, list);
+      if (l._count.climbAttempts > 0) climbingLogs.push(ref);
     }
   }
 
@@ -170,15 +194,20 @@ export async function getProgramCards(): Promise<ProgramCard[]> {
     }));
     const projection = projectRoadmap(projInput, today, target);
 
-    // A session counts once for the program even when two of its tracks
-    // point at the same routine, or two routines were logged the same day.
-    const routineIds = new Set(
-      list.filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef).map((m) => m.scopeRef!)
-    );
-    const ymds: string[] = [];
-    for (const rid of routineIds) ymds.push(...(logsByRoutine.get(rid) ?? []));
-    ymds.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-    const lastYmd = ymds[0] ?? null;
+    const routineIds = new Set([
+      ...list.filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef).map((m) => m.scopeRef!),
+      ...f.routineLinks.map((link) => link.routineId),
+      ...(sportRoutineIdByFocus.get(f.id) ? [sportRoutineIdByFocus.get(f.id)!] : []),
+    ]);
+    const activityById = new Map<string, ActivityLogRef>();
+    for (const rid of routineIds) {
+      for (const log of logsByRoutine.get(rid) ?? []) activityById.set(log.id, log);
+    }
+    if (f.pursuitKey?.trim().toLowerCase() === "climbing") {
+      for (const log of climbingLogs) activityById.set(log.id, log);
+    }
+    const activityLogs = Array.from(activityById.values()).sort((a, b) => b.ymd.localeCompare(a.ymd));
+    const lastYmd = activityLogs[0]?.ymd ?? null;
 
     return {
       id: f.id,
@@ -199,7 +228,7 @@ export async function getProgramCards(): Promise<ProgramCard[]> {
       driftDays: projection.driftDays,
       projectionStatus: projection.status,
       activity: {
-        sessions: ymds.length,
+        sessions: activityLogs.length,
         lastYmd,
         daysSinceLast: lastYmd ? diffYmdDays(today, lastYmd) : null,
       },

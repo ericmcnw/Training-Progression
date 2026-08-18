@@ -7,7 +7,12 @@ import {
   createProgramBlock,
   createProgramStage,
   createProgramTargetList,
+  moveProgramTargetItem,
+  removeProgramBlockItem,
   saveProgramRelationships,
+  setProgramBlockStatus,
+  setProgramStageStatus,
+  setProgramTargetItemStatus,
 } from "@/app/programs/actions";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +44,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
             <strong>{detail.milestones.length} milestones</strong>
             <div style={minorText}>{detail.milestones.filter((m) => m.status === "ACHIEVED").length} achieved</div>
           </div>
-          <Link href={`/focus/${id}/edit`} style={actionLink}>Edit details and milestones</Link>
+          <Link href={`/programs/${id}/settings`} style={actionLink}>Edit details and milestones</Link>
         </div>
       </EditorSection>
 
@@ -89,6 +94,11 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
                   <strong>{stage.name}</strong>
                   <div style={minorText}>{stage.status.toLowerCase()} · {stage.blocks.length} block{stage.blocks.length === 1 ? "" : "s"}</div>
                 </div>
+                <div style={actionGroup}>
+                  {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
+                  {stage.status === "ACTIVE" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="COMPLETED" label="Complete" /> : null}
+                  {stage.status === "COMPLETED" || stage.status === "SKIPPED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="PLANNED" label="Reopen" /> : null}
+                </div>
               </div>
             ))}
           </div>
@@ -112,11 +122,16 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
                     <strong>{block.name}</strong>
                     <div style={minorText}>{block.lengthWeeks ? `${block.lengthWeeks} weeks · ` : ""}{block.scheduleMode.toLowerCase()} · {block.status.toLowerCase()}</div>
                   </div>
+                  <div style={actionGroup}>
+                    {block.status === "DRAFT" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="ACTIVE" label="Start" /> : null}
+                    {block.status === "ACTIVE" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="COMPLETED" label="Complete" /> : null}
+                    {block.status === "COMPLETED" || block.status === "ARCHIVED" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="DRAFT" label="Reopen" /> : null}
+                  </div>
                 </div>
                 {block.items.map((item) => (
                   <div key={item.id} style={itemRow}>
                     <span>{item.label}</span>
-                    <span style={minorText}>{item.targetPerWeek ? `${item.targetPerWeek}x/week` : "flexible"}</span>
+                    <div style={actionGroup}><span style={minorText}>{item.targetPerWeek ? `${item.targetPerWeek}x/week` : "flexible"}</span><StatusForm action={removeProgramBlockItem} programId={id} entityName="itemId" entityId={item.id} label="Remove" tone="quiet" /></div>
                   </div>
                 ))}
                 <form action={addProgramBlockRoutine} style={miniForm}>
@@ -148,14 +163,22 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
       <EditorSection number="5" title="Named targets and ladders" subtitle="Tick lists for climbs or skills; progression ladders for ordered skills.">
         {detail.targetLists.map((targetList) => (
           <div key={targetList.id} style={blockCard}>
-            <div style={cardHead}><strong>{targetList.name}</strong><span style={typeChip}>{targetList.kind.toLowerCase()}</span></div>
-            {targetList.items.map((item) => <div key={item.id} style={itemRow}><span>{item.completed ? "Done" : "Open"} · {item.label}</span></div>)}
-            <form action={addProgramTargetItem} style={miniForm}>
-              <input type="hidden" name="programId" value={id} />
-              <input type="hidden" name="listId" value={targetList.id} />
-              <input name="label" required placeholder="Add target" style={input} />
-              <button type="submit" style={iconButton} title="Add target" aria-label={`Add target to ${targetList.name}`}>+</button>
-            </form>
+            <div style={cardHead}><div><strong>{targetList.name}</strong>{targetList.membershipSource === "CLIMB_TICK_LIST" ? <div style={minorText}>Synced from starred climbing problems</div> : null}</div><span style={typeChip}>{targetList.kind.toLowerCase()}</span></div>
+            {targetList.items.map((item, index) => <div key={item.id} style={itemRow}>
+              <span style={{ color: item.status === "DROPPED" ? "rgba(255,255,255,0.38)" : "inherit", textDecoration: item.completed ? "line-through" : "none" }}>{item.status === "DROPPED" ? "Dropped" : item.completed ? "Done" : "Open"} · {item.label}</span>
+              {targetList.membershipSource === "PROGRAM" ? <div style={actionGroup}>
+                <MoveTargetForm programId={id} itemId={item.id} direction="up" disabled={index === 0} />
+                <MoveTargetForm programId={id} itemId={item.id} direction="down" disabled={index === targetList.items.length - 1} />
+                {item.status === "ACTIVE" ? <StatusForm action={setProgramTargetItemStatus} programId={id} entityName="itemId" entityId={item.id} status="COMPLETED" label="Done" /> : <StatusForm action={setProgramTargetItemStatus} programId={id} entityName="itemId" entityId={item.id} status="ACTIVE" label="Reopen" />}
+                {item.status !== "DROPPED" ? <StatusForm action={setProgramTargetItemStatus} programId={id} entityName="itemId" entityId={item.id} status="DROPPED" label="Drop" tone="quiet" /> : null}
+              </div> : item.climbProblem?.location ? <Link href={`/activities/climbing/locations/${item.climbProblem.location.id}`} style={inlineLink}>{item.climbProblem.grade} · {item.climbProblem.location.name}</Link> : null}
+            </div>)}
+            {targetList.membershipSource === "PROGRAM" ? <form action={addProgramTargetItem} style={miniForm}>
+                <input type="hidden" name="programId" value={id} />
+                <input type="hidden" name="listId" value={targetList.id} />
+                <input name="label" required placeholder="Add target" style={input} />
+                <button type="submit" style={iconButton} title="Add target" aria-label={`Add target to ${targetList.name}`}>+</button>
+              </form> : <Link href="/activities/climbing" style={actionLink}>Manage starred climbs</Link>}
           </div>
         ))}
         <form action={createProgramTargetList} style={inlineForm}>
@@ -187,6 +210,22 @@ function CheckRow({ name, value, checked, label, meta }: { name: string; value: 
 
 function Empty({ text }: { text: string }) { return <div style={empty}>{text}</div>; }
 function stateDot(status: string): React.CSSProperties { return { width: 9, height: 9, borderRadius: 99, flexShrink: 0, background: status === "ACTIVE" ? "#7ce8aa" : status === "COMPLETED" ? "#60a5fa" : "rgba(255,255,255,0.25)" }; }
+
+function StatusForm({ action, programId, entityName, entityId, status, label, tone = "default" }: {
+  action: (formData: FormData) => Promise<void>;
+  programId: string;
+  entityName: "stageId" | "blockId" | "itemId";
+  entityId: string;
+  status?: string;
+  label: string;
+  tone?: "default" | "quiet";
+}) {
+  return <form action={action}><input type="hidden" name="programId" value={programId} /><input type="hidden" name={entityName} value={entityId} />{status ? <input type="hidden" name="status" value={status} /> : null}<button type="submit" style={tone === "quiet" ? quietActionButton : stateButton}>{label}</button></form>;
+}
+
+function MoveTargetForm({ programId, itemId, direction, disabled }: { programId: string; itemId: string; direction: "up" | "down"; disabled: boolean }) {
+  return <form action={moveProgramTargetItem}><input type="hidden" name="programId" value={programId} /><input type="hidden" name="itemId" value={itemId} /><input type="hidden" name="direction" value={direction} /><button type="submit" disabled={disabled} style={{ ...moveButton, opacity: disabled ? 0.28 : 1 }} title={`Move ${direction}`} aria-label={`Move target ${direction}`}>{direction === "up" ? "↑" : "↓"}</button></form>;
+}
 
 const page: React.CSSProperties = { maxWidth: 720, margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", display: "grid", gap: 16 };
 const topBar: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
@@ -221,4 +260,9 @@ const blockCard: React.CSSProperties = { display: "grid", gap: 7, padding: 12, b
 const cardHead: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 };
 const itemRow: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 34, padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 12.5 };
 const typeChip: React.CSSProperties = { fontSize: 9.5, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", padding: "3px 7px", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 99 };
+const actionGroup: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, flexWrap: "wrap", flexShrink: 0 };
+const stateButton: React.CSSProperties = { minHeight: 32, padding: "0 9px", borderRadius: 7, border: "1px solid rgba(51,255,122,0.3)", background: "rgba(51,255,122,0.08)", color: "#7ce8aa", fontSize: 10.5, fontWeight: 850, cursor: "pointer" };
+const quietActionButton: React.CSSProperties = { ...stateButton, borderColor: "rgba(255,255,255,0.12)", background: "transparent", color: "rgba(255,255,255,0.5)" };
+const moveButton: React.CSSProperties = { width: 32, height: 32, borderRadius: 7, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "rgba(255,255,255,0.65)", cursor: "pointer" };
+const inlineLink: React.CSSProperties = { color: "rgba(255,255,255,0.55)", textDecoration: "none", fontSize: 10.5, textAlign: "right" };
 const empty: React.CSSProperties = { padding: "12px", borderRadius: 8, border: "1px dashed rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.48)", fontSize: 12, lineHeight: 1.5 };

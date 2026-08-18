@@ -67,7 +67,7 @@ export default function InjuryForm({
           zoneSlugs: selected,
           aggravatingFactors,
         });
-        router.push(id ? `/injuries/${id}` : "/body");
+        router.push(id ? `/injuries/${id}` : "/profile/health");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Unable to save injury.");
       }

@@ -4,7 +4,8 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFocusDetail, getInjuryPanelData, seasonPhaseLabel } from "@/app/focus/data";
+import { getFocusDetail, getInjuryPanelData } from "@/app/focus/data";
+import { seasonPhaseLabel } from "@/app/focus/shared";
 import { formatUtcDateLabel } from "@/lib/dates";
 import FocusRoadmap from "./FocusRoadmap";
 import InjuryPanel from "./InjuryPanel";
@@ -35,7 +36,7 @@ export default async function FocusDetailPage({
     <main style={page} className="focusDetail">
       <div style={topBar}>
         <Link href="/programs" style={backLink}>← Programs</Link>
-        <Link href={`/focus/${focus.id}/edit`} style={editLink}>Edit</Link>
+        <Link href={`/programs/${focus.id}/settings`} style={editLink}>Edit</Link>
       </div>
 
       <header style={header}>

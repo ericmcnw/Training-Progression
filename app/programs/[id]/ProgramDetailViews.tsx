@@ -26,7 +26,8 @@ export function ProgramOverview({ focus, detail, injury, accent }: SharedProps &
     <Section title="Training that counts" action={<Link href={`/programs/${focus.id}/edit`} style={sectionLink}>Manage</Link>}>
       {detail.routines.length ? <div style={pillRow}>{detail.routines.map((routine) => <span key={routine.id} style={pill}>{routine.name}</span>)}</div> : <Empty message="Connect routines so their logs appear in program progress." />}
       <div style={metricRow}>
-        <Metric value={detail.activity.total8Weeks} label="sessions / 8 weeks" />
+        {detail.activity.sportSessions > 0 ? <Metric value={detail.activity.sportSessions} label="sport sessions / 8 weeks" /> : <Metric value={detail.activity.total8Weeks} label="sessions / 8 weeks" />}
+        {detail.activity.sportSessions > 0 ? <Metric value={detail.activity.trainingSessions} label="support sessions / 8 weeks" /> : null}
         <Metric value={detail.activity.lastYmd ?? "None"} label="last session" />
       </div>
     </Section>
@@ -64,24 +65,36 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
   const max = Math.max(1, ...detail.activity.weeklyCounts);
   return <div style={stack}>
     {injury ? <InjuryPanel injury={injury} /> : null}
-    <Section title="Training consistency" subtitle="Sessions from routines connected to this program.">
+    <Section title="Training consistency" subtitle="Sport sessions and supporting work connected to this program.">
+      {detail.activity.sportSessions > 0 ? <div style={legend}><span><i style={{ ...legendSwatch, background: accent }} />Sport</span><span><i style={{ ...legendSwatch, background: "rgba(255,255,255,0.24)" }} />Supporting</span></div> : null}
       <div style={chart} aria-label="Eight weeks of program sessions">
-        {detail.activity.weeklyCounts.map((count, index) => <div key={index} style={barColumn}><div style={{ ...bar, height: `${Math.max(count ? 12 : 2, (count / max) * 76)}px`, background: count ? accent : "rgba(255,255,255,0.08)" }} title={`${count} sessions`} /><span style={barLabel}>{count}</span></div>)}
+        {detail.activity.weeklyCounts.map((count, index) => {
+          const sport = detail.activity.weeklySportCounts[index];
+          const training = detail.activity.weeklyTrainingCounts[index];
+          return <div key={index} style={barColumn}>
+            <div style={{ ...barStack, height: `${Math.max(count ? 12 : 2, (count / max) * 76)}px` }} title={`${sport} sport, ${training} supporting`}>
+              {sport > 0 ? <span style={{ flex: sport, background: accent }} /> : null}
+              {training > 0 ? <span style={{ flex: training, background: "rgba(255,255,255,0.24)" }} /> : null}
+              {count === 0 ? <span style={{ flex: 1, background: "rgba(255,255,255,0.08)" }} /> : null}
+            </div>
+            <span style={barLabel}>{count}</span>
+          </div>;
+        })}
       </div>
       <div style={chartCaption}><span>8 weeks ago</span><span>This week</span></div>
     </Section>
 
     <Section title="Goals">
       {detail.goalLinks.length || detail.frequencyGoalLinks.length ? <div style={stackTight}>
-        {detail.goalLinks.map((link) => <Link key={link.goal.id} href={`/plan/goals/${link.goal.id}`} style={linkedRow}><div><div style={rowTitle}>{link.goal.name}</div><div style={rowMeta}>{link.goal.metricType.toLowerCase()} · target {link.goal.targetValue}{link.goal.unit ?? ""}</div></div><span style={subtleChip}>{link.role.toLowerCase()}</span></Link>)}
-        {detail.frequencyGoalLinks.map((link) => <div key={link.frequencyGoal.id} style={linkedRow}><div><div style={rowTitle}>{link.frequencyGoal.name}</div><div style={rowMeta}>{link.frequencyGoal.targetCount} per {link.frequencyGoal.targetInterval} {link.frequencyGoal.targetUnit.toLowerCase()}</div></div><span style={subtleChip}>{link.role.toLowerCase()}</span></div>)}
+        {detail.goalLinks.map((link) => <GoalProgressRow key={link.goal.id} name={link.goal.name} role={link.role} href={link.progress?.detailHref ?? `/plan/goals/${link.goal.id}`} progress={link.progress} accent={accent} />)}
+        {detail.frequencyGoalLinks.map((link) => <GoalProgressRow key={link.frequencyGoal.id} name={link.frequencyGoal.name} role={link.role} href={link.progress?.detailHref} progress={link.progress} accent={accent} />)}
       </div> : <Empty message="No goals are connected yet. The builder shows your existing goals so you can attach the right ones without duplicating them." />}
     </Section>
 
     <OutcomeSection detail={detail} accent={accent} />
 
     <Section title="Recent sessions">
-      {detail.activity.recent.length ? <div style={stackTight}>{detail.activity.recent.map((log) => <Link key={log.id} href={`/routines/${log.routineId}/logs/${log.id}/details`} style={linkedRow}><div><div style={rowTitle}>{log.routineName}</div><div style={rowMeta}>{log.ymd}{log.durationMin ? ` · ${log.durationMin} min` : ""}</div></div></Link>)}</div> : <Empty message="No connected routine sessions in the last eight weeks." />}
+      {detail.activity.recent.length ? <div style={stackTight}>{detail.activity.recent.map((log) => <Link key={log.id} href={`/routines/${log.routineId}/logs/${log.id}/details`} style={linkedRow}><div><div style={rowTitle}>{log.routineName}</div><div style={rowMeta}>{log.ymd}{log.durationMin ? ` · ${log.durationMin} min` : ""}</div></div><span style={subtleChip}>{log.kind === "SPORT" ? "sport" : "support"}</span></Link>)}</div> : <Empty message="No program sessions in the last eight weeks." />}
     </Section>
   </div>;
 }
@@ -89,11 +102,26 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
 function OutcomeSection({ detail, accent }: { detail: Detail; accent: string }) {
   return <Section title="Named outcomes">
     {detail.targetLists.length ? <div style={stackTight}>{detail.targetLists.map((list) => {
-      const done = list.items.filter((item) => item.completed).length;
-      const pct = list.items.length ? Math.round(done / list.items.length * 100) : 0;
-      return <div key={list.id} style={blockCard}><div style={rowBetween}><div><div style={rowTitle}>{list.name}</div><div style={rowMeta}>{done}/{list.items.length} complete · {list.kind.toLowerCase()}</div></div></div><div style={smallTrack}><div style={{ ...smallFill, width: `${pct}%`, background: accent }} /></div>{list.items.slice(0, 6).map((item) => <div key={item.id} style={itemRow}><span style={{ color: item.completed ? "rgba(255,255,255,0.45)" : "inherit", textDecoration: item.completed ? "line-through" : "none" }}>{item.label}</span>{item.climbProblem ? <span style={rowMeta}>{item.climbProblem.grade}</span> : null}</div>)}</div>;
+      const visibleItems = list.items.filter((item) => item.status !== "DROPPED");
+      const done = visibleItems.filter((item) => item.completed).length;
+      const pct = visibleItems.length ? Math.round(done / visibleItems.length * 100) : 0;
+      return <div key={list.id} style={blockCard}><div style={rowBetween}><div><div style={rowTitle}>{list.name}</div><div style={rowMeta}>{done}/{visibleItems.length} complete · {list.kind.toLowerCase()}</div></div></div><div style={smallTrack}><div style={{ ...smallFill, width: `${pct}%`, background: accent }} /></div>{visibleItems.slice(0, 6).map((item) => <div key={item.id} style={itemRow}><span style={{ color: item.completed ? "rgba(255,255,255,0.45)" : "inherit", textDecoration: item.completed ? "line-through" : "none" }}>{item.label}</span>{item.climbProblem ? <span style={rowMeta}>{item.climbProblem.grade}</span> : null}</div>)}</div>;
     })}</div> : <Empty message="Use a checklist for named climbs or skills, or a ladder for ordered progressions such as calisthenics." />}
   </Section>;
+}
+
+function GoalProgressRow({ name, role, href, progress, accent }: {
+  name: string;
+  role: string;
+  href?: string | null;
+  progress: Detail["goalLinks"][number]["progress"];
+  accent: string;
+}) {
+  const body = <>
+    <div style={goalHead}><div style={{ minWidth: 0 }}><div style={rowTitle}>{name}</div><div style={rowMeta}>{progress?.summaryLabel ?? "Progress is not available yet."}</div></div><span style={subtleChip}>{role.toLowerCase()}</span></div>
+    {progress ? <><div style={goalNumbers}><strong>{progress.actualDisplay}</strong><span style={rowMeta}>of {progress.targetDisplay}</span><span style={{ ...rowMeta, marginLeft: "auto", color: progress.isAchieved ? "#7ce8aa" : undefined }}>{progress.timeframeStatusLabel}</span></div><div style={smallTrack}><div style={{ ...smallFill, width: `${Math.min(100, Math.max(0, progress.fractionComplete * 100))}%`, background: accent }} /></div></> : null}
+  </>;
+  return href ? <Link href={href} style={goalRow}>{body}</Link> : <div style={goalRow}>{body}</div>;
 }
 
 function ProjectionCard({ focus }: { focus: FocusDetail }) {
@@ -123,7 +151,7 @@ const rowMeta: React.CSSProperties = { fontSize: 10.5, lineHeight: 1.4, color: "
 const rowDescription: React.CSSProperties = { margin: "5px 0 0", fontSize: 11.5, lineHeight: 1.45, color: "rgba(255,255,255,0.58)" };
 const pillRow: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 7 };
 const pill: React.CSSProperties = { padding: "5px 9px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.11)", background: "rgba(255,255,255,0.04)", fontSize: 11.5, fontWeight: 750 };
-const metricRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 };
+const metricRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 };
 const metric: React.CSSProperties = { display: "grid", gap: 2, padding: 10, borderRadius: 8, background: "rgba(0,0,0,0.14)" };
 const empty: React.CSSProperties = { padding: 11, borderRadius: 8, border: "1px dashed rgba(255,255,255,0.13)", color: "rgba(255,255,255,0.48)", fontSize: 11.5, lineHeight: 1.45 };
 const projectionCard: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 12px", border: "1px solid rgba(96,165,250,0.28)", borderRadius: 9, background: "rgba(96,165,250,0.07)", fontSize: 12 };
@@ -138,9 +166,14 @@ const itemRow: React.CSSProperties = { minHeight: 34, display: "flex", alignItem
 const emptyInline: React.CSSProperties = { color: "rgba(255,255,255,0.4)", fontSize: 11 };
 const chart: React.CSSProperties = { height: 104, display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 7, alignItems: "end", padding: "8px 4px 0" };
 const barColumn: React.CSSProperties = { height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 4 };
-const bar: React.CSSProperties = { width: "100%", maxWidth: 34, minHeight: 2, borderRadius: "4px 4px 1px 1px" };
+const barStack: React.CSSProperties = { width: "100%", maxWidth: 34, minHeight: 2, borderRadius: "4px 4px 1px 1px", overflow: "hidden", display: "flex", flexDirection: "column" };
 const barLabel: React.CSSProperties = { fontSize: 9, color: "rgba(255,255,255,0.4)" };
 const chartCaption: React.CSSProperties = { display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.38)", fontSize: 9.5 };
+const legend: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 800 };
+const legendSwatch: React.CSSProperties = { width: 8, height: 8, borderRadius: 2, display: "inline-block", marginRight: 5 };
 const linkedRow: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 9px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.07)", textDecoration: "none", color: "inherit" };
+const goalRow: React.CSSProperties = { display: "grid", gap: 8, minHeight: 58, padding: "9px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", textDecoration: "none", color: "inherit" };
+const goalHead: React.CSSProperties = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 };
+const goalNumbers: React.CSSProperties = { display: "flex", alignItems: "baseline", gap: 5, fontSize: 12 };
 const smallTrack: React.CSSProperties = { height: 5, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" };
 const smallFill: React.CSSProperties = { height: "100%", borderRadius: 99 };

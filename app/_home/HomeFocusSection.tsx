@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import CollapsibleSection from "./CollapsibleSection";
 import { COLOR, withAlpha } from "./tokens";
-import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/data";
+import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/shared";
 
 export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[] }) {
   if (focuses.length === 0) return null;

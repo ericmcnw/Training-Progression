@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
+import { todayAppYmd } from "@/lib/dates";
+import type { ProgramBlockStatus, ProgramStageStatus, ProgramTargetItemStatus } from "@/generated/prisma";
 
 async function requireProgram(programId: string) {
   const session = await getAppSession();
@@ -84,6 +86,41 @@ export async function createProgramStage(formData: FormData) {
   revalidateProgram(programId);
 }
 
+export async function setProgramStageStatus(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const stageId = String(formData.get("stageId") || "");
+  const rawStatus = String(formData.get("status") || "");
+  const allowed = new Set<ProgramStageStatus>(["PLANNED", "ACTIVE", "COMPLETED", "SKIPPED"]);
+  if (!allowed.has(rawStatus as ProgramStageStatus)) throw new Error("Invalid stage status.");
+  const status = rawStatus as ProgramStageStatus;
+  const stage = await prisma.programStage.findFirst({ where: { id: stageId, programId }, select: { id: true, startedAt: true } });
+  if (!stage) throw new Error("Stage not found.");
+  const now = new Date();
+  if (status === "ACTIVE") {
+    await prisma.$transaction([
+      prisma.programStage.updateMany({
+        where: { programId, status: "ACTIVE", id: { not: stageId } },
+        data: { status: "COMPLETED", completedAt: now },
+      }),
+      prisma.programStage.update({
+        where: { id: stageId },
+        data: { status, startedAt: stage.startedAt ?? now, completedAt: null },
+      }),
+    ]);
+  } else {
+    await prisma.programStage.update({
+      where: { id: stageId },
+      data: {
+        status,
+        startedAt: status === "PLANNED" ? null : undefined,
+        completedAt: status === "COMPLETED" || status === "SKIPPED" ? now : null,
+      },
+    });
+  }
+  revalidateProgram(programId);
+}
+
 export async function createProgramBlock(formData: FormData) {
   const programId = String(formData.get("programId") || "");
   await requireProgram(programId);
@@ -113,6 +150,40 @@ export async function createProgramBlock(formData: FormData) {
   revalidateProgram(programId);
 }
 
+export async function setProgramBlockStatus(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const blockId = String(formData.get("blockId") || "");
+  const rawStatus = String(formData.get("status") || "");
+  const allowed = new Set<ProgramBlockStatus>(["DRAFT", "ACTIVE", "COMPLETED", "ARCHIVED"]);
+  if (!allowed.has(rawStatus as ProgramBlockStatus)) throw new Error("Invalid block status.");
+  const status = rawStatus as ProgramBlockStatus;
+  const block = await prisma.programBlock.findFirst({ where: { id: blockId, programId }, select: { id: true, startYmd: true } });
+  if (!block) throw new Error("Block not found.");
+  if (status === "ACTIVE") {
+    await prisma.$transaction([
+      prisma.programBlock.updateMany({
+        where: { programId, status: "ACTIVE", id: { not: blockId } },
+        data: { status: "COMPLETED", endYmd: todayAppYmd() },
+      }),
+      prisma.programBlock.update({
+        where: { id: blockId },
+        data: { status, startYmd: block.startYmd ?? todayAppYmd(), endYmd: null },
+      }),
+    ]);
+  } else {
+    await prisma.programBlock.update({
+      where: { id: blockId },
+      data: {
+        status,
+        startYmd: status === "DRAFT" ? null : undefined,
+        endYmd: status === "COMPLETED" || status === "ARCHIVED" ? todayAppYmd() : null,
+      },
+    });
+  }
+  revalidateProgram(programId);
+}
+
 export async function addProgramBlockRoutine(formData: FormData) {
   const programId = String(formData.get("programId") || "");
   await requireProgram(programId);
@@ -123,6 +194,11 @@ export async function addProgramBlockRoutine(formData: FormData) {
     prisma.routine.findFirst({ where: { id: routineId, isDeleted: false }, select: { id: true, name: true } }),
   ]);
   if (!block || !routine) throw new Error("Block or routine not found.");
+  const existingItem = await prisma.programBlockItem.findFirst({
+    where: { blockId, kind: "ROUTINE", routineId },
+    select: { id: true },
+  });
+  if (existingItem) throw new Error("That routine is already in this block.");
   const rawTarget = Number(formData.get("targetPerWeek"));
   const targetPerWeek = Number.isFinite(rawTarget) && rawTarget > 0 ? Math.min(21, rawTarget) : null;
   const last = await prisma.programBlockItem.aggregate({ where: { blockId }, _max: { sortOrder: true } });
@@ -137,6 +213,19 @@ export async function addProgramBlockRoutine(formData: FormData) {
       sortOrder: (last._max.sortOrder ?? -1) + 1,
     },
   });
+  revalidateProgram(programId);
+}
+
+export async function removeProgramBlockItem(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const itemId = String(formData.get("itemId") || "");
+  const item = await prisma.programBlockItem.findFirst({
+    where: { id: itemId, block: { programId } },
+    select: { id: true },
+  });
+  if (!item) throw new Error("Block item not found.");
+  await prisma.programBlockItem.delete({ where: { id: itemId } });
   revalidateProgram(programId);
 }
 
@@ -179,3 +268,47 @@ export async function addProgramTargetItem(formData: FormData) {
   revalidateProgram(programId);
 }
 
+export async function setProgramTargetItemStatus(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const itemId = String(formData.get("itemId") || "");
+  const rawStatus = String(formData.get("status") || "");
+  const allowed = new Set<ProgramTargetItemStatus>(["ACTIVE", "COMPLETED", "DROPPED"]);
+  if (!allowed.has(rawStatus as ProgramTargetItemStatus)) throw new Error("Invalid target status.");
+  const item = await prisma.programTargetListItem.findFirst({
+    where: { id: itemId, list: { programId } },
+    select: { id: true },
+  });
+  if (!item) throw new Error("Target not found.");
+  const status = rawStatus as ProgramTargetItemStatus;
+  await prisma.programTargetListItem.update({
+    where: { id: itemId },
+    data: { status, completedAt: status === "COMPLETED" ? new Date() : null },
+  });
+  revalidateProgram(programId);
+}
+
+export async function moveProgramTargetItem(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const itemId = String(formData.get("itemId") || "");
+  const direction = String(formData.get("direction") || "") === "up" ? -1 : 1;
+  const item = await prisma.programTargetListItem.findFirst({
+    where: { id: itemId, list: { programId } },
+    select: { id: true, listId: true },
+  });
+  if (!item) throw new Error("Target not found.");
+  const ordered = await prisma.programTargetListItem.findMany({
+    where: { listId: item.listId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+  const currentIndex = ordered.findIndex((row) => row.id === itemId);
+  const swapIndex = currentIndex + direction;
+  if (currentIndex < 0 || swapIndex < 0 || swapIndex >= ordered.length) return;
+  await prisma.$transaction([
+    prisma.programTargetListItem.update({ where: { id: ordered[currentIndex].id }, data: { sortOrder: swapIndex } }),
+    prisma.programTargetListItem.update({ where: { id: ordered[swapIndex].id }, data: { sortOrder: currentIndex } }),
+  ]);
+  revalidateProgram(programId);
+}

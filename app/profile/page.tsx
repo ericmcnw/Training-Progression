@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import ProfileHeader from "@/app/profile/ProfileHeader";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
@@ -10,7 +11,12 @@ import { todayAppYmd } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams?: Promise<{ view?: string; domain?: string }> }) {
+  const requested = searchParams ? await searchParams : undefined;
+  if (requested?.view === "history") {
+    const query = requested.domain ? `?domain=${encodeURIComponent(requested.domain)}` : "";
+    redirect(`/profile/history${query}`);
+  }
   const session = await getAppSession();
   const [stats, identity, injuries, programs, latestMeasurement] = await Promise.all([
     loadProfileStats(todayAppYmd()),

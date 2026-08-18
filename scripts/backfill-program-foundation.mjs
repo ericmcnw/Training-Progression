@@ -1,8 +1,8 @@
 // Idempotent metadata backfill for the Program foundation migration.
 //
-// This script never updates or deletes logs. It only creates Program* rows
-// from relationships already expressed unambiguously by existing milestones
-// and the named climbing targets selected during program planning.
+// This script never updates or deletes logs. It creates Program* rows from
+// relationships already expressed unambiguously by existing milestones and
+// marks the named climbing targets selected during program planning.
 
 import { PrismaClient } from "../generated/prisma/index.js";
 
@@ -113,6 +113,10 @@ if (climbingProgramId) {
     select: { id: true, name: true },
   });
   const problemByName = new Map(problems.map((problem) => [problem.name, problem]));
+  await prisma.climbProblem.updateMany({
+    where: { id: { in: problems.map((problem) => problem.id) } },
+    data: { onTickList: true },
+  });
   const existing = await prisma.programTargetListItem.findMany({
     where: { listId: tickList.id },
     select: { climbProblemId: true },

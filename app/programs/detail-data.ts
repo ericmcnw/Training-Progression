@@ -1,8 +1,25 @@
 import { prisma } from "@/lib/prisma";
 import { diffYmdDays, todayAppYmd, toAppYmd } from "@/lib/dates";
 import { getAppSession } from "@/lib/auth";
+import { getActivityEntry } from "@/lib/activity-families";
+import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
+import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
 
 const SENT_OUTCOMES = new Set(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
+
+function compactGoalInsight(insight: GoalInsight | null) {
+  if (!insight) return null;
+  return {
+    actualDisplay: insight.actualDisplay,
+    targetDisplay: insight.targetDisplay,
+    fractionComplete: insight.fractionComplete,
+    isAchieved: insight.isAchieved,
+    hasData: insight.hasData,
+    summaryLabel: insight.summaryLabel,
+    timeframeStatusLabel: insight.timeframeStatusLabel,
+    detailHref: insight.detailHref ?? null,
+  };
+}
 
 export type ProgramDetailData = Awaited<ReturnType<typeof getProgramDetailData>>;
 
@@ -130,53 +147,145 @@ export async function getProgramDetailData(id: string) {
   });
   if (!program) return null;
 
-  const milestones = await prisma.progressionMilestone.findMany({
-    where: { ownerKind: "FOCUS", ownerId: id },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, scopeKind: true, scopeRef: true, label: true, status: true },
-  });
+  const pursuitSlug = program.pursuitKey?.trim().toLowerCase() || null;
+  const pursuit = pursuitSlug ? getActivityEntry(pursuitSlug) : null;
+  const sportRoutineId = pursuit?.family === "sports" ? getSyntheticSportRoutineId(pursuitSlug!) : null;
+  const hasClimbingList = program.targetLists.some((list) => list.sportSlug?.trim().toLowerCase() === "climbing");
+
+  const [milestones, allGoalInsights, starredClimbs] = await Promise.all([
+    prisma.progressionMilestone.findMany({
+      where: { ownerKind: "FOCUS", ownerId: id },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, scopeKind: true, scopeRef: true, label: true, status: true },
+    }),
+    getGoalsOverview({ active: "all" }),
+    hasClimbingList
+      ? prisma.climbProblem.findMany({
+          where: { onTickList: true },
+          orderBy: [{ grade: "desc" }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            grade: true,
+            location: { select: { id: true, name: true } },
+            attempts: { select: { outcome: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const goalInsightById = new Map(allGoalInsights.map((insight) => [insight.goal.id, insight]));
 
   const explicitRoutineIds = program.routineLinks.map((link) => link.routine.id);
   const fallbackRoutineIds = milestones
     .filter((m) => m.scopeKind === "ROUTINE" && m.scopeRef)
     .map((m) => m.scopeRef!);
-  const routineIds = Array.from(new Set(explicitRoutineIds.length ? explicitRoutineIds : fallbackRoutineIds));
+  const routineIds = Array.from(
+    new Set([...explicitRoutineIds, ...fallbackRoutineIds, ...(sportRoutineId ? [sportRoutineId] : [])])
+  );
 
+  const missingRoutineIds = routineIds.filter((routineId) => !explicitRoutineIds.includes(routineId));
   const fallbackRoutines =
-    program.routineLinks.length === 0 && routineIds.length
+    missingRoutineIds.length
       ? await prisma.routine.findMany({
-          where: { id: { in: routineIds } },
+          where: { id: { in: missingRoutineIds } },
           orderBy: { name: "asc" },
           select: { id: true, name: true, kind: true, domain: true },
         })
       : [];
 
   const since = new Date(Date.now() - 56 * 86_400_000);
-  const logs = routineIds.length
+  const activityFilters = [
+    ...(routineIds.length ? [{ routineId: { in: routineIds } }] : []),
+    ...(pursuitSlug === "climbing" ? [{ climbAttempts: { some: {} } }] : []),
+  ];
+  const logs = activityFilters.length
     ? await prisma.routineLog.findMany({
-        where: { routineId: { in: routineIds }, performedAt: { gte: since } },
+        where: { performedAt: { gte: since }, OR: activityFilters },
         orderBy: { performedAt: "desc" },
-        select: { id: true, routineId: true, performedAt: true, durationSec: true, routine: { select: { name: true } } },
+        select: {
+          id: true,
+          routineId: true,
+          performedAt: true,
+          durationSec: true,
+          routine: { select: { name: true } },
+          _count: { select: { climbAttempts: true } },
+        },
       })
     : [];
 
   const today = todayAppYmd();
   const weeklyCounts = new Array(8).fill(0) as number[];
+  const weeklySportCounts = new Array(8).fill(0) as number[];
+  const weeklyTrainingCounts = new Array(8).fill(0) as number[];
   for (const log of logs) {
     const daysAgo = diffYmdDays(today, toAppYmd(log.performedAt));
     const bucket = Math.floor(daysAgo / 7);
-    if (bucket >= 0 && bucket < 8) weeklyCounts[7 - bucket] += 1;
+    if (bucket < 0 || bucket >= 8) continue;
+    const index = 7 - bucket;
+    const isSportSession = log.routineId === sportRoutineId || (pursuitSlug === "climbing" && log._count.climbAttempts > 0);
+    weeklyCounts[index] += 1;
+    if (isSportSession) weeklySportCounts[index] += 1;
+    else weeklyTrainingCounts[index] += 1;
   }
+
+  const targetLists = program.targetLists.map((list) => {
+    if (list.sportSlug?.trim().toLowerCase() === "climbing") {
+      return {
+        ...list,
+        membershipSource: "CLIMB_TICK_LIST" as const,
+        items: starredClimbs.map((problem) => ({
+          id: `climb:${problem.id}`,
+          label: problem.name,
+          description: null,
+          status: problem.attempts.some((attempt) => SENT_OUTCOMES.has(attempt.outcome))
+            ? ("COMPLETED" as const)
+            : ("ACTIVE" as const),
+          completedAt: null,
+          climbProblem: problem,
+          completed: problem.attempts.some((attempt) => SENT_OUTCOMES.has(attempt.outcome)),
+        })),
+      };
+    }
+    return {
+      ...list,
+      membershipSource: "PROGRAM" as const,
+      items: list.items.map((item) => ({
+        ...item,
+        completed:
+          item.status === "COMPLETED" ||
+          Boolean(item.climbProblem?.attempts.some((attempt) => SENT_OUTCOMES.has(attempt.outcome))),
+      })),
+    };
+  });
 
   return {
     ...program,
     milestones,
-    routines: program.routineLinks.length
-      ? program.routineLinks.map((link) => ({ ...link.routine, role: link.role, source: "LINK" as const }))
-      : fallbackRoutines.map((routine) => ({ ...routine, role: "SUPPORTING" as const, source: "MILESTONE" as const })),
+    goalLinks: program.goalLinks.map((link) => ({
+      ...link,
+      progress: compactGoalInsight(goalInsightById.get(link.goal.id) ?? null),
+    })),
+    frequencyGoalLinks: program.frequencyGoalLinks.map((link) => ({
+      ...link,
+      progress: compactGoalInsight(
+        goalInsightById.get(`group-frequency:${link.frequencyGoal.id}`) ?? null
+      ),
+    })),
+    routines: [
+      ...program.routineLinks.map((link) => ({ ...link.routine, role: link.role, source: "LINK" as const })),
+      ...fallbackRoutines.map((routine) => ({
+        ...routine,
+        role: routine.id === sportRoutineId ? ("PRIMARY" as const) : ("SUPPORTING" as const),
+        source: routine.id === sportRoutineId ? ("SPORT" as const) : ("MILESTONE" as const),
+      })),
+    ],
     activity: {
       total8Weeks: logs.length,
       weeklyCounts,
+      weeklySportCounts,
+      weeklyTrainingCounts,
+      sportSessions: weeklySportCounts.reduce((sum, count) => sum + count, 0),
+      trainingSessions: weeklyTrainingCounts.reduce((sum, count) => sum + count, 0),
       lastYmd: logs[0] ? toAppYmd(logs[0].performedAt) : null,
       recent: logs.slice(0, 12).map((log) => ({
         id: log.id,
@@ -184,17 +293,13 @@ export async function getProgramDetailData(id: string) {
         routineName: log.routine.name,
         ymd: toAppYmd(log.performedAt),
         durationMin: log.durationSec ? Math.round(log.durationSec / 60) : null,
+        kind:
+          log.routineId === sportRoutineId || (pursuitSlug === "climbing" && log._count.climbAttempts > 0)
+            ? ("SPORT" as const)
+            : ("TRAINING" as const),
       })),
     },
-    targetLists: program.targetLists.map((list) => ({
-      ...list,
-      items: list.items.map((item) => ({
-        ...item,
-        completed:
-          item.status === "COMPLETED" ||
-          Boolean(item.climbProblem?.attempts.some((attempt) => SENT_OUTCOMES.has(attempt.outcome))),
-      })),
-    })),
+    targetLists,
   };
 }
 

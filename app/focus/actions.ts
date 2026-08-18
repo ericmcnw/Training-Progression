@@ -29,6 +29,23 @@ function revalidateFocusSurfaces() {
   revalidatePath("/programs");
 }
 
+async function requireOwnedFocus(id: string) {
+  const session = await getAppSession();
+  const focus = await prisma.focus.findFirst({ where: { id, profileKey: session.profileKey }, select: { id: true } });
+  if (!focus) throw new Error("Program not found.");
+  return focus;
+}
+
+async function requireOwnedFocusMilestone(id: string) {
+  const milestone = await prisma.progressionMilestone.findUnique({
+    where: { id },
+    select: { id: true, ownerKind: true, ownerId: true },
+  });
+  if (!milestone || milestone.ownerKind !== "FOCUS") throw new Error("Milestone not found.");
+  await requireOwnedFocus(milestone.ownerId);
+  return milestone;
+}
+
 // ── Focus CRUD ───────────────────────────────────────────────────────────
 
 export type FocusInput = {
@@ -70,6 +87,7 @@ export async function createFocus(input: FocusInput): Promise<{ id: string }> {
 }
 
 export async function updateFocus(id: string, input: FocusInput): Promise<void> {
+  await requireOwnedFocus(id);
   const name = input.name.trim();
   if (!name) throw new Error("Focus needs a name.");
 
@@ -93,6 +111,7 @@ export async function updateFocus(id: string, input: FocusInput): Promise<void> 
 // polymorphic owner (no FK), so remove them explicitly. Training logs are never
 // touched — a focus is an organizational overlay, not a record of work.
 export async function deleteFocus(id: string): Promise<void> {
+  await requireOwnedFocus(id);
   await prisma.$transaction([
     prisma.progressionMilestone.deleteMany({
       where: { ownerKind: "FOCUS", ownerId: id },
@@ -104,11 +123,13 @@ export async function deleteFocus(id: string): Promise<void> {
 
 // Lightweight archive — hides a focus without deleting its roadmap/history.
 export async function setFocusStatus(id: string, status: FocusStatus): Promise<void> {
+  await requireOwnedFocus(id);
   await prisma.focus.update({ where: { id }, data: { status } });
   revalidateFocusSurfaces();
 }
 
 export async function reorderFocuses(orderedIds: string[]): Promise<void> {
+  await Promise.all(orderedIds.map((id) => requireOwnedFocus(id)));
   await prisma.$transaction(
     orderedIds.map((id, index) =>
       prisma.focus.update({ where: { id }, data: { sortOrder: index } })
@@ -128,6 +149,7 @@ export async function setFocusContributors(
   focusId: string,
   contributors: ContributorInput[]
 ): Promise<void> {
+  await requireOwnedFocus(focusId);
   const deduped = Array.from(
     new Map(contributors.map((c) => [`${c.kind}:${c.refId}`, c])).values()
   ).filter((c) => c.refId.trim().length > 0);
@@ -156,6 +178,8 @@ export async function addMilestone(
   ownerId: string,
   input: MilestoneInput
 ): Promise<{ id: string }> {
+  if (ownerKind !== "FOCUS") throw new Error("Only program milestones can be edited here.");
+  await requireOwnedFocus(ownerId);
   const label = input.label.trim();
   if (!label) throw new Error("Milestone needs a label.");
 
@@ -184,6 +208,7 @@ export async function addMilestone(
 }
 
 export async function updateMilestone(id: string, input: MilestoneInput): Promise<void> {
+  await requireOwnedFocusMilestone(id);
   const label = input.label.trim();
   if (!label) throw new Error("Milestone needs a label.");
 
@@ -202,6 +227,7 @@ export async function updateMilestone(id: string, input: MilestoneInput): Promis
 // Mark a milestone done. The track's "current" milestone is derived (first
 // ACTIVE by sortOrder), so this single write advances the aim to the next one.
 export async function markMilestoneMet(id: string): Promise<void> {
+  await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.update({
     where: { id },
     data: { status: "ACHIEVED", achievedAt: new Date() },
@@ -211,6 +237,7 @@ export async function markMilestoneMet(id: string): Promise<void> {
 
 // Undo a mark-met (back to ACTIVE).
 export async function reopenMilestone(id: string): Promise<void> {
+  await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.update({
     where: { id },
     data: { status: "ACTIVE", achievedAt: null },
@@ -219,6 +246,7 @@ export async function reopenMilestone(id: string): Promise<void> {
 }
 
 export async function skipMilestone(id: string): Promise<void> {
+  await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.update({
     where: { id },
     data: { status: "SKIPPED", achievedAt: null },
@@ -227,6 +255,7 @@ export async function skipMilestone(id: string): Promise<void> {
 }
 
 export async function deleteMilestone(id: string): Promise<void> {
+  await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.delete({ where: { id } });
   revalidateFocusSurfaces();
 }
@@ -269,9 +298,11 @@ export async function logInjuryReading(zoneId: string, level: number): Promise<v
   revalidatePath("/");
   revalidatePath("/focus");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
 }
 
 export async function reorderMilestones(orderedIds: string[]): Promise<void> {
+  await Promise.all(orderedIds.map((id) => requireOwnedFocusMilestone(id)));
   await prisma.$transaction(
     orderedIds.map((id, index) =>
       prisma.progressionMilestone.update({ where: { id }, data: { sortOrder: index } })

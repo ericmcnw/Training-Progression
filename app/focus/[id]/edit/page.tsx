@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/auth";
 import FocusForm from "@/app/focus/FocusForm";
 import type { FocusStatus } from "@/generated/prisma";
 
@@ -16,10 +17,11 @@ export default async function EditFocusPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const session = await getAppSession();
 
   const [focus, milestones, routines, exercises, injuries] = await Promise.all([
-    prisma.focus.findUnique({
-      where: { id },
+    prisma.focus.findFirst({
+      where: { id, profileKey: session.profileKey },
       select: { id: true, name: true, description: true, icon: true, color: true, status: true, targetDate: true, targetKind: true, season: true, phase: true, handoffNote: true, pursuitKey: true, linkedInjuryId: true },
     }),
     prisma.progressionMilestone.findMany({
