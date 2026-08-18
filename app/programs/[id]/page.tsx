@@ -88,4 +88,4 @@ const progressRow: React.CSSProperties = { display: "flex", alignItems: "center"
 const track: React.CSSProperties = { height: 7, flex: 1, borderRadius: 99, background: "rgba(255,255,255,0.09)", overflow: "hidden" };
 const fill: React.CSSProperties = { height: "100%", borderRadius: 99 };
 const tabs: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, padding: 4, border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, background: "rgba(255,255,255,0.025)" };
-const tabLink: React.CSSProperties = { minHeight: 40, display: "grid", placeItems: "center", borderRadius: 7, border: "1px solid transparent", color: "rgba(255,255,255,0.55)", textDecoration: "none", fontSize: 12, fontWeight: 900 };
+const tabLink: React.CSSProperties = { minHeight: 40, display: "grid", placeItems: "center", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", color: "rgba(255,255,255,0.55)", textDecoration: "none", fontSize: 12, fontWeight: 900 };
