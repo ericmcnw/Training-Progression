@@ -8,6 +8,9 @@ import AssessmentBuilder, { type DraftProgramAssessment } from "@/app/programs/[
 import type { ProgramAssessmentSuggestion } from "@/app/programs/assessment-suggestions";
 
 type Pick = { id: string; name: string };
+type RoutinePick = Pick & { kind: string; domain: string };
+type GoalPick = Pick & { goalType: string };
+type FrequencyGoalPick = Pick & { targetCount: number; targetInterval: number; targetUnit: string };
 type ExercisePick = Pick & { unit: string; supportsWeight: boolean; supportsSports: string[] };
 type Path = "sport" | "strength" | "endurance" | "body" | "recovery";
 
@@ -23,11 +26,15 @@ const SPORTS = activitiesByFamily("sports");
 
 export default function ProgramCreator({
   routines,
+  goals,
+  frequencyGoals,
   exercises,
   injuries,
   assessmentSuggestions,
 }: {
-  routines: Pick[];
+  routines: RoutinePick[];
+  goals: GoalPick[];
+  frequencyGoals: FrequencyGoalPick[];
   exercises: ExercisePick[];
   injuries: Pick[];
   assessmentSuggestions: ProgramAssessmentSuggestion[];
@@ -37,6 +44,9 @@ export default function ProgramCreator({
   const [name, setName] = useState("");
   const [pursuitKey, setPursuitKey] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [routineIds, setRoutineIds] = useState<string[]>([]);
+  const [goalIds, setGoalIds] = useState<string[]>([]);
+  const [frequencyGoalIds, setFrequencyGoalIds] = useState<string[]>([]);
   const [startingAssessment, setStartingAssessment] = useState<DraftProgramAssessment | null>(null);
   const [includeAssessment, setIncludeAssessment] = useState(true);
   const [outcomeDraft, setOutcomeDraft] = useState<MilestoneFormRow[] | null>(null);
@@ -46,11 +56,11 @@ export default function ProgramCreator({
       <div style={choiceGrid}>
         <button type="button" style={primaryChoice} onClick={() => setMode("guided")}>
           <span style={choiceTitle}>Guided setup</span>
-          <span style={choiceMeta}>Build the foundation on one clear page</span>
+          <span style={choiceMeta}>Five steps on one page: purpose, the work, the measure, outcomes. Recommended.</span>
         </button>
         <button type="button" style={secondaryChoice} onClick={() => setMode("manual")}>
-          <span style={choiceTitle}>Full editor</span>
-          <span style={choiceMeta}>Enter the complete roadmap directly</span>
+          <span style={choiceTitle}>Blank form</span>
+          <span style={choiceMeta}>Name and milestones only. Skips the work and the measure — you add those afterward.</span>
         </button>
       </div>
     );
@@ -67,11 +77,13 @@ export default function ProgramCreator({
 
   const resolvedPursuit = path === "sport" ? pursuitKey : pursuitKey.trim() || pursuitFor(path);
   const canOpenOutcomes = name.trim().length > 0 && (path !== "sport" || pursuitKey.trim().length > 0);
+  const trainingCount = routineIds.length + goalIds.length + frequencyGoalIds.length;
   const miniSteps = [
     { number: "1", id: "setup-purpose", label: "Purpose", complete: Boolean(path), meta: PATHS.find((option) => option.id === path)?.label ?? "Choose a direction" },
     { number: "2", id: "setup-details", label: "Program details", complete: canOpenOutcomes, meta: name.trim() || "Name and timeline" },
-    { number: "3", id: "setup-starting-point", label: "Starting point", complete: !includeAssessment || Boolean(startingAssessment?.name.trim()), meta: includeAssessment ? assessmentSummary(startingAssessment) : "Skipped" },
-    { number: "4", id: "setup-outcomes", label: "Outcomes", complete: Boolean(outcomeDraft?.some((outcome) => outcome.label.trim())), meta: outcomeDraft?.filter((outcome) => outcome.label.trim()).length ? `${outcomeDraft.filter((outcome) => outcome.label.trim()).length} defined` : "Define success" },
+    { number: "3", id: "setup-work", label: "The work", complete: trainingCount > 0, meta: trainingCount ? `${routineIds.length} routines · ${goalIds.length + frequencyGoalIds.length} goals` : "What you'll actually do" },
+    { number: "4", id: "setup-starting-point", label: "The measure", complete: !includeAssessment || Boolean(startingAssessment?.name.trim()), meta: includeAssessment ? assessmentSummary(startingAssessment) : "Skipped" },
+    { number: "5", id: "setup-outcomes", label: "Outcomes", complete: Boolean(outcomeDraft?.some((outcome) => outcome.label.trim())), meta: outcomeDraft?.filter((outcome) => outcome.label.trim()).length ? `${outcomeDraft.filter((outcome) => outcome.label.trim()).length} defined` : "Define success" },
   ];
 
   function selectPath(nextPath: Path) {
@@ -138,9 +150,37 @@ export default function ProgramCreator({
           </CreatorPanel>
           </div>
 
+          <div id="setup-work" style={miniSection}>
+          <CreatorPanel eyebrow="3 · The work" title="What will you actually do?" copy="Pick the routines and targets this program drives. This is the part you follow week to week — you can add more later, but a program with nothing in it can't tell you what to do today.">
+            <div style={{ display: "grid", gap: 14 }}>
+              <TrainingPicker
+                title="Routines"
+                empty="No routines yet. You can create them later and connect them from the program editor."
+                items={routines.map((routine) => ({ id: routine.id, label: routine.name, meta: `${routine.kind.toLowerCase()} · ${routine.domain}` }))}
+                selected={routineIds}
+                onToggle={(id) => setRoutineIds(toggle(routineIds, id))}
+              />
+              <TrainingPicker
+                title="Frequency targets"
+                empty="No frequency goals yet."
+                items={frequencyGoals.map((goal) => ({ id: goal.id, label: goal.name, meta: `${goal.targetCount} per ${goal.targetInterval} ${goal.targetUnit.toLowerCase()}` }))}
+                selected={frequencyGoalIds}
+                onToggle={(id) => setFrequencyGoalIds(toggle(frequencyGoalIds, id))}
+              />
+              <TrainingPicker
+                title="Performance and volume goals"
+                empty="No performance goals yet."
+                items={goals.map((goal) => ({ id: goal.id, label: goal.name, meta: goal.goalType.toLowerCase() }))}
+                selected={goalIds}
+                onToggle={(id) => setGoalIds(toggle(goalIds, id))}
+              />
+            </div>
+          </CreatorPanel>
+          </div>
+
           <div id="setup-starting-point" style={miniSection}>
-          <CreatorPanel eyebrow="3 · Starting point" title="Establish the starting point" copy="Choose one repeatable measure. When history matches, use the logged result and original date.">
-            <label style={includeRow}><input type="checkbox" checked={includeAssessment} onChange={(event) => setIncludeAssessment(event.target.checked)} /> Track a starting-point assessment</label>
+          <CreatorPanel eyebrow="4 · The measure" title="How will you know it is working?" copy="Choose one repeatable measure, record where you are, and set where you're going. When your history already has a matching result, use it instead of retyping.">
+            <label style={includeRow}><input type="checkbox" checked={includeAssessment} onChange={(event) => setIncludeAssessment(event.target.checked)} /> Track a measure for this program</label>
             {includeAssessment ? (
               <AssessmentBuilder
                 key={`${path}:${resolvedPursuit}`}
@@ -166,6 +206,7 @@ export default function ProgramCreator({
               exercises={exercises}
               injuries={injuries}
               startingAssessment={includeAssessment ? startingAssessment : null}
+              initialTraining={{ routineIds, goalIds, frequencyGoalIds }}
               panel="milestones"
               embedded
               guidedOutcomes
@@ -194,8 +235,8 @@ export default function ProgramCreator({
 
 function CreatorStageRail() {
   const stages = [
-    { number: "1", label: "Program setup", meta: "Objective, baseline, outcomes" },
-    { number: "2", label: "Training inputs", meta: "Routines, goals, frequency" },
+    { number: "1", label: "Program setup", meta: "Purpose, work, measure, outcomes" },
+    { number: "2", label: "Training inputs", meta: "Edit routines and goals later" },
     { number: "3", label: "Stages", meta: "Phases and progression gates" },
     { number: "4", label: "Training blocks", meta: "Repeatable weeks of work" },
     { number: "5", label: "Schedule", meta: "Place the next two weeks" },
@@ -217,6 +258,51 @@ function CreatorStageRail() {
       </div>
       <p style={railNote}>Finish setup to create the program. The same builder then unlocks the remaining steps without changing your logs.</p>
     </nav>
+  );
+}
+
+function toggle(list: string[], id: string) {
+  return list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
+}
+
+function TrainingPicker({
+  title,
+  empty,
+  items,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  empty: string;
+  items: Array<{ id: string; label: string; meta: string }>;
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div style={pickerGroup}>
+      <div style={pickerHeader}>
+        <strong style={pickerTitle}>{title}</strong>
+        <span style={pickerCount}>{selected.length ? `${selected.length} selected` : "None"}</span>
+      </div>
+      {items.length === 0 ? (
+        <p style={pickerEmpty}>{empty}</p>
+      ) : (
+        <div style={pickerList}>
+          {items.map((item) => {
+            const checked = selected.includes(item.id);
+            return (
+              <label key={item.id} style={{ ...pickerRow, ...(checked ? pickerRowChecked : {}) }}>
+                <input type="checkbox" checked={checked} onChange={() => onToggle(item.id)} />
+                <span style={{ minWidth: 0 }}>
+                  <strong style={pickerLabel}>{item.label}</strong>
+                  <span style={pickerMeta}>{item.meta}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -259,6 +345,16 @@ function placeholderFor(path: Path) { if (path === "sport") return "Fall climbin
 function pursuitFor(path: Path) { if (path === "strength") return "strength"; if (path === "endurance") return "endurance"; if (path === "body") return "body composition"; if (path === "recovery") return "rehab"; return "climbing"; }
 function objectiveKindFor(path: Path): FocusFormInitial["objectiveKind"] { if (path === "sport") return "SPORT"; if (path === "strength") return "STRENGTH"; if (path === "endurance") return "ENDURANCE"; if (path === "body") return "BODY_COMPOSITION"; return "RECOVERY"; }
 
+const pickerGroup: CSSProperties = { display: "grid", gap: 8, padding: 12, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", borderRadius: 8 };
+const pickerHeader: CSSProperties = { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 };
+const pickerTitle: CSSProperties = { fontSize: 12.5, fontWeight: 900, color: "rgba(255,255,255,0.8)" };
+const pickerCount: CSSProperties = { fontSize: 10.5, fontWeight: 800, color: "rgba(255,255,255,0.42)" };
+const pickerEmpty: CSSProperties = { margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "rgba(255,255,255,0.42)" };
+const pickerList: CSSProperties = { display: "grid", gap: 5, maxHeight: 260, overflowY: "auto" };
+const pickerRow: CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", gap: 10, padding: "7px 9px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.07)", borderRadius: 7, cursor: "pointer" };
+const pickerRowChecked: CSSProperties = { borderColor: "rgba(51,255,122,0.32)", background: "rgba(51,255,122,0.06)" };
+const pickerLabel: CSSProperties = { display: "block", fontSize: 12.5, color: "rgba(255,255,255,0.85)" };
+const pickerMeta: CSSProperties = { fontSize: 10.5, color: "rgba(255,255,255,0.42)" };
 const choiceGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 };
 const primaryChoice: CSSProperties = { minHeight: 108, display: "grid", alignContent: "center", justifyItems: "start", gap: 4, padding: 15, textAlign: "left", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(51,255,122,0.36)", borderRadius: 9, background: "rgba(51,255,122,0.09)", color: "white", cursor: "pointer" };
 const secondaryChoice: CSSProperties = { ...primaryChoice, borderColor: "rgba(255,255,255,0.13)", background: "rgba(255,255,255,0.03)" };
@@ -281,7 +377,7 @@ const railNote: CSSProperties = { margin: "2px 10px 0", fontSize: 10.5, lineHeig
 const setupShell: CSSProperties = { display: "grid", gap: 0, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.10)", borderRadius: 9, background: "rgba(255,255,255,0.018)", overflow: "hidden" };
 const setupHeader: CSSProperties = { display: "grid", gap: 6, padding: "20px 20px 16px" };
 const setupTitle: CSSProperties = { margin: 0, fontSize: 24, lineHeight: 1.2 };
-const mobileSteps: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, padding: "0 20px 18px" };
+const mobileSteps: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, padding: "0 20px 18px" };
 const mobileStep: CSSProperties = { minWidth: 0, minHeight: 54, display: "grid", gridTemplateColumns: "24px minmax(0, 1fr)", alignItems: "center", gap: 7, padding: "7px 8px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", borderRadius: 7, background: "rgba(255,255,255,0.02)", color: "rgba(255,255,255,0.62)", textAlign: "left", cursor: "pointer" };
 const mobileStepComplete: CSSProperties = { borderColor: "rgba(51,255,122,0.24)", background: "rgba(51,255,122,0.05)" };
 const miniStepNumber: CSSProperties = { width: 22, height: 22, display: "grid", placeItems: "center", borderRadius: 6, background: "rgba(51,255,122,0.1)", color: "#7ce8aa", fontSize: 10, fontWeight: 900 };

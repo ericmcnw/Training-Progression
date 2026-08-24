@@ -9,11 +9,17 @@ import { getProgramAssessmentSuggestions } from "@/app/programs/assessment-sugge
 export const dynamic = "force-dynamic";
 
 export default async function NewProgramPage() {
-  const [routines, exercises, injuries, assessmentSuggestions] = await Promise.all([
+  const [routines, goals, frequencyGoals, exercises, injuries, assessmentSuggestions] = await Promise.all([
     prisma.routine.findMany({
+      where: { isActive: true, isDeleted: false, isPlaceholder: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, kind: true, domain: true },
+    }),
+    prisma.goal.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, goalType: true } }),
+    prisma.frequencyGoal.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, targetCount: true, targetInterval: true, targetUnit: true },
     }),
     prisma.exercise.findMany({
       orderBy: { name: "asc" },
@@ -34,10 +40,10 @@ export default async function NewProgramPage() {
       </div>
       <h1 style={title}>New program</h1>
       <p style={blurb}>
-          Define the foundation first. Then continue through training inputs,
-          stages, blocks, scheduling, and named targets.
+          Set the purpose, the work you&rsquo;ll do, and how you&rsquo;ll measure it.
+          Stages, blocks, scheduling, and named targets come next.
       </p>
-      <ProgramCreator routines={routines} exercises={exercises} injuries={injuries} assessmentSuggestions={assessmentSuggestions} />
+      <ProgramCreator routines={routines} goals={goals} frequencyGoals={frequencyGoals} exercises={exercises} injuries={injuries} assessmentSuggestions={assessmentSuggestions} />
       <style>{`
         .focusForm { --edge: clamp(14px, 4vw, 28px); }
         @media (max-width: 720px) { .focusForm { --edge: 14px; } }

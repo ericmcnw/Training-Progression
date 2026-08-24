@@ -353,6 +353,11 @@ function cleanProgramYmd(value?: string | null): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
 }
 
+function numeric(value?: string | null): number | null {
+  const raw = (value ?? "").trim();
+  return raw && Number.isFinite(Number(raw)) ? Number(raw) : null;
+}
+
 export type InitialProgramAssessment = {
   name: string;
   metricKind: "NUMBER" | "RATIO" | "DURATION" | "GRADE" | "PAIN" | "BODY_WEIGHT" | "BODY_FAT" | "WAIST" | "TEXT";
@@ -360,6 +365,10 @@ export type InitialProgramAssessment = {
   unit: string;
   direction: "HIGHER" | "LOWER" | "TARGET" | "INFORMATIONAL";
   checkpointIntervalWeeks: string;
+  targetNumberValue: string;
+  targetNumerator: string;
+  targetDenominator: string;
+  targetTextValue: string;
   baselineNumberValue: string;
   baselineNumerator: string;
   baselineDenominator: string;
@@ -389,6 +398,7 @@ export async function saveFocus(input: {
   phase?: "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN" | "" | null;
   handoffNote?: string | null;
   initialAssessment?: InitialProgramAssessment | null;
+  initialTraining?: { routineIds: string[]; goalIds: string[]; frequencyGoalIds: string[] } | null;
   updateFoundation?: boolean;
   reconcileMilestones?: boolean;
   milestones: MilestoneFormRow[];
@@ -523,14 +533,31 @@ export async function saveFocus(input: {
   await prisma.$transaction(ops);
   }
 
+  if (!input.id && input.initialTraining) {
+    const { routineIds, goalIds, frequencyGoalIds } = input.initialTraining;
+    const [validRoutines, validGoals, validFrequencyGoals] = await Promise.all([
+      prisma.routine.findMany({ where: { id: { in: routineIds }, isDeleted: false }, select: { id: true } }),
+      prisma.goal.findMany({ where: { id: { in: goalIds } }, select: { id: true } }),
+      prisma.frequencyGoal.findMany({ where: { id: { in: frequencyGoalIds } }, select: { id: true } }),
+    ]);
+    await prisma.$transaction([
+      ...validRoutines.map((routine, sortOrder) =>
+        prisma.programRoutine.create({ data: { programId: focusId, routineId: routine.id, sortOrder } })
+      ),
+      ...validGoals.map((goal, sortOrder) =>
+        prisma.programGoal.create({ data: { programId: focusId, goalId: goal.id, role: "PRIMARY", sortOrder } })
+      ),
+      ...validFrequencyGoals.map((goal, sortOrder) =>
+        prisma.programFrequencyGoal.create({ data: { programId: focusId, frequencyGoalId: goal.id, role: "SUPPORTING", sortOrder } })
+      ),
+    ]);
+  }
+
   if (!input.id && input.initialAssessment?.name.trim()) {
     const assessment = input.initialAssessment;
-    const rawNumber = assessment.baselineNumberValue.trim();
-    const numberValue = rawNumber && Number.isFinite(Number(rawNumber)) ? Number(rawNumber) : null;
-    const rawNumerator = assessment.baselineNumerator.trim();
-    const numerator = rawNumerator && Number.isFinite(Number(rawNumerator)) ? Number(rawNumerator) : null;
-    const rawDenominator = assessment.baselineDenominator.trim();
-    const denominator = rawDenominator && Number.isFinite(Number(rawDenominator)) ? Number(rawDenominator) : null;
+    const numberValue = numeric(assessment.baselineNumberValue);
+    const numerator = numeric(assessment.baselineNumerator);
+    const denominator = numeric(assessment.baselineDenominator);
     const textValue = assessment.baselineTextValue.trim() || null;
     const hasRatio = assessment.metricKind === "RATIO" && numerator != null && denominator != null && denominator > 0;
     const hasScalar = assessment.metricKind !== "RATIO" && (numberValue != null || textValue != null);
@@ -543,6 +570,10 @@ export async function saveFocus(input: {
         metricKey: assessment.metricKey.trim() || null,
         unit: assessment.unit.trim() || null,
         direction: assessment.direction,
+        targetNumberValue: numeric(assessment.targetNumberValue),
+        targetNumerator: numeric(assessment.targetNumerator),
+        targetDenominator: numeric(assessment.targetDenominator),
+        targetTextValue: assessment.targetTextValue.trim() || null,
         checkpointIntervalWeeks: Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null,
         ...((hasRatio || hasScalar) ? {
           results: {

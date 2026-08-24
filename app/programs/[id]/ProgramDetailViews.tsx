@@ -180,6 +180,12 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
                     <span><small>Start</small><strong>{formatAssessment(baseline, assessment.unit)}</strong></span>
                     <span aria-hidden style={comparisonArrow}>to</span>
                     <span><small>Latest</small><strong>{formatAssessment(latest, assessment.unit)}</strong></span>
+                    {formatTarget(assessment) ? (
+                      <>
+                        <span aria-hidden style={comparisonArrow}>{directionArrow(assessment.direction)}</span>
+                        <span><small>Target</small><strong style={{ color: "#7ce8aa" }}>{formatTarget(assessment)}</strong></span>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -375,6 +381,19 @@ function formatAssessment(result: Detail["assessments"][number]["results"][numbe
   if (result.numerator != null && result.denominator != null) return `${result.numerator}/${result.denominator}`;
   if (result.numberValue != null) return `${result.numberValue}${unit ? ` ${unit}` : ""}`;
   return result.textValue ?? "Recorded";
+}
+
+function formatTarget(assessment: Detail["assessments"][number]) {
+  if (assessment.targetNumerator != null && assessment.targetDenominator != null) return `${assessment.targetNumerator}/${assessment.targetDenominator}`;
+  if (assessment.targetNumberValue != null) return `${assessment.targetNumberValue}${assessment.unit ? ` ${assessment.unit}` : ""}`;
+  return assessment.targetTextValue || null;
+}
+
+function directionArrow(direction: Detail["assessments"][number]["direction"]) {
+  if (direction === "HIGHER") return "up to";
+  if (direction === "LOWER") return "down to";
+  if (direction === "TARGET") return "hold at";
+  return "to";
 }
 
 function frequencyLabel(min: number | null, target: number | null, max: number | null) { if (min != null && max != null) return `${min}-${max}x/week`; if (target != null) return `${target}x/week`; if (min != null) return `${min}+x/week`; return "Flexible"; }

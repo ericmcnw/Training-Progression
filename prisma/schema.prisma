@@ -2087,6 +2087,13 @@ model ProgramAssessment {
   metricKey               String?
   unit                    String?
   direction               ProgramAssessmentDirection @default(INFORMATIONAL)
+  // Where the measure is headed. A baseline alone says where you are; without
+  // these a weight-loss or target-load program can state no destination.
+  // Shaped like a result so RATIO targets ("8 of 10 moves") stay expressible.
+  targetNumberValue       Float?
+  targetNumerator         Float?
+  targetDenominator       Float?
+  targetTextValue         String?
   checkpointIntervalWeeks Int?
   sortOrder               Int                        @default(0)
   createdAt               DateTime                   @default(now())

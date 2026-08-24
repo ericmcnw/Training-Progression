@@ -66,6 +66,11 @@ function cleanYmd(value: FormDataEntryValue | null) {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
 }
 
+function numberField(formData: FormData, name: string) {
+  const raw = String(formData.get(name) || "").trim();
+  return raw && Number.isFinite(Number(raw)) ? Number(raw) : null;
+}
+
 export async function createProgramStage(formData: FormData) {
   const programId = String(formData.get("programId") || "");
   await requireProgram(programId);
@@ -363,6 +368,10 @@ export async function createProgramAssessment(formData: FormData) {
       metricKey: String(formData.get("metricKey") || "").trim() || null,
       unit: String(formData.get("unit") || "").trim() || null,
       direction,
+      targetNumberValue: numberField(formData, "targetNumberValue"),
+      targetNumerator: numberField(formData, "targetNumerator"),
+      targetDenominator: numberField(formData, "targetDenominator"),
+      targetTextValue: String(formData.get("targetTextValue") || "").trim() || null,
       checkpointIntervalWeeks,
       sortOrder: (last._max.sortOrder ?? -1) + 1,
       ...(baseline ? { results: { create: baseline } } : {}),

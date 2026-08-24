@@ -36,14 +36,17 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const selectedFrequencyGoals = new Set(options.program.frequencyGoalLinks.map((link) => link.frequencyGoalId));
   const scheduledCount = detail.schedule.missed.length + detail.schedule.next.length;
   const targetCount = detail.targetLists.reduce((sum, list) => sum + list.items.length, 0);
+  const trainingCount = selectedRoutines.size + selectedGoals.size + selectedFrequencyGoals.size;
   const steps: ProgramEditorStep[] = [
-    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `${definition.initial.milestones.length} outcomes · ${detail.assessments.length} baselines` },
-    { id: "program-editor-step-2", number: "2", label: "Training inputs", meta: `${selectedRoutines.size} routines · ${selectedGoals.size + selectedFrequencyGoals.size} goals` },
-    { id: "program-editor-step-3", number: "3", label: "Stages", meta: `${detail.stages.length} defined` },
-    { id: "program-editor-step-4", number: "4", label: "Training blocks", meta: `${detail.blocks.length} defined` },
-    { id: "program-editor-step-5", number: "5", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Nothing placed" },
-    { id: "program-editor-step-6", number: "6", label: "Targets and ladders", meta: targetCount ? `${targetCount} targets` : "No targets" },
+    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `${definition.initial.milestones.length} outcomes · ${detail.assessments.length} baselines`, complete: definition.initial.milestones.length > 0 || detail.assessments.length > 0 },
+    { id: "program-editor-step-2", number: "2", label: "Training inputs", meta: `${selectedRoutines.size} routines · ${selectedGoals.size + selectedFrequencyGoals.size} goals`, complete: trainingCount > 0 },
+    { id: "program-editor-step-3", number: "3", label: "Stages", meta: `${detail.stages.length} defined`, complete: detail.stages.length > 0 },
+    { id: "program-editor-step-4", number: "4", label: "Training blocks", meta: `${detail.blocks.length} defined`, complete: detail.blocks.length > 0 },
+    { id: "program-editor-step-5", number: "5", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Nothing placed", complete: scheduledCount > 0 },
+    { id: "program-editor-step-6", number: "6", label: "Targets and ladders", meta: targetCount ? `${targetCount} targets` : "No targets", complete: targetCount > 0 },
   ];
+  // Land on the first thing still missing, not on the step just filled in.
+  const openStep = steps.find((step) => !step.complete)?.number ?? "1";
 
   return (
     <main style={page} className="programEditor">
@@ -54,15 +57,15 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
 
       <header style={{ display: "grid", gap: 5 }}>
         <h1 style={title}>Edit {detail.name}</h1>
-        <p style={subtitle}>Build from the program foundation through training, stages, and the next scheduled sessions. Work through one higher-level step at a time.</p>
+        <p style={subtitle}>Each section saves on its own. Ticked steps are done — this opens on the first one that still needs you.</p>
       </header>
 
       <div className="programEditorWorkspace" style={workspace}>
         <aside className="programEditorSidebar" style={sidebar}>
-          <ProgramEditorNav steps={steps} />
+          <ProgramEditorNav steps={steps} openStepId={`program-editor-step-${openStep}`} />
         </aside>
         <div className="programEditorCanvas" style={canvas}>
-      <EditorSection number="1" title="Program setup" subtitle="Objective, timeline, starting point, and outcomes live together here.">
+      <EditorSection openStep={openStep} number="1" title="Program setup" subtitle="Objective, timeline, starting point, and outcomes live together here.">
         <SetupPart number="1" title="Direction and timeline" subtitle={`${humanize(definition.initial.objectiveKind)} · ${humanize(definition.initial.timelineMode)}`}>
         <FocusForm
           initial={definition.initial}
@@ -93,7 +96,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
           const latest = assessment.results.at(-1) ?? null;
           return <div key={assessment.id} style={blockCard}>
             <div style={cardHead}><div><strong>{assessment.name}</strong><div style={minorText}>{assessment.metricKind.toLowerCase().replaceAll("_", " ")}{assessment.checkpointIntervalWeeks ? ` · every ${assessment.checkpointIntervalWeeks} weeks` : " · stage review"}</div></div><form action={deleteProgramAssessment}><input type="hidden" name="programId" value={id} /><input type="hidden" name="assessmentId" value={assessment.id} /><button type="submit" style={quietActionButton}>Remove</button></form></div>
-            {baseline ? <div style={summaryRow}><span><span style={minorText}>Baseline</span><strong style={{ display: "block" }}>{assessmentValue(baseline, assessment.unit)}</strong></span>{latest && latest.id !== baseline.id ? <span style={{ textAlign: "right" }}><span style={minorText}>Latest</span><strong style={{ display: "block" }}>{assessmentValue(latest, assessment.unit)}</strong></span> : null}</div> : <div style={empty}>No confirmed baseline yet.</div>}
+            {baseline ? <div style={summaryRow}><span><span style={minorText}>Baseline</span><strong style={{ display: "block" }}>{assessmentValue(baseline, assessment.unit)}</strong></span>{latest && latest.id !== baseline.id ? <span style={{ textAlign: "center" }}><span style={minorText}>Latest</span><strong style={{ display: "block" }}>{assessmentValue(latest, assessment.unit)}</strong></span> : null}{targetValue(assessment) ? <span style={{ textAlign: "right" }}><span style={minorText}>Target</span><strong style={{ display: "block", color: "#7ce8aa" }}>{targetValue(assessment)}</strong></span> : null}</div> : <div style={empty}>No confirmed baseline yet.</div>}
             <form action={addProgramAssessmentResult} style={miniForm}>
               <input type="hidden" name="programId" value={id} /><input type="hidden" name="assessmentId" value={assessment.id} />
               {assessment.metricKind === "RATIO" ? <><input name="numerator" type="number" step="any" placeholder="made" style={smallInput} /><input name="denominator" type="number" step="any" placeholder="attempts" style={smallInput} /></> : assessment.metricKind === "TEXT" || assessment.metricKind === "GRADE" ? <input name="textValue" placeholder="result" style={input} /> : <input name="numberValue" type="number" step="any" placeholder={assessment.unit ?? "result"} style={smallInput} />}
@@ -120,7 +123,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </SetupPart>
       </EditorSection>
 
-      <EditorSection number="2" title="Training inputs" subtitle="Connect the routines, performance goals, and frequency targets that move this program forward.">
+      <EditorSection openStep={openStep} number="2" title="Training inputs" subtitle="Connect the routines, performance goals, and frequency targets that move this program forward.">
         <div style={builderActions}>
           <span style={minorText}>Reuse what already exists. Create something only when the program genuinely needs it.</span>
           <div style={actionGroup}><NewRoutineDrawerButton style={smallCreateButton}>New routine</NewRoutineDrawerButton><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
@@ -160,7 +163,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </form>
       </EditorSection>
 
-      <EditorSection number="3" title="Stages" subtitle="High-level phases such as Base, Build, Send season, or Return to sport.">
+      <EditorSection openStep={openStep} number="3" title="Stages" subtitle="High-level phases such as Base, Build, Send season, or Return to sport.">
         {detail.stages.length ? (
           <div style={list}>
             {detail.stages.map((stage) => (
@@ -190,7 +193,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </AddPanel>
       </EditorSection>
 
-      <EditorSection number="4" title="Training blocks" subtitle="A few weeks of repeatable work. Flexible blocks do not force exact dates.">
+      <EditorSection openStep={openStep} number="4" title="Training blocks" subtitle="A few weeks of repeatable work. Flexible blocks do not force exact dates.">
         {detail.blocks.length ? (
           <div style={list}>
             {detail.blocks.map((block) => (
@@ -240,7 +243,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </AddPanel>
       </EditorSection>
 
-      <EditorSection number="5" title="Two-week schedule" subtitle="Place the next few sessions without turning the whole program into a rigid calendar.">
+      <EditorSection openStep={openStep} number="5" title="Two-week schedule" subtitle="Place the next few sessions without turning the whole program into a rigid calendar.">
         {detail.schedule.missed.length ? (
           <div style={scheduleGroup}>
             <div style={scheduleLabel}>Needs a decision</div>
@@ -289,7 +292,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         <p style={scheduleNote}>Flexible sessions can slide together after a miss. Fixed sessions stay on their date. Nothing is moved without your choice.</p>
       </EditorSection>
 
-      <EditorSection number="6" title="Named targets and ladders" subtitle="Tick lists for climbs or skills; progression ladders for ordered skills.">
+      <EditorSection openStep={openStep} number="6" title="Named targets and ladders" subtitle="Tick lists for climbs or skills; progression ladders for ordered skills.">
         {detail.targetLists.map((targetList) => (
           <div key={targetList.id} style={blockCard}>
             <div style={cardHead}><div><strong>{targetList.name}</strong>{targetList.membershipSource === "CLIMB_TICK_LIST" ? <div style={minorText}>Synced from starred climbing problems</div> : null}</div><span style={typeChip}>{targetList.kind.toLowerCase()}</span></div>
@@ -351,8 +354,8 @@ function SetupPart({ number, title, subtitle, children }: { number: string; titl
   </section>;
 }
 
-function EditorSection({ number, title, subtitle, children }: { number: string; title: string; subtitle: string; children: React.ReactNode }) {
-  return <details id={`program-editor-step-${number}`} data-program-editor-step open={number === "1"} style={section}><summary style={sectionHeader}><span style={numberChip}>{number}</span><div style={{ flex: 1, minWidth: 0 }}><h2 style={sectionTitle}>{title}</h2><p style={sectionSubtitle}>{subtitle}</p></div><span aria-hidden style={sectionChevron}>⌄</span></summary><div className="programEditorSectionBody" style={sectionBody}>{children}</div></details>;
+function EditorSection({ number, title, subtitle, openStep, children }: { number: string; title: string; subtitle: string; openStep: string; children: React.ReactNode }) {
+  return <details id={`program-editor-step-${number}`} data-program-editor-step open={number === openStep} style={section}><summary style={sectionHeader}><span style={numberChip}>{number}</span><div style={{ flex: 1, minWidth: 0 }}><h2 style={sectionTitle}>{title}</h2><p style={sectionSubtitle}>{subtitle}</p></div><span aria-hidden style={sectionChevron}>⌄</span></summary><div className="programEditorSectionBody" style={sectionBody}>{children}</div></details>;
 }
 
 function PickerGroup({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
@@ -372,6 +375,11 @@ function assessmentValue(result: { numberValue: number | null; numerator: number
   if (result.numerator != null && result.denominator != null) return `${result.numerator}/${result.denominator}`;
   if (result.numberValue != null) return `${result.numberValue}${unit ? ` ${unit}` : ""}`;
   return result.textValue ?? "—";
+}
+function targetValue(assessment: { targetNumberValue: number | null; targetNumerator: number | null; targetDenominator: number | null; targetTextValue: string | null; unit: string | null }) {
+  if (assessment.targetNumerator != null && assessment.targetDenominator != null) return `${assessment.targetNumerator}/${assessment.targetDenominator}`;
+  if (assessment.targetNumberValue != null) return `${assessment.targetNumberValue}${assessment.unit ? ` ${assessment.unit}` : ""}`;
+  return assessment.targetTextValue || null;
 }
 function humanize(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());

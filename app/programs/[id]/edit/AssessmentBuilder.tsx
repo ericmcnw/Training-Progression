@@ -8,6 +8,14 @@ import { programSportMetricOptions, type ProgramSportMetricOption } from "@/lib/
 import type { ProgramAssessmentSuggestion } from "@/app/programs/assessment-suggestions";
 
 type SourceKind = "sport" | "exercise" | "body" | "recovery" | "manual";
+type Direction = "HIGHER" | "LOWER" | "TARGET" | "INFORMATIONAL";
+
+const DIRECTIONS: Array<{ id: Direction; label: string; hint: string }> = [
+  { id: "HIGHER", label: "↑ Increase", hint: "Progress means a bigger number" },
+  { id: "LOWER", label: "↓ Decrease", hint: "Progress means a smaller number" },
+  { id: "TARGET", label: "→ Hold", hint: "Progress means staying at the target" },
+  { id: "INFORMATIONAL", label: "Just tracking", hint: "No direction — you only want the history" },
+];
 type MetricKind = "NUMBER" | "RATIO" | "DURATION" | "GRADE" | "PAIN" | "BODY_WEIGHT" | "BODY_FAT" | "WAIST" | "TEXT";
 
 type MetricOption = Omit<ProgramSportMetricOption, "metricKind"> & { metricKind: MetricKind };
@@ -76,6 +84,11 @@ export default function AssessmentBuilder({
   const [customName, setCustomName] = useState("");
   const [customKind, setCustomKind] = useState<MetricKind>("NUMBER");
   const [customUnit, setCustomUnit] = useState("");
+  const [targetNumberValue, setTargetNumberValue] = useState("");
+  const [targetNumerator, setTargetNumerator] = useState("");
+  const [targetDenominator, setTargetDenominator] = useState("");
+  const [targetTextValue, setTargetTextValue] = useState("");
+  const [directionOverride, setDirectionOverride] = useState<Direction | null>(null);
   const [baselineNumberValue, setBaselineNumberValue] = useState("");
   const [baselineNumerator, setBaselineNumerator] = useState("");
   const [baselineDenominator, setBaselineDenominator] = useState("");
@@ -103,6 +116,11 @@ export default function AssessmentBuilder({
     customUnit,
   });
   const suggestion = suggestions.find((candidate) => candidate.metricKey === definition.metricKey) ?? null;
+  const direction: Direction = directionOverride ?? definition.direction;
+
+  // Each metric carries its own sensible direction, so a manual choice only
+  // applies to the metric it was made for.
+  useEffect(() => { setDirectionOverride(null); }, [definition.metricKey]);
 
   function clearSuggestionSource() {
     setBaselineSource("MANUAL");
@@ -125,8 +143,12 @@ export default function AssessmentBuilder({
       metricKind: definition.metricKind,
       metricKey: definition.metricKey,
       unit: definition.unit,
-      direction: definition.direction,
+      direction,
       checkpointIntervalWeeks,
+      targetNumberValue,
+      targetNumerator,
+      targetDenominator,
+      targetTextValue,
       baselineNumberValue,
       baselineNumerator,
       baselineDenominator,
@@ -141,8 +163,12 @@ export default function AssessmentBuilder({
     definition.metricKind,
     definition.metricKey,
     definition.unit,
-    definition.direction,
+    direction,
     checkpointIntervalWeeks,
+    targetNumberValue,
+    targetNumerator,
+    targetDenominator,
+    targetTextValue,
     baselineNumberValue,
     baselineNumerator,
     baselineDenominator,
@@ -159,7 +185,7 @@ export default function AssessmentBuilder({
       <input type="hidden" name="metricKind" value={definition.metricKind} />
       <input type="hidden" name="metricKey" value={definition.metricKey} />
       <input type="hidden" name="unit" value={definition.unit} />
-      <input type="hidden" name="direction" value={definition.direction} />
+      <input type="hidden" name="direction" value={direction} />
       <input type="hidden" name="baselineSource" value={baselineSource} />
       <input type="hidden" name="baselineSourceRefId" value={baselineSourceRefId} />
 
@@ -262,7 +288,7 @@ export default function AssessmentBuilder({
 
       <div style={baselinePanel}>
         <div style={baselineHeading}>
-          <div><strong style={{ display: "block", fontSize: 13 }}>Current result</strong><span style={hint}>Optional. Save it now, or let the first repeatable test establish the baseline.</span></div>
+          <div><strong style={{ display: "block", fontSize: 13 }}>Where you are now</strong><span style={hint}>Optional. Save it now, or let the first repeatable test establish the baseline.</span></div>
           <span style={metricChip}>{definition.name || "Choose a measure"}</span>
         </div>
         {suggestion ? (
@@ -291,18 +317,59 @@ export default function AssessmentBuilder({
             <Labeled label={`Result${definition.unit ? ` (${definition.unit})` : ""}`}><input name="baselineNumberValue" type="number" step="any" value={baselineNumberValue} onChange={(event) => { setBaselineNumberValue(event.target.value); clearSuggestionSource(); }} style={input} /></Labeled>
           )}
           <Labeled label="Measured on" hint={baselineSourceRefId ? "Filled from the source log; edit to make it manual." : undefined}><input name="baselineYmd" type="date" value={baselineYmd} onChange={(event) => { setBaselineYmd(event.target.value); clearSuggestionSource(); }} style={input} /></Labeled>
-          <Labeled label="Repeat">
+        </div>
+      </div>
+
+      <div style={targetPanel}>
+        <div style={baselineHeading}>
+          <div>
+            <strong style={{ display: "block", fontSize: 13 }}>Where you&rsquo;re going</strong>
+            <span style={hint}>Optional, but this is what turns a reading into progress. Leave it blank to only keep the history.</span>
+          </div>
+        </div>
+        <div className="assessmentBaselineGrid" style={baselineGrid}>
+          {definition.metricKind === "RATIO" ? (
+            <>
+              <Labeled label="Target made"><input name="targetNumerator" type="number" step="any" value={targetNumerator} onChange={(event) => setTargetNumerator(event.target.value)} style={input} /></Labeled>
+              <Labeled label="Out of"><input name="targetDenominator" type="number" step="any" value={targetDenominator} onChange={(event) => setTargetDenominator(event.target.value)} style={input} /></Labeled>
+            </>
+          ) : definition.metricKind === "TEXT" || definition.metricKind === "GRADE" ? (
+            <Labeled label="Target"><input name="targetTextValue" value={targetTextValue} onChange={(event) => setTargetTextValue(event.target.value)} placeholder={definition.metricKind === "GRADE" ? "e.g. V5" : "Target result"} style={input} /></Labeled>
+          ) : (
+            <Labeled label={`Target${definition.unit ? ` (${definition.unit})` : ""}`}><input name="targetNumberValue" type="number" step="any" value={targetNumberValue} onChange={(event) => setTargetNumberValue(event.target.value)} style={input} /></Labeled>
+          )}
+          <Labeled label="Repeat the test">
             <select name="checkpointIntervalWeeks" value={checkpointIntervalWeeks} onChange={(event) => setCheckpointIntervalWeeks(event.target.value)} style={input}>
               <option value="">At stage changes</option><option value="2">Every 2 weeks</option><option value="4">Every 4 weeks</option><option value="6">Every 6 weeks</option><option value="8">Every 8 weeks</option><option value="12">Every 12 weeks</option>
             </select>
           </Labeled>
+        </div>
+        <div>
+          <div style={fieldTitle}>Which way is progress?</div>
+          <div className="assessmentDirectionGrid" style={directionGrid}>
+            {DIRECTIONS.map((option) => {
+              const selected = direction === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setDirectionOverride(option.id)}
+                  style={{ ...directionButton, ...(selected ? selectedSource : {}) }}
+                >
+                  <strong style={{ color: selected ? "#fff" : "rgba(255,255,255,0.78)" }}>{option.label}</strong>
+                  <span style={sourceDescription}>{option.hint}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {!draft ? <button type="submit" disabled={!definition.name.trim()} style={{ ...submit, opacity: definition.name.trim() ? 1 : 0.45 }}>Add assessment</button> : null}
       <style>{`
         @media (max-width: 680px) {
-          .assessmentSourceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .assessmentSourceGrid, .assessmentDirectionGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .assessmentConfigGrid, .assessmentBaselineGrid { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
@@ -414,6 +481,9 @@ const field: CSSProperties = { minWidth: 0, display: "grid", gap: 6, fontSize: 1
 const hint: CSSProperties = { fontSize: 10.5, fontWeight: 500, lineHeight: 1.4, color: "rgba(255,255,255,0.4)" };
 const input: CSSProperties = { width: "100%", minWidth: 0, minHeight: 44, boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "#111827", color: "#fff", fontSize: 16 };
 const baselinePanel: CSSProperties = { display: "grid", gap: 12, padding: "14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.09)" };
+const targetPanel: CSSProperties = { ...baselinePanel, borderColor: "rgba(51,255,122,0.2)", background: "rgba(51,255,122,0.02)" };
+const directionGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 7 };
+const directionButton: CSSProperties = { ...sourceButton, minHeight: 64 };
 const baselineHeading: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" };
 const metricChip: CSSProperties = { maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "4px 8px", borderRadius: 6, background: "rgba(51,255,122,0.08)", color: "#7ce8aa", fontSize: 10.5, fontWeight: 850 };
 const baselineGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(165px, 1fr))", gap: 10 };

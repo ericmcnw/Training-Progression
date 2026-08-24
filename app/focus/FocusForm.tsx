@@ -103,6 +103,7 @@ export default function FocusForm({
   embedded = false,
   panel = "all",
   startingAssessment = null,
+  initialTraining = null,
   guidedOutcomes = false,
   onBack,
   onMilestonesChange,
@@ -116,6 +117,7 @@ export default function FocusForm({
   embedded?: boolean;
   panel?: "all" | "foundation" | "milestones";
   startingAssessment?: InitialProgramAssessment | null;
+  initialTraining?: { routineIds: string[]; goalIds: string[]; frequencyGoalIds: string[] } | null;
   guidedOutcomes?: boolean;
   onBack?: () => void;
   onMilestonesChange?: (milestones: MilestoneFormRow[]) => void;
@@ -208,6 +210,7 @@ export default function FocusForm({
           endYmd: submittedEndYmd,
           reviewYmd: submittedReviewYmd,
           initialAssessment: startingAssessment,
+          initialTraining,
           updateFoundation: panel !== "milestones",
           reconcileMilestones: panel !== "foundation",
           milestones: rows.map((r) => ({

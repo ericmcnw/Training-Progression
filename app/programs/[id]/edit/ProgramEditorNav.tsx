@@ -7,10 +7,11 @@ export type ProgramEditorStep = {
   number: string;
   label: string;
   meta: string;
+  complete: boolean;
 };
 
-export default function ProgramEditorNav({ steps }: { steps: ProgramEditorStep[] }) {
-  const [activeId, setActiveId] = useState(steps[0]?.id ?? "");
+export default function ProgramEditorNav({ steps, openStepId }: { steps: ProgramEditorStep[]; openStepId?: string }) {
+  const [activeId, setActiveId] = useState(openStepId ?? steps[0]?.id ?? "");
 
   useEffect(() => {
     const sections = Array.from(
@@ -62,7 +63,7 @@ export default function ProgramEditorNav({ steps }: { steps: ProgramEditorStep[]
               aria-current={active ? "step" : undefined}
               style={{ ...stepButton, ...(active ? activeStep : {}) }}
             >
-              <span style={{ ...number, ...(active ? activeNumber : {}) }}>{step.number}</span>
+              <span style={{ ...number, ...(active ? activeNumber : {}), ...(step.complete ? completeNumber : {}) }}>{step.complete ? "✓" : step.number}</span>
               <span style={stepText}>
                 <span style={{ ...label, color: active ? "#fff" : label.color }}>{step.label}</span>
                 <span style={meta}>{step.meta}</span>
@@ -82,6 +83,7 @@ const stepList: React.CSSProperties = { display: "grid", gap: 3 };
 const stepButton: React.CSSProperties = { width: "100%", minHeight: 58, display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)", alignItems: "center", gap: 10, padding: "8px 10px", borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: 7, background: "transparent", color: "inherit", textAlign: "left", cursor: "pointer" };
 const activeStep: React.CSSProperties = { background: "rgba(51,255,122,0.075)", borderColor: "rgba(51,255,122,0.24)" };
 const number: React.CSSProperties = { width: 26, height: 26, display: "grid", placeItems: "center", borderRadius: 6, background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.46)", fontSize: 10.5, fontWeight: 900 };
+const completeNumber: React.CSSProperties = { background: "rgba(51,255,122,0.16)", color: "#7ce8aa" };
 const activeNumber: React.CSSProperties = { background: "rgba(51,255,122,0.14)", color: "#7ce8aa" };
 const stepText: React.CSSProperties = { minWidth: 0, display: "grid", gap: 2 };
 const label: React.CSSProperties = { fontSize: 12.5, fontWeight: 850, color: "rgba(255,255,255,0.7)", lineHeight: 1.25 };

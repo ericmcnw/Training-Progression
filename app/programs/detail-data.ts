@@ -164,6 +164,10 @@ export async function getProgramDetailData(id: string) {
           metricKey: true,
           unit: true,
           direction: true,
+          targetNumberValue: true,
+          targetNumerator: true,
+          targetDenominator: true,
+          targetTextValue: true,
           checkpointIntervalWeeks: true,
           results: {
             orderBy: { measuredAt: "asc" },
