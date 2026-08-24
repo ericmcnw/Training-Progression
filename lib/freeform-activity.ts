@@ -34,6 +34,7 @@ export const ACTIVITY_TAGS: ActivityTag[] = [
   { key: "run", label: "Run" },
   { key: "swim", label: "Swim" },
   { key: "hike", label: "Hike" },
+  { key: "stairs", label: "Stairs" },
   { key: "bike", label: "Bike" },
   { key: "paddle", label: "Paddle" },
   { key: "surf", label: "Surf" },
