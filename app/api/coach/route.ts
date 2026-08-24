@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { COACH_TOOLS, runCoachTool } from "@/lib/coach-tools";
 import { formatAppDate, todayAppYmd } from "@/lib/dates";
+import { TRAINING_AI_POLICY_PROMPT } from "@/lib/ai/training-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -63,6 +64,8 @@ async function buildSystemBlocks(threadSummary: string | null): Promise<Anthropi
     `Your standing coaching brief:`,
     ``,
     brief,
+    ``,
+    TRAINING_AI_POLICY_PROMPT,
     ``,
     `## Working rules`,
     `- Before ANY training recommendation, call get_recent_logs and get_pain_trend`,

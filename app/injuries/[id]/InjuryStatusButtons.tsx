@@ -20,7 +20,7 @@ export default function InjuryStatusButtons({ id }: { id: string }) {
     if (!window.confirm("Delete this injury?")) return;
     startTransition(async () => {
       await deleteInjury(id);
-      router.push("/body");
+      router.push("/profile/health");
     });
   }
 

@@ -110,6 +110,7 @@ export async function logPain(
 
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
   revalidatePath("/injuries");
   for (const row of rows) revalidatePath(`/body/${row.zoneSlug}`);
 }
@@ -143,6 +144,7 @@ export async function updatePainLog(
 
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
   revalidatePath("/injuries");
   revalidatePath(`/body/${zone.slug}`);
   // Moving a log off its old zone changes that zone's surfaces too.
@@ -159,6 +161,7 @@ export async function deletePainLog(id: string) {
 
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
   revalidatePath("/injuries");
   if (log.zone?.slug) revalidatePath(`/body/${log.zone.slug}`);
 }
@@ -196,6 +199,6 @@ export async function addManualZoneActivity(input: {
 
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
   revalidatePath(`/body/${zone.slug}`);
 }
-

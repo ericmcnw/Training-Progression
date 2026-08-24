@@ -10,17 +10,17 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import CollapsibleSection from "./CollapsibleSection";
 import { COLOR, withAlpha } from "./tokens";
-import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/data";
+import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/shared";
 
 export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[] }) {
   if (focuses.length === 0) return null;
 
   return (
     <CollapsibleSection
-      title="Focus"
+      title="Programs"
       count={focuses.length}
       countTone="accent"
-      hint="tap a focus"
+      hint="tap a program"
       storageKey="home:focus:open"
       defaultOpen
     >
@@ -29,7 +29,7 @@ export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[]
           <FocusCard key={f.id} focus={f} />
         ))}
       </div>
-      <Link href="/focus/new" style={newLink}>+ New focus</Link>
+      <Link href="/programs" style={newLink}>All programs →</Link>
     </CollapsibleSection>
   );
 }
@@ -42,7 +42,7 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
       : 0;
 
   return (
-    <Link href={`/focus/${focus.id}`} style={{ ...cardShell, borderColor: withAlpha(accent, 0.28) }}>
+    <Link href={`/programs/${focus.id}`} style={{ ...cardShell, borderColor: withAlpha(accent, 0.28) }}>
       <div style={topRow}>
         <span style={nameWrap}>
           {focus.icon ? <span aria-hidden style={iconStyle}>{focus.icon}</span> : null}

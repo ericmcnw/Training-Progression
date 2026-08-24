@@ -9,7 +9,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd, toAppYmd, diffYmdDays } from "@/lib/dates";
 import { projectRoadmap, type ProjectionInputMilestone } from "@/lib/focus-projection";
-import { phaseLabel } from "@/app/focus/data";
+import { phaseLabel } from "@/app/focus/shared";
+import { getAppSession } from "@/lib/auth";
 
 const PX_PER_DAY = 1.6;
 const LABEL_W = 84;
@@ -17,9 +18,10 @@ const LANE_H = 40;
 
 export default async function YearTab() {
   const today = todayAppYmd();
+  const session = await getAppSession();
 
   const focuses = await prisma.focus.findMany({
-    where: { status: { in: ["ACTIVE", "PLANNED"] } },
+    where: { status: { in: ["ACTIVE", "PLANNED"] }, profileKey: session.profileKey },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true, name: true, icon: true, color: true, status: true,
@@ -121,7 +123,7 @@ export default async function YearTab() {
           {months.map((mo) => (
             <Link
               key={mo.ym}
-              href={`/plan?month=${mo.ym}#schedule`}
+              href={`/plan?view=calendar&month=${mo.ym}`}
               style={{ ...monthLink, left: Math.round(mo.day * PX_PER_DAY) }}
               title={`Zoom into ${mo.label}`}
             >
@@ -147,7 +149,7 @@ export default async function YearTab() {
               </div>
               <div style={{ position: "relative", height: LANE_H, flex: 1 }}>
                 <Link
-                  href={`/focus/${lane.id}`}
+                  href={`/programs/${lane.id}`}
                   style={{
                     ...band,
                     left: lane.startX,

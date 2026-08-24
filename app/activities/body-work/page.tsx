@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 
 // /activities/body-work was a Phase 1 stub whose feature list (body
-// status, injuries list, mobility chart, zone coverage) already lives
-// on /body, /injuries, and the rewritten /activities/mobility. The URL
-// stays alive for legacy bookmarks; users land on /body which is the
-// real body-status surface.
+// status and injuries) now lives under Profile / Health. Keep the old URL
+// alive for bookmarks without making the body map a primary destination.
 export const dynamic = "force-dynamic";
 
 export default function BodyWorkRedirect() {
-  redirect("/body");
+  redirect("/profile/health");
 }

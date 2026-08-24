@@ -24,7 +24,8 @@ export default async function ScheduleRedirect(props: {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const month = getParam(searchParams, "month");
   const qs = new URLSearchParams();
+  qs.set("view", "calendar");
   if (month && /^\d{4}-\d{2}$/.test(month)) qs.set("month", month);
   const query = qs.toString();
-  redirect(`/plan${query ? `?${query}` : ""}`);
+  redirect(`/plan?${query}`);
 }

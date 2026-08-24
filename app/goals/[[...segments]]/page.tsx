@@ -19,6 +19,7 @@ export default async function GoalsRedirect(props: {
 
   if (segments.length === 0) {
     const qs = new URLSearchParams();
+    qs.set("view", "goals");
     for (const [k, v] of Object.entries(searchParams)) {
       if (k === "tab") continue;
       if (typeof v === "string") qs.set(k, v);
@@ -28,7 +29,7 @@ export default async function GoalsRedirect(props: {
     // redirect lands on it. (Server-redirect Location fragments aren't
     // reliable; the in-app jump-nav handles client-side anchoring.)
     const query = qs.toString();
-    redirect(`/plan${query ? `?${query}` : ""}`);
+    redirect(`/plan?${query}`);
   }
 
   if (segments.length === 1) {

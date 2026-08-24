@@ -312,7 +312,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
     <PageShell
       eyebrow="Injury"
       title={injury.name}
-      toolbar={<HistoryBackButton fallbackHref="/body" label="← Back" style={linkStyle} />}
+      toolbar={<HistoryBackButton fallbackHref="/profile/health" label="← Back" style={linkStyle} />}
     >
       {/* ── Hero: slim daily strip. A returning user needs "how is it +
           log today's reading" first — the identity block (map, factors,

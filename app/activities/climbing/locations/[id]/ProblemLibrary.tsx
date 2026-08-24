@@ -25,7 +25,7 @@ import {
 } from "@/lib/climb-types";
 import MediaGallery, { type GalleryMediaItem } from "@/app/components/climbing/MediaGallery";
 import MediaUploader from "@/app/components/climbing/MediaUploader";
-import { renameClimbProblem, updateClimbProblemNotes } from "./actions";
+import { renameClimbProblem, setClimbProblemTickList, updateClimbProblemNotes } from "./actions";
 
 export type ProblemLibraryEntry = {
   id: string;
@@ -36,12 +36,13 @@ export type ProblemLibraryEntry = {
   attemptCount: number;
   lastAttempt: Date | null;
   bestOutcome: ClimbOutcome | null;
+  onTickList: boolean;
   /** Photos + links attached to this specific problem. Independent from
    *  the location-level gallery; persists across sessions just like notes. */
   media: GalleryMediaItem[];
 };
 
-type StatusFilter = "all" | "sent" | "projects" | "unsent";
+type StatusFilter = "all" | "ticklist" | "sent" | "projects" | "unsent";
 
 export default function ProblemLibrary({ entries }: { entries: ProblemLibraryEntry[] }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -51,17 +52,20 @@ export default function ProblemLibrary({ entries }: { entries: ProblemLibraryEnt
     let sent = 0;
     let projects = 0;
     let unsent = 0;
+    let ticklist = 0;
     for (const e of entries) {
+      if (e.onTickList) ticklist += 1;
       if (e.bestOutcome !== null && SENT_OUTCOMES.has(e.bestOutcome)) sent += 1;
       else if (e.bestOutcome !== null) projects += 1;
       else unsent += 1;
     }
-    return { all: entries.length, sent, projects, unsent };
+    return { all: entries.length, ticklist, sent, projects, unsent };
   }, [entries]);
 
   const filtered = useMemo(() => {
     return entries.filter((e) => {
       if (filter === "all") return true;
+      if (filter === "ticklist") return e.onTickList;
       if (filter === "sent") return e.bestOutcome !== null && SENT_OUTCOMES.has(e.bestOutcome);
       if (filter === "projects") return e.bestOutcome !== null && !SENT_OUTCOMES.has(e.bestOutcome);
       // unsent
@@ -89,6 +93,7 @@ export default function ProblemLibrary({ entries }: { entries: ProblemLibraryEnt
       <div style={tabRowStyle}>
         {([
           { value: "all", label: `All (${counts.all})` },
+          ...(counts.ticklist > 0 ? [{ value: "ticklist" as const, label: `★ Tick list (${counts.ticklist})` }] : []),
           { value: "sent", label: `Sent (${counts.sent})` },
           { value: "projects", label: `Projects (${counts.projects})` },
           ...(counts.unsent > 0 ? [{ value: "unsent", label: `Unsent (${counts.unsent})` }] : []),
@@ -145,7 +150,22 @@ function ProblemRow({
   const [nameDraft, setNameDraft] = useState(problem.name);
   const [notesDraft, setNotesDraft] = useState(problem.notes ?? "");
   const [editingNotes, setEditingNotes] = useState(false);
+  const [ticked, setTicked] = useState(problem.onTickList);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleTick() {
+    const next = !ticked;
+    setTicked(next);
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setClimbProblemTickList({ id: problem.id, onTickList: next });
+      } catch {
+        setTicked(!next);
+        setError("Couldn't update tick list");
+      }
+    });
+  }
 
   function saveName() {
     if (!nameDraft.trim()) {
@@ -182,26 +202,38 @@ function ProblemRow({
         ...(expanded ? rowExpandedStyle : {}),
       }}
     >
-      <button type="button" onClick={onToggle} style={rowMainStyle} aria-expanded={expanded}>
-        <span style={gradeChipStyle(problem.bestOutcome)}>{problem.grade}</span>
-        <span style={{ display: "grid", gap: 1, minWidth: 0, flex: 1, textAlign: "left" }}>
-          <span style={nameStyle}>{problem.name}</span>
-          <span style={metaStyle}>
-            {problem.attemptCount > 0
-              ? `${problem.attemptCount} attempt${problem.attemptCount === 1 ? "" : "s"}`
-              : "Not yet attempted"}
-            {problem.lastAttempt
-              ? ` · last ${formatAppDate(problem.lastAttempt, { month: "short", day: "numeric" })}`
-              : ""}
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <button
+          type="button"
+          onClick={toggleTick}
+          style={ticked ? starOnStyle : starOffStyle}
+          aria-pressed={ticked}
+          aria-label={ticked ? `Remove ${problem.name} from tick list` : `Add ${problem.name} to tick list`}
+          title={ticked ? "On your tick list" : "Add to tick list"}
+        >
+          {ticked ? "★" : "☆"}
+        </button>
+        <button type="button" onClick={onToggle} style={rowMainStyle} aria-expanded={expanded}>
+          <span style={gradeChipStyle(problem.bestOutcome)}>{problem.grade}</span>
+          <span style={{ display: "grid", gap: 1, minWidth: 0, flex: 1, textAlign: "left" }}>
+            <span style={nameStyle}>{problem.name}</span>
+            <span style={metaStyle}>
+              {problem.attemptCount > 0
+                ? `${problem.attemptCount} attempt${problem.attemptCount === 1 ? "" : "s"}`
+                : "Not yet attempted"}
+              {problem.lastAttempt
+                ? ` · last ${formatAppDate(problem.lastAttempt, { month: "short", day: "numeric" })}`
+                : ""}
+            </span>
           </span>
-        </span>
-        {problem.bestOutcome && (
-          <span style={outcomeChipStyle(problem.bestOutcome, problem.gradeSystem)}>
-            {climbOutcomeLabel(problem.bestOutcome, problem.gradeSystem)}
-          </span>
-        )}
-        <span style={{ fontSize: 11, opacity: 0.4 }}>{expanded ? "▴" : "▾"}</span>
-      </button>
+          {problem.bestOutcome && (
+            <span style={outcomeChipStyle(problem.bestOutcome, problem.gradeSystem)}>
+              {climbOutcomeLabel(problem.bestOutcome, problem.gradeSystem)}
+            </span>
+          )}
+          <span style={{ fontSize: 11, opacity: 0.4 }}>{expanded ? "▴" : "▾"}</span>
+        </button>
+      </div>
 
       {expanded && (
         <div style={expandedBody}>
@@ -369,14 +401,36 @@ const rowMainStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "9px 10px",
+  padding: "9px 10px 9px 2px",
   background: "transparent",
   border: "none",
   color: "inherit",
   cursor: "pointer",
   textAlign: "left",
   minHeight: 44,
+  flex: 1,
+  minWidth: 0,
 };
+
+const starBaseStyle: React.CSSProperties = {
+  width: 40,
+  minHeight: 44,
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  fontSize: 17,
+  lineHeight: 1,
+  padding: 0,
+  touchAction: "manipulation",
+};
+
+const starOnStyle: React.CSSProperties = { ...starBaseStyle, color: "#fbbf24" };
+
+const starOffStyle: React.CSSProperties = { ...starBaseStyle, color: "rgba(255,255,255,0.26)" };
 
 const nameStyle: React.CSSProperties = {
   fontSize: 13,

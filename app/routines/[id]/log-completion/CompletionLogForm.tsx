@@ -5,7 +5,13 @@ import { useState } from "react";
 import { createCompletionLog } from "../../actions";
 import { Field, FormActions, FormError, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
 
-export default function CompletionLogForm({ routineId }: { routineId: string }) {
+export default function CompletionLogForm({
+  routineId,
+  description,
+}: {
+  routineId: string;
+  description?: string | null;
+}) {
   const [completionCount, setCompletionCount] = useState("");
   const [notes, setNotes] = useState("");
   const [performedAtLocal, setPerformedAtLocal] = useState("");
@@ -54,6 +60,17 @@ export default function CompletionLogForm({ routineId }: { routineId: string }) 
 
   return (
     <FormStack maxWidth={560}>
+      {description?.trim() && (
+        <details style={{ border: "1px solid rgba(128,128,128,0.3)", borderRadius: 12, padding: "10px 12px" }}>
+          <summary data-collapsible-summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 800, opacity: 0.8, minHeight: 44 }}>
+            How I do this
+          </summary>
+          <div style={{ fontSize: 14, opacity: 0.88, lineHeight: 1.5, whiteSpace: "pre-wrap", paddingTop: 4 }}>
+            {description.trim()}
+          </div>
+        </details>
+      )}
+
       {/* Quick save — tap once and done */}
       <button type="button" onClick={quickSave} disabled={anyPending} style={quickSaveBtn}>
         {quickSaving ? "Saving..." : "✓ Mark Done"}

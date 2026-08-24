@@ -97,6 +97,7 @@ export async function getAggravatingFactorSuggestions(): Promise<string[]> {
 function revalidateInjurySurfaces(id?: string) {
   revalidatePath("/");
   revalidatePath("/body");
+  revalidatePath("/profile/health");
   revalidatePath("/injuries");
   if (id) revalidatePath(`/injuries/${id}`);
 }

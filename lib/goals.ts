@@ -1350,7 +1350,9 @@ function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, 
   const targetValue = frequency.targetCount ?? 0;
   const fractionComplete = targetValue > 0 ? Math.min(1, actualValue / targetValue) : 0;
   const achieved = actualValue >= targetValue && targetValue > 0;
-  const routineTypeLabel = formatRoutineSubtype(routine.subtype) ?? routine.kind;
+  const routineTypeLabel =
+    formatRoutineSubtype(routine.subtype) ||
+    `${routine.kind.charAt(0)}${routine.kind.slice(1).toLowerCase()}`;
 
   return {
     goal: {

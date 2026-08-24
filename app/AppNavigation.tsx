@@ -5,26 +5,22 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 
-// Phase 2 nav: 6 top-level tabs — Home / Log / Plan / Activities / Body / Profile.
-// "Log" combines current Routines management + quick log entry. The /log path
-// embeds /routines today; /routines URLs continue to work for direct access.
-// "Plan" combines /schedule and /goals; both legacy URLs continue to work.
-// "Activities" replaces the old /progress sports + cardio split.
+// Five stable destinations: do work in Log, organize it in Plan, inspect a
+// sport or training domain in Activities, and keep health/data under Profile.
 const desktopNavItems = [
   { href: "/", label: "Home", match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
-  { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
   { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") },
-  { href: "/body", label: "Body", match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
-  { href: "/profile", label: "Profile", match: (pathname: string) => pathname.startsWith("/profile") },
+  { href: "/profile", label: "Profile", match: (pathname: string) => pathname.startsWith("/profile") || pathname.startsWith("/body") || pathname.startsWith("/injuries") },
 ];
 
 const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
-  { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
   { href: "/activities", label: "Activities", icon: <ActivitiesIcon />, match: (pathname: string) => pathname.startsWith("/activities") },
-  { href: "/body", label: "Body", icon: <BodyIcon />, match: (pathname: string) => pathname.startsWith("/body") || pathname.startsWith("/injuries") },
+  { href: "/profile", label: "Profile", icon: <ProfileIcon />, match: (pathname: string) => pathname.startsWith("/profile") || pathname.startsWith("/body") || pathname.startsWith("/injuries") },
 ];
 
 export default function AppNavigation() {
@@ -132,18 +128,6 @@ function ActivitiesIcon() {
   );
 }
 
-function BodyIcon() {
-  return (
-    <MobileNavIcon>
-      <circle cx="12" cy="5" r="2.5" />
-      <path d="M12 7.5v6" />
-      <path d="M7.5 10h9" />
-      <path d="m12 13.5-4 6" />
-      <path d="m12 13.5 4 6" />
-    </MobileNavIcon>
-  );
-}
-
 function ScheduleIcon() {
   return (
     <MobileNavIcon>
@@ -160,7 +144,7 @@ function ScheduleIcon() {
 
 export function MobileProfileButton() {
   const pathname = usePathname();
-  const active = pathname.startsWith("/profile");
+  const active = pathname.startsWith("/profile") || pathname.startsWith("/body") || pathname.startsWith("/injuries");
   return (
     <Link
       href="/profile"
@@ -178,10 +162,10 @@ export function MobileProfileButton() {
 
 function ProfileIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+    <MobileNavIcon>
       <circle cx="12" cy="8" r="3.5" />
       <path d="M5 20c0-3.866 3.134-7 7-7s7 3.134 7 7" />
-    </svg>
+    </MobileNavIcon>
   );
 }
 

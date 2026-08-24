@@ -1,7 +1,7 @@
 // Injury/pain panel for rehab focuses — shown in place of the projection
 // banner. The honest signal for tissue-gated work: how long it's been going,
 // the latest reading, and the recent pain trend. Server component (display
-// only); logging happens on /body.
+// only); logging happens from Profile / Health.
 
 import Link from "next/link";
 import { formatUtcDateLabel } from "@/lib/dates";
@@ -28,7 +28,7 @@ export default function InjuryPanel({ injury }: { injury: InjuryPanelData }) {
             active {injury.daysActive} days · since {formatUtcDateLabel(injury.startedYmd, { month: "short", day: "numeric", year: "numeric" })}
           </span>
         </div>
-        <Link href="/body" style={logLink}>Log / view →</Link>
+        <Link href="/profile/health" style={logLink}>Log / view →</Link>
       </div>
 
       {latest ? (

@@ -10,6 +10,7 @@
 // that track. "Current" is derived, never stored.
 
 import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/auth";
 
 export type RoutineAim = {
   label: string;
@@ -30,6 +31,7 @@ export async function getRoutineAims(
 ): Promise<Map<string, RoutineAim>> {
   const ids = Array.from(new Set(routineIds.filter(Boolean)));
   if (ids.length === 0) return new Map();
+  const session = await getAppSession();
 
   const milestones = await prisma.progressionMilestone.findMany({
     where: {
@@ -56,7 +58,7 @@ export async function getRoutineAims(
   );
   const focuses = focusIds.length
     ? await prisma.focus.findMany({
-        where: { id: { in: focusIds } },
+        where: { id: { in: focusIds }, profileKey: session.profileKey },
         select: { id: true, status: true, sortOrder: true },
       })
     : [];

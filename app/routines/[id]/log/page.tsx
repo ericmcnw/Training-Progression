@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma";
 import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import { formatHoursMinutes } from "@/lib/progress";
+import type { PrescriptionShape } from "@/lib/prescription";
 import {
   exerciseLibraryWhereForKinds,
   guidedPreferredLibraryKinds,
@@ -97,6 +98,7 @@ export default async function LogRoutinePage(props: {
     select: {
       id: true,
       name: true,
+      description: true,
       kind: true,
       subtype: true,
       metadataGroups: {
@@ -107,6 +109,7 @@ export default async function LogRoutinePage(props: {
         select: {
           exerciseId: true,
           defaultSets: true,
+          prescription: true,
           exercise: {
             select: {
               name: true,
@@ -358,7 +361,25 @@ export default async function LogRoutinePage(props: {
           seconds: s.seconds !== null ? String(s.seconds) : undefined,
           weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
         })) ?? [];
-    const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
+    const rx = exercise.prescription;
+    const prescription: PrescriptionShape | undefined = rx
+      ? {
+          sets: rx.sets,
+          repsMin: rx.repsMin,
+          repsMax: rx.repsMax,
+          seconds: rx.seconds,
+          load: rx.load,
+          loadUnit: rx.loadUnit,
+          tempo: rx.tempo,
+          restSec: rx.restSec,
+          cue: rx.cue,
+        }
+      : undefined;
+
+    // A prescribed set count is what you're supposed to do, so it outranks the
+    // "however many rows you did last time" memory.
+    const defaultSetCount =
+      prescription?.sets ?? (lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3));
     const lastDate = prev?.routineLog?.performedAt
       ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(prev.routineLog.performedAt)
       : undefined;
@@ -371,6 +392,7 @@ export default async function LogRoutinePage(props: {
       rows: Array.from({ length: defaultSetCount }, (_, index) => ({ setNumber: index + 1 })),
       lastRows: lastRows.length > 0 ? lastRows : undefined,
       lastDate,
+      prescription,
     };
   });
 
@@ -517,7 +539,7 @@ export default async function LogRoutinePage(props: {
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : (
-            <CompletionLogForm routineId={routineId} />
+            <CompletionLogForm routineId={routineId} description={routine.description} />
           )}
         </div>
       </section>

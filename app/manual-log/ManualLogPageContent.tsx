@@ -15,13 +15,44 @@ import {
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
-import { getLogDisplayName } from "@/lib/routine-display";
-import DeleteLogButton from "./DeleteLogButton";
+import { getLogDisplayName, getLogVenue } from "@/lib/routine-display";
 import WeeklySummary from "./WeeklySummary";
 import ProfileHeader from "@/app/profile/ProfileHeader";
 import ProfileMilestones from "@/app/profile/ProfileMilestones";
+import LogHistoryFeed, { type HistoryRow } from "./LogHistoryFeed";
 
 export const dynamic = "force-dynamic";
+
+// Pre-formatted native metric line for a history row, mirroring the card
+// detail lines by routine kind.
+function buildHistoryMetricLine(
+  log: {
+    distanceMi: number | null;
+    durationSec: number | null;
+    elevationGainFt: number | null;
+    completionCount: number | null;
+    exercises: { exercise: { name: string }; sets: { id: string }[] }[];
+    routine: { subtype: string | null };
+  },
+  kind: string,
+  setCount: number,
+): string | null {
+  if (isCardioKind(kind)) {
+    const parts = [`${(log.distanceMi ?? 0).toFixed(2)} mi`];
+    if (log.durationSec) parts.push(formatHoursMinutes(log.durationSec));
+    if (log.elevationGainFt) parts.push(`${log.elevationGainFt} ft`);
+    return parts.join(" · ");
+  }
+  if (isWorkoutKind(kind)) {
+    return `${setCount} sets${log.exercises.length > 0 ? ` · ${log.exercises.length} exercises` : ""}`;
+  }
+  if (isGuidedKind(kind) && log.durationSec) {
+    return `${formatHoursMinutes(log.durationSec)}${log.routine.subtype ? ` · ${formatRoutineSubtype(log.routine.subtype)}` : ""}`;
+  }
+  if (isSessionKind(kind) && log.durationSec) return formatHoursMinutes(log.durationSec);
+  if (isCompletionKind(kind) && log.completionCount) return `Count: ${log.completionCount}`;
+  return null;
+}
 
 const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "lifestyle"] as const;
 type Domain = (typeof DOMAIN_ORDER)[number];
@@ -47,33 +78,62 @@ export default async function ManualLogPageContent({
     ? (rawDomain as Domain)
     : "";
 
-  const [recentLogs, goalCount, routineCount] = await Promise.all([
-    prisma.routineLog.findMany({
-      orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
-      take: 500,
-      select: {
-        id: true,
-        routineId: true,
-        performedAt: true,
-        notes: true,
-        completionCount: true,
-        distanceMi: true,
-        elevationGainFt: true,
-        durationSec: true,
-        location: true,
-        sportData: true,
-        routine: {
+  const [recentLogs, allHistoryLogs, goalCount, routineCount] = await Promise.all([
+    // Profile view: recent window for the calendar / pulse / recent-5.
+    showHistory
+      ? Promise.resolve([])
+      : prisma.routineLog.findMany({
+          orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+          take: 500,
           select: {
             id: true,
-            name: true,
-            kind: true,
-            domain: true,
-            subtype: true,
+            routineId: true,
+            performedAt: true,
+            notes: true,
+            completionCount: true,
+            distanceMi: true,
+            elevationGainFt: true,
+            durationSec: true,
+            location: true,
+            climbLocation: { select: { name: true, type: true } },
+            activitySpot: { select: { name: true } },
+            sportData: true,
+            routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true } },
+            exercises: { select: { id: true, sets: { select: { id: true } } } },
           },
-        },
-        exercises: { select: { id: true, sets: { select: { id: true } } } },
-      },
-    }),
+        }),
+    // History view: the FULL log history, with exercise names for search.
+    showHistory
+      ? prisma.routineLog.findMany({
+          orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            routineId: true,
+            performedAt: true,
+            notes: true,
+            completionCount: true,
+            distanceMi: true,
+            elevationGainFt: true,
+            durationSec: true,
+            location: true,
+            climbLocation: { select: { name: true, type: true } },
+            activitySpot: { select: { name: true } },
+            sportData: true,
+            activityType: { select: { name: true } },
+            routine: {
+              select: {
+                id: true,
+                name: true,
+                kind: true,
+                domain: true,
+                subtype: true,
+                activityType: { select: { name: true } },
+              },
+            },
+            exercises: { select: { exercise: { select: { name: true } }, sets: { select: { id: true } } } },
+          },
+        })
+      : Promise.resolve([]),
     prisma.goal.count({ where: { isActive: true } }),
     prisma.routine.count({ where: { isDeleted: false, isActive: true } }),
   ]);
@@ -87,6 +147,35 @@ export default async function ManualLogPageContent({
       log.routine.subtype
     ) as Domain,
   }));
+
+  // Pre-shape the full history into lean search rows for the client feed.
+  const historyRows: HistoryRow[] = allHistoryLogs.map((log) => {
+    const domain = effectiveRoutineDomain(log.routine.domain, log.routine.kind, log.routine.subtype) as Domain;
+    const kind = String(log.routine.kind);
+    const name = getLogDisplayName(log);
+    const exerciseNames = log.exercises.map((e) => e.exercise.name);
+    const setCount = log.exercises.reduce((s, e) => s + e.sets.length, 0);
+    const venue = getLogVenue(log);
+    return {
+      id: log.id,
+      routineId: log.routineId,
+      name,
+      domain,
+      typeLabel: formatRoutineTypeLabel(kind),
+      dateKey: toAppYmd(log.performedAt),
+      timeLabel: formatAppDateTime(log.performedAt, { hour: "numeric", minute: "2-digit" }),
+      metricLine: buildHistoryMetricLine(log, kind, setCount),
+      venueLabel: venue?.label ?? null,
+      venueGlyph: venue?.glyph ?? null,
+      notes: log.notes ?? null,
+      searchText: [name, log.notes ?? "", venue?.label ?? "", ...exerciseNames]
+        .join(" ")
+        .toLowerCase(),
+      editHref: `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(
+        filterDomain ? `/profile/history?domain=${filterDomain}` : "/profile/history",
+      )}`,
+    };
+  });
 
   // ── Stats ────────────────────────────────────────────────────────────────────
   // The profile keeps only the WeeklySummary pulse; full week/month/year
@@ -122,30 +211,26 @@ export default async function ManualLogPageContent({
     year: "numeric",
   }).format(now);
 
-  // Map day-of-month → domain colors
+  // Map day-of-month → domain colors. On history, source from the full
+  // history rows; on profile, from the recent window.
   const calDayDomains = new Map<number, Domain[]>();
-  for (const log of enrichedLogs) {
-    const ymd = toAppYmd(log.performedAt);
-    const [ly, lm, ld] = ymd.split("-").map(Number);
+  const calSource: Array<{ ymd: string; domain: Domain }> = showHistory
+    ? historyRows.map((r) => ({ ymd: r.dateKey, domain: r.domain as Domain }))
+    : enrichedLogs.map((l) => ({ ymd: toAppYmd(l.performedAt), domain: l.domain }));
+  for (const item of calSource) {
+    const [ly, lm, ld] = item.ymd.split("-").map(Number);
     if (ly === calYear && lm === calMonthNum) {
       if (!calDayDomains.has(ld)) calDayDomains.set(ld, []);
-      calDayDomains.get(ld)!.push(log.domain);
+      calDayDomains.get(ld)!.push(item.domain);
     }
   }
 
-  // ── History feed (filtered) ──────────────────────────────────────────────────
   const latestLog = enrichedLogs[0] ?? null;
-  const historyLogs = filterDomain
-    ? enrichedLogs.filter((l) => l.domain === filterDomain)
-    : enrichedLogs;
 
-  const byDate = new Map<string, typeof historyLogs>();
-  for (const log of historyLogs) {
-    const dateKey = toAppYmd(log.performedAt);
-    if (!byDate.has(dateKey)) byDate.set(dateKey, []);
-    byDate.get(dateKey)!.push(log);
-  }
-  const orderedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+  const historyDomainOptions = [
+    { value: "", label: "All" },
+    ...DOMAIN_ORDER.map((d) => ({ value: d, label: DOMAIN_LABELS[d] })),
+  ];
 
   const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -166,7 +251,7 @@ export default async function ManualLogPageContent({
           <ProfileHeader stats={profileStats} identity={identity ?? undefined} />
 
           <div className="mobileManualLogHeroActions mobileActionRow" style={heroActionRow}>
-            <Link href="/profile?view=history" style={primaryLinkBtn}>
+            <Link href="/profile/history" style={primaryLinkBtn}>
               History
             </Link>
             <Link href="/reports/week" style={linkBtn}>Reports</Link>
@@ -222,7 +307,7 @@ export default async function ManualLogPageContent({
             {enrichedLogs.slice(0, 5).map((log) => (
               <ActivityCard key={log.id} log={log} />
             ))}
-            <Link href="/profile?view=history" style={linkBtn}>
+            <Link href="/profile/history" style={linkBtn}>
               Open Full Log History
             </Link>
           </div>
@@ -366,166 +451,12 @@ export default async function ManualLogPageContent({
               </div>
             </div>
 
-            {/* Domain filter */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {(
-                [
-                  ["", "All"],
-                  ...DOMAIN_ORDER.map((d) => [d, DOMAIN_LABELS[d]]),
-                ] as [Domain | "", string][]
-              ).map(([d, label]) => {
-                const active = filterDomain === d;
-                return (
-                  <Link
-                    key={d || "all"}
-                    href={
-                      d
-                        ? `/profile?view=history&domain=${d}`
-                        : "/profile?view=history"
-                    }
-                    scroll={false}
-                    style={{
-                      padding: "7px 12px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textDecoration: "none",
-                      color: "inherit",
-                      background: active
-                        ? d
-                          ? domainColor(d).replace("0.9)", "0.18)")
-                          : "rgba(255,255,255,0.12)"
-                        : "rgba(255,255,255,0.05)",
-                      border: active
-                        ? `1px solid ${
-                            d
-                              ? domainColor(d).replace("0.9)", "0.35)")
-                              : "rgba(255,255,255,0.28)"
-                          }`
-                        : "1px solid rgba(128,128,128,0.28)",
-                    }}
-                  >
-                    {label}
-                  </Link>
-                );
-              })}
-            </div>
-
-            {/* Feed */}
-            {enrichedLogs.length === 0 && <div style={{ opacity: 0.75 }}>No logs yet.</div>}
-            {historyLogs.length === 0 && enrichedLogs.length > 0 && (
-              <div style={{ opacity: 0.72, fontSize: 13 }}>
-                No {filterDomain ? DOMAIN_LABELS[filterDomain] : ""} sessions in the last 500 logs.
-              </div>
-            )}
-            {orderedDates.map((dateKey) => {
-              const dayLogs = byDate.get(dateKey) ?? [];
-              return (
-                <div key={dateKey} style={{ display: "grid", gap: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 900,
-                      letterSpacing: 0.6,
-                      opacity: 0.55,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {formatAppDate(`${dateKey}T12:00:00.000Z`, {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                    {" "}
-                    ({dayLogs.length})
-                  </div>
-                  {dayLogs.map((log) => {
-                    const exerciseSetCount = log.exercises.reduce(
-                      (sum, ex) => sum + ex.sets.length,
-                      0
-                    );
-                    const routineKind = String(log.routine.kind);
-                    const typeLabel = formatRoutineTypeLabel(routineKind);
-                    const historyReturnTo = filterDomain
-                      ? `/profile?view=history&domain=${filterDomain}`
-                      : "/profile?view=history";
-                    const editHref = `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(historyReturnTo)}`;
-                    const color = domainColor(log.domain);
-
-                    return (
-                      <div
-                        key={log.id}
-                        className="mobileManualLogHistoryCard mobileCard"
-                        style={{
-                          ...historyCard,
-                          borderLeft: `3px solid ${color.replace("0.9)", "0.6)")}`,
-                          paddingLeft: 12,
-                        }}
-                      >
-                        <div style={{ fontSize: 13, flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 800 }}>
-                            {getLogDisplayName(log)}
-                          </div>
-                          <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
-                            {typeLabel} ·{" "}
-                            {formatAppDateTime(log.performedAt, {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                          {isCardioKind(routineKind) && (
-                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {(log.distanceMi ?? 0).toFixed(2)} mi
-                              {log.durationSec
-                                ? ` · ${formatHoursMinutes(log.durationSec)}`
-                                : ""}
-                              {log.elevationGainFt ? ` · ${log.elevationGainFt} ft` : ""}
-                            </div>
-                          )}
-                          {isWorkoutKind(routineKind) && (
-                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {exerciseSetCount} sets
-                              {log.exercises.length > 0
-                                ? ` · ${log.exercises.length} exercises`
-                                : ""}
-                            </div>
-                          )}
-                          {isGuidedKind(routineKind) && log.durationSec ? (
-                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {formatHoursMinutes(log.durationSec)}
-                              {log.routine.subtype
-                                ? ` · ${formatRoutineSubtype(log.routine.subtype)}`
-                                : ""}
-                            </div>
-                          ) : null}
-                          {isSessionKind(routineKind) && log.durationSec ? (
-                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              {formatHoursMinutes(log.durationSec)}
-                            </div>
-                          ) : null}
-                          {isCompletionKind(routineKind) && log.completionCount ? (
-                            <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>
-                              Count: {log.completionCount}
-                            </div>
-                          ) : null}
-                          {log.notes ? (
-                            <div style={{ opacity: 0.65, marginTop: 4, fontSize: 12 }}>
-                              {log.notes}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexShrink: 0 }}>
-                          <Link href={editHref} style={miniLinkBtn}>Edit</Link>
-                          <DeleteLogButton logId={log.id} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+            {/* Searchable + filterable feed over the FULL history. */}
+            <LogHistoryFeed
+              rows={historyRows}
+              domainOptions={historyDomainOptions}
+              initialDomain={filterDomain}
+            />
           </div>
         </section>
       )}
@@ -545,6 +476,9 @@ function ActivityCard({
     completionCount: number | null;
     domain: Domain;
     sportData?: unknown;
+    location?: string | null;
+    climbLocation?: { name: string; type?: string | null } | null;
+    activitySpot?: { name: string } | null;
     routine: { name: string; kind: string | null; subtype: string | null };
     exercises: { id: string; sets: { id: string }[] }[];
   };
@@ -553,6 +487,7 @@ function ActivityCard({
   const routineKind = String(log.routine.kind);
   const typeLabel = formatRoutineTypeLabel(routineKind);
   const color = domainColor(log.domain);
+  const venue = getLogVenue(log);
 
   return (
     <div
@@ -573,6 +508,11 @@ function ActivityCard({
           minute: "2-digit",
         })}
       </div>
+      {venue ? (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {venue.glyph} {venue.label}
+        </div>
+      ) : null}
       {isCardioKind(routineKind) && (
         <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
           {(log.distanceMi ?? 0).toFixed(2)} mi
@@ -661,17 +601,6 @@ const activityCard: React.CSSProperties = {
   border: "1px solid rgba(128,128,128,0.24)",
   borderRadius: 16,
   padding: 14,
-  background: "rgba(128,128,128,0.06)",
-};
-
-const historyCard: React.CSSProperties = {
-  border: "1px solid rgba(128,128,128,0.28)",
-  borderRadius: 16,
-  padding: 14,
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 8,
-  flexWrap: "wrap",
   background: "rgba(128,128,128,0.06)",
 };
 

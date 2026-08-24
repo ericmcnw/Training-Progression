@@ -1,16 +1,7 @@
-// Plan — one scrolling surface: Goals on top, the month Schedule below, and
-// the training Rotation last. The old Month / Goals / Cycles tab split is
-// gone: goals shouldn't hide behind a click, and the three views read better
-// stacked than siloed. Each section fetches its own data (server components),
-// and the jump-nav anchors let you skip straight to one on a long page.
-
 import Link from "next/link";
-import PlanSection from "./PlanSection";
 import MonthTab from "./month/MonthTab";
 import YearTab from "./year/YearTab";
 import GoalsTab from "./goals/GoalsTab";
-import RotationTab from "./cycles/RotationTab";
-import PackingListsTab from "./PackingListsTab";
 import MarkTimeAwayButton from "./month/MarkTimeAwayButton";
 import { NewRoutineDrawerButton, NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { todayAppYmd } from "@/lib/dates";
@@ -18,150 +9,90 @@ import { todayAppYmd } from "@/lib/dates";
 export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
+type PlanView = "programs" | "calendar" | "goals";
 
-const JUMP_LINKS = [
-  { href: "#year", label: "Year" },
-  { href: "#goals", label: "Goals" },
-  { href: "#schedule", label: "Schedule" },
-  { href: "#rotation", label: "Rotation" },
-  { href: "#packing", label: "Packing" },
+const VIEWS: Array<{ value: PlanView; label: string }> = [
+  { value: "programs", label: "Programs" },
+  { value: "calendar", label: "Calendar" },
+  { value: "goals", label: "Goals" },
 ];
 
-export default async function PlanPage(props: {
-  searchParams?: Promise<SearchParams> | SearchParams;
-}) {
+export default async function PlanPage(props: { searchParams?: Promise<SearchParams> | SearchParams }) {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const requested = Array.isArray(searchParams.view) ? searchParams.view[0] : searchParams.view;
+  const view: PlanView = requested === "calendar" || requested === "goals" ? requested : "programs";
 
   return (
-    <div className="mobilePageShell" style={pageStyle}>
-      <header style={headerStyle}>
-        <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-          <h1 className="mobilePageTitle" style={h1Style}>Plan</h1>
-          <p className="mobilePageSubtitle" style={subStyle}>
-            Your goals, schedule, and training rotation — all in one place.
-          </p>
+    <main className="mobilePageShell" style={page}>
+      <header style={header}>
+        <div>
+          <h1 className="mobilePageTitle" style={title}>Plan</h1>
+          <p className="mobilePageSubtitle" style={subtitle}>{viewDescription(view)}</p>
         </div>
-        <nav aria-label="Jump to section" style={jumpNavStyle}>
-          {JUMP_LINKS.map((l) => (
-            <a key={l.href} href={l.href} style={jumpPillStyle}>
-              {l.label}
-            </a>
-          ))}
-        </nav>
+        <ViewAction view={view} />
       </header>
 
-      <PlanSection
-        id="year"
-        title="Year"
-        subtitle="Your focuses across the seasons. Tap a month to zoom in."
-      >
-        <YearTab />
-      </PlanSection>
+      <nav aria-label="Plan view" style={viewTabs}>
+        {VIEWS.map((item) => (
+          <Link
+            key={item.value}
+            href={`/plan?view=${item.value}`}
+            aria-current={view === item.value ? "page" : undefined}
+            style={{ ...viewLink, ...(view === item.value ? activeViewLink : {}) }}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
-      <PlanSection
-        id="goals"
-        title="Goals"
-        subtitle="Frequency, performance, volume, and completion targets."
-        action={<NewGoalDrawerButton style={ctaStyle}>+ New Goal</NewGoalDrawerButton>}
-      >
-        <GoalsTab searchParams={searchParams} />
-      </PlanSection>
-
-      <PlanSection
-        id="schedule"
-        title="Schedule"
-        subtitle="What's planned and logged this month. Tap any day for detail."
-        action={
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <MarkTimeAwayButton today={todayAppYmd()} />
-            <NewRoutineDrawerButton style={ctaStyle}>+ New Routine</NewRoutineDrawerButton>
+      {view === "programs" ? (
+        <section style={surface}>
+          <div style={surfaceHead}>
+            <div><h2 style={surfaceTitle}>Program timeline</h2><p style={surfaceCopy}>Campaigns and seasons across the year. Open a program for its roadmap and progress.</p></div>
+            <Link href="/programs" style={quietAction}>All programs</Link>
           </div>
-        }
-      >
-        <MonthTab searchParams={searchParams} />
-      </PlanSection>
+          <YearTab />
+        </section>
+      ) : null}
 
-      <PlanSection
-        id="rotation"
-        title="Rotation"
-        subtitle="Your training cycle — what you did last and what's up next."
-      >
-        <RotationTab />
-      </PlanSection>
+      {view === "calendar" ? (
+        <section style={surface}>
+          <MonthTab searchParams={searchParams} />
+        </section>
+      ) : null}
 
-      <PlanSection
-        id="packing"
-        title="Packing lists"
-        subtitle="Reusable kits — pack against one before a trip, apply it to a log."
-        action={<Link href="/gear/lists" style={ctaStyle}>Open lists →</Link>}
-      >
-        <PackingListsTab />
-      </PlanSection>
-    </div>
+      {view === "goals" ? (
+        <section style={surface}>
+          <GoalsTab searchParams={searchParams} />
+        </section>
+      ) : null}
+    </main>
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  maxWidth: 980,
-  margin: "0 auto",
-  padding: 4,
-  display: "grid",
-  gap: 16,
-};
+function ViewAction({ view }: { view: PlanView }) {
+  if (view === "programs") return <Link href="/programs/new" style={primaryAction}>New program</Link>;
+  if (view === "goals") return <NewGoalDrawerButton style={primaryAction}>New goal</NewGoalDrawerButton>;
+  return <div style={actionRow}><MarkTimeAwayButton today={todayAppYmd()} /><NewRoutineDrawerButton style={primaryAction}>New routine</NewRoutineDrawerButton></div>;
+}
 
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-};
+function viewDescription(view: PlanView) {
+  if (view === "calendar") return "What is planned and what actually happened.";
+  if (view === "goals") return "Measured targets that can contribute to programs.";
+  return "Longer-term direction, stages, and progression.";
+}
 
-const h1Style: React.CSSProperties = {
-  fontSize: 26,
-  fontWeight: 900,
-  margin: 0,
-};
-
-const subStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 13,
-  opacity: 0.7,
-};
-
-const jumpNavStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-const jumpPillStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "7px 13px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 800,
-  letterSpacing: 0.2,
-  textDecoration: "none",
-  color: "inherit",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  minHeight: 34,
-};
-
-const ctaStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "8px 14px",
-  borderRadius: 999,
-  border: "1px solid rgba(51,255,122,0.45)",
-  background: "rgba(51,255,122,0.10)",
-  color: "rgba(51,255,122,0.95)",
-  fontSize: 12.5,
-  fontWeight: 800,
-  letterSpacing: 0.2,
-  cursor: "pointer",
-  minHeight: 36,
-  lineHeight: 1,
-};
+const page: React.CSSProperties = { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 16 };
+const header: React.CSSProperties = { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" };
+const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900 };
+const subtitle: React.CSSProperties = { margin: "3px 0 0", fontSize: 13, color: "rgba(255,255,255,0.62)" };
+const viewTabs: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, padding: 4, borderRadius: 8, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.025)" };
+const viewLink: React.CSSProperties = { minHeight: 40, display: "grid", placeItems: "center", borderRadius: 6, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", color: "rgba(255,255,255,0.58)", textDecoration: "none", fontSize: 12, fontWeight: 900 };
+const activeViewLink: React.CSSProperties = { color: "#fff", background: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.18)" };
+const surface: React.CSSProperties = { display: "grid", gap: 14, paddingTop: 4 };
+const surfaceHead: React.CSSProperties = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 };
+const surfaceTitle: React.CSSProperties = { margin: 0, fontSize: 16, fontWeight: 900 };
+const surfaceCopy: React.CSSProperties = { margin: "3px 0 0", maxWidth: 560, color: "rgba(255,255,255,0.52)", fontSize: 11.5, lineHeight: 1.45 };
+const primaryAction: React.CSSProperties = { minHeight: 40, display: "inline-flex", alignItems: "center", padding: "0 13px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(51,255,122,0.4)", background: "rgba(51,255,122,0.1)", color: "#7ce8aa", textDecoration: "none", fontSize: 12, fontWeight: 900, cursor: "pointer" };
+const quietAction: React.CSSProperties = { minHeight: 34, display: "inline-flex", alignItems: "center", color: "rgba(255,255,255,0.66)", textDecoration: "none", fontSize: 11.5, fontWeight: 850, flexShrink: 0 };
+const actionRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" };

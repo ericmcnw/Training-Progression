@@ -43,6 +43,7 @@ export default function EditRoutineForm({
   routine: {
     id: string;
     name: string;
+    description?: string | null;
     subtype: string | null;
     domain: string;
     kind: RoutineKind;
@@ -194,6 +195,19 @@ export default function EditRoutineForm({
       <div>
         <label style={styles.label}>Name</label>
         <input name="name" style={styles.input} defaultValue={routine.name} />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label style={styles.label}>
+          Description <span style={styles.optional}>(optional)</span>
+        </label>
+        <textarea
+          name="description"
+          style={{ ...styles.input, minHeight: 88, resize: "vertical" }}
+          defaultValue={routine.description ?? ""}
+          placeholder="What this is and how you do it — edge sizes, grip rotation, intent, anything you'd otherwise have to remember."
+        />
       </div>
 
       {/* Session template */}

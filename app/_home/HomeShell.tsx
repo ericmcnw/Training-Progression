@@ -30,7 +30,7 @@ import HomeFocusSection from "./HomeFocusSection";
 import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
 import type { HomeRotation } from "@/lib/home-rotation";
-import type { FocusBandItem } from "@/app/focus/data";
+import type { FocusBandItem } from "@/app/focus/shared";
 
 export default function HomeShell({
   data,

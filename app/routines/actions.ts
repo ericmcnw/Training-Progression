@@ -14,6 +14,16 @@ function parseSupportsSports(raw: string[]): string[] {
     .filter((s) => s.length > 0 && VALID_SPORT_SLUGS.has(s));
   return Array.from(new Set(filtered)).sort();
 }
+
+const ROUTINE_DESCRIPTION_MAX = 2000;
+
+// undefined when the field wasn't posted at all, so a partial form can't wipe
+// an existing description; null when posted empty (an explicit clear).
+function parseRoutineDescription(formData: FormData): string | null | undefined {
+  if (!formData.has("description")) return undefined;
+  const value = String(formData.get("description") ?? "").trim();
+  return value ? value.slice(0, ROUTINE_DESCRIPTION_MAX) : null;
+}
 import { parseSessionGradeValue } from "@/lib/session-templates";
 import { recalculateRoutineLogStimulus } from "@/lib/stimulus";
 import { stampLogWeather } from "@/lib/weather-stamp";
@@ -1095,6 +1105,7 @@ function revalidateRoutineSurfaces(routineId?: string) {
 
 export async function createRoutine(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
+  const description = parseRoutineDescription(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
@@ -1116,6 +1127,7 @@ export async function createRoutine(formData: FormData) {
   const created = await prisma.routine.create({
     data: {
       name,
+      ...(description != null ? { description } : {}),
       domain,
       kind,
       subtype,
@@ -1210,6 +1222,7 @@ export async function createStarterPack(formData: FormData) {
 export async function updateRoutine(formData: FormData) {
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
+  const description = parseRoutineDescription(formData);
   const domain = String(formData.get("domain") || "general").trim() || "general";
   const kind = normalizeRoutineKind(String(formData.get("kind") || "COMPLETION"));
   const subtype = normalizeRoutineSubtype(kind, String(formData.get("subtype") || ""));
@@ -1246,6 +1259,7 @@ export async function updateRoutine(formData: FormData) {
       where: { id },
       data: {
         name,
+        ...(description !== undefined ? { description } : {}),
         domain,
         kind,
         subtype,

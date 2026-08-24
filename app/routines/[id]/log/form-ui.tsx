@@ -28,14 +28,16 @@ export function FormStack({
 export function FormSection({
   title,
   description,
+  unframed = false,
   children,
 }: {
   title?: string;
   description?: string;
+  unframed?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mobileCard" style={sectionStyle}>
+    <section className={unframed ? undefined : "mobileCard"} style={unframed ? unframedSectionStyle : sectionStyle}>
       {title ? <div style={sectionTitleStyle}>{title}</div> : null}
       {description ? <div style={sectionDescriptionStyle}>{description}</div> : null}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, minWidth: 0 }}>{children}</div>
@@ -307,6 +309,12 @@ const sectionStyle: React.CSSProperties = {
   borderRadius: 16,
   padding: 16,
   background: surfaceColor,
+  minWidth: 0,
+};
+
+const unframedSectionStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
   minWidth: 0,
 };
 

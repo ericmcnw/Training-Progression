@@ -40,6 +40,16 @@ export async function updateClimbProblemNotes(input: { id: string; notes: string
   return updated;
 }
 
+export async function setClimbProblemTickList(input: { id: string; onTickList: boolean }) {
+  const updated = await prisma.climbProblem.update({
+    where: { id: input.id },
+    data: { onTickList: input.onTickList },
+    select: { id: true, onTickList: true, locationId: true },
+  });
+  if (updated.locationId) revalidateLocation(updated.locationId);
+  return updated;
+}
+
 export async function renameClimbLocation(input: { id: string; name: string }) {
   const name = input.name.trim();
   if (!name) throw new Error("Name cannot be empty");

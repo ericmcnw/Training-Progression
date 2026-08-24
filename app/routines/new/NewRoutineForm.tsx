@@ -565,6 +565,18 @@ export default function NewRoutineForm({
         />
       </div>
 
+      {/* Description */}
+      <div>
+        <label style={s.label}>
+          Description <span style={s.optional}>(optional)</span>
+        </label>
+        <textarea
+          name="description"
+          style={{ ...s.input, minHeight: 88, resize: "vertical" }}
+          placeholder="What this is and how you do it — edge sizes, grip rotation, intent, anything you'd otherwise have to remember."
+        />
+      </div>
+
       {/* Session template — SESSION kind only */}
       {kind === "SESSION" && (
         <div>

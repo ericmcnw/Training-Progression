@@ -37,6 +37,7 @@ type RoutineFormData =
         targetFrequencyInterval: number | null;
         frequencyGoalEnabled: boolean;
         sessionTemplateId: string | null;
+        description?: string | null;
         selectedMetadataGroupIds: string[];
         tags: string[];
         supportsSports?: string[];

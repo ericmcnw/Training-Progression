@@ -97,6 +97,7 @@ export default async function ClimbLocationDetailPage(props: {
         grade: true,
         gradeSystem: true,
         notes: true,
+        onTickList: true,
       },
     }),
     prisma.climbMedia.findMany({
@@ -248,6 +249,7 @@ export default async function ClimbLocationDetailPage(props: {
       attemptCount: rollup?.attemptCount ?? 0,
       lastAttempt: rollup?.lastAttempt ?? null,
       bestOutcome: rollup?.bestOutcome ?? null,
+      onTickList: p.onTickList,
       media: problemMediaByProblemId.get(p.id) ?? [],
     };
   });
