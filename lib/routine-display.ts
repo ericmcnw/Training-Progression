@@ -64,3 +64,22 @@ export function getLogDisplayName(log: {
     sportData: log.sportData,
   });
 }
+
+/** Venue for a log row. SpotPicker writes a FK — ClimbLocation for climbing,
+ *  ActivitySpot for every other sport — so the free-text `location` column
+ *  only carries a value on logs predating the picker. Reading `location`
+ *  alone renders modern logs as venue-less. */
+export function getLogVenue(log: {
+  climbLocation?: { name: string; type?: string | null } | null;
+  activitySpot?: { name: string } | null;
+  location?: string | null;
+}): { label: string; glyph: string } | null {
+  if (log.climbLocation) {
+    const glyph =
+      log.climbLocation.type === "GYM" ? "🏠" : log.climbLocation.type === "CRAG" ? "🪨" : "📍";
+    return { label: log.climbLocation.name, glyph };
+  }
+  if (log.activitySpot) return { label: log.activitySpot.name, glyph: "📍" };
+  const freeText = log.location?.trim();
+  return freeText ? { label: freeText, glyph: "📍" } : null;
+}

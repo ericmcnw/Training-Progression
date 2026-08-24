@@ -15,7 +15,7 @@ import {
 } from "@/lib/routines";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
-import { getLogDisplayName } from "@/lib/routine-display";
+import { getLogDisplayName, getLogVenue } from "@/lib/routine-display";
 import WeeklySummary from "./WeeklySummary";
 import ProfileHeader from "@/app/profile/ProfileHeader";
 import ProfileMilestones from "@/app/profile/ProfileMilestones";
@@ -95,6 +95,8 @@ export default async function ManualLogPageContent({
             elevationGainFt: true,
             durationSec: true,
             location: true,
+            climbLocation: { select: { name: true, type: true } },
+            activitySpot: { select: { name: true } },
             sportData: true,
             routine: { select: { id: true, name: true, kind: true, domain: true, subtype: true } },
             exercises: { select: { id: true, sets: { select: { id: true } } } },
@@ -113,6 +115,9 @@ export default async function ManualLogPageContent({
             distanceMi: true,
             elevationGainFt: true,
             durationSec: true,
+            location: true,
+            climbLocation: { select: { name: true, type: true } },
+            activitySpot: { select: { name: true } },
             sportData: true,
             activityType: { select: { name: true } },
             routine: {
@@ -150,6 +155,7 @@ export default async function ManualLogPageContent({
     const name = getLogDisplayName(log);
     const exerciseNames = log.exercises.map((e) => e.exercise.name);
     const setCount = log.exercises.reduce((s, e) => s + e.sets.length, 0);
+    const venue = getLogVenue(log);
     return {
       id: log.id,
       routineId: log.routineId,
@@ -159,8 +165,12 @@ export default async function ManualLogPageContent({
       dateKey: toAppYmd(log.performedAt),
       timeLabel: formatAppDateTime(log.performedAt, { hour: "numeric", minute: "2-digit" }),
       metricLine: buildHistoryMetricLine(log, kind, setCount),
+      venueLabel: venue?.label ?? null,
+      venueGlyph: venue?.glyph ?? null,
       notes: log.notes ?? null,
-      searchText: [name, log.notes ?? "", ...exerciseNames].join(" ").toLowerCase(),
+      searchText: [name, log.notes ?? "", venue?.label ?? "", ...exerciseNames]
+        .join(" ")
+        .toLowerCase(),
       editHref: `/routines/${log.routineId}/logs/${log.id}/edit?returnTo=${encodeURIComponent(
         filterDomain ? `/profile/history?domain=${filterDomain}` : "/profile/history",
       )}`,
@@ -466,6 +476,9 @@ function ActivityCard({
     completionCount: number | null;
     domain: Domain;
     sportData?: unknown;
+    location?: string | null;
+    climbLocation?: { name: string; type?: string | null } | null;
+    activitySpot?: { name: string } | null;
     routine: { name: string; kind: string | null; subtype: string | null };
     exercises: { id: string; sets: { id: string }[] }[];
   };
@@ -474,6 +487,7 @@ function ActivityCard({
   const routineKind = String(log.routine.kind);
   const typeLabel = formatRoutineTypeLabel(routineKind);
   const color = domainColor(log.domain);
+  const venue = getLogVenue(log);
 
   return (
     <div
@@ -494,6 +508,11 @@ function ActivityCard({
           minute: "2-digit",
         })}
       </div>
+      {venue ? (
+        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+          {venue.glyph} {venue.label}
+        </div>
+      ) : null}
       {isCardioKind(routineKind) && (
         <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
           {(log.distanceMi ?? 0).toFixed(2)} mi

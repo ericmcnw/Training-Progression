@@ -18,8 +18,10 @@ export type HistoryRow = {
   dateKey: string; // app-local YMD, for grouping + header
   timeLabel: string;
   metricLine: string | null;
+  venueLabel: string | null;
+  venueGlyph: string | null;
   notes: string | null;
-  /** Lowercased name + notes + exercise names — the haystack for search. */
+  /** Lowercased name + notes + venue + exercise names — the haystack for search. */
   searchText: string;
   editHref: string;
 };
@@ -69,7 +71,7 @@ export default function LogHistoryFeed({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search routines, exercises, notes…"
+          placeholder="Search routines, exercises, notes, places…"
           style={searchInputStyle}
           aria-label="Search log history"
         />
@@ -134,6 +136,11 @@ export default function LogHistoryFeed({
                     <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
                       {log.typeLabel} · {log.timeLabel}
                     </div>
+                    {log.venueLabel ? (
+                      <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
+                        {log.venueGlyph ?? "📍"} {log.venueLabel}
+                      </div>
+                    ) : null}
                     {log.metricLine ? (
                       <div style={{ opacity: 0.8, marginTop: 2, fontSize: 12 }}>{log.metricLine}</div>
                     ) : null}
