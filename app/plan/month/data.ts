@@ -154,7 +154,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
   // Spans are profile-scoped (createDaySpan writes profileKey); todos are not
   // (the DayTodo model carries none). Both use YMD string overlap on the month.
   const session = await getAppSession();
-  const [rawRoutines, manualRaw, logsRaw, activityTypesRaw, spansRaw, todosRaw] = await Promise.all([
+  const [rawRoutines, manualRaw, programPlannedRaw, logsRaw, activityTypesRaw, spansRaw, todosRaw] = await Promise.all([
     // NOTE: isPlaceholder filter intentionally removed. Synthetic-endurance
     // and synthetic-sport routines carry isPlaceholder=true (see
     // lib/synthetic-sport-routines.ts + lib/activity-types.ts). They're
@@ -193,6 +193,16 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
       },
       orderBy: [{ scheduledDate: "asc" }, { sortOrder: "asc" }],
       select: { id: true, routineId: true, scheduledDate: true, sortOrder: true, activityTypeId: true },
+    }),
+    prisma.plannedSession.findMany({
+      where: {
+        program: { profileKey: session.profileKey },
+        status: "PLANNED",
+        currentYmd: { gte: monthStart, lte: monthEnd },
+        routineId: { not: null },
+      },
+      orderBy: [{ currentYmd: "asc" }, { sortOrder: "asc" }],
+      select: { id: true, routineId: true, activityTypeId: true, currentYmd: true },
     }),
     prisma.routineLog.findMany({
       where: {
@@ -260,6 +270,14 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     const ymd = toAppYmd(entry.scheduledDate);
     if (!manualByDay.has(ymd)) manualByDay.set(ymd, []);
     manualByDay.get(ymd)!.push({
+      routineId: entry.routineId,
+      activityTypeId: entry.activityTypeId,
+    });
+  }
+  for (const entry of programPlannedRaw) {
+    if (!entry.routineId) continue;
+    if (!manualByDay.has(entry.currentYmd)) manualByDay.set(entry.currentYmd, []);
+    manualByDay.get(entry.currentYmd)!.push({
       routineId: entry.routineId,
       activityTypeId: entry.activityTypeId,
     });

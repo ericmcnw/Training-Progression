@@ -17,6 +17,8 @@ import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import QuickLogDrawerButton from "@/app/routines/QuickLogDrawerButton";
 import StrengthSearch from "./StrengthSearch";
 import { domainRgb } from "@/lib/routines";
+import { getCoverageOverviewModel, type CoverageLens, type CoverageRange, type CoverageOverviewModel } from "@/app/progress/coverage";
+import CoverageGroupedBarChart from "@/app/progress/CoverageGroupedBarChart";
 
 export const dynamic = "force-dynamic";
 
@@ -53,10 +55,19 @@ function formatNumber(n: number) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function StrengthWorldPage() {
-  const [strength, strengthGoals] = await Promise.all([
+type SearchParams = Record<string, string | string[] | undefined>;
+const COVERAGE_RANGES: CoverageRange[] = ["week", "2w", "4w", "12w", "ytd"];
+
+export default async function StrengthWorldPage({ searchParams: searchParamsPromise }: { searchParams?: Promise<SearchParams> }) {
+  const searchParams = (await searchParamsPromise) ?? {};
+  const rawLens = Array.isArray(searchParams.coverage) ? searchParams.coverage[0] : searchParams.coverage;
+  const rawRange = Array.isArray(searchParams.range) ? searchParams.range[0] : searchParams.range;
+  const coverageLens: Exclude<CoverageLens, "sports"> = rawLens === "patterns" ? "patterns" : "muscles";
+  const coverageRange: CoverageRange = COVERAGE_RANGES.includes(rawRange as CoverageRange) ? rawRange as CoverageRange : "4w";
+  const [strength, strengthGoals, coverage] = await Promise.all([
     loadStrengthWorld(),
     getStrengthGoals(),
+    getCoverageOverviewModel(coverageRange),
   ]);
 
   if (strength.totalSessions === 0) {
@@ -206,6 +217,12 @@ export default async function StrengthWorldPage() {
             />
           </SectionCard>
         ) : null}
+
+        <StrengthCoverage
+          overview={coverage}
+          lens={coverageLens}
+          range={coverageRange}
+        />
 
         {/* Top exercises — with an inline finder so ANY lift's progression
             (not just the top-8) is reachable without leaving for /exercises.
@@ -363,6 +380,35 @@ function ExerciseCard({ exercise }: { exercise: import("@/app/progress/details/s
     </Link>
   );
 }
+
+function StrengthCoverage({ overview, lens, range }: { overview: CoverageOverviewModel; lens: Exclude<CoverageLens, "sports">; range: CoverageRange }) {
+  const section = overview.sections.find((candidate) => candidate.lens === lens);
+  if (!section) return null;
+  const categories = section.categories.filter((category) => category.totalCount > 0);
+  const href = (nextLens: Exclude<CoverageLens, "sports">, nextRange: CoverageRange) => `/activities/strength?coverage=${nextLens}&range=${nextRange}#training-coverage`;
+
+  return (
+    <section id="training-coverage" style={coverageBand}>
+      <div style={coverageHead}>
+        <div><h2 style={coverageTitle}>Muscle and movement coverage</h2><p style={coverageCopy}>All completed training that contributed to each group. Tap a bar segment to see the routines behind it.</p></div>
+      </div>
+      <div style={coverageControls}>
+        <div style={coveragePills}>{(["muscles", "patterns"] as const).map((value) => <Link key={value} href={href(value, range)} scroll={false} style={{ ...coveragePill, ...(lens === value ? coveragePillActive : {}) }}>{value === "muscles" ? "Muscle groups" : "Movement patterns"}</Link>)}</div>
+        <div style={coveragePills}>{([{ value: "week", label: "7D" }, { value: "4w", label: "4W" }, { value: "12w", label: "12W" }, { value: "ytd", label: "YTD" }] as const).map((item) => <Link key={item.value} href={href(lens, item.value)} scroll={false} replace style={{ ...coveragePill, ...(range === item.value ? coveragePillActive : {}) }}>{item.label}</Link>)}</div>
+      </div>
+      <CoverageGroupedBarChart categories={categories} legend={overview.routineKindLegend} rangeLabel={overview.rangeLabel} emptyMessage={section.emptyMessage} />
+    </section>
+  );
+}
+
+const coverageBand: React.CSSProperties = { display: "grid", gap: 12, padding: "18px 0", borderTopWidth: 1, borderTopStyle: "solid", borderTopColor: "rgba(255,255,255,0.1)", borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "rgba(255,255,255,0.1)" };
+const coverageHead: React.CSSProperties = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 };
+const coverageTitle: React.CSSProperties = { margin: 0, fontSize: 15, fontWeight: 900 };
+const coverageCopy: React.CSSProperties = { margin: "4px 0 0", maxWidth: 600, color: "rgba(255,255,255,0.54)", fontSize: 11.5, lineHeight: 1.45 };
+const coverageControls: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" };
+const coveragePills: React.CSSProperties = { display: "flex", gap: 5, flexWrap: "wrap" };
+const coveragePill: React.CSSProperties = { minHeight: 34, display: "inline-flex", alignItems: "center", padding: "0 10px", borderRadius: 6, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.11)", color: "rgba(255,255,255,0.56)", textDecoration: "none", fontSize: 10.5, fontWeight: 850 };
+const coveragePillActive: React.CSSProperties = { borderColor: `rgba(${STRENGTH_RGB},0.48)`, color: STRENGTH_TEXT, background: `rgba(${STRENGTH_RGB},0.09)` };
 
 function Sparkline({
   points,

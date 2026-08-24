@@ -227,22 +227,24 @@ export async function updateMilestone(id: string, input: MilestoneInput): Promis
 // Mark a milestone done. The track's "current" milestone is derived (first
 // ACTIVE by sortOrder), so this single write advances the aim to the next one.
 export async function markMilestoneMet(id: string): Promise<void> {
-  await requireOwnedFocusMilestone(id);
+  const milestone = await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.update({
     where: { id },
     data: { status: "ACHIEVED", achievedAt: new Date() },
   });
   revalidateFocusSurfaces();
+  revalidatePath(`/programs/${milestone.ownerId}`);
 }
 
 // Undo a mark-met (back to ACTIVE).
 export async function reopenMilestone(id: string): Promise<void> {
-  await requireOwnedFocusMilestone(id);
+  const milestone = await requireOwnedFocusMilestone(id);
   await prisma.progressionMilestone.update({
     where: { id },
     data: { status: "ACTIVE", achievedAt: null },
   });
   revalidateFocusSurfaces();
+  revalidatePath(`/programs/${milestone.ownerId}`);
 }
 
 export async function skipMilestone(id: string): Promise<void> {
@@ -320,6 +322,7 @@ export async function reorderMilestones(orderedIds: string[]): Promise<void> {
 
 export type MilestoneFormRow = {
   id?: string; // present = existing milestone
+  stageId?: string | null;
   scopeKind: MilestoneScopeKind;
   scopeRef?: string | null;
   label: string;
@@ -345,6 +348,27 @@ function parseTargetDate(value?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function cleanProgramYmd(value?: string | null): string | null {
+  const raw = (value ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+export type InitialProgramAssessment = {
+  name: string;
+  metricKind: "NUMBER" | "RATIO" | "DURATION" | "GRADE" | "PAIN" | "BODY_WEIGHT" | "BODY_FAT" | "WAIST" | "TEXT";
+  metricKey: string;
+  unit: string;
+  direction: "HIGHER" | "LOWER" | "TARGET" | "INFORMATIONAL";
+  checkpointIntervalWeeks: string;
+  baselineNumberValue: string;
+  baselineNumerator: string;
+  baselineDenominator: string;
+  baselineTextValue: string;
+  baselineYmd: string;
+  baselineSource: "MANUAL" | "ROUTINE_LOG" | "BODY_MEASUREMENT" | "PAIN_LOG" | "CLIMB_ATTEMPT" | "DERIVED";
+  baselineSourceRefId: string;
+};
+
 export async function saveFocus(input: {
   id?: string;
   name: string;
@@ -354,11 +378,19 @@ export async function saveFocus(input: {
   icon?: string | null;
   pursuitKey?: string | null;
   linkedInjuryId?: string | null;
+  objectiveKind?: "SPORT" | "STRENGTH" | "ENDURANCE" | "BODY_COMPOSITION" | "RECOVERY" | "GENERAL";
+  timelineMode?: "SEASON" | "DURATION" | "TARGET_DATE" | "REVIEW_DATE";
+  startYmd?: string | null;
+  endYmd?: string | null;
+  reviewYmd?: string | null;
   targetDate?: string | null;
   targetKind?: "SOFT" | "HARD";
   season?: string | null;
   phase?: "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN" | "" | null;
   handoffNote?: string | null;
+  initialAssessment?: InitialProgramAssessment | null;
+  updateFoundation?: boolean;
+  reconcileMilestones?: boolean;
   milestones: MilestoneFormRow[];
 }): Promise<{ id: string }> {
   const session = await getAppSession();
@@ -375,6 +407,11 @@ export async function saveFocus(input: {
     season: input.season?.trim() || null,
     phase: input.phase ? input.phase : null,
     handoffNote: input.handoffNote?.trim() || null,
+    ...(input.objectiveKind ? { objectiveKind: input.objectiveKind } : {}),
+    ...(input.timelineMode ? { timelineMode: input.timelineMode } : {}),
+    ...(input.startYmd !== undefined ? { startYmd: cleanProgramYmd(input.startYmd) } : {}),
+    ...(input.endYmd !== undefined ? { endYmd: cleanProgramYmd(input.endYmd) } : {}),
+    ...(input.reviewYmd !== undefined ? { reviewYmd: cleanProgramYmd(input.reviewYmd) } : {}),
     // Only touch these when the caller explicitly provides them — the edit
     // form doesn't manage them, so an undefined must NOT wipe the value.
     ...(input.linkedInjuryId !== undefined ? { linkedInjuryId: input.linkedInjuryId || null } : {}),
@@ -386,10 +423,12 @@ export async function saveFocus(input: {
   if (input.id) {
     const existing = await prisma.focus.findFirst({ where: { id: input.id, profileKey: session.profileKey }, select: { id: true } });
     if (!existing) throw new Error("Program not found.");
-    await prisma.focus.update({
-      where: { id: existing.id },
-      data: { ...focusData, status: input.status },
-    });
+    if (input.updateFoundation !== false) {
+      await prisma.focus.update({
+        where: { id: existing.id },
+        data: { ...focusData, status: input.status },
+      });
+    }
     focusId = input.id;
   } else {
     const min = await prisma.focus.aggregate({ _min: { sortOrder: true } });
@@ -405,6 +444,7 @@ export async function saveFocus(input: {
     focusId = created.id;
   }
 
+  if (input.reconcileMilestones !== false) {
   // Resolve the zone for pain gates once — the focus's linked injury's first
   // zone. Pain gates without a resolvable zone fall back to no auto-eval.
   let painZoneId: string | null = null;
@@ -423,6 +463,12 @@ export async function saveFocus(input: {
   // Reconcile milestones.
   const rows = input.milestones.filter((m) => m.label.trim().length > 0);
   const keepIds = rows.map((m) => m.id).filter((id): id is string => Boolean(id));
+  const requestedStageIds = Array.from(new Set(rows.map((m) => m.stageId).filter((value): value is string => Boolean(value))));
+  const validStageIds = new Set(
+    requestedStageIds.length
+      ? (await prisma.programStage.findMany({ where: { id: { in: requestedStageIds }, programId: focusId }, select: { id: true } })).map((stage) => stage.id)
+      : []
+  );
 
   const ops: Prisma.PrismaPromise<unknown>[] = [];
   // Delete any existing milestone the form no longer includes.
@@ -442,6 +488,7 @@ export async function saveFocus(input: {
       scopeRef: m.scopeRef?.trim() || null,
       label: m.label.trim(),
       targetText: m.targetText?.trim() || null,
+      stageId: m.stageId && validStageIds.has(m.stageId) ? m.stageId : null,
       estDurationDays:
         m.estDurationDays != null && Number.isFinite(m.estDurationDays) && m.estDurationDays > 0
           ? Math.round(m.estDurationDays)
@@ -474,6 +521,47 @@ export async function saveFocus(input: {
     }
   });
   await prisma.$transaction(ops);
+  }
+
+  if (!input.id && input.initialAssessment?.name.trim()) {
+    const assessment = input.initialAssessment;
+    const rawNumber = assessment.baselineNumberValue.trim();
+    const numberValue = rawNumber && Number.isFinite(Number(rawNumber)) ? Number(rawNumber) : null;
+    const rawNumerator = assessment.baselineNumerator.trim();
+    const numerator = rawNumerator && Number.isFinite(Number(rawNumerator)) ? Number(rawNumerator) : null;
+    const rawDenominator = assessment.baselineDenominator.trim();
+    const denominator = rawDenominator && Number.isFinite(Number(rawDenominator)) ? Number(rawDenominator) : null;
+    const textValue = assessment.baselineTextValue.trim() || null;
+    const hasRatio = assessment.metricKind === "RATIO" && numerator != null && denominator != null && denominator > 0;
+    const hasScalar = assessment.metricKind !== "RATIO" && (numberValue != null || textValue != null);
+    const rawInterval = Number(assessment.checkpointIntervalWeeks);
+    await prisma.programAssessment.create({
+      data: {
+        programId: focusId,
+        name: assessment.name.trim(),
+        metricKind: assessment.metricKind,
+        metricKey: assessment.metricKey.trim() || null,
+        unit: assessment.unit.trim() || null,
+        direction: assessment.direction,
+        checkpointIntervalWeeks: Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null,
+        ...((hasRatio || hasScalar) ? {
+          results: {
+            create: {
+              measuredAt: new Date(`${cleanProgramYmd(assessment.baselineYmd) ?? todayAppYmd()}T12:00:00.000Z`),
+              numberValue,
+              numerator,
+              denominator,
+              textValue,
+              source: assessment.baselineSource,
+              sourceRefId: assessment.baselineSourceRefId.trim() || null,
+              isBaseline: true,
+              confirmedAt: new Date(),
+            },
+          },
+        } : {}),
+      },
+    });
+  }
 
   revalidateFocusSurfaces();
   return { id: focusId };

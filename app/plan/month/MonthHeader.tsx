@@ -6,7 +6,7 @@ import type { MonthData } from "./data";
 // 4-stat strip below.
 
 function monthHref(monthYmd: string) {
-  return `/plan?month=${monthYmd}#schedule`;
+  return `/plan?view=calendar&month=${monthYmd}`;
 }
 
 export default function MonthHeader({ data }: { data: MonthData }) {

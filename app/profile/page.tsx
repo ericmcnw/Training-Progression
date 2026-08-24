@@ -4,7 +4,6 @@ import ProfileHeader from "@/app/profile/ProfileHeader";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
 import { getHomeInjuries } from "@/lib/home-injuries";
-import { getProgramCards } from "@/app/programs/data";
 import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd } from "@/lib/dates";
@@ -18,18 +17,16 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
     redirect(`/profile/history${query}`);
   }
   const session = await getAppSession();
-  const [stats, identity, injuries, programs, latestMeasurement] = await Promise.all([
+  const [stats, identity, injuries, latestMeasurement] = await Promise.all([
     loadProfileStats(todayAppYmd()),
     getProfileIdentity(),
     getHomeInjuries(),
-    getProgramCards(),
     prisma.bodyMeasurement.findFirst({
       where: { profileKey: session.profileKey },
       orderBy: { measuredAt: "desc" },
       select: { measuredAt: true, weightKg: true },
     }),
   ]);
-  const activePrograms = programs.filter((program) => program.status === "ACTIVE").length;
   const weightLb = latestMeasurement?.weightKg ? latestMeasurement.weightKg * 2.2046226218 : null;
 
   return <main style={page}>
@@ -42,7 +39,6 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
     <section style={group}>
       <h2 style={groupTitle}>Training</h2>
       <div style={navGrid}>
-        <HubLink href="/programs" title="Programs" meta={`${activePrograms} active · plans and progress`} />
         <HubLink href="/profile/history" title="Training history" meta={`${stats.totalSessions} sessions · search and review logs`} />
         <HubLink href="/reports" title="Reports" meta="Weekly review and longer trends" />
       </div>

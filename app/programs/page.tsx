@@ -201,10 +201,14 @@ const TONES: Record<Tone, { color: string; background: string; borderColor: stri
 };
 
 const page = {
+  width: "100%",
+  minWidth: 0,
   maxWidth: 720,
   margin: "0 auto",
   padding: "16px var(--edge) 80px",
+  boxSizing: "border-box",
   display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: 18,
 } as const;
 

@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getRoutineAims } from "@/app/focus/aims";
-import { addDaysYmd, diffYmdDays, toAppYmd, todayAppYmd } from "@/lib/dates";
+import { addDaysYmd, toAppYmd, todayAppYmd } from "@/lib/dates";
 import {
   effectiveRoutineDomain,
   type RoutineDomain,
@@ -48,6 +48,7 @@ import type {
   QuickPickRoutine,
 } from "./types";
 import { DOMAIN_LABEL } from "./tokens";
+import { getAppSession } from "@/lib/auth";
 
 const HABIT_GRID_DAYS = 30;
 // State window for the unified Frequency Goals card. Wide enough to cover
@@ -137,6 +138,7 @@ async function resolveBreadcrumbWeather(opts: {
 }
 
 export async function getHomeData(): Promise<HomeData> {
+  const session = await getAppSession();
   const today = todayAppYmd();
   const habitWindowStart = addDaysYmd(today, -(HABIT_GRID_DAYS - 1));
   const weekBounds = getWeekBoundsSunday(new Date());
@@ -163,6 +165,7 @@ export async function getHomeData(): Promise<HomeData> {
     allLogs,
     dayTodosRaw,
     manualEntriesRaw,
+    programEntriesRaw,
     movementPatterns,
     wagWeather,
     recentPings,
@@ -255,6 +258,11 @@ export async function getHomeData(): Promise<HomeData> {
     prisma.$queryRawUnsafe<Array<{ routineId: string; activityTypeId: string | null; scheduledDate: string; sortOrder: number }>>(
       'SELECT "routineId","activityTypeId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
     ),
+    prisma.plannedSession.findMany({
+      where: { program: { profileKey: session.profileKey }, status: "PLANNED", currentYmd: { gte: wagStart, lte: wagEnd }, routineId: { not: null } },
+      orderBy: [{ currentYmd: "asc" }, { sortOrder: "asc" }],
+      select: { routineId: true, activityTypeId: true, currentYmd: true },
+    }),
     getMovementPatternData().catch(() => ({
       weekStarts: [] as string[],
       patterns: [] as Awaited<ReturnType<typeof getMovementPatternData>>["patterns"],
@@ -350,6 +358,16 @@ export async function getHomeData(): Promise<HomeData> {
     } else {
       if (!manualByDay.has(ymd)) manualByDay.set(ymd, []);
       manualByDay.get(ymd)!.push(entry.routineId);
+    }
+  }
+  for (const entry of programEntriesRaw) {
+    if (!entry.routineId) continue;
+    if (entry.activityTypeId) {
+      if (!typedManualByDay.has(entry.currentYmd)) typedManualByDay.set(entry.currentYmd, []);
+      typedManualByDay.get(entry.currentYmd)!.push({ routineId: entry.routineId, activityTypeId: entry.activityTypeId });
+    } else {
+      if (!manualByDay.has(entry.currentYmd)) manualByDay.set(entry.currentYmd, []);
+      manualByDay.get(entry.currentYmd)!.push(entry.routineId);
     }
   }
 

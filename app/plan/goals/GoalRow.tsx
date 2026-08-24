@@ -15,6 +15,7 @@ import type { CSSProperties } from "react";
 import type { GoalInsight } from "@/lib/goals";
 import type { HabitRow } from "@/app/_home/types";
 import { TYPE_ACCENT, TYPE_ICON } from "./goal-type-accent";
+import { diffYmdDays, toAppYmd } from "@/lib/dates";
 
 // Status colors are intentionally muted — see feedback_habit_lens.
 // behind and at_risk share the same amber dot to avoid collision with
@@ -70,7 +71,7 @@ export default function GoalRow({
 
   // Stalled = active, older than two weeks, and nothing has EVER counted
   // toward it — usually a mis-aimed target. Quiet hint, not an alarm.
-  const ageDays = (Date.now() - insight.goal.createdAt.getTime()) / (24 * 60 * 60 * 1000);
+  const ageDays = diffYmdDays(today, toAppYmd(insight.goal.createdAt));
   const isStalled = insight.goal.isActive && !insight.hasData && ageDays > 14;
 
   // One-time achieved milestones read "Achieved" (they latch forever);

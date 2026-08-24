@@ -1,8 +1,6 @@
-// Canonical Program settings route. The existing Focus form remains the
-// implementation while Focus stays the schema noun.
+import { redirect } from "next/navigation";
 
-import EditFocusPage from "@/app/focus/[id]/edit/page";
-
-export const dynamic = "force-dynamic";
-
-export default EditFocusPage;
+export default async function LegacyProgramSettingsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  redirect(`/programs/${encodeURIComponent(id)}/edit`);
+}

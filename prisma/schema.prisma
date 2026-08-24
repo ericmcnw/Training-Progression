@@ -213,6 +213,7 @@ model ActivityType {
   manualScheduleEntries ScheduleManualEntry[]
   userPreferences       UserActivityTypePreference[]
   programBlockItems     ProgramBlockItem[]
+  plannedSessions       PlannedSession[]
 
   @@index([familyId, sortOrder])
   @@index([slug])
@@ -337,6 +338,7 @@ model Routine {
   frequencyGoalRoutines FrequencyGoalRoutine[]
   programLinks          ProgramRoutine[]
   programBlockItems     ProgramBlockItem[]
+  plannedSessions       PlannedSession[]
   activityType          ActivityType? @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
@@ -728,6 +730,7 @@ model RoutineLog {
   painLogs            PainLog[]
   climbAttempts       ClimbAttempt[]
   gearLinks           RoutineLogGear[]
+  completedPlannedSession PlannedSession?
 
   createdAt DateTime @default(now())
 
@@ -1690,6 +1693,56 @@ enum ProgramTargetItemStatus {
   DROPPED
 }
 
+enum ProgramObjectiveKind {
+  SPORT
+  STRENGTH
+  ENDURANCE
+  BODY_COMPOSITION
+  RECOVERY
+  GENERAL
+}
+
+enum ProgramTimelineMode {
+  SEASON
+  DURATION
+  TARGET_DATE
+  REVIEW_DATE
+}
+
+enum ProgramAssessmentMetricKind {
+  NUMBER
+  RATIO
+  DURATION
+  GRADE
+  PAIN
+  BODY_WEIGHT
+  BODY_FAT
+  WAIST
+  TEXT
+}
+
+enum ProgramAssessmentDirection {
+  HIGHER
+  LOWER
+  TARGET
+  INFORMATIONAL
+}
+
+enum ProgramAssessmentSource {
+  MANUAL
+  ROUTINE_LOG
+  BODY_MEASUREMENT
+  PAIN_LOG
+  CLIMB_ATTEMPT
+  DERIVED
+}
+
+enum PlannedSessionStatus {
+  PLANNED
+  COMPLETED
+  SKIPPED
+}
+
 model Focus {
   id             String        @id @default(cuid())
   name           String
@@ -1710,6 +1763,16 @@ model Focus {
   // Sport slug / activity-family / domain this focus belongs to; renders its
   // seasonal arc on that world page. Null for cross-cutting focuses.
   pursuitKey     String?
+  objectiveKind  ProgramObjectiveKind @default(GENERAL)
+  timelineMode   ProgramTimelineMode  @default(REVIEW_DATE)
+  // Date-only values use app-local YYYY-MM-DD. targetDate remains readable
+  // for legacy programs while the Program UI writes these explicit bounds.
+  startYmd       String?
+  endYmd         String?
+  reviewYmd      String?
+  continuedFromId String?
+  continuedFrom Focus?  @relation("ProgramContinuation", fields: [continuedFromId], references: [id], onDelete: SetNull)
+  continuations Focus[] @relation("ProgramContinuation")
   // Optional link to an ActiveInjury the focus "nods" to (rehab focuses).
   linkedInjuryId String?
   linkedInjury   ActiveInjury? @relation(fields: [linkedInjuryId], references: [id], onDelete: SetNull)
@@ -1726,9 +1789,13 @@ model Focus {
   stages             ProgramStage[]
   blocks             ProgramBlock[]
   targetLists        ProgramTargetList[]
+  assessments        ProgramAssessment[]
+  plannedSessions    PlannedSession[]
 
   @@index([status, sortOrder])
   @@index([profileKey, status, sortOrder])
+  @@index([continuedFromId])
+  @@index([pursuitKey, status])
 }
 
 model FocusContributor {
@@ -1766,6 +1833,8 @@ model ProgressionMilestone {
   // — its projected start is max(prior-in-track end, dependency end).
   estDurationDays     Int?
   dependsOnMilestoneId String?
+  stageId              String?
+  stage                ProgramStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
   // Advance gate (Phase 2). PAIN gates auto-evaluate from PainLog; FREE_TEXT is
   // self-assessed. gatePain* only meaningful when gateKind = PAIN.
   gateKind          MilestoneGateKind @default(NONE)
@@ -1784,6 +1853,7 @@ model ProgressionMilestone {
 
   @@index([ownerKind, ownerId, sortOrder])
   @@index([scopeKind, scopeRef, status])
+  @@index([stageId, sortOrder])
 }
 
 // ── AI coach (Slice 3) ─────────────────────────────────────────────────────
@@ -1859,6 +1929,8 @@ model ProgramStage {
   program Focus              @relation(fields: [programId], references: [id], onDelete: Cascade)
   gates   ProgramStageGate[]
   blocks  ProgramBlock[]
+  milestones ProgressionMilestone[]
+  assessments ProgramAssessment[]
 
   @@index([programId, sortOrder])
   @@index([programId, status])
@@ -1902,6 +1974,7 @@ model ProgramBlock {
   program Focus         @relation(fields: [programId], references: [id], onDelete: Cascade)
   stage   ProgramStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
   items   ProgramBlockItem[]
+  plannedSessions PlannedSession[]
 
   @@index([programId, sortOrder])
   @@index([stageId])
@@ -1930,6 +2003,7 @@ model ProgramBlockItem {
   routine       Routine?                   @relation(fields: [routineId], references: [id], onDelete: SetNull)
   activityType  ActivityType?              @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
   prescriptions ProgramBlockPrescription[]
+  plannedSessions PlannedSession[]
 
   @@index([blockId, sortOrder])
   @@index([routineId])
@@ -1998,6 +2072,90 @@ model ProgramTargetListItem {
   @@index([listId, sortOrder])
   @@index([climbProblemId])
   @@index([refKind, refId])
+}
+
+// A repeatable measurement or test used to establish a starting point and
+// compare later checkpoints. Results may reference existing source records;
+// they never edit the underlying log, measurement, pain reading, or attempt.
+model ProgramAssessment {
+  id                      String                     @id @default(cuid())
+  programId               String
+  stageId                 String?
+  name                    String
+  description             String?
+  metricKind              ProgramAssessmentMetricKind
+  metricKey               String?
+  unit                    String?
+  direction               ProgramAssessmentDirection @default(INFORMATIONAL)
+  checkpointIntervalWeeks Int?
+  sortOrder               Int                        @default(0)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  program Focus         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  stage   ProgramStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  results ProgramAssessmentResult[]
+
+  @@index([programId, sortOrder])
+  @@index([stageId])
+}
+
+model ProgramAssessmentResult {
+  id            String                  @id @default(cuid())
+  assessmentId  String
+  measuredAt    DateTime
+  numberValue   Float?
+  numerator     Float?
+  denominator   Float?
+  textValue     String?
+  source        ProgramAssessmentSource @default(MANUAL)
+  sourceRefId   String?
+  isBaseline    Boolean                 @default(false)
+  confirmedAt   DateTime?
+  notes         String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  assessment ProgramAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, measuredAt])
+  @@index([source, sourceRefId])
+}
+
+// Materialized program work on a real date. This is deliberately separate
+// from immutable RoutineLog history and from reusable SchedulePlan templates.
+// Moving a planned session changes only currentYmd; originalYmd remains an
+// audit trail and completedLogId connects the plan to what actually happened.
+model PlannedSession {
+  id             String               @id @default(cuid())
+  programId      String
+  blockId        String?
+  blockItemId    String?
+  routineId      String?
+  activityTypeId String?
+  sportSlug      String?
+  label          String
+  originalYmd    String
+  currentYmd     String
+  status         PlannedSessionStatus @default(PLANNED)
+  pinned         Boolean              @default(false)
+  completedLogId String?              @unique
+  reminderAt     DateTime?
+  sortOrder      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  program      Focus             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  block        ProgramBlock?     @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  blockItem    ProgramBlockItem? @relation(fields: [blockItemId], references: [id], onDelete: SetNull)
+  routine      Routine?          @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  activityType ActivityType?     @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
+  completedLog RoutineLog?       @relation(fields: [completedLogId], references: [id], onDelete: SetNull)
+
+  @@index([programId, currentYmd, status])
+  @@index([blockId, currentYmd])
+  @@index([blockItemId])
+  @@index([routineId, currentYmd])
 }
 
 model BodyMeasurement {

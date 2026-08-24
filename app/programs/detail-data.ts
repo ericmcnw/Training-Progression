@@ -4,6 +4,7 @@ import { getAppSession } from "@/lib/auth";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
+import { getProgramAssessmentSuggestions } from "@/app/programs/assessment-suggestions";
 
 const SENT_OUTCOMES = new Set(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
 
@@ -30,8 +31,18 @@ export async function getProgramDetailData(id: string) {
     select: {
       id: true,
       name: true,
+      description: true,
+      status: true,
+      color: true,
+      icon: true,
       pursuitKey: true,
       linkedInjuryId: true,
+      objectiveKind: true,
+      timelineMode: true,
+      startYmd: true,
+      endYmd: true,
+      reviewYmd: true,
+      continuedFromId: true,
       routineLinks: {
         orderBy: { sortOrder: "asc" },
         select: { role: true, routine: { select: { id: true, name: true, kind: true, domain: true } } },
@@ -143,6 +154,27 @@ export async function getProgramDetailData(id: string) {
           },
         },
       },
+      assessments: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          metricKind: true,
+          metricKey: true,
+          unit: true,
+          direction: true,
+          checkpointIntervalWeeks: true,
+          results: {
+            orderBy: { measuredAt: "asc" },
+            select: { id: true, measuredAt: true, numberValue: true, numerator: true, denominator: true, textValue: true, source: true, sourceRefId: true, isBaseline: true, confirmedAt: true, notes: true },
+          },
+        },
+      },
+      plannedSessions: {
+        orderBy: [{ currentYmd: "asc" }, { sortOrder: "asc" }],
+        select: { id: true, label: true, currentYmd: true, originalYmd: true, status: true, pinned: true, routineId: true, sportSlug: true, activityTypeId: true },
+      },
     },
   });
   if (!program) return null;
@@ -156,7 +188,7 @@ export async function getProgramDetailData(id: string) {
     prisma.progressionMilestone.findMany({
       where: { ownerKind: "FOCUS", ownerId: id },
       orderBy: { sortOrder: "asc" },
-      select: { id: true, scopeKind: true, scopeRef: true, label: true, status: true },
+      select: { id: true, stageId: true, scopeKind: true, scopeRef: true, label: true, targetText: true, status: true, estDurationDays: true, gateKind: true, gateNote: true },
     }),
     getGoalsOverview({ active: "all" }),
     hasClimbingList
@@ -236,6 +268,11 @@ export async function getProgramDetailData(id: string) {
     if (isSportSession) weeklySportCounts[index] += 1;
     else weeklyTrainingCounts[index] += 1;
   }
+  const completedPlannedIds = new Set(
+    program.plannedSessions
+      .filter((planned) => planned.routineId && logs.some((log) => log.routineId === planned.routineId && toAppYmd(log.performedAt) === planned.currentYmd))
+      .map((planned) => planned.id)
+  );
 
   const targetLists = program.targetLists.map((list) => {
     if (list.sportSlug?.trim().toLowerCase() === "climbing") {
@@ -269,6 +306,7 @@ export async function getProgramDetailData(id: string) {
 
   return {
     ...program,
+    activityLink: programActivityLink(pursuitSlug, pursuit?.family ?? null, program.objectiveKind),
     milestones,
     goalLinks: program.goalLinks.map((link) => ({
       ...link,
@@ -307,7 +345,24 @@ export async function getProgramDetailData(id: string) {
       })),
     },
     targetLists,
+    schedule: {
+      next: program.plannedSessions.filter((session) => session.status === "PLANNED" && !completedPlannedIds.has(session.id) && session.currentYmd >= today),
+      missed: program.plannedSessions.filter((session) => session.status === "PLANNED" && !completedPlannedIds.has(session.id) && session.currentYmd < today),
+    },
   };
+}
+
+function programActivityLink(
+  pursuitSlug: string | null,
+  family: "endurance" | "sports" | "strength" | "body-work" | "mobility" | "lifestyle" | null,
+  objectiveKind: string
+) {
+  if (objectiveKind === "BODY_COMPOSITION") return { href: "/profile/measurements", label: "Measurements" };
+  if (objectiveKind === "RECOVERY") return { href: "/profile/health", label: "Health" };
+  if (pursuitSlug === "strength" || objectiveKind === "STRENGTH") return { href: "/activities/strength", label: "Strength" };
+  if (family === "endurance" || pursuitSlug === "endurance") return { href: pursuitSlug && pursuitSlug !== "endurance" ? `/activities/${pursuitSlug}` : "/activities/endurance", label: pursuitSlug ? pursuitSlug.replaceAll("-", " ") : "Endurance" };
+  if (pursuitSlug) return { href: `/activities/${pursuitSlug}`, label: pursuitSlug.replaceAll("-", " ") };
+  return { href: "/activities", label: "Activities" };
 }
 
 export async function getProgramEditorOptions(programId: string) {
@@ -332,4 +387,103 @@ export async function getProgramEditorOptions(programId: string) {
   ]);
   if (!program) return null;
   return { program, routines, goals, frequencyGoals };
+}
+
+export async function getProgramDefinitionEditorData(programId: string) {
+  const session = await getAppSession();
+  const [program, milestones, routines, exercises, injuries, stages, metricDefinitions, assessmentSuggestions] = await Promise.all([
+    prisma.focus.findFirst({
+      where: { id: programId, profileKey: session.profileKey },
+      select: {
+        id: true, name: true, description: true, icon: true, color: true, status: true,
+        targetDate: true, targetKind: true, season: true, phase: true, handoffNote: true,
+        pursuitKey: true, linkedInjuryId: true, objectiveKind: true, timelineMode: true,
+        startYmd: true, endYmd: true, reviewYmd: true,
+      },
+    }),
+    prisma.progressionMilestone.findMany({
+      where: { ownerKind: "FOCUS", ownerId: programId },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true, stageId: true, scopeKind: true, scopeRef: true, label: true,
+        targetText: true, estDurationDays: true, gateKind: true, gateNote: true,
+        gatePainThreshold: true, gatePainDays: true, gateFreqPerWeek: true, gateFreqWeeks: true,
+      },
+    }),
+    prisma.routine.findMany({ where: { isActive: true, isDeleted: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.exercise.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, unit: true, supportsWeight: true, supportsSports: true },
+    }),
+    prisma.activeInjury.findMany({ where: { status: { in: ["ACTIVE", "FLARED"] } }, orderBy: { startedAt: "desc" }, select: { id: true, name: true } }),
+    prisma.programStage.findMany({ where: { programId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    prisma.sessionMetricDefinition.findMany({
+      // Baselines should offer durable progress measures, not every narrow
+      // goal bucket (for example V0/V1 per-grade counters).
+      where: { showInProgress: true },
+      orderBy: [{ template: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+      select: {
+        id: true,
+        label: true,
+        unit: true,
+        valueType: true,
+        template: {
+          select: {
+            key: true,
+            name: true,
+            metadataGroups: { select: { group: { select: { slug: true } } } },
+          },
+        },
+      },
+    }),
+    getProgramAssessmentSuggestions(),
+  ]);
+  if (!program) return null;
+  const pursuitKey = program.pursuitKey?.trim().toLowerCase() ?? "";
+  const sessionMetrics = metricDefinitions
+    .filter((metric) => {
+      if (!pursuitKey) return true;
+      const slugs = metric.template.metadataGroups.map((assignment) => assignment.group.slug.toLowerCase());
+      return slugs.includes(pursuitKey) || metric.template.key.toLowerCase().includes(pursuitKey);
+    })
+    .map((metric) => ({
+      id: metric.id,
+      label: metric.label,
+      unit: metric.unit,
+      valueType: metric.valueType,
+      templateName: metric.template.name,
+    }));
+  return {
+    initial: {
+      id: program.id,
+      name: program.name,
+      description: program.description ?? "",
+      icon: program.icon ?? "",
+      color: program.color ?? "#84cc78",
+      status: program.status,
+      targetDate: program.targetDate ? program.targetDate.toISOString().slice(0, 10) : "",
+      targetKind: program.targetKind,
+      season: program.season ?? "",
+      phase: ((["BUILD", "PEAK", "OFFSEASON", "MAINTAIN"] as const).includes(
+        program.phase as "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN"
+      )
+        ? (program.phase as "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN")
+        : "") as "" | "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN",
+      handoffNote: program.handoffNote ?? "",
+      pursuitKey: program.pursuitKey ?? "",
+      linkedInjuryId: program.linkedInjuryId ?? "",
+      objectiveKind: program.objectiveKind,
+      timelineMode: program.timelineMode,
+      startYmd: program.startYmd ?? "",
+      endYmd: program.endYmd ?? "",
+      reviewYmd: program.reviewYmd ?? "",
+      milestones,
+    },
+    routines,
+    exercises,
+    injuries,
+    stages,
+    sessionMetrics,
+    assessmentSuggestions,
+  };
 }

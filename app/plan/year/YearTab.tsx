@@ -123,7 +123,7 @@ export default async function YearTab() {
           {months.map((mo) => (
             <Link
               key={mo.ym}
-              href={`/plan?month=${mo.ym}#schedule`}
+              href={`/plan?view=calendar&month=${mo.ym}`}
               style={{ ...monthLink, left: Math.round(mo.day * PX_PER_DAY) }}
               title={`Zoom into ${mo.label}`}
             >
