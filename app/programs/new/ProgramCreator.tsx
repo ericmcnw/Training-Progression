@@ -13,6 +13,7 @@ type GoalPick = Pick & { goalType: string };
 type FrequencyGoalPick = Pick & { targetCount: number; targetInterval: number; targetUnit: string };
 type ExercisePick = Pick & { unit: string; supportsWeight: boolean; supportsSports: string[] };
 type Path = "sport" | "strength" | "endurance" | "body" | "recovery";
+type TimelineMode = "SEASON" | "DURATION" | "TARGET_DATE" | "REVIEW_DATE";
 
 const PATHS: Array<{ id: Path; label: string; examples: string }> = [
   { id: "sport", label: "Improve at a sport", examples: "climbing, basketball, golf, snowboarding" },
@@ -43,7 +44,11 @@ export default function ProgramCreator({
   const [path, setPath] = useState<Path>("sport");
   const [name, setName] = useState("");
   const [pursuitKey, setPursuitKey] = useState("");
-  const [targetDate, setTargetDate] = useState("");
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>(timelineModeFor("sport"));
+  const [startYmd, setStartYmd] = useState("");
+  const [endYmd, setEndYmd] = useState("");
+  const [reviewYmd, setReviewYmd] = useState("");
+  const [durationWeeks, setDurationWeeks] = useState("");
   const [routineIds, setRoutineIds] = useState<string[]>([]);
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [frequencyGoalIds, setFrequencyGoalIds] = useState<string[]>([]);
@@ -88,12 +93,14 @@ export default function ProgramCreator({
 
   function selectPath(nextPath: Path) {
     setPath(nextPath);
+    setTimelineMode(timelineModeFor(nextPath));
     setPursuitKey(nextPath === "sport" ? "" : pursuitFor(nextPath));
     setStartingAssessment(null);
     setOutcomeDraft(null);
   }
 
-  const initial = guidedInitial(path, name, resolvedPursuit, targetDate, outcomeDraft);
+  const resolvedEndYmd = timelineMode === "DURATION" ? addWeeks(startYmd, durationWeeks) : endYmd;
+  const initial = guidedInitial(path, name, resolvedPursuit, { timelineMode, startYmd, endYmd: resolvedEndYmd, reviewYmd }, outcomeDraft);
 
   return (
     <div className="programCreatorWorkspace" style={workspace}>
@@ -145,7 +152,32 @@ export default function ProgramCreator({
               ) : (
                 <label style={field}>Primary activity<input value={pursuitKey} onChange={(event) => setPursuitKey(event.target.value)} placeholder={pursuitFor(path)} style={input} /></label>
               )}
-              <label style={field}>End or review date <span style={optionalText}>optional</span><input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} style={input} /></label>
+              <label style={field}>Timeline
+                <select value={timelineMode} onChange={(event) => setTimelineMode(event.target.value as TimelineMode)} style={input}>
+                  <option value="SEASON">A season or window — it runs between two dates</option>
+                  <option value="TARGET_DATE">A date I&rsquo;m training for — a race, trip, or event</option>
+                  <option value="DURATION">A fixed block — so many weeks from a start</option>
+                  <option value="REVIEW_DATE">Open-ended — check in on it periodically</option>
+                </select>
+              </label>
+              <div className="programDateRow" style={dateRow}>
+                {timelineMode === "SEASON" ? (
+                  <>
+                    <label style={field}>Season starts <span style={optionalText}>optional</span><input type="date" value={startYmd} onChange={(event) => setStartYmd(event.target.value)} style={input} /></label>
+                    <label style={field}>Season ends <span style={optionalText}>optional</span><input type="date" value={endYmd} onChange={(event) => setEndYmd(event.target.value)} style={input} /></label>
+                  </>
+                ) : timelineMode === "TARGET_DATE" ? (
+                  <label style={field}>The date <span style={optionalText}>optional</span><input type="date" value={endYmd} onChange={(event) => setEndYmd(event.target.value)} style={input} /></label>
+                ) : timelineMode === "DURATION" ? (
+                  <>
+                    <label style={field}>Starts <span style={optionalText}>optional</span><input type="date" value={startYmd} onChange={(event) => setStartYmd(event.target.value)} style={input} /></label>
+                    <label style={field}>Weeks<input type="number" min={1} max={104} value={durationWeeks} onChange={(event) => setDurationWeeks(event.target.value)} placeholder="8" style={input} /></label>
+                  </>
+                ) : (
+                  <label style={field}>Check in on <span style={optionalText}>optional</span><input type="date" value={reviewYmd} onChange={(event) => setReviewYmd(event.target.value)} style={input} /></label>
+                )}
+              </div>
+              {timelineMode === "DURATION" && resolvedEndYmd ? <p style={dateNote}>Ends {resolvedEndYmd}.</p> : null}
             </div>
           </CreatorPanel>
           </div>
@@ -227,6 +259,7 @@ export default function ProgramCreator({
           .programCreatorWorkspace { grid-template-columns: minmax(0, 1fr) !important; }
           .programPathList { grid-template-columns: minmax(0, 1fr) !important; }
           .programCreatorMiniSteps { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .programDateRow { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
     </div>
@@ -319,7 +352,30 @@ function blankInitial(): FocusFormInitial {
   return { name: "", description: "", icon: "", color: "#84cc78", status: "ACTIVE", targetDate: "", targetKind: "SOFT", season: "", phase: "", handoffNote: "", pursuitKey: "", linkedInjuryId: "", objectiveKind: "GENERAL", timelineMode: "REVIEW_DATE", startYmd: "", endYmd: "", reviewYmd: "", milestones: [] };
 }
 
-function guidedInitial(path: Path, name: string, pursuitKey: string, targetDate: string, outcomes: MilestoneFormRow[] | null): FocusFormInitial {
+function timelineModeFor(path: Path): TimelineMode {
+  if (path === "sport") return "SEASON";
+  if (path === "endurance") return "TARGET_DATE";
+  return "REVIEW_DATE";
+}
+
+function addWeeks(startYmd: string, weeks: string) {
+  const count = Number(weeks);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startYmd) || !Number.isFinite(count) || count <= 0) return "";
+  const [year, month, day] = startYmd.split("-").map(Number);
+  const end = new Date(Date.UTC(year, month - 1, day + Math.round(count) * 7));
+  return end.toISOString().slice(0, 10);
+}
+
+function guidedInitial(
+  path: Path,
+  name: string,
+  pursuitKey: string,
+  timeline: { timelineMode: TimelineMode; startYmd: string; endYmd: string; reviewYmd: string },
+  outcomes: MilestoneFormRow[] | null
+): FocusFormInitial {
+  // targetDate is the legacy projection anchor: the end of a bounded program,
+  // otherwise the review date.
+  const targetDate = timeline.endYmd || timeline.reviewYmd;
   return {
     ...blankInitial(),
     name,
@@ -327,9 +383,10 @@ function guidedInitial(path: Path, name: string, pursuitKey: string, targetDate:
     targetDate,
     targetKind: "SOFT",
     objectiveKind: objectiveKindFor(path),
-    timelineMode: path === "sport" ? "SEASON" : targetDate ? "TARGET_DATE" : "REVIEW_DATE",
-    endYmd: targetDate,
-    reviewYmd: targetDate,
+    timelineMode: timeline.timelineMode,
+    startYmd: timeline.startYmd,
+    endYmd: timeline.endYmd,
+    reviewYmd: timeline.reviewYmd,
     phase: "BUILD",
     milestones: outcomes ?? [{ scopeKind: "CAPACITY", scopeRef: pursuitKey || path, label: "", targetText: "", gateKind: "NONE" }],
   };
@@ -388,6 +445,8 @@ const panelHeader: CSSProperties = { display: "grid", gap: 6, paddingBottom: 2 }
 const panelEyebrow: CSSProperties = { fontSize: 10, fontWeight: 900, textTransform: "uppercase", color: "#7ce8aa" };
 const panelTitle: CSSProperties = { margin: 0, fontSize: 22, lineHeight: 1.2 };
 const panelCopy: CSSProperties = { maxWidth: 650, margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "rgba(255,255,255,0.52)" };
+const dateRow: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 13 };
+const dateNote: CSSProperties = { margin: 0, fontSize: 11, color: "rgba(255,255,255,0.45)" };
 const detailFields: CSSProperties = { display: "grid", gap: 13, maxWidth: 680 };
 const backButton: CSSProperties = { minHeight: 42, padding: "0 13px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 8, background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.7)", fontWeight: 800, cursor: "pointer" };
 const pathList: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 };

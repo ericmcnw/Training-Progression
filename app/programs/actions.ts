@@ -397,6 +397,9 @@ export async function addProgramAssessmentResult(formData: FormData) {
   if (assessment.metricKind === "RATIO" ? numerator == null || denominator == null || denominator <= 0 : numberValue == null && !textValue) {
     throw new Error("Enter a result.");
   }
+  const rawResultSource = String(formData.get("source") || "MANUAL");
+  const allowedResultSources = new Set(["MANUAL", "ROUTINE_LOG", "BODY_MEASUREMENT", "PAIN_LOG", "CLIMB_ATTEMPT", "DERIVED"]);
+  const resultSource = (allowedResultSources.has(rawResultSource) ? rawResultSource : "MANUAL") as "MANUAL" | "ROUTINE_LOG" | "BODY_MEASUREMENT" | "PAIN_LOG" | "CLIMB_ATTEMPT" | "DERIVED";
   const isBaseline = String(formData.get("isBaseline") || "") === "1";
   if (isBaseline) {
     await prisma.programAssessmentResult.updateMany({ where: { assessmentId, isBaseline: true }, data: { isBaseline: false } });
@@ -409,10 +412,43 @@ export async function addProgramAssessmentResult(formData: FormData) {
       numerator,
       denominator,
       textValue,
-      source: "MANUAL",
+      source: resultSource,
+      sourceRefId: resultSource === "MANUAL" ? null : String(formData.get("sourceRefId") || "").trim() || null,
       isBaseline,
       confirmedAt: new Date(),
       notes: String(formData.get("notes") || "").trim() || null,
+    },
+  });
+  revalidateProgram(programId);
+}
+
+export async function updateProgramAssessment(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const assessmentId = String(formData.get("assessmentId") || "");
+  const assessment = await prisma.programAssessment.findFirst({ where: { id: assessmentId, programId }, select: { id: true } });
+  if (!assessment) throw new Error("Assessment not found.");
+  const name = String(formData.get("name") || "").trim();
+  if (!name) throw new Error("Assessment needs a name.");
+  const rawDirection = String(formData.get("direction") || "INFORMATIONAL");
+  const allowedDirections = new Set<ProgramAssessmentDirection>(["HIGHER", "LOWER", "TARGET", "INFORMATIONAL"]);
+  if (!allowedDirections.has(rawDirection as ProgramAssessmentDirection)) throw new Error("Invalid direction.");
+  const rawInterval = Number(formData.get("checkpointIntervalWeeks"));
+
+  // The metric, its unit, and its kind define the series every recorded result
+  // belongs to, so they stay fixed once results exist. Everything the plan can
+  // legitimately change mid-program is editable.
+  await prisma.programAssessment.update({
+    where: { id: assessmentId },
+    data: {
+      name,
+      description: String(formData.get("description") || "").trim() || null,
+      direction: rawDirection as ProgramAssessmentDirection,
+      targetNumberValue: numberField(formData, "targetNumberValue"),
+      targetNumerator: numberField(formData, "targetNumerator"),
+      targetDenominator: numberField(formData, "targetDenominator"),
+      targetTextValue: String(formData.get("targetTextValue") || "").trim() || null,
+      checkpointIntervalWeeks: Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null,
     },
   });
   revalidateProgram(programId);

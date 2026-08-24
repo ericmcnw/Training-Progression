@@ -4,13 +4,11 @@ import { getProgramDefinitionEditorData, getProgramDetailData, getProgramEditorO
 import FocusForm from "@/app/focus/FocusForm";
 import {
   addProgramBlockRoutine,
-  addProgramAssessmentResult,
   addProgramTargetItem,
   createPlannedSession,
   createProgramBlock,
   createProgramStage,
   createProgramTargetList,
-  deleteProgramAssessment,
   moveProgramTargetItem,
   removeProgramBlockItem,
   saveProgramRelationships,
@@ -23,6 +21,7 @@ import { todayAppYmd } from "@/lib/dates";
 import { NewGoalDrawerButton, NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import ProgramEditorNav, { type ProgramEditorStep } from "./ProgramEditorNav";
 import AssessmentBuilder from "./AssessmentBuilder";
+import AssessmentCard from "./AssessmentCard";
 
 export const dynamic = "force-dynamic";
 
@@ -91,21 +90,14 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </SetupPart>
 
         <SetupPart number="3" title="Starting point and checkpoints" subtitle={`${detail.assessments.length} assessment${detail.assessments.length === 1 ? "" : "s"}`}>
-        {detail.assessments.length ? <div style={list}>{detail.assessments.map((assessment) => {
-          const baseline = assessment.results.find((result) => result.isBaseline) ?? assessment.results[0] ?? null;
-          const latest = assessment.results.at(-1) ?? null;
-          return <div key={assessment.id} style={blockCard}>
-            <div style={cardHead}><div><strong>{assessment.name}</strong><div style={minorText}>{assessment.metricKind.toLowerCase().replaceAll("_", " ")}{assessment.checkpointIntervalWeeks ? ` · every ${assessment.checkpointIntervalWeeks} weeks` : " · stage review"}</div></div><form action={deleteProgramAssessment}><input type="hidden" name="programId" value={id} /><input type="hidden" name="assessmentId" value={assessment.id} /><button type="submit" style={quietActionButton}>Remove</button></form></div>
-            {baseline ? <div style={summaryRow}><span><span style={minorText}>Baseline</span><strong style={{ display: "block" }}>{assessmentValue(baseline, assessment.unit)}</strong></span>{latest && latest.id !== baseline.id ? <span style={{ textAlign: "center" }}><span style={minorText}>Latest</span><strong style={{ display: "block" }}>{assessmentValue(latest, assessment.unit)}</strong></span> : null}{targetValue(assessment) ? <span style={{ textAlign: "right" }}><span style={minorText}>Target</span><strong style={{ display: "block", color: "#7ce8aa" }}>{targetValue(assessment)}</strong></span> : null}</div> : <div style={empty}>No confirmed baseline yet.</div>}
-            <form action={addProgramAssessmentResult} style={miniForm}>
-              <input type="hidden" name="programId" value={id} /><input type="hidden" name="assessmentId" value={assessment.id} />
-              {assessment.metricKind === "RATIO" ? <><input name="numerator" type="number" step="any" placeholder="made" style={smallInput} /><input name="denominator" type="number" step="any" placeholder="attempts" style={smallInput} /></> : assessment.metricKind === "TEXT" || assessment.metricKind === "GRADE" ? <input name="textValue" placeholder="result" style={input} /> : <input name="numberValue" type="number" step="any" placeholder={assessment.unit ?? "result"} style={smallInput} />}
-              <input name="measuredYmd" type="date" style={input} />
-              <label style={baselineToggle}><input type="checkbox" name="isBaseline" value="1" /> baseline</label>
-              <button type="submit" style={iconButton} title="Add checkpoint" aria-label={`Add ${assessment.name} checkpoint`}>+</button>
-            </form>
-          </div>;
-        })}</div> : <Empty text="No assessments yet. Add the test or measurement you want to compare over time." />}
+        {detail.assessments.length ? <div style={list}>{detail.assessments.map((assessment) => (
+          <AssessmentCard
+            key={assessment.id}
+            programId={id}
+            assessment={assessment}
+            suggestion={definition.assessmentSuggestions.find((candidate) => candidate.metricKey === assessment.metricKey) ?? null}
+          />
+        ))}</div> : <Empty text="No assessments yet. Add the test or measurement you want to compare over time." />}
         <details style={addPanel}>
           <summary style={addPanelSummary}>Add an assessment</summary>
           <div style={{ paddingTop: 12 }}>
@@ -371,16 +363,6 @@ function CheckRow({ name, value, checked, label, meta }: { name: string; value: 
 }
 
 function Empty({ text }: { text: string }) { return <div style={empty}>{text}</div>; }
-function assessmentValue(result: { numberValue: number | null; numerator: number | null; denominator: number | null; textValue: string | null }, unit: string | null) {
-  if (result.numerator != null && result.denominator != null) return `${result.numerator}/${result.denominator}`;
-  if (result.numberValue != null) return `${result.numberValue}${unit ? ` ${unit}` : ""}`;
-  return result.textValue ?? "—";
-}
-function targetValue(assessment: { targetNumberValue: number | null; targetNumerator: number | null; targetDenominator: number | null; targetTextValue: string | null; unit: string | null }) {
-  if (assessment.targetNumerator != null && assessment.targetDenominator != null) return `${assessment.targetNumerator}/${assessment.targetDenominator}`;
-  if (assessment.targetNumberValue != null) return `${assessment.targetNumberValue}${assessment.unit ? ` ${assessment.unit}` : ""}`;
-  return assessment.targetTextValue || null;
-}
 function humanize(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 }
@@ -424,7 +406,6 @@ const setupPartNumber: React.CSSProperties = { width: 22, height: 22, display: "
 const setupPartTitle: React.CSSProperties = { margin: 0, fontSize: 14, lineHeight: 1.3 };
 const setupPartSubtitle: React.CSSProperties = { margin: "2px 0 0", fontSize: 10.5, color: "rgba(255,255,255,0.42)" };
 const setupPartBody: React.CSSProperties = { minWidth: 0, paddingLeft: 32 };
-const summaryRow: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
 const actionLink: React.CSSProperties = { ...quietLink, minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 12px", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8 };
 const minorText: React.CSSProperties = { fontSize: 11, lineHeight: 1.35, color: "rgba(255,255,255,0.48)" };
 const picker: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, overflow: "hidden" };

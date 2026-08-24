@@ -6,16 +6,10 @@ import { createProgramAssessment } from "@/app/programs/actions";
 import type { InitialProgramAssessment } from "@/app/focus/actions";
 import { programSportMetricOptions, type ProgramSportMetricOption } from "@/lib/program-sport-metrics";
 import type { ProgramAssessmentSuggestion } from "@/app/programs/assessment-suggestions";
+import { ASSESSMENT_DIRECTIONS, type AssessmentDirection } from "@/app/programs/assessment-directions";
 
 type SourceKind = "sport" | "exercise" | "body" | "recovery" | "manual";
-type Direction = "HIGHER" | "LOWER" | "TARGET" | "INFORMATIONAL";
-
-const DIRECTIONS: Array<{ id: Direction; label: string; hint: string }> = [
-  { id: "HIGHER", label: "↑ Increase", hint: "Progress means a bigger number" },
-  { id: "LOWER", label: "↓ Decrease", hint: "Progress means a smaller number" },
-  { id: "TARGET", label: "→ Hold", hint: "Progress means staying at the target" },
-  { id: "INFORMATIONAL", label: "Just tracking", hint: "No direction — you only want the history" },
-];
+type Direction = AssessmentDirection;
 type MetricKind = "NUMBER" | "RATIO" | "DURATION" | "GRADE" | "PAIN" | "BODY_WEIGHT" | "BODY_FAT" | "WAIST" | "TEXT";
 
 type MetricOption = Omit<ProgramSportMetricOption, "metricKind"> & { metricKind: MetricKind };
@@ -347,7 +341,7 @@ export default function AssessmentBuilder({
         <div>
           <div style={fieldTitle}>Which way is progress?</div>
           <div className="assessmentDirectionGrid" style={directionGrid}>
-            {DIRECTIONS.map((option) => {
+            {ASSESSMENT_DIRECTIONS.map((option) => {
               const selected = direction === option.id;
               return (
                 <button
