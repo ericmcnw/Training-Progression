@@ -445,12 +445,9 @@ export default async function ClimbingHubPage(props: {
       notes: a.notes ?? null,
       performedAt: a.sessionLog.performedAt,
     }));
-  const projectsAll = buildProjectRollup(projectAttemptsInput, { now });
-  // Only include "active" — touched in the last 60 days. Dormant projects
-  // belong on /projects.
-  const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
-  const activeCutoff = new Date(now.getTime() - SIXTY_DAYS_MS);
-  const activeProjects = projectsAll.filter((p) => p.lastAttempt >= activeCutoff);
+  // A project stays listed until it's sent — no recency window, because an
+  // outdoor project survives an off-season.
+  const activeProjects = buildProjectRollup(projectAttemptsInput, { now });
   const topProjects = activeProjects.slice(0, ACTIVE_PROJECTS_LIMIT);
   const problemNameById = new Map(problems.map((p) => [p.id, p.name]));
   const problemLocationById = new Map(problems.map((p) => [p.id, p.locationId]));
@@ -762,7 +759,7 @@ export default async function ClimbingHubPage(props: {
         subtitle={
           activeProjects.length === 0
             ? undefined
-            : `Top ${Math.min(ACTIVE_PROJECTS_LIMIT, activeProjects.length)} of ${activeProjects.length} touched in the last 60 days.`
+            : `Top ${Math.min(ACTIVE_PROJECTS_LIMIT, activeProjects.length)} of ${activeProjects.length}, most recently touched first.`
         }
       >
         {topProjects.length === 0 ? (
