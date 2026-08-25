@@ -36,6 +36,7 @@ export const ACTIVITY_TYPE_SLUGS = {
   GRAVEL_BIKE: "gravel-bike",
   // Swimming
   SWIM: "swim",
+  POOL_SWIM: "pool-swim",
   OPEN_WATER_SWIM: "open-water-swim",
   // Rowing
   ROW: "row",
@@ -91,6 +92,7 @@ export const FAMILY_TYPE_SLUGS: Record<EnduranceFamilySlug, readonly ActivityTyp
   ],
   [ENDURANCE_FAMILY_SLUGS.SWIMMING]: [
     ACTIVITY_TYPE_SLUGS.SWIM,
+    ACTIVITY_TYPE_SLUGS.POOL_SWIM,
     ACTIVITY_TYPE_SLUGS.OPEN_WATER_SWIM,
   ],
   [ENDURANCE_FAMILY_SLUGS.ROWING]: [
@@ -98,3 +100,10 @@ export const FAMILY_TYPE_SLUGS: Record<EnduranceFamilySlug, readonly ActivityTyp
     ACTIVITY_TYPE_SLUGS.ERG_ROW,
   ],
 };
+
+// Pool swims capture a structured set list (see lib/pool-swim.ts) instead of
+// the reps/work/rest block that usesIntervals drives. Gated on the slug
+// rather than a column because there is exactly one pool type.
+export function isPoolSwimType(slug: string | null | undefined) {
+  return slug === ACTIVITY_TYPE_SLUGS.POOL_SWIM;
+}

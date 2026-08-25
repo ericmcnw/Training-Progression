@@ -38,6 +38,7 @@ import {
   type SpotPickerItem,
 } from "@/lib/activity-spots";
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
+import { parsePoolSwimData, type PoolSwimData } from "@/lib/pool-swim";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 import { getLogGearPicks } from "@/lib/gear";
 import type { GearPick } from "@/lib/gear-pick-types";
@@ -140,6 +141,9 @@ export type EditCardioData = {
   availableActivityTypes: EditCardioActivityTypeOption[];
   initialActivityTypeId: string | null;
   initialIntervals: EditCardioIntervals | null;
+  // Stored pool-swim payload (pool geometry + set list) off sportData.
+  // null for every non-pool cardio log.
+  initialPoolSwim: PoolSwimData | null;
   // Stored perceived effort 1-10, or null if never rated. The edit form
   // pre-fills the slider with this (null → slider sits at the predicted
   // guess, untouched, so historical logs can be backfilled).
@@ -562,6 +566,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         availableActivityTypes,
         initialActivityTypeId: log.activityTypeId ?? null,
         initialIntervals: intervals,
+        initialPoolSwim: parsePoolSwimData(log.sportData),
         initialEffort: log.effort ?? null,
         initialGear: await getLogGearPicks(logId),
       };

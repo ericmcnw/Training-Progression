@@ -15,6 +15,7 @@ import type { GuidedStepKind, RoutineKind } from "@/generated/prisma";
 import { getRoutineDisplayName } from "@/lib/routine-display";
 import { coerceWeatherSnapshot, type WeatherSnapshot } from "@/lib/weather";
 import { toAppYmd } from "@/lib/dates";
+import { parsePoolSwimData, type PoolSwimData } from "@/lib/pool-swim";
 
 const GRAMS_PER_OZ = 28.349523125;
 const GRAMS_PER_LB = 453.59237;
@@ -135,6 +136,10 @@ export type LogSummarySportData =
           notes?: string;
         }>;
       };
+    }
+  | {
+      kind: "pool-swim";
+      pool: PoolSwimData;
     }
   | {
       kind: "generic-sport";
@@ -318,6 +323,15 @@ function parseSportData(raw: unknown): LogSummarySportData | null {
       };
     }
     return out;
+  }
+
+  // Pool swims carry a structured set list. Must be matched before the
+  // generic branch below, which would otherwise flatten the sets into
+  // meaningless "extras".
+  if (sport === "pool-swim") {
+    const pool = parsePoolSwimData(obj);
+    if (pool) return { kind: "pool-swim", pool };
+    return { kind: "unknown" };
   }
 
   // Generic sport — basketball/surfing/snowboarding/etc. carry sessionType

@@ -30,6 +30,7 @@ import { stampLogWeather } from "@/lib/weather-stamp";
 import { setLogGear, type GearPickInput } from "@/lib/gear";
 import { createActivityZoneActivitiesForLog, createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { clampEffort } from "@/lib/strain";
+import type { PoolSwimData } from "@/lib/pool-swim";
 import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
@@ -2303,6 +2304,11 @@ export async function logCardio(params: {
   painCheck?: PainCheckInput;
   /** Gear used (e.g. footwear) — linked to the log for usage rollups. */
   gearPicks?: GearPickInput[];
+  /** Structured pool-swim payload (pool geometry + the set list) for Pool
+   *  Swim logs. Persisted on RoutineLog.sportData under the
+   *  sport: "pool-swim" discriminator; distanceMi is derived from it by
+   *  the caller so the endurance rollups need no swim awareness. */
+  sportData?: PoolSwimData;
 }) {
   await ensureRoutineKind(params.routineId, "CARDIO");
   // Distance is optional (walks are often logged by time alone); duration is
@@ -2350,6 +2356,7 @@ export async function logCardio(params: {
       // Prisma's Json scalar accepts the object directly; null clears
       // any prior structured data on this log.
       intervalsConfig: params.intervalsConfig ?? undefined,
+      sportData: params.sportData ?? undefined,
     },
     select: { id: true },
   });
@@ -2399,6 +2406,11 @@ export async function logRun(params: {
   effort?: number | null;
   painCheck?: PainCheckInput;
   gearPicks?: GearPickInput[];
+  /** Structured pool-swim payload (pool geometry + the set list) for Pool
+   *  Swim logs. Persisted on RoutineLog.sportData under the
+   *  sport: "pool-swim" discriminator; distanceMi is derived from it by
+   *  the caller so the endurance rollups need no swim awareness. */
+  sportData?: PoolSwimData;
 }) {
   return logCardio(params);
 }
@@ -2812,6 +2824,9 @@ export type UpdateCardioLogParams = {
   newClimbLocationOsmId?: string | null;
   /** Gear used. Omit to leave links untouched; pass [] to clear. */
   gearPicks?: GearPickInput[];
+  /** Structured pool-swim payload. Same undefined/null/object contract as
+   *  intervalsConfig: omit to leave untouched, null to clear. */
+  sportData?: PoolSwimData | null;
 };
 
 export async function updateCardioLog(params: UpdateCardioLogParams) {
@@ -2881,6 +2896,7 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
     };
     if (params.activityTypeId !== undefined) partialUpdate.activityTypeId = params.activityTypeId;
     if (params.intervalsConfig !== undefined) partialUpdate.intervalsConfig = params.intervalsConfig ?? null;
+    if (params.sportData !== undefined) partialUpdate.sportData = params.sportData ?? null;
     if (params.effort !== undefined) partialUpdate.effort = params.effort == null ? null : clampEffort(params.effort);
     if (hasSpotParams) {
       partialUpdate.climbLocationId = nextClimbLocationId;

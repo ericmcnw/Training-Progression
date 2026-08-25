@@ -2,6 +2,7 @@ import type { WorkoutBlock } from "@/app/routines/[id]/log/WorkoutExerciseEditor
 import type { SessionMetricDraftValue } from "@/app/routines/[id]/log-session/SessionMetricFields";
 import type { ClimbAttemptDraft, QuickClimbRow } from "@/lib/climb-types";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
+import type { PoolSwimFormState } from "@/app/routines/[id]/log-cardio/PoolSwimSets";
 import type { GearPick } from "@/lib/gear-pick-types";
 
 const DRAFT_KEY_PREFIX = "log-draft:";
@@ -86,6 +87,9 @@ export type CardioDraft = {
   // Gear picks (footwear etc.) — restored into the GearPicker on remount.
   // Optional so older drafts deserialize cleanly.
   gear?: GearPick[];
+  // Pool-swim set builder state, held as typed strings so a half-entered
+  // set survives a refresh. Only present on Pool Swim logs.
+  poolSwim?: PoolSwimFormState;
 };
 
 export type GuidedDraft = {

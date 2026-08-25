@@ -32,6 +32,14 @@ import {
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
+import { isPoolSwimType } from "@/lib/activity-types";
+import { normalizePoolSwimData, poolSwimTotals } from "@/lib/pool-swim";
+import { loadLastPoolGeometry } from "./pool-swim-actions";
+import PoolSwimSets, {
+  emptyPoolSwimFormState,
+  poolSwimFormToData,
+  type PoolSwimFormState,
+} from "./PoolSwimSets";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import type { ActivityTypeOption } from "@/app/components/LogDrawer";
 
@@ -88,6 +96,7 @@ export default function LogRunForm({
   // the log row on save.
   const [activityTypeId, setActivityTypeId] = useState<string | null>(initialActivityTypeId);
   const activeType = activityTypes.find((t) => t.id === activityTypeId) ?? null;
+  const isPoolSwim = isPoolSwimType(activeType?.slug);
   // Interval-style structured input — surfaced when the active type sets
   // usesIntervals (currently Interval Run + Sprint). Values held as
   // strings to play nicely with controlled inputs; parsed at save time.
@@ -97,6 +106,10 @@ export default function LogRunForm({
   const [intervalWorkSec, setIntervalWorkSec] = useState("");
   const [intervalRestMin, setIntervalRestMin] = useState("");
   const [intervalRestSec, setIntervalRestSec] = useState("");
+  const [poolSwim, setPoolSwim] = useState<PoolSwimFormState>(() => emptyPoolSwimFormState());
+  // Set once the user edits the pool block (or a draft restores one), so the
+  // "default to your last pool" fetch below never clobbers real input.
+  const poolTouchedRef = useRef(false);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
     Object.fromEntries(activePainZones.map((zone) => [zone.slug, 0])),
@@ -179,6 +192,10 @@ export default function LogRunForm({
     // have this field; the form falls back to initialActivityTypeId.
     if (stored.activityTypeId !== undefined) setActivityTypeId(stored.activityTypeId);
     if (stored.gear !== undefined) setGear(stored.gear);
+    if (stored.poolSwim !== undefined) {
+      setPoolSwim(stored.poolSwim);
+      poolTouchedRef.current = true;
+    }
     draftStartedAtRef.current = stored.startedAt;
     isDirtyRef.current = true;
     draftCtx?.saveDraft(stored);
@@ -213,6 +230,7 @@ export default function LogRunForm({
       location: "",
       spotValue: spotValue ?? undefined,
       gear,
+      poolSwim: isPoolSwim ? poolSwim : undefined,
     };
     const timer = setTimeout(() => {
       saveDraftToStorage(draft);
@@ -220,7 +238,26 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, gear]);
+  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, gear, poolSwim, isPoolSwim]);
+
+  useEffect(() => {
+    if (!isPoolSwim || poolTouchedRef.current) return;
+    let cancelled = false;
+    loadLastPoolGeometry()
+      .then((last) => {
+        if (cancelled || !last || poolTouchedRef.current) return;
+        setPoolSwim((cur) => ({ ...cur, poolLength: String(last.poolLength), poolUnit: last.poolUnit }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isPoolSwim]);
+
+  const liveDurationSec = useMemo(
+    () => Number(minutes || "0") * 60 + Number(seconds || "0"),
+    [minutes, seconds],
+  );
 
   const pace = useMemo(() => {
     const dist = Number(distanceMi);
@@ -242,15 +279,27 @@ export default function LogRunForm({
   }
 
   async function onSave() {
-    const distanceProvided = distanceMi.trim().length > 0;
-    const distance = distanceProvided ? Number(distanceMi) : null;
+    const mins = Number(minutes || "0");
+    const secs = Number(seconds || "0");
+    const durationSec = mins * 60 + secs;
+
+    // Pool swims never type a mileage: the set builder is the source of
+    // truth and distanceMi is derived from it, so the endurance charts,
+    // goals, and family rollups keep reading the same column they always
+    // have without knowing anything about pools.
+    const poolData = isPoolSwim ? normalizePoolSwimData(poolSwimFormToData(poolSwim)) : null;
+    const poolTotals = poolData ? poolSwimTotals(poolData, durationSec) : null;
+
+    const distanceProvided = isPoolSwim ? poolTotals !== null : distanceMi.trim().length > 0;
+    const distance = isPoolSwim
+      ? poolTotals?.distanceMi ?? null
+      : distanceProvided
+        ? Number(distanceMi)
+        : null;
     const elevation =
       elevationGainFt.trim().length > 0
         ? Number(elevationGainFt)
         : null;
-    const mins = Number(minutes || "0");
-    const secs = Number(seconds || "0");
-    const durationSec = mins * 60 + secs;
 
     // Synthetic routine requires a type pick — otherwise the log lands
     // against the synthetic Endurance routine with no type, which would
@@ -271,7 +320,11 @@ export default function LogRunForm({
     }
     // Need at least one of distance / duration so the log means something.
     if (!hasDistance && !hasDuration) {
-      setError("Add a distance or a duration.");
+      setError(
+        isPoolSwim
+          ? "Add at least one set (reps × distance), or a duration."
+          : "Add a distance or a duration.",
+      );
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
@@ -325,6 +378,7 @@ export default function LogRunForm({
         activitySlug: derivedActivitySlug ?? undefined,
         activityTypeId: activityTypeId ?? undefined,
         intervalsConfig: intervalsConfig ?? undefined,
+        sportData: poolData ?? undefined,
         gearPicks: gearToPickInput(gear),
         ...spotParams,
         painCheck:
@@ -371,15 +425,20 @@ export default function LogRunForm({
       )}
 
       <FormSection title="Cardio">
-        <Field label="Distance (miles)">
-          <input
-            style={bigInputStyle}
-            value={distanceMi}
-            onChange={(e) => { markDirty(); setDistanceMi(e.target.value); }}
-            inputMode="decimal"
-            placeholder="0.00"
-          />
-        </Field>
+        {/* Pool swims derive distance from the set builder below — a
+            miles field would be the wrong unit and a second source of
+            truth for the same number. */}
+        {!isPoolSwim && (
+          <Field label="Distance (miles)">
+            <input
+              style={bigInputStyle}
+              value={distanceMi}
+              onChange={(e) => { markDirty(); setDistanceMi(e.target.value); }}
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+          </Field>
+        )}
 
         <div>
           <div style={fieldLabelStyle}>Duration</div>
@@ -408,7 +467,7 @@ export default function LogRunForm({
           </div>
         </div>
 
-        {pace && (
+        {pace && !isPoolSwim && (
           <div style={paceBadgeStyle}>
             <span style={{ opacity: 0.65, fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>PACE</span>
             <span style={{ fontSize: 22, fontWeight: 900 }}>{pace}</span>
@@ -429,6 +488,14 @@ export default function LogRunForm({
               placeholder="0"
             />
           </Field>
+        )}
+
+        {isPoolSwim && (
+          <PoolSwimSets
+            value={poolSwim}
+            onChange={(next) => { markDirty(); poolTouchedRef.current = true; setPoolSwim(next); }}
+            durationSec={liveDurationSec}
+          />
         )}
 
         {/* Interval / Sprint block — surfaces structured rep data for

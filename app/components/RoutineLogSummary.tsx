@@ -18,6 +18,13 @@ import type { ClimbOutcome, ClimbGradeSystem } from "@/lib/climb-types";
 import type { LogSummaryData } from "@/lib/log-summary";
 import WeatherBadge from "@/app/components/WeatherBadge";
 import { gearTypeMeta } from "@/lib/gear-types";
+import {
+  describePoolSwimSet,
+  formatPoolDistance,
+  formatSwimPace,
+  poolSwimTotals,
+  type PoolSwimData,
+} from "@/lib/pool-swim";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
@@ -36,6 +43,8 @@ function formatMetricValue(value: number, unit?: string | null) {
 
 export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
   const { logKind } = data;
+  const pool = data.sportData?.kind === "pool-swim" ? data.sportData.pool : null;
+  const poolTotals = pool ? poolSwimTotals(pool, data.durationSec) : null;
   return (
     <>
       <section style={panel}>
@@ -79,16 +88,40 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
             <>
               <div style={statCard}>
                 <div style={statLabel}>Distance</div>
-                <div style={statValue}>{(data.distanceMi ?? 0).toFixed(2)} mi</div>
+                <div style={statValue}>
+                  {pool && poolTotals
+                    ? formatPoolDistance(poolTotals.distance, pool.poolUnit)
+                    : `${(data.distanceMi ?? 0).toFixed(2)} mi`}
+                </div>
               </div>
               <div style={statCard}>
                 <div style={statLabel}>Duration</div>
                 <div style={statValue}>{formatSeconds(data.durationSec)}</div>
               </div>
-              <div style={statCard}>
-                <div style={statLabel}>Elevation</div>
-                <div style={statValue}>{data.elevationGainFt ? `${data.elevationGainFt} ft` : "0 ft"}</div>
-              </div>
+              {/* Pools are flat and measured in lengths, so elevation gives
+                  way to the two numbers a swimmer actually reads. */}
+              {pool && poolTotals ? (
+                <>
+                  <div style={statCard}>
+                    <div style={statLabel}>Lengths</div>
+                    <div style={statValue}>
+                      {poolTotals.lengths != null ? Math.round(poolTotals.lengths * 10) / 10 : "—"}
+                    </div>
+                    <div style={statSub}>{`${pool.poolLength} ${pool.poolUnit} pool`}</div>
+                  </div>
+                  <div style={statCard}>
+                    <div style={statLabel}>Pace</div>
+                    <div style={statValue}>
+                      {formatSwimPace(poolTotals.paceSecPer100, pool.poolUnit) ?? "—"}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={statCard}>
+                  <div style={statLabel}>Elevation</div>
+                  <div style={statValue}>{data.elevationGainFt ? `${data.elevationGainFt} ft` : "0 ft"}</div>
+                </div>
+              )}
               {/* Sprint / Interval Run reps as a stat chip so the
                   structured workout flavor reads at-a-glance alongside
                   the volume totals. Full breakdown lives in the
@@ -203,6 +236,9 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
       {data.sportData?.kind === "golf" && data.sportData.mode === "RANGE" && data.sportData.range ? (
         <GolfRangePanel range={data.sportData.range} />
       ) : null}
+
+      {/* Pool swim set list — the workout as written on the whiteboard. */}
+      {pool && pool.sets.length > 0 ? <PoolSwimPanel pool={pool} /> : null}
 
       {/* Generic-sport extras grid — basketball points, surfing wave
           count, snowboarding runs, etc. Each value renders as a
@@ -756,6 +792,27 @@ function GolfRangePanel({
   );
 }
 
+function PoolSwimPanel({ pool }: { pool: PoolSwimData }) {
+  return (
+    <section style={panel}>
+      <div style={panelHeader}>SETS</div>
+      <div style={contentPad}>
+        <div style={{ display: "grid", gap: 8 }}>
+          {pool.sets.map((set, i) => (
+            <div key={i} style={poolSetRow}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                <span style={poolSetIndex}>{i + 1}</span>
+                <span style={poolSetLabel}>{describePoolSwimSet(set, pool.poolUnit)}</span>
+              </div>
+              {set.note ? <div style={poolSetNote}>{set.note}</div> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SportExtrasPanel({ extras }: { extras: Record<string, string | number> }) {
   return (
     <section style={panel}>
@@ -781,6 +838,34 @@ function prettifyExtraKey(key: string): string {
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+const poolSetRow: React.CSSProperties = {
+  display: "grid",
+  gap: 4,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(6,182,212,0.25)",
+  background: "rgba(6,182,212,0.06)",
+};
+
+const poolSetIndex: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  opacity: 0.55,
+  minWidth: 14,
+};
+
+const poolSetLabel: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 800,
+  overflowWrap: "anywhere",
+};
+
+const poolSetNote: React.CSSProperties = {
+  fontSize: 12.5,
+  opacity: 0.75,
+  paddingLeft: 22,
+};
 
 const golfTotalsRow: React.CSSProperties = {
   display: "grid",

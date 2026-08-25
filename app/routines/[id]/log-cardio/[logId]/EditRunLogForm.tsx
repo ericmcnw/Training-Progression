@@ -10,6 +10,14 @@ import {
   type SpotPickerItem,
   getActivitySpotConfig,
 } from "@/lib/activity-spots";
+import { isPoolSwimType } from "@/lib/activity-types";
+import { normalizePoolSwimData, poolSwimTotals, type PoolSwimData } from "@/lib/pool-swim";
+import PoolSwimSets, {
+  emptyPoolSwimFormState,
+  poolSwimDataToForm,
+  poolSwimFormToData,
+  type PoolSwimFormState,
+} from "../PoolSwimSets";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -71,6 +79,7 @@ export default function EditRunLogForm({
   initialActivityTypeId = null,
   initialIntervals = null,
   initialGear = [],
+  initialPoolSwim = null,
   onComplete,
   onCancel,
 }: {
@@ -97,6 +106,9 @@ export default function EditRunLogForm({
     restSec: number | null;
   } | null;
   initialGear?: GearPick[];
+  /** Stored pool-swim payload off RoutineLog.sportData. Null for every
+   *  non-pool cardio log. */
+  initialPoolSwim?: PoolSwimData | null;
   // When provided (drawer-mounted edit), called after a successful save
   // instead of navigating to `returnTo`. Lets the drawer close + refresh
   // the page in place.
@@ -140,6 +152,12 @@ export default function EditRunLogForm({
     initialIntervals?.restSec != null ? String(initialIntervals.restSec % 60) : ""
   );
 
+  const isPoolSwim = isPoolSwimType(activeType?.slug);
+  const [poolSwim, setPoolSwim] = useState<PoolSwimFormState>(() =>
+    initialPoolSwim ? poolSwimDataToForm(initialPoolSwim) : emptyPoolSwimFormState(),
+  );
+  const liveDurationSec = Number(minutes || "0") * 60 + Number(seconds || "0");
+
   const spotConfig = activitySlug ? getActivitySpotConfig(activitySlug) : null;
   const showSpotPicker = activitySlug != null && spotConfig?.supportsMap === true;
 
@@ -154,15 +172,25 @@ export default function EditRunLogForm({
   }, [activitySlug]);
 
   async function onSave() {
-    const distanceProvided = distanceMi.trim().length > 0;
-    const distance = distanceProvided ? Number(distanceMi) : null;
+    const mins = Number(minutes || "0");
+    const secs = Number(seconds || "0");
+    const durationSec = mins * 60 + secs;
+
+    // Same derivation as the create form: the set list owns the distance on
+    // a pool swim, and distanceMi is computed from it.
+    const poolData = isPoolSwim ? normalizePoolSwimData(poolSwimFormToData(poolSwim)) : null;
+    const poolTotals = poolData ? poolSwimTotals(poolData, durationSec) : null;
+
+    const distanceProvided = isPoolSwim ? poolTotals !== null : distanceMi.trim().length > 0;
+    const distance = isPoolSwim
+      ? poolTotals?.distanceMi ?? null
+      : distanceProvided
+        ? Number(distanceMi)
+        : null;
     const elevation =
       elevationGainFt.trim().length > 0
         ? Number(elevationGainFt)
         : null;
-    const mins = Number(minutes || "0");
-    const secs = Number(seconds || "0");
-    const durationSec = mins * 60 + secs;
 
     const hasDistance = distance !== null && Number.isFinite(distance) && distance > 0;
     const hasDuration = Number.isFinite(durationSec) && durationSec > 0;
@@ -171,7 +199,11 @@ export default function EditRunLogForm({
       return;
     }
     if (!hasDistance && !hasDuration) {
-      setError("Add a distance or a duration.");
+      setError(
+        isPoolSwim
+          ? "Add at least one set (reps × distance), or a duration."
+          : "Add a distance or a duration.",
+      );
       return;
     }
     if (elevation !== null && (!Number.isFinite(elevation) || elevation < 0)) {
@@ -216,6 +248,7 @@ export default function EditRunLogForm({
         // through to the action. Server overwrites both atomically.
         activityTypeId: activityTypeId ?? null,
         intervalsConfig,
+        sportData: poolData,
         gearPicks: gearToPickInput(gear),
         ...spotParams,
       });
@@ -268,9 +301,11 @@ export default function EditRunLogForm({
 
       <FormSection title="Cardio">
         <FieldGrid>
-          <Field label="Distance (miles)">
-            <input style={inputStyle} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
-          </Field>
+          {!isPoolSwim && (
+            <Field label="Distance (miles)">
+              <input style={inputStyle} value={distanceMi} onChange={(e) => setDistanceMi(e.target.value)} inputMode="decimal" />
+            </Field>
+          )}
           {/* Hide elevation only when the active type explicitly opts out
               (pool swim, erg row). Default visible for any unknown / no-
               type log so we don't accidentally drop existing data. */}
@@ -292,6 +327,10 @@ export default function EditRunLogForm({
 
         {/* Structured interval block — shown when the active type uses
             intervals (Sprint, Interval Run). Mirrors the create form. */}
+        {isPoolSwim && (
+          <PoolSwimSets value={poolSwim} onChange={setPoolSwim} durationSec={liveDurationSec} />
+        )}
+
         {activeType?.usesIntervals && (
           <div style={editIntervalsBlockStyle}>
             <div style={editIntervalsHeaderStyle}>

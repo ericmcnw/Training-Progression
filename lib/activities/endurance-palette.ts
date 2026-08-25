@@ -20,6 +20,7 @@ export const TYPE_SLUG_TO_REGISTRY_SLUG: Record<string, string> = {
   "road-bike": "road-cycling",
   "gravel-bike": "gravel-cycling",
   "swim": "swimming",
+  "pool-swim": "pool-swimming",
   "open-water-swim": "open-water-swimming",
   "row": "rowing",
   "erg-row": "rowing",
