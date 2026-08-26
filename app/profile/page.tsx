@@ -7,6 +7,7 @@ import { getHomeInjuries } from "@/lib/home-injuries";
 import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { todayAppYmd } from "@/lib/dates";
+import { formatSleepDuration, formatSteps } from "@/lib/daily-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
     redirect(`/profile/history${query}`);
   }
   const session = await getAppSession();
-  const [stats, identity, injuries, latestMeasurement] = await Promise.all([
+  const [stats, identity, injuries, latestMeasurement, latestDaily] = await Promise.all([
     loadProfileStats(todayAppYmd()),
     getProfileIdentity(),
     getHomeInjuries(),
@@ -26,8 +27,18 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
       orderBy: { measuredAt: "desc" },
       select: { measuredAt: true, weightKg: true },
     }),
+    prisma.dailyMetric.findFirst({
+      where: { profileKey: session.profileKey },
+      orderBy: { day: "desc" },
+      select: { sleepMinutes: true, sleepScore: true, steps: true },
+    }),
   ]);
   const weightLb = latestMeasurement?.weightKg ? latestMeasurement.weightKg * 2.2046226218 : null;
+  const dailyMeta = [
+    formatSleepDuration(latestDaily?.sleepMinutes) ? `Last night ${formatSleepDuration(latestDaily?.sleepMinutes)}` : null,
+    latestDaily?.sleepScore != null ? `score ${latestDaily.sleepScore}` : null,
+    formatSteps(latestDaily?.steps) ? `${formatSteps(latestDaily?.steps)} steps` : null,
+  ].filter(Boolean).join(" · ");
 
   return <main style={page}>
     <header style={header}>
@@ -48,6 +59,7 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
       <h2 style={groupTitle}>Health and data</h2>
       <div style={navGrid}>
         <HubLink href="/profile/health" title="Health" meta={injuries.length ? `${injuries.length} active issue${injuries.length === 1 ? "" : "s"} · pain and recovery` : "Pain, injuries, and recovery"} />
+        <HubLink href="/profile/daily" title="Daily metrics" meta={dailyMeta || "Sleep, steps, and distance from your band"} />
         <HubLink href="/profile/measurements" title="Measurements" meta={weightLb ? `Latest weight ${weightLb.toFixed(1)} lb` : "Weight and body measurements"} />
         <HubLink href="/gear" title="Gear" meta="Equipment and packing lists" />
       </div>

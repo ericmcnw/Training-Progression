@@ -2179,6 +2179,29 @@ model BodyMeasurement {
   @@index([profileKey, measuredAt])
 }
 
+// One row per day of wearable-reported daily context (sleep, steps, distance).
+// Deliberately not on RoutineLog: these describe the day, not a session, and a
+// day with no training still has them. Unique on (profileKey, day) so a re-save
+// corrects the day rather than stacking duplicates.
+model DailyMetric {
+  id           String   @id @default(cuid())
+  profileKey   String   @default("default")
+  day          DateTime
+  // "manual" today; a Fitbit importer would write "fitbit" and win over a
+  // hand-typed row for the same day.
+  source       String   @default("manual")
+  sleepMinutes Int?
+  sleepScore   Int?
+  steps        Int?
+  distanceMi   Float?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([profileKey, day])
+  @@index([profileKey, day])
+}
+
 model CoachThread {
   id              String         @id @default(cuid())
   title           String?
