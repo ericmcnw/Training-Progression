@@ -68,6 +68,11 @@ export default function GearPicker({
   const listId = `gear-types-${activitySlug}`;
   const presets = useMemo(() => gearTypesForActivity(activitySlug), [activitySlug]);
 
+  // Gear the chip row can actually show. Anything picked but missing from it
+  // — scoped to another activity, or since retired — must fall back to a card,
+  // or it would be on the log with nothing on screen to see or remove it.
+  const chipGearIds = useMemo(() => new Set(saved.map((g) => g.id)), [saved]);
+
   // Which pick, if any, represents this inventory item on the log.
   function pickForSaved(g: SavedGear): GearPick | undefined {
     return value.find((p) => (p.gearId ? p.gearId === g.id : norm(p.name) === norm(g.name)));
@@ -201,7 +206,9 @@ export default function GearPicker({
         </div>
       ) : null}
 
-      {value.filter((p) => p.gearId === null || expandedIds.has(p.localId)).map((p) => {
+      {value
+        .filter((p) => p.gearId === null || expandedIds.has(p.localId) || !chipGearIds.has(p.gearId))
+        .map((p) => {
         const meta = gearTypeMeta(resolveGearTypeSlug(p.type));
         return (
           <div key={p.localId} style={gearCard}>

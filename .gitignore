@@ -13,6 +13,8 @@
 # one-off migration reversal backups (local DB ids, not source)
 /scripts/_retire-legacy-backup.json
 /scripts/_repair-goal-refs-backup.json
+/scripts/_pain-rescale-backup.json
+/scripts/_katahdin-focus-backup.json
 
 # testing
 /coverage
