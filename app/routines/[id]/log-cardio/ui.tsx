@@ -634,8 +634,8 @@ export default function LogRunForm({
           label="Carried load (lb, optional)"
           hint={
             gearPackGrams > 0
-              ? `Your gear above adds up to ${lbFromGrams(gearPackGrams)} lb — leave this blank to use that.`
-              : "Pack, pads, water. Put weights on your gear above and this fills itself in."
+              ? `Carried gear above adds up to ${lbFromGrams(gearPackGrams)} lb — leave blank to use that. Worn things don't count.`
+              : "Pack, pads, water. Weigh your gear above and this fills itself in; worn things like shoes don't count."
           }
         >
           <input

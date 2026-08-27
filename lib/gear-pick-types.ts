@@ -1,5 +1,8 @@
-// Shared gear-picker types — kept dependency-free so form drafts (localStorage)
-// and the React picker can both reference them without importing server code.
+// Shared gear-picker types — kept free of server imports so form drafts
+// (localStorage) and the React picker can both reference them. The gear-type
+// registry is a pure client-safe lookup, so it's fair game.
+
+import { isWornGearType } from "./gear-types";
 
 /** A gear line in the picker's value. String fields mirror the raw inputs so an
  *  in-progress draft round-trips cleanly. `gearId` is set when the line came
@@ -41,6 +44,8 @@ export function gramsFromLb(lb: number): number {
 export function packWeightGramsFromPicks(picks: GearPick[]): number {
   return picks.reduce((sum, pick) => {
     if (pick.name.trim().length === 0) return sum;
+    // Worn on you, not carried by you.
+    if (isWornGearType(pick.type)) return sum;
     const oz = Number(pick.weightOz);
     if (!Number.isFinite(oz) || oz <= 0) return sum;
     const qty = pick.quantity.trim() === "" ? 1 : Number(pick.quantity);

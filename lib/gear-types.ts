@@ -17,12 +17,15 @@ export type GearTypePreset = {
   activities?: string[];
   /** Natural lifetime unit for usage rollups. */
   unit: GearUnit;
+  /** Worn on the body rather than carried in a pack. Excluded from a log's
+   *  carried load — shoes on your feet aren't weight on your back. */
+  worn?: boolean;
 };
 
 export const GEAR_TYPES: GearTypePreset[] = [
-  { value: "footwear", label: "Footwear", icon: "👟", scope: "universal", unit: "miles" },
-  { value: "clothing", label: "Clothing", icon: "🧥", scope: "universal", unit: "sessions" },
-  { value: "watch", label: "Watch / device", icon: "⌚", scope: "universal", unit: "sessions" },
+  { value: "footwear", label: "Footwear", icon: "👟", scope: "universal", unit: "miles", worn: true },
+  { value: "clothing", label: "Clothing", icon: "🧥", scope: "universal", unit: "sessions", worn: true },
+  { value: "watch", label: "Watch / device", icon: "⌚", scope: "universal", unit: "sessions", worn: true },
   { value: "pack", label: "Pack", icon: "🎒", scope: "activity", activities: ["backpacking", "hiking"], unit: "nights" },
   { value: "tent", label: "Tent / shelter", icon: "⛺", scope: "activity", activities: ["backpacking"], unit: "nights" },
   { value: "sleeping-bag", label: "Sleeping bag", icon: "🛌", scope: "activity", activities: ["backpacking"], unit: "nights" },
@@ -54,6 +57,12 @@ export function slugifyGearType(input: string): string {
 
 /** Resolve a raw type input (a preset label, a preset slug, or free text) to a
  *  stable type slug. */
+/** Is this gear worn rather than carried? Unknown / free-typed types default
+ *  to carried — a custom type is far more likely to be something in the pack. */
+export function isWornGearType(input: string): boolean {
+  return BY_VALUE.get(resolveGearTypeSlug(input))?.worn === true;
+}
+
 export function resolveGearTypeSlug(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "other";
