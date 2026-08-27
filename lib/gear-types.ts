@@ -34,6 +34,9 @@ export const GEAR_TYPES: GearTypePreset[] = [
   { value: "skis", label: "Skis", icon: "🎿", scope: "activity", activities: ["skiing"], unit: "days" },
   { value: "surfboard", label: "Surfboard", icon: "🏄", scope: "activity", activities: ["surfing", "bodysurfing", "wakesurfing"], unit: "sessions" },
   { value: "skateboard", label: "Skateboard", icon: "🛹", scope: "activity", activities: ["skateboarding"], unit: "sessions" },
+  // Universal rather than climbing-scoped on purpose: a pad's whole life is
+  // being carried somewhere, so it has to be pickable on the approach log too.
+  { value: "crash-pad", label: "Crash pad", icon: "🟪", scope: "universal", unit: "sessions" },
   { value: "other", label: "Other", icon: "📦", scope: "universal", unit: "sessions" },
 ];
 
