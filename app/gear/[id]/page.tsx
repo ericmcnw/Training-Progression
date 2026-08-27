@@ -21,6 +21,7 @@ export default async function GearDetailPage({ params }: { params: Promise<{ id:
       weightGrams={gear.weightGrams}
       activitySlug={gear.activitySlug}
       consumable={gear.consumable}
+      worn={gear.worn}
       retired={Boolean(gear.retiredAt)}
       usage={usage}
     />

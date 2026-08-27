@@ -30,7 +30,7 @@ import {
   gearToPickInput,
   gramsFromLb,
   lbFromGrams,
-  packWeightGramsFromPicks,
+  summarizePackWeight,
   type GearPick,
 } from "@/lib/gear-pick-types";
 import {
@@ -99,7 +99,22 @@ export default function LogRunForm({
   // Blank = fall back to whatever the linked gear weighs. Typed = override,
   // for the days you don't feel like itemizing a pack.
   const [packWeightLb, setPackWeightLb] = useState("");
-  const gearPackGrams = packWeightGramsFromPicks(gear);
+  const packSummary = summarizePackWeight(gear);
+  const gearPackGrams = packSummary.grams;
+  // Show the arithmetic rather than an unexplained number — which items were
+  // counted, which were skipped and why.
+  const packHint = (() => {
+    const skipped: string[] = [];
+    if (packSummary.wornSkipped.length > 0) skipped.push(`skipped as worn: ${packSummary.wornSkipped.join(", ")}`);
+    if (packSummary.unweighed.length > 0) skipped.push(`no weight on file: ${packSummary.unweighed.join(", ")}`);
+    if (gearPackGrams > 0) {
+      const n = packSummary.counted.length;
+      const head = `${lbFromGrams(gearPackGrams)} lb from ${n} carried item${n === 1 ? "" : "s"} — leave blank to use it.`;
+      return skipped.length > 0 ? `${head} (${skipped.join("; ")})` : head;
+    }
+    if (skipped.length > 0) return `Nothing carried counted yet — ${skipped.join("; ")}.`;
+    return "Pack, pads, water. Weigh your gear above and this fills itself in; worn things like shoes don't count.";
+  })();
   // Active activity type. Defaults to whatever the legacy routine maps to;
   // null for synthetic routine (user must pick). Drives form field
   // visibility (elevation hidden when !hasElevation) and goes through to
@@ -632,11 +647,7 @@ export default function LogRunForm({
         />
         <Field
           label="Carried load (lb, optional)"
-          hint={
-            gearPackGrams > 0
-              ? `Carried gear above adds up to ${lbFromGrams(gearPackGrams)} lb — leave blank to use that. Worn things don't count.`
-              : "Pack, pads, water. Weigh your gear above and this fills itself in; worn things like shoes don't count."
-          }
+          hint={packHint}
         >
           <input
             style={bigInputStyle}

@@ -4,7 +4,7 @@ import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ACTIVITY_REGISTRY } from "@/lib/activity-families";
-import { GEAR_TYPES, gearTypeMeta, resolveGearTypeSlug } from "@/lib/gear-types";
+import { GEAR_TYPES, gearTypeMeta, isWornGearType, resolveGearTypeSlug } from "@/lib/gear-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import type { GearUsage } from "@/lib/gear-usage";
 import { deleteGear, retireGear, unretireGear, updateGear } from "../actions";
@@ -34,6 +34,7 @@ export default function GearDetailEditor({
   weightGrams,
   activitySlug: initialActivity,
   consumable: initialConsumable,
+  worn: initialWorn,
   retired,
   usage,
 }: {
@@ -43,6 +44,7 @@ export default function GearDetailEditor({
   weightGrams: number | null;
   activitySlug: string | null;
   consumable: boolean;
+  worn: boolean | null;
   retired: boolean;
   usage: GearUsage | null;
 }) {
@@ -54,6 +56,9 @@ export default function GearDetailEditor({
   const [weightOz, setWeightOz] = useState(ozFromGrams(weightGrams));
   const [activitySlug, setActivitySlug] = useState(initialActivity ?? "");
   const [consumable, setConsumable] = useState(initialConsumable);
+  // null on the row means "no opinion" — show what the gear type would decide,
+  // and store an explicit answer the moment the user disagrees with it.
+  const [worn, setWorn] = useState(initialWorn ?? isWornGearType(initialType));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const meta = gearTypeMeta(resolveGearTypeSlug(type));
@@ -161,6 +166,19 @@ export default function GearDetailEditor({
           </select>
           <span style={fieldHint}>“Everywhere” suits footwear/watches; scope packs, tents, boards to their sport.</span>
         </label>
+
+        <button
+          type="button"
+          onClick={() => {
+            const next = !worn;
+            setWorn(next);
+            run(() => updateGear(id, { worn: next }));
+          }}
+          style={worn ? consumableOn : consumableOff}
+          title="Worn on you rather than carried — excluded from a log's carried load"
+        >
+          {worn ? "🧍 Worn" : "🎒 Carried"}
+        </button>
 
         <button
           type="button"

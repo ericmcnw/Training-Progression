@@ -23,7 +23,7 @@ export async function getVisibleGear(activitySlug: string): Promise<SavedGear[]>
         OR: [{ activitySlug: null }, { activitySlug: { in: compatible } }],
       },
       orderBy: [{ name: "asc" }],
-      select: { id: true, type: true, name: true, weightGrams: true, consumable: true },
+      select: { id: true, type: true, name: true, weightGrams: true, consumable: true, worn: true },
     });
     return rows;
   } catch {
@@ -38,6 +38,7 @@ export type GearRow = {
   weightGrams: number | null;
   activitySlug: string | null;
   consumable: boolean;
+  worn: boolean | null;
   retiredAt: Date | null;
 };
 
@@ -48,7 +49,7 @@ export async function getAllGear(): Promise<GearRow[]> {
     return await prisma.gear.findMany({
       where: { profileKey: session.profileKey },
       orderBy: [{ retiredAt: "asc" }, { name: "asc" }],
-      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, retiredAt: true },
+      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, worn: true, retiredAt: true },
     });
   } catch {
     return [];
@@ -61,7 +62,7 @@ export async function getGear(id: string): Promise<GearRow | null> {
     const session = await getAppSession();
     return await prisma.gear.findFirst({
       where: { id, profileKey: session.profileKey },
-      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, retiredAt: true },
+      select: { id: true, type: true, name: true, weightGrams: true, activitySlug: true, consumable: true, worn: true, retiredAt: true },
     });
   } catch {
     return null;
@@ -172,7 +173,7 @@ export async function getLogGearPicks(logId: string): Promise<GearPick[]> {
   try {
     const links = await prisma.routineLogGear.findMany({
       where: { routineLogId: logId },
-      select: { gear: { select: { id: true, type: true, name: true, weightGrams: true, consumable: true } } },
+      select: { gear: { select: { id: true, type: true, name: true, weightGrams: true, consumable: true, worn: true } } },
     });
     return links.map((l) => ({
       localId: Math.random().toString(36).slice(2),
@@ -182,6 +183,7 @@ export async function getLogGearPicks(logId: string): Promise<GearPick[]> {
       weightOz: l.gear.weightGrams != null ? String(Math.round((l.gear.weightGrams / GRAMS_PER_OZ) * 10) / 10) : "",
       quantity: "1",
       consumable: l.gear.consumable,
+      worn: l.gear.worn ?? undefined,
     }));
   } catch {
     return [];

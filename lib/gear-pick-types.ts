@@ -15,6 +15,9 @@ export type GearPick = {
   weightOz: string;
   quantity: string;
   consumable: boolean;
+  /** Worn this session rather than carried. Undefined = no per-session call,
+   *  fall back to the item's default and then the gear type's. */
+  worn?: boolean;
 };
 
 /** A saved inventory item surfaced in the picker's "your gear" quick-add. */
@@ -24,6 +27,8 @@ export type SavedGear = {
   name: string;
   weightGrams: number | null;
   consumable: boolean;
+  /** Item-level worn default; null = use the gear type's. */
+  worn?: boolean | null;
 };
 
 const GRAMS_PER_OZ = 28.349523125;
@@ -41,17 +46,45 @@ export function gramsFromLb(lb: number): number {
 /** Total carried weight from picked gear, in grams. Lines without a weight
  *  contribute nothing rather than voiding the total — a pack with one
  *  unweighed item should still report the weight it does know. */
+/** Worn on you, not carried by you. Per-session call wins; otherwise the
+ *  gear type decides. */
+export function pickIsWorn(pick: GearPick): boolean {
+  return pick.worn ?? isWornGearType(pick.type);
+}
+
 export function packWeightGramsFromPicks(picks: GearPick[]): number {
-  return picks.reduce((sum, pick) => {
-    if (pick.name.trim().length === 0) return sum;
-    // Worn on you, not carried by you.
-    if (isWornGearType(pick.type)) return sum;
+  return summarizePackWeight(picks).grams;
+}
+
+/** The carried total plus what went into it, so the form can show its work
+ *  instead of presenting an unexplained number. */
+export function summarizePackWeight(picks: GearPick[]): {
+  grams: number;
+  counted: string[];
+  wornSkipped: string[];
+  unweighed: string[];
+} {
+  let grams = 0;
+  const counted: string[] = [];
+  const wornSkipped: string[] = [];
+  const unweighed: string[] = [];
+  for (const pick of picks) {
+    const name = pick.name.trim();
+    if (name.length === 0) continue;
+    if (pickIsWorn(pick)) {
+      wornSkipped.push(name);
+      continue;
+    }
     const oz = Number(pick.weightOz);
-    if (!Number.isFinite(oz) || oz <= 0) return sum;
+    if (!Number.isFinite(oz) || oz <= 0) {
+      unweighed.push(name);
+      continue;
+    }
     const qty = pick.quantity.trim() === "" ? 1 : Number(pick.quantity);
-    const each = Math.round(oz * GRAMS_PER_OZ);
-    return sum + each * (Number.isFinite(qty) && qty > 0 ? qty : 1);
-  }, 0);
+    grams += Math.round(oz * GRAMS_PER_OZ) * (Number.isFinite(qty) && qty > 0 ? qty : 1);
+    counted.push(name);
+  }
+  return { grams, counted, wornSkipped, unweighed };
 }
 
 /** Convert picker values to the resolve-on-save input shape (drops blank rows,

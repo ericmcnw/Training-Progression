@@ -21,13 +21,14 @@ async function owns(id: string): Promise<boolean> {
 
 export async function updateGear(
   id: string,
-  input: { name?: string; type?: string; weightOz?: string; consumable?: boolean; activitySlug?: string | null }
+  input: { name?: string; type?: string; weightOz?: string; consumable?: boolean; worn?: boolean | null; activitySlug?: string | null }
 ): Promise<void> {
   if (!(await owns(id))) return;
-  const data: { name?: string; type?: string; weightGrams?: number | null; consumable?: boolean; activitySlug?: string | null } = {};
+  const data: { name?: string; type?: string; weightGrams?: number | null; consumable?: boolean; worn?: boolean | null; activitySlug?: string | null } = {};
   if (input.name !== undefined) data.name = input.name.trim() || "Gear";
   if (input.type !== undefined) data.type = resolveGearTypeSlug(input.type);
   if (input.consumable !== undefined) data.consumable = input.consumable;
+  if (input.worn !== undefined) data.worn = input.worn;
   if (input.activitySlug !== undefined) data.activitySlug = input.activitySlug || null;
   if (input.weightOz !== undefined) {
     const oz = input.weightOz.trim();

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { listGearForActivity, listGearListsForActivity, applyGearList } from "@/app/log/gear-actions";
 import { createGearListFromPicks } from "@/app/gear/lists/actions";
-import { gearToPickInput, type GearPick, type SavedGear } from "@/lib/gear-pick-types";
+import { gearToPickInput, pickIsWorn, type GearPick, type SavedGear } from "@/lib/gear-pick-types";
 import type { GearListSummary } from "@/lib/gear-lists";
 import { gearTypeMeta, gearTypesForActivity, resolveGearTypeSlug } from "@/lib/gear-types";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
@@ -98,7 +98,7 @@ export default function GearPicker({
     onChange([
       ...value,
       // Seed the type box with the friendly label, not the raw slug.
-      { localId: rid(), gearId: g.id, type: gearTypeMeta(g.type).label, name: g.name, weightOz: ozFromGrams(g.weightGrams), quantity: "1", consumable: g.consumable },
+      { localId: rid(), gearId: g.id, type: gearTypeMeta(g.type).label, name: g.name, weightOz: ozFromGrams(g.weightGrams), quantity: "1", consumable: g.consumable, worn: g.worn ?? undefined },
     ]);
   }
   function addBlank() {
@@ -254,6 +254,16 @@ export default function GearPicker({
                 </label>
               ) : null}
             </div>
+            {showWeight ? (
+              <button
+                type="button"
+                onClick={() => setPick(p.localId, { worn: !pickIsWorn(p) })}
+                style={pickIsWorn(p) ? consumableOn : consumableOff}
+                title="Worn on you rather than carried — excluded from this log's carried load"
+              >
+                {pickIsWorn(p) ? "🧍 Worn" : "🎒 Carried"}
+              </button>
+            ) : null}
             {showConsumable ? (
               <button
                 type="button"

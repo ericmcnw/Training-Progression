@@ -806,6 +806,10 @@ model Gear {
   name         String
   weightGrams  Int?
   activitySlug String?
+  // Worn on the body rather than carried in a pack, so it's excluded from a
+  // log's carried load. Null = no opinion, fall back to the gear type's
+  // default (GEAR_TYPES.worn). A log's pick can still override per session.
+  worn         Boolean?
   consumable   Boolean   @default(false)
   retiredAt    DateTime?
   createdAt    DateTime  @default(now())
