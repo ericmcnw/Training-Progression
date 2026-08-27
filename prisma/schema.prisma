@@ -669,6 +669,11 @@ model RoutineLog {
   durationSec     Int?
   distanceMi      Float?
   elevationGainFt Int?
+  // Total weight carried for the session (pack, crash pads, water). Derived
+  // from the log's linked gear when those items have weights, but stored as a
+  // snapshot so editing a gear item's weight later never rewrites what you
+  // actually carried that day. Grams, matching Gear.weightGrams.
+  packWeightGrams Int?
   // Perceived effort 1-10 (Borg-style RPE) for cardio + sport logs. Drives
   // the strain model: load = duration × convexWeight(effort), which feeds the
   // body map + training-load charts. Editable/backfillable per log. Null for

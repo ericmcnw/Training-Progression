@@ -2266,6 +2266,8 @@ export async function logCardio(params: {
   distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
+  /** Total carried weight in grams. Null / omitted = not recorded. */
+  packWeightGrams?: number | null;
   location?: string;
   notes?: string;
   performedAtLocal?: string;
@@ -2346,6 +2348,10 @@ export async function logCardio(params: {
         params.elevationGainFt !== null && params.elevationGainFt !== undefined
           ? Math.round(params.elevationGainFt)
           : null,
+      packWeightGrams:
+        params.packWeightGrams != null && Number.isFinite(params.packWeightGrams) && params.packWeightGrams > 0
+          ? Math.round(params.packWeightGrams)
+          : null,
       notes: params.notes?.trim() || null,
       location: params.location?.trim() || null,
       effort: params.effort != null ? clampEffort(params.effort) : null,
@@ -2383,6 +2389,7 @@ export async function logRun(params: {
   distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
+  packWeightGrams?: number | null;
   location?: string;
   notes?: string;
   performedAtLocal?: string;
@@ -2783,6 +2790,9 @@ export type UpdateCardioLogParams = {
   distanceMi?: number | null;
   durationSec: number;
   elevationGainFt?: number | null;
+  /** Total carried weight in grams. Pass a number to set/backfill, null to
+   *  clear, omit to leave unchanged. */
+  packWeightGrams?: number | null;
   notes?: string;
   performedAtLocal?: string;
   metrics?: MetricInput[];
@@ -2894,6 +2904,12 @@ export async function updateCardioLog(params: UpdateCardioLogParams) {
           : null,
       notes: params.notes?.trim() || null,
     };
+    if (params.packWeightGrams !== undefined) {
+      partialUpdate.packWeightGrams =
+        params.packWeightGrams != null && Number.isFinite(params.packWeightGrams) && params.packWeightGrams > 0
+          ? Math.round(params.packWeightGrams)
+          : null;
+    }
     if (params.activityTypeId !== undefined) partialUpdate.activityTypeId = params.activityTypeId;
     if (params.intervalsConfig !== undefined) partialUpdate.intervalsConfig = params.intervalsConfig ?? null;
     if (params.sportData !== undefined) partialUpdate.sportData = params.sportData ?? null;

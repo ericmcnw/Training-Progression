@@ -128,6 +128,7 @@ export type EditCardioData = {
   logId: string;
   initialDistanceMi: number | null;
   initialElevationGainFt: number | null;
+  initialPackWeightGrams: number | null;
   initialDurationSec: number | null;
   initialNotes: string;
   initialPerformedAt: Date;
@@ -268,6 +269,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       completionCount: true,
       distanceMi: true,
       elevationGainFt: true,
+      packWeightGrams: true,
       durationSec: true,
       location: true,
       effort: true,
@@ -559,6 +561,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         ...base,
         initialDistanceMi: log.distanceMi ?? null,
         initialElevationGainFt: log.elevationGainFt,
+        initialPackWeightGrams: log.packWeightGrams ?? null,
         initialDurationSec: log.durationSec ?? null,
         activitySlug: editSpotActivitySlug,
         savedSpots: editSavedSpots,

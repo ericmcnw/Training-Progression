@@ -5,7 +5,13 @@ import { updateRunLog } from "../../../actions";
 import { Field, FieldGrid, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
-import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
+import {
+  gearToPickInput,
+  gramsFromLb,
+  lbFromGrams,
+  packWeightGramsFromPicks,
+  type GearPick,
+} from "@/lib/gear-pick-types";
 import {
   type SpotPickerItem,
   getActivitySpotConfig,
@@ -69,6 +75,7 @@ export default function EditRunLogForm({
   returnTo,
   initialDistanceMi,
   initialElevationGainFt,
+  initialPackWeightGrams = null,
   initialDurationSec,
   initialNotes,
   initialPerformedAt,
@@ -88,6 +95,7 @@ export default function EditRunLogForm({
   returnTo: string;
   initialDistanceMi: number | null;
   initialElevationGainFt: number | null;
+  initialPackWeightGrams?: number | null;
   initialDurationSec: number | null;
   initialNotes: string;
   initialPerformedAt: Date;
@@ -126,6 +134,11 @@ export default function EditRunLogForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
   const [gear, setGear] = useState<GearPick[]>(initialGear);
+  // Blank = fall back to what the linked gear weighs; typed = override.
+  const [packWeightLb, setPackWeightLb] = useState(
+    initialPackWeightGrams != null ? String(lbFromGrams(initialPackWeightGrams)) : ""
+  );
+  const gearPackGrams = packWeightGramsFromPicks(gear);
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +254,12 @@ export default function EditRunLogForm({
         distanceMi: distance,
         durationSec,
         elevationGainFt: elevation,
+        packWeightGrams:
+          packWeightLb.trim() === ""
+            ? gearPackGrams > 0
+              ? gearPackGrams
+              : null
+            : gramsFromLb(Number(packWeightLb)),
         notes,
         performedAtLocal,
         activitySlug: activitySlug ?? undefined,
@@ -384,10 +403,24 @@ export default function EditRunLogForm({
           activitySlug={activitySlug ?? "running"}
           value={gear}
           onChange={setGear}
-          showWeight={false}
           showConsumable={false}
-          showQuantity={false}
         />
+        <Field
+          label="Carried load (lb, optional)"
+          hint={
+            gearPackGrams > 0
+              ? `Your gear above adds up to ${lbFromGrams(gearPackGrams)} lb — leave this blank to use that.`
+              : "Pack, pads, water. Put weights on your gear above and this fills itself in."
+          }
+        >
+          <input
+            style={inputStyle}
+            value={packWeightLb}
+            onChange={(e) => setPackWeightLb(e.target.value)}
+            inputMode="decimal"
+            placeholder={gearPackGrams > 0 ? String(lbFromGrams(gearPackGrams)) : "0"}
+          />
+        </Field>
       </FormSection>
 
       <FormSection title="Notes">

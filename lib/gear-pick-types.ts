@@ -25,6 +25,30 @@ export type SavedGear = {
 
 const GRAMS_PER_OZ = 28.349523125;
 
+export const GRAMS_PER_LB = 453.59237;
+
+export function lbFromGrams(grams: number): number {
+  return Math.round((grams / GRAMS_PER_LB) * 10) / 10;
+}
+
+export function gramsFromLb(lb: number): number {
+  return Math.round(lb * GRAMS_PER_LB);
+}
+
+/** Total carried weight from picked gear, in grams. Lines without a weight
+ *  contribute nothing rather than voiding the total — a pack with one
+ *  unweighed item should still report the weight it does know. */
+export function packWeightGramsFromPicks(picks: GearPick[]): number {
+  return picks.reduce((sum, pick) => {
+    if (pick.name.trim().length === 0) return sum;
+    const oz = Number(pick.weightOz);
+    if (!Number.isFinite(oz) || oz <= 0) return sum;
+    const qty = pick.quantity.trim() === "" ? 1 : Number(pick.quantity);
+    const each = Math.round(oz * GRAMS_PER_OZ);
+    return sum + each * (Number.isFinite(qty) && qty > 0 ? qty : 1);
+  }, 0);
+}
+
 /** Convert picker values to the resolve-on-save input shape (drops blank rows,
  *  oz → grams). Matches `GearPickInput` in lib/gear.ts structurally. */
 export function gearToPickInput(picks: GearPick[]): Array<{

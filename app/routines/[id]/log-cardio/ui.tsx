@@ -26,7 +26,13 @@ import {
 } from "@/lib/log-draft";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
-import { gearToPickInput, type GearPick } from "@/lib/gear-pick-types";
+import {
+  gearToPickInput,
+  gramsFromLb,
+  lbFromGrams,
+  packWeightGramsFromPicks,
+  type GearPick,
+} from "@/lib/gear-pick-types";
 import {
   type SpotPickerItem,
   getActivitySpotConfig,
@@ -90,6 +96,10 @@ export default function LogRunForm({
   const [error, setError] = useState<string | null>(null);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
   const [gear, setGear] = useState<GearPick[]>([]);
+  // Blank = fall back to whatever the linked gear weighs. Typed = override,
+  // for the days you don't feel like itemizing a pack.
+  const [packWeightLb, setPackWeightLb] = useState("");
+  const gearPackGrams = packWeightGramsFromPicks(gear);
   // Active activity type. Defaults to whatever the legacy routine maps to;
   // null for synthetic routine (user must pick). Drives form field
   // visibility (elevation hidden when !hasElevation) and goes through to
@@ -332,6 +342,15 @@ export default function LogRunForm({
       return;
     }
 
+    const packOverride = packWeightLb.trim();
+    if (packOverride !== "" && (!Number.isFinite(Number(packOverride)) || Number(packOverride) < 0)) {
+      setError("Enter a valid carried load in pounds.");
+      return;
+    }
+    const derivedPackGrams = packWeightGramsFromPicks(gear);
+    const packGrams =
+      packOverride === "" ? (derivedPackGrams > 0 ? derivedPackGrams : null) : gramsFromLb(Number(packOverride));
+
     // Build the intervals payload when the type opts into structure.
     // Each field is independently optional — user might know reps + work
     // distance but not rest, or vice versa. Empty block sends null.
@@ -368,6 +387,7 @@ export default function LogRunForm({
         distanceMi: distance,
         durationSec,
         elevationGainFt: elevation,
+        packWeightGrams: packGrams,
         notes,
         performedAtLocal: performedAtLocal || undefined,
         // Use the derived slug, not the prop: the synthetic Endurance routine
@@ -607,10 +627,24 @@ export default function LogRunForm({
           activitySlug={derivedActivitySlug ?? "running"}
           value={gear}
           onChange={(g) => { markDirty(); setGear(g); }}
-          showWeight={false}
           showConsumable={false}
-          showQuantity={false}
         />
+        <Field
+          label="Carried load (lb, optional)"
+          hint={
+            gearPackGrams > 0
+              ? `Your gear above adds up to ${lbFromGrams(gearPackGrams)} lb — leave this blank to use that.`
+              : "Pack, pads, water. Put weights on your gear above and this fills itself in."
+          }
+        >
+          <input
+            style={bigInputStyle}
+            value={packWeightLb}
+            onChange={(e) => { markDirty(); setPackWeightLb(e.target.value); }}
+            inputMode="decimal"
+            placeholder={gearPackGrams > 0 ? String(lbFromGrams(gearPackGrams)) : "0"}
+          />
+        </Field>
       </FormSection>
 
       <FormSection title="Notes">
