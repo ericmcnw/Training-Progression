@@ -43,6 +43,10 @@ export default function GearPicker({
   const [lists, setLists] = useState<GearListSummary[]>([]);
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Inventory picks stay collapsed — their details already live in the gear
+  // library. Only freshly-typed gear needs the form, plus anything the user
+  // explicitly opens to adjust.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -64,13 +68,31 @@ export default function GearPicker({
   const listId = `gear-types-${activitySlug}`;
   const presets = useMemo(() => gearTypesForActivity(activitySlug), [activitySlug]);
 
-  // Saved gear not already on this log — by id or by name.
-  const pickedKeys = useMemo(() => {
-    const ids = new Set(value.map((p) => p.gearId).filter(Boolean) as string[]);
-    const names = new Set(value.map((p) => norm(p.name)).filter(Boolean));
-    return { ids, names };
-  }, [value]);
-  const quickAdd = saved.filter((g) => !pickedKeys.ids.has(g.id) && !pickedKeys.names.has(norm(g.name)));
+  // Which pick, if any, represents this inventory item on the log.
+  function pickForSaved(g: SavedGear): GearPick | undefined {
+    return value.find((p) => (p.gearId ? p.gearId === g.id : norm(p.name) === norm(g.name)));
+  }
+  function toggleSaved(g: SavedGear) {
+    const existing = pickForSaved(g);
+    if (!existing) {
+      addSaved(g);
+      return;
+    }
+    onChange(value.filter((p) => p.localId !== existing.localId));
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(existing.localId);
+      return next;
+    });
+  }
+  function toggleExpanded(localId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(localId)) next.delete(localId);
+      else next.add(localId);
+      return next;
+    });
+  }
 
   function addSaved(g: SavedGear) {
     onChange([
@@ -143,22 +165,43 @@ export default function GearPicker({
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      {quickAdd.length > 0 ? (
+      {saved.length > 0 ? (
         <div>
-          <div style={quickLabel}>Your gear · tap to add</div>
+          <div style={quickLabel}>Your gear · tap to select</div>
           <div style={chipWrap}>
-            {quickAdd.map((g) => (
-              <button key={g.id} type="button" style={chip} onClick={() => addSaved(g)}>
-                <span aria-hidden>{gearTypeMeta(g.type).icon}</span>
-                <span style={chipName}>{g.name}</span>
-                {g.weightGrams != null ? <span style={chipWeight}>{ozFromGrams(g.weightGrams)} oz</span> : null}
-              </button>
-            ))}
+            {saved.map((g) => {
+              const picked = pickForSaved(g);
+              const on = Boolean(picked);
+              return (
+                <span key={g.id} style={on ? chipOn : chip}>
+                  <button
+                    type="button"
+                    style={chipMain}
+                    onClick={() => toggleSaved(g)}
+                    aria-pressed={on}
+                  >
+                    <span aria-hidden>{on ? "✓" : gearTypeMeta(g.type).icon}</span>
+                    <span style={chipName}>{g.name}</span>
+                    {g.weightGrams != null ? <span style={chipWeight}>{ozFromGrams(g.weightGrams)} oz</span> : null}
+                  </button>
+                  {on && picked ? (
+                    <button
+                      type="button"
+                      style={chipEdit}
+                      onClick={() => toggleExpanded(picked.localId)}
+                      aria-label={`Adjust ${g.name}`}
+                    >
+                      ✎
+                    </button>
+                  ) : null}
+                </span>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
-      {value.map((p) => {
+      {value.filter((p) => p.gearId === null || expandedIds.has(p.localId)).map((p) => {
         const meta = gearTypeMeta(resolveGearTypeSlug(p.type));
         return (
           <div key={p.localId} style={gearCard}>
@@ -282,16 +325,44 @@ const chipWrap: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 6 };
 const chip: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
-  padding: "6px 10px",
+  gap: 2,
+  minHeight: 40,
   borderRadius: 999,
   border: "1px solid rgba(132,204,120,0.32)",
   background: "rgba(132,204,120,0.10)",
   color: "inherit",
   fontSize: 12.5,
   fontWeight: 700,
+  maxWidth: "100%",
+};
+// Selected reads as filled, not as a different component. Tapping the chip
+// again deselects; the pencil opens the detail form for the rare case where
+// quantity or weight needs adjusting on this log.
+const chipOn: CSSProperties = {
+  ...chip,
+  border: "1px solid rgba(132,204,120,0.75)",
+  background: "rgba(132,204,120,0.28)",
+};
+const chipMain: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "9px 6px 9px 12px",
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
   cursor: "pointer",
   maxWidth: "100%",
+};
+const chipEdit: CSSProperties = {
+  padding: "9px 12px 9px 6px",
+  border: "none",
+  background: "transparent",
+  color: "inherit",
+  opacity: 0.65,
+  fontSize: 13,
+  cursor: "pointer",
 };
 const chipName: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 };
 const chipWeight: CSSProperties = { opacity: 0.6, fontWeight: 800, fontSize: 11 };

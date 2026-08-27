@@ -157,6 +157,7 @@ export type LogSummaryData = {
   completionCount: number | null;
   distanceMi: number | null;
   elevationGainFt: number | null;
+  packWeightGrams: number | null;
   durationSec: number | null;
   location: string | null;
   weather: WeatherSnapshot | null;
@@ -192,6 +193,7 @@ type RawLog = {
   completionCount: number | null;
   distanceMi: number | null;
   elevationGainFt: number | null;
+  packWeightGrams: number | null;
   durationSec: number | null;
   location: string | null;
   exercises: Array<{ id: string }>;
@@ -377,6 +379,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       completionCount: true,
       distanceMi: true,
       elevationGainFt: true,
+      packWeightGrams: true,
       durationSec: true,
       location: true,
       weather: true,
@@ -502,6 +505,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     completionCount: log.completionCount,
     distanceMi: log.distanceMi,
     elevationGainFt: log.elevationGainFt,
+    packWeightGrams: log.packWeightGrams,
     durationSec: log.durationSec,
     location: log.location,
     weather: coerceWeatherSnapshot(log.weather),

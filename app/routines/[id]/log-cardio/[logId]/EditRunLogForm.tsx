@@ -223,6 +223,11 @@ export default function EditRunLogForm({
       setError("Enter a valid elevation gain in feet.");
       return;
     }
+    const packOverride = packWeightLb.trim();
+    if (packOverride !== "" && (!Number.isFinite(Number(packOverride)) || Number(packOverride) < 0)) {
+      setError("Enter a valid carried load in pounds.");
+      return;
+    }
 
     // Build the intervals payload from the form state. When the active
     // type doesn't use intervals OR no field has a meaningful value, we
@@ -255,11 +260,7 @@ export default function EditRunLogForm({
         durationSec,
         elevationGainFt: elevation,
         packWeightGrams:
-          packWeightLb.trim() === ""
-            ? gearPackGrams > 0
-              ? gearPackGrams
-              : null
-            : gramsFromLb(Number(packWeightLb)),
+          packOverride === "" ? (gearPackGrams > 0 ? gearPackGrams : null) : gramsFromLb(Number(packOverride)),
         notes,
         performedAtLocal,
         activitySlug: activitySlug ?? undefined,

@@ -189,6 +189,7 @@ export default function LogRunForm({
     if (!stored || stored.kind !== "CARDIO") return;
     setDistanceMi(stored.distanceMi);
     setElevationGainFt(stored.elevationGainFt);
+    if (stored.packWeightLb !== undefined) setPackWeightLb(stored.packWeightLb);
     setMinutes(stored.minutes);
     setSeconds(stored.seconds);
     setNotes(stored.notes);
@@ -230,6 +231,7 @@ export default function LogRunForm({
       performedAtLocal,
       distanceMi,
       elevationGainFt,
+      packWeightLb,
       minutes,
       seconds,
       activityTypeId: activityTypeId ?? null,
@@ -248,7 +250,7 @@ export default function LogRunForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceMi, elevationGainFt, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, gear, poolSwim, isPoolSwim]);
+  }, [distanceMi, elevationGainFt, packWeightLb, minutes, seconds, notes, performedAtLocal, spotValue, activityTypeId, gear, poolSwim, isPoolSwim]);
 
   useEffect(() => {
     if (!isPoolSwim || poolTouchedRef.current) return;
@@ -347,9 +349,8 @@ export default function LogRunForm({
       setError("Enter a valid carried load in pounds.");
       return;
     }
-    const derivedPackGrams = packWeightGramsFromPicks(gear);
     const packGrams =
-      packOverride === "" ? (derivedPackGrams > 0 ? derivedPackGrams : null) : gramsFromLb(Number(packOverride));
+      packOverride === "" ? (gearPackGrams > 0 ? gearPackGrams : null) : gramsFromLb(Number(packOverride));
 
     // Build the intervals payload when the type opts into structure.
     // Each field is independently optional — user might know reps + work

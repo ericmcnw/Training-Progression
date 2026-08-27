@@ -30,6 +30,7 @@ function buildHistoryMetricLine(
     distanceMi: number | null;
     durationSec: number | null;
     elevationGainFt: number | null;
+    packWeightGrams: number | null;
     completionCount: number | null;
     exercises: { exercise: { name: string }; sets: { id: string }[] }[];
     routine: { subtype: string | null };
@@ -41,6 +42,7 @@ function buildHistoryMetricLine(
     const parts = [`${(log.distanceMi ?? 0).toFixed(2)} mi`];
     if (log.durationSec) parts.push(formatHoursMinutes(log.durationSec));
     if (log.elevationGainFt) parts.push(`${log.elevationGainFt} ft`);
+    if (log.packWeightGrams) parts.push(`${Math.round((log.packWeightGrams / 453.59237) * 10) / 10} lb carried`);
     return parts.join(" · ");
   }
   if (isWorkoutKind(kind)) {
@@ -94,6 +96,7 @@ export default async function ManualLogPageContent({
             distanceMi: true,
             elevationGainFt: true,
             durationSec: true,
+            packWeightGrams: true,
             location: true,
             climbLocation: { select: { name: true, type: true } },
             activitySpot: { select: { name: true } },
@@ -115,6 +118,7 @@ export default async function ManualLogPageContent({
             distanceMi: true,
             elevationGainFt: true,
             durationSec: true,
+            packWeightGrams: true,
             location: true,
             climbLocation: { select: { name: true, type: true } },
             activitySpot: { select: { name: true } },
@@ -476,6 +480,7 @@ function ActivityCard({
     completionCount: number | null;
     domain: Domain;
     sportData?: unknown;
+    packWeightGrams?: number | null;
     location?: string | null;
     climbLocation?: { name: string; type?: string | null } | null;
     activitySpot?: { name: string } | null;
@@ -518,6 +523,9 @@ function ActivityCard({
           {(log.distanceMi ?? 0).toFixed(2)} mi
           {log.durationSec
             ? ` · ${formatHoursMinutes(log.durationSec)}`
+            : ""}
+          {log.packWeightGrams
+            ? ` · ${Math.round((log.packWeightGrams / 453.59237) * 10) / 10} lb carried`
             : ""}
         </div>
       )}

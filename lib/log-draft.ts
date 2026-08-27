@@ -68,6 +68,9 @@ export type CardioDraft = {
   // chip-strip visibility.
   distanceMi: string;
   elevationGainFt: string;
+  /** Carried-load override in lb. Optional so drafts written before the
+   *  field landed still deserialize. */
+  packWeightLb?: string;
   minutes: string;
   seconds: string;
   // Active activity type — surfaced so the ActiveSessionTray chip shows

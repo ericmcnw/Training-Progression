@@ -122,6 +122,12 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
                   <div style={statValue}>{data.elevationGainFt ? `${data.elevationGainFt} ft` : "0 ft"}</div>
                 </div>
               )}
+              {data.packWeightGrams ? (
+                <div style={statCard}>
+                  <div style={statLabel}>Carried</div>
+                  <div style={statValue}>{Math.round((data.packWeightGrams / 453.59237) * 10) / 10} lb</div>
+                </div>
+              ) : null}
               {/* Sprint / Interval Run reps as a stat chip so the
                   structured workout flavor reads at-a-glance alongside
                   the volume totals. Full breakdown lives in the
