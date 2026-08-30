@@ -203,7 +203,7 @@ const TONES: Record<Tone, { color: string; background: string; borderColor: stri
 const page = {
   width: "100%",
   minWidth: 0,
-  maxWidth: 720,
+  maxWidth: "var(--app-width-content)",
   margin: "0 auto",
   padding: "16px var(--edge) 80px",
   boxSizing: "border-box",

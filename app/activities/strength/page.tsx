@@ -73,7 +73,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
   if (strength.totalSessions === 0) {
     return (
       <>
-        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gap: 16 }}>
+        <div style={{ maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: "14px 14px 20px", display: "grid", gap: 16 }}>
           <ActivityHeader
             title="Strength"
             accent={domainColor("strength")}
@@ -150,7 +150,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
 
   return (
     <>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+      <div style={{ maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
         <ActivityHeader
           title="Strength"
           accent={domainColor("strength")}

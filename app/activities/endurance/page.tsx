@@ -237,7 +237,7 @@ export default async function EnduranceWorldPage(props: {
 
   return (
     <>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
+      <div style={{ maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: "14px 14px 20px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16, minWidth: 0 }}>
         <ActivityHeader
           title="Endurance"
           accent={domainColor("cardio")}

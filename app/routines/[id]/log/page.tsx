@@ -620,7 +620,7 @@ function BackDateBanner({ ymd }: { ymd: string }) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  container: { maxWidth: "var(--app-width-form)", margin: "0 auto", padding: 4, display: "grid", gap: 18 },
   topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" },
   h1: { fontSize: 24, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },

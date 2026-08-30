@@ -74,7 +74,7 @@ function ListCard({ list }: { list: GearListSummary }) {
   );
 }
 
-const page: React.CSSProperties = { maxWidth: 720, margin: "0 auto", padding: "18px 14px 60px", display: "grid", gap: 16 };
+const page: React.CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "18px 14px 60px", display: "grid", gap: 16 };
 const header: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
 const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 900, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.5 };
 const title: React.CSSProperties = { margin: "2px 0 0", fontSize: 26, fontWeight: 900, letterSpacing: -0.4 };

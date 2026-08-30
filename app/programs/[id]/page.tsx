@@ -93,7 +93,7 @@ function sentenceCase(value: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-const page: React.CSSProperties = { width: "100%", minWidth: 0, maxWidth: 760, margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 };
+const page: React.CSSProperties = { width: "100%", minWidth: 0, maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 };
 const topBar: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between" };
 const quietLink: React.CSSProperties = { color: "rgba(255,255,255,0.62)", textDecoration: "none", fontSize: 13, fontWeight: 800 };
 const editLink: React.CSSProperties = { ...quietLink, minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 13px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)" };

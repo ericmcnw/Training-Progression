@@ -59,7 +59,7 @@ export default async function SettingsPage() {
 }
 
 const shell: CSSProperties = {
-  maxWidth: 820,
+  maxWidth: "var(--app-width-form)",
   margin: "0 auto",
   padding: "16px 12px",
   display: "grid",

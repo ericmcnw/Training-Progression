@@ -33,7 +33,7 @@ export default async function LogPainPage(props: { searchParams?: Promise<Search
   const autoSelected = !zoneParam && injuryZoneSlugs.length > 0;
 
   return (
-    <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
+    <main style={{ maxWidth: "var(--app-width-form)", margin: "0 auto", display: "grid", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.2, opacity: 0.55, textTransform: "uppercase" }}>Body</div>

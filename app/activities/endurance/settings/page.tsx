@@ -104,7 +104,7 @@ export default async function EnduranceSettingsPage() {
         }
       />
 
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "0 14px 20px", display: "grid", gap: 16 }}>
         {data.families.length === 0 ? (
           <SectionCard title="Setup">
             <EmptyState message="Activity types haven't been seeded yet — run the latest migration." />

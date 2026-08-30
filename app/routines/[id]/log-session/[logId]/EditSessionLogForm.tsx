@@ -372,7 +372,7 @@ export default function EditSessionLogForm({
   }
 
   return (
-    <FormStack maxWidth={640}>
+    <FormStack>
       <FormSection title="Session details">
         <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 

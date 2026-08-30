@@ -47,6 +47,14 @@
   --muted: rgba(255,255,255,0.70);
   --success: #33ff7a;   /* bright green */
   --app-max-width: 1180px;
+  /* Page width tiers. A page picks one by what it HOLDS, not by what it is
+     called: form = single-column entry and reading, content = lists and
+     light detail, wide = charts, maps, tables, multi-column grids. Pages
+     that set no width at all already render at the wide tier, since
+     .appMain caps everything at --app-max-width. */
+  --app-width-form: 720px;
+  --app-width-content: 980px;
+  --app-width-wide: var(--app-max-width);
   --app-edge-padding: clamp(14px, 3vw, 24px);
   --app-mobile-bottom-offset: calc(116px + env(safe-area-inset-bottom));
 }

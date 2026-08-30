@@ -66,7 +66,7 @@ export default function EditCompletionLogForm({
   }
 
   return (
-    <FormStack maxWidth={560}>
+    <FormStack>
       <FormSection title="Completion details">
         <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 

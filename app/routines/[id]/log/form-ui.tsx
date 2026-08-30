@@ -10,10 +10,12 @@ const inputBackground = "#111827";
 
 export function FormStack({
   children,
-  maxWidth = 640,
+  maxWidth = "var(--app-width-form)",
 }: {
   children: React.ReactNode;
-  maxWidth?: number;
+  /** A width tier token. Defaults to the form tier; dense editors that hold
+   *  a grid rather than a single column pass the content tier. */
+  maxWidth?: string;
 }) {
   return (
     <div

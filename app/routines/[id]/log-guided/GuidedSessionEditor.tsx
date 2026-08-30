@@ -305,7 +305,7 @@ export default function GuidedSessionEditor({
   }
 
   return (
-    <FormStack maxWidth={920}>
+    <FormStack maxWidth="var(--app-width-content)">
       <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 
       <FormSection title="Guided session" description="Run the flow live, edit it while you go, or log what actually happened after the fact.">

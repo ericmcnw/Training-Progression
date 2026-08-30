@@ -351,7 +351,7 @@ const supportGroupCount: React.CSSProperties = {
 };
 
 const pageBody: React.CSSProperties = {
-  maxWidth: 1120,
+  maxWidth: "var(--app-width-wide)",
   margin: "0 auto",
   padding: "0 14px 60px",
   display: "grid",

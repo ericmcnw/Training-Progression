@@ -336,7 +336,7 @@ export default async function BodyZoneDetailPage(props: {
 }
 
 const page: React.CSSProperties = {
-  maxWidth: 1120,
+  maxWidth: "var(--app-width-wide)",
   margin: "0 auto",
   padding: "4px 0 28px",
   display: "grid",

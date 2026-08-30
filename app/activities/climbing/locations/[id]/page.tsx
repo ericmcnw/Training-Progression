@@ -401,7 +401,7 @@ export default async function ClimbLocationDetailPage(props: {
 
       <div
         style={{
-          maxWidth: 1120,
+          maxWidth: "var(--app-width-wide)",
           margin: "0 auto",
           padding: "0 14px 20px",
           display: "grid",
@@ -745,7 +745,7 @@ const inlineLinkStyle: React.CSSProperties = {
 };
 
 const slimHeaderShellStyle: React.CSSProperties = {
-  maxWidth: 1120,
+  maxWidth: "var(--app-width-wide)",
   margin: "0 auto",
   padding: "16px 14px 12px",
   display: "grid",

@@ -1017,7 +1017,7 @@ function SessionRow({ session }: { session: {
 // ── Styles ──────────────────────────────────────────────────────────────────
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 760,
+  maxWidth: "var(--app-width-wide)",
   margin: "0 auto",
   padding: "18px 14px 60px",
   display: "grid",

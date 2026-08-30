@@ -252,7 +252,7 @@ export default function FocusForm({
   }
 
   return (
-    <FormStack maxWidth={860}>
+    <FormStack maxWidth="var(--app-width-content)">
       {panel !== "milestones" ? <FormSection title={embedded ? undefined : "Direction and timeline"} unframed={embedded}>
         <Field label="Name">
           <input

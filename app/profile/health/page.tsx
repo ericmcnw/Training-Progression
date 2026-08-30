@@ -41,7 +41,7 @@ export default async function HealthPage() {
   </main>;
 }
 
-const page: React.CSSProperties = { maxWidth: 760, margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", display: "grid", gap: 16 };
+const page: React.CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", display: "grid", gap: 16 };
 const topBar: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
 const backLink: React.CSSProperties = { color: "rgba(255,255,255,0.62)", textDecoration: "none", fontSize: 13, fontWeight: 800 };
 const title: React.CSSProperties = { margin: 0, fontSize: 24, fontWeight: 900 };

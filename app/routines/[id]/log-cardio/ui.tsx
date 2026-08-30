@@ -440,7 +440,7 @@ export default function LogRunForm({
   }
 
   return (
-    <FormStack maxWidth={560}>
+    <FormStack>
       <DateTimeField
         value={performedAtLocal}
         onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}

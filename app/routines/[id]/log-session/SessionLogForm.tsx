@@ -390,7 +390,7 @@ export default function SessionLogForm({
   const detailsSectionTitle = templateName ?? "Details";
 
   return (
-    <FormStack maxWidth={640}>
+    <FormStack>
       {/* Draft banners */}
       {draftBanner === "recent" && (
         <div style={draftBannerGreen}>

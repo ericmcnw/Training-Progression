@@ -121,7 +121,7 @@ export default async function ClimbingMapPage() {
 }
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 1120,
+  maxWidth: "var(--app-width-wide)",
   margin: "0 auto",
   padding: "10px 14px 12px",
   display: "grid",

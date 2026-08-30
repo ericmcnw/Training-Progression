@@ -384,10 +384,10 @@ function MoveTargetForm({ programId, itemId, direction, disabled }: { programId:
   return <form action={moveProgramTargetItem}><input type="hidden" name="programId" value={programId} /><input type="hidden" name="itemId" value={itemId} /><input type="hidden" name="direction" value={direction} /><button type="submit" disabled={disabled} style={{ ...moveButton, opacity: disabled ? 0.28 : 1 }} title={`Move ${direction}`} aria-label={`Move target ${direction}`}>{direction === "up" ? "↑" : "↓"}</button></form>;
 }
 
-const page: React.CSSProperties = { width: "100%", minWidth: 0, maxWidth: 1240, margin: "0 auto", padding: "16px clamp(14px, 3vw, 32px) 96px", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 };
+const page: React.CSSProperties = { width: "100%", minWidth: 0, maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: "16px clamp(14px, 3vw, 32px) 96px", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 };
 const workspace: React.CSSProperties = { minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 28 };
 const sidebar: React.CSSProperties = { position: "sticky", top: 18, minWidth: 0, padding: "12px 0" };
-const canvas: React.CSSProperties = { minWidth: 0, maxWidth: 900, width: "100%" };
+const canvas: React.CSSProperties = { minWidth: 0, maxWidth: "var(--app-width-content)", width: "100%" };
 const topBar: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
 const quietLink: React.CSSProperties = { color: "rgba(255,255,255,0.68)", textDecoration: "none", fontSize: 13, fontWeight: 800 };
 const savedHint: React.CSSProperties = { fontSize: 11, color: "rgba(255,255,255,0.42)" };

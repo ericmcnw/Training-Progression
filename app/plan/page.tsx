@@ -82,7 +82,7 @@ function viewDescription(view: PlanView) {
   return "Longer-term direction, stages, and progression.";
 }
 
-const page: React.CSSProperties = { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 16 };
+const page: React.CSSProperties = { maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: 4, display: "grid", gap: 16 };
 const header: React.CSSProperties = { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" };
 const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900 };
 const subtitle: React.CSSProperties = { margin: "3px 0 0", fontSize: 13, color: "rgba(255,255,255,0.62)" };

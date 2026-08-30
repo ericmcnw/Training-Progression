@@ -59,7 +59,7 @@ export default function CompletionLogForm({
   const anyPending = saving || quickSaving;
 
   return (
-    <FormStack maxWidth={560}>
+    <FormStack>
       {description?.trim() && (
         <details style={{ border: "1px solid rgba(128,128,128,0.3)", borderRadius: 12, padding: "10px 12px" }}>
           <summary data-collapsible-summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 800, opacity: 0.8, minHeight: 44 }}>

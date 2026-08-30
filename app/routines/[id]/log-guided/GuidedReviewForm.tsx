@@ -106,7 +106,7 @@ export default function GuidedReviewForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 20, maxWidth: 520, margin: "0 auto" }}>
+    <div style={{ display: "grid", gap: 20, maxWidth: "var(--app-width-form)", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button type="button" onClick={onBack} style={backBtnStyle}>

@@ -22,7 +22,7 @@ export default async function NewInjuryPage(props: { searchParams?: Promise<Sear
   ]);
 
   return (
-    <main style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 16 }}>
+    <main style={{ maxWidth: "var(--app-width-form)", margin: "0 auto", display: "grid", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={eyebrow}>Injuries</div>

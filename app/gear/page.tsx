@@ -179,7 +179,7 @@ const listEmpty: React.CSSProperties = {
   textDecoration: "none",
   color: "inherit",
 };
-const page: React.CSSProperties = { maxWidth: 720, margin: "0 auto", padding: "18px 14px 60px", display: "grid", gap: 16 };
+const page: React.CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "18px 14px 60px", display: "grid", gap: 16 };
 const header: React.CSSProperties = { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 };
 const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: -0.4 };
 const countPill: React.CSSProperties = {

@@ -309,7 +309,7 @@ export default function EditRunLogForm({
   })();
 
   return (
-    <FormStack maxWidth={560}>
+    <FormStack>
       <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 
       {/* Activity type picker — visible whenever the API returns options.

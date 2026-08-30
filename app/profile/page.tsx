@@ -71,7 +71,7 @@ function HubLink({ href, title, meta }: { href: string; title: string; meta: str
   return <Link href={href} style={hubLink}><span style={hubTitle}>{title}</span><span style={hubMeta}>{meta}</span><span aria-hidden style={chevron}>›</span></Link>;
 }
 
-const page: React.CSSProperties = { maxWidth: 820, margin: "0 auto", padding: "16px clamp(12px, 3vw, 24px) 96px", display: "grid", gap: 18 };
+const page: React.CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "16px clamp(12px, 3vw, 24px) 96px", display: "grid", gap: 18 };
 const header: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between" };
 const title: React.CSSProperties = { margin: 0, fontSize: 25, fontWeight: 900 };
 const settingsLink: React.CSSProperties = { minHeight: 40, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.13)", color: "rgba(255,255,255,0.68)", textDecoration: "none", fontSize: 12, fontWeight: 800 };
