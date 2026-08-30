@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { updateRunLog } from "../../../actions";
-import { Field, FieldGrid, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
+import { DateTimeField, Field, FieldGrid, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
 import {
@@ -310,6 +310,8 @@ export default function EditRunLogForm({
 
   return (
     <FormStack maxWidth={560}>
+      <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
+
       {/* Activity type picker — visible whenever the API returns options.
           Switches the elevation field's visibility + the interval block
           to match the new type. Soft tint matches the new-log form. */}
@@ -409,9 +411,6 @@ export default function EditRunLogForm({
           />
         ) : null}
 
-        <Field label="Performed at">
-          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
-        </Field>
       </FormSection>
 
       <FormSection title="Gear">

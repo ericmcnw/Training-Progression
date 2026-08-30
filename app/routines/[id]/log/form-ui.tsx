@@ -165,7 +165,7 @@ export { localDateTimeForYmd } from "./date-helpers";
 export function DateTimeField({
   value,
   onChange,
-  label = "Date & Time",
+  label = "When",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -190,29 +190,6 @@ export function DateTimeField({
         </button>
       </div>
     </Field>
-  );
-}
-
-export function OptionalDateSection({
-  value,
-  onChange,
-  summary = "Log with custom date/time (optional)",
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  summary?: string;
-}) {
-  return (
-    <details style={detailsStyle}>
-      <summary data-collapsible-summary style={summaryStyle}>
-        {summary}
-      </summary>
-      <div style={{ marginTop: 10 }}>
-        <Field label="Performed at">
-          <input type="datetime-local" style={inputStyle} value={value} onChange={(event) => onChange(event.target.value)} />
-        </Field>
-      </div>
-    </details>
   );
 }
 
@@ -356,18 +333,7 @@ const nowButtonStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const detailsStyle: React.CSSProperties = {
-  border: `1px solid ${borderColor}`,
-  borderRadius: 12,
-  padding: "10px 12px",
-  background: surfaceColor,
-};
 
-const summaryStyle: React.CSSProperties = {
-  cursor: "pointer",
-  fontWeight: 800,
-  fontSize: 13,
-};
 
 const actionsStyle: React.CSSProperties = {
   display: "flex",

@@ -20,7 +20,7 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
-import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { inputStyle, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { listSportPeople, updateSportLogAction } from "@/app/log/sport-actions";
 import { updateGolfLogAction } from "@/app/log/golf-log-actions";
 import { getSportLogConfig, isExtraVisible } from "@/app/routines/sportLogConfig";
@@ -153,7 +153,12 @@ function EditGolfLog({
   const router = useRouter();
   const parsed = useMemo(() => parseGolfSportData(sportData), [sportData]);
   const [performedAt, setPerformedAt] = useState(formatLocal(initialPerformedAt));
-  const [duration, setDuration] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
+  const [durationHours, setDurationHours] = useState(
+    initialDurationSec > 0 ? String(Math.floor(initialDurationSec / 3600)) : ""
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    initialDurationSec > 0 ? String(Math.round((initialDurationSec % 3600) / 60)) : ""
+  );
   const [notes, setNotes] = useState(initialNotes);
   const [effort, setEffort] = useState<number | null>(initialEffort);
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
@@ -178,9 +183,9 @@ function EditGolfLog({
       setError("Invalid date/time.");
       return;
     }
-    const minutes = duration.trim() === "" ? undefined : Number(duration);
-    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
-      setError("Duration must be a positive number.");
+    const { minutes, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
+    if (!durationValid) {
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
     startTransition(async () => {
@@ -389,21 +394,42 @@ function EditGolfLog({
         </>
       )}
 
-      <Field label="Duration (min)">
-        <input
-          type="number"
-          inputMode="numeric"
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          style={inputStyle}
-        />
+      <Field label="Duration (optional)">
+        <div style={hmRow}>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              min={0}
+              max={24}
+              value={durationHours}
+              onChange={(e) => setDurationHours(e.target.value)}
+              style={inputStyle}
+              aria-label="Hours"
+            />
+            <span style={hmSub}>hours</span>
+          </div>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(e.target.value)}
+              style={inputStyle}
+              aria-label="Minutes"
+            />
+            <span style={hmSub}>minutes</span>
+          </div>
+        </div>
       </Field>
 
       <div style={fieldGroup}>
         <span style={effortLabelStyle}>Effort</span>
         <EffortSlider
           value={effort}
-          predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+          predicted={predictEffortDefault(parseHoursMinutes(durationHours, durationMinutes).minutes ?? null)}
           onChange={setEffort}
         />
       </div>
@@ -466,7 +492,12 @@ function EditGenericSport({
   const spotConfig = getActivitySpotConfig(sportSlug);
 
   const [performedAt, setPerformedAt] = useState(formatLocal(initialPerformedAt));
-  const [duration, setDuration] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
+  const [durationHours, setDurationHours] = useState(
+    initialDurationSec > 0 ? String(Math.floor(initialDurationSec / 3600)) : ""
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    initialDurationSec > 0 ? String(Math.round((initialDurationSec % 3600) / 60)) : ""
+  );
   const [notes, setNotes] = useState(initialNotes);
   const [effort, setEffort] = useState<number | null>(initialEffort);
   const [spot, setSpot] = useState<SpotPickerValue>(initialSpot);
@@ -492,9 +523,9 @@ function EditGenericSport({
       setError("Invalid date/time.");
       return;
     }
-    const minutes = duration.trim() === "" ? undefined : Number(duration);
-    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
-      setError("Duration must be a positive number.");
+    const { minutes, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
+    if (!durationValid) {
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
     const extrasOut: Record<string, string | number | undefined> = {};
@@ -568,14 +599,35 @@ function EditGenericSport({
         </Field>
       ) : null}
 
-      <Field label="Duration (min)">
-        <input
-          type="number"
-          inputMode="numeric"
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          style={inputStyle}
-        />
+      <Field label="Duration (optional)">
+        <div style={hmRow}>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              min={0}
+              max={24}
+              value={durationHours}
+              onChange={(e) => setDurationHours(e.target.value)}
+              style={inputStyle}
+              aria-label="Hours"
+            />
+            <span style={hmSub}>hours</span>
+          </div>
+          <div style={hmCol}>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="0"
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(e.target.value)}
+              style={inputStyle}
+              aria-label="Minutes"
+            />
+            <span style={hmSub}>minutes</span>
+          </div>
+        </div>
       </Field>
 
       {config.extras && config.extras.length > 0 ? (
@@ -611,7 +663,7 @@ function EditGenericSport({
         <span style={effortLabelStyle}>Effort</span>
         <EffortSlider
           value={effort}
-          predicted={predictEffortDefault(Number(duration) > 0 ? Number(duration) : null)}
+          predicted={predictEffortDefault(parseHoursMinutes(durationHours, durationMinutes).minutes ?? null)}
           onChange={setEffort}
         />
       </div>
@@ -641,6 +693,10 @@ function formatLocal(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+const hmRow: React.CSSProperties = { display: "flex", gap: 10 };
+const hmCol: React.CSSProperties = { flex: 1, display: "grid", gap: 4, minWidth: 0 };
+const hmSub: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textAlign: "center" };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

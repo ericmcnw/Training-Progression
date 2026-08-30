@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateCompletionLog } from "../../../actions";
-import { Field, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
+import { DateTimeField, Field, FormActions, FormError, FormSection, FormStack, inputStyle, textareaStyle } from "../../log/form-ui";
 
 function toLocalInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -68,9 +68,7 @@ export default function EditCompletionLogForm({
   return (
     <FormStack maxWidth={560}>
       <FormSection title="Completion details">
-        <Field label="Performed at">
-          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(e) => setPerformedAtLocal(e.target.value)} />
-        </Field>
+        <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 
         <Field label="Count (optional)" hint="Leave blank for a simple done log.">
           <input

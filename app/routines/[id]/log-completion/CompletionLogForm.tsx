@@ -3,7 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { createCompletionLog } from "../../actions";
-import { Field, FormActions, FormError, FormSection, FormStack, OptionalDateSection, inputStyle, textareaStyle } from "../log/form-ui";
+import { DateTimeField, Field, FormActions, FormError, FormSection, FormStack, inputStyle, localDateTimeNow, textareaStyle } from "../log/form-ui";
 
 export default function CompletionLogForm({
   routineId,
@@ -14,7 +14,7 @@ export default function CompletionLogForm({
 }) {
   const [completionCount, setCompletionCount] = useState("");
   const [notes, setNotes] = useState("");
-  const [performedAtLocal, setPerformedAtLocal] = useState("");
+  const [performedAtLocal, setPerformedAtLocal] = useState(() => localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [quickSaving, setQuickSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +80,8 @@ export default function CompletionLogForm({
 
       {/* Detailed entry */}
       <FormSection title="Log with details" description="Add a count or notes when you want to track more than just completion.">
+        <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
+
         <Field label="Count (optional)" hint="Leave blank for a simple done log.">
           <input
             style={inputStyle}
@@ -99,8 +101,6 @@ export default function CompletionLogForm({
           />
         </Field>
       </FormSection>
-
-      <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />
 
       <FormActions
         primaryLabel="Save with Details"

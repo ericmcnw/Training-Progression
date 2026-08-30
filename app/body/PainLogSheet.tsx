@@ -76,6 +76,24 @@ export default function PainLogSheet({
     <Popover open={Boolean(zone)} onClose={close} title={`Log pain${zone ? ` · ${zone.label}` : ""}`} desktopWidth={420}>
       {zone ? (
         <div style={{ display: "grid", gap: 16 }}>
+          {/* Backdating — catch up on days you missed. Capped at today. */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={fieldLabel}>Date</span>
+            <input
+              type="date"
+              value={when}
+              max={today}
+              onChange={(e) => setWhen(e.target.value)}
+              style={input}
+              aria-label="Day this reading is for"
+            />
+            {when !== today ? (
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(251,191,36,0.9)" }}>
+                Backdating to {when}
+              </span>
+            ) : null}
+          </div>
+
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
             <span style={fieldLabel}>How bad?</span>
             <span style={{ fontSize: 30, fontWeight: 900, color: painColor(level), lineHeight: 1 }}>
@@ -94,7 +112,7 @@ export default function PainLogSheet({
           />
 
           <div style={{ display: "grid", gap: 6 }}>
-            <span style={fieldLabel}>When</span>
+            <span style={fieldLabel}>Context</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {CONTEXTS.map((c) => (
                 <button
@@ -107,24 +125,6 @@ export default function PainLogSheet({
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Backdating — catch up on days you missed. Capped at today. */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <span style={fieldLabel}>Day</span>
-            <input
-              type="date"
-              value={when}
-              max={today}
-              onChange={(e) => setWhen(e.target.value)}
-              style={input}
-              aria-label="Day this reading is for"
-            />
-            {when !== today ? (
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(251,191,36,0.9)" }}>
-                Backdating to {when}
-              </span>
-            ) : null}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>

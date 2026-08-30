@@ -441,6 +441,11 @@ export default function LogRunForm({
 
   return (
     <FormStack maxWidth={560}>
+      <DateTimeField
+        value={performedAtLocal}
+        onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+      />
+
       {/* Activity type picker — present for every CARDIO log. Hidden only
           if the API didn't return any types (legacy/error state). Selecting
           a type retunes the elevation field's visibility immediately. */}
@@ -632,10 +637,6 @@ export default function LogRunForm({
           />
         ) : null}
 
-        <DateTimeField
-          value={performedAtLocal}
-          onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
-        />
       </FormSection>
 
       <FormSection title="Gear">

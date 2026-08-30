@@ -125,7 +125,7 @@ export default function GuidedReviewForm({
 
       {/* Date / time */}
       <div style={sectionCard}>
-        <div style={sectionLabel}>When did you do this?</div>
+        <div style={sectionLabel}>When</div>
         <input
           type="datetime-local"
           value={performedAtLocal}

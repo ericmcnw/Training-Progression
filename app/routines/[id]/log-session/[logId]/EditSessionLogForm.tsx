@@ -12,13 +12,15 @@ import {
 } from "@/lib/activity-spots";
 import { COLOR } from "@/lib/design-tokens";
 import {
+  DateTimeField,
   Field,
   FormActions,
   FormError,
   FormSection,
   FormStack,
+  HoursMinutesField,
   helperTextStyle,
-  inputStyle,
+  parseHoursMinutes,
   textareaStyle,
 } from "../../log/form-ui";
 import {
@@ -191,7 +193,12 @@ export default function EditSessionLogForm({
       : "Climbs"
     : null;
 
-  const [durationMin, setDurationMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
+  const [durationHours, setDurationHours] = useState(
+    initialDurationSec > 0 ? String(Math.floor(initialDurationSec / 3600)) : ""
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    initialDurationSec > 0 ? String(Math.round((initialDurationSec % 3600) / 60)) : ""
+  );
   const [notes, setNotes] = useState(initialNotes);
   // Effort is captured only on sport logs now; preserve any stored value
   // through edits rather than wiping it. The save payload still carries it.
@@ -286,13 +293,12 @@ export default function EditSessionLogForm({
     : visibleMainDefinitions;
 
   async function onSave() {
-    const trimmedDuration = durationMin.trim();
-    const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
-    if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
-      setError("Enter a valid duration in minutes or leave it blank.");
+    const { minutes: parsedDurationMin, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
+    if (!durationValid) {
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
-    const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
+    const durationSec = parsedDurationMin != null ? parsedDurationMin * 60 : null;
 
     let structuredValues: Array<{
       metricDefinitionId: string;
@@ -368,13 +374,15 @@ export default function EditSessionLogForm({
   return (
     <FormStack maxWidth={640}>
       <FormSection title="Session details">
-        <Field label="Performed at">
-          <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
-        </Field>
+        <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
 
-        <Field label="Duration (minutes, optional)">
-          <input style={inputStyle} value={durationMin} onChange={(event) => setDurationMin(event.target.value)} inputMode="decimal" />
-        </Field>
+        <HoursMinutesField
+          label="Duration (optional)"
+          hours={durationHours}
+          minutes={durationMinutes}
+          onHours={setDurationHours}
+          onMinutes={setDurationMinutes}
+        />
 
         {showSpotPicker && spotPickerConfig ? (
           <SpotPicker

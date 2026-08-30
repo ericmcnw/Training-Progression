@@ -23,7 +23,7 @@ import ProblemCombobox, { type ProblemPick } from "./ProblemCombobox";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
-import { inputStyle, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { inputStyle, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
@@ -119,13 +119,14 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
 
 export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
-  const [duration, setDuration] = useState("");
+  const [durationHours, setDurationHours] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("");
   const [notes, setNotes] = useState("");
   const [effort, setEffort] = useState<number | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
   const predictedEffort = useLearnedEffortPrefill({
     routineId: "sports-climbing-synthetic",
-    durationMin: Number(duration) > 0 ? Number(duration) : null,
+    durationMin: parseHoursMinutes(durationHours, durationMinutes).minutes ?? null,
   });
 
   // Location — a single SpotPicker value: search any saved ClimbLocation,
@@ -300,9 +301,9 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
       setError("Add at least one climb with a grade.");
       return;
     }
-    const minutes = duration.trim() === "" ? undefined : Number(duration);
-    if (minutes !== undefined && (Number.isNaN(minutes) || minutes < 0)) {
-      setError("Duration must be a positive number.");
+    const { minutes, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
+    if (!durationValid) {
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
     // Resolve the picked spot into climb-location params. Saved climb
@@ -612,19 +613,36 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <div style={twoCol}>
-            <label style={fieldLabel}>
-              Duration (min)
-              <input
-                type="number"
-                inputMode="numeric"
-                placeholder="optional"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                style={fieldInput}
-              />
-            </label>
-            <div />
+          <div style={fieldGroup}>
+            <span style={fieldGroupLabel}>Duration (optional)</span>
+            <div style={twoCol}>
+              <div style={hmCol}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="0"
+                  min={0}
+                  max={24}
+                  value={durationHours}
+                  onChange={(e) => setDurationHours(e.target.value)}
+                  style={fieldInput}
+                  aria-label="Hours"
+                />
+                <span style={hmSub}>hours</span>
+              </div>
+              <div style={hmCol}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(e.target.value)}
+                  style={fieldInput}
+                  aria-label="Minutes"
+                />
+                <span style={hmSub}>minutes</span>
+              </div>
+            </div>
           </div>
 
           <div style={fieldGroup}>
@@ -680,6 +698,8 @@ const fieldGroupLabel: CSSProperties = {
 // font is required to block iOS Safari's focus-zoom behavior.
 const fieldInput: CSSProperties = inputStyle;
 const twoCol: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
+const hmCol: CSSProperties = { display: "grid", gap: 4, minWidth: 0 };
+const hmSub: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textAlign: "center" };
 
 const attemptStack: CSSProperties = { display: "grid", gap: 8 };
 const attemptCard: CSSProperties = {

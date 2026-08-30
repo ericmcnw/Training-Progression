@@ -6,7 +6,7 @@ import { logGuided, updateGuidedLog } from "../../actions";
 import { EXERCISE_LIBRARY_KIND_LABELS, guidedPreferredLibraryKinds, orderExercisesForLibraryContext } from "@/lib/exercise-library";
 import { buildGuidedRunnerSegments, formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
 import type { ExerciseLibraryKind, GuidedStepKind } from "@/generated/prisma";
-import { Field, FieldGrid, FormActions, FormError, FormSection, FormStack, OptionalDateSection, helperTextStyle, inputStyle, pillButtonStyle, textareaStyle } from "../log/form-ui";
+import { DateTimeField, Field, FieldGrid, FormActions, FormError, FormSection, FormStack, helperTextStyle, inputStyle, localDateTimeNow, pillButtonStyle, textareaStyle } from "../log/form-ui";
 
 type ExerciseOption = { id: string; name: string; unit: "REPS" | "TIME"; supportsWeight: boolean; libraryKind: ExerciseLibraryKind };
 type InitialStep = {
@@ -190,7 +190,7 @@ export default function GuidedSessionEditor({
   const [followScope, setFollowScope] = useState<FollowScope>("SET");
   const [draftSteps, setDraftSteps] = useState<DraftStep[]>(baseDraftSteps);
   const [notes, setNotes] = useState(initialNotes);
-  const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt ? toLocalInputValue(initialPerformedAt) : "");
+  const [performedAtLocal, setPerformedAtLocal] = useState(initialPerformedAt ? toLocalInputValue(initialPerformedAt) : localDateTimeNow());
   const [durationOverrideMin, setDurationOverrideMin] = useState(initialDurationSec > 0 ? String(Math.round(initialDurationSec / 60)) : "");
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -306,6 +306,8 @@ export default function GuidedSessionEditor({
 
   return (
     <FormStack maxWidth={920}>
+      <DateTimeField value={performedAtLocal} onChange={setPerformedAtLocal} />
+
       <FormSection title="Guided session" description="Run the flow live, edit it while you go, or log what actually happened after the fact.">
         <div style={pillRow}>
           {["FOLLOW", "START_STOP", "LOG_AFTER"].map((value) => (
@@ -449,9 +451,6 @@ export default function GuidedSessionEditor({
         </FormSection>
       ) : (
         <FormSection title="Log After" description="Use this clean template when you completed the routine without running the guide live.">
-          <Field label="Performed at">
-            <input type="datetime-local" style={inputStyle} value={performedAtLocal} onChange={(event) => setPerformedAtLocal(event.target.value)} />
-          </Field>
           <div style={{ display: "grid", gap: 10 }}>
             {draftSteps.length === 0 ? <div style={{ ...card, borderStyle: "dashed", opacity: 0.78 }}>Start blank or add the steps you completed.</div> : null}
             {draftSteps.map((step, index) => {
@@ -545,8 +544,6 @@ export default function GuidedSessionEditor({
           <textarea style={textareaStyle} value={notes} onChange={(event) => setNotes(event.target.value)} />
         </Field>
       </FormSection>
-
-      {mode === "LOG_AFTER" ? null : <OptionalDateSection value={performedAtLocal} onChange={setPerformedAtLocal} />}
 
       <FormError message={error} />
       <FormActions primaryLabel={saveLabel} primaryPendingLabel={savePendingLabel} saving={saving} onPrimary={onSave} backHref={backHref} onBack={onCancel} />

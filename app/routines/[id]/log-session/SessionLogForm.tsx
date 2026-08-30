@@ -17,11 +17,12 @@ import { COLOR } from "@/lib/design-tokens";
 import {
   DateTimeField,
   Field,
+  HoursMinutesField,
   FormActions,
   FormError,
   FormSection,
   FormStack,
-  inputStyle,
+  parseHoursMinutes,
   localDateTimeNow,
   textareaStyle,
 } from "../log/form-ui";
@@ -104,7 +105,8 @@ export default function SessionLogForm({
   const mainDefinitions = definitions.filter((d) => d.key !== "template_notes");
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [durationMin, setDurationMin] = useState("");
+  const [durationHours, setDurationHours] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("");
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>({});
   const [selectedClimbingGrades, setSelectedClimbingGrades] = useState(preferredClimbingGrades);
   const [notes, setNotes] = useState("");
@@ -205,7 +207,11 @@ export default function SessionLogForm({
     if (!draft || draft.kind !== "SESSION") return;
 
     draftStartedAtRef.current = draft.startedAt;
-    setDurationMin(draft.durationMin);
+    const storedMinutes = Number(draft.durationMin);
+    if (Number.isFinite(storedMinutes) && storedMinutes > 0) {
+      setDurationHours(String(Math.floor(storedMinutes / 60)));
+      setDurationMinutes(String(storedMinutes % 60));
+    }
     setSessionMetricValues(draft.sessionMetricValues);
     setSelectedClimbingGrades(draft.selectedClimbingGrades);
     setNotes(draft.notes);
@@ -241,7 +247,7 @@ export default function SessionLogForm({
       routineId,
       routineName,
       startedAt: draftStartedAtRef.current,
-      durationMin,
+      durationMin: String(parseHoursMinutes(durationHours, durationMinutes).minutes ?? ""),
       // Free-text location is no longer captured — the picker's spotValue
       // is the canonical record. Empty string for legacy schema compat.
       location: "",
@@ -260,7 +266,7 @@ export default function SessionLogForm({
     }, 600);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durationMin, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
+  }, [durationHours, durationMinutes, sessionMetricValues, selectedClimbingGrades, notes, performedAtLocal,
       climbMode, climbAttempts, quickClimbRows, spotValue]);
 
   function markDirty() {
@@ -271,7 +277,8 @@ export default function SessionLogForm({
   function handleStartFresh() {
     clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
-    setDurationMin("");
+    setDurationHours("");
+    setDurationMinutes("");
     setSessionMetricValues({});
     setSelectedClimbingGrades(preferredClimbingGrades);
     setNotes("");
@@ -288,13 +295,12 @@ export default function SessionLogForm({
   }
 
   async function onSave() {
-    const trimmedDuration = durationMin.trim();
-    const parsedDurationMin = trimmedDuration ? Number(trimmedDuration) : null;
-    if (parsedDurationMin !== null && (!Number.isFinite(parsedDurationMin) || parsedDurationMin <= 0)) {
-      setError("Enter a valid duration in minutes or leave it blank.");
+    const { minutes: parsedDurationMin, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
+    if (!durationValid) {
+      setError("Enter a valid duration (under 24 hours).");
       return;
     }
-    const durationSec = parsedDurationMin !== null ? parsedDurationMin * 60 : null;
+    const durationSec = parsedDurationMin != null ? parsedDurationMin * 60 : null;
 
     // Build metric values
     let sessionMetricValuesToSend: Array<{
@@ -400,15 +406,18 @@ export default function SessionLogForm({
       )}
 
       <FormSection title="Overview">
-        <Field label="Duration (minutes, optional)">
-          <input
-            style={inputStyle}
-            value={durationMin}
-            onChange={(e) => { markDirty(); setDurationMin(e.target.value); }}
-            inputMode="decimal"
-            placeholder="e.g. 90"
-          />
-        </Field>
+        <DateTimeField
+          value={performedAtLocal}
+          onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
+        />
+
+        <HoursMinutesField
+          label="Duration (optional)"
+          hours={durationHours}
+          minutes={durationMinutes}
+          onHours={(v) => { markDirty(); setDurationHours(v); }}
+          onMinutes={(v) => { markDirty(); setDurationMinutes(v); }}
+        />
 
         {showSpotPicker && spotPickerConfig ? (
           <SpotPicker
@@ -420,11 +429,6 @@ export default function SessionLogForm({
             onChange={(next) => { markDirty(); setSpotValue(next); }}
           />
         ) : null}
-
-        <DateTimeField
-          value={performedAtLocal}
-          onChange={(v) => { markDirty(); setPerformedAtLocal(v); }}
-        />
 
         {!templateKey && definitions.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.65, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(128,128,128,0.3)", background: "rgba(128,128,128,0.06)" }}>
