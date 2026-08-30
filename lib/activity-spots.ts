@@ -220,6 +220,10 @@ const COMPATIBLE_ACTIVITY_SPOTS_RAW: Record<string, string[]> = {
   "swimming":          ["pool-swimming", "open-water-swimming"],
   "pool-swimming":     ["swimming"],
 
+  // Slacklining: a line needs two anchors and flat ground — parks and
+  // trailheads, which is where the walking and hiking spots already are.
+  "slacklining":       ["walking", "hiking"],
+
   // Climbing: own crags + hiking spots (approach trails / shared trailheads).
   "climbing":          ["hiking", "trail-running"],
 
