@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
+import { useSportLogDraft } from "./useSportLogDraft";
 import {
   listAreasForClimbLocation,
   loadClimbSpotPickerData,
@@ -117,13 +118,40 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
   };
 }
 
+type ClimbDraft = {
+  performedAt: string;
+  durationHours: string;
+  durationMinutes: string;
+  notes: string;
+  effort: number | null;
+  attempts: Attempt[];
+  spotValue: SpotPickerValue;
+};
+
 export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
-  const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
-  const [durationHours, setDurationHours] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
-  const [notes, setNotes] = useState("");
-  const [effort, setEffort] = useState<number | null>(null);
-  const [attempts, setAttempts] = useState<Attempt[]>(() => [newAttempt()]);
+  // Every field the user types lives in one localStorage-backed draft, so
+  // closing the sheet mid-session doesn't discard the climbs already entered.
+  // Destructured back into the same names the rest of the sheet already uses.
+  const [draft, setDraft, clearDraft] = useSportLogDraft<ClimbDraft>("climb-log-draft", {
+    performedAt: formatLocalDateTime(new Date()),
+    durationHours: "",
+    durationMinutes: "",
+    notes: "",
+    effort: null,
+    attempts: [newAttempt()],
+    spotValue: null,
+  });
+  const { performedAt, durationHours, durationMinutes, notes, effort, attempts } = draft;
+  const setPerformedAt = (v: string) => setDraft((d) => ({ ...d, performedAt: v }));
+  const setDurationHours = (v: string) => setDraft((d) => ({ ...d, durationHours: v }));
+  const setDurationMinutes = (v: string) => setDraft((d) => ({ ...d, durationMinutes: v }));
+  const setNotes = (v: string) => setDraft((d) => ({ ...d, notes: v }));
+  const setEffort = (v: number | null) => setDraft((d) => ({ ...d, effort: v }));
+  const setAttempts = useCallback(
+    (next: Attempt[] | ((prev: Attempt[]) => Attempt[])) =>
+      setDraft((d) => ({ ...d, attempts: typeof next === "function" ? next(d.attempts) : next })),
+    [setDraft],
+  );
   const predictedEffort = useLearnedEffortPrefill({
     routineId: "sports-climbing-synthetic",
     durationMin: parseHoursMinutes(durationHours, durationMinutes).minutes ?? null,
@@ -132,7 +160,11 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   // Location — a single SpotPicker value: search any saved ClimbLocation,
   // pick a recent chip, or pin a new place via OSM. Saved picks are always
   // climbLocation refs (we only feed climb locations as saved spots).
-  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const spotValue = draft.spotValue;
+  const setSpotValue = useCallback(
+    (v: SpotPickerValue) => setDraft((d) => ({ ...d, spotValue: v })),
+    [setDraft],
+  );
   const [savedSpots, setSavedSpots] = useState<SpotPickerItem[]>([]);
   const [recentSpots, setRecentSpots] = useState<ClimbRecentSpot[]>([]);
 
@@ -141,6 +173,11 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   // no id yet (created on save), so areas fall back to free-text.
   const pickedLocationId =
     spotValue?.kind === "saved" && spotValue.ref.kind === "climbLocation" ? spotValue.ref.id : null;
+  // Both refs exist so restoring a draft is faithful: a restored spot must not
+  // be replaced by the auto-pick, and the location-change cleanup below must
+  // not fire on the restored location and wipe its area/problem picks.
+  const hadRestoredSpotRef = useRef(draft.spotValue != null);
+  const lastClearedLocationRef = useRef<string | null>(pickedLocationId);
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +193,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
         // Auto-pick the most recent location — 95% of the time it's the
         // right answer and saves a tap.
         const top = data.recentSpots[0];
-        if (top) {
+        if (top && !hadRestoredSpotRef.current) {
           setSpotValue({ kind: "saved", ref: top.ref, display: { name: top.name, region: top.region } });
         }
       })
@@ -166,7 +203,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setSpotValue]);
 
   // Saved areas + problems for the picked location — fed into the
   // per-attempt area/name pickers. Re-fetches when locationId changes
@@ -178,9 +215,12 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const [savedProblems, setSavedProblems] = useState<ClimbProblemBasic[]>([]);
   useEffect(() => {
     let cancelled = false;
-    setAttempts((arr) =>
-      arr.map((a) => (a.areaId || a.problemId ? { ...a, areaId: "", problemId: "" } : a))
-    );
+    if (lastClearedLocationRef.current !== pickedLocationId) {
+      lastClearedLocationRef.current = pickedLocationId;
+      setAttempts((arr) =>
+        arr.map((a) => (a.areaId || a.problemId ? { ...a, areaId: "", problemId: "" } : a))
+      );
+    }
     if (!pickedLocationId) {
       setSavedAreas([]);
       setSavedProblems([]);
@@ -200,7 +240,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [pickedLocationId]);
+  }, [pickedLocationId, setAttempts]);
 
   function updateAttempt(localId: string, patch: Partial<Attempt>) {
     setAttempts((arr) =>
@@ -366,6 +406,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
             };
           }),
         });
+        clearDraft();
         onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save climb log.");
@@ -424,6 +465,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
             <input
               type="datetime-local"
               value={performedAt}
+              max={formatLocalDateTime(new Date())}
               onChange={(e) => setPerformedAt(e.target.value)}
               style={fieldInput}
             />

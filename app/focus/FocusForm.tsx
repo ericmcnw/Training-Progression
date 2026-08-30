@@ -404,7 +404,7 @@ export default function FocusForm({
         <div style={{ display: "flex", gap: 8 }}>
           {onBack ? <button type="button" onClick={onBack} disabled={pending} style={cancelBtn}>Back</button> : !embedded ? <button type="button" onClick={() => router.back()} disabled={pending} style={cancelBtn}>Cancel</button> : null}
           <button type="button" onClick={submit} disabled={pending || submitDisabled} style={{ ...saveBtn, opacity: submitDisabled ? 0.45 : 1 }}>
-            {pending ? "Saving..." : !isEdit ? "Create program" : panel === "foundation" ? "Save direction" : panel === "milestones" ? "Save outcomes" : "Save program"}
+            {pending ? "Saving…" : !isEdit ? "Create program" : panel === "foundation" ? "Save direction" : panel === "milestones" ? "Save outcomes" : "Save program"}
           </button>
         </div>
       </div>

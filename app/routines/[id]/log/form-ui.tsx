@@ -162,6 +162,13 @@ export function localDateTimeNow(): string {
 // "use client" boundary.
 export { localDateTimeForYmd } from "./date-helpers";
 
+/** Clamps a datetime-local value to the present. The zero-padded
+ *  "YYYY-MM-DDTHH:mm" shape compares correctly as a plain string. */
+export function clampToNow(value: string) {
+  const now = localDateTimeNow();
+  return value > now ? now : value;
+}
+
 export function DateTimeField({
   value,
   onChange,
@@ -178,7 +185,8 @@ export function DateTimeField({
           type="datetime-local"
           style={{ ...inputStyle, flex: 1 }}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          max={localDateTimeNow()}
+          onChange={(e) => onChange(clampToNow(e.target.value))}
         />
         <button
           type="button"

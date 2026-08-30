@@ -8,6 +8,7 @@ import SportLogModal from "./SportLogModal";
 import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import { inputStyle, textareaStyle, Field, FormSection } from "@/app/routines/[id]/log/form-ui";
+import { todayAppYmd } from "@/lib/dates";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 import GearPicker from "@/app/components/log/GearPicker";
@@ -300,7 +301,7 @@ export default function BackpackingLogSheet({
                 <div style={dayGrid}>
                   <label style={miniField}>
                     <span style={miniLabel}>Date</span>
-                    <input type="date" style={inputStyle} value={d.ymd} onChange={(e) => setDay(d.localId, { ymd: e.target.value })} />
+                    <input type="date" style={inputStyle} value={d.ymd} max={todayAppYmd()} onChange={(e) => setDay(d.localId, { ymd: e.target.value })} />
                   </label>
                   <label style={miniField}>
                     <span style={miniLabel}>Miles</span>

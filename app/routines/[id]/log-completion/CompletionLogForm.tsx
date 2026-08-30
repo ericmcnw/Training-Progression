@@ -73,7 +73,7 @@ export default function CompletionLogForm({
 
       {/* Quick save — tap once and done */}
       <button type="button" onClick={quickSave} disabled={anyPending} style={quickSaveBtn}>
-        {quickSaving ? "Saving..." : "✓ Mark Done"}
+        {quickSaving ? "Saving…" : "✓ Mark Done"}
       </button>
 
       <FormError message={error} />
@@ -104,7 +104,7 @@ export default function CompletionLogForm({
 
       <FormActions
         primaryLabel="Save with Details"
-        primaryPendingLabel="Saving..."
+        primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
         backHref="/log"

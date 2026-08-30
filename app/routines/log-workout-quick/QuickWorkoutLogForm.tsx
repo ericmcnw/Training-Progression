@@ -167,7 +167,7 @@ export default function QuickWorkoutLogForm({
         initialBlocks={initialBlocks}
         availableExercises={availableExercises}
         saveLabel="Save Quick Workout"
-        savingLabel="Saving..."
+        savingLabel="Saving…"
         backHref={backHref}
         onBack={onBack}
         addExerciseTitle="Add Exercise To This Log"

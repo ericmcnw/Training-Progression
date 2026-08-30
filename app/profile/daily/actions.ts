@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
+import { todayAppYmd } from "@/lib/dates";
 import { MAX_DISTANCE_MI, MAX_SLEEP_MINUTES, MAX_STEPS } from "@/lib/daily-metrics";
 
 function optionalNumber(value: FormDataEntryValue | null) {
@@ -21,6 +22,7 @@ export async function saveDailyMetric(formData: FormData) {
   const session = await getAppSession();
   const date = String(formData.get("date") || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
+  if (date > todayAppYmd()) throw new Error("Can't log a day in the future.");
 
   const sleepHours = optionalInt(formData.get("sleepHours"));
   const sleepMins = optionalInt(formData.get("sleepMins"));

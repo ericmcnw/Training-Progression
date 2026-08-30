@@ -168,6 +168,7 @@ export function ActivityLogSheet({ onClose }: { onClose: () => void }) {
         <input
           type="datetime-local"
           value={draft.performedAt}
+          max={formatLocalDateTime(new Date())}
           onChange={(e) => setDraft((d) => ({ ...d, performedAt: e.target.value }))}
           style={inputStyle}
         />

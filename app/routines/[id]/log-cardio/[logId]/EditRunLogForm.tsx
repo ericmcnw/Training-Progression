@@ -444,7 +444,7 @@ export default function EditRunLogForm({
 
       <FormActions
         primaryLabel="Save Changes"
-        primaryPendingLabel="Saving..."
+        primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
         backHref={returnTo}

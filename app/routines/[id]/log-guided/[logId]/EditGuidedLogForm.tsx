@@ -55,7 +55,7 @@ export default function EditGuidedLogForm({
       logId={logId}
       backHref={returnTo}
       saveLabel="Save Changes"
-      savePendingLabel="Saving..."
+      savePendingLabel="Saving…"
       initialDurationSec={initialDurationSec}
       initialNotes={initialNotes}
       initialPerformedAt={initialPerformedAt}

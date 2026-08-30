@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
+import { useSportLogDraft } from "./useSportLogDraft";
 import { logGolfAction } from "@/app/log/golf-log-actions";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import SportLogModal from "./SportLogModal";
@@ -58,13 +59,50 @@ function newShot(): Shot {
   };
 }
 
+type GolfDraft = {
+  mode: Mode;
+  performedAt: string;
+  durationHours: string;
+  durationMinutes: string;
+  sessionNotes: string;
+  effort: number | null;
+  spotValue: SpotPickerValue;
+  holeCount: 9 | 18;
+  holes: Hole[];
+  ballCount: string;
+  shots: Shot[];
+};
+
 export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<Mode>("COURSE");
-  const [performedAt, setPerformedAt] = useState(() => formatLocalDateTime(new Date()));
-  const [durationHours, setDurationHours] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
-  const [sessionNotes, setSessionNotes] = useState("");
-  const [effort, setEffort] = useState<number | null>(null);
+  // One localStorage-backed draft for everything typed into the sheet, so a
+  // half-scored round survives closing it. Destructured back into the names
+  // the rest of the sheet already uses.
+  const [draft, setDraft, clearDraft] = useSportLogDraft<GolfDraft>("golf-log-draft", {
+    mode: "COURSE",
+    performedAt: formatLocalDateTime(new Date()),
+    durationHours: "",
+    durationMinutes: "",
+    sessionNotes: "",
+    effort: null,
+    spotValue: null,
+    holeCount: 18,
+    holes: buildDefaultHoles(18),
+    ballCount: "",
+    shots: [newShot()],
+  });
+  const { mode, performedAt, durationHours, durationMinutes, sessionNotes, effort, holeCount, holes, ballCount, shots } = draft;
+  const setMode = (v: Mode) => setDraft((d) => ({ ...d, mode: v }));
+  const setPerformedAt = (v: string) => setDraft((d) => ({ ...d, performedAt: v }));
+  const setDurationHours = (v: string) => setDraft((d) => ({ ...d, durationHours: v }));
+  const setDurationMinutes = (v: string) => setDraft((d) => ({ ...d, durationMinutes: v }));
+  const setSessionNotes = (v: string) => setDraft((d) => ({ ...d, sessionNotes: v }));
+  const setEffort = (v: number | null) => setDraft((d) => ({ ...d, effort: v }));
+  const setHoleCount = (v: 9 | 18) => setDraft((d) => ({ ...d, holeCount: v }));
+  const setHoles = (next: Hole[] | ((prev: Hole[]) => Hole[])) =>
+    setDraft((d) => ({ ...d, holes: typeof next === "function" ? next(d.holes) : next }));
+  const setBallCount = (v: string) => setDraft((d) => ({ ...d, ballCount: v }));
+  const setShots = (next: Shot[] | ((prev: Shot[]) => Shot[])) =>
+    setDraft((d) => ({ ...d, shots: typeof next === "function" ? next(d.shots) : next }));
   const predictedEffort = useLearnedEffortPrefill({
     routineId: "sports-golf-synthetic",
     durationMin: parseHoursMinutes(durationHours, durationMinutes).minutes ?? null,
@@ -74,7 +112,8 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   // Spot picker — replaces the prior free-text courseName field.
   // Ties golf logs into the same map/recents infrastructure other
   // sports use; same SpotPicker UX, "course" noun.
-  const [spotValue, setSpotValue] = useState<SpotPickerValue>(null);
+  const spotValue = draft.spotValue;
+  const setSpotValue = (v: SpotPickerValue) => setDraft((d) => ({ ...d, spotValue: v }));
   const [spotCtx, setSpotCtx] = useState<SportLogContext | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -87,13 +126,9 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
       cancelled = true;
     };
   }, []);
-  const [holeCount, setHoleCount] = useState<9 | 18>(18);
-  const [holes, setHoles] = useState<Hole[]>(() => buildDefaultHoles(18));
   const [showHoleDetail, setShowHoleDetail] = useState(false);
 
   // RANGE mode state
-  const [ballCount, setBallCount] = useState("");
-  const [shots, setShots] = useState<Shot[]>(() => [newShot()]);
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +221,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             })),
           });
         }
+        clearDraft();
         onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save golf log.");
@@ -232,6 +268,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
             <input
               type="datetime-local"
               value={performedAt}
+              max={formatLocalDateTime(new Date())}
               onChange={(e) => setPerformedAt(e.target.value)}
               style={fieldInput}
             />

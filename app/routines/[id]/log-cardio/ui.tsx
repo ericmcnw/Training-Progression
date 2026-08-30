@@ -685,7 +685,7 @@ export default function LogRunForm({
 
       <FormActions
         primaryLabel="Save Cardio"
-        primaryPendingLabel="Saving..."
+        primaryPendingLabel="Saving…"
         saving={saving}
         onPrimary={onSave}
         backHref="/log"

@@ -59,7 +59,7 @@ export default function ManualZoneActivityForm({ zoneSlug }: { zoneSlug: string 
       </label>
       {message ? <div style={{ fontSize: 12, color: "#FCA5A5" }}>{message}</div> : null}
       <button type="button" disabled={pending} onClick={submit}>
-        {pending ? "Saving..." : "Add activity"}
+        {pending ? "Saving…" : "Add activity"}
       </button>
     </div>
   );

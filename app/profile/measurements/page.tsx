@@ -37,7 +37,7 @@ export default async function MeasurementsPage() {
     <section style={section}>
       <h2 style={sectionTitle}>Add measurement</h2>
       <form action={addBodyMeasurement} style={form}>
-        <label style={field}>Date<input name="date" type="date" defaultValue={todayAppYmd()} required style={input} /></label>
+        <label style={field}>Date<input name="date" type="date" defaultValue={todayAppYmd()} max={todayAppYmd()} required style={input} /></label>
         <label style={field}>Weight (lb)<input name="weightLb" type="number" min="1" max="1500" step="0.1" inputMode="decimal" style={input} /></label>
         <label style={field}>Body fat (%)<input name="bodyFatPct" type="number" min="0" max="100" step="0.1" inputMode="decimal" style={input} /></label>
         <label style={field}>Waist (in)<input name="waistIn" type="number" min="1" max="150" step="0.1" inputMode="decimal" style={input} /></label>

@@ -49,9 +49,10 @@ export function useSportLogDraft<T extends Record<string, unknown>>(
     };
   }, [key, value]);
 
-  function setValue(next: T | ((prev: T) => T)) {
-    setValueRaw(next);
-  }
+  // setValueRaw is React's own setter and is referentially stable, so
+  // callers can safely derive useCallback'd setters from it and list them
+  // in effect dependency arrays.
+  const setValue = setValueRaw;
   function clearDraft() {
     if (typeof window === "undefined") return;
     try {

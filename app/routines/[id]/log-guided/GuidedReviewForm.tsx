@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { GuidedStepKind } from "@/generated/prisma";
 import { formatGuidedRepSetSummary, formatGuidedSeconds, formatGuidedStepLabel } from "@/lib/guided";
-import { FormError } from "../log/form-ui";
+import { FormError, clampToNow, localDateTimeNow } from "../log/form-ui";
 
 export type ReviewTemplateStep = {
   id: string;
@@ -129,7 +129,8 @@ export default function GuidedReviewForm({
         <input
           type="datetime-local"
           value={performedAtLocal}
-          onChange={(e) => setPerformedAtLocal(e.target.value)}
+          max={localDateTimeNow()}
+          onChange={(e) => setPerformedAtLocal(clampToNow(e.target.value))}
           style={inputStyle}
         />
       </div>
@@ -249,7 +250,7 @@ export default function GuidedReviewForm({
           disabled={saving}
           style={saveBtn}
         >
-          {saving ? "Saving..." : "Save Log"}
+          {saving ? "Saving…" : "Save Log"}
         </button>
         <button type="button" onClick={onBack} style={cancelBtn}>
           Back

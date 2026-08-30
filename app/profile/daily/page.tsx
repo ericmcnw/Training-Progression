@@ -60,7 +60,7 @@ export default async function DailyMetricsPage() {
     <section style={section}>
       <h2 style={sectionTitle}>{todayRow ? "Edit today" : "Log a day"}</h2>
       <form action={saveDailyMetric} style={form}>
-        <label style={{ ...field, gridColumn: "1 / -1" }}>Date<input name="date" type="date" defaultValue={today} required style={input} /></label>
+        <label style={{ ...field, gridColumn: "1 / -1" }}>Date<input name="date" type="date" defaultValue={today} max={today} required style={input} /></label>
         <div style={{ ...field, gridColumn: "1 / -1" }}>Sleep
           <div style={splitField}>
             <input name="sleepHours" type="number" min="0" max="24" step="1" inputMode="numeric" placeholder="hours" defaultValue={todayRow?.sleepMinutes != null ? Math.floor(todayRow.sleepMinutes / 60) : ""} style={input} aria-label="Sleep hours" />

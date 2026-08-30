@@ -20,7 +20,7 @@ import SpotPicker from "@/app/components/log/SpotPicker";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
 import { getActivitySpotConfig } from "@/lib/activity-spots";
-import { inputStyle, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
+import { clampToNow, inputStyle, localDateTimeNow, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { listSportPeople, updateSportLogAction } from "@/app/log/sport-actions";
 import { updateGolfLogAction } from "@/app/log/golf-log-actions";
 import { getSportLogConfig, isExtraVisible } from "@/app/routines/sportLogConfig";
@@ -244,7 +244,8 @@ function EditGolfLog({
         <input
           type="datetime-local"
           value={performedAt}
-          onChange={(e) => setPerformedAt(e.target.value)}
+          max={localDateTimeNow()}
+          onChange={(e) => setPerformedAt(clampToNow(e.target.value))}
           style={inputStyle}
         />
       </Field>
@@ -567,7 +568,8 @@ function EditGenericSport({
         <input
           type="datetime-local"
           value={performedAt}
-          onChange={(e) => setPerformedAt(e.target.value)}
+          max={localDateTimeNow()}
+          onChange={(e) => setPerformedAt(clampToNow(e.target.value))}
           style={inputStyle}
         />
       </Field>

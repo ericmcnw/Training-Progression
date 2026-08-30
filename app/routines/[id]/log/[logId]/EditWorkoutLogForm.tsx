@@ -48,7 +48,7 @@ export default function EditWorkoutLogForm({
       initialBlocks={initialExercises}
       availableExercises={availableExercises}
       saveLabel="Save Changes"
-      savingLabel="Saving..."
+      savingLabel="Saving…"
       backHref={returnTo}
       onBack={onCancel}
       createExerciseOption={createWorkoutExerciseOption}

@@ -131,7 +131,7 @@ export default function InjuryForm({
 
       {message ? <div style={hint}>{message}</div> : null}
       <button type="button" onClick={submit} disabled={pending}>
-        {pending ? "Saving..." : submitLabel}
+        {pending ? "Saving…" : submitLabel}
       </button>
     </div>
   );
