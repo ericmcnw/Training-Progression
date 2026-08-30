@@ -69,6 +69,7 @@ const PER_SLUG_OVERRIDES: Record<string, Partial<ActivitySpotConfig>> = {
   // Single-type activities — keep the noun specific but skip the type buttons.
   golf:       { spotNoun: "course" },
   skateboarding: { spotNoun: "park" },
+  slacklining: { spotNoun: "spot" },
   "trail-running":     { spotNoun: "trail" },
   "mountain-biking":   { spotNoun: "trail" },
   "gravel-cycling":    { spotNoun: "route" },

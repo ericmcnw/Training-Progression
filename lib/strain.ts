@@ -150,6 +150,9 @@ export const ACTIVITY_MUSCLE_MAP: Record<string, string[]> = {
   snowboarding: ["quads", "glutes", "calves", "abs", "obliques", "hip-flexors"],
   skiing: ["quads", "glutes", "calves", "abs", "hip-flexors", "adductors"],
   skateboarding: ["quads", "calves", "glutes", "abs"],
+  // Continuous single-leg balance: the ankle stabilizers and the hip abductors
+  // do the work, not the prime movers.
+  slacklining: ["calves", "tibialis", "quads", "glutes", "glute-medius", "abs", "obliques", "hip-flexors"],
   basketball: ["quads", "calves", "glutes", "hamstrings", "abs", "shoulders"],
   spikeball: ["quads", "calves", "glutes", "shoulders", "abs"],
   tennis: ["quads", "calves", "shoulders", "forearms", "abs", "obliques"],
