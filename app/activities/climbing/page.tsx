@@ -41,9 +41,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import {
   climbOutcomeColor,
-  climbOutcomeLabel,
   gradeSort,
-  PYRAMID_OUTCOMES,
   SENT_OUTCOMES,
   venueOf,
   type ClimbGradeSystem,
@@ -68,6 +66,7 @@ import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getActivityGoals, frequencyChipFor } from "@/lib/activity-goals";
 import TrainingTagsPanel from "./TrainingTagsPanel";
+import GradePyramid, { type PyramidColumnRow } from "./GradePyramid";
 import { startOfWeekMonday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +98,20 @@ function parseChartWeeks(value: string | undefined): ClimbingChartWeeks {
   return value === "4w" ? 4 : 12;
 }
 
+// Pyramid time range. Defaults to all-time — a pyramid reads as lifetime
+// achievement, so a window is opt-in.
+type PyramidRange = "12w" | "1y" | "all";
+const PYRAMID_RANGE_DAYS: Record<Exclude<PyramidRange, "all">, number> = { "12w": 84, "1y": 365 };
+const PYRAMID_RANGE_LABEL: Record<PyramidRange, string> = {
+  "12w": "last 12 weeks",
+  "1y": "last year",
+  all: "all time",
+};
+
+function parsePyramidRange(value: string | undefined): PyramidRange {
+  return value === "12w" || value === "1y" ? value : "all";
+}
+
 function parseDisciplineFilter(value: string | undefined, active: Set<ClimbingDiscipline>): DisciplineFilter {
   if (value === "BOULDER" || value === "SPORT_LEAD" || value === "TOP_ROPE") {
     return active.has(value) ? value : "all";
@@ -126,6 +139,7 @@ export default async function ClimbingHubPage(props: {
   const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
   const recentExpanded = getParam(searchParams, "recent") === "all";
   const disciplineFilterParam = getParam(searchParams, "discipline");
+  const pyramidRange = parsePyramidRange(getParam(searchParams, "pyramid"));
 
   const now = new Date();
 
@@ -388,25 +402,49 @@ export default async function ClimbingHubPage(props: {
     }),
   ]);
 
-  // ── Pyramid (filtered by discipline pill, split indoor/outdoor) ─────────
-  const pyramidAttempts = disciplineFilter === "all"
-    ? attempts
-    : attempts.filter((a) => a.discipline === disciplineFilter);
+  // ── Pyramid (discipline pill + time range, split indoor/outdoor) ────────
+  const pyramidCutoff =
+    pyramidRange === "all"
+      ? null
+      : new Date(now.getTime() - PYRAMID_RANGE_DAYS[pyramidRange] * 24 * 60 * 60 * 1000);
+  const pyramidAttempts = attempts.filter((a) => {
+    if (disciplineFilter !== "all" && a.discipline !== disciplineFilter) return false;
+    if (pyramidCutoff && a.sessionLog.performedAt < pyramidCutoff) return false;
+    return true;
+  });
   const pyramidRows = buildPyramidRows(pyramidAttempts);
   const hasBoulder = pyramidRows.boulderRows.length > 0;
   const hasYosemite = pyramidRows.yosemiteRows.length > 0;
+
+  const problemNameById = new Map(problems.map((p) => [p.id, p.name]));
+
+  // Attach the climbs behind each bar so tapping a segment can name them.
+  // FELL is skipped to match buildPyramidRows — otherwise the bubble would
+  // list climbs the bar never counted.
+  const toColumnRows = (rows: PyramidRow[], source: typeof attempts): PyramidColumnRow[] =>
+    rows.map((r) => ({
+      ...r,
+      climbs: source
+        .filter((a) => a.gradeSystem === r.system && a.grade === r.grade && a.outcome !== "FELL")
+        .sort((a, b) => b.sessionLog.performedAt.getTime() - a.sessionLog.performedAt.getTime())
+        .map((a) => ({
+          id: a.id,
+          outcome: a.outcome,
+          name: a.problemId ? problemNameById.get(a.problemId) ?? null : null,
+          locationName: a.sessionLog.climbLocation?.name ?? null,
+          dateLabel: formatAppDate(a.sessionLog.performedAt),
+        })),
+    }));
 
   // Indoor/outdoor pyramid split — venue resolves per session, so map the
   // session's venue onto each attempt. The venue stat (session count + %)
   // lives in each pyramid column's header, replacing the separate
   // Indoor-vs-Outdoor card.
   const venueBySessionId = new Map(sessions.map((s) => [s.id, s.venue]));
-  const gymPyramidRows = buildPyramidRows(
-    pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "GYM")
-  );
-  const cragPyramidRows = buildPyramidRows(
-    pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "CRAG")
-  );
+  const gymAttempts = pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "GYM");
+  const cragAttempts = pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "CRAG");
+  const gymPyramidRows = buildPyramidRows(gymAttempts);
+  const cragPyramidRows = buildPyramidRows(cragAttempts);
 
   // Send rate — quiet stat folded into the pyramid subtitle. Gated behind
   // a minimum attempt count so it doesn't show a meaningless "100%" after
@@ -431,6 +469,41 @@ export default async function ClimbingHubPage(props: {
   const gymSessions = sessions.filter((s) => s.venue === "GYM");
   const cragSessions = sessions.filter((s) => s.venue === "CRAG");
 
+  const venueShare = (count: number) =>
+    `${count} session${count !== 1 ? "s" : ""} · ${sessions.length > 0 ? Math.round((count / sessions.length) * 100) : 0}%`;
+
+  // Falls back to one combined column when no session has a venue, so a
+  // climber who never sets gym/crag still gets a pyramid.
+  const pyramidColumns =
+    gymPyramidRows.allRows.length > 0 || cragPyramidRows.allRows.length > 0
+      ? [
+          ...(gymPyramidRows.allRows.length > 0
+            ? [{
+                key: "gym",
+                title: "🏠 Indoor",
+                stat: venueShare(gymSessions.length),
+                boulderRows: toColumnRows(gymPyramidRows.boulderRows, gymAttempts),
+                yosemiteRows: toColumnRows(gymPyramidRows.yosemiteRows, gymAttempts),
+              }]
+            : []),
+          ...(cragPyramidRows.allRows.length > 0
+            ? [{
+                key: "crag",
+                title: "🪨 Outdoor",
+                stat: venueShare(cragSessions.length),
+                boulderRows: toColumnRows(cragPyramidRows.boulderRows, cragAttempts),
+                yosemiteRows: toColumnRows(cragPyramidRows.yosemiteRows, cragAttempts),
+              }]
+            : []),
+        ]
+      : [{
+          key: "all",
+          title: "All sessions",
+          stat: `${sessions.length} session${sessions.length !== 1 ? "s" : ""}`,
+          boulderRows: toColumnRows(pyramidRows.boulderRows, pyramidAttempts),
+          yosemiteRows: toColumnRows(pyramidRows.yosemiteRows, pyramidAttempts),
+        }];
+
   // ── Active projects (top 3) ─────────────────────────────────────────────
   const projectAttemptsInput = attempts
     .filter((a) => a.problemId)
@@ -449,7 +522,6 @@ export default async function ClimbingHubPage(props: {
   // outdoor project survives an off-season.
   const activeProjects = buildProjectRollup(projectAttemptsInput, { now });
   const topProjects = activeProjects.slice(0, ACTIVE_PROJECTS_LIMIT);
-  const problemNameById = new Map(problems.map((p) => [p.id, p.name]));
   const problemLocationById = new Map(problems.map((p) => [p.id, p.locationId]));
 
   // ── Tick list ───────────────────────────────────────────────────────────
@@ -639,12 +711,25 @@ export default async function ClimbingHubPage(props: {
         title="Grade Pyramid"
         subtitle={
           (disciplineFilter === "all"
-            ? "All sends and falls by grade · all time."
-            : `${DISCIPLINE_LABEL[disciplineFilter]} only · all time.`) +
+            ? `All sends by grade · ${PYRAMID_RANGE_LABEL[pyramidRange]}.`
+            : `${DISCIPLINE_LABEL[disciplineFilter]} only · ${PYRAMID_RANGE_LABEL[pyramidRange]}.`) +
           (sendRatePct !== null ? ` ${sendRatePct}% send rate.` : "") +
-          (avgTriesToSend !== null ? ` Avg ${avgTriesToSend} tries to send.` : "")
+          (avgTriesToSend !== null ? ` Avg ${avgTriesToSend} tries to send.` : "") +
+          " Tap a bar to see the climbs."
         }
       >
+        <div style={chartPillRowStyle}>
+          {(["12w", "1y", "all"] as const).map((r) => (
+            <Link
+              key={r}
+              href={buildHref(searchParams, { pyramid: r === "all" ? undefined : r })}
+              style={pyramidRange === r ? pillSelectStyle : pillStyle}
+            >
+              {r === "all" ? "All time" : r === "1y" ? "1y" : "12w"}
+            </Link>
+          ))}
+        </div>
+
         {/* Discipline filter pill row — only shows pills for disciplines
             with data so a boulder-only climber doesn't see TR/sport clutter. */}
         {activeDisciplinesAllTime.size > 1 ? (
@@ -668,7 +753,7 @@ export default async function ClimbingHubPage(props: {
         ) : null}
 
         {!hasBoulder && !hasYosemite ? (
-          <EmptyState message="No climbs in this discipline yet." />
+          <EmptyState message={`No climbs in this discipline over the ${PYRAMID_RANGE_LABEL[pyramidRange]}.`} />
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             <OutcomeLegend showOnsight={hasYosemite && !hasBoulder} />
@@ -676,26 +761,7 @@ export default async function ClimbingHubPage(props: {
                 headers so the old separate Indoor-vs-Outdoor card is
                 folded in here. Falls back to a single combined pyramid
                 when no session has a venue. */}
-            {gymPyramidRows.allRows.length > 0 || cragPyramidRows.allRows.length > 0 ? (
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {gymPyramidRows.allRows.length > 0 ? (
-                  <PyramidSection
-                    title="🏠 Indoor"
-                    stat={`${gymSessions.length} session${gymSessions.length !== 1 ? "s" : ""} · ${sessions.length > 0 ? Math.round((gymSessions.length / sessions.length) * 100) : 0}%`}
-                    rows={gymPyramidRows}
-                  />
-                ) : null}
-                {cragPyramidRows.allRows.length > 0 ? (
-                  <PyramidSection
-                    title="🪨 Outdoor"
-                    stat={`${cragSessions.length} session${cragSessions.length !== 1 ? "s" : ""} · ${sessions.length > 0 ? Math.round((cragSessions.length / sessions.length) * 100) : 0}%`}
-                    rows={cragPyramidRows}
-                  />
-                ) : null}
-              </div>
-            ) : (
-              <PyramidSection title="All sessions" stat={`${sessions.length} session${sessions.length !== 1 ? "s" : ""}`} rows={pyramidRows} />
-            )}
+            <GradePyramid columns={pyramidColumns} />
           </div>
         )}
       </SectionCard>
@@ -901,72 +967,6 @@ function HubTile({ href, label, stat, icon }: { href: string; label: string; sta
   );
 }
 
-// One pyramid column (Indoor or Outdoor). The venue stat (session count +
-// share %) sits in the header so the split card it replaced isn't missed.
-// Bars use SOLID outcome colors — the canonical pyramid look from the old
-// climbing world page; segments scale within the column's own max so each
-// column fills its width.
-function PyramidSection({ title, stat, rows }: { title: string; stat: string; rows: { boulderRows: PyramidRow[]; yosemiteRows: PyramidRow[] } }) {
-  const showBoth = rows.boulderRows.length > 0 && rows.yosemiteRows.length > 0;
-  const maxTotal = Math.max(
-    1,
-    ...rows.boulderRows.map((r) => r.total),
-    ...rows.yosemiteRows.map((r) => r.total)
-  );
-  return (
-    <div style={{ flex: "1 1 260px", minWidth: 0, display: "grid", gap: 8, alignContent: "start" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <span style={pyramidSubtitleStyle}>{title}</span>
-        <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>{stat}</span>
-      </div>
-      {rows.boulderRows.length > 0 ? (
-        <div style={{ display: "grid", gap: 4 }}>
-          {showBoth ? <div style={pyramidSystemLabelStyle}>Boulder</div> : null}
-          {[...rows.boulderRows].reverse().map((r) => (
-            <PyramidBar key={`${r.system}::${r.grade}`} row={r} maxTotal={maxTotal} />
-          ))}
-        </div>
-      ) : null}
-      {rows.yosemiteRows.length > 0 ? (
-        <div style={{ display: "grid", gap: 4 }}>
-          {showBoth ? <div style={pyramidSystemLabelStyle}>Sport / Top rope</div> : null}
-          {[...rows.yosemiteRows].reverse().map((r) => (
-            <PyramidBar key={`${r.system}::${r.grade}`} row={r} maxTotal={maxTotal} />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function PyramidBar({ row, maxTotal }: { row: PyramidRow; maxTotal: number }) {
-  const BAR_MAX_PCT = 100;
-  const barPct = (row.total / maxTotal) * BAR_MAX_PCT;
-  const segments = PYRAMID_OUTCOMES
-    .map((o) => ({ outcome: o as ClimbOutcome, count: row.counts[o as ClimbOutcome] ?? 0 }))
-    .filter((s) => s.count > 0);
-  return (
-    <div style={pyramidRowStyle}>
-      <span style={pyramidGradeStyle}>{row.grade}</span>
-      <div style={pyramidBarTrackStyle}>
-        {segments.map(({ outcome, count }) => (
-          <span
-            key={outcome}
-            title={`${climbOutcomeLabel(outcome, row.system)} × ${count}`}
-            style={{
-              width: `${(count / row.total) * barPct}%`,
-              background: climbOutcomeColor(outcome),
-              minWidth: 4,
-              flexShrink: 0,
-            }}
-          />
-        ))}
-      </div>
-      <span style={pyramidTotalStyle}>{row.total}</span>
-    </div>
-  );
-}
-
 // Shared outcome legend — solid swatches matching the bar segments.
 function OutcomeLegend({ showOnsight }: { showOnsight: boolean }) {
   const items: Array<{ outcome: ClimbOutcome; label: string }> = [
@@ -1148,55 +1148,6 @@ const disciplinePillRowStyle: React.CSSProperties = {
   gap: 6,
   flexWrap: "wrap",
   marginBottom: 12,
-};
-
-const pyramidSubtitleStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.5,
-  opacity: 0.6,
-  textTransform: "uppercase",
-};
-
-const pyramidRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "44px 1fr 28px",
-  gap: 8,
-  alignItems: "center",
-};
-
-const pyramidGradeStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 900,
-  textAlign: "right",
-  opacity: 0.85,
-};
-
-// Solid-segment bar track — gap:1 puts a hairline seam between outcome
-// segments so adjacent solid colors stay distinguishable (the old
-// climbing world page's pyramid look).
-const pyramidBarTrackStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 1,
-  height: 20,
-  borderRadius: 5,
-  background: "rgba(255,255,255,0.05)",
-  overflow: "hidden",
-};
-
-const pyramidTotalStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  opacity: 0.55,
-  textAlign: "left",
-};
-
-const pyramidSystemLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  opacity: 0.45,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
 };
 
 const tickRowStyle: React.CSSProperties = {
