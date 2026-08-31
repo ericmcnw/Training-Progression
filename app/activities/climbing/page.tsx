@@ -422,20 +422,40 @@ export default async function ClimbingHubPage(props: {
   // FELL is skipped to match buildPyramidRows — otherwise the bubble would
   // list climbs the bar never counted.
   const toColumnRows = (rows: PyramidRow[], source: typeof attempts): PyramidColumnRow[] =>
-    rows.map((r) => ({
-      ...r,
-      climbs: source
+    rows.map((r) => {
+      const matching = source
         .filter((a) => a.gradeSystem === r.system && a.grade === r.grade && a.outcome !== "FELL")
-        .sort((a, b) => b.sessionLog.performedAt.getTime() - a.sessionLog.performedAt.getTime())
-        .map((a) => ({
+        .sort((a, b) => b.sessionLog.performedAt.getTime() - a.sessionLog.performedAt.getTime());
+
+      // Collapse repeats into one row with a ×N. A named problem has an
+      // identity, so laps across sessions fold together; an unnamed gym climb
+      // doesn't, so it only folds within the same day and place — otherwise
+      // twenty different boulders would read as one climb done twenty times.
+      const grouped = new Map<string, PyramidColumnRow["climbs"][number]>();
+      for (const a of matching) {
+        const name = a.problemId ? problemNameById.get(a.problemId) ?? null : null;
+        const locationId = a.sessionLog.climbLocation?.id ?? null;
+        const dateLabel = formatAppDate(a.sessionLog.performedAt);
+        const key = name
+          ? `n:${name}|${a.outcome}`
+          : `u:${a.outcome}|${locationId ?? ""}|${dateLabel}`;
+        const seen = grouped.get(key);
+        if (seen) {
+          seen.count += 1;
+          continue;
+        }
+        grouped.set(key, {
           id: a.id,
           outcome: a.outcome,
-          name: a.problemId ? problemNameById.get(a.problemId) ?? null : null,
-          locationId: a.sessionLog.climbLocation?.id ?? null,
+          name,
+          locationId,
           locationName: a.sessionLog.climbLocation?.name ?? null,
-          dateLabel: formatAppDate(a.sessionLog.performedAt),
-        })),
-    }));
+          dateLabel,
+          count: 1,
+        });
+      }
+      return { ...r, climbs: [...grouped.values()] };
+    });
 
   // Indoor/outdoor pyramid split — venue resolves per session, so map the
   // session's venue onto each attempt. The venue stat (session count + %)

@@ -24,6 +24,8 @@ export type PyramidClimb = {
   locationId: string | null;
   locationName: string | null;
   dateLabel: string;
+  /** Repeats collapsed into this row; 1 means a single ascent. */
+  count: number;
 };
 
 export type PyramidColumnRow = {
@@ -237,17 +239,19 @@ function ClimbBubble({
   onClose: () => void;
 }) {
   const climbs = outcome === "ALL" ? row.climbs : row.climbs.filter((c) => c.outcome === outcome);
+  // Counts ascents, not rows, so the header agrees with the bar's total.
+  const ascents = climbs.reduce((sum, c) => sum + c.count, 0);
 
   return (
     <div style={bubbleWrapStyle}>
       <span aria-hidden style={{ ...caretStyle, marginLeft: `calc(${caretPct}% - 5px)` }} />
       <div style={bubbleStyle}>
         <div style={bubbleHeadStyle}>
-          <span style={{ fontSize: 11, fontWeight: 900 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 900, lineHeight: 1 }}>
             {row.grade}
             <span style={{ opacity: 0.55, fontWeight: 700, marginLeft: 5 }}>
               {outcome === "ALL" ? "all" : climbOutcomeLabel(outcome, row.system).toLowerCase()} ·{" "}
-              {climbs.length}
+              {ascents}
             </span>
           </span>
           <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Close">
@@ -281,13 +285,12 @@ function ClimbLink({
     : `/activities/climbing/climbs?grade=${encodeURIComponent(grade)}&range=all`;
   return (
     <Link href={href} style={climbRowStyle}>
-      <span style={{ ...dotStyle, background: climbOutcomeColor(climb.outcome), marginTop: 4 }} />
-      <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
-        <span style={climbMetaStyle}>
-          {climbOutcomeLabel(climb.outcome, system)}
-          {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
-        </span>
+      <span style={{ ...dotStyle, background: climbOutcomeColor(climb.outcome) }} />
+      <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
+      {climb.count > 1 ? <span style={repeatStyle}>×{climb.count}</span> : null}
+      <span style={climbMetaStyle}>
+        {climbOutcomeLabel(climb.outcome, system)}
+        {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
       </span>
       <span style={chevronStyle} aria-hidden>
         ›
@@ -401,6 +404,7 @@ const bubbleHeadStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: 8,
+  lineHeight: 1,
 };
 const closeButtonStyle: CSSProperties = {
   appearance: "none",
@@ -409,12 +413,13 @@ const closeButtonStyle: CSSProperties = {
   borderRadius: 0,
   color: "inherit",
   opacity: 0.55,
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 900,
+  lineHeight: 1,
   cursor: "pointer",
   padding: 0,
   margin: 0,
-  height: 16,
+  height: 12,
   touchAction: "manipulation",
 };
 const dotStyle: CSSProperties = {
@@ -426,16 +431,19 @@ const dotStyle: CSSProperties = {
 };
 const climbRowStyle: CSSProperties = {
   display: "flex",
-  gap: 7,
-  alignItems: "flex-start",
+  gap: 6,
+  alignItems: "baseline",
   padding: "3px 0",
   borderTop: "1px solid rgba(255,255,255,0.06)",
   color: "inherit",
   textDecoration: "none",
   touchAction: "manipulation",
 };
+// Name takes the leftover width and ellipsizes; the meta keeps its own
+// line-end but shrinks rather than pushing the chevron off the row.
 const climbNameStyle: CSSProperties = {
-  display: "block",
+  flex: "1 1 auto",
+  minWidth: 0,
   fontSize: 12,
   fontWeight: 800,
   lineHeight: 1.2,
@@ -444,11 +452,22 @@ const climbNameStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 const climbMetaStyle: CSSProperties = {
-  display: "block",
+  flex: "0 1 auto",
+  minWidth: 0,
   fontSize: 10,
   fontWeight: 700,
   opacity: 0.6,
-  lineHeight: 1.3,
+  lineHeight: 1.2,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+const repeatStyle: CSSProperties = {
+  flexShrink: 0,
+  fontSize: 10,
+  fontWeight: 900,
+  opacity: 0.75,
+  lineHeight: 1.2,
 };
 const chevronStyle: CSSProperties = {
   fontSize: 14,
