@@ -4,7 +4,6 @@ import { getAppSession } from "@/lib/auth";
 import { getActivityEntry } from "@/lib/activity-families";
 import { getGoalsOverview, type GoalInsight } from "@/lib/goals";
 import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
-import { getProgramAssessmentSuggestions } from "@/app/programs/assessment-suggestions";
 
 const SENT_OUTCOMES = new Set(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
 
@@ -58,8 +57,28 @@ export async function getProgramDetailData(id: string) {
               goalType: true,
               metricType: true,
               targetValue: true,
+              targetText: true,
+              metricKey: true,
+              direction: true,
+              checkpointIntervalWeeks: true,
               unit: true,
+              notes: true,
               isActive: true,
+              checkpoints: {
+                orderBy: { measuredAt: "asc" },
+                select: {
+                  id: true,
+                  measuredAt: true,
+                  numberValue: true,
+                  numerator: true,
+                  denominator: true,
+                  textValue: true,
+                  source: true,
+                  sourceRefId: true,
+                  isBaseline: true,
+                  notes: true,
+                },
+              },
             },
           },
         },
@@ -151,27 +170,6 @@ export async function getProgramDetailData(id: string) {
                 },
               },
             },
-          },
-        },
-      },
-      assessments: {
-        orderBy: { sortOrder: "asc" },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          metricKind: true,
-          metricKey: true,
-          unit: true,
-          direction: true,
-          targetNumberValue: true,
-          targetNumerator: true,
-          targetDenominator: true,
-          targetTextValue: true,
-          checkpointIntervalWeeks: true,
-          results: {
-            orderBy: { measuredAt: "asc" },
-            select: { id: true, measuredAt: true, numberValue: true, numerator: true, denominator: true, textValue: true, source: true, sourceRefId: true, isBaseline: true, confirmedAt: true, notes: true },
           },
         },
       },
@@ -308,8 +306,34 @@ export async function getProgramDetailData(id: string) {
     };
   });
 
+  // Goal is now the single home for both a destination and its measured
+  // history. Keep this read shape temporarily so the existing Program views
+  // can render checkpoints while their labels transition away from
+  // "assessment".
+  const assessments = program.goalLinks.map((link) => ({
+      id: link.goal.id,
+      name: link.goal.name,
+      description: link.goal.notes,
+      metricKind: link.goal.targetText ? ("TEXT" as const) : ("NUMBER" as const),
+      metricKey: link.goal.metricKey,
+      unit: link.goal.unit,
+      direction:
+        link.goal.direction === "HOLD"
+          ? ("TARGET" as const)
+          : link.goal.direction === "TRACK_ONLY"
+            ? ("INFORMATIONAL" as const)
+            : link.goal.direction,
+      targetNumberValue: link.goal.targetValue,
+      targetNumerator: null,
+      targetDenominator: null,
+      targetTextValue: link.goal.targetText,
+      checkpointIntervalWeeks: link.goal.checkpointIntervalWeeks,
+      results: link.goal.checkpoints.map((checkpoint) => ({ ...checkpoint, confirmedAt: null })),
+  }));
+
   return {
     ...program,
+    assessments,
     activityLink: programActivityLink(pursuitSlug, pursuit?.family ?? null, program.objectiveKind),
     milestones,
     goalLinks: program.goalLinks.map((link) => ({
@@ -395,7 +419,7 @@ export async function getProgramEditorOptions(programId: string) {
 
 export async function getProgramDefinitionEditorData(programId: string) {
   const session = await getAppSession();
-  const [program, milestones, routines, exercises, injuries, stages, metricDefinitions, assessmentSuggestions] = await Promise.all([
+  const [program, milestones, routines, exercises, injuries, stages] = await Promise.all([
     prisma.focus.findFirst({
       where: { id: programId, profileKey: session.profileKey },
       select: {
@@ -421,42 +445,8 @@ export async function getProgramDefinitionEditorData(programId: string) {
     }),
     prisma.activeInjury.findMany({ where: { status: { in: ["ACTIVE", "FLARED"] } }, orderBy: { startedAt: "desc" }, select: { id: true, name: true } }),
     prisma.programStage.findMany({ where: { programId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
-    prisma.sessionMetricDefinition.findMany({
-      // Baselines should offer durable progress measures, not every narrow
-      // goal bucket (for example V0/V1 per-grade counters).
-      where: { showInProgress: true },
-      orderBy: [{ template: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-      select: {
-        id: true,
-        label: true,
-        unit: true,
-        valueType: true,
-        template: {
-          select: {
-            key: true,
-            name: true,
-            metadataGroups: { select: { group: { select: { slug: true } } } },
-          },
-        },
-      },
-    }),
-    getProgramAssessmentSuggestions(),
   ]);
   if (!program) return null;
-  const pursuitKey = program.pursuitKey?.trim().toLowerCase() ?? "";
-  const sessionMetrics = metricDefinitions
-    .filter((metric) => {
-      if (!pursuitKey) return true;
-      const slugs = metric.template.metadataGroups.map((assignment) => assignment.group.slug.toLowerCase());
-      return slugs.includes(pursuitKey) || metric.template.key.toLowerCase().includes(pursuitKey);
-    })
-    .map((metric) => ({
-      id: metric.id,
-      label: metric.label,
-      unit: metric.unit,
-      valueType: metric.valueType,
-      templateName: metric.template.name,
-    }));
   return {
     initial: {
       id: program.id,
@@ -487,7 +477,5 @@ export async function getProgramDefinitionEditorData(programId: string) {
     exercises,
     injuries,
     stages,
-    sessionMetrics,
-    assessmentSuggestions,
   };
 }

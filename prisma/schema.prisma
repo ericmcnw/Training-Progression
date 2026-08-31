@@ -45,6 +45,49 @@ enum MetadataGroupKind {
   ROUTINE_FOCUS
 }
 
+enum GoalDirection {
+  HIGHER
+  LOWER
+  HOLD
+  TRACK_ONLY
+}
+
+enum GoalCheckpointMode {
+  WHEN_LOGGED
+  INTERVAL
+  DATES
+}
+
+enum GoalCheckpointSource {
+  MANUAL
+  ROUTINE_LOG
+  BODY_MEASUREMENT
+  PAIN_LOG
+  CLIMB_ATTEMPT
+  DERIVED
+}
+
+model GoalCheckpoint {
+  id          String   @id @default(cuid())
+  goalId      String
+  measuredAt  DateTime
+  numberValue Float?
+  numerator   Float?
+  denominator Float?
+  textValue   String?
+  source      GoalCheckpointSource @default(MANUAL)
+  sourceRefId String?
+  isBaseline  Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, measuredAt])
+  @@index([goalId, isBaseline])
+}
+
 enum GoalType {
   FREQUENCY
   VOLUME
@@ -736,6 +779,7 @@ model RoutineLog {
   climbAttempts       ClimbAttempt[]
   gearLinks           RoutineLogGear[]
   completedPlannedSession PlannedSession?
+  programContext      ProgramLogContext?
 
   createdAt DateTime @default(now())
 
@@ -1415,7 +1459,13 @@ model Goal {
   targetType  GoalTargetType
   targetId    String
   metricType  GoalMetricType
-  targetValue Float
+  targetValue Float?
+  targetText  String?
+  metricKey   String?
+  direction   GoalDirection @default(HIGHER)
+  checkpointMode          GoalCheckpointMode @default(WHEN_LOGGED)
+  checkpointIntervalWeeks Int?
+  checkpointDates         String[]           @default([])
   timeframe   GoalTimeframe
   unit        String?
   startDate   DateTime       @default(now())
@@ -1428,8 +1478,10 @@ model Goal {
 
   programLinks ProgramGoal[]
   stageGates   ProgramStageGate[]
+  checkpoints  GoalCheckpoint[]
 
   @@index([isActive, goalType])
+  @@index([metricKey])
   @@index([targetType, targetId])
   @@index([timeframe, startDate, endDate])
 }
@@ -1718,34 +1770,6 @@ enum ProgramTimelineMode {
   REVIEW_DATE
 }
 
-enum ProgramAssessmentMetricKind {
-  NUMBER
-  RATIO
-  DURATION
-  GRADE
-  PAIN
-  BODY_WEIGHT
-  BODY_FAT
-  WAIST
-  TEXT
-}
-
-enum ProgramAssessmentDirection {
-  HIGHER
-  LOWER
-  TARGET
-  INFORMATIONAL
-}
-
-enum ProgramAssessmentSource {
-  MANUAL
-  ROUTINE_LOG
-  BODY_MEASUREMENT
-  PAIN_LOG
-  CLIMB_ATTEMPT
-  DERIVED
-}
-
 enum PlannedSessionStatus {
   PLANNED
   COMPLETED
@@ -1798,8 +1822,8 @@ model Focus {
   stages             ProgramStage[]
   blocks             ProgramBlock[]
   targetLists        ProgramTargetList[]
-  assessments        ProgramAssessment[]
   plannedSessions    PlannedSession[]
+  logContexts        ProgramLogContext[]
 
   @@index([status, sortOrder])
   @@index([profileKey, status, sortOrder])
@@ -1939,7 +1963,7 @@ model ProgramStage {
   gates   ProgramStageGate[]
   blocks  ProgramBlock[]
   milestones ProgressionMilestone[]
-  assessments ProgramAssessment[]
+  logContexts ProgramLogContext[]
 
   @@index([programId, sortOrder])
   @@index([programId, status])
@@ -2013,6 +2037,7 @@ model ProgramBlockItem {
   activityType  ActivityType?              @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
   prescriptions ProgramBlockPrescription[]
   plannedSessions PlannedSession[]
+  logContexts ProgramLogContext[]
 
   @@index([blockId, sortOrder])
   @@index([routineId])
@@ -2083,61 +2108,6 @@ model ProgramTargetListItem {
   @@index([refKind, refId])
 }
 
-// A repeatable measurement or test used to establish a starting point and
-// compare later checkpoints. Results may reference existing source records;
-// they never edit the underlying log, measurement, pain reading, or attempt.
-model ProgramAssessment {
-  id                      String                     @id @default(cuid())
-  programId               String
-  stageId                 String?
-  name                    String
-  description             String?
-  metricKind              ProgramAssessmentMetricKind
-  metricKey               String?
-  unit                    String?
-  direction               ProgramAssessmentDirection @default(INFORMATIONAL)
-  // Where the measure is headed. A baseline alone says where you are; without
-  // these a weight-loss or target-load program can state no destination.
-  // Shaped like a result so RATIO targets ("8 of 10 moves") stay expressible.
-  targetNumberValue       Float?
-  targetNumerator         Float?
-  targetDenominator       Float?
-  targetTextValue         String?
-  checkpointIntervalWeeks Int?
-  sortOrder               Int                        @default(0)
-  createdAt               DateTime                   @default(now())
-  updatedAt               DateTime                   @updatedAt
-
-  program Focus         @relation(fields: [programId], references: [id], onDelete: Cascade)
-  stage   ProgramStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  results ProgramAssessmentResult[]
-
-  @@index([programId, sortOrder])
-  @@index([stageId])
-}
-
-model ProgramAssessmentResult {
-  id            String                  @id @default(cuid())
-  assessmentId  String
-  measuredAt    DateTime
-  numberValue   Float?
-  numerator     Float?
-  denominator   Float?
-  textValue     String?
-  source        ProgramAssessmentSource @default(MANUAL)
-  sourceRefId   String?
-  isBaseline    Boolean                 @default(false)
-  confirmedAt   DateTime?
-  notes         String?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
-
-  assessment ProgramAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-
-  @@index([assessmentId, measuredAt])
-  @@index([source, sourceRefId])
-}
-
 // Materialized program work on a real date. This is deliberately separate
 // from immutable RoutineLog history and from reusable SchedulePlan templates.
 // Moving a planned session changes only currentYmd; originalYmd remains an
@@ -2167,11 +2137,33 @@ model PlannedSession {
   routine      Routine?          @relation(fields: [routineId], references: [id], onDelete: SetNull)
   activityType ActivityType?     @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
   completedLog RoutineLog?       @relation(fields: [completedLogId], references: [id], onDelete: SetNull)
+  logContext   ProgramLogContext?
 
   @@index([programId, currentYmd, status])
   @@index([blockId, currentYmd])
   @@index([blockItemId])
   @@index([routineId, currentYmd])
+}
+
+model ProgramLogContext {
+  id                   String   @id @default(cuid())
+  routineLogId         String   @unique
+  programId            String?
+  stageId              String?
+  blockItemId          String?
+  plannedSessionId     String?  @unique
+  prescriptionSnapshot Json
+  createdAt            DateTime @default(now())
+
+  routineLog     RoutineLog        @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
+  program        Focus?            @relation(fields: [programId], references: [id], onDelete: SetNull)
+  stage          ProgramStage?     @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  blockItem      ProgramBlockItem? @relation(fields: [blockItemId], references: [id], onDelete: SetNull)
+  plannedSession PlannedSession?   @relation(fields: [plannedSessionId], references: [id], onDelete: SetNull)
+
+  @@index([programId, createdAt])
+  @@index([stageId])
+  @@index([blockItemId])
 }
 
 model BodyMeasurement {

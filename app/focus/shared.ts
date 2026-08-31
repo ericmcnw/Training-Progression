@@ -28,4 +28,5 @@ export type FocusBandItem = {
   milestonesDone: number;
   milestonesTotal: number;
   currentAims: string[];
+  availableWork: Array<{ id: string; label: string; routineId: string; targetPerWeek: number | null }>;
 };

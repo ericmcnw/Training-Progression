@@ -90,7 +90,7 @@ export async function GET(req: Request) {
       targetId: goalRow.targetId,
       metricType: goalRow.metricType,
       timeframe: goalRow.timeframe,
-      targetValue: goalRow.targetValue,
+      targetValue: goalRow.targetValue ?? 0,
       startDate: toYmd(goalRow.startDate),
       endDate: toYmd(goalRow.endDate),
       isActive: goalRow.isActive,

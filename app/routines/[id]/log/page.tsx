@@ -41,6 +41,7 @@ import { getTemplateDefaultZones } from "@/lib/template-zone-defaults";
 import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
 import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
 import ContributesToStrip from "./ContributesToStrip";
+import { resolveProgramWorkoutContext } from "@/lib/program-prescriptions";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,12 @@ export default async function LogRoutinePage(props: {
   const rawDate = searchParams.date;
   const dateParam = Array.isArray(rawDate) ? rawDate[0] : rawDate;
   const backDateYmd = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+  const scalarParam = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  const programPlanRef = {
+    programId: scalarParam(searchParams.programId) ?? null,
+    blockItemId: scalarParam(searchParams.blockItemId) ?? null,
+    plannedSessionId: scalarParam(searchParams.plannedSessionId) ?? null,
+  };
 
   if (!routineId) return <div style={{ padding: 20 }}>Missing routine id.</div>;
 
@@ -153,6 +160,9 @@ export default async function LogRoutinePage(props: {
   if (!routine) return <div style={{ padding: 20 }}>Routine not found.</div>;
 
   const kind = normalizeRoutineKind(routine.kind);
+  const programContext = isWorkoutKind(kind)
+    ? await resolveProgramWorkoutContext(routineId, backDateYmd ?? todayAppYmd(), programPlanRef)
+    : null;
   const availableExercises = isWorkoutKind(kind)
     ? await (async () => {
         try {
@@ -362,7 +372,7 @@ export default async function LogRoutinePage(props: {
           weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
         })) ?? [];
     const rx = exercise.prescription;
-    const prescription: PrescriptionShape | undefined = rx
+    const routinePrescription: PrescriptionShape | undefined = rx
       ? {
           sets: rx.sets,
           repsMin: rx.repsMin,
@@ -375,6 +385,7 @@ export default async function LogRoutinePage(props: {
           cue: rx.cue,
         }
       : undefined;
+    const prescription = programContext?.prescriptionsByExerciseId.get(exercise.exerciseId) ?? routinePrescription;
 
     // A prescribed set count is what you're supposed to do, so it outranks the
     // "however many rows you did last time" memory.
@@ -481,6 +492,7 @@ export default async function LogRoutinePage(props: {
         <div className="mobileSectionHeader" style={styles.panelHeader}>{getDetailHeading(kind)}</div>
         <div className="mobileSectionBody" style={{ padding: 14 }}>
           {backDateYmd ? <BackDateBanner ymd={backDateYmd} /> : null}
+          {programContext ? <div style={styles.programContextBanner}>Program targets · week {programContext.weekNumber || "current"}</div> : null}
           <ContributesToStrip contributions={goalContributions} />
           <RoutineInjuryWarningBanner warning={routineInjuryWarning} />
           {isWorkoutKind(kind) ? (
@@ -490,6 +502,7 @@ export default async function LogRoutinePage(props: {
               initialBlocks={initialBlocks}
               availableExercises={availableExercisesForLog}
               activePainZones={activePainZones}
+              programPlanRef={programPlanRef}
               defaultPerformedAtLocal={backDateYmd ? localDateTimeForYmd(backDateYmd, 12) : undefined}
             />
           ) : isCardioKind(kind) ? (
@@ -653,5 +666,15 @@ const styles: Record<string, React.CSSProperties> = {
     color: "inherit",
     background: "rgba(128,128,128,0.12)",
     fontWeight: 800 as const,
+  },
+  programContextBanner: {
+    marginBottom: 10,
+    padding: "9px 11px",
+    borderRadius: 9,
+    border: "1px solid rgba(124,232,170,0.3)",
+    background: "rgba(124,232,170,0.06)",
+    color: "rgba(180,255,210,0.9)",
+    fontSize: 11.5,
+    fontWeight: 800,
   },
 };

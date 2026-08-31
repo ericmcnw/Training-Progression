@@ -31,7 +31,8 @@ import { setLogGear, type GearPickInput } from "@/lib/gear";
 import { createActivityZoneActivitiesForLog, createExerciseZoneActivitiesForLog } from "@/lib/zone-activities";
 import { clampEffort } from "@/lib/strain";
 import type { PoolSwimData } from "@/lib/pool-swim";
-import { getAppDayRange, parseAppDateTimeLocal } from "@/lib/dates";
+import { getAppDayRange, parseAppDateTimeLocal, toAppYmd } from "@/lib/dates";
+import { resolveProgramWorkoutContext, type ProgramPlanRef } from "@/lib/program-prescriptions";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
 import { prisma } from "@/lib/prisma";
@@ -1848,9 +1849,15 @@ export async function logWorkout(params: {
    *  squat outworks an easy loaded squat). null/omitted = unrated. */
   effort?: number | null;
   painCheck?: PainCheckInput;
+  programPlanRef?: ProgramPlanRef;
 }) {
   await ensureRoutineKind(params.routineId, "WORKOUT");
   const performedAt = parsePerformedAt(params.performedAtLocal);
+  const programContext = await resolveProgramWorkoutContext(
+    params.routineId,
+    toAppYmd(performedAt),
+    params.programPlanRef ?? {},
+  );
   const logId = await prisma.$transaction(async (tx) => {
     const exercises = await sanitizeWorkoutExercises(tx, params.exercises);
     await syncWorkoutTemplateTx(tx, params.routineId, exercises);
@@ -1883,6 +1890,24 @@ export async function logWorkout(params: {
           weightLb: set.weightLb,
         })),
       });
+    }
+    if (programContext) {
+      await tx.programLogContext.create({
+        data: {
+          routineLogId: log.id,
+          programId: programContext.programId,
+          stageId: programContext.stageId,
+          blockItemId: programContext.blockItemId,
+          plannedSessionId: programContext.plannedSessionId,
+          prescriptionSnapshot: programContext.snapshot as import("@/generated/prisma").Prisma.InputJsonValue,
+        },
+      });
+      if (programContext.plannedSessionId) {
+        await tx.plannedSession.update({
+          where: { id: programContext.plannedSessionId },
+          data: { status: "COMPLETED", completedLogId: log.id },
+        });
+      }
     }
     return log.id;
   });

@@ -42,12 +42,12 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
       : 0;
 
   return (
-    <Link href={`/programs/${focus.id}`} style={{ ...cardShell, borderColor: withAlpha(accent, 0.28) }}>
+    <div style={{ ...cardShell, borderColor: withAlpha(accent, 0.28) }}>
       <div style={topRow}>
-        <span style={nameWrap}>
+        <Link href={`/programs/${focus.id}`} style={nameWrap}>
           {focus.icon ? <span aria-hidden style={iconStyle}>{focus.icon}</span> : null}
           <span style={nameStyle}>{focus.name}</span>
-        </span>
+        </Link>
         {focus.milestonesTotal > 0 ? (
           <span style={{ ...progressPill, color: accent, borderColor: withAlpha(accent, 0.35), background: withAlpha(accent, 0.12) }}>
             {focus.milestonesDone}/{focus.milestonesTotal}
@@ -80,9 +80,20 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
           ) : null}
         </div>
       ) : (
-        <span style={emptyAim}>No active milestones — tap to plan</span>
+        <span style={emptyAim}>No active outcomes yet</span>
       )}
-    </Link>
+      {focus.availableWork.length > 0 ? (
+        <div style={workList}>
+          <span style={workLabel}>Available now</span>
+          {focus.availableWork.map((work) => (
+            <Link key={work.id} href={`/routines/${work.routineId}/log?programId=${encodeURIComponent(focus.id)}&blockItemId=${encodeURIComponent(work.id)}`} style={workRow}>
+              <span>{work.label}</span>
+              <strong>{work.targetPerWeek ? `${work.targetPerWeek}x/wk` : "Log"}</strong>
+            </Link>
+          ))}
+        </div>
+      ) : <Link href={`/programs/${focus.id}/edit`} style={planLink}>Add current work →</Link>}
+    </div>
   );
 }
 
@@ -118,7 +129,14 @@ const nameWrap: CSSProperties = {
   alignItems: "center",
   gap: 8,
   minWidth: 0,
+  color: "inherit",
+  textDecoration: "none",
 };
+
+const workList: CSSProperties = { display: "grid", gap: 5, paddingTop: 3, borderTop: `1px solid ${COLOR.border}` };
+const workLabel: CSSProperties = { fontSize: 9.5, fontWeight: 900, textTransform: "uppercase", color: COLOR.textFaint };
+const workRow: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.035)", color: COLOR.textDim, textDecoration: "none", fontSize: 11.5 };
+const planLink: CSSProperties = { fontSize: 11.5, fontWeight: 800, color: COLOR.textDim, textDecoration: "none" };
 
 const iconStyle: CSSProperties = { fontSize: 16, lineHeight: 1, flexShrink: 0 };
 

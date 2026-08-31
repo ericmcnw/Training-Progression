@@ -4,12 +4,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import ProgramCreator from "./ProgramCreator";
-import { getProgramAssessmentSuggestions } from "@/app/programs/assessment-suggestions";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewProgramPage() {
-  const [routines, goals, frequencyGoals, exercises, injuries, assessmentSuggestions] = await Promise.all([
+  const [routines, goals, frequencyGoals, exercises, injuries, tickListCount, climbingProjects, climbingLocations] = await Promise.all([
     prisma.routine.findMany({
       where: { isActive: true, isDeleted: false, isPlaceholder: false },
       orderBy: { name: "asc" },
@@ -30,7 +29,16 @@ export default async function NewProgramPage() {
       orderBy: { startedAt: "desc" },
       select: { id: true, name: true },
     }),
-    getProgramAssessmentSuggestions(),
+    prisma.climbProblem.count({ where: { onTickList: true } }),
+    prisma.climbProblem.findMany({
+      where: {
+        attempts: { some: { outcome: { in: ["PROJECT", "FELL"] } } },
+        NOT: { attempts: { some: { outcome: { in: ["FLASH", "ONSIGHT", "SEND", "REDPOINT"] } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, name: true, grade: true, gradeSystem: true, onTickList: true, location: { select: { name: true } } },
+    }),
+    prisma.climbLocation.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, type: true } }),
   ]);
 
   return (
@@ -43,7 +51,16 @@ export default async function NewProgramPage() {
           Set the purpose, the work you&rsquo;ll do, and how you&rsquo;ll measure it.
           Stages, blocks, scheduling, and named targets come next.
       </p>
-      <ProgramCreator routines={routines} goals={goals} frequencyGoals={frequencyGoals} exercises={exercises} injuries={injuries} assessmentSuggestions={assessmentSuggestions} />
+      <ProgramCreator
+        routines={routines}
+        goals={goals}
+        frequencyGoals={frequencyGoals}
+        exercises={exercises}
+        injuries={injuries}
+        tickListCount={tickListCount}
+        climbingProjects={climbingProjects}
+        climbingLocations={climbingLocations}
+      />
       <style>{`
         .focusForm { --edge: clamp(14px, 4vw, 28px); }
         @media (max-width: 720px) { .focusForm { --edge: 14px; } }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
 import { todayAppYmd } from "@/lib/dates";
-import type { ProgramAssessmentDirection, ProgramAssessmentMetricKind, ProgramBlockStatus, ProgramStageStatus, ProgramTargetItemStatus } from "@/generated/prisma";
+import type { ProgramBlockStatus, ProgramStageStatus, ProgramTargetItemStatus } from "@/generated/prisma";
 
 async function requireProgram(programId: string) {
   const session = await getAppSession();
@@ -64,11 +64,6 @@ export async function saveProgramRelationships(formData: FormData) {
 function cleanYmd(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
-}
-
-function numberField(formData: FormData, name: string) {
-  const raw = String(formData.get(name) || "").trim();
-  return raw && Number.isFinite(Number(raw)) ? Number(raw) : null;
 }
 
 export async function createProgramStage(formData: FormData) {
@@ -222,6 +217,79 @@ export async function addProgramBlockRoutine(formData: FormData) {
   revalidateProgram(programId);
 }
 
+/** Add visible phase work while retaining ProgramBlock as an internal
+ * compatibility container. The user never has to create or name that layer. */
+export async function addProgramPhaseRoutine(formData: FormData) {
+  const programId = String(formData.get("programId") || "");
+  await requireProgram(programId);
+  const routineId = String(formData.get("routineId") || "");
+  if (!routineId) throw new Error("Choose a routine.");
+  const routine = await prisma.routine.findFirst({
+    where: { id: routineId, isDeleted: false },
+    select: { id: true, name: true },
+  });
+  if (!routine) throw new Error("Routine not found.");
+  const lastRoutineLink = await prisma.programRoutine.aggregate({ where: { programId }, _max: { sortOrder: true } });
+  await prisma.programRoutine.upsert({
+    where: { programId_routineId: { programId, routineId } },
+    update: {},
+    create: { programId, routineId, sortOrder: (lastRoutineLink._max.sortOrder ?? -1) + 1 },
+  });
+
+  let stageId = String(formData.get("stageId") || "").trim() || null;
+  let stage = stageId
+    ? await prisma.programStage.findFirst({ where: { id: stageId, programId }, select: { id: true, name: true } })
+    : await prisma.programStage.findFirst({
+        where: { programId, status: "ACTIVE" },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true },
+      });
+  if (!stage) {
+    const lastStage = await prisma.programStage.aggregate({ where: { programId }, _max: { sortOrder: true } });
+    stage = await prisma.programStage.create({
+      data: { programId, name: "Current phase", status: "ACTIVE", sortOrder: (lastStage._max.sortOrder ?? -1) + 1 },
+      select: { id: true, name: true },
+    });
+  }
+  stageId = stage.id;
+
+  let block = await prisma.programBlock.findFirst({
+    where: { programId, stageId },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true },
+  });
+  if (!block) {
+    const lastBlock = await prisma.programBlock.aggregate({ where: { programId }, _max: { sortOrder: true } });
+    block = await prisma.programBlock.create({
+      data: {
+        programId,
+        stageId,
+        name: stage.name,
+        status: "ACTIVE",
+        scheduleMode: "FLEXIBLE",
+        sortOrder: (lastBlock._max.sortOrder ?? -1) + 1,
+      },
+      select: { id: true },
+    });
+  }
+
+  const existing = await prisma.programBlockItem.findFirst({ where: { blockId: block.id, routineId }, select: { id: true } });
+  if (existing) return;
+  const last = await prisma.programBlockItem.aggregate({ where: { blockId: block.id }, _max: { sortOrder: true } });
+  const rawTarget = Number(formData.get("targetPerWeek"));
+  await prisma.programBlockItem.create({
+    data: {
+      blockId: block.id,
+      kind: "ROUTINE",
+      routineId,
+      label: routine.name,
+      targetPerWeek: Number.isFinite(rawTarget) && rawTarget > 0 ? Math.min(21, rawTarget) : null,
+      sortOrder: (last._max.sortOrder ?? -1) + 1,
+    },
+  });
+  revalidateProgram(programId);
+}
+
 export async function removeProgramBlockItem(formData: FormData) {
   const programId = String(formData.get("programId") || "");
   await requireProgram(programId);
@@ -319,149 +387,39 @@ export async function moveProgramTargetItem(formData: FormData) {
   revalidateProgram(programId);
 }
 
-export async function createProgramAssessment(formData: FormData) {
+export async function addProgramGoalCheckpoint(formData: FormData) {
   const programId = String(formData.get("programId") || "");
   await requireProgram(programId);
-  const name = String(formData.get("name") || "").trim();
-  if (!name) throw new Error("Assessment needs a name.");
-  const metricKind = String(formData.get("metricKind") || "NUMBER") as ProgramAssessmentMetricKind;
-  const direction = String(formData.get("direction") || "INFORMATIONAL") as ProgramAssessmentDirection;
-  const allowedMetrics = new Set<ProgramAssessmentMetricKind>(["NUMBER", "RATIO", "DURATION", "GRADE", "PAIN", "BODY_WEIGHT", "BODY_FAT", "WAIST", "TEXT"]);
-  const allowedDirections = new Set<ProgramAssessmentDirection>(["HIGHER", "LOWER", "TARGET", "INFORMATIONAL"]);
-  if (!allowedMetrics.has(metricKind) || !allowedDirections.has(direction)) throw new Error("Invalid assessment configuration.");
-  const rawInterval = Number(formData.get("checkpointIntervalWeeks"));
-  const checkpointIntervalWeeks = Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null;
-  const baselineYmd = cleanYmd(formData.get("baselineYmd")) ?? todayAppYmd();
-  const rawBaselineNumber = String(formData.get("baselineNumberValue") || "").trim();
-  const baselineNumberValue = rawBaselineNumber && Number.isFinite(Number(rawBaselineNumber)) ? Number(rawBaselineNumber) : null;
-  const rawBaselineNumerator = String(formData.get("baselineNumerator") || "").trim();
-  const baselineNumerator = rawBaselineNumerator && Number.isFinite(Number(rawBaselineNumerator)) ? Number(rawBaselineNumerator) : null;
-  const rawBaselineDenominator = String(formData.get("baselineDenominator") || "").trim();
-  const baselineDenominator = rawBaselineDenominator && Number.isFinite(Number(rawBaselineDenominator)) ? Number(rawBaselineDenominator) : null;
-  const baselineTextValue = String(formData.get("baselineTextValue") || "").trim() || null;
-  const requestedBaselineSource = String(formData.get("baselineSource") || "MANUAL");
-  const allowedBaselineSources = new Set(["MANUAL", "ROUTINE_LOG", "BODY_MEASUREMENT", "PAIN_LOG", "CLIMB_ATTEMPT", "DERIVED"]);
-  const baselineSource = allowedBaselineSources.has(requestedBaselineSource) ? requestedBaselineSource as "MANUAL" | "ROUTINE_LOG" | "BODY_MEASUREMENT" | "PAIN_LOG" | "CLIMB_ATTEMPT" | "DERIVED" : "MANUAL";
-  const baselineSourceRefId = baselineSource === "MANUAL" ? null : String(formData.get("baselineSourceRefId") || "").trim() || null;
-  const hasRatioBaseline = metricKind === "RATIO" && baselineNumerator != null && baselineDenominator != null && baselineDenominator > 0;
-  const hasScalarBaseline = metricKind !== "RATIO" && (baselineNumberValue != null || baselineTextValue != null);
-  const baseline = hasRatioBaseline || hasScalarBaseline
-    ? {
-        measuredAt: new Date(`${baselineYmd}T12:00:00.000Z`),
-        numberValue: baselineNumberValue,
-        numerator: baselineNumerator,
-        denominator: baselineDenominator,
-        textValue: baselineTextValue,
-        source: baselineSource,
-        sourceRefId: baselineSourceRefId,
-        isBaseline: true,
-        confirmedAt: new Date(),
-      }
-    : null;
-  const last = await prisma.programAssessment.aggregate({ where: { programId }, _max: { sortOrder: true } });
-  await prisma.programAssessment.create({
-    data: {
-      programId,
-      name,
-      description: String(formData.get("description") || "").trim() || null,
-      metricKind,
-      metricKey: String(formData.get("metricKey") || "").trim() || null,
-      unit: String(formData.get("unit") || "").trim() || null,
-      direction,
-      targetNumberValue: numberField(formData, "targetNumberValue"),
-      targetNumerator: numberField(formData, "targetNumerator"),
-      targetDenominator: numberField(formData, "targetDenominator"),
-      targetTextValue: String(formData.get("targetTextValue") || "").trim() || null,
-      checkpointIntervalWeeks,
-      sortOrder: (last._max.sortOrder ?? -1) + 1,
-      ...(baseline ? { results: { create: baseline } } : {}),
-    },
+  const goalId = String(formData.get("goalId") || "");
+  const link = await prisma.programGoal.findFirst({
+    where: { programId, goalId },
+    select: { id: true },
   });
-  revalidateProgram(programId);
-}
-
-export async function addProgramAssessmentResult(formData: FormData) {
-  const programId = String(formData.get("programId") || "");
-  await requireProgram(programId);
-  const assessmentId = String(formData.get("assessmentId") || "");
-  const assessment = await prisma.programAssessment.findFirst({ where: { id: assessmentId, programId }, select: { id: true, metricKind: true } });
-  if (!assessment) throw new Error("Assessment not found.");
-  const ymd = cleanYmd(formData.get("measuredYmd")) ?? todayAppYmd();
-  const rawNumber = String(formData.get("numberValue") || "").trim();
-  const numberValue = rawNumber && Number.isFinite(Number(rawNumber)) ? Number(rawNumber) : null;
-  const rawNumerator = String(formData.get("numerator") || "").trim();
-  const rawDenominator = String(formData.get("denominator") || "").trim();
-  const numerator = rawNumerator && Number.isFinite(Number(rawNumerator)) ? Number(rawNumerator) : null;
-  const denominator = rawDenominator && Number.isFinite(Number(rawDenominator)) ? Number(rawDenominator) : null;
-  const textValue = String(formData.get("textValue") || "").trim() || null;
-  if (assessment.metricKind === "RATIO" ? numerator == null || denominator == null || denominator <= 0 : numberValue == null && !textValue) {
-    throw new Error("Enter a result.");
-  }
-  const rawResultSource = String(formData.get("source") || "MANUAL");
-  const allowedResultSources = new Set(["MANUAL", "ROUTINE_LOG", "BODY_MEASUREMENT", "PAIN_LOG", "CLIMB_ATTEMPT", "DERIVED"]);
-  const resultSource = (allowedResultSources.has(rawResultSource) ? rawResultSource : "MANUAL") as "MANUAL" | "ROUTINE_LOG" | "BODY_MEASUREMENT" | "PAIN_LOG" | "CLIMB_ATTEMPT" | "DERIVED";
+  if (!link) throw new Error("Goal is not connected to this Program.");
+  const raw = String(formData.get("value") || "").trim();
+  if (!raw) throw new Error("Enter a checkpoint value.");
+  const parsed = Number(raw);
+  const isNumber = Number.isFinite(parsed);
+  const measuredYmd = cleanYmd(formData.get("measuredYmd")) ?? todayAppYmd();
   const isBaseline = String(formData.get("isBaseline") || "") === "1";
-  if (isBaseline) {
-    await prisma.programAssessmentResult.updateMany({ where: { assessmentId, isBaseline: true }, data: { isBaseline: false } });
-  }
-  await prisma.programAssessmentResult.create({
-    data: {
-      assessmentId,
-      measuredAt: new Date(`${ymd}T12:00:00.000Z`),
-      numberValue,
-      numerator,
-      denominator,
-      textValue,
-      source: resultSource,
-      sourceRefId: resultSource === "MANUAL" ? null : String(formData.get("sourceRefId") || "").trim() || null,
-      isBaseline,
-      confirmedAt: new Date(),
-      notes: String(formData.get("notes") || "").trim() || null,
-    },
+  await prisma.$transaction(async (tx) => {
+    if (isBaseline) {
+      await tx.goalCheckpoint.updateMany({ where: { goalId, isBaseline: true }, data: { isBaseline: false } });
+    }
+    await tx.goalCheckpoint.create({
+      data: {
+        goalId,
+        measuredAt: new Date(`${measuredYmd}T12:00:00.000Z`),
+        numberValue: isNumber ? parsed : null,
+        textValue: isNumber ? null : raw,
+        source: "MANUAL",
+        isBaseline,
+        notes: String(formData.get("notes") || "").trim() || null,
+      },
+    });
   });
   revalidateProgram(programId);
-}
-
-export async function updateProgramAssessment(formData: FormData) {
-  const programId = String(formData.get("programId") || "");
-  await requireProgram(programId);
-  const assessmentId = String(formData.get("assessmentId") || "");
-  const assessment = await prisma.programAssessment.findFirst({ where: { id: assessmentId, programId }, select: { id: true } });
-  if (!assessment) throw new Error("Assessment not found.");
-  const name = String(formData.get("name") || "").trim();
-  if (!name) throw new Error("Assessment needs a name.");
-  const rawDirection = String(formData.get("direction") || "INFORMATIONAL");
-  const allowedDirections = new Set<ProgramAssessmentDirection>(["HIGHER", "LOWER", "TARGET", "INFORMATIONAL"]);
-  if (!allowedDirections.has(rawDirection as ProgramAssessmentDirection)) throw new Error("Invalid direction.");
-  const rawInterval = Number(formData.get("checkpointIntervalWeeks"));
-
-  // The metric, its unit, and its kind define the series every recorded result
-  // belongs to, so they stay fixed once results exist. Everything the plan can
-  // legitimately change mid-program is editable.
-  await prisma.programAssessment.update({
-    where: { id: assessmentId },
-    data: {
-      name,
-      description: String(formData.get("description") || "").trim() || null,
-      direction: rawDirection as ProgramAssessmentDirection,
-      targetNumberValue: numberField(formData, "targetNumberValue"),
-      targetNumerator: numberField(formData, "targetNumerator"),
-      targetDenominator: numberField(formData, "targetDenominator"),
-      targetTextValue: String(formData.get("targetTextValue") || "").trim() || null,
-      checkpointIntervalWeeks: Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null,
-    },
-  });
-  revalidateProgram(programId);
-}
-
-export async function deleteProgramAssessment(formData: FormData) {
-  const programId = String(formData.get("programId") || "");
-  await requireProgram(programId);
-  const assessmentId = String(formData.get("assessmentId") || "");
-  const assessment = await prisma.programAssessment.findFirst({ where: { id: assessmentId, programId }, select: { id: true } });
-  if (!assessment) throw new Error("Assessment not found.");
-  await prisma.programAssessment.delete({ where: { id: assessmentId } });
-  revalidateProgram(programId);
+  revalidatePath(`/goals/${goalId}`);
 }
 
 export async function createPlannedSession(formData: FormData) {
@@ -561,14 +519,12 @@ export async function continueProgramCycle(formData: FormData) {
       goalLinks: true,
       frequencyGoalLinks: true,
       targetLists: { include: { items: true } },
-      assessments: { include: { results: { orderBy: { measuredAt: "desc" }, take: 1 } } },
     },
   });
   if (!source) throw new Error("Program not found.");
   const carryRoutines = String(formData.get("carryRoutines") || "") === "1";
   const carryGoals = String(formData.get("carryGoals") || "") === "1";
   const carryTargets = String(formData.get("carryTargets") || "") === "1";
-  const carryAssessments = String(formData.get("carryAssessments") || "") === "1";
   const created = await prisma.focus.create({
     data: {
       name: String(formData.get("name") || "").trim() || `${source.name} - next cycle`,
@@ -591,7 +547,6 @@ export async function continueProgramCycle(formData: FormData) {
         frequencyGoalLinks: { create: source.frequencyGoalLinks.map((link) => ({ frequencyGoalId: link.frequencyGoalId, role: link.role, sortOrder: link.sortOrder })) },
       } : {}),
       ...(carryTargets ? { targetLists: { create: source.targetLists.map((list) => ({ name: list.name, description: list.description, kind: list.kind, sportSlug: list.sportSlug, sortOrder: list.sortOrder, items: { create: list.items.filter((item) => item.status === "ACTIVE").map((item) => ({ label: item.label, description: item.description, climbProblemId: item.climbProblemId, refKind: item.refKind, refId: item.refId, sortOrder: item.sortOrder })) } })) } } : {}),
-      ...(carryAssessments ? { assessments: { create: source.assessments.map((assessment) => ({ name: assessment.name, description: assessment.description, metricKind: assessment.metricKind, metricKey: assessment.metricKey, unit: assessment.unit, direction: assessment.direction, checkpointIntervalWeeks: assessment.checkpointIntervalWeeks, sortOrder: assessment.sortOrder, results: assessment.results[0] ? { create: { measuredAt: assessment.results[0].measuredAt, numberValue: assessment.results[0].numberValue, numerator: assessment.results[0].numerator, denominator: assessment.results[0].denominator, textValue: assessment.results[0].textValue, source: "DERIVED", sourceRefId: assessment.results[0].id, isBaseline: true, confirmedAt: new Date(), notes: "Carried from prior program cycle" } } : undefined })) } } : {}),
     },
     select: { id: true },
   });

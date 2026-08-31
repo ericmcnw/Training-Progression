@@ -989,17 +989,18 @@ function summaryLabel(goal: GoalWithConfig, targetLabel: string) {
 
 function statusForGoal(goal: GoalWithConfig, actualValue: number, elapsedFraction: number) {
   const lowerIsBetter = metricIsLowerBetter(goal.metricType as GoalMetricTypeValue);
+  const targetValue = goal.targetValue ?? 0;
   const progressRatio = lowerIsBetter
     ? actualValue > 0
-      ? goal.targetValue / actualValue
+      ? targetValue / actualValue
       : 0
-    : goal.targetValue > 0
-    ? actualValue / goal.targetValue
+    : targetValue > 0
+    ? actualValue / targetValue
     : 0;
 
   const isAchieved = lowerIsBetter
-    ? actualValue > 0 && actualValue <= goal.targetValue
-    : actualValue >= goal.targetValue;
+    ? actualValue > 0 && actualValue <= targetValue
+    : actualValue >= targetValue;
 
   if (!actualValue) return { label: "No data yet", isAchieved: false, fraction: 0, hasData: false };
   if (isAchieved) return { label: "Achieved", isAchieved: true, fraction: Math.min(1, progressRatio), hasData: true };
@@ -1153,9 +1154,9 @@ async function buildGoalInsightCore(
     timeframeWindowLabel: window.currentLabel,
     summaryLabel: summaryLabel(parsedGoal, descriptor.label),
     actualValue,
-    targetValue: parsedGoal.targetValue,
+    targetValue: parsedGoal.targetValue ?? 0,
     actualDisplay: formatMetricValue(parsedGoal, actualValue),
-    targetDisplay: formatMetricValue(parsedGoal, parsedGoal.targetValue),
+    targetDisplay: formatMetricValue(parsedGoal, parsedGoal.targetValue ?? 0),
     fractionComplete: status.fraction,
     isAchieved: status.isAchieved,
     hasData: status.hasData,
@@ -1366,6 +1367,12 @@ function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, 
       targetId: routine.id,
       metricType: "SESSIONS",
       targetValue,
+      targetText: null,
+      metricKey: null,
+      direction: "HIGHER",
+      checkpointMode: "WHEN_LOGGED",
+      checkpointIntervalWeeks: null,
+      checkpointDates: [],
       timeframe,
       unit: null,
       startDate: routine.createdAt,
@@ -1506,6 +1513,12 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
       targetId: goal.id,
       metricType: "SESSIONS",
       targetValue,
+      targetText: null,
+      metricKey: null,
+      direction: "HIGHER",
+      checkpointMode: "WHEN_LOGGED",
+      checkpointIntervalWeeks: null,
+      checkpointDates: [],
       timeframe,
       unit: null,
       startDate: goal.createdAt,
@@ -2247,12 +2260,13 @@ export async function getChartGoalReference(params: {
 
   const goal = ranked?.goal ?? goals[0];
   const parsedGoal = toGoalWithConfig(goal);
+  if (parsedGoal.targetValue == null) return null;
   const valueText = formatMetricValue(parsedGoal, parsedGoal.targetValue);
 
   return {
     goalId: goal.id,
     goalName: goal.name,
-    targetValue: goal.targetValue,
+    targetValue: parsedGoal.targetValue,
     label: `${goal.name} (${valueText})`,
     unit: goal.unit ?? undefined,
     decimals:

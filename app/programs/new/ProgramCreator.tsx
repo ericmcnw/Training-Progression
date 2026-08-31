@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import FocusForm, { type FocusFormInitial } from "@/app/focus/FocusForm";
-import type { MilestoneFormRow } from "@/app/focus/actions";
+import { NewGoalDrawerButton } from "@/app/components/FormDrawerButtons";
 import { activitiesByFamily } from "@/lib/activity-families";
-import AssessmentBuilder, { type DraftProgramAssessment } from "@/app/programs/[id]/edit/AssessmentBuilder";
-import type { ProgramAssessmentSuggestion } from "@/app/programs/assessment-suggestions";
 
 type Pick = { id: string; name: string };
 type RoutinePick = Pick & { kind: string; domain: string };
 type GoalPick = Pick & { goalType: string };
 type FrequencyGoalPick = Pick & { targetCount: number; targetInterval: number; targetUnit: string };
 type ExercisePick = Pick & { unit: string; supportsWeight: boolean; supportsSports: string[] };
+type ClimbingProjectPick = Pick & { grade: string; gradeSystem: "BOULDER_V" | "YOSEMITE"; onTickList: boolean; location: { name: string } | null };
+type ClimbingLocationPick = Pick & { type: "GYM" | "CRAG" };
+type NewTickTarget = { key: string; name: string; grade: string; gradeSystem: "BOULDER_V" | "YOSEMITE"; locationId: string };
 type Path = "sport" | "strength" | "endurance" | "body" | "recovery";
 type TimelineMode = "SEASON" | "DURATION" | "TARGET_DATE" | "REVIEW_DATE";
 
@@ -31,14 +32,18 @@ export default function ProgramCreator({
   frequencyGoals,
   exercises,
   injuries,
-  assessmentSuggestions,
+  tickListCount,
+  climbingProjects,
+  climbingLocations,
 }: {
   routines: RoutinePick[];
   goals: GoalPick[];
   frequencyGoals: FrequencyGoalPick[];
   exercises: ExercisePick[];
   injuries: Pick[];
-  assessmentSuggestions: ProgramAssessmentSuggestion[];
+  tickListCount: number;
+  climbingProjects: ClimbingProjectPick[];
+  climbingLocations: ClimbingLocationPick[];
 }) {
   const [mode, setMode] = useState<"choose" | "guided" | "manual">("choose");
   const [path, setPath] = useState<Path>("sport");
@@ -52,16 +57,34 @@ export default function ProgramCreator({
   const [routineIds, setRoutineIds] = useState<string[]>([]);
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [frequencyGoalIds, setFrequencyGoalIds] = useState<string[]>([]);
-  const [startingAssessment, setStartingAssessment] = useState<DraftProgramAssessment | null>(null);
-  const [includeAssessment, setIncludeAssessment] = useState(true);
-  const [outcomeDraft, setOutcomeDraft] = useState<MilestoneFormRow[] | null>(null);
+  const [includeClimbingTickList, setIncludeClimbingTickList] = useState(false);
+  const [showTickListBuilder, setShowTickListBuilder] = useState(false);
+  const [selectedTickProblemIds, setSelectedTickProblemIds] = useState<string[]>([]);
+  const [newTickTargets, setNewTickTargets] = useState<NewTickTarget[]>([]);
+  const [activeStepId, setActiveStepId] = useState("setup-purpose");
+
+  useEffect(() => {
+    if (mode !== "guided") return;
+    const sections = ["setup-purpose", "setup-details", "setup-goal", "setup-work"]
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => Boolean(section));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) setActiveStepId(visible.target.id);
+      },
+      { rootMargin: "-18% 0px -58% 0px", threshold: [0.05, 0.25, 0.5] }
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [mode]);
 
   if (mode === "choose") {
     return (
       <div style={choiceGrid}>
         <button type="button" style={primaryChoice} onClick={() => setMode("guided")}>
           <span style={choiceTitle}>Guided setup</span>
-          <span style={choiceMeta}>Five steps on one page: purpose, the work, the measure, outcomes. Recommended.</span>
+          <span style={choiceMeta}>Four short steps: purpose, details, one goal, and optional current work. Recommended.</span>
         </button>
         <button type="button" style={secondaryChoice} onClick={() => setMode("manual")}>
           <span style={choiceTitle}>Blank form</span>
@@ -81,39 +104,43 @@ export default function ProgramCreator({
   }
 
   const resolvedPursuit = path === "sport" ? pursuitKey : pursuitKey.trim() || pursuitFor(path);
-  const canOpenOutcomes = name.trim().length > 0 && (path !== "sport" || pursuitKey.trim().length > 0);
-  const trainingCount = routineIds.length + goalIds.length + frequencyGoalIds.length;
+  const isClimbing = resolvedPursuit.trim().toLowerCase() === "climbing";
+  const hasIdentity = name.trim().length > 0 && (path !== "sport" || pursuitKey.trim().length > 0);
+  const hasTickListDraft = includeClimbingTickList || selectedTickProblemIds.length > 0 || newTickTargets.some((target) => target.name.trim());
+  const measureCount = goalIds.length + frequencyGoalIds.length + (hasTickListDraft ? 1 : 0);
+  const hasMeasure = measureCount > 0;
+  const canCreate = hasIdentity && hasMeasure;
   const miniSteps = [
     { number: "1", id: "setup-purpose", label: "Purpose", complete: Boolean(path), meta: PATHS.find((option) => option.id === path)?.label ?? "Choose a direction" },
-    { number: "2", id: "setup-details", label: "Program details", complete: canOpenOutcomes, meta: name.trim() || "Name and timeline" },
-    { number: "3", id: "setup-work", label: "The work", complete: trainingCount > 0, meta: trainingCount ? `${routineIds.length} routines · ${goalIds.length + frequencyGoalIds.length} goals` : "What you'll actually do" },
-    { number: "4", id: "setup-starting-point", label: "The measure", complete: !includeAssessment || Boolean(startingAssessment?.name.trim()), meta: includeAssessment ? assessmentSummary(startingAssessment) : "Skipped" },
-    { number: "5", id: "setup-outcomes", label: "Outcomes", complete: Boolean(outcomeDraft?.some((outcome) => outcome.label.trim())), meta: outcomeDraft?.filter((outcome) => outcome.label.trim()).length ? `${outcomeDraft.filter((outcome) => outcome.label.trim()).length} defined` : "Define success" },
+    { number: "2", id: "setup-details", label: "Program details", complete: hasIdentity, meta: name.trim() || "Name and optional timeline" },
+    { number: "3", id: "setup-goal", label: "Goal or target", complete: hasMeasure, meta: hasMeasure ? `${measureCount} selected` : "Choose or create one" },
+    { number: "4", id: "setup-work", label: "Current work", complete: routineIds.length > 0, meta: routineIds.length ? `${routineIds.length} routines` : "Optional — add later" },
   ];
 
   function selectPath(nextPath: Path) {
     setPath(nextPath);
     setTimelineMode(timelineModeFor(nextPath));
     setPursuitKey(nextPath === "sport" ? "" : pursuitFor(nextPath));
-    setStartingAssessment(null);
-    setOutcomeDraft(null);
+    setIncludeClimbingTickList(false);
+    setShowTickListBuilder(false);
+    setSelectedTickProblemIds([]);
+    setNewTickTargets([]);
   }
 
   const resolvedEndYmd = timelineMode === "DURATION" ? addWeeks(startYmd, durationWeeks) : endYmd;
-  const initial = guidedInitial(path, name, resolvedPursuit, { timelineMode, startYmd, endYmd: resolvedEndYmd, reviewYmd }, outcomeDraft);
+  const initial = guidedInitial(path, name, resolvedPursuit, { timelineMode, startYmd, endYmd: resolvedEndYmd, reviewYmd });
 
   return (
     <div className="programCreatorWorkspace" style={workspace}>
       <aside className="programCreatorSidebar" style={sidebar}>
-        <CreatorStageRail />
+        <CreatorStepRail steps={miniSteps} activeStepId={activeStepId} onStepChange={setActiveStepId} />
       </aside>
-
       <main style={canvas}>
         <section style={setupShell}>
           <header style={setupHeader}>
             <span style={panelEyebrow}>Program setup</span>
             <h2 style={setupTitle}>Define the program foundation</h2>
-            <p style={panelCopy}>Set the objective, timeline, starting point, and outcomes together. After you create it, continue through training, stages, blocks, schedule, and named targets.</p>
+            <p style={panelCopy}>A goal or named target says where you are going. Current work says what you will do next.</p>
           </header>
 
           <nav aria-label="Program setup sections" className="programCreatorMiniSteps" style={mobileSteps}>
@@ -121,8 +148,9 @@ export default function ProgramCreator({
             <button
               key={step.id}
               type="button"
-              onClick={() => document.getElementById(step.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              style={{ ...mobileStep, ...(step.complete ? mobileStepComplete : {}) }}
+              aria-current={activeStepId === step.id ? "step" : undefined}
+              onClick={() => { setActiveStepId(step.id); document.getElementById(step.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+              style={{ ...mobileStep, ...(step.complete ? mobileStepComplete : {}), ...(activeStepId === step.id ? mobileStepActive : {}) }}
             >
               <span style={miniStepNumber}>{step.complete ? "✓" : step.number}</span>
               <span style={miniStepText}><strong>{step.label}</strong><small>{step.meta}</small></span>
@@ -148,7 +176,7 @@ export default function ProgramCreator({
             <div style={detailFields}>
               <label style={field}>Program name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={placeholderFor(path)} style={input} /></label>
               {path === "sport" ? (
-                <label style={field}>Sport<select value={pursuitKey} onChange={(event) => { setPursuitKey(event.target.value); setStartingAssessment(null); setOutcomeDraft(null); }} style={input}><option value="">Choose a sport</option>{SPORTS.map((sport) => <option key={sport.slug} value={sport.slug}>{sport.label}</option>)}</select></label>
+                <label style={field}>Sport<select value={pursuitKey} onChange={(event) => { setPursuitKey(event.target.value); if (event.target.value !== "climbing") { setIncludeClimbingTickList(false); setShowTickListBuilder(false); setSelectedTickProblemIds([]); setNewTickTargets([]); } }} style={input}><option value="">Choose a sport</option>{SPORTS.map((sport) => <option key={sport.slug} value={sport.slug}>{sport.label}</option>)}</select></label>
               ) : (
                 <label style={field}>Primary activity<input value={pursuitKey} onChange={(event) => setPursuitKey(event.target.value)} placeholder={pursuitFor(path)} style={input} /></label>
               )}
@@ -182,70 +210,117 @@ export default function ProgramCreator({
           </CreatorPanel>
           </div>
 
-          <div id="setup-work" style={miniSection}>
-          <CreatorPanel eyebrow="3 · The work" title="What will you actually do?" copy="Pick the routines and targets this program drives. This is the part you follow week to week — you can add more later, but a program with nothing in it can't tell you what to do today.">
+          <div id="setup-goal" style={miniSection}>
+          <CreatorPanel eyebrow="3 · Goal or target" title="How will you know it is working?" copy="Choose an existing goal, create the one you need, or use a named activity target such as your climbing tick list.">
             <div style={{ display: "grid", gap: 14 }}>
+              <div style={builderActions}>
+                <span style={choiceMeta}>Nothing suitable yet? Create it here, then select it below.</span>
+                <NewGoalDrawerButton style={createButton}>+ Create goal</NewGoalDrawerButton>
+              </div>
               <TrainingPicker
-                title="Routines"
-                empty="No routines yet. You can create them later and connect them from the program editor."
-                items={routines.map((routine) => ({ id: routine.id, label: routine.name, meta: `${routine.kind.toLowerCase()} · ${routine.domain}` }))}
-                selected={routineIds}
-                onToggle={(id) => setRoutineIds(toggle(routineIds, id))}
-              />
-              <TrainingPicker
-                title="Frequency targets"
+                title="Consistency goals"
                 empty="No frequency goals yet."
                 items={frequencyGoals.map((goal) => ({ id: goal.id, label: goal.name, meta: `${goal.targetCount} per ${goal.targetInterval} ${goal.targetUnit.toLowerCase()}` }))}
                 selected={frequencyGoalIds}
                 onToggle={(id) => setFrequencyGoalIds(toggle(frequencyGoalIds, id))}
               />
               <TrainingPicker
-                title="Performance and volume goals"
+                title="Performance and outcome goals"
                 empty="No performance goals yet."
                 items={goals.map((goal) => ({ id: goal.id, label: goal.name, meta: goal.goalType.toLowerCase() }))}
                 selected={goalIds}
                 onToggle={(id) => setGoalIds(toggle(goalIds, id))}
               />
+              {isClimbing ? (
+                <div style={tickListBox}>
+                  {tickListCount ? (
+                    <label style={{ ...targetOption, ...(includeClimbingTickList ? selectedTargetOption : {}) }}>
+                      <input type="checkbox" checked={includeClimbingTickList} onChange={(event) => setIncludeClimbingTickList(event.target.checked)} />
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <strong style={{ display: "block" }}>Use my climbing tick list</strong>
+                        <span style={choiceMeta}>{tickListCount} starred climb{tickListCount === 1 ? "" : "s"} · stays synced with Climbing</span>
+                      </span>
+                    </label>
+                  ) : null}
+                  <button type="button" style={createTickListButton} onClick={() => { setIncludeClimbingTickList(true); setShowTickListBuilder((open) => !open); }}>
+                    {showTickListBuilder ? "Close tick-list builder" : tickListCount ? "+ Add to tick list" : "+ Create tick list"}
+                  </button>
+                  {showTickListBuilder ? (
+                    <div style={tickListBuilder}>
+                      <div>
+                        <strong style={builderTitle}>Select from current projects</strong>
+                        <p style={builderCopy}>Adding a project stars it on the activity-level tick list. Nothing is copied into the Program.</p>
+                      </div>
+                      {climbingProjects.length ? (
+                        <div style={projectList}>
+                          {climbingProjects.map((project) => {
+                            const checked = project.onTickList || selectedTickProblemIds.includes(project.id);
+                            return (
+                              <label key={project.id} style={{ ...pickerRow, ...(checked ? pickerRowChecked : {}) }}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={project.onTickList}
+                                  onChange={() => { setSelectedTickProblemIds(toggle(selectedTickProblemIds, project.id)); setIncludeClimbingTickList(true); }}
+                                />
+                                <span style={{ minWidth: 0, flex: 1 }}><strong style={pickerLabel}>{project.name}</strong><span style={pickerMeta}>{project.grade} · {project.location?.name ?? "No location"}{project.onTickList ? " · already on tick list" : ""}</span></span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : <p style={pickerEmpty}>No unsent logged projects yet.</p>}
+                      <div style={newTargetHeader}>
+                        <div><strong style={builderTitle}>Add a new climb</strong><p style={builderCopy}>Use this for a named target you have not logged as a project yet.</p></div>
+                        <button type="button" style={smallAddButton} onClick={() => { setNewTickTargets((targets) => [...targets, freshTickTarget()]); setIncludeClimbingTickList(true); }}>+ Add climb</button>
+                      </div>
+                      {newTickTargets.map((target) => (
+                        <div key={target.key} className="tickListTargetRow" style={newTargetRow}>
+                          <input value={target.name} onChange={(event) => updateTickTarget(target.key, { name: event.target.value }, setNewTickTargets)} placeholder="Climb name" style={input} />
+                          <input value={target.grade} onChange={(event) => updateTickTarget(target.key, { grade: event.target.value }, setNewTickTargets)} placeholder={target.gradeSystem === "BOULDER_V" ? "V5" : "5.11a"} style={input} />
+                          <select value={target.gradeSystem} onChange={(event) => updateTickTarget(target.key, { gradeSystem: event.target.value as NewTickTarget["gradeSystem"] }, setNewTickTargets)} style={input}><option value="BOULDER_V">Boulder (V)</option><option value="YOSEMITE">Rope (YDS)</option></select>
+                          <select value={target.locationId} onChange={(event) => updateTickTarget(target.key, { locationId: event.target.value }, setNewTickTargets)} style={input}><option value="">No location yet</option>{climbingLocations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.type.toLowerCase()}</option>)}</select>
+                          <button type="button" style={removeTargetButton} onClick={() => setNewTickTargets((targets) => targets.filter((item) => item.key !== target.key))}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </CreatorPanel>
           </div>
 
-          <div id="setup-starting-point" style={miniSection}>
-          <CreatorPanel eyebrow="4 · The measure" title="How will you know it is working?" copy="Choose one repeatable measure, record where you are, and set where you're going. When your history already has a matching result, use it instead of retyping.">
-            <label style={includeRow}><input type="checkbox" checked={includeAssessment} onChange={(event) => setIncludeAssessment(event.target.checked)} /> Track a measure for this program</label>
-            {includeAssessment ? (
-              <AssessmentBuilder
-                key={`${path}:${resolvedPursuit}`}
-                programId=""
-                pursuitKey={resolvedPursuit}
-                objectiveKind={objectiveKindFor(path)}
-                exercises={exercises}
-                injuries={injuries}
-                sessionMetrics={[]}
-                suggestions={assessmentSuggestions}
-                draft
-                onDraftChange={setStartingAssessment}
-              />
-            ) : null}
-          </CreatorPanel>
-          </div>
-
-          <div id="setup-outcomes" style={miniSection}>
+          <div id="setup-work" style={miniSection}>
+          <CreatorPanel eyebrow="4 · Current work" title="What will you do now?" copy="Optional. Pick the routines you expect to use now. You can change them, add phases, or schedule dates after creation.">
+            <TrainingPicker
+              title="Current routines"
+              empty="No routines yet. Create the Program now and add a routine later."
+              items={routines.map((routine) => ({ id: routine.id, label: routine.name, meta: `${routine.kind.toLowerCase()} · ${routine.domain}` }))}
+              selected={routineIds}
+              onToggle={(id) => setRoutineIds(toggle(routineIds, id))}
+            />
             <FocusForm
               key={`${path}:${resolvedPursuit}`}
               initial={initial}
               routines={routines}
               exercises={exercises}
               injuries={injuries}
-              startingAssessment={includeAssessment ? startingAssessment : null}
-              initialTraining={{ routineIds, goalIds, frequencyGoalIds }}
-              panel="milestones"
+              initialTraining={{
+                routineIds,
+                goalIds,
+                frequencyGoalIds,
+                includeClimbingTickList: hasTickListDraft,
+                tickListProblemIds: selectedTickProblemIds,
+                newTickListItems: newTickTargets.filter((target) => target.name.trim()).map(({ name, grade, gradeSystem, locationId }) => ({ name, grade, gradeSystem, locationId })),
+              }}
+              panel="submit"
               embedded
               guidedOutcomes
               onBack={() => setMode("choose")}
-              onMilestonesChange={setOutcomeDraft}
-              submitDisabled={!canOpenOutcomes}
+              submitDisabled={!canCreate}
             />
+            {!hasMeasure ? <p style={dateNote}>Choose or create at least one goal or target in step 3 to create this Program.</p> : null}
+          </CreatorPanel>
           </div>
         </section>
       </main>
@@ -254,48 +329,64 @@ export default function ProgramCreator({
         @media (min-width: 900px) {
           .programCreatorWorkspace { grid-template-columns: 230px minmax(0, 1fr) !important; }
           .programCreatorSidebar { display: block !important; }
+          .programCreatorMiniSteps { display: none !important; }
         }
         @media (max-width: 899px) {
           .programCreatorWorkspace { grid-template-columns: minmax(0, 1fr) !important; }
           .programPathList { grid-template-columns: minmax(0, 1fr) !important; }
           .programCreatorMiniSteps { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .programDateRow { grid-template-columns: minmax(0, 1fr) !important; }
+          .tickListTargetRow { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
     </div>
   );
 }
 
-function CreatorStageRail() {
-  const stages = [
-    { number: "1", label: "Program setup", meta: "Purpose, work, measure, outcomes" },
-    { number: "2", label: "Training inputs", meta: "Edit routines and goals later" },
-    { number: "3", label: "Stages", meta: "Phases and progression gates" },
-    { number: "4", label: "Training blocks", meta: "Repeatable weeks of work" },
-    { number: "5", label: "Schedule", meta: "Place the next two weeks" },
-    { number: "6", label: "Targets and ladders", meta: "Projects and skill steps" },
-  ];
+function CreatorStepRail({ steps, activeStepId, onStepChange }: {
+  steps: Array<{ number: string; id: string; label: string; complete: boolean; meta: string }>;
+  activeStepId: string;
+  onStepChange: (id: string) => void;
+}) {
   return (
-    <nav aria-label="Program builder stages" style={rail}>
-      <span style={railEyebrow}>Build program</span>
+    <nav aria-label="Program setup steps" style={rail}>
+      <span style={railEyebrow}>Program setup</span>
       <div style={railList}>
-        {stages.map((step, index) => {
-          const active = index === 0;
+        {steps.map((step) => {
+          const current = step.id === activeStepId;
           return (
-            <div key={step.number} aria-current={active ? "step" : undefined} style={{ ...railStep, ...(active ? railStepActive : {}), opacity: active ? 1 : 0.5 }}>
-              <span style={{ ...railNumber, ...(active ? railNumberActive : {}) }}>{step.number}</span>
+            <button
+              key={step.id}
+              type="button"
+              aria-current={current ? "step" : undefined}
+              onClick={() => { onStepChange(step.id); document.getElementById(step.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+              style={{ ...railStep, ...(step.complete ? railStepComplete : {}), ...(current ? railStepCurrent : {}) }}
+            >
+              <span style={{ ...railNumber, ...(current ? railNumberCurrent : {}), ...(step.complete ? railNumberComplete : {}) }}>{step.complete ? "✓" : step.number}</span>
               <span style={railText}><strong style={railLabel}>{step.label}</strong><span style={railMeta}>{step.meta}</span></span>
-            </div>
+            </button>
           );
         })}
       </div>
-      <p style={railNote}>Finish setup to create the program. The same builder then unlocks the remaining steps without changing your logs.</p>
+      <p style={railNote}>A goal or target is required. Current work is optional and can be added later.</p>
     </nav>
   );
 }
 
 function toggle(list: string[], id: string) {
   return list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
+}
+
+function freshTickTarget(): NewTickTarget {
+  return { key: crypto.randomUUID(), name: "", grade: "", gradeSystem: "BOULDER_V", locationId: "" };
+}
+
+function updateTickTarget(
+  key: string,
+  patch: Partial<NewTickTarget>,
+  setTargets: (updater: (targets: NewTickTarget[]) => NewTickTarget[]) => void
+) {
+  setTargets((targets) => targets.map((target) => target.key === key ? { ...target, ...patch } : target));
 }
 
 function TrainingPicker({
@@ -370,8 +461,7 @@ function guidedInitial(
   path: Path,
   name: string,
   pursuitKey: string,
-  timeline: { timelineMode: TimelineMode; startYmd: string; endYmd: string; reviewYmd: string },
-  outcomes: MilestoneFormRow[] | null
+  timeline: { timelineMode: TimelineMode; startYmd: string; endYmd: string; reviewYmd: string }
 ): FocusFormInitial {
   // targetDate is the legacy projection anchor: the end of a bounded program,
   // otherwise the review date.
@@ -388,14 +478,8 @@ function guidedInitial(
     endYmd: timeline.endYmd,
     reviewYmd: timeline.reviewYmd,
     phase: "BUILD",
-    milestones: outcomes ?? [{ scopeKind: "CAPACITY", scopeRef: pursuitKey || path, label: "", targetText: "", gateKind: "NONE" }],
+    milestones: [],
   };
-}
-
-function assessmentSummary(assessment: DraftProgramAssessment | null) {
-  if (!assessment?.name.trim()) return "Choose a measure";
-  const value = assessment.baselineTextValue || assessment.baselineNumberValue || (assessment.baselineNumerator && assessment.baselineDenominator ? `${assessment.baselineNumerator}/${assessment.baselineDenominator}` : "");
-  return value ? `${assessment.name}: ${value}` : assessment.name;
 }
 
 function placeholderFor(path: Path) { if (path === "sport") return "Fall climbing season"; if (path === "strength") return "Build a 50 lb weighted pull-up"; if (path === "endurance") return "Half-marathon base"; if (path === "body") return "Reach target weight"; return "Return to sport"; }
@@ -410,6 +494,20 @@ const pickerEmpty: CSSProperties = { margin: 0, fontSize: 11.5, lineHeight: 1.45
 const pickerList: CSSProperties = { display: "grid", gap: 5, maxHeight: 260, overflowY: "auto" };
 const pickerRow: CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", gap: 10, padding: "7px 9px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.07)", borderRadius: 7, cursor: "pointer" };
 const pickerRowChecked: CSSProperties = { borderColor: "rgba(51,255,122,0.32)", background: "rgba(51,255,122,0.06)" };
+const builderActions: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" };
+const createButton: CSSProperties = { minHeight: 38, padding: "0 12px", borderRadius: 7, border: "1px solid rgba(51,255,122,0.32)", background: "rgba(51,255,122,0.08)", color: "#7ce8aa", fontSize: 11.5, fontWeight: 900, cursor: "pointer" };
+const targetOption: CSSProperties = { minHeight: 58, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", borderRadius: 8, cursor: "pointer" };
+const selectedTargetOption: CSSProperties = { borderColor: "rgba(51,255,122,0.34)", background: "rgba(51,255,122,0.06)" };
+const tickListBox: CSSProperties = { display: "grid", gap: 10, padding: 12, border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, background: "rgba(0,0,0,0.1)" };
+const createTickListButton: CSSProperties = { minHeight: 40, padding: "0 12px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(51,255,122,0.3)", borderRadius: 7, background: "rgba(51,255,122,0.07)", color: "#7ce8aa", fontSize: 11.5, fontWeight: 900, cursor: "pointer" };
+const tickListBuilder: CSSProperties = { display: "grid", gap: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" };
+const builderTitle: CSSProperties = { display: "block", fontSize: 12.5, color: "rgba(255,255,255,0.84)" };
+const builderCopy: CSSProperties = { margin: "3px 0 0", fontSize: 10.5, lineHeight: 1.4, color: "rgba(255,255,255,0.44)" };
+const projectList: CSSProperties = { display: "grid", gap: 5, maxHeight: 240, overflowY: "auto" };
+const newTargetHeader: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" };
+const smallAddButton: CSSProperties = { minHeight: 34, padding: "0 10px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 7, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.72)", fontSize: 10.5, fontWeight: 850, cursor: "pointer" };
+const newTargetRow: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(150px, 1.4fr) minmax(90px, 0.55fr) minmax(125px, 0.75fr) minmax(150px, 1fr) auto", gap: 7, alignItems: "center" };
+const removeTargetButton: CSSProperties = { minHeight: 40, padding: "0 9px", border: 0, background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 10.5, cursor: "pointer" };
 const pickerLabel: CSSProperties = { display: "block", fontSize: 12.5, color: "rgba(255,255,255,0.85)" };
 const pickerMeta: CSSProperties = { fontSize: 10.5, color: "rgba(255,255,255,0.42)" };
 const choiceGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 };
@@ -418,24 +516,27 @@ const secondaryChoice: CSSProperties = { ...primaryChoice, borderColor: "rgba(25
 const choiceTitle: CSSProperties = { fontSize: 14, fontWeight: 900 };
 const choiceMeta: CSSProperties = { fontSize: 10.5, lineHeight: 1.4, color: "rgba(255,255,255,0.5)" };
 const workspace: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18, alignItems: "start" };
-const sidebar: CSSProperties = { display: "none", position: "sticky", top: 82, alignSelf: "start", padding: "12px 8px 14px", borderRightWidth: 1, borderRightStyle: "solid", borderRightColor: "rgba(255,255,255,0.08)" };
+const sidebar: CSSProperties = { display: "none", position: "sticky", top: 82, alignSelf: "start", minWidth: 0, padding: "10px 14px 14px 0", borderRight: "1px solid rgba(255,255,255,0.08)" };
 const canvas: CSSProperties = { minWidth: 0, width: "100%" };
 const rail: CSSProperties = { display: "grid", gap: 12 };
-const railEyebrow: CSSProperties = { padding: "0 10px", fontSize: 10, fontWeight: 900, textTransform: "uppercase", color: "rgba(255,255,255,0.38)" };
-const railList: CSSProperties = { display: "grid", gap: 3 };
-const railStep: CSSProperties = { width: "100%", minHeight: 62, display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)", alignItems: "center", gap: 10, padding: "8px 10px", borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: 7, background: "transparent", color: "inherit", textAlign: "left", cursor: "pointer" };
-const railStepActive: CSSProperties = { background: "rgba(51,255,122,0.075)", borderColor: "rgba(51,255,122,0.24)" };
+const railEyebrow: CSSProperties = { padding: "0 10px", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.38)" };
+const railList: CSSProperties = { display: "grid", gap: 4 };
+const railStep: CSSProperties = { width: "100%", minHeight: 62, display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)", alignItems: "center", gap: 10, padding: "8px 10px", borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: 8, background: "transparent", color: "inherit", textAlign: "left", cursor: "pointer" };
+const railStepCurrent: CSSProperties = { borderColor: "rgba(51,255,122,0.28)", background: "rgba(51,255,122,0.075)" };
+const railStepComplete: CSSProperties = { color: "rgba(255,255,255,0.72)" };
 const railNumber: CSSProperties = { width: 26, height: 26, display: "grid", placeItems: "center", borderRadius: 6, background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.46)", fontSize: 10.5, fontWeight: 900 };
-const railNumberActive: CSSProperties = { background: "rgba(51,255,122,0.14)", color: "#7ce8aa" };
+const railNumberCurrent: CSSProperties = { background: "rgba(51,255,122,0.14)", color: "#7ce8aa" };
+const railNumberComplete: CSSProperties = { background: "rgba(51,255,122,0.1)", color: "#7ce8aa" };
 const railText: CSSProperties = { minWidth: 0, display: "grid", gap: 2 };
-const railLabel: CSSProperties = { fontSize: 12.5, color: "rgba(255,255,255,0.78)" };
-const railMeta: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, color: "rgba(255,255,255,0.38)" };
-const railNote: CSSProperties = { margin: "2px 10px 0", fontSize: 10.5, lineHeight: 1.45, color: "rgba(255,255,255,0.36)" };
+const railLabel: CSSProperties = { fontSize: 12.5, color: "rgba(255,255,255,0.82)" };
+const railMeta: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, color: "rgba(255,255,255,0.4)" };
+const railNote: CSSProperties = { margin: "2px 10px 0", fontSize: 10.5, lineHeight: 1.45, color: "rgba(255,255,255,0.38)" };
 const setupShell: CSSProperties = { display: "grid", gap: 0, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.10)", borderRadius: 9, background: "rgba(255,255,255,0.018)", overflow: "hidden" };
 const setupHeader: CSSProperties = { display: "grid", gap: 6, padding: "20px 20px 16px" };
 const setupTitle: CSSProperties = { margin: 0, fontSize: 24, lineHeight: 1.2 };
 const mobileSteps: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, padding: "0 20px 18px" };
 const mobileStep: CSSProperties = { minWidth: 0, minHeight: 54, display: "grid", gridTemplateColumns: "24px minmax(0, 1fr)", alignItems: "center", gap: 7, padding: "7px 8px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", borderRadius: 7, background: "rgba(255,255,255,0.02)", color: "rgba(255,255,255,0.62)", textAlign: "left", cursor: "pointer" };
+const mobileStepActive: CSSProperties = { borderColor: "rgba(51,255,122,0.34)", background: "rgba(51,255,122,0.075)" };
 const mobileStepComplete: CSSProperties = { borderColor: "rgba(51,255,122,0.24)", background: "rgba(51,255,122,0.05)" };
 const miniStepNumber: CSSProperties = { width: 22, height: 22, display: "grid", placeItems: "center", borderRadius: 6, background: "rgba(51,255,122,0.1)", color: "#7ce8aa", fontSize: 10, fontWeight: 900 };
 const miniStepText: CSSProperties = { minWidth: 0, display: "grid", gap: 1, fontSize: 10.5, lineHeight: 1.25 };
@@ -455,4 +556,3 @@ const selectedPath: CSSProperties = { borderColor: "rgba(51,255,122,0.35)", back
 const field: CSSProperties = { display: "grid", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.62)", fontWeight: 800 };
 const input: CSSProperties = { minHeight: 44, minWidth: 0, width: "100%", padding: "8px 10px", boxSizing: "border-box", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 8, background: "#111827", color: "white", fontSize: 16 };
 const optionalText: CSSProperties = { color: "rgba(255,255,255,0.38)", fontWeight: 650 };
-const includeRow: CSSProperties = { minHeight: 40, display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,0.67)" };

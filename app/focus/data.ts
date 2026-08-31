@@ -377,7 +377,20 @@ export async function getFocusBandData(): Promise<FocusBandItem[]> {
   const focuses = await prisma.focus.findMany({
     where: { status: "ACTIVE", profileKey: session.profileKey },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, name: true, icon: true, color: true, status: true, season: true, phase: true },
+    select: {
+      id: true, name: true, icon: true, color: true, status: true, season: true, phase: true,
+      blocks: {
+        where: { status: { in: ["ACTIVE", "DRAFT"] } },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          items: {
+            where: { routineId: { not: null } },
+            orderBy: [{ priority: "desc" }, { sortOrder: "asc" }],
+            select: { id: true, label: true, routineId: true, targetPerWeek: true },
+          },
+        },
+      },
+    },
   });
   if (focuses.length === 0) return [];
 
@@ -427,6 +440,10 @@ export async function getFocusBandData(): Promise<FocusBandItem[]> {
       milestonesDone: done,
       milestonesTotal: total,
       currentAims,
+      availableWork: f.blocks
+        .flatMap((block) => block.items)
+        .filter((item): item is typeof item & { routineId: string } => Boolean(item.routineId))
+        .slice(0, 4),
     };
   });
 }

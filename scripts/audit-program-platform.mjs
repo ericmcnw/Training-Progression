@@ -14,7 +14,7 @@ const protectedCounts = Object.fromEntries(
   )
 );
 
-const [programs, milestoneGroups, stageCount, blockCount, assessmentCount, plannedCount] = await Promise.all([
+const [programs, milestoneGroups, stageCount, blockCount, checkpointCount, plannedCount] = await Promise.all([
   prisma.focus.findMany({
     orderBy: { sortOrder: "asc" },
     select: {
@@ -34,7 +34,6 @@ const [programs, milestoneGroups, stageCount, blockCount, assessmentCount, plann
           stages: true,
           blocks: true,
           targetLists: true,
-          assessments: true,
           plannedSessions: true,
           continuations: true,
         },
@@ -44,7 +43,7 @@ const [programs, milestoneGroups, stageCount, blockCount, assessmentCount, plann
   prisma.progressionMilestone.groupBy({ by: ["ownerId"], where: { ownerKind: "FOCUS" }, _count: { _all: true } }),
   prisma.programStage.count(),
   prisma.programBlock.count(),
-  prisma.programAssessment.count(),
+  prisma.goalCheckpoint.count(),
   prisma.plannedSession.count(),
 ]);
 
@@ -71,7 +70,7 @@ console.log(JSON.stringify({
     milestones: milestoneGroups.reduce((sum, row) => sum + row._count._all, 0),
     stages: stageCount,
     blocks: blockCount,
-    assessments: assessmentCount,
+    goalCheckpoints: checkpointCount,
     plannedSessions: plannedCount,
   },
   integrity: {

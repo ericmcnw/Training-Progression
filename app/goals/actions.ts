@@ -15,8 +15,6 @@ import { recordBarRaise } from "@/lib/goal-milestones";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-
 function parseRequiredString(formData: FormData, key: string, label: string) {
   const value = String(formData.get(key) ?? "").trim();
   if (!value) throw new Error(`${label} is required.`);
@@ -46,22 +44,6 @@ function inferUnit(metricType: string) {
   if (metricType === "MAX_WEIGHT" || metricType === "VOLUME") return "lb";
   if (metricType === "SESSION_METRIC") return null;
   return null;
-}
-
-function isRoutineFrequencyGoalInput(input: {
-  goalType: string;
-  targetType: string;
-  metricType: string;
-  timeframe: string;
-  targetId: string;
-}) {
-  return (
-    input.goalType === "FREQUENCY" &&
-    input.targetType === "ROUTINE" &&
-    input.metricType === "SESSIONS" &&
-    input.timeframe !== "ONE_TIME" &&
-    input.targetId.trim().length > 0
-  );
 }
 
 function isStoredRoutineFrequencyGoalLike(input: {
@@ -351,6 +333,7 @@ export async function promoteGoal(formData: FormData) {
   if (goal.metricType === "SESSION_METRIC") {
     throw new Error("Grade goals promote through Edit Goal (the target is a grade, not a number).");
   }
+  if (goal.targetValue == null) throw new Error("This goal does not have a numeric target.");
   if (newTarget <= goal.targetValue) {
     throw new Error("The new bar should be higher than the one you just hit.");
   }

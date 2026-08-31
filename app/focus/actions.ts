@@ -353,31 +353,6 @@ function cleanProgramYmd(value?: string | null): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
 }
 
-function numeric(value?: string | null): number | null {
-  const raw = (value ?? "").trim();
-  return raw && Number.isFinite(Number(raw)) ? Number(raw) : null;
-}
-
-export type InitialProgramAssessment = {
-  name: string;
-  metricKind: "NUMBER" | "RATIO" | "DURATION" | "GRADE" | "PAIN" | "BODY_WEIGHT" | "BODY_FAT" | "WAIST" | "TEXT";
-  metricKey: string;
-  unit: string;
-  direction: "HIGHER" | "LOWER" | "TARGET" | "INFORMATIONAL";
-  checkpointIntervalWeeks: string;
-  targetNumberValue: string;
-  targetNumerator: string;
-  targetDenominator: string;
-  targetTextValue: string;
-  baselineNumberValue: string;
-  baselineNumerator: string;
-  baselineDenominator: string;
-  baselineTextValue: string;
-  baselineYmd: string;
-  baselineSource: "MANUAL" | "ROUTINE_LOG" | "BODY_MEASUREMENT" | "PAIN_LOG" | "CLIMB_ATTEMPT" | "DERIVED";
-  baselineSourceRefId: string;
-};
-
 export async function saveFocus(input: {
   id?: string;
   name: string;
@@ -397,8 +372,14 @@ export async function saveFocus(input: {
   season?: string | null;
   phase?: "BUILD" | "PEAK" | "OFFSEASON" | "MAINTAIN" | "" | null;
   handoffNote?: string | null;
-  initialAssessment?: InitialProgramAssessment | null;
-  initialTraining?: { routineIds: string[]; goalIds: string[]; frequencyGoalIds: string[] } | null;
+  initialTraining?: {
+    routineIds: string[];
+    goalIds: string[];
+    frequencyGoalIds: string[];
+    includeClimbingTickList?: boolean;
+    tickListProblemIds?: string[];
+    newTickListItems?: Array<{ name: string; grade: string; gradeSystem: "BOULDER_V" | "YOSEMITE"; locationId?: string }>;
+  } | null;
   updateFoundation?: boolean;
   reconcileMilestones?: boolean;
   milestones: MilestoneFormRow[];
@@ -534,9 +515,23 @@ export async function saveFocus(input: {
   }
 
   if (!input.id && input.initialTraining) {
-    const { routineIds, goalIds, frequencyGoalIds } = input.initialTraining;
+    const { routineIds, goalIds, frequencyGoalIds, includeClimbingTickList, tickListProblemIds = [], newTickListItems = [] } = input.initialTraining;
+    const requestedTickProblemIds = Array.from(new Set(tickListProblemIds.filter(Boolean))).slice(0, 100);
+    if (newTickListItems.length > 25) throw new Error("Add no more than 25 new tick-list climbs at once.");
+    const cleanTickItems = newTickListItems
+      .map((item) => ({
+        name: item.name.trim().slice(0, 120),
+        grade: item.grade.trim().slice(0, 24),
+        gradeSystem: item.gradeSystem,
+        locationId: item.locationId?.trim() || null,
+      }))
+      .filter((item) => item.name);
+    if (cleanTickItems.some((item) => !item.grade)) throw new Error("Add a grade for each new tick-list climb.");
+    if (cleanTickItems.some((item) => item.gradeSystem !== "BOULDER_V" && item.gradeSystem !== "YOSEMITE")) throw new Error("Choose a valid climbing grade system.");
+    const wantsTickList = Boolean(includeClimbingTickList || requestedTickProblemIds.length || cleanTickItems.length);
+    if (wantsTickList && input.pursuitKey?.trim().toLowerCase() !== "climbing") throw new Error("A climbing tick list can only be attached to a climbing Program.");
     const [validRoutines, validGoals, validFrequencyGoals] = await Promise.all([
-      prisma.routine.findMany({ where: { id: { in: routineIds }, isDeleted: false }, select: { id: true } }),
+      prisma.routine.findMany({ where: { id: { in: routineIds }, isDeleted: false }, select: { id: true, name: true } }),
       prisma.goal.findMany({ where: { id: { in: goalIds } }, select: { id: true } }),
       prisma.frequencyGoal.findMany({ where: { id: { in: frequencyGoalIds } }, select: { id: true } }),
     ]);
@@ -550,48 +545,59 @@ export async function saveFocus(input: {
       ...validFrequencyGoals.map((goal, sortOrder) =>
         prisma.programFrequencyGoal.create({ data: { programId: focusId, frequencyGoalId: goal.id, role: "SUPPORTING", sortOrder } })
       ),
-    ]);
-  }
-
-  if (!input.id && input.initialAssessment?.name.trim()) {
-    const assessment = input.initialAssessment;
-    const numberValue = numeric(assessment.baselineNumberValue);
-    const numerator = numeric(assessment.baselineNumerator);
-    const denominator = numeric(assessment.baselineDenominator);
-    const textValue = assessment.baselineTextValue.trim() || null;
-    const hasRatio = assessment.metricKind === "RATIO" && numerator != null && denominator != null && denominator > 0;
-    const hasScalar = assessment.metricKind !== "RATIO" && (numberValue != null || textValue != null);
-    const rawInterval = Number(assessment.checkpointIntervalWeeks);
-    await prisma.programAssessment.create({
-      data: {
-        programId: focusId,
-        name: assessment.name.trim(),
-        metricKind: assessment.metricKind,
-        metricKey: assessment.metricKey.trim() || null,
-        unit: assessment.unit.trim() || null,
-        direction: assessment.direction,
-        targetNumberValue: numeric(assessment.targetNumberValue),
-        targetNumerator: numeric(assessment.targetNumerator),
-        targetDenominator: numeric(assessment.targetDenominator),
-        targetTextValue: assessment.targetTextValue.trim() || null,
-        checkpointIntervalWeeks: Number.isFinite(rawInterval) && rawInterval > 0 ? Math.min(52, Math.round(rawInterval)) : null,
-        ...((hasRatio || hasScalar) ? {
-          results: {
-            create: {
-              measuredAt: new Date(`${cleanProgramYmd(assessment.baselineYmd) ?? todayAppYmd()}T12:00:00.000Z`),
-              numberValue,
-              numerator,
-              denominator,
-              textValue,
-              source: assessment.baselineSource,
-              sourceRefId: assessment.baselineSourceRefId.trim() || null,
-              isBaseline: true,
-              confirmedAt: new Date(),
+      ...(wantsTickList
+        ? [prisma.programTargetList.create({
+            data: {
+              programId: focusId,
+              name: "Climbing tick list",
+              description: "Starred climbing targets, managed from the Climbing activity.",
+              kind: "CHECKLIST",
+              sportSlug: "climbing",
+              sortOrder: 0,
             },
+          })]
+        : []),
+    ]);
+    if (wantsTickList) {
+      if (requestedTickProblemIds.length) {
+        await prisma.climbProblem.updateMany({ where: { id: { in: requestedTickProblemIds } }, data: { onTickList: true } });
+      }
+      const requestedLocationIds = Array.from(new Set(cleanTickItems.flatMap((item) => item.locationId ? [item.locationId] : [])));
+      const validLocationIds = new Set((await prisma.climbLocation.findMany({ where: { id: { in: requestedLocationIds } }, select: { id: true } })).map((location) => location.id));
+      for (const item of cleanTickItems) {
+        const locationId = item.locationId && validLocationIds.has(item.locationId) ? item.locationId : null;
+        const existing = await prisma.climbProblem.findFirst({
+          where: { name: { equals: item.name, mode: "insensitive" }, grade: item.grade, gradeSystem: item.gradeSystem, locationId },
+          select: { id: true },
+        });
+        if (existing) await prisma.climbProblem.update({ where: { id: existing.id }, data: { onTickList: true } });
+        else await prisma.climbProblem.create({ data: { name: item.name, grade: item.grade, gradeSystem: item.gradeSystem, locationId, onTickList: true } });
+      }
+    }
+    if (validRoutines.length) {
+      const currentPhase = await prisma.programStage.create({
+        data: { programId: focusId, name: "Current phase", status: "ACTIVE", sortOrder: 0 },
+        select: { id: true },
+      });
+      await prisma.programBlock.create({
+        data: {
+          programId: focusId,
+          stageId: currentPhase.id,
+          name: "Current phase",
+          status: "ACTIVE",
+          scheduleMode: "FLEXIBLE",
+          sortOrder: 0,
+          items: {
+            create: validRoutines.map((routine, sortOrder) => ({
+              kind: "ROUTINE",
+              routineId: routine.id,
+              label: routine.name,
+              sortOrder,
+            })),
           },
-        } : {}),
-      },
-    });
+        },
+      });
+    }
   }
 
   revalidateFocusSurfaces();

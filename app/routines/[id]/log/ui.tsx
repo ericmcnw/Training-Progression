@@ -8,6 +8,7 @@ import WorkoutExerciseEditor, {
   type ExerciseOption,
   type WorkoutBlock,
 } from "./WorkoutExerciseEditor";
+import type { ProgramPlanRef } from "@/lib/program-prescriptions";
 
 export default function LogWorkoutForm({
   routineId,
@@ -20,6 +21,7 @@ export default function LogWorkoutForm({
   onComplete,
   onBack,
   defaultPerformedAtLocal,
+  programPlanRef,
 }: {
   routineId: string;
   routineName: string;
@@ -31,6 +33,7 @@ export default function LogWorkoutForm({
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
+  programPlanRef?: ProgramPlanRef;
 }) {
   const finish = onComplete ?? (() => { window.location.href = "/log"; });
   const [painLevels, setPainLevels] = useState<Record<string, number>>(() =>
@@ -72,6 +75,7 @@ export default function LogWorkoutForm({
           performedAtLocal: payload.performedAtLocal || undefined,
           exercises: payload.exercises,
           effort: payload.effort,
+          programPlanRef,
           painCheck:
             activePainZones.length > 0
               ? {

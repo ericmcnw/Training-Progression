@@ -34,7 +34,7 @@ export function ProgramOverview({ focus, detail, injury, accent }: SharedProps &
                 key={session.id}
                 title={session.label}
                 meta={dateLabel(session.currentYmd)}
-                href={session.routineId ? `/routines/${session.routineId}/log` : "/log"}
+                href={session.routineId ? `/routines/${session.routineId}/log?plannedSessionId=${encodeURIComponent(session.id)}` : "/log"}
                 action="Log"
               />
             ))}
@@ -46,7 +46,7 @@ export function ProgramOverview({ focus, detail, injury, accent }: SharedProps &
                 key={item.id}
                 title={item.label}
                 meta={frequencyLabel(item.minPerWeek, item.targetPerWeek, item.maxPerWeek)}
-                href={item.routine?.id ? `/routines/${item.routine.id}/log` : detail.activityLink.href}
+                href={item.routine?.id ? `/routines/${item.routine.id}/log?programId=${encodeURIComponent(detail.id)}&blockItemId=${encodeURIComponent(item.id)}` : detail.activityLink.href}
                 action={item.routine?.id ? "Log" : "Open"}
               />
             ))}
@@ -54,7 +54,7 @@ export function ProgramOverview({ focus, detail, injury, accent }: SharedProps &
         ) : detail.routines.length ? (
           <div style={rowList}>
             {detail.routines.slice(0, 4).map((routine) => (
-              <ActionRow key={routine.id} title={routine.name} meta={routine.role.toLowerCase()} href={`/routines/${routine.id}/log`} action="Log" />
+              <ActionRow key={routine.id} title={routine.name} meta={routine.role.toLowerCase()} href={`/routines/${routine.id}/log?programId=${encodeURIComponent(detail.id)}`} action="Log" />
             ))}
           </div>
         ) : (
@@ -164,7 +164,7 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
   const max = Math.max(1, ...detail.activity.weeklyCounts);
   return (
     <div style={viewStack}>
-      <Section eyebrow="Evidence" title="Starting point and checkpoints" action={<Link href={`/programs/${detail.id}/edit`} style={textAction}>Manage assessments</Link>}>
+      <Section eyebrow="Evidence" title="Goal checkpoints" action={<Link href={`/programs/${detail.id}/edit`} style={textAction}>Manage checkpoints</Link>}>
         {detail.assessments.length ? (
           <div style={rowList}>
             {detail.assessments.map((assessment) => {
@@ -191,7 +191,7 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
               );
             })}
           </div>
-        ) : <Empty message="No baseline has been confirmed. The first logs can still guide training, but a repeatable assessment makes longer-term change clearer." actionHref={`/programs/${detail.id}/edit`} actionLabel="Add an assessment" />}
+        ) : <Empty message="No checkpoint has been recorded yet. Add a baseline when a repeatable measure would make progress clearer." actionHref={`/programs/${detail.id}/edit`} actionLabel="Record checkpoint" />}
       </Section>
 
       <Section eyebrow="Consistency" title="Training over eight weeks" action={<Link href={detail.activityLink.href} style={textAction}>Activity page</Link>}>
@@ -246,7 +246,7 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
             <label><input type="checkbox" name="carryRoutines" value="1" defaultChecked /> routines</label>
             <label><input type="checkbox" name="carryGoals" value="1" defaultChecked /> goals</label>
             <label><input type="checkbox" name="carryTargets" value="1" defaultChecked /> open targets</label>
-            <label><input type="checkbox" name="carryAssessments" value="1" defaultChecked /> latest checkpoints</label>
+            <span style={rowMeta}>Goal checkpoints stay with their goals.</span>
           </div>
           <button type="submit" style={cycleButton}>Create next cycle</button>
         </form>
@@ -297,7 +297,7 @@ function OutcomePreview({ detail, accent }: { detail: Detail; accent: string }) 
 }
 
 function AssessmentPreview({ detail }: { detail: Detail }) {
-  const assessment = detail.assessments[0];
+  const assessment = detail.assessments.find((candidate) => candidate.results.length > 0);
   if (!assessment) return null;
   const baseline = assessment.results.find((result) => result.isBaseline) ?? assessment.results[0] ?? null;
   const latest = assessment.results.at(-1) ?? null;

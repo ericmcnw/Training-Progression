@@ -7,7 +7,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type CSSProperties } from "react";
-import { saveFocus, deleteFocus, type InitialProgramAssessment, type MilestoneFormRow } from "@/app/focus/actions";
+import { saveFocus, deleteFocus, type MilestoneFormRow } from "@/app/focus/actions";
 import { inputStyle, textareaStyle, Field, FormSection, FormStack } from "@/app/routines/[id]/log/form-ui";
 import type { MilestoneScopeKind, FocusStatus } from "@/generated/prisma";
 import { activitiesByFamily } from "@/lib/activity-families";
@@ -102,7 +102,6 @@ export default function FocusForm({
   stages = [],
   embedded = false,
   panel = "all",
-  startingAssessment = null,
   initialTraining = null,
   guidedOutcomes = false,
   onBack,
@@ -115,9 +114,15 @@ export default function FocusForm({
   injuries?: InjuryPick[];
   stages?: PickItem[];
   embedded?: boolean;
-  panel?: "all" | "foundation" | "milestones";
-  startingAssessment?: InitialProgramAssessment | null;
-  initialTraining?: { routineIds: string[]; goalIds: string[]; frequencyGoalIds: string[] } | null;
+  panel?: "all" | "foundation" | "milestones" | "submit";
+  initialTraining?: {
+    routineIds: string[];
+    goalIds: string[];
+    frequencyGoalIds: string[];
+    includeClimbingTickList?: boolean;
+    tickListProblemIds?: string[];
+    newTickListItems?: Array<{ name: string; grade: string; gradeSystem: "BOULDER_V" | "YOSEMITE"; locationId?: string }>;
+  } | null;
   guidedOutcomes?: boolean;
   onBack?: () => void;
   onMilestonesChange?: (milestones: MilestoneFormRow[]) => void;
@@ -209,10 +214,9 @@ export default function FocusForm({
           startYmd,
           endYmd: submittedEndYmd,
           reviewYmd: submittedReviewYmd,
-          initialAssessment: startingAssessment,
           initialTraining,
           updateFoundation: panel !== "milestones",
-          reconcileMilestones: panel !== "foundation",
+          reconcileMilestones: panel !== "foundation" && panel !== "submit",
           milestones: rows.map((r) => ({
             id: r.id,
             stageId: r.stageId,
@@ -253,7 +257,7 @@ export default function FocusForm({
 
   return (
     <FormStack maxWidth="var(--app-width-content)">
-      {panel !== "milestones" ? <FormSection title={embedded ? undefined : "Direction and timeline"} unframed={embedded}>
+      {panel !== "milestones" && panel !== "submit" ? <FormSection title={embedded ? undefined : "Direction and timeline"} unframed={embedded}>
         <Field label="Name">
           <input
             style={inputStyle}
@@ -353,7 +357,7 @@ export default function FocusForm({
         </details>
       </FormSection> : null}
 
-      {panel !== "foundation" ? guidedOutcomes ? (
+      {panel !== "foundation" && panel !== "submit" ? guidedOutcomes ? (
         <GuidedOutcomesEditor
           rows={rows}
           pursuitKey={pursuitKey}

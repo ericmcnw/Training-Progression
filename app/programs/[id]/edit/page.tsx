@@ -3,16 +3,15 @@ import { notFound } from "next/navigation";
 import { getProgramDefinitionEditorData, getProgramDetailData, getProgramEditorOptions } from "@/app/programs/detail-data";
 import FocusForm from "@/app/focus/FocusForm";
 import {
-  addProgramBlockRoutine,
+  addProgramPhaseRoutine,
+  addProgramGoalCheckpoint,
   addProgramTargetItem,
   createPlannedSession,
-  createProgramBlock,
   createProgramStage,
   createProgramTargetList,
   moveProgramTargetItem,
   removeProgramBlockItem,
   saveProgramRelationships,
-  setProgramBlockStatus,
   setProgramStageStatus,
   setProgramTargetItemStatus,
   updatePlannedSession,
@@ -20,8 +19,6 @@ import {
 import { todayAppYmd } from "@/lib/dates";
 import { NewGoalDrawerButton, NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import ProgramEditorNav, { type ProgramEditorStep } from "./ProgramEditorNav";
-import AssessmentBuilder from "./AssessmentBuilder";
-import AssessmentCard from "./AssessmentCard";
 
 export const dynamic = "force-dynamic";
 
@@ -35,17 +32,23 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const selectedFrequencyGoals = new Set(options.program.frequencyGoalLinks.map((link) => link.frequencyGoalId));
   const scheduledCount = detail.schedule.missed.length + detail.schedule.next.length;
   const targetCount = detail.targetLists.reduce((sum, list) => sum + list.items.length, 0);
-  const trainingCount = selectedRoutines.size + selectedGoals.size + selectedFrequencyGoals.size;
+  const hasNamedMeasure = detail.targetLists.length > 0;
+  const currentWork = detail.blocks.flatMap((block) => block.items.map((item) => ({
+    ...item,
+    phaseName: detail.stages.find((stage) => stage.id === block.stageId)?.name ?? "Current phase",
+  })));
+  const goalCount = selectedGoals.size + selectedFrequencyGoals.size;
   const steps: ProgramEditorStep[] = [
-    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `${definition.initial.milestones.length} outcomes · ${detail.assessments.length} baselines`, complete: definition.initial.milestones.length > 0 || detail.assessments.length > 0 },
-    { id: "program-editor-step-2", number: "2", label: "Training inputs", meta: `${selectedRoutines.size} routines · ${selectedGoals.size + selectedFrequencyGoals.size} goals`, complete: trainingCount > 0 },
-    { id: "program-editor-step-3", number: "3", label: "Stages", meta: `${detail.stages.length} defined`, complete: detail.stages.length > 0 },
-    { id: "program-editor-step-4", number: "4", label: "Training blocks", meta: `${detail.blocks.length} defined`, complete: detail.blocks.length > 0 },
-    { id: "program-editor-step-5", number: "5", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Nothing placed", complete: scheduledCount > 0 },
-    { id: "program-editor-step-6", number: "6", label: "Targets and ladders", meta: targetCount ? `${targetCount} targets` : "No targets", complete: targetCount > 0 },
+    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `${goalCount} goals · ${detail.targetLists.length} target lists`, complete: goalCount > 0 || hasNamedMeasure || definition.initial.milestones.length > 0 },
+    { id: "program-editor-step-2", number: "2", label: "Goals & measures", meta: goalCount ? `${goalCount} goals` : hasNamedMeasure ? `${detail.targetLists.length} target lists` : "Choose one", complete: goalCount > 0 || hasNamedMeasure },
+    { id: "program-editor-step-3", number: "3", label: "Current work", meta: currentWork.length ? `${currentWork.length} routines` : "Optional — add later", complete: currentWork.length > 0 },
+    { id: "program-editor-step-4", number: "4", label: "Dates", meta: scheduledCount ? `${scheduledCount} placed` : "Optional", complete: scheduledCount > 0 },
+    { id: "program-editor-step-5", number: "5", label: "Targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
   ];
-  // Land on the first thing still missing, not on the step just filled in.
-  const openStep = steps.find((step) => !step.complete)?.number ?? "1";
+  // Optional dates and targets are never treated as setup debt. Once the
+  // required foundation is sound, open current work only when it is absent.
+  const requiredGap = steps.slice(0, 2).find((step) => !step.complete);
+  const openStep = requiredGap?.number ?? (currentWork.length ? "1" : "3");
 
   return (
     <main style={page} className="programEditor">
@@ -89,51 +92,44 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         />
         </SetupPart>
 
-        <SetupPart number="3" title="Starting point and checkpoints" subtitle={`${detail.assessments.length} assessment${detail.assessments.length === 1 ? "" : "s"}`}>
-        {detail.assessments.length ? <div style={list}>{detail.assessments.map((assessment) => (
-          <AssessmentCard
-            key={assessment.id}
-            programId={id}
-            assessment={assessment}
-            suggestion={definition.assessmentSuggestions.find((candidate) => candidate.metricKey === assessment.metricKey) ?? null}
-          />
-        ))}</div> : <Empty text="No assessments yet. Add the test or measurement you want to compare over time." />}
-        <details style={addPanel}>
-          <summary style={addPanelSummary}>Add an assessment</summary>
-          <div style={{ paddingTop: 12 }}>
-            <AssessmentBuilder
-              programId={id}
-              pursuitKey={definition.initial.pursuitKey}
-              objectiveKind={definition.initial.objectiveKind}
-              exercises={definition.exercises}
-              injuries={definition.injuries}
-              sessionMetrics={definition.sessionMetrics}
-              suggestions={definition.assessmentSuggestions}
-            />
+        <SetupPart number="3" title="Checkpoints" subtitle={`${detail.assessments.length} measured goal${detail.assessments.length === 1 ? "" : "s"}`}>
+        {detail.assessments.length ? (
+          <div style={list}>
+            {detail.assessments.map((goal) => {
+              const latest = goal.results.at(-1);
+              const value = latest?.numberValue ?? latest?.textValue ?? null;
+              return (
+                <div key={goal.id} style={compactRow}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong>{goal.name}</strong>
+                    <div style={minorText}>{value != null ? `Latest checkpoint: ${value}${goal.unit ? ` ${goal.unit}` : ""}` : "No checkpoint recorded"}</div>
+                  </div>
+                  <Link href={`/goals/${encodeURIComponent(goal.id)}`} style={quietLink}>Open goal</Link>
+                  <form action={addProgramGoalCheckpoint} style={miniForm}>
+                    <input type="hidden" name="programId" value={id} />
+                    <input type="hidden" name="goalId" value={goal.id} />
+                    <input name="measuredYmd" type="date" defaultValue={todayAppYmd()} style={dateInput} aria-label="Checkpoint date" />
+                    <input name="value" required placeholder={goal.unit ? `Value (${goal.unit})` : "Value or grade"} style={smallInput} />
+                    <label style={minorText}><input type="checkbox" name="isBaseline" value="1" /> baseline</label>
+                    <button type="submit" style={quietActionButton}>Record</button>
+                  </form>
+                </div>
+              );
+            })}
           </div>
-        </details>
+        ) : <Empty text="Connect a measured goal to keep its baseline and checkpoints with the program." />}
+        <p style={minorText}>This is measurement history only. Choose or change the Program goals in step 2.</p>
         </SetupPart>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="2" title="Training inputs" subtitle="Connect the routines, performance goals, and frequency targets that move this program forward.">
+      <EditorSection openStep={openStep} number="2" title="Choose goals and measures" subtitle="Use a measured goal, a named target list, or both. Workouts belong in step 3.">
         <div style={builderActions}>
-          <span style={minorText}>Reuse what already exists. Create something only when the program genuinely needs it.</span>
-          <div style={actionGroup}><NewRoutineDrawerButton style={smallCreateButton}>New routine</NewRoutineDrawerButton><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
+          <span style={minorText}>Choose at least one measurable destination for this Program.</span>
+          <div style={actionGroup}><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
         </div>
         <form action={saveProgramRelationships} style={{ display: "grid", gap: 14 }}>
           <input type="hidden" name="programId" value={id} />
-          <PickerGroup title="Routines" count={selectedRoutines.size}>
-            {options.routines.map((routine) => (
-              <CheckRow
-                key={routine.id}
-                name="routineId"
-                value={routine.id}
-                checked={selectedRoutines.has(routine.id)}
-                label={routine.name}
-                meta={`${routine.kind.toLowerCase()} · ${routine.domain}`}
-              />
-            ))}
-          </PickerGroup>
+          {[...selectedRoutines].map((routineId) => <input key={routineId} type="hidden" name="routineId" value={routineId} />)}
           <PickerGroup title="Performance and volume goals" count={selectedGoals.size}>
             {options.goals.map((goal) => (
               <CheckRow key={goal.id} name="goalId" value={goal.id} checked={selectedGoals.has(goal.id)} label={goal.name} meta={goal.goalType.toLowerCase()} />
@@ -151,91 +147,69 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
               />
             ))}
           </PickerGroup>
+          {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them in step 5.</p> : null}
           <button type="submit" style={primaryButton}>Save connections</button>
         </form>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="3" title="Stages" subtitle="High-level phases such as Base, Build, Send season, or Return to sport.">
-        {detail.stages.length ? (
+      <EditorSection openStep={openStep} number="3" title="Choose the current work" subtitle="These are the routines available to train now. Dates are optional and belong in step 4.">
+        {currentWork.length ? (
           <div style={list}>
-            {detail.stages.map((stage) => (
-              <div key={stage.id} style={compactRow}>
-                <span style={stateDot(stage.status)} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <strong>{stage.name}</strong>
-                  <div style={minorText}>{stage.status.toLowerCase()} · {stage.blocks.length} block{stage.blocks.length === 1 ? "" : "s"}</div>
-                </div>
-                <div style={actionGroup}>
-                  {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
-                  {stage.status === "ACTIVE" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="COMPLETED" label="Complete" /> : null}
-                  {stage.status === "COMPLETED" || stage.status === "SKIPPED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="PLANNED" label="Reopen" /> : null}
-                </div>
+            {currentWork.map((item) => (
+              <div key={item.id} style={itemRow}>
+                <div><strong>{item.label}</strong><div style={minorText}>{item.phaseName}</div></div>
+                <div style={actionGroup}><span style={minorText}>{item.targetPerWeek ? `${item.targetPerWeek}x/week` : "flexible"}</span><StatusForm action={removeProgramBlockItem} programId={id} entityName="itemId" entityId={item.id} label="Remove" tone="quiet" /></div>
               </div>
             ))}
           </div>
-        ) : <Empty text="No stages yet. Your existing milestones still remain the roadmap." />}
-        <AddPanel label="Add a stage">
-          <form action={createProgramStage} style={inlineForm}>
-            <input type="hidden" name="programId" value={id} />
-            <input name="name" placeholder="Stage name" required style={input} />
-            <input name="notBeforeYmd" type="date" aria-label="Not before date" style={input} />
-            <textarea name="description" placeholder="Purpose or exit condition" style={textarea} />
-            <button type="submit" style={secondaryButton}>Create stage</button>
-          </form>
-        </AddPanel>
-      </EditorSection>
-
-      <EditorSection openStep={openStep} number="4" title="Training blocks" subtitle="A few weeks of repeatable work. Flexible blocks do not force exact dates.">
-        {detail.blocks.length ? (
-          <div style={list}>
-            {detail.blocks.map((block) => (
-              <div key={block.id} style={blockCard}>
-                <div style={cardHead}>
-                  <div>
-                    <strong>{block.name}</strong>
-                    <div style={minorText}>{block.lengthWeeks ? `${block.lengthWeeks} weeks · ` : ""}{block.scheduleMode.toLowerCase()} · {block.status.toLowerCase()}</div>
-                  </div>
-                  <div style={actionGroup}>
-                    {block.status === "DRAFT" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="ACTIVE" label="Start" /> : null}
-                    {block.status === "ACTIVE" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="COMPLETED" label="Complete" /> : null}
-                    {block.status === "COMPLETED" || block.status === "ARCHIVED" ? <StatusForm action={setProgramBlockStatus} programId={id} entityName="blockId" entityId={block.id} status="DRAFT" label="Reopen" /> : null}
-                  </div>
-                </div>
-                {block.items.map((item) => (
-                  <div key={item.id} style={itemRow}>
-                    <span>{item.label}</span>
-                    <div style={actionGroup}><span style={minorText}>{item.targetPerWeek ? `${item.targetPerWeek}x/week` : "flexible"}</span><StatusForm action={removeProgramBlockItem} programId={id} entityName="itemId" entityId={item.id} label="Remove" tone="quiet" /></div>
+        ) : <Empty text="No current work yet. Add one routine to make this Program ready to train." />}
+        <div style={builderActions}>
+          <span style={minorText}>Add a routine here once. It remains flexible until you put it on a date.</span>
+          <NewRoutineDrawerButton style={smallCreateButton}>New routine</NewRoutineDrawerButton>
+        </div>
+        <form action={addProgramPhaseRoutine} style={miniForm}>
+          <input type="hidden" name="programId" value={id} />
+          {detail.stages.length ? <select name="stageId" style={input} defaultValue={detail.stages.find((stage) => stage.status === "ACTIVE")?.id ?? detail.stages[0].id}>{detail.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select> : null}
+          <select name="routineId" required style={input} defaultValue=""><option value="" disabled>Add current work...</option>{options.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}</select>
+          <input name="targetPerWeek" type="number" min="0.5" max="21" step="0.5" placeholder="times/week" style={smallInput} />
+          <button type="submit" style={secondaryButton}>Add work</button>
+        </form>
+        <details style={advancedPanel}>
+          <summary style={advancedSummary}>Manage phases and progression</summary>
+          <div style={advancedBody}>
+            <p style={minorText}>Most Programs only need the automatic Current phase. Add another phase when the work will actually change.</p>
+            {detail.stages.length ? (
+              <div style={list}>
+                {detail.stages.map((stage) => (
+                  <div key={stage.id} style={compactRow}>
+                    <span style={stateDot(stage.status)} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <strong>{stage.name}</strong>
+                      <div style={minorText}>{stage.status.toLowerCase()} · {detail.blocks.filter((block) => block.stageId === stage.id).reduce((sum, block) => sum + block.items.length, 0)} work items</div>
+                    </div>
+                    <div style={actionGroup}>
+                      {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
+                      {stage.status === "ACTIVE" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="COMPLETED" label="Complete" /> : null}
+                      {stage.status === "COMPLETED" || stage.status === "SKIPPED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="PLANNED" label="Reopen" /> : null}
+                    </div>
                   </div>
                 ))}
-                <form action={addProgramBlockRoutine} style={miniForm}>
-                  <input type="hidden" name="programId" value={id} />
-                  <input type="hidden" name="blockId" value={block.id} />
-                  <select name="routineId" required style={input} defaultValue="">
-                    <option value="" disabled>Add a routine...</option>
-                    {options.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
-                  </select>
-                  <input name="targetPerWeek" type="number" min="0.5" max="21" step="0.5" placeholder="times/week" style={smallInput} />
-                  <button type="submit" style={iconButton} title="Add routine" aria-label={`Add routine to ${block.name}`}>+</button>
-                </form>
               </div>
-            ))}
+            ) : null}
+            <AddPanel label="Add another phase">
+              <form action={createProgramStage} style={inlineForm}>
+                <input type="hidden" name="programId" value={id} />
+                <input name="name" placeholder="Phase name" required style={input} />
+                <input name="notBeforeYmd" type="date" aria-label="Not before date" style={input} />
+                <textarea name="description" placeholder="Purpose or exit condition" style={textarea} />
+                <button type="submit" style={secondaryButton}>Create phase</button>
+              </form>
+            </AddPanel>
           </div>
-        ) : <Empty text="No blocks yet. Add one when the weekly structure is stable enough to repeat." />}
-        <AddPanel label="Add a training block">
-          <form action={createProgramBlock} style={inlineForm}>
-            <input type="hidden" name="programId" value={id} />
-            <input name="name" placeholder="Block name" required style={input} />
-            <select name="stageId" style={input} defaultValue="">
-              <option value="">No stage</option>
-              {detail.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
-            </select>
-            <input name="lengthWeeks" type="number" min="1" max="52" placeholder="Weeks" style={input} />
-            <button type="submit" style={secondaryButton}>Create block</button>
-          </form>
-        </AddPanel>
+        </details>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="5" title="Two-week schedule" subtitle="Place the next few sessions without turning the whole program into a rigid calendar.">
+      <EditorSection openStep={openStep} number="4" title="Put work on dates" subtitle="Optional. This does not add new training—it only gives current work a date in the next two weeks.">
         {detail.schedule.missed.length ? (
           <div style={scheduleGroup}>
             <div style={scheduleLabel}>Needs a decision</div>
@@ -264,27 +238,24 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
             ))}
           </div>
         ) : <Empty text="Nothing is dated yet. That is fine until the next week or two is concrete." />}
-        <AddPanel label="Place a session">
-          <form action={createPlannedSession} style={inlineForm}>
-            <input type="hidden" name="programId" value={id} />
-            <select name="blockItemId" style={input} defaultValue="">
-              <option value="">Choose training item (optional)</option>
-              {detail.blocks.flatMap((block) => block.items.map((item) => <option key={item.id} value={item.id}>{block.name}: {item.label}</option>))}
-            </select>
-            <select name="routineId" style={input} defaultValue="">
-              <option value="">Or choose a routine</option>
-              {options.routines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
-            </select>
-            <input name="label" placeholder="Label (if no item or routine)" style={input} />
-            <input name="currentYmd" type="date" defaultValue={todayAppYmd()} required style={input} />
-            <label style={baselineToggle}><input name="pinned" type="checkbox" value="1" /> Fixed date</label>
-            <button type="submit" style={secondaryButton}>Add to schedule</button>
-          </form>
-        </AddPanel>
+        {currentWork.length ? (
+          <AddPanel label="Choose work and a date">
+            <form action={createPlannedSession} style={inlineForm}>
+              <input type="hidden" name="programId" value={id} />
+              <select name="blockItemId" required style={input} defaultValue="">
+                <option value="" disabled>Choose current work</option>
+                {currentWork.map((item) => <option key={item.id} value={item.id}>{item.label}{detail.stages.length > 1 ? ` · ${item.phaseName}` : ""}</option>)}
+              </select>
+              <input name="currentYmd" type="date" defaultValue={todayAppYmd()} required style={input} />
+              <label style={baselineToggle}><input name="pinned" type="checkbox" value="1" /> Fixed date</label>
+              <button type="submit" style={secondaryButton}>Add date</button>
+            </form>
+          </AddPanel>
+        ) : <p style={scheduleNote}>Add current work in step 3 before putting anything on the calendar.</p>}
         <p style={scheduleNote}>Flexible sessions can slide together after a miss. Fixed sessions stay on their date. Nothing is moved without your choice.</p>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="6" title="Named targets and ladders" subtitle="Tick lists for climbs or skills; progression ladders for ordered skills.">
+      <EditorSection openStep={openStep} number="5" title="Named targets" subtitle="Optional activity targets such as climbs or skills.">
         {detail.targetLists.map((targetList) => (
           <div key={targetList.id} style={blockCard}>
             <div style={cardHead}><div><strong>{targetList.name}</strong>{targetList.membershipSource === "CLIMB_TICK_LIST" ? <div style={minorText}>Synced from starred climbing problems</div> : null}</div><span style={typeChip}>{targetList.kind.toLowerCase()}</span></div>
@@ -412,6 +383,9 @@ const picker: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.09)"
 const pickerSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 850 };
 const addPanel: React.CSSProperties = { borderTop: "1px solid rgba(255,255,255,0.08)" };
 const addPanelSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer", color: "#7ce8aa", fontSize: 12, fontWeight: 850, listStyle: "none" };
+const advancedPanel: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, background: "rgba(255,255,255,0.015)" };
+const advancedSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", padding: "0 12px", cursor: "pointer", color: "rgba(255,255,255,0.58)", fontSize: 11.5, fontWeight: 850, listStyle: "none" };
+const advancedBody: React.CSSProperties = { display: "grid", gap: 12, padding: "4px 12px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" };
 const countChip: React.CSSProperties = { fontSize: 10, color: "#7ce8aa", background: "rgba(51,255,122,0.08)", padding: "3px 7px", borderRadius: 99 };
 const pickerBody: React.CSSProperties = { display: "grid", maxHeight: 320, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.08)" };
 const checkRow: React.CSSProperties = { minHeight: 48, display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 12.5, cursor: "pointer" };
