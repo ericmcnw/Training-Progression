@@ -221,6 +221,22 @@ button:hover{
   box-shadow: 0 0 0 3px rgba(51,255,122,0.15);
 }
 
+/* Grade-pyramid bar segments and bubble controls are rendered as buttons so
+   they're tappable. The global `button { ... }` rule above would stretch each
+   20px bar row to 44px, add a 12px radius to every colored segment, and ring
+   them in green on hover. Same reset as .freqHeatmapCell below. */
+.pyramidCell {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-weight: inherit !important;
+}
+.pyramidCell:hover,
+.pyramidCell:focus-visible {
+  border-color: inherit !important;
+  box-shadow: none !important;
+}
+
 .navLink{
   display: inline-flex;
   align-items: center;

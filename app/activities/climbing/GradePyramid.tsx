@@ -182,6 +182,7 @@ function PyramidBar({
     <div style={pyramidRowStyle}>
       <button
         type="button"
+        className="pyramidCell"
         onClick={() => select("ALL", Math.min(barPct / 2, 50))}
         style={gradeButtonStyle}
         aria-label={`All ${row.total} climbs at ${row.grade}`}
@@ -193,6 +194,7 @@ function PyramidBar({
           <button
             key={outcome}
             type="button"
+            className="pyramidCell"
             onClick={() => select(outcome, centerPct)}
             title={`${climbOutcomeLabel(outcome, row.system)} × ${count}`}
             aria-label={`${count} ${climbOutcomeLabel(outcome, row.system)} at ${row.grade}`}
@@ -217,6 +219,7 @@ function PyramidBar({
       </div>
       <button
         type="button"
+        className="pyramidCell"
         onClick={() => select("ALL", Math.min(barPct / 2, 50))}
         style={totalButtonStyle}
         aria-label={`All ${row.total} climbs at ${row.grade}`}
@@ -254,7 +257,13 @@ function ClimbBubble({
               {ascents}
             </span>
           </span>
-          <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Close">
+          <button
+            type="button"
+            className="pyramidCell"
+            onClick={onClose}
+            style={closeButtonStyle}
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
