@@ -431,6 +431,7 @@ export default async function ClimbingHubPage(props: {
           id: a.id,
           outcome: a.outcome,
           name: a.problemId ? problemNameById.get(a.problemId) ?? null : null,
+          locationId: a.sessionLog.climbLocation?.id ?? null,
           locationName: a.sessionLog.climbLocation?.name ?? null,
           dateLabel: formatAppDate(a.sessionLog.performedAt),
         })),

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import {
   climbOutcomeColor,
@@ -20,6 +21,7 @@ export type PyramidClimb = {
   id: string;
   outcome: ClimbOutcome;
   name: string | null;
+  locationId: string | null;
   locationName: string | null;
   dateLabel: string;
 };
@@ -131,15 +133,6 @@ function ColumnBars({
                     row={row}
                     outcome={selected.outcome}
                     caretPct={selected.caretPct}
-                    onPickOutcome={(o) =>
-                      onToggle({
-                        columnKey: column.key,
-                        system: row.system,
-                        grade: row.grade,
-                        outcome: o,
-                        caretPct: selected.caretPct,
-                      })
-                    }
                     onClose={onClose}
                   />
                 ) : null}
@@ -204,10 +197,14 @@ function PyramidBar({
             style={{
               width: `${width}%`,
               background: climbOutcomeColor(outcome),
-              minWidth: 6,
+              minWidth: 4,
               flexShrink: 0,
+              // Buttons carry a UA border-radius; the track owns the rounding.
+              appearance: "none",
+              borderRadius: 0,
               border: "none",
               padding: 0,
+              margin: 0,
               cursor: "pointer",
               touchAction: "manipulation",
               opacity: activeOutcome && activeOutcome !== outcome ? 0.45 : 1,
@@ -232,29 +229,25 @@ function ClimbBubble({
   row,
   outcome,
   caretPct,
-  onPickOutcome,
   onClose,
 }: {
   row: PyramidColumnRow;
   outcome: ClimbOutcome | "ALL";
   caretPct: number;
-  onPickOutcome: (o: ClimbOutcome | "ALL") => void;
   onClose: () => void;
 }) {
   const climbs = outcome === "ALL" ? row.climbs : row.climbs.filter((c) => c.outcome === outcome);
-  const present = PYRAMID_OUTCOMES.map((o) => o as ClimbOutcome).filter(
-    (o) => (row.counts[o] ?? 0) > 0
-  );
 
   return (
     <div style={bubbleWrapStyle}>
       <span aria-hidden style={{ ...caretStyle, marginLeft: `calc(${caretPct}% - 5px)` }} />
       <div style={bubbleStyle}>
         <div style={bubbleHeadStyle}>
-          <span style={{ fontSize: 12, fontWeight: 900 }}>
+          <span style={{ fontSize: 11, fontWeight: 900 }}>
             {row.grade}
-            <span style={{ opacity: 0.55, fontWeight: 700, marginLeft: 6 }}>
-              {climbs.length} climb{climbs.length === 1 ? "" : "s"}
+            <span style={{ opacity: 0.55, fontWeight: 700, marginLeft: 5 }}>
+              {outcome === "ALL" ? "all" : climbOutcomeLabel(outcome, row.system).toLowerCase()} ·{" "}
+              {climbs.length}
             </span>
           </span>
           <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Close">
@@ -262,49 +255,44 @@ function ClimbBubble({
           </button>
         </div>
 
-        {present.length > 1 ? (
-          <div style={bubbleChipRowStyle}>
-            <button
-              type="button"
-              onClick={() => onPickOutcome("ALL")}
-              style={outcome === "ALL" ? bubbleChipOnStyle : bubbleChipStyle}
-            >
-              All
-            </button>
-            {present.map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => onPickOutcome(o)}
-                style={
-                  outcome === o
-                    ? { ...bubbleChipOnStyle, borderColor: climbOutcomeColor(o) }
-                    : bubbleChipStyle
-                }
-              >
-                <span style={{ ...dotStyle, background: climbOutcomeColor(o) }} />
-                {climbOutcomeLabel(o, row.system)}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div style={{ display: "grid", gap: 4 }}>
+        <div style={{ display: "grid" }}>
           {climbs.map((c) => (
-            <div key={c.id} style={climbRowStyle}>
-              <span style={{ ...dotStyle, background: climbOutcomeColor(c.outcome), marginTop: 5 }} />
-              <div style={{ minWidth: 0, display: "grid", gap: 1 }}>
-                <span style={climbNameStyle}>{c.name ?? "Unnamed climb"}</span>
-                <span style={climbMetaStyle}>
-                  {climbOutcomeLabel(c.outcome, row.system)}
-                  {c.locationName ? ` · ${c.locationName}` : ""} · {c.dateLabel}
-                </span>
-              </div>
-            </div>
+            <ClimbLink key={c.id} climb={c} system={row.system} grade={row.grade} />
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+// A named climb goes to the location that holds it; an unnamed one has no
+// destination of its own, so it falls back to the climb list at that grade.
+function ClimbLink({
+  climb,
+  system,
+  grade,
+}: {
+  climb: PyramidClimb;
+  system: ClimbGradeSystem;
+  grade: string;
+}) {
+  const href = climb.locationId
+    ? `/activities/climbing/locations/${climb.locationId}`
+    : `/activities/climbing/climbs?grade=${encodeURIComponent(grade)}&range=all`;
+  return (
+    <Link href={href} style={climbRowStyle}>
+      <span style={{ ...dotStyle, background: climbOutcomeColor(climb.outcome), marginTop: 4 }} />
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
+        <span style={climbMetaStyle}>
+          {climbOutcomeLabel(climb.outcome, system)}
+          {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
+        </span>
+      </span>
+      <span style={chevronStyle} aria-hidden>
+        ›
+      </span>
+    </Link>
   );
 }
 
@@ -351,29 +339,33 @@ const pyramidBarTrackStyle: CSSProperties = {
   background: "rgba(255,255,255,0.05)",
   overflow: "hidden",
 };
+// Height matches the bar track so the button gives a full-height tap target
+// without making the row taller than the span it replaced.
+const cellButtonReset: CSSProperties = {
+  appearance: "none",
+  background: "none",
+  border: "none",
+  borderRadius: 0,
+  color: "inherit",
+  padding: 0,
+  margin: 0,
+  height: 20,
+  cursor: "pointer",
+  touchAction: "manipulation",
+};
 const gradeButtonStyle: CSSProperties = {
+  ...cellButtonReset,
   fontSize: 12,
   fontWeight: 900,
   textAlign: "right",
   opacity: 0.85,
-  background: "none",
-  border: "none",
-  color: "inherit",
-  padding: "6px 0",
-  cursor: "pointer",
-  touchAction: "manipulation",
 };
 const totalButtonStyle: CSSProperties = {
+  ...cellButtonReset,
   fontSize: 11,
   fontWeight: 800,
   opacity: 0.55,
   textAlign: "left",
-  background: "none",
-  border: "none",
-  color: "inherit",
-  padding: "6px 0",
-  cursor: "pointer",
-  touchAction: "manipulation",
 };
 
 const bubbleWrapStyle: CSSProperties = {
@@ -381,7 +373,7 @@ const bubbleWrapStyle: CSSProperties = {
   gridTemplateColumns: "44px 1fr 28px",
   gap: 8,
   marginTop: 2,
-  marginBottom: 6,
+  marginBottom: 4,
 };
 const caretStyle: CSSProperties = {
   gridColumn: 2,
@@ -398,9 +390,9 @@ const caretStyle: CSSProperties = {
 const bubbleStyle: CSSProperties = {
   gridColumn: "1 / -1",
   display: "grid",
-  gap: 8,
-  padding: "10px 12px",
-  borderRadius: 10,
+  gap: 3,
+  padding: "6px 9px",
+  borderRadius: 8,
   border: "1px solid rgba(251,146,60,0.35)",
   background: "rgba(28,28,32,0.98)",
 };
@@ -411,57 +403,57 @@ const bubbleHeadStyle: CSSProperties = {
   gap: 8,
 };
 const closeButtonStyle: CSSProperties = {
+  appearance: "none",
   background: "none",
   border: "none",
+  borderRadius: 0,
   color: "inherit",
   opacity: 0.55,
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 900,
   cursor: "pointer",
-  padding: "2px 4px",
+  padding: 0,
+  margin: 0,
+  height: 16,
   touchAction: "manipulation",
-};
-const bubbleChipRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 6 };
-const bubbleChipStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 5,
-  padding: "4px 9px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 800,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-  color: "inherit",
-  cursor: "pointer",
-  touchAction: "manipulation",
-};
-const bubbleChipOnStyle: CSSProperties = {
-  ...bubbleChipStyle,
-  border: "1px solid rgba(120,190,255,0.45)",
-  background: "rgba(120,190,255,0.15)",
-  color: "rgba(191,219,254,0.98)",
 };
 const dotStyle: CSSProperties = {
-  width: 7,
-  height: 7,
+  width: 6,
+  height: 6,
   borderRadius: 999,
   flexShrink: 0,
   display: "inline-block",
 };
 const climbRowStyle: CSSProperties = {
   display: "flex",
-  gap: 8,
+  gap: 7,
   alignItems: "flex-start",
-  padding: "5px 0",
+  padding: "3px 0",
   borderTop: "1px solid rgba(255,255,255,0.06)",
+  color: "inherit",
+  textDecoration: "none",
+  touchAction: "manipulation",
 };
 const climbNameStyle: CSSProperties = {
-  fontSize: 12.5,
+  display: "block",
+  fontSize: 12,
   fontWeight: 800,
-  lineHeight: 1.25,
+  lineHeight: 1.2,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
-const climbMetaStyle: CSSProperties = { fontSize: 10.5, fontWeight: 700, opacity: 0.6 };
+const climbMetaStyle: CSSProperties = {
+  display: "block",
+  fontSize: 10,
+  fontWeight: 700,
+  opacity: 0.6,
+  lineHeight: 1.3,
+};
+const chevronStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 900,
+  opacity: 0.35,
+  flexShrink: 0,
+  lineHeight: 1,
+};
