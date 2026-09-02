@@ -26,10 +26,16 @@ const GRIPS = [
   "1 Finger Crimp",
 ];
 
-const RENAMES = GRIPS.flatMap((grip) => [
-  [`${grip} Pull`, `${grip} Lift`],
-  [`${grip} Pull (Time)`, `${grip} Lift (Time)`],
-]);
+const RENAMES = [
+  ...GRIPS.flatMap((grip) => [
+    [`${grip} Pull`, `${grip} Lift`],
+    [`${grip} Pull (Time)`, `${grip} Lift (Time)`],
+  ]),
+  // Bent knee slackens the gastroc, so this is the soleus raise — named for
+  // the muscle Eric asks for it by. The slant-board version is the same
+  // exercise at a non-zero angleDeg, not a second row.
+  ["Bent-Knee Calf Raise", "Soleus Calf Raise"],
+];
 
 const PARAM_ASSIGNMENTS = [
   {
@@ -48,7 +54,7 @@ const PARAM_ASSIGNMENTS = [
       "Calf Raise",
       "Single-Leg Calf Raise",
       "Seated Calf Raise",
-      "Bent-Knee Calf Raise",
+      "Soleus Calf Raise",
       "Goblet Squat",
       "Goblet Squat (Reps)",
       "Goblet Cossack Squat",
