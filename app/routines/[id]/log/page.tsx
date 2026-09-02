@@ -5,6 +5,7 @@ import { formatGuidedSeconds } from "@/lib/guided";
 import { prisma } from "@/lib/prisma";
 import { formatHoursMinutes } from "@/lib/progress";
 import type { PrescriptionShape } from "@/lib/prescription";
+import { exerciseParamKeys, exerciseParamsToInput, readExerciseParams } from "@/lib/exercise-params";
 import {
   exerciseLibraryWhereForKinds,
   guidedPreferredLibraryKinds,
@@ -122,6 +123,7 @@ export default async function LogRoutinePage(props: {
               name: true,
               unit: true,
               supportsWeight: true,
+              paramKeys: true,
             },
           },
         },
@@ -175,6 +177,7 @@ export default async function LogRoutinePage(props: {
               unit: true,
               supportsWeight: true,
               libraryKind: true,
+              paramKeys: true,
             },
           });
         } catch (error) {
@@ -240,6 +243,7 @@ export default async function LogRoutinePage(props: {
             orderBy: { routineLog: { performedAt: "desc" } },
             select: {
               exerciseId: true,
+              params: true,
               routineLog: { select: { performedAt: true } },
               sets: {
                 orderBy: { setNumber: "asc" },
@@ -400,6 +404,8 @@ export default async function LogRoutinePage(props: {
       name: exercise.exercise.name,
       unit: exercise.exercise.unit,
       supportsWeight: exercise.exercise.supportsWeight,
+      paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
+      params: exerciseParamsToInput(readExerciseParams(prev?.params)),
       rows: Array.from({ length: defaultSetCount }, (_, index) => ({ setNumber: index + 1 })),
       lastRows: lastRows.length > 0 ? lastRows : undefined,
       lastDate,

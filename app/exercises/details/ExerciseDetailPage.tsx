@@ -3,6 +3,13 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatAppDate } from "@/lib/dates";
 import { exerciseUnitLabel } from "@/lib/exercises";
+import {
+  compareExerciseParam,
+  exerciseParamKeys,
+  formatExerciseParams,
+  readExerciseParams,
+  type ParamShift,
+} from "@/lib/exercise-params";
 import ExerciseMetricChart, { type ExerciseSessionPoint } from "./ExerciseMetricChart";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
 
@@ -34,6 +41,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
         unit: true,
         supportsWeight: true,
         libraryKind: true,
+        paramKeys: true,
       },
     }),
     prisma.sessionExercise.findMany({
@@ -41,6 +49,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
       orderBy: { routineLog: { performedAt: "asc" } },
       select: {
         id: true,
+        params: true,
         routineLog: {
           select: {
             id: true,
@@ -125,6 +134,31 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
     (a, b) => b.routineLog.performedAt.getTime() - a.routineLog.performedAt.getTime()
   );
   const recent = sortedNewest.slice(0, 8);
+
+  // Setup parameters (edge size, board angle, box height) per session, each
+  // compared against the previous session so a smaller edge at the same load
+  // reads as progression rather than a flat line.
+  const trackedParams = exerciseParamKeys(exercise.paramKeys);
+  const setupById = new Map<string, SessionSetup>();
+  if (trackedParams.length > 0) {
+    let previous: ReturnType<typeof readExerciseParams> | null = null;
+    for (const se of sessionExercises) {
+      const current = readExerciseParams(se.params);
+      const label = formatExerciseParams(current);
+      if (label) {
+        const shifts = trackedParams
+          .map((key) => {
+            const before = previous?.[key];
+            const after = current[key];
+            if (before === undefined || after === undefined) return null;
+            return compareExerciseParam(key, before, after);
+          })
+          .filter((shift): shift is ParamShift => shift !== null && shift !== "same");
+        setupById.set(se.id, { label, shift: shifts[0] ?? null });
+      }
+      if (label) previous = current;
+    }
+  }
 
   // De-dupe routines and split active vs archived.
   const seen = new Set<string>();
@@ -225,6 +259,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
                 sets={se.sets}
                 isTimeBased={isTimeBased}
                 supportsWeight={exercise.supportsWeight}
+                setup={setupById.get(se.id)}
               />
             ))}
           </div>
@@ -302,6 +337,7 @@ function SessionRow({
   sets,
   isTimeBased,
   supportsWeight,
+  setup,
 }: {
   routineId: string;
   logId: string;
@@ -310,6 +346,7 @@ function SessionRow({
   sets: Array<{ setNumber: number; reps: number | null; seconds: number | null; weightLb: number | null }>;
   isTimeBased: boolean;
   supportsWeight: boolean;
+  setup?: SessionSetup;
 }) {
   const summary = sets
     .map((s) => {
@@ -325,10 +362,59 @@ function SessionRow({
           {formatAppDate(performedAt, { weekday: "short", month: "short", day: "numeric" })} · {routineName}
         </div>
         <div style={sessionSetsStyle}>{summary}</div>
+        {setup ? (
+          <div style={setupRowStyle}>
+            <span style={setupChipStyle}>{setup.label}</span>
+            {setup.shift && setup.shift !== "same" ? (
+              <span style={setupShiftStyle(setup.shift)}>
+                {setup.shift === "harder" ? "harder setup" : setup.shift === "easier" ? "easier setup" : "setup changed"}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <span style={caretStyle}>›</span>
     </Link>
   );
+}
+
+type SessionSetup = { label: string; shift: ParamShift | null };
+
+const setupRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 4,
+  flexWrap: "wrap",
+};
+
+const setupChipStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  padding: "2px 7px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.05)",
+};
+
+function setupShiftStyle(shift: ParamShift): React.CSSProperties {
+  const tone =
+    shift === "harder"
+      ? { color: "#73dc98", border: "rgba(115,220,152,0.45)", bg: "rgba(115,220,152,0.12)" }
+      : shift === "easier"
+      ? { color: "#f0b866", border: "rgba(240,184,102,0.45)", bg: "rgba(240,184,102,0.12)" }
+      : { color: "#9db4d0", border: "rgba(157,180,208,0.4)", bg: "rgba(157,180,208,0.1)" };
+  return {
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    padding: "2px 7px",
+    borderRadius: 999,
+    color: tone.color,
+    border: `1px solid ${tone.border}`,
+    background: tone.bg,
+  };
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────

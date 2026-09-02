@@ -11,6 +11,12 @@
 
 import { prisma } from "@/lib/prisma";
 import {
+  exerciseParamKeys,
+  exerciseParamsToInput,
+  readExerciseParams,
+  type ExerciseParamKey,
+} from "@/lib/exercise-params";
+import {
   exerciseLibraryWhereForKinds,
   guidedPreferredLibraryKinds,
   isMissingExerciseLibraryKindError,
@@ -97,9 +103,11 @@ export type EditWorkoutData = {
     name: string;
     unit: ExerciseUnitValue;
     supportsWeight: boolean;
+    paramKeys: ExerciseParamKey[];
+    params: Partial<Record<ExerciseParamKey, string>>;
     rows: Array<{ setNumber: number; reps?: string; seconds?: string; weightLb?: string }>;
   }>;
-  availableExercises: Array<{ id: string; name: string; unit: ExerciseUnitValue; supportsWeight: boolean; libraryKind: ExerciseLibraryKind }>;
+  availableExercises: Array<{ id: string; name: string; unit: ExerciseUnitValue; supportsWeight: boolean; libraryKind: ExerciseLibraryKind; paramKeys?: ExerciseParamKey[] }>;
 };
 
 export type EditCardioActivityTypeOption = {
@@ -320,7 +328,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         select: {
           id: true,
           exerciseId: true,
-          exercise: { select: { name: true, unit: true, supportsWeight: true } },
+          params: true,
+          exercise: { select: { name: true, unit: true, supportsWeight: true, paramKeys: true } },
           sets: {
             orderBy: { setNumber: "asc" },
             select: { setNumber: true, reps: true, seconds: true, weightLb: true },
@@ -344,7 +353,7 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
         select: {
           exerciseId: true,
           defaultSets: true,
-          exercise: { select: { name: true, unit: true, supportsWeight: true } },
+          exercise: { select: { name: true, unit: true, supportsWeight: true, paramKeys: true } },
         },
       },
       sessionDetails: {
@@ -380,6 +389,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           name: routineExercise.exercise.name,
           unit: routineExercise.exercise.unit,
           supportsWeight: routineExercise.exercise.supportsWeight,
+          paramKeys: exerciseParamKeys(routineExercise.exercise.paramKeys),
+          params: exerciseParamsToInput(readExerciseParams(fromLog?.params)),
           rows:
             fromLog?.sets.length
               ? fromLog.sets.map((set) => ({
@@ -400,6 +411,8 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
           name: exercise.exercise.name,
           unit: exercise.exercise.unit,
           supportsWeight: exercise.exercise.supportsWeight,
+          paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
+          params: exerciseParamsToInput(readExerciseParams(exercise.params)),
           rows:
             exercise.sets.length > 0
               ? exercise.sets.map((set) => ({
@@ -715,7 +728,7 @@ async function fetchWorkoutExercises() {
     return await prisma.exercise.findMany({
       where: exerciseLibraryWhereForKinds(workoutLibraryKinds()),
       orderBy: { name: "asc" },
-      select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true },
+      select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true, paramKeys: true },
     });
   } catch (error) {
     if (!isMissingExerciseLibraryKindError(error)) throw error;

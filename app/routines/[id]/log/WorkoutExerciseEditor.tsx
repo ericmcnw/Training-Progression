@@ -10,6 +10,13 @@ import {
   saveDraftToStorage,
 } from "@/lib/log-draft";
 import { formatPrescription, prescriptionHints, type PrescriptionShape } from "@/lib/prescription";
+import {
+  exerciseParamDef,
+  formatExerciseParams,
+  normalizeExerciseParamInput,
+  readExerciseParams,
+  type ExerciseParamKey,
+} from "@/lib/exercise-params";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
@@ -22,6 +29,7 @@ export type ExerciseOption = {
   supportsWeight: boolean;
   libraryKind?: "STRENGTH" | "CONDITIONING" | "MOBILITY" | "STRETCH" | "BREATHWORK" | "SKILL";
   injuryWarning?: string;
+  paramKeys?: ExerciseParamKey[];
 };
 
 export type SetRow = {
@@ -44,6 +52,12 @@ export type WorkoutBlock = {
   lastRows?: SetRow[];
   lastDate?: string;
   prescription?: PrescriptionShape;
+  /** Setup parameters this exercise records (edge size, board angle, box
+   *  height). Server-owned — comes from the exercise library. */
+  paramKeys?: ExerciseParamKey[];
+  /** This session's values, prefilled from the last session so an unchanged
+   *  setup costs no input. Strings while editing, like the set cells. */
+  params?: Partial<Record<ExerciseParamKey, string>>;
 };
 
 type SavePayload = {
@@ -52,6 +66,7 @@ type SavePayload = {
   effort: number | null;
   exercises: {
     exerciseId: string;
+    params?: Record<string, number> | null;
     sets: {
       setNumber: number;
       reps?: number | null;
@@ -247,6 +262,7 @@ export default function WorkoutExerciseEditor({
             lastRows: initial.lastRows,
             lastDate: initial.lastDate,
             prescription: initial.prescription,
+            paramKeys: initial.paramKeys,
           }
         : draftBlock;
     });
@@ -413,6 +429,7 @@ export default function WorkoutExerciseEditor({
         name: exercise.name,
         unit: exercise.unit,
         supportsWeight: exercise.supportsWeight,
+        paramKeys: exercise.paramKeys ?? [],
         rows: defaultRows(),
       },
     ]);
@@ -544,6 +561,17 @@ export default function WorkoutExerciseEditor({
     );
   }
 
+  function updateParam(exerciseId: string, key: ExerciseParamKey, value: string) {
+    markDirty();
+    setBlocks((prev) =>
+      prev.map((block) =>
+        block.exerciseId === exerciseId
+          ? { ...block, params: { ...block.params, [key]: value } }
+          : block
+      )
+    );
+  }
+
   // Editing a value un-confirms the set — re-tap the check to lock it back in.
   function updateCell(exerciseId: string, setNumber: number, key: keyof SetRow, value: string) {
     markDirty();
@@ -604,6 +632,7 @@ export default function WorkoutExerciseEditor({
         effort,
         exercises: blocks.map((block) => ({
           exerciseId: block.exerciseId,
+          params: normalizeExerciseParamInput(block.paramKeys ?? [], block.params ?? {}),
           // Only send rows with the primary metric — a weight-only row is not a
           // set. Keeps volume/PR math clean and matches what the green check
           // (and the "X/Y done" count) already gate on.
@@ -722,6 +751,8 @@ export default function WorkoutExerciseEditor({
           const doneSets = block.rows.filter((r) => r.done).length;
           const targetLine = formatPrescription(block.prescription, block.unit);
           const cue = block.prescription?.cue?.trim();
+          const paramKeys = block.paramKeys ?? [];
+          const paramSummary = formatExerciseParams(readExerciseParams(block.params ?? {}));
 
           return (
             <div
@@ -768,6 +799,7 @@ export default function WorkoutExerciseEditor({
                   )}
                   <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                     {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
+                    {paramSummary ? ` · ${paramSummary}` : ""}
                     {doneSets > 0
                       ? ` · ${doneSets}/${block.rows.length} done`
                       : ` · ${block.rows.length} sets`}
@@ -828,6 +860,55 @@ export default function WorkoutExerciseEditor({
                       </summary>
                       <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.45, paddingBottom: 4 }}>{cue}</div>
                     </details>
+                  )}
+
+                  {/* Setup parameters — carried forward from last session, so
+                      an unchanged setup needs no input at all. */}
+                  {paramKeys.length > 0 && (
+                    <div style={styles.paramRow}>
+                      {paramKeys.map((key) => {
+                        const def = exerciseParamDef(key);
+                        if (!def) return null;
+                        const current = block.params?.[key] ?? "";
+                        return (
+                          <div key={key} style={styles.paramCard}>
+                            <div style={styles.paramHead}>
+                              <span style={styles.colLabel}>{def.label}</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={current}
+                                min={def.min}
+                                max={def.max}
+                                step={def.step}
+                                placeholder="—"
+                                onChange={(e) => updateParam(block.exerciseId, key, e.target.value)}
+                                style={styles.paramInput}
+                                aria-label={`${def.label} for ${block.name}`}
+                              />
+                              <span style={styles.paramUnit}>{def.unit}</span>
+                            </div>
+                            <div style={styles.paramPresets}>
+                              {def.presets.map((preset) => {
+                                const on = current !== "" && Number(current) === preset;
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() =>
+                                      updateParam(block.exerciseId, key, on ? "" : String(preset))
+                                    }
+                                    style={on ? styles.paramPresetOn : styles.paramPreset}
+                                  >
+                                    {preset}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
 
                   {/* Column headers */}
@@ -1314,6 +1395,81 @@ const styles = {
     cursor: "pointer",
     touchAction: "manipulation",
     WebkitTapHighlightColor: "transparent",
+  } as React.CSSProperties,
+
+  paramRow: {
+    display: "grid",
+    gap: 8,
+    marginBottom: 10,
+  } as React.CSSProperties,
+
+  paramCard: {
+    border: "1px solid rgba(128,128,128,0.35)",
+    borderRadius: 12,
+    padding: "8px 10px 10px",
+    background: "rgba(128,128,128,0.06)",
+    display: "grid",
+    gap: 8,
+  } as React.CSSProperties,
+
+  paramHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  } as React.CSSProperties,
+
+  paramInput: {
+    width: 86,
+    padding: "8px 6px",
+    border: "1px solid rgba(128,128,128,0.5)",
+    borderRadius: 10,
+    background: "#111827",
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: 700,
+    textAlign: "center",
+    marginLeft: "auto",
+  } as React.CSSProperties,
+
+  paramUnit: {
+    fontSize: 13,
+    fontWeight: 800,
+    opacity: 0.6,
+    minWidth: 22,
+  } as React.CSSProperties,
+
+  paramPresets: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+  } as React.CSSProperties,
+
+  paramPreset: {
+    minWidth: 44,
+    minHeight: 44,
+    padding: "0 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(128,128,128,0.4)",
+    background: "transparent",
+    color: "inherit",
+    fontSize: 14,
+    fontWeight: 800,
+    cursor: "pointer",
+    touchAction: "manipulation",
+  } as React.CSSProperties,
+
+  paramPresetOn: {
+    minWidth: 44,
+    minHeight: 44,
+    padding: "0 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(115,220,152,0.7)",
+    background: "rgba(115,220,152,0.16)",
+    color: "inherit",
+    fontSize: 14,
+    fontWeight: 900,
+    cursor: "pointer",
+    touchAction: "manipulation",
   } as React.CSSProperties,
 
   colLabel: {

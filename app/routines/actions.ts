@@ -34,6 +34,7 @@ import type { PoolSwimData } from "@/lib/pool-swim";
 import { getAppDayRange, parseAppDateTimeLocal, toAppYmd } from "@/lib/dates";
 import { resolveProgramWorkoutContext, type ProgramPlanRef } from "@/lib/program-prescriptions";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
+import { exerciseParamKeys, normalizeExerciseParamInput } from "@/lib/exercise-params";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
 import { prisma } from "@/lib/prisma";
 import { recordBarRaise } from "@/lib/goal-milestones";
@@ -54,6 +55,9 @@ type WorkoutExerciseInput = {
   unit?: "REPS" | "TIME";
   supportsWeight?: boolean;
   exerciseId: string;
+  /** Setup parameters for this session (edge size, board angle, box height).
+   *  Re-validated server-side against the exercise's declared paramKeys. */
+  params?: Record<string, number> | null;
   sets: {
     setNumber: number;
     reps?: number | null;
@@ -165,6 +169,7 @@ type SanitizedWorkoutExercise = {
   exerciseId: string;
   sortOrder: number;
   defaultSets: number;
+  params: Record<string, number> | null;
   loggedSets: {
     setNumber: number;
     reps: number | null;
@@ -860,7 +865,7 @@ async function ensureExerciseExists(
 }
 
 async function sanitizeWorkoutExercises(tx: PrismaTx, exercises: WorkoutExerciseInput[]) {
-  const sanitized: SanitizedWorkoutExercise[] = [];
+  const sanitized: (SanitizedWorkoutExercise & { rawParams: Record<string, number> | null })[] = [];
   const seenExerciseIds = new Set<string>();
 
   for (const [index, exercise] of (exercises ?? []).entries()) {
@@ -888,11 +893,30 @@ async function sanitizeWorkoutExercises(tx: PrismaTx, exercises: WorkoutExercise
       exerciseId,
       sortOrder: index,
       defaultSets: Math.max(1, allRows.length || 1),
+      params: null,
+      rawParams: exercise.params ?? null,
       loggedSets,
     });
   }
 
-  return sanitized;
+  // A client can send any keys; only ones the exercise actually declares are
+  // persisted, so a stale form can't write junk into the params blob.
+  const withParams = sanitized.filter((entry) => entry.rawParams);
+  if (withParams.length > 0) {
+    const declared = new Map(
+      (
+        await tx.exercise.findMany({
+          where: { id: { in: withParams.map((entry) => entry.exerciseId) } },
+          select: { id: true, paramKeys: true },
+        })
+      ).map((exercise) => [exercise.id, exerciseParamKeys(exercise.paramKeys)])
+    );
+    for (const entry of withParams) {
+      entry.params = normalizeExerciseParamInput(declared.get(entry.exerciseId) ?? [], entry.rawParams ?? {});
+    }
+  }
+
+  return sanitized.map(({ rawParams: _rawParams, ...entry }) => entry);
 }
 
 async function syncWorkoutTemplateTx(tx: PrismaTx, routineId: string, exercises: SanitizedWorkoutExercise[]) {
@@ -995,6 +1019,7 @@ async function buildWorkoutTemplateFromStepsTx(tx: PrismaTx, routineId: string):
       exerciseId: step.exerciseId as string,
       sortOrder: Number.isFinite(step.sortOrder) ? step.sortOrder : index,
       defaultSets: Math.max(1, step.setCount ?? step.repeatCount ?? 1),
+      params: null,
       loggedSets: [],
     }));
 }
@@ -1877,7 +1902,11 @@ export async function logWorkout(params: {
 
     for (const exercise of loggedExercises) {
       const sessionExercise = await tx.sessionExercise.create({
-        data: { routineLogId: log.id, exerciseId: exercise.exerciseId },
+        data: {
+          routineLogId: log.id,
+          exerciseId: exercise.exerciseId,
+          params: exercise.params ?? undefined,
+        },
         select: { id: true },
       });
 
@@ -1963,7 +1992,11 @@ export async function logAdHocWorkout(params: {
 
     for (const exercise of loggedExercises) {
       const sessionExercise = await tx.sessionExercise.create({
-        data: { routineLogId: log.id, exerciseId: exercise.exerciseId },
+        data: {
+          routineLogId: log.id,
+          exerciseId: exercise.exerciseId,
+          params: exercise.params ?? undefined,
+        },
         select: { id: true },
       });
 
@@ -2974,18 +3007,7 @@ export async function updateWorkoutLog(params: {
   logId: string;
   notes?: string;
   performedAtLocal?: string;
-  exercises: {
-    customName?: string;
-    unit?: "REPS" | "TIME";
-    supportsWeight?: boolean;
-    exerciseId: string;
-    sets: {
-      setNumber: number;
-      reps?: number | null;
-      seconds?: number | null;
-      weightLb?: number | null;
-    }[];
-  }[];
+  exercises: WorkoutExerciseInput[];
   /** Perceived effort 1-10, or null to clear. Omit to leave unchanged. */
   effort?: number | null;
 }) {
@@ -3020,6 +3042,7 @@ export async function updateWorkoutLog(params: {
         data: {
           routineLogId: params.logId,
           exerciseId: exercise.exerciseId,
+          params: exercise.params ?? undefined,
         },
         select: { id: true },
       });

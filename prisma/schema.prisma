@@ -1158,6 +1158,9 @@ model Exercise {
   // untagged routine still counts as sport training when it contains a
   // tagged exercise (e.g. pull-ups in a generic Upper day → climbing).
   supportsSports String[]            @default([])
+  // Setup-parameter keys this exercise records per session (edge size, board
+  // angle, box height). Definitions live in lib/exercise-params.ts.
+  paramKeys      String[]            @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1423,6 +1426,9 @@ model SessionExercise {
   id           String @id @default(cuid())
   routineLogId String
   exerciseId   String
+
+  // This session's values for the exercise's paramKeys, e.g. { "edgeMm": 20 }.
+  params Json?
 
   routineLog RoutineLog @relation(fields: [routineLogId], references: [id], onDelete: Cascade)
   exercise   Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
