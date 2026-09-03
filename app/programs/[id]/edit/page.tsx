@@ -39,11 +39,11 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   })));
   const goalCount = selectedGoals.size + selectedFrequencyGoals.size;
   const steps: ProgramEditorStep[] = [
-    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `${goalCount} goals · ${detail.targetLists.length} target lists`, complete: goalCount > 0 || hasNamedMeasure || definition.initial.milestones.length > 0 },
-    { id: "program-editor-step-2", number: "2", label: "Goals & measures", meta: goalCount ? `${goalCount} goals` : hasNamedMeasure ? `${detail.targetLists.length} target lists` : "Choose one", complete: goalCount > 0 || hasNamedMeasure },
-    { id: "program-editor-step-3", number: "3", label: "Current work", meta: currentWork.length ? `${currentWork.length} routines` : "Optional — add later", complete: currentWork.length > 0 },
-    { id: "program-editor-step-4", number: "4", label: "Dates", meta: scheduledCount ? `${scheduledCount} placed` : "Optional", complete: scheduledCount > 0 },
-    { id: "program-editor-step-5", number: "5", label: "Targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
+    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `Purpose, details, goal${currentWork.length ? ", routines" : ""}`, complete: goalCount > 0 || hasNamedMeasure },
+    { id: "program-editor-step-2", number: "2", label: "Phases", meta: detail.stages.length > 1 ? `${detail.stages.length} phases` : "Optional — one continuous stretch", complete: detail.stages.length > 1 },
+    { id: "program-editor-step-3", number: "3", label: "Work and prescriptions", meta: currentWork.length ? `${currentWork.length} routines` : "Optional — add later", complete: currentWork.length > 0 },
+    { id: "program-editor-step-4", number: "4", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Optional", complete: scheduledCount > 0 },
+    { id: "program-editor-step-5", number: "5", label: "Named targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
   ];
   // Optional dates and targets are never treated as setup debt. Once the
   // required foundation is sound, open current work only when it is absent.
@@ -80,16 +80,34 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         />
         </SetupPart>
 
-        <SetupPart number="2" title="Outcomes and milestones" subtitle={`${definition.initial.milestones.length} defined`}>
-        <FocusForm
-          initial={definition.initial}
-          routines={definition.routines}
-          exercises={definition.exercises}
-          injuries={definition.injuries}
-          stages={definition.stages}
-          embedded
-          panel="milestones"
-        />
+        <SetupPart number="2" title="Goal or target" subtitle={goalCount ? `${goalCount} goals` : hasNamedMeasure ? `${detail.targetLists.length} target lists` : "Choose at least one"}>
+        <div style={builderActions}>
+          <span style={minorText}>At least one measurable destination. This is what the Program is for.</span>
+          <div style={actionGroup}><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
+        </div>
+        <form action={saveProgramRelationships} style={{ display: "grid", gap: 14 }}>
+          <input type="hidden" name="programId" value={id} />
+          {[...selectedRoutines].map((routineId) => <input key={routineId} type="hidden" name="routineId" value={routineId} />)}
+          <PickerGroup title="Performance and volume goals" count={selectedGoals.size}>
+            {options.goals.map((goal) => (
+              <CheckRow key={goal.id} name="goalId" value={goal.id} checked={selectedGoals.has(goal.id)} label={goal.name} meta={goal.goalType.toLowerCase()} />
+            ))}
+          </PickerGroup>
+          <PickerGroup title="Frequency goals" count={selectedFrequencyGoals.size}>
+            {options.frequencyGoals.map((goal) => (
+              <CheckRow
+                key={goal.id}
+                name="frequencyGoalId"
+                value={goal.id}
+                checked={selectedFrequencyGoals.has(goal.id)}
+                label={goal.name}
+                meta={`${goal.targetCount} per ${goal.targetInterval} ${goal.targetUnit.toLowerCase()}`}
+              />
+            ))}
+          </PickerGroup>
+          {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them in stage 5.</p> : null}
+          <button type="submit" style={primaryButton}>Save connections</button>
+        </form>
         </SetupPart>
 
         <SetupPart number="3" title="Checkpoints" subtitle={`${detail.assessments.length} measured goal${detail.assessments.length === 1 ? "" : "s"}`}>
@@ -118,41 +136,66 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
             })}
           </div>
         ) : <Empty text="Connect a measured goal to keep its baseline and checkpoints with the program." />}
-        <p style={minorText}>This is measurement history only. Choose or change the Program goals in step 2.</p>
+        <p style={minorText}>This is measurement history only. Choose or change the Program goals above.</p>
+        </SetupPart>
+
+        <SetupPart number="4" title="Outcomes and milestones" subtitle={`${definition.initial.milestones.length} defined`}>
+        <FocusForm
+          initial={definition.initial}
+          routines={definition.routines}
+          exercises={definition.exercises}
+          injuries={definition.injuries}
+          stages={definition.stages}
+          embedded
+          panel="milestones"
+        />
         </SetupPart>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="2" title="Choose goals and measures" subtitle="Use a measured goal, a named target list, or both. Workouts belong in step 3.">
-        <div style={builderActions}>
-          <span style={minorText}>Choose at least one measurable destination for this Program.</span>
-          <div style={actionGroup}><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
-        </div>
-        <form action={saveProgramRelationships} style={{ display: "grid", gap: 14 }}>
-          <input type="hidden" name="programId" value={id} />
-          {[...selectedRoutines].map((routineId) => <input key={routineId} type="hidden" name="routineId" value={routineId} />)}
-          <PickerGroup title="Performance and volume goals" count={selectedGoals.size}>
-            {options.goals.map((goal) => (
-              <CheckRow key={goal.id} name="goalId" value={goal.id} checked={selectedGoals.has(goal.id)} label={goal.name} meta={goal.goalType.toLowerCase()} />
+      <EditorSection openStep={openStep} number="2" title="Phases" subtitle="Optional. A phase is a stretch of the Program where the work has one purpose — add one when the work will actually change.">
+        {detail.stages.length ? (
+          <div style={list}>
+            {detail.stages.map((stage) => (
+              <div key={stage.id} style={compactRow}>
+                <span style={stateDot(stage.status)} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <strong>{stage.name}</strong>
+                  <div style={minorText}>
+                    {stage.status.toLowerCase()}
+                    {phaseRange(stage.notBeforeYmd, stage.targetEndYmd) ? ` · ${phaseRange(stage.notBeforeYmd, stage.targetEndYmd)}` : ""}
+                    {" · "}{detail.blocks.filter((block) => block.stageId === stage.id).reduce((sum, block) => sum + block.items.length, 0)} work items
+                  </div>
+                </div>
+                <div style={actionGroup}>
+                  {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
+                  {stage.status === "ACTIVE" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="COMPLETED" label="Complete" /> : null}
+                  {stage.status === "COMPLETED" || stage.status === "SKIPPED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="PLANNED" label="Reopen" /> : null}
+                </div>
+              </div>
             ))}
-          </PickerGroup>
-          <PickerGroup title="Frequency goals" count={selectedFrequencyGoals.size}>
-            {options.frequencyGoals.map((goal) => (
-              <CheckRow
-                key={goal.id}
-                name="frequencyGoalId"
-                value={goal.id}
-                checked={selectedFrequencyGoals.has(goal.id)}
-                label={goal.name}
-                meta={`${goal.targetCount} per ${goal.targetInterval} ${goal.targetUnit.toLowerCase()}`}
-              />
-            ))}
-          </PickerGroup>
-          {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them in step 5.</p> : null}
-          <button type="submit" style={primaryButton}>Save connections</button>
-        </form>
+          </div>
+        ) : <Empty text="No phases yet. The Program runs as one continuous stretch until you add one." />}
+        <p style={minorText}>Phases never advance on their own — starting the next one is always your call.</p>
+        <AddPanel label="Add a phase">
+          <form action={createProgramStage} style={inlineForm}>
+            <input type="hidden" name="programId" value={id} />
+            <p style={phaseIntro}>
+              Is there a stretch of this Program that matters most — a prime season, a trip, an
+              event? That goes here, inside the Program, rather than becoming the Program&rsquo;s
+              own dates.
+            </p>
+            <input name="name" placeholder="Phase name — e.g. Send season" required style={input} />
+            <div style={phaseDateRow}>
+              <label style={dateField}>From<input name="notBeforeYmd" type="date" style={input} /></label>
+              <label style={dateField}>To<input name="targetEndYmd" type="date" style={input} /></label>
+            </div>
+            <textarea name="description" placeholder="Purpose or exit condition" style={textarea} />
+            <button type="submit" style={secondaryButton}>Create phase</button>
+          </form>
+        </AddPanel>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="3" title="Choose the current work" subtitle="These are the routines available to train now. Dates are optional and belong in step 4.">
+      <EditorSection openStep={openStep} number="3" title="Work and prescriptions" subtitle="The routines available to train now. Dates are optional and belong in stage 4.">
         {currentWork.length ? (
           <div style={list}>
             {currentWork.map((item) => (
@@ -174,51 +217,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
           <input name="targetPerWeek" type="number" min="0.5" max="21" step="0.5" placeholder="times/week" style={smallInput} />
           <button type="submit" style={secondaryButton}>Add work</button>
         </form>
-        <details style={advancedPanel}>
-          <summary style={advancedSummary}>Manage phases and progression</summary>
-          <div style={advancedBody}>
-            <p style={minorText}>Most Programs only need the automatic Current phase. Add another phase when the work will actually change.</p>
-            {detail.stages.length ? (
-              <div style={list}>
-                {detail.stages.map((stage) => (
-                  <div key={stage.id} style={compactRow}>
-                    <span style={stateDot(stage.status)} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <strong>{stage.name}</strong>
-                      <div style={minorText}>
-                        {stage.status.toLowerCase()}
-                        {phaseRange(stage.notBeforeYmd, stage.targetEndYmd) ? ` · ${phaseRange(stage.notBeforeYmd, stage.targetEndYmd)}` : ""}
-                        {" · "}{detail.blocks.filter((block) => block.stageId === stage.id).reduce((sum, block) => sum + block.items.length, 0)} work items
-                      </div>
-                    </div>
-                    <div style={actionGroup}>
-                      {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
-                      {stage.status === "ACTIVE" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="COMPLETED" label="Complete" /> : null}
-                      {stage.status === "COMPLETED" || stage.status === "SKIPPED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="PLANNED" label="Reopen" /> : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            <AddPanel label="Add another phase">
-              <form action={createProgramStage} style={inlineForm}>
-                <input type="hidden" name="programId" value={id} />
-                <p style={phaseIntro}>
-                  Is there a stretch of this Program that matters most — a prime season, a trip, an
-                  event? That goes here, inside the Program, rather than becoming the Program&rsquo;s
-                  own dates.
-                </p>
-                <input name="name" placeholder="Phase name — e.g. Send season" required style={input} />
-                <div style={phaseDateRow}>
-                  <label style={dateField}>From<input name="notBeforeYmd" type="date" style={input} /></label>
-                  <label style={dateField}>To<input name="targetEndYmd" type="date" style={input} /></label>
-                </div>
-                <textarea name="description" placeholder="Purpose or exit condition" style={textarea} />
-                <button type="submit" style={secondaryButton}>Create phase</button>
-              </form>
-            </AddPanel>
-          </div>
-        </details>
+        {detail.stages.length > 1 ? <p style={minorText}>Work is added to a phase. Manage the phases themselves in stage 2.</p> : null}
       </EditorSection>
 
       <EditorSection openStep={openStep} number="4" title="Put work on dates" subtitle="Optional. This does not add new training—it only gives current work a date in the next two weeks.">
@@ -405,9 +404,6 @@ const picker: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.09)"
 const pickerSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 850 };
 const addPanel: React.CSSProperties = { borderTop: "1px solid rgba(255,255,255,0.08)" };
 const addPanelSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer", color: "#7ce8aa", fontSize: 12, fontWeight: 850, listStyle: "none" };
-const advancedPanel: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, background: "rgba(255,255,255,0.015)" };
-const advancedSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", padding: "0 12px", cursor: "pointer", color: "rgba(255,255,255,0.58)", fontSize: 11.5, fontWeight: 850, listStyle: "none" };
-const advancedBody: React.CSSProperties = { display: "grid", gap: 12, padding: "4px 12px 14px", borderTop: "1px solid rgba(255,255,255,0.07)" };
 const countChip: React.CSSProperties = { fontSize: 10, color: "#7ce8aa", background: "rgba(51,255,122,0.08)", padding: "3px 7px", borderRadius: 99 };
 const pickerBody: React.CSSProperties = { display: "grid", maxHeight: 320, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.08)" };
 const checkRow: React.CSSProperties = { minHeight: 48, display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 12.5, cursor: "pointer" };
