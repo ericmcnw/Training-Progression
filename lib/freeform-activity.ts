@@ -141,6 +141,14 @@ export function freeformActivityName(sportData: unknown): string | null {
   return labels.length > 0 ? labels.join(" · ") : null;
 }
 
+/** Safely read the validated tag keys off a freeform log's sportData blob. */
+export function freeformTagsFromSportData(sportData: unknown): string[] {
+  if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return [];
+  const tags = (sportData as Record<string, unknown>).tags;
+  if (!Array.isArray(tags)) return [];
+  return tags.filter((t): t is string => typeof t === "string" && TAG_LABEL.has(t));
+}
+
 /** Safely read the validated body-part keys off a freeform log's sportData blob. */
 export function freeformBodyPartsFromSportData(sportData: unknown): string[] {
   if (!sportData || typeof sportData !== "object" || Array.isArray(sportData)) return [];

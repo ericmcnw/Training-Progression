@@ -56,6 +56,70 @@ export type LogActivityInput = {
   bodyParts?: string[];
 };
 
+export type UpdateActivityInput = LogActivityInput & { logId: string };
+
+/** Edit an existing freeform activity log. Rewrites sportData wholesale so
+ *  clearing every tag or body part actually clears them. */
+export async function updateActivityLogAction(input: UpdateActivityInput): Promise<void> {
+  const performedAt = new Date(input.performedAtIso);
+  if (Number.isNaN(performedAt.getTime())) {
+    throw new Error("Invalid performedAt timestamp");
+  }
+
+  const existing = await prisma.routineLog.findUnique({
+    where: { id: input.logId },
+    select: { id: true, routineId: true },
+  });
+  if (!existing) throw new Error("Log not found");
+  if (existing.routineId !== FREEFORM_ACTIVITY_ROUTINE_ID) {
+    throw new Error("Not a freeform activity log");
+  }
+
+  const tags = (input.tags ?? []).filter((t) => VALID_TAG_KEYS.has(t));
+  const bodyParts = (input.bodyParts ?? []).filter((p) => VALID_BODY_PART_KEYS.has(p));
+  const title = input.title?.trim().slice(0, 80) || undefined;
+  const effort = input.effort != null ? clampEffort(input.effort) : null;
+  const durationSec =
+    input.durationMinutes && input.durationMinutes > 0
+      ? Math.round(input.durationMinutes * 60)
+      : null;
+
+  await prisma.routineLog.update({
+    where: { id: input.logId },
+    data: {
+      performedAt,
+      durationSec,
+      notes: input.notes?.trim() || null,
+      effort,
+      sportData: {
+        sport: "activity",
+        ...(title ? { title } : {}),
+        ...(tags.length > 0 ? { tags } : {}),
+        ...(bodyParts.length > 0 ? { bodyParts } : {}),
+      },
+    },
+  });
+
+  const zoneLabel =
+    title ??
+    (tags.length > 0 ? `Activity — ${tags.map(activityTagLabel).join(", ")}` : "Activity");
+  await createManualZoneActivitiesForLog(
+    prisma,
+    input.logId,
+    bodyPartsToZoneGroups(bodyParts),
+    effort != null ? effortIntensity(effort) : "moderate",
+    zoneLabel,
+  );
+
+  await stampLogWeather(input.logId);
+
+  revalidatePath("/log");
+  revalidatePath("/");
+  revalidatePath("/plan");
+  revalidatePath("/profile");
+  revalidatePath("/body");
+}
+
 export async function logActivityAction(input: LogActivityInput): Promise<{ logId: string }> {
   await ensureFreeformActivityRoutine();
 

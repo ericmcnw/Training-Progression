@@ -46,6 +46,12 @@ import {
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 import { parsePoolSwimData, type PoolSwimData } from "@/lib/pool-swim";
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
+import {
+  freeformActivityTitle,
+  freeformBodyPartsFromSportData,
+  freeformTagsFromSportData,
+  isFreeformActivityRoutineId,
+} from "@/lib/freeform-activity";
 import { getLogGearPicks } from "@/lib/gear";
 import type { GearPick } from "@/lib/gear-pick-types";
 import type { SpotPickerValue } from "@/lib/spot-picker-types";
@@ -254,12 +260,30 @@ export type EditSportData = {
   initialGear: GearPick[];
 };
 
+// Edit-time data for the freeform "Activity" catch-all. Its fields live in
+// sportData (title / tags / bodyParts) rather than columns, so it needs its
+// own shape — the generic sport editor can't reach any of them.
+export type EditActivityData = {
+  kind: "ACTIVITY";
+  routineId: string;
+  routineName: string;
+  logId: string;
+  initialNotes: string;
+  initialPerformedAt: Date;
+  initialTitle: string;
+  initialTags: string[];
+  initialDurationSec: number | null;
+  initialEffort: number | null;
+  initialBodyParts: string[];
+};
+
 export type LogEditData =
   | EditWorkoutData
   | EditCardioData
   | EditGuidedData
   | EditSessionData
   | EditSportData
+  | EditActivityData
   | EditCompletionData;
 
 // ── Fetcher ───────────────────────────────────────────────────────────
@@ -378,6 +402,21 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
     initialNotes: log.notes ?? "",
     initialPerformedAt: log.performedAt,
   };
+
+  // Routed on routine identity, not inferred kind: a freeform activity saved
+  // without a duration infers COMPLETION and would otherwise land on the
+  // completion form with its tags and body parts unreachable.
+  if (isFreeformActivityRoutineId(log.routineId)) {
+    return {
+      kind: "ACTIVITY",
+      ...base,
+      initialTitle: freeformActivityTitle(log.sportData) ?? "",
+      initialTags: freeformTagsFromSportData(log.sportData),
+      initialDurationSec: log.durationSec ?? null,
+      initialEffort: log.effort ?? null,
+      initialBodyParts: freeformBodyPartsFromSportData(log.sportData),
+    };
+  }
 
   if (isWorkoutKind(logKind)) {
     const availableExercises = await fetchWorkoutExercises();

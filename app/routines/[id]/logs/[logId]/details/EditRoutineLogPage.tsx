@@ -8,6 +8,7 @@ import EditGuidedLogForm from "../../../log-guided/[logId]/EditGuidedLogForm";
 import EditSessionLogForm from "../../../log-session/[logId]/EditSessionLogForm";
 import EditCompletionLogForm from "../../../log-check/[logId]/EditCompletionLogForm";
 import EditSportLogForm from "./EditSportLogForm";
+import EditActivityLogForm from "./EditActivityLogForm";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,7 @@ export default async function EditRoutineLogPage(props: {
     : data.kind === "GUIDED" ? "Guided"
     : data.kind === "SESSION" ? "Session"
     : data.kind === "SPORT" ? "Sport"
+    : data.kind === "ACTIVITY" ? "Activity"
     : "Completion";
 
   return (
@@ -133,6 +135,18 @@ export default async function EditRoutineLogPage(props: {
               initialClimbAttempts={data.initialClimbAttempts}
               climbDefaultDiscipline={data.climbDefaultDiscipline}
               initialEffort={data.initialEffort}
+            />
+          ) : data.kind === "ACTIVITY" ? (
+            <EditActivityLogForm
+              logId={data.logId}
+              initialPerformedAt={data.initialPerformedAt}
+              initialTitle={data.initialTitle}
+              initialTags={data.initialTags}
+              initialDurationSec={data.initialDurationSec}
+              initialEffort={data.initialEffort}
+              initialBodyParts={data.initialBodyParts}
+              initialNotes={data.initialNotes}
+              returnTo={returnTo}
             />
           ) : data.kind === "SPORT" ? (
             <EditSportLogForm
