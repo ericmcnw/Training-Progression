@@ -7,11 +7,15 @@ import { buildStrengthPulse } from "@/app/progress/details/sport-pulse";
 import { applyGoalsToPulseSlots } from "@/app/progress/details/pulse-goal-slots";
 import ActivityPulseStrip from "@/app/progress/details/ActivityPulseStrip";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
-import ActivityCoverageHeatmap from "@/app/progress/details/ActivityCoverageHeatmap";
+
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import { domainColor } from "@/lib/routines";
-import { buildStrengthChartData } from "@/lib/activities/strength-chart";
+import {
+  buildStrengthChartData,
+  STRENGTH_RANGE_LABEL,
+  type StrengthChartRange,
+} from "@/lib/activities/strength-chart";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import QuickLogDrawerButton from "@/app/routines/QuickLogDrawerButton";
@@ -53,6 +57,62 @@ function formatNumber(n: number) {
   return n.toLocaleString("en-US");
 }
 
+const CHART_RANGE_TITLE: Record<StrengthChartRange, string> = {
+  "12w": "Last 12 Weeks",
+  "26w": "Last 6 Months",
+  "52w": "Last Year",
+};
+
+function buildStrengthHref(
+  params: Record<string, string | string[] | undefined>,
+  overrides: Record<string, string | undefined>
+): string {
+  const next: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (typeof v === "string") next[k] = v;
+  }
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === undefined || v === "") delete next[k];
+    else next[k] = v;
+  }
+  const qs = new URLSearchParams(next).toString();
+  return `/activities/strength${qs ? `?${qs}` : ""}`;
+}
+
+const chartRangeRow: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+const rangePill: React.CSSProperties = {
+  padding: "5px 11px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "inherit",
+  fontSize: 11,
+  fontWeight: 800,
+  textDecoration: "none",
+  minHeight: 30,
+  display: "inline-flex",
+  alignItems: "center",
+};
+const rangePillActive: React.CSSProperties = {
+  ...rangePill,
+  border: `1px solid rgba(${STRENGTH_RGB},0.5)`,
+  background: `rgba(${STRENGTH_RGB},0.15)`,
+  color: STRENGTH_TEXT,
+};
+const viewAllLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  marginTop: 10,
+  fontSize: 12,
+  fontWeight: 800,
+  color: STRENGTH_TEXT,
+  textDecoration: "none",
+};
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -64,6 +124,9 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
   const rawRange = Array.isArray(searchParams.range) ? searchParams.range[0] : searchParams.range;
   const coverageLens: Exclude<CoverageLens, "sports"> = rawLens === "patterns" ? "patterns" : "muscles";
   const coverageRange: CoverageRange = COVERAGE_RANGES.includes(rawRange as CoverageRange) ? rawRange as CoverageRange : "4w";
+  const rawChart = Array.isArray(searchParams.chart) ? searchParams.chart[0] : searchParams.chart;
+  const chartRange: StrengthChartRange =
+    rawChart === "26w" || rawChart === "52w" ? rawChart : "12w";
   const [strength, strengthGoals, coverage] = await Promise.all([
     loadStrengthWorld(),
     getStrengthGoals(),
@@ -143,7 +206,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
   // 12w sessions + volume series for the interactive bar charts.
   // Pure derivation from the data already loaded by loadStrengthWorld
   // (no extra Prisma roundtrip).
-  const chartData = buildStrengthChartData(strength.sessionStats, now);
+  const chartData = buildStrengthChartData(strength.sessionStats, now, chartRange);
   const hasChartData = chartData.sessionsSeries.some((s) =>
     s.weeklyValues.some((v) => v > 0)
   );
@@ -175,8 +238,19 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
             EmptyState branch above already handles that case. */}
         {hasChartData ? (
           <>
+            <div style={chartRangeRow}>
+              {(["12w", "26w", "52w"] as const).map((r) => (
+                <Link
+                  key={r}
+                  href={buildStrengthHref(searchParams, { chart: r === "12w" ? undefined : r })}
+                  style={chartRange === r ? rangePillActive : rangePill}
+                >
+                  {STRENGTH_RANGE_LABEL[r]}
+                </Link>
+              ))}
+            </div>
             <WeeklyBarChartWithSessions
-              title="Strength Sessions per Week — Last 12 Weeks"
+              title={`Strength Sessions per Week — ${CHART_RANGE_TITLE[chartRange]}`}
               weekLabels={chartData.weekLabels}
               series={chartData.sessionsSeries}
               sessionsByWeek={chartData.sessionsByWeek}
@@ -185,7 +259,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
               secondaryLabel="Sets"
             />
             <WeeklyBarChartWithSessions
-              title="Weekly Volume (lb) — Last 12 Weeks"
+              title={`Weekly Volume (lb) — ${CHART_RANGE_TITLE[chartRange]}`}
               weekLabels={chartData.weekLabels}
               series={chartData.volumeSeries}
               sessionsByWeek={chartData.sessionsByWeek}
@@ -201,22 +275,8 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
           goals={strengthGoals}
           activitySlug="strength"
           activityLabel="Strength"
+          collapsible
         />
-
-        {/* Activity coverage heatmap (single row, sessions only) */}
-        {strength.heatmapWeeks.length > 1 ? (
-          <SectionCard
-            title="Activity Coverage"
-            subtitle="Strength sessions over the last 52 weeks. Tap any week to see what you trained."
-          >
-            <ActivityCoverageHeatmap
-              weeks={strength.heatmapWeeks}
-              sessionLabel="Strength session"
-              sessionRowLabel="Strength"
-              hideTrainingRow
-            />
-          </SectionCard>
-        ) : null}
 
         <StrengthCoverage
           overview={coverage}
@@ -227,37 +287,44 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
         {/* Top exercises — with an inline finder so ANY lift's progression
             (not just the top-8) is reachable without leaving for /exercises.
             Rehab lifts rarely crack the top-8 by session count. */}
+        {/* Search leads: it reaches all logged exercises, not just the top
+            eight below it. Buried inside the Top Exercises card it read as
+            if it only searched those. */}
+        <SectionCard
+          title="Find an exercise"
+          subtitle={`Search any of your ${strength.allExercises.length} logged exercises or ${strength.routines.length} routines — jump straight to its progression.`}
+        >
+          <StrengthSearch
+            exercises={strength.allExercises
+              .slice()
+              .sort((a, b) => b.totalSessions - a.totalSessions)
+              .map((ex) => ({
+                id: ex.exerciseId,
+                name: ex.name,
+                href: ex.routineLink,
+                meta: `${ex.totalSessions} session${ex.totalSessions === 1 ? "" : "s"}${
+                  ex.allTimePR && ex.allTimePR.weightLb > 0 ? ` · top ${ex.allTimePR.weightLb} lb` : ""
+                }`,
+              }))}
+            routines={strength.routines.map((r) => ({
+              id: r.routineId,
+              name: r.name,
+              href: `/routines/${r.routineId}`,
+              meta: `${r.totalSessions} session${r.totalSessions === 1 ? "" : "s"}`,
+            }))}
+            accentRgb={STRENGTH_RGB}
+          />
+        </SectionCard>
+
         {strength.topExercises.length > 0 ? (
           <SectionCard
             title="Top Exercises"
-            subtitle="Your most-trained lifts, with all-time top weight and recent progression. Search finds any exercise or routine."
+            subtitle="Your most-trained lifts, with all-time top weight and recent progression."
           >
-            <div style={{ display: "grid", gap: 12 }}>
-              <StrengthSearch
-                exercises={strength.allExercises
-                  .slice()
-                  .sort((a, b) => b.totalSessions - a.totalSessions)
-                  .map((ex) => ({
-                    id: ex.exerciseId,
-                    name: ex.name,
-                    href: ex.routineLink,
-                    meta: `${ex.totalSessions} session${ex.totalSessions === 1 ? "" : "s"}${
-                      ex.allTimePR && ex.allTimePR.weightLb > 0 ? ` · top ${ex.allTimePR.weightLb} lb` : ""
-                    }`,
-                  }))}
-                routines={strength.routines.map((r) => ({
-                  id: r.routineId,
-                  name: r.name,
-                  href: `/routines/${r.routineId}`,
-                  meta: `${r.totalSessions} session${r.totalSessions === 1 ? "" : "s"}`,
-                }))}
-                accentRgb={STRENGTH_RGB}
-              />
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-                {strength.topExercises.slice(0, 8).map((ex) => (
-                  <ExerciseCard key={ex.exerciseId} exercise={ex} />
-                ))}
-              </div>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+              {strength.topExercises.slice(0, 8).map((ex) => (
+                <ExerciseCard key={ex.exerciseId} exercise={ex} />
+              ))}
             </div>
           </SectionCard>
         ) : null}
@@ -296,6 +363,9 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
                 <SessionCard key={s.id} session={s} />
               ))}
             </div>
+            <Link href="/profile/history?domain=strength" style={viewAllLinkStyle}>
+              View all {strength.totalSessions} strength sessions →
+            </Link>
           </SectionCard>
         ) : null}
       </div>

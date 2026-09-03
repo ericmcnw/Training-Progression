@@ -193,6 +193,7 @@ export default async function MobilityWorldPage(props: {
         activitySlug="mobility"
         activityLabel="Mobility"
         showWhenEmpty={false}
+        collapsible
       />
 
       {/* Per-chart range pill — only this chart responds to it. */}

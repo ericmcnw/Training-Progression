@@ -1,4 +1,4 @@
-import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
+import { formatWeekLabel, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import type { StrengthSessionStat } from "@/app/progress/details/strength-world-loader";
 import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
@@ -9,6 +9,20 @@ import { toAppYmd } from "@/lib/dates";
 // volume-per-week charts split by ROUTINE (one stacked segment per
 // routine each week) so the user can see at a glance which routine is
 // driving their volume that week.
+
+export type StrengthChartRange = "12w" | "26w" | "52w";
+
+export const STRENGTH_RANGE_WEEKS: Record<StrengthChartRange, number> = {
+  "12w": 12,
+  "26w": 26,
+  "52w": 52,
+};
+
+export const STRENGTH_RANGE_LABEL: Record<StrengthChartRange, string> = {
+  "12w": "12w",
+  "26w": "6mo",
+  "52w": "1y",
+};
 
 export type StrengthChartData = {
   weekLabels: string[];
@@ -42,9 +56,23 @@ const ROUTINE_PALETTE = [
 
 export function buildStrengthChartData(
   sessionStats: StrengthSessionStat[],
-  now = new Date()
+  now = new Date(),
+  range: StrengthChartRange = "12w"
 ): StrengthChartData {
-  const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  // Week keys are built once and every series is mapped onto them, so the
+  // stacked segments stay index-aligned. (fillWeeklySeries' "all"/"ytd"
+  // modes return only the weeks present in each series' own map, which
+  // would give each routine a different-length array.)
+  const weeks = STRENGTH_RANGE_WEEKS[range];
+  const weekKeys: string[] = [];
+  const cursor = getWeekBoundsSunday(now).start;
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const date = new Date(cursor);
+    date.setDate(date.getDate() - i * 7);
+    weekKeys.push(toAppYmd(date));
+  }
+
+  const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
   const inWindow = sessionStats.filter((s) => s.date >= cutoff);
 
   // Group by routine. Keep totals so we can rank routines for color
@@ -92,28 +120,21 @@ export function buildStrengthChartData(
     colorByRoutineId.set(r.routineId, ROUTINE_PALETTE[idx % ROUTINE_PALETTE.length]);
   });
 
-  const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
+  const weekLabels = weekKeys.map((k) => formatWeekLabel(k));
 
   const sessionsSeries: StackedBarSeries[] = rankedRoutines.map((r) => ({
     label: r.routineName,
     color: colorByRoutineId.get(r.routineId)!,
-    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, "12w", now).map((p) => p.value),
+    weeklyValues: weekKeys.map((k) => r.sessionCountByWeek.get(k) ?? 0),
   }));
 
   const volumeSeries: StackedBarSeries[] = rankedRoutines.map((r) => ({
     label: r.routineName,
     color: colorByRoutineId.get(r.routineId)!,
-    weeklyValues: fillWeeklySeries(r.volumeByWeek, "12w", now).map((p) => p.value),
+    weeklyValues: weekKeys.map((k) => r.volumeByWeek.get(k) ?? 0),
   }));
 
-  // Build per-week session lists for the panel underneath either chart.
-  const weekKeys: string[] = [];
-  const cursor = getWeekBoundsSunday(now).start;
-  for (let i = 11; i >= 0; i -= 1) {
-    const date = new Date(cursor);
-    date.setDate(date.getDate() - i * 7);
-    weekKeys.push(toAppYmd(date));
-  }
+  // Per-week session lists for the panel underneath either chart.
   const weekIndexByKey = new Map(weekKeys.map((k, i) => [k, i]));
   const sessionsByWeek: WeekSession[][] = weekKeys.map(() => []);
 

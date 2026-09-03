@@ -171,6 +171,14 @@ body{
 }
 .swbcBar:focus { outline: none; }
 
+/* In-bar series names. A weekly column is ~28px wide on a phone, so nothing
+   legible fits there — the legend carries the names instead. Desktop columns
+   are wide enough to label the dominant band directly. */
+.swbcSegLabel { display: none; }
+@media (min-width: 721px) {
+  .swbcSegLabel { display: block; }
+}
+
 *{
   box-sizing: border-box;
 }

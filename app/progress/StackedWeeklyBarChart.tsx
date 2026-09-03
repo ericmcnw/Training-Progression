@@ -41,6 +41,13 @@ function seriesColor(s: StackedBarSeries | undefined, idx: number) {
   return s?.color ?? seriesPalette[idx % seriesPalette.length];
 }
 
+// Neutral grey — the folded tail should read as "everything else", not as
+// another category competing for attention.
+const OTHER_COLOR = "rgba(148,163,184,0.72)";
+
+// A segment shorter than this can't fit 9px text without clipping.
+const SEGMENT_LABEL_MIN_PCT = 16;
+
 function niceAxisMax(value: number) {
   if (value <= 0) return 1;
   const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
@@ -72,6 +79,7 @@ export default function StackedWeeklyBarChart({
   unit = "",
   decimals = 1,
   compact = false,
+  maxSeries = 4,
   onPinnedWeekChange,
   hideTooltip: _hideTooltip,
 }: {
@@ -81,6 +89,10 @@ export default function StackedWeeklyBarChart({
   unit?: string;
   decimals?: number;
   compact?: boolean;
+  /** Colors shown before the tail folds into one "Other" band. Keeps the
+   *  legend readable and stops the palette wrapping into duplicate hues
+   *  when someone logs a dozen different routines in one window. */
+  maxSeries?: number;
   onPinnedWeekChange?: (weekIndex: number | null) => void;
   /** Accepted for API compatibility — there is no in-chart tooltip
    *  anymore; the sessions panel below the chart is the single source
@@ -105,6 +117,32 @@ export default function StackedWeeklyBarChart({
 
   const hasAnyTime = weeklyMinutesTotals.some((m) => m > 0);
   const activeSeries = series.filter((s) => s.weeklyValues.some((v) => v > 0));
+
+  // Rank by window total, then fold everything past the cap into one band.
+  // A long tail of one-session routines otherwise eats a color and a legend
+  // row each while rendering as an invisible sliver.
+  const displaySeries = useMemo<Array<StackedBarSeries & { total: number }>>(() => {
+    const withTotals = activeSeries
+      .map((s) => ({ ...s, total: s.weeklyValues.reduce((a, b) => a + b, 0) }))
+      .sort((a, b) => b.total - a.total);
+    if (withTotals.length <= maxSeries) return withTotals;
+
+    const kept = withTotals.slice(0, maxSeries - 1);
+    const tail = withTotals.slice(maxSeries - 1);
+    const merged: StackedBarSeries & { total: number } = {
+      label: `Other (${tail.length})`,
+      color: OTHER_COLOR,
+      weeklyValues: weekLabels.map((_, wi) =>
+        tail.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0)
+      ),
+      weeklyMinutes: weekLabels.map((_, wi) =>
+        tail.reduce((sum, s) => sum + (s.weeklyMinutes?.[wi] ?? 0), 0)
+      ),
+      total: tail.reduce((sum, s) => sum + s.total, 0),
+    };
+    return [...kept, merged];
+  }, [activeSeries, maxSeries, weekLabels]);
+
   const yMax = niceAxisMax(Math.max(0.001, ...weekTotals));
 
   const totalAll = weekTotals.reduce((a, b) => a + b, 0);
@@ -156,21 +194,37 @@ export default function StackedWeeklyBarChart({
                 onClick={() => setPinnedWeek((p) => (p === wi ? null : wi))}
               >
                 <div style={barCell(isPinned)}>
-                  {series
+                  {displaySeries
                     .map((s, idx) => ({ s, idx, val: s.weeklyValues[wi] ?? 0 }))
                     .filter((seg) => seg.val > 0)
-                    .map((seg) => (
-                      <div
-                        key={seg.s.label}
-                        style={{
-                          width: "100%",
-                          height: `${(seg.val / yMax) * 100}%`,
-                          background: seriesColor(seg.s, seg.idx),
-                          borderRadius: 2,
-                          marginTop: 1,
-                        }}
-                      />
-                    ))}
+                    .map((seg) => {
+                      const pct = (seg.val / yMax) * 100;
+                      return (
+                        <div
+                          key={seg.s.label}
+                          style={{
+                            width: "100%",
+                            height: `${pct}%`,
+                            background: seriesColor(seg.s, seg.idx),
+                            borderRadius: 2,
+                            marginTop: 1,
+                            overflow: "hidden",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {/* Only tall segments get an in-bar name, and the
+                              class hides it below 720px where a weekly column
+                              is ~28px wide and nothing legible fits. */}
+                          {pct >= SEGMENT_LABEL_MIN_PCT ? (
+                            <span className="swbcSegLabel" style={segLabel}>
+                              {seg.s.label}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                 </div>
               </button>
             );
@@ -197,12 +251,13 @@ export default function StackedWeeklyBarChart({
         </div>
       </div>
 
-      {activeSeries.length > 1 ? (
+      {displaySeries.length > 1 ? (
         <div style={legend}>
-          {activeSeries.map((s, idx) => (
+          {displaySeries.map((s, idx) => (
             <span key={s.label} style={legendItem}>
               <span style={{ ...legendSwatch, background: seriesColor(s, idx) }} />
               <span style={legendLabel}>{s.label}</span>
+              <span style={legendCount}>{fmtValue(s.total, decimals, unit)}</span>
             </span>
           ))}
         </div>
@@ -408,3 +463,15 @@ const legendSwatch: CSSProperties = {
   flexShrink: 0,
 };
 const legendLabel: CSSProperties = { opacity: 0.7, fontWeight: 800 };
+const legendCount: CSSProperties = { opacity: 0.45, fontWeight: 800, fontVariantNumeric: "tabular-nums" };
+const segLabel: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 900,
+  lineHeight: 1,
+  color: "rgba(10,12,16,0.82)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "clip",
+  padding: "0 3px",
+  pointerEvents: "none",
+};

@@ -319,6 +319,7 @@ export default async function EnduranceWorldPage(props: {
           activitySlug="endurance"
           activityLabel="Endurance"
           showWhenEmpty={false}
+          collapsible
         />
 
         {/* Overview tab: side-by-side family cards */}

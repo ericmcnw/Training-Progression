@@ -208,6 +208,7 @@ export default async function LifestyleWorldPage(props: {
         activitySlug="lifestyle"
         activityLabel="Lifestyle"
         showWhenEmpty={false}
+        collapsible
       />
 
       {/* Per-chart range pill — only this chart responds. */}
