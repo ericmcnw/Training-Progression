@@ -179,6 +179,15 @@ body{
   .swbcSegLabel { display: block; }
 }
 
+/* Legend entries are buttons (tap one to isolate that series). Inline styles
+   already override the global button box, but the green :hover halo would
+   still ring every chip. */
+.swbcLegendBtn:hover,
+.swbcLegendBtn:focus-visible {
+  border-color: inherit !important;
+  box-shadow: none !important;
+}
+
 *{
   box-sizing: border-box;
 }

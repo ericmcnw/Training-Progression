@@ -41,10 +41,6 @@ function seriesColor(s: StackedBarSeries | undefined, idx: number) {
   return s?.color ?? seriesPalette[idx % seriesPalette.length];
 }
 
-// Neutral grey — the folded tail should read as "everything else", not as
-// another category competing for attention.
-const OTHER_COLOR = "rgba(148,163,184,0.72)";
-
 // A segment shorter than this can't fit 9px text without clipping.
 const SEGMENT_LABEL_MIN_PCT = 16;
 
@@ -79,7 +75,6 @@ export default function StackedWeeklyBarChart({
   unit = "",
   decimals = 1,
   compact = false,
-  maxSeries = 4,
   onPinnedWeekChange,
   hideTooltip: _hideTooltip,
 }: {
@@ -89,10 +84,6 @@ export default function StackedWeeklyBarChart({
   unit?: string;
   decimals?: number;
   compact?: boolean;
-  /** Colors shown before the tail folds into one "Other" band. Keeps the
-   *  legend readable and stops the palette wrapping into duplicate hues
-   *  when someone logs a dozen different routines in one window. */
-  maxSeries?: number;
   onPinnedWeekChange?: (weekIndex: number | null) => void;
   /** Accepted for API compatibility — there is no in-chart tooltip
    *  anymore; the sessions panel below the chart is the single source
@@ -100,6 +91,9 @@ export default function StackedWeeklyBarChart({
   hideTooltip?: boolean;
 }) {
   const [pinnedWeek, setPinnedWeek] = useState<number | null>(null);
+  // Isolating a series is the readability lever: one saturated color at a
+  // time beats decoding a dozen. Works the same on desktop and mobile.
+  const [isolated, setIsolated] = useState<string | null>(null);
 
   useEffect(() => {
     onPinnedWeekChange?.(pinnedWeek);
@@ -118,30 +112,15 @@ export default function StackedWeeklyBarChart({
   const hasAnyTime = weeklyMinutesTotals.some((m) => m > 0);
   const activeSeries = series.filter((s) => s.weeklyValues.some((v) => v > 0));
 
-  // Rank by window total, then fold everything past the cap into one band.
-  // A long tail of one-session routines otherwise eats a color and a legend
-  // row each while rendering as an invisible sliver.
-  const displaySeries = useMemo<Array<StackedBarSeries & { total: number }>>(() => {
-    const withTotals = activeSeries
-      .map((s) => ({ ...s, total: s.weeklyValues.reduce((a, b) => a + b, 0) }))
-      .sort((a, b) => b.total - a.total);
-    if (withTotals.length <= maxSeries) return withTotals;
-
-    const kept = withTotals.slice(0, maxSeries - 1);
-    const tail = withTotals.slice(maxSeries - 1);
-    const merged: StackedBarSeries & { total: number } = {
-      label: `Other (${tail.length})`,
-      color: OTHER_COLOR,
-      weeklyValues: weekLabels.map((_, wi) =>
-        tail.reduce((sum, s) => sum + (s.weeklyValues[wi] ?? 0), 0)
-      ),
-      weeklyMinutes: weekLabels.map((_, wi) =>
-        tail.reduce((sum, s) => sum + (s.weeklyMinutes?.[wi] ?? 0), 0)
-      ),
-      total: tail.reduce((sum, s) => sum + s.total, 0),
-    };
-    return [...kept, merged];
-  }, [activeSeries, maxSeries, weekLabels]);
+  // Every series is kept — ranking by window total just puts the routines
+  // that actually drove the period at the front of the legend.
+  const displaySeries = useMemo<Array<StackedBarSeries & { total: number }>>(
+    () =>
+      activeSeries
+        .map((s) => ({ ...s, total: s.weeklyValues.reduce((a, b) => a + b, 0) }))
+        .sort((a, b) => b.total - a.total),
+    [activeSeries]
+  );
 
   const yMax = niceAxisMax(Math.max(0.001, ...weekTotals));
 
@@ -199,6 +178,7 @@ export default function StackedWeeklyBarChart({
                     .filter((seg) => seg.val > 0)
                     .map((seg) => {
                       const pct = (seg.val / yMax) * 100;
+                      const dimmed = isolated !== null && seg.s.label !== isolated;
                       return (
                         <div
                           key={seg.s.label}
@@ -212,6 +192,8 @@ export default function StackedWeeklyBarChart({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
+                            opacity: dimmed ? 0.15 : 1,
+                            transition: "opacity 0.12s",
                           }}
                         >
                           {/* Only tall segments get an in-bar name, and the
@@ -253,13 +235,24 @@ export default function StackedWeeklyBarChart({
 
       {displaySeries.length > 1 ? (
         <div style={legend}>
-          {displaySeries.map((s, idx) => (
-            <span key={s.label} style={legendItem}>
-              <span style={{ ...legendSwatch, background: seriesColor(s, idx) }} />
-              <span style={legendLabel}>{s.label}</span>
-              <span style={legendCount}>{fmtValue(s.total, decimals, unit)}</span>
-            </span>
-          ))}
+          {displaySeries.map((s, idx) => {
+            const on = isolated === s.label;
+            const dimmed = isolated !== null && !on;
+            return (
+              <button
+                key={s.label}
+                type="button"
+                className="swbcLegendBtn"
+                aria-pressed={on}
+                onClick={() => setIsolated((prev) => (prev === s.label ? null : s.label))}
+                style={{ ...legendItem, ...(on ? legendItemOn : null), opacity: dimmed ? 0.4 : 1 }}
+              >
+                <span style={{ ...legendSwatch, background: seriesColor(s, idx) }} />
+                <span style={legendLabel}>{s.label}</span>
+                <span style={legendCount}>{fmtValue(s.total, decimals, unit)}</span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -454,7 +447,25 @@ const legend: CSSProperties = {
   borderTop: "1px solid rgba(255,255,255,0.07)",
 };
 
-const legendItem: CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 11 };
+const legendItem: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 11,
+  minHeight: 34,
+  padding: "4px 9px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.03)",
+  color: "inherit",
+  cursor: "pointer",
+  touchAction: "manipulation",
+  transition: "opacity 0.12s, border-color 0.12s, background 0.12s",
+};
+const legendItemOn: CSSProperties = {
+  border: "1px solid rgba(120,190,255,0.45)",
+  background: "rgba(120,190,255,0.14)",
+};
 const legendSwatch: CSSProperties = {
   display: "inline-block",
   width: 9,
