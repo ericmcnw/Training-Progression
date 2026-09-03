@@ -35,6 +35,7 @@ export default function ProgramCreator({
   tickListCount,
   climbingProjects,
   climbingLocations,
+  todayYmd,
 }: {
   routines: RoutinePick[];
   goals: GoalPick[];
@@ -44,13 +45,18 @@ export default function ProgramCreator({
   tickListCount: number;
   climbingProjects: ClimbingProjectPick[];
   climbingLocations: ClimbingLocationPick[];
+  // Resolved server-side so the default start matches the app timezone rather
+  // than the browser's.
+  todayYmd: string;
 }) {
   const [mode, setMode] = useState<"choose" | "guided" | "manual">("choose");
   const [path, setPath] = useState<Path>("sport");
   const [name, setName] = useState("");
   const [pursuitKey, setPursuitKey] = useState("");
   const [timelineMode, setTimelineMode] = useState<TimelineMode>(timelineModeFor("sport"));
-  const [startYmd, setStartYmd] = useState("");
+  // A program's start is when you begin the work, which is almost always now.
+  // Defaulting it removes the most confusing decision in setup.
+  const [startYmd, setStartYmd] = useState(todayYmd);
   const [endYmd, setEndYmd] = useState("");
   const [reviewYmd, setReviewYmd] = useState("");
   const [durationWeeks, setDurationWeeks] = useState("");
@@ -180,10 +186,10 @@ export default function ProgramCreator({
               ) : (
                 <label style={field}>Primary activity<input value={pursuitKey} onChange={(event) => setPursuitKey(event.target.value)} placeholder={pursuitFor(path)} style={input} /></label>
               )}
-              <label style={field}>Timeline
+              <label style={field}>How long are you working on this?
                 <select value={timelineMode} onChange={(event) => setTimelineMode(event.target.value as TimelineMode)} style={input}>
-                  <option value="SEASON">A season or window — it runs between two dates</option>
-                  <option value="TARGET_DATE">A date I&rsquo;m training for — a race, trip, or event</option>
+                  <option value="SEASON">It runs between two dates — a build-up and an end point</option>
+                  <option value="TARGET_DATE">I&rsquo;m training for one date — a race, trip, or event</option>
                   <option value="DURATION">A fixed block — so many weeks from a start</option>
                   <option value="REVIEW_DATE">Open-ended — check in on it periodically</option>
                 </select>
@@ -191,8 +197,8 @@ export default function ProgramCreator({
               <div className="programDateRow" style={dateRow}>
                 {timelineMode === "SEASON" ? (
                   <>
-                    <label style={field}>Season starts <span style={optionalText}>optional</span><input type="date" value={startYmd} onChange={(event) => setStartYmd(event.target.value)} style={input} /></label>
-                    <label style={field}>Season ends <span style={optionalText}>optional</span><input type="date" value={endYmd} onChange={(event) => setEndYmd(event.target.value)} style={input} /></label>
+                    <label style={field}>Starts <span style={optionalText}>optional</span><input type="date" value={startYmd} onChange={(event) => setStartYmd(event.target.value)} style={input} /><span style={fieldHint}>When you begin the work — usually today.</span></label>
+                    <label style={field}>Ends <span style={optionalText}>optional</span><input type="date" value={endYmd} onChange={(event) => setEndYmd(event.target.value)} style={input} /><span style={fieldHint}>When the program is over.</span></label>
                   </>
                 ) : timelineMode === "TARGET_DATE" ? (
                   <label style={field}>The date <span style={optionalText}>optional</span><input type="date" value={endYmd} onChange={(event) => setEndYmd(event.target.value)} style={input} /></label>
@@ -206,6 +212,12 @@ export default function ProgramCreator({
                 )}
               </div>
               {timelineMode === "DURATION" && resolvedEndYmd ? <p style={dateNote}>Ends {resolvedEndYmd}.</p> : null}
+              {timelineMode === "SEASON" ? (
+                <p style={dateNote}>
+                  This is the whole arc, including the build-up — not just the part you&rsquo;re peaking for.
+                  A prime season, trip, or event goes inside it as a phase once the program exists.
+                </p>
+              ) : null}
             </div>
           </CreatorPanel>
           </div>
@@ -548,6 +560,7 @@ const panelTitle: CSSProperties = { margin: 0, fontSize: 22, lineHeight: 1.2 };
 const panelCopy: CSSProperties = { maxWidth: 650, margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "rgba(255,255,255,0.52)" };
 const dateRow: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 13 };
 const dateNote: CSSProperties = { margin: 0, fontSize: 11, color: "rgba(255,255,255,0.45)" };
+const fieldHint: CSSProperties = { fontSize: 10.5, fontWeight: 650, color: "rgba(255,255,255,0.4)" };
 const detailFields: CSSProperties = { display: "grid", gap: 13, maxWidth: 680 };
 const backButton: CSSProperties = { minHeight: 42, padding: "0 13px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 8, background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.7)", fontWeight: 800, cursor: "pointer" };
 const pathList: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 };

@@ -185,7 +185,11 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
                     <span style={stateDot(stage.status)} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <strong>{stage.name}</strong>
-                      <div style={minorText}>{stage.status.toLowerCase()} · {detail.blocks.filter((block) => block.stageId === stage.id).reduce((sum, block) => sum + block.items.length, 0)} work items</div>
+                      <div style={minorText}>
+                        {stage.status.toLowerCase()}
+                        {phaseRange(stage.notBeforeYmd, stage.targetEndYmd) ? ` · ${phaseRange(stage.notBeforeYmd, stage.targetEndYmd)}` : ""}
+                        {" · "}{detail.blocks.filter((block) => block.stageId === stage.id).reduce((sum, block) => sum + block.items.length, 0)} work items
+                      </div>
                     </div>
                     <div style={actionGroup}>
                       {stage.status === "PLANNED" ? <StatusForm action={setProgramStageStatus} programId={id} entityName="stageId" entityId={stage.id} status="ACTIVE" label="Start" /> : null}
@@ -199,8 +203,16 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
             <AddPanel label="Add another phase">
               <form action={createProgramStage} style={inlineForm}>
                 <input type="hidden" name="programId" value={id} />
-                <input name="name" placeholder="Phase name" required style={input} />
-                <input name="notBeforeYmd" type="date" aria-label="Not before date" style={input} />
+                <p style={phaseIntro}>
+                  Is there a stretch of this Program that matters most — a prime season, a trip, an
+                  event? That goes here, inside the Program, rather than becoming the Program&rsquo;s
+                  own dates.
+                </p>
+                <input name="name" placeholder="Phase name — e.g. Send season" required style={input} />
+                <div style={phaseDateRow}>
+                  <label style={dateField}>From<input name="notBeforeYmd" type="date" style={input} /></label>
+                  <label style={dateField}>To<input name="targetEndYmd" type="date" style={input} /></label>
+                </div>
                 <textarea name="description" placeholder="Purpose or exit condition" style={textarea} />
                 <button type="submit" style={secondaryButton}>Create phase</button>
               </form>
@@ -379,6 +391,16 @@ const setupPartSubtitle: React.CSSProperties = { margin: "2px 0 0", fontSize: 10
 const setupPartBody: React.CSSProperties = { minWidth: 0, paddingLeft: 32 };
 const actionLink: React.CSSProperties = { ...quietLink, minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 12px", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8 };
 const minorText: React.CSSProperties = { fontSize: 11, lineHeight: 1.35, color: "rgba(255,255,255,0.48)" };
+
+function phaseRange(from: string | null, to: string | null) {
+  if (!from && !to) return null;
+  const show = (ymd: string) => {
+    const [y, m, d] = ymd.split("-").map(Number);
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+  };
+  if (from && to) return `${show(from)} – ${show(to)}`;
+  return from ? `from ${show(from)}` : `until ${show(to!)}`;
+}
 const picker: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, overflow: "hidden" };
 const pickerSummary: React.CSSProperties = { minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 850 };
 const addPanel: React.CSSProperties = { borderTop: "1px solid rgba(255,255,255,0.08)" };
@@ -395,6 +417,10 @@ const input: React.CSSProperties = { minWidth: 0, width: "100%", minHeight: 42, 
 const smallInput: React.CSSProperties = { ...input, width: 110 };
 const textarea: React.CSSProperties = { ...input, minHeight: 70, resize: "vertical" };
 const inlineForm: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, alignItems: "start" };
+// inlineForm flows children into columns; these two need the full row.
+const phaseIntro: React.CSSProperties = { ...minorText, gridColumn: "1 / -1", margin: 0 };
+const phaseDateRow: React.CSSProperties = { gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 };
+const dateField: React.CSSProperties = { display: "grid", gap: 4, fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.6)" };
 const miniForm: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", paddingTop: 8 };
 const baselineToggle: React.CSSProperties = { minHeight: 42, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontSize: 11, color: "rgba(255,255,255,0.6)" };
 const iconButton: React.CSSProperties = { width: 42, height: 42, flexShrink: 0, borderRadius: 8, border: "1px solid rgba(51,255,122,0.35)", background: "rgba(51,255,122,0.1)", color: "#7ce8aa", fontSize: 20, cursor: "pointer" };

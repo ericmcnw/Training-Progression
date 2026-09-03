@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { todayAppYmd } from "@/lib/dates";
 import ProgramCreator from "./ProgramCreator";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,7 @@ export default async function NewProgramPage() {
         tickListCount={tickListCount}
         climbingProjects={climbingProjects}
         climbingLocations={climbingLocations}
+        todayYmd={todayAppYmd()}
       />
       <style>{`
         .focusForm { --edge: clamp(14px, 4vw, 28px); }
