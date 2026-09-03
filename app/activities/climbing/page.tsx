@@ -10,10 +10,12 @@
 //   - Hero with quick-log CTA
 //   - Pulse strip (this week / 4w / 12w / all time sessions)
 //   - Hub navigation tiles → Climbs · Projects · Map · Locations
-//   - Sessions chart, stacked by climbing discipline, per-chart range pill
+//   - Active goals (collapsed by default — the header states the count)
 //   - Grade pyramid with conditional discipline filter pill (only renders
 //     pills for disciplines that have data — boulder-only climbers don't
 //     see top-rope/sport-lead clutter)
+//   - Sessions chart, stacked by climbing discipline, per-chart range pill
+//   - Training-per-week chart + the tag panel that drives it
 //   - Indoor / outdoor split card
 //   - Active projects (top 3, with "view all" link)
 //   - Recent locations (top 5)
@@ -675,56 +677,7 @@ export default async function ClimbingHubPage(props: {
         activitySlug="climbing"
         activityLabel="Climbing"
         showWhenEmpty={false}
-      />
-
-      {/* ── Chart range — applies to both weekly charts below ──────── */}
-      <div style={chartPillRowStyle}>
-        <span style={chartPillLabelStyle}>Chart range</span>
-        {(["4w", "12w"] as const).map((w) => (
-          <Link
-            key={w}
-            href={buildHref(searchParams, { chart: w === "12w" ? undefined : w })}
-            style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
-          >
-            {w}
-          </Link>
-        ))}
-      </div>
-
-      {/* Chart 1 — climbing sessions. Hue = discipline (boulder orange,
-          sport lead red, top rope sky), shade = venue (indoor light,
-          outdoor deep). Only combos with data render. */}
-      {chartHasData ? (
-        <WeeklyEffortChart
-          title={`Climbing Sessions per Week — Last ${chartWeeks} Weeks`}
-          weekLabels={chartData.weekLabels}
-          series={chartData.series}
-          sessionsByWeek={chartData.sessionsByWeek}
-          defaultLens="bars"
-        />
-      ) : null}
-
-      {/* Chart 2 — supporting training (Fingers, Pull Day, tagged cardio,
-          …) stacked by domain so the support mix reads at a glance. */}
-      {trainingChartHasData ? (
-        <WeeklyBarChartWithSessions
-          title={`Climbing Training per Week — Last ${chartWeeks} Weeks`}
-          weekLabels={trainingChartData.weekLabels}
-          series={trainingChartData.series}
-          sessionsByWeek={trainingChartData.sessionsByWeek}
-          unit=""
-          decimals={0}
-          compact={false}
-        />
-      ) : null}
-
-      {/* Tag management — visible + editable right under the chart it
-          drives. Routine tags link out to the routine edit page; exercise
-          tags add/remove inline. */}
-      <TrainingTagsPanel
-        taggedRoutines={taggedRoutines}
-        taggedExercises={taggedExercises}
-        allExerciseNames={allExerciseNames.map((e) => e.name)}
+        collapsible
       />
 
       {/* ── Pyramid ───────────────────────────────────────────────── */}
@@ -786,6 +739,56 @@ export default async function ClimbingHubPage(props: {
           </div>
         )}
       </SectionCard>
+
+      {/* ── Chart range — applies to both weekly charts below ──────── */}
+      <div style={chartPillRowStyle}>
+        <span style={chartPillLabelStyle}>Chart range</span>
+        {(["4w", "12w"] as const).map((w) => (
+          <Link
+            key={w}
+            href={buildHref(searchParams, { chart: w === "12w" ? undefined : w })}
+            style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
+          >
+            {w}
+          </Link>
+        ))}
+      </div>
+
+      {/* Chart 1 — climbing sessions. Hue = discipline (boulder orange,
+          sport lead red, top rope sky), shade = venue (indoor light,
+          outdoor deep). Only combos with data render. */}
+      {chartHasData ? (
+        <WeeklyEffortChart
+          title={`Climbing Sessions per Week — Last ${chartWeeks} Weeks`}
+          weekLabels={chartData.weekLabels}
+          series={chartData.series}
+          sessionsByWeek={chartData.sessionsByWeek}
+          defaultLens="bars"
+        />
+      ) : null}
+
+      {/* Chart 2 — supporting training (Fingers, Pull Day, tagged cardio,
+          …) stacked by domain so the support mix reads at a glance. */}
+      {trainingChartHasData ? (
+        <WeeklyBarChartWithSessions
+          title={`Climbing Training per Week — Last ${chartWeeks} Weeks`}
+          weekLabels={trainingChartData.weekLabels}
+          series={trainingChartData.series}
+          sessionsByWeek={trainingChartData.sessionsByWeek}
+          unit=""
+          decimals={0}
+          compact={false}
+        />
+      ) : null}
+
+      {/* Tag management — visible + editable right under the chart it
+          drives. Routine tags link out to the routine edit page; exercise
+          tags add/remove inline. */}
+      <TrainingTagsPanel
+        taggedRoutines={taggedRoutines}
+        taggedExercises={taggedExercises}
+        allExerciseNames={allExerciseNames.map((e) => e.name)}
+      />
 
       {/* ── Tick list ─────────────────────────────────────────────── */}
       {tickListRows.length > 0 ? (

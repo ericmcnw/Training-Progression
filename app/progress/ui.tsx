@@ -91,19 +91,50 @@ export function SectionCard({
   subtitle,
   actions,
   children,
+  collapsible = false,
+  defaultOpen = false,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  /** Renders the card as a native <details> so the body folds away and the
+   *  header stays as a one-line summary. No JS, so it works in a server
+   *  component; the subtitle should carry enough to read while collapsed. */
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const heading = (
+    <div style={{ minWidth: 0 }}>
+      <div style={styles.sectionHeader}>{title}</div>
+      {subtitle ? <div style={styles.sectionSub}>{subtitle}</div> : null}
+    </div>
+  );
+
+  if (collapsible) {
+    return (
+      <details className="mobileSectionCard" style={styles.section} open={defaultOpen || undefined}>
+        {/* Actions live in the body, not the summary: anything clickable
+            inside <summary> fights the toggle. */}
+        <summary
+          data-collapsible-summary
+          className="mobileSectionHeader"
+          style={{ ...styles.sectionHeaderRow, cursor: "pointer", minHeight: 44 }}
+        >
+          {heading}
+        </summary>
+        <div className="mobileSectionBody" style={styles.sectionBody}>
+          {actions ? <div className="mobileActionRow" style={styles.sectionActions}>{actions}</div> : null}
+          {children}
+        </div>
+      </details>
+    );
+  }
+
   return (
     <section className="mobileSectionCard" style={styles.section}>
       <div className="mobileSectionHeader" style={styles.sectionHeaderRow}>
-        <div style={{ minWidth: 0 }}>
-          <div style={styles.sectionHeader}>{title}</div>
-          {subtitle ? <div style={styles.sectionSub}>{subtitle}</div> : null}
-        </div>
+        {heading}
         {actions ? <div className="mobileActionRow" style={styles.sectionActions}>{actions}</div> : null}
       </div>
       <div className="mobileSectionBody" style={styles.sectionBody}>{children}</div>

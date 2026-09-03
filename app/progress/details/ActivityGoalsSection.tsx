@@ -174,11 +174,17 @@ export default function ActivityGoalsSection({
   activitySlug,
   activityLabel,
   showWhenEmpty = true,
+  collapsible = false,
+  defaultOpen = false,
 }: {
   goals: GoalInsight[];
   activitySlug: string;
   activityLabel: string;
   showWhenEmpty?: boolean;
+  /** Folds the goal cards away, leaving the header line. The subtitle
+   *  already states the goal count, so the collapsed card still reads. */
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
   if (goals.length === 0 && !showWhenEmpty) return null;
 
@@ -192,6 +198,8 @@ export default function ActivityGoalsSection({
   return (
     <SectionCard
       title="Active Goals"
+      collapsible={collapsible}
+      defaultOpen={defaultOpen}
       subtitle={
         goals.length === 0
           ? `Targets you've set for ${activityLabel.toLowerCase()}.`
