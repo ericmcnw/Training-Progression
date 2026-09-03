@@ -60,7 +60,7 @@ const PARAM_ASSIGNMENTS = [
       "Goblet Cossack Squat",
     ],
   },
-  { keys: ["angleDeg", "boxHeightIn"], names: ["Step-Down"] },
+  { keys: ["angleDeg", "boxHeightIn"], names: ["Step-Down", "Slant Board Step-Down"] },
   {
     keys: ["boxHeightIn"],
     names: [

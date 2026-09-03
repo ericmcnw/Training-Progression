@@ -5,6 +5,7 @@ import { addDaysYmd, getAppDayRange, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { getLogsInWindow } from "@/lib/logs-window";
 import { getHomeInjuries } from "@/lib/home-injuries";
 import { getMonthData } from "@/app/plan/month/data";
+import { exerciseParamKeys, readExerciseParams } from "@/lib/exercise-params";
 import type { RoutineDomain } from "@/lib/routines";
 
 // Read-only tools for the AI coach. Every tool clamps its window so a single
@@ -86,7 +87,7 @@ export const COACH_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_exercise_history",
     description:
-      "Set-by-set history for one exercise by name (e.g. 'Single-Leg Hamstring Curl', 'Weighted Pull-Up') across all routines: per session date, routine, and sets (reps / seconds / weight lb), plus best weight and best reps in the window. Use for PR and loading-progression questions.",
+      "Set-by-set history for one exercise by name (e.g. 'Single-Leg Hamstring Curl', 'Weighted Pull-Up') across all routines: per session date, routine, sets (reps / seconds / weight lb), the setup it was performed at, and that session's notes; plus best weight and best reps in the window. Use for PR and loading-progression questions. IMPORTANT: before calling a change in the numbers progress or regression, check `setup` and `notes`. `setup` holds measured parameters that change how hard the same movement is (edgeMm: smaller is harder; pinchWidthMm: smaller is harder; boxHeightIn: taller is harder; angleDeg: direction depends on the movement) — identical reps at a smaller edge is progress, not a plateau. `notes` can record a change in technique or equipment that makes later sessions non-comparable to earlier ones. Surface that explanation to the user when it is what actually moved the numbers.",
     input_schema: {
       type: "object",
       properties: {
@@ -343,7 +344,7 @@ async function getExerciseHistory(input: Record<string, unknown>) {
 
   const matches = await prisma.exercise.findMany({
     where: { name: { contains: query, mode: "insensitive" } },
-    select: { id: true, name: true, unit: true, isUnilateral: true },
+    select: { id: true, name: true, unit: true, isUnilateral: true, paramKeys: true },
     take: 8,
   });
   if (matches.length === 0) return { error: `No exercise matching "${query}".` };
@@ -359,17 +360,24 @@ async function getExerciseHistory(input: Record<string, unknown>) {
     orderBy: { routineLog: { performedAt: "desc" } },
     take: sessionCount,
     select: {
-      routineLog: { select: { performedAt: true, routine: { select: { name: true } } } },
+      params: true,
+      routineLog: { select: { performedAt: true, notes: true, routine: { select: { name: true } } } },
       sets: { select: { setNumber: true, reps: true, seconds: true, weightLb: true } },
     },
   });
 
   const sessions = entries
-    .map((entry) => ({
-      date: toAppYmd(entry.routineLog.performedAt),
-      routine: entry.routineLog.routine.name,
-      sets: summarizeSets(entry.sets),
-    }))
+    .map((entry) => {
+      const setup = readExerciseParams(entry.params);
+      const notes = entry.routineLog.notes?.trim();
+      return {
+        date: toAppYmd(entry.routineLog.performedAt),
+        routine: entry.routineLog.routine.name,
+        sets: summarizeSets(entry.sets),
+        ...(Object.keys(setup).length > 0 ? { setup } : {}),
+        ...(notes ? { notes: notes.slice(0, 600) } : {}),
+      };
+    })
     .reverse();
 
   const allSets = sessions.flatMap((s) => s.sets);
@@ -382,9 +390,12 @@ async function getExerciseHistory(input: Record<string, unknown>) {
     null
   );
 
+  const tracked = exerciseParamKeys(exercise.paramKeys);
+
   return {
     exercise: exercise.name,
     unit: exercise.unit,
+    ...(tracked.length > 0 ? { trackedSetupParams: tracked } : {}),
     ...(exercise.isUnilateral ? { unilateral: true } : {}),
     ...(bestWeightLb != null ? { bestWeightLbInWindow: bestWeightLb } : {}),
     ...(bestReps != null ? { bestRepsInWindow: bestReps } : {}),
