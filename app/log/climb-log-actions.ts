@@ -134,6 +134,7 @@ export type ClimbLogInput = {
     /** Only meaningful for SEND/REDPOINT — how many tries to send.
      *  Implicitly 1 for FLASH/ONSIGHT, irrelevant for PROJECT. */
     triesCount?: number;
+    isRepeat?: boolean;
     notes?: string;
   }>;
 };
@@ -184,6 +185,7 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
       areaId: a.areaId || undefined,
       newAreaName: a.areaId ? undefined : a.area?.trim() || undefined,
       triesCount: a.triesCount,
+      isRepeat: a.isRepeat,
       notes: a.notes?.trim() || undefined,
       attemptOrder: idx,
     })),

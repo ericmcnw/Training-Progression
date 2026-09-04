@@ -689,6 +689,10 @@ model ClimbAttempt {
   // implicitly 1 for FLASH/ONSIGHT and meaningless for PROJECT (it's still
   // in progress). Null for historical rows before this field existed.
   triesCount     Int?
+  // Declared repeat — "I've climbed this before." Independent of problemId
+  // on purpose: a repeat is still a repeat when the climb was never saved as
+  // a ClimbProblem, which is the only case the derived badges cannot cover.
+  isRepeat       Boolean            @default(false)
   notes          String?
   attemptOrder   Int                @default(0)
   createdAt      DateTime           @default(now())

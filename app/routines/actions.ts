@@ -2673,6 +2673,7 @@ export async function logSession(params: {
     movesCompleted?: number;
     totalMoves?: number;
     triesCount?: number | null;
+    isRepeat?: boolean;
     notes?: string;
     attemptOrder: number;
     problemId?: string | null;
@@ -2816,6 +2817,7 @@ export async function logSession(params: {
           movesCompleted: attempt.movesCompleted ?? null,
           totalMoves: attempt.totalMoves ?? null,
           triesCount: attempt.triesCount ?? null,
+          isRepeat: attempt.isRepeat ?? false,
           notes: attempt.notes?.trim() || null,
           attemptOrder: attempt.attemptOrder,
         })),
@@ -3198,6 +3200,7 @@ export async function updateSessionLog(params: {
     movesCompleted?: number;
     totalMoves?: number;
     triesCount?: number | null;
+    isRepeat?: boolean;
     notes?: string;
     attemptOrder: number;
     problemId?: string | null;
@@ -3379,6 +3382,7 @@ export async function updateSessionLog(params: {
             movesCompleted: attempt.movesCompleted ?? null,
             totalMoves: attempt.totalMoves ?? null,
             triesCount: attempt.triesCount ?? null,
+            isRepeat: attempt.isRepeat ?? false,
             notes: attempt.notes?.trim() || null,
             attemptOrder: attempt.attemptOrder,
           })),

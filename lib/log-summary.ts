@@ -57,6 +57,8 @@ export type LogSummaryClimbAttempt = {
   outcome: string;
   movesCompleted: number | null;
   totalMoves: number | null;
+  triesCount: number | null;
+  isRepeat: boolean;
   notes: string | null;
   problem: { id: string; name: string } | null;
 };
@@ -450,6 +452,8 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
           outcome: true,
           movesCompleted: true,
           totalMoves: true,
+          triesCount: true,
+          isRepeat: true,
           notes: true,
           problem: { select: { id: true, name: true } },
         },
@@ -532,6 +536,8 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
       outcome: a.outcome,
       movesCompleted: a.movesCompleted,
       totalMoves: a.totalMoves,
+      triesCount: a.triesCount,
+      isRepeat: a.isRepeat,
       notes: a.notes,
       problem: a.problem,
     })),

@@ -399,6 +399,14 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
                     >
                       {climbOutcomeLabel(outcome, system)}
                     </span>
+                    {attempt.isRepeat && (
+                      <span style={repeatChip} title="A climb you had done before">↻ Repeat</span>
+                    )}
+                    {attempt.triesCount != null && attempt.triesCount > 0 && (
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>
+                        {attempt.triesCount} {attempt.triesCount === 1 ? "try" : "tries"}
+                      </span>
+                    )}
                     {attempt.problem && (
                       <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.8 }}>{attempt.problem.name}</span>
                     )}
@@ -844,6 +852,17 @@ function prettifyExtraKey(key: string): string {
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+const repeatChip: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 900,
+  padding: "2px 7px",
+  borderRadius: 999,
+  background: "rgba(74,222,128,0.12)",
+  border: "1px solid rgba(74,222,128,0.35)",
+  color: "rgba(74,222,128,0.95)",
+  flexShrink: 0,
+};
 
 const poolSetRow: React.CSSProperties = {
   display: "grid",

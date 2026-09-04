@@ -226,12 +226,13 @@ function AttemptRow({
   // least one prior send. Shown inline next to the outcome chip so the row
   // reads "Send · ↻ Repeat" at a glance.
   const isRepeat =
-    !!linkedProblem &&
-    (linkedProblem.priorSendCount ?? 0) > 0 &&
-    (attempt.outcome === "SEND" ||
-      attempt.outcome === "REDPOINT" ||
-      attempt.outcome === "FLASH" ||
-      attempt.outcome === "ONSIGHT");
+    attempt.isRepeat === true ||
+    (!!linkedProblem &&
+      (linkedProblem.priorSendCount ?? 0) > 0 &&
+      (attempt.outcome === "SEND" ||
+        attempt.outcome === "REDPOINT" ||
+        attempt.outcome === "FLASH" ||
+        attempt.outcome === "ONSIGHT"));
 
   const [history, setHistory] = useState<AttemptHistoryItem[] | null>(null);
   const [localBeta, setLocalBeta] = useState(linkedProblem?.notes ?? "");
@@ -468,6 +469,20 @@ function AttemptRow({
                 />
               </div>
             )}
+            {/* Declared repeat — the badge above is otherwise derived from a
+                saved problem's prior sends, which cannot cover a climb that
+                was never saved. */}
+            <div style={{ display: "grid", gap: 4, flex: "1 1 110px", minWidth: 110 }}>
+              <div style={expandLabelStyle}>Climbed before?</div>
+              <button
+                type="button"
+                onClick={() => onUpdate({ isRepeat: !attempt.isRepeat })}
+                aria-pressed={attempt.isRepeat === true}
+                style={attempt.isRepeat ? repeatToggleOnStyle : repeatToggleOffStyle}
+              >
+                ↻ Repeat
+              </button>
+            </div>
           </div>
           <div style={{ display: "grid", gap: 4 }}>
             <div style={expandLabelStyle}>Beta notes & video link (optional)</div>
@@ -1578,6 +1593,23 @@ function summaryChipStyle(color: string, bg: string): React.CSSProperties {
 // Small ↻ marker shown on saved-problem chips (and per-climb attempt rows)
 // when the underlying problem has prior sends — visual cue that a tap on
 // this chip is logging a repeat send, not a first ascent.
+const repeatToggleOnStyle: React.CSSProperties = {
+  minHeight: 34,
+  padding: "0 10px",
+  borderRadius: 8,
+  fontSize: 11,
+  fontWeight: 900,
+  cursor: "pointer",
+  background: "rgba(74,222,128,0.16)",
+  border: "1px solid rgba(74,222,128,0.5)",
+  color: "rgba(74,222,128,0.95)",
+};
+const repeatToggleOffStyle: React.CSSProperties = {
+  ...repeatToggleOnStyle,
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,0.16)",
+  color: "rgba(255,255,255,0.5)",
+};
 const repeatBadgeStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 900,

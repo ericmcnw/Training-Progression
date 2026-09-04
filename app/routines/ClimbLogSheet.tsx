@@ -68,9 +68,11 @@ type Attempt = {
   /** OR type a fresh area name. If areaId is set the typed name
    *  is ignored on save. */
   area: string;
-  /** Tries-to-send. Only meaningful when outcome is SEND/REDPOINT;
-   *  hidden in the UI otherwise. Stored as string so empty stays empty. */
+  /** How many goes. Stored as string so empty stays empty. */
   triesCount: string;
+  /** Declared repeat. Works for climbs that were never saved, which the
+   *  derived same-session / saved-problem badges cannot cover. */
+  isRepeat: boolean;
   notes: string;
 };
 
@@ -114,6 +116,7 @@ function newAttempt(d: ClimbingDiscipline = "BOULDER"): Attempt {
     areaId: "",
     area: "",
     triesCount: "",
+    isRepeat: false,
     notes: "",
   };
 }
@@ -291,6 +294,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
         name: src.name,
         areaId: src.areaId,
         area: src.area,
+        isRepeat: true,
       };
       return [...arr.slice(0, idx + 1), clone, ...arr.slice(idx + 1)];
     });
@@ -402,6 +406,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               areaId: a.areaId || undefined,
               area: a.areaId ? undefined : a.area.trim() || undefined,
               triesCount: Number.isFinite(triesNum) ? triesNum : undefined,
+              isRepeat: a.isRepeat || undefined,
               notes: a.notes.trim() || undefined,
             };
           }),
@@ -508,6 +513,19 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                     <div style={attemptHeader}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <span style={attemptIndex}>#{idx + 1}</span>
+                        {/* Declared repeat. The badges below are derived and
+                            only fire for a same-session lap or a saved
+                            problem; this covers the climb that was never
+                            saved at all. */}
+                        <button
+                          type="button"
+                          onClick={() => updateAttempt(a.localId, { isRepeat: !a.isRepeat })}
+                          aria-pressed={a.isRepeat}
+                          style={a.isRepeat ? repeatToggleOn : repeatToggleOff}
+                          title="I've climbed this one before"
+                        >
+                          ↻ Repeat
+                        </button>
                         {repeatIdx >= 0 ? (
                           <span style={repeatBadge} title={`Same climb as #${repeatIdx + 1}`}>
                             ↻ repeat of #{repeatIdx + 1}
@@ -526,9 +544,9 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                           type="button"
                           style={repeatAttemptBtn}
                           onClick={() => repeatAttempt(a.localId)}
-                          aria-label={`Log climb ${idx + 1} again`}
+                          aria-label={`Add another lap of climb ${idx + 1}`}
                         >
-                          ↻ Repeat
+                          + Lap
                         </button>
                         {attempts.length > 1 ? (
                           <button
@@ -764,6 +782,28 @@ const attemptIndex: CSSProperties = {
   letterSpacing: 0.6,
   textTransform: "uppercase",
   opacity: 0.55,
+};
+const repeatToggleBase: CSSProperties = {
+  minHeight: 26,
+  fontSize: 10,
+  fontWeight: 900,
+  padding: "3px 7px",
+  borderRadius: 6,
+  whiteSpace: "nowrap",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+const repeatToggleOn: CSSProperties = {
+  ...repeatToggleBase,
+  background: "rgba(74,222,128,0.16)",
+  border: "1px solid rgba(74,222,128,0.5)",
+  color: "rgba(74,222,128,0.95)",
+};
+const repeatToggleOff: CSSProperties = {
+  ...repeatToggleBase,
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,0.16)",
+  color: "rgba(255,255,255,0.5)",
 };
 const repeatBadge: CSSProperties = {
   fontSize: 10,

@@ -76,10 +76,14 @@ export type ClimbAttemptInput = {
   newAreaName?: string | null;
   movesCompleted?: number;
   totalMoves?: number;
-  /** Optional "how many tries it took to send." Only meaningful for
-   *  SEND/REDPOINT — implicitly 1 for FLASH/ONSIGHT, irrelevant for
-   *  PROJECT (still in progress). */
+  /** How many goes this climb took. Reads as "tries to send" on a send and
+   *  "tries this session" on a project. Implicitly 1 for FLASH/ONSIGHT, so
+   *  no input is shown there. */
   triesCount?: number | null;
+  /** Declared repeat — the climber has done this climb before. Set by hand,
+   *  so it works for climbs that were never saved as a ClimbProblem; the
+   *  derived badges only cover saved problems and same-session laps. */
+  isRepeat?: boolean;
   notes?: string;
   attemptOrder: number;
   problemId?: string | null;
@@ -163,15 +167,11 @@ export function climbOutcomesForDiscipline(discipline: ClimbingDiscipline): Clim
 }
 
 // Outcomes that get an optional "tries" count next to them in the per-climb
-// logger. Send/Redpoint count how many tries it took to clean it; Project
-// counts how many tries you've put in so far on something you're still
-// working. Flash/Onsight are implicitly 1, so no input shown.
-// Tries-count input only appears for SEND/REDPOINT — the number records
-// "how many tries it took to send." For PROJECT it's meaningless (the climb
-// is still in progress; the count would just grow). For FLASH/ONSIGHT it's
-// implicitly 1.
+// Send/Redpoint count how many tries it took to clean it; Project and Fell
+// count the goes put in during this session. Only Flash/Onsight are
+// definitionally one try, so they are the only outcomes with no input.
 export function outcomeUsesTriesCount(outcome: ClimbOutcome): boolean {
-  return outcome === "SEND" || outcome === "REDPOINT";
+  return outcome !== "FLASH" && outcome !== "ONSIGHT";
 }
 
 // Compat shim — old callers used grade system to derive outcome list.
