@@ -70,6 +70,8 @@ export default async function ClimbLocationDetailPage(props: {
         grade: true,
         gradeSystem: true,
         outcome: true,
+        isRepeat: true,
+        discipline: true,
         area: true,
         areaId: true,
         climbArea: { select: { name: true } },

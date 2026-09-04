@@ -38,6 +38,7 @@ export default async function ClimbsBrowsePage(props: {
         grade: true,
         gradeSystem: true,
         outcome: true,
+        isRepeat: true,
         discipline: true,
         area: true,
         areaId: true,
@@ -76,6 +77,7 @@ export default async function ClimbsBrowsePage(props: {
   const attempts: BrowserAttempt[] = allAttempts.map((a) => ({
     id: a.id,
     grade: a.grade,
+    isRepeat: a.isRepeat,
     gradeSystem: a.gradeSystem,
     outcome: a.outcome,
     discipline: a.discipline,

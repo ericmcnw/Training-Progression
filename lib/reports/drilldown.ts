@@ -43,7 +43,7 @@ export async function loadDrilldowns(
       (async () => {
         const attempts = await prisma.climbAttempt.findMany({
           where: { sessionLogId: { in: logIds } },
-          select: { grade: true, gradeSystem: true, outcome: true, sessionLogId: true },
+          select: { grade: true, gradeSystem: true, outcome: true, isRepeat: true, discipline: true, sessionLogId: true },
         });
         if (attempts.length > 0) {
           const pyramid = buildPyramidRows(
@@ -51,6 +51,8 @@ export async function loadDrilldowns(
               grade: a.grade,
               gradeSystem: a.gradeSystem as ClimbGradeSystem,
               outcome: a.outcome as ClimbOutcome,
+              isRepeat: a.isRepeat,
+              discipline: a.discipline,
             }))
           );
           out.climb = {

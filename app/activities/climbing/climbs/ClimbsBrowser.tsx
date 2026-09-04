@@ -22,6 +22,7 @@ import {
   climbOutcomeColor,
   climbOutcomeLabel,
   climbOutcomesForDiscipline,
+  effectiveOutcome,
   gradeSort,
   type ClimbGradeSystem,
   type ClimbOutcome,
@@ -36,6 +37,7 @@ export type BrowserAttempt = {
   grade: string;
   gradeSystem: ClimbGradeSystem;
   outcome: ClimbOutcome;
+  isRepeat: boolean;
   discipline: ClimbingDiscipline;
   areaId: string | null;
   areaName: string | null;
@@ -168,7 +170,8 @@ export default function ClimbsBrowser({
   const filtered = useMemo(() => {
     return baseFiltered.filter((a) => {
       if (cutoff && a.performedAt < cutoff) return false;
-      if (outcome === "flashed" && !FLASH_OUTCOMES.has(a.outcome)) return false;
+      if (outcome === "flashed" && !FLASH_OUTCOMES.has(effectiveOutcome(a.outcome, a.isRepeat, a.discipline)))
+        return false;
       if (outcome === "sent" && !SEND_OUTCOMES_ONLY.has(a.outcome)) return false;
       if (outcome === "falls" && a.outcome !== "FELL") return false;
       return true;
@@ -220,7 +223,9 @@ export default function ClimbsBrowser({
   // climbs actually exist, so retired outcomes (FELL) don't leave a
   // permanently-empty filter sitting in the UI. ─────────────────────────
   const outcomeOptions = useMemo(() => {
-    const hasFlash = rows.some((a) => FLASH_OUTCOMES.has(a.outcome));
+    const hasFlash = rows.some((a) =>
+      FLASH_OUTCOMES.has(effectiveOutcome(a.outcome, a.isRepeat, a.discipline)),
+    );
     const hasSent = rows.some((a) => SEND_OUTCOMES_ONLY.has(a.outcome));
     const hasProject = rows.some((a) => a.outcome === "PROJECT" || (a.problemId && !CLEAN_OUTCOMES.has(a.outcome)));
     const hasFalls = rows.some((a) => a.outcome === "FELL");

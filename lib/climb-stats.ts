@@ -4,11 +4,13 @@
 // drag the whole client in.
 
 import {
+  effectiveOutcome,
   gradeSort,
   isSendOutcome,
   ORDERED_OUTCOMES,
   SENT_OUTCOMES,
   type ClimbGradeSystem,
+  type ClimbingDiscipline,
   type ClimbOutcome,
 } from "./climb-types";
 
@@ -18,6 +20,10 @@ export type PyramidAttemptInput = {
   grade: string;
   gradeSystem: ClimbGradeSystem;
   outcome: ClimbOutcome;
+  /** Repeats are counted as sends, never flashes. Optional so older callers
+   *  that don't select it keep their existing behaviour. */
+  isRepeat?: boolean | null;
+  discipline?: ClimbingDiscipline | null;
 };
 
 export type PyramidRow = {
@@ -38,6 +44,7 @@ export function buildPyramidRows(attempts: PyramidAttemptInput[]): PyramidRows {
   for (const a of attempts) {
     // Falls don't get pyramid bars — pyramid celebrates clean climbs.
     if (a.outcome === "FELL") continue;
+    const outcome = effectiveOutcome(a.outcome, a.isRepeat, a.discipline);
     const key = `${a.gradeSystem}::${a.grade}`;
     const row = map.get(key) ?? {
       grade: a.grade,
@@ -45,7 +52,7 @@ export function buildPyramidRows(attempts: PyramidAttemptInput[]): PyramidRows {
       counts: {},
       total: 0,
     };
-    row.counts[a.outcome] = (row.counts[a.outcome] ?? 0) + 1;
+    row.counts[outcome] = (row.counts[outcome] ?? 0) + 1;
     row.total += 1;
     map.set(key, row);
   }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
-import { gradeSort, venueOf, type ClimbGradeSystem } from "@/lib/climb-types";
+import { effectiveOutcome, gradeSort, venueOf, type ClimbGradeSystem } from "@/lib/climb-types";
 import { toAppYmd } from "@/lib/dates";
 
 export type ProgramAssessmentSuggestion = {
@@ -144,6 +144,7 @@ async function loadClimbAttempts() {
       grade: true,
       gradeSystem: true,
       outcome: true,
+      isRepeat: true,
       movesCompleted: true,
       totalMoves: true,
       triesCount: true,
@@ -164,17 +165,20 @@ async function loadClimbAttempts() {
 function addClimbingSuggestions(target: ProgramAssessmentSuggestion[], attempts: ClimbRow[]) {
   const venue = (row: ClimbRow) => venueOf(row.sessionLog.routine.sessionDetails?.template?.key, row.sessionLog.climbLocation?.type);
   const isRope = (row: ClimbRow) => row.discipline !== "BOULDER";
+  // A repeat counts as a send, never a flash or onsight — otherwise a lap on
+  // something already climbed would set a "hardest flash" assessment.
+  const oc = (row: ClimbRow) => effectiveOutcome(row.outcome, row.isRepeat, row.discipline);
   const cleanBoulder = new Set(["FLASH", "SEND"]);
   const cleanRope = new Set(["FLASH", "ONSIGHT", "SEND", "REDPOINT"]);
 
-  addBestGrade(target, "sport:climbing:outdoor_boulder_send", attempts.filter((row) => venue(row) === "CRAG" && !isRope(row) && cleanBoulder.has(row.outcome)));
-  addBestGrade(target, "sport:climbing:outdoor_boulder_flash", attempts.filter((row) => venue(row) === "CRAG" && !isRope(row) && row.outcome === "FLASH"));
-  addBestGrade(target, "sport:climbing:indoor_boulder_send", attempts.filter((row) => venue(row) === "GYM" && !isRope(row) && cleanBoulder.has(row.outcome)));
-  addBestGrade(target, "sport:climbing:indoor_boulder_flash", attempts.filter((row) => venue(row) === "GYM" && !isRope(row) && row.outcome === "FLASH"));
-  addBestGrade(target, "sport:climbing:outdoor_rope_redpoint", attempts.filter((row) => venue(row) === "CRAG" && isRope(row) && row.outcome === "REDPOINT"));
-  addBestGrade(target, "sport:climbing:outdoor_rope_onsight", attempts.filter((row) => venue(row) === "CRAG" && isRope(row) && row.outcome === "ONSIGHT"));
-  addBestGrade(target, "sport:climbing:indoor_rope_redpoint", attempts.filter((row) => venue(row) === "GYM" && isRope(row) && cleanRope.has(row.outcome)));
-  addBestGrade(target, "sport:climbing:indoor_rope_onsight", attempts.filter((row) => venue(row) === "GYM" && isRope(row) && row.outcome === "ONSIGHT"));
+  addBestGrade(target, "sport:climbing:outdoor_boulder_send", attempts.filter((row) => venue(row) === "CRAG" && !isRope(row) && cleanBoulder.has(oc(row))));
+  addBestGrade(target, "sport:climbing:outdoor_boulder_flash", attempts.filter((row) => venue(row) === "CRAG" && !isRope(row) && oc(row) === "FLASH"));
+  addBestGrade(target, "sport:climbing:indoor_boulder_send", attempts.filter((row) => venue(row) === "GYM" && !isRope(row) && cleanBoulder.has(oc(row))));
+  addBestGrade(target, "sport:climbing:indoor_boulder_flash", attempts.filter((row) => venue(row) === "GYM" && !isRope(row) && oc(row) === "FLASH"));
+  addBestGrade(target, "sport:climbing:outdoor_rope_redpoint", attempts.filter((row) => venue(row) === "CRAG" && isRope(row) && oc(row) === "REDPOINT"));
+  addBestGrade(target, "sport:climbing:outdoor_rope_onsight", attempts.filter((row) => venue(row) === "CRAG" && isRope(row) && oc(row) === "ONSIGHT"));
+  addBestGrade(target, "sport:climbing:indoor_rope_redpoint", attempts.filter((row) => venue(row) === "GYM" && isRope(row) && cleanRope.has(oc(row))));
+  addBestGrade(target, "sport:climbing:indoor_rope_onsight", attempts.filter((row) => venue(row) === "GYM" && isRope(row) && oc(row) === "ONSIGHT"));
 
   const latestMoves = [...attempts]
     .filter((row) => row.movesCompleted != null && row.totalMoves != null && row.totalMoves > 0)
@@ -184,7 +188,7 @@ function addClimbingSuggestions(target: ProgramAssessmentSuggestion[], attempts:
   }
 
   const latestSendWithTries = [...attempts]
-    .filter((row) => cleanRope.has(row.outcome) && (row.triesCount != null || row.outcome === "FLASH" || row.outcome === "ONSIGHT"))
+    .filter((row) => cleanRope.has(oc(row)) && (row.triesCount != null || oc(row) === "FLASH" || oc(row) === "ONSIGHT"))
     .sort((a, b) => b.sessionLog.performedAt.getTime() - a.sessionLog.performedAt.getTime())[0];
   if (latestSendWithTries) {
     const tries = latestSendWithTries.triesCount ?? 1;

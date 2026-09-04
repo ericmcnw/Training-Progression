@@ -43,6 +43,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import {
   climbOutcomeColor,
+  effectiveOutcome,
   gradeSort,
   SENT_OUTCOMES,
   venueOf,
@@ -156,6 +157,7 @@ export default async function ClimbingHubPage(props: {
         grade: true,
         gradeSystem: true,
         outcome: true,
+        isRepeat: true,
         discipline: true,
         sessionLogId: true,
         problemId: true,
@@ -435,12 +437,15 @@ export default async function ClimbingHubPage(props: {
       // twenty different boulders would read as one climb done twenty times.
       const grouped = new Map<string, PyramidColumnRow["climbs"][number]>();
       for (const a of matching) {
+        // Same normalisation the bar used, so a repeat never shows as a
+        // flash in the bubble the bar opens.
+        const outcome = effectiveOutcome(a.outcome, a.isRepeat, a.discipline);
         const name = a.problemId ? problemNameById.get(a.problemId) ?? null : null;
         const locationId = a.sessionLog.climbLocation?.id ?? null;
         const dateLabel = formatAppDate(a.sessionLog.performedAt);
         const key = name
-          ? `n:${name}|${a.outcome}`
-          : `u:${a.outcome}|${locationId ?? ""}|${dateLabel}`;
+          ? `n:${name}|${outcome}`
+          : `u:${outcome}|${locationId ?? ""}|${dateLabel}`;
         const seen = grouped.get(key);
         if (seen) {
           seen.count += 1;
@@ -448,7 +453,7 @@ export default async function ClimbingHubPage(props: {
         }
         grouped.set(key, {
           id: a.id,
-          outcome: a.outcome,
+          outcome,
           name,
           locationId,
           locationName: a.sessionLog.climbLocation?.name ?? null,

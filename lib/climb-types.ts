@@ -170,6 +170,21 @@ export function climbOutcomesForDiscipline(discipline: ClimbingDiscipline): Clim
 // Send/Redpoint count how many tries it took to clean it; Project and Fell
 // count the goes put in during this session. Only Flash/Onsight are
 // definitionally one try, so they are the only outcomes with no input.
+// A repeat is not a flash. You can only flash a climb once, so an ascent
+// marked as a repeat is counted as an ordinary send no matter how it went
+// on the day — the log still records Flash for the session, but every
+// aggregate that asks "what have you flashed" sees a send instead.
+// Sport lead's send outcome is REDPOINT; everything else uses SEND.
+export function effectiveOutcome(
+  outcome: ClimbOutcome,
+  isRepeat: boolean | null | undefined,
+  discipline?: ClimbingDiscipline | null,
+): ClimbOutcome {
+  if (!isRepeat) return outcome;
+  if (outcome !== "FLASH" && outcome !== "ONSIGHT") return outcome;
+  return discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
+}
+
 export function outcomeUsesTriesCount(outcome: ClimbOutcome): boolean {
   return outcome !== "FLASH" && outcome !== "ONSIGHT";
 }
