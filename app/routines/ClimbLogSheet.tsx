@@ -406,7 +406,9 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               areaId: a.areaId || undefined,
               area: a.areaId ? undefined : a.area.trim() || undefined,
               triesCount: Number.isFinite(triesNum) ? triesNum : undefined,
-              isRepeat: a.isRepeat || undefined,
+              isRepeat:
+                (a.isRepeat || derivedRepeat(a, attempts.findIndex((x) => x.localId === a.localId))) ||
+                undefined,
               notes: a.notes.trim() || undefined,
             };
           }),
@@ -435,6 +437,17 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
         .map((n) => [n.toLowerCase(), n] as const)
     ).values()
   );
+
+  // True when the app can already tell this is a repeat, without the user
+  // saying so: an earlier lap this session, or a saved problem with prior
+  // sends. Persisted at log time rather than recomputed later — prior-send
+  // counts grow, so a later ascent would retroactively relabel an earlier
+  // one as a repeat if this were derived on read.
+  function derivedRepeat(a: Attempt, idx: number): boolean {
+    if (repeatOfIndex(idx) >= 0) return true;
+    const linked = a.problemId ? savedProblems.find((p) => p.id === a.problemId) : undefined;
+    return (linked?.priorSendCount ?? 0) > 0;
+  }
 
   // Earlier attempt this session on the same climb (linked id, or same
   // typed name) — drives the ↻ badge so a repeat reads as one at a glance.
@@ -513,31 +526,34 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
                     <div style={attemptHeader}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <span style={attemptIndex}>#{idx + 1}</span>
-                        {/* Declared repeat. The badges below are derived and
-                            only fire for a same-session lap or a saved
-                            problem; this covers the climb that was never
-                            saved at all. */}
-                        <button
-                          type="button"
-                          onClick={() => updateAttempt(a.localId, { isRepeat: !a.isRepeat })}
-                          aria-pressed={a.isRepeat}
-                          style={a.isRepeat ? repeatToggleOn : repeatToggleOff}
-                          title="I've climbed this one before"
-                        >
-                          ↻ Repeat
-                        </button>
+                        {/* One repeat control per card, whether or not the
+                            climb is named. When the app can already tell
+                            (earlier lap, or a saved problem with prior
+                            sends) it states the reason and there is nothing
+                            to tap; otherwise it is the toggle that makes an
+                            unnamed climb a repeat. */}
                         {repeatIdx >= 0 ? (
-                          <span style={repeatBadge} title={`Same climb as #${repeatIdx + 1}`}>
-                            ↻ repeat of #{repeatIdx + 1}
+                          <span style={repeatToggleOn} title={`Same climb as #${repeatIdx + 1}`}>
+                            ↻ Repeat · of #{repeatIdx + 1}
                           </span>
                         ) : isPriorSend ? (
                           <span
-                            style={repeatBadge}
-                            title={`Previously sent ${linkedProblem!.priorSendCount}×`}
+                            style={repeatToggleOn}
+                            title={`You've sent this ${linkedProblem!.priorSendCount}× before`}
                           >
-                            ↻ sent {linkedProblem!.priorSendCount}× before
+                            ↻ Repeat · sent {linkedProblem!.priorSendCount}× before
                           </span>
-                        ) : null}
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => updateAttempt(a.localId, { isRepeat: !a.isRepeat })}
+                            aria-pressed={a.isRepeat}
+                            style={a.isRepeat ? repeatToggleOn : repeatToggleOff}
+                            title="I've climbed this one before"
+                          >
+                            ↻ Repeat
+                          </button>
+                        )}
                       </span>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <button
@@ -804,17 +820,6 @@ const repeatToggleOff: CSSProperties = {
   background: "transparent",
   border: "1px solid rgba(255,255,255,0.16)",
   color: "rgba(255,255,255,0.5)",
-};
-const repeatBadge: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  padding: "1px 5px",
-  borderRadius: 6,
-  background: "rgba(74,222,128,0.12)",
-  border: "1px solid rgba(74,222,128,0.35)",
-  color: "rgba(74,222,128,0.95)",
-  whiteSpace: "nowrap",
-  lineHeight: 1,
 };
 const repeatAttemptBtn: CSSProperties = {
   minHeight: 26,

@@ -339,7 +339,24 @@ export default function SessionLogForm({
     // Build climb attempts for API
     const activeClimbAttempts = isClimbing
       ? climbMode === "per-climb"
-        ? climbAttempts.map((a, i) => ({ ...a, attemptOrder: i }))
+        ? climbAttempts.map((a, i) => {
+            // Mirror ClimbLogSheet: record a repeat the app can already see
+            // (earlier lap this session, or a saved problem with prior
+            // sends) so the stored flag matches the badge the row showed.
+            const linked = a.problemId ? savedProblems.find((p) => p.id === a.problemId) : undefined;
+            const named = a.newProblemName?.trim().toLowerCase();
+            const earlierLap = climbAttempts.some(
+              (b, j) =>
+                j < i &&
+                ((!!a.problemId && b.problemId === a.problemId) ||
+                  (!!named && b.newProblemName?.trim().toLowerCase() === named)),
+            );
+            return {
+              ...a,
+              attemptOrder: i,
+              isRepeat: a.isRepeat || earlierLap || (linked?.priorSendCount ?? 0) > 0,
+            };
+          })
         : synthesizeAttemptsFromQuickRows(quickClimbRows)
       : undefined;
 

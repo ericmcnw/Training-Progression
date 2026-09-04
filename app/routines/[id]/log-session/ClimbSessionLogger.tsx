@@ -474,14 +474,23 @@ function AttemptRow({
                 was never saved. */}
             <div style={{ display: "grid", gap: 4, flex: "1 1 110px", minWidth: 110 }}>
               <div style={expandLabelStyle}>Climbed before?</div>
-              <button
-                type="button"
-                onClick={() => onUpdate({ isRepeat: !attempt.isRepeat })}
-                aria-pressed={attempt.isRepeat === true}
-                style={attempt.isRepeat ? repeatToggleOnStyle : repeatToggleOffStyle}
-              >
-                ↻ Repeat
-              </button>
+              {(linkedProblem?.priorSendCount ?? 0) > 0 ? (
+                <span
+                  style={repeatToggleOnStyle}
+                  title={`You've sent this ${linkedProblem!.priorSendCount}× before`}
+                >
+                  ↻ Sent {linkedProblem!.priorSendCount}× before
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onUpdate({ isRepeat: !attempt.isRepeat })}
+                  aria-pressed={attempt.isRepeat === true}
+                  style={attempt.isRepeat ? repeatToggleOnStyle : repeatToggleOffStyle}
+                >
+                  ↻ Repeat
+                </button>
+              )}
             </div>
           </div>
           <div style={{ display: "grid", gap: 4 }}>

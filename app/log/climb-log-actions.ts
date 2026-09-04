@@ -131,9 +131,10 @@ export type ClimbLogInput = {
     /** OR type a fresh area name; server dedupes against ClimbArea
      *  by name within the location and creates as needed. */
     area?: string;
-    /** Only meaningful for SEND/REDPOINT — how many tries to send.
-     *  Implicitly 1 for FLASH/ONSIGHT, irrelevant for PROJECT. */
+    /** How many goes this climb took. Set for any outcome except
+     *  FLASH/ONSIGHT, which are definitionally one try. */
     triesCount?: number;
+    /** Declared or derived repeat — see ClimbAttempt.isRepeat. */
     isRepeat?: boolean;
     notes?: string;
   }>;
