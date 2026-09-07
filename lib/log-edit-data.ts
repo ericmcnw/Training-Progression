@@ -75,12 +75,17 @@ function inferLogKind(log: {
   climbAttempts: Array<{ id: string }>;
 }, routineKind: string): RoutineKind {
   if (log.distanceMi !== null) return "CARDIO";
+  // Climb attempts settle it before exercises do: a climbing session can now
+  // carry a few finisher sets (post-climb pull-ups), and testing exercises
+  // first would classify it WORKOUT and strand the attempts behind the
+  // strength form.
+  if (log.climbAttempts.length > 0) return "SESSION";
   if (log.exercises.length > 0) return "WORKOUT";
   // climbAttempts is the definitive climbing-session signal: a quick climb
   // log carries no duration, no `location` string (it uses climbLocationId),
   // and no session-metric values, so without this check a durationless climb
   // falls through to COMPLETION and its attempts become uneditable.
-  if (log.climbAttempts.length > 0 || log.location || log.sessionMetricValues.length > 0) return "SESSION";
+  if (log.location || log.sessionMetricValues.length > 0) return "SESSION";
   if (log.durationSec !== null && log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
   if (log.durationSec !== null && isSessionKind(routineKind)) return "SESSION";
   if (log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";

@@ -360,8 +360,13 @@ function parseSportData(raw: unknown): LogSummarySportData | null {
 // what fields are populated. This mirrors the previous in-page logic.
 function inferLogKind(log: RawLog, routineKind: string): RoutineKind {
   if (log.distanceMi !== null) return "CARDIO";
+  // Climb attempts settle it before exercises do: a climbing session can now
+  // carry a few finisher sets (post-climb pull-ups), and testing exercises
+  // first would classify it WORKOUT and strand the attempts behind the
+  // strength form.
+  if (log.climbAttempts.length > 0) return "SESSION";
   if (log.exercises.length > 0) return "WORKOUT";
-  if (log.climbAttempts.length > 0 || log.location || log.sessionMetricValues.length > 0) return "SESSION";
+  if (log.location || log.sessionMetricValues.length > 0) return "SESSION";
   if (log.durationSec !== null && log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
   if (log.durationSec !== null && isSessionKind(routineKind)) return "SESSION";
   if (log.guidedSteps.length > 0) return isSessionKind(routineKind) ? "SESSION" : "GUIDED";
