@@ -26,6 +26,7 @@ import type { SpotPickerValue } from "@/lib/spot-picker-types";
 import type { ActivitySpotConfig, SpotPickerItem } from "@/lib/activity-spots";
 import { inputStyle, parseHoursMinutes, textareaStyle } from "@/app/routines/[id]/log/form-ui";
 import { EffortSlider } from "@/app/components/strain/EffortSlider";
+import SessionExtraSets, { toExerciseInput, type ExtraExercise } from "./SessionExtraSets";
 import { useLearnedEffortPrefill } from "@/app/components/strain/useLearnedEffort";
 
 // Synthetic SpotPicker config for climbing. getActivitySpotConfig() returns
@@ -129,6 +130,7 @@ type ClimbDraft = {
   effort: number | null;
   attempts: Attempt[];
   spotValue: SpotPickerValue;
+  extras: ExtraExercise[];
 };
 
 export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
@@ -143,6 +145,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
     effort: null,
     attempts: [newAttempt()],
     spotValue: null,
+    extras: [],
   });
   const { performedAt, durationHours, durationMinutes, notes, effort, attempts } = draft;
   const setPerformedAt = (v: string) => setDraft((d) => ({ ...d, performedAt: v }));
@@ -150,6 +153,9 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   const setDurationMinutes = (v: string) => setDraft((d) => ({ ...d, durationMinutes: v }));
   const setNotes = (v: string) => setDraft((d) => ({ ...d, notes: v }));
   const setEffort = (v: number | null) => setDraft((d) => ({ ...d, effort: v }));
+  // Older drafts predate `extras`; the merge leaves it undefined, so default here.
+  const extras = draft.extras ?? [];
+  const setExtras = (v: ExtraExercise[]) => setDraft((d) => ({ ...d, extras: v }));
   const setAttempts = useCallback(
     (next: Attempt[] | ((prev: Attempt[]) => Attempt[])) =>
       setDraft((d) => ({ ...d, attempts: typeof next === "function" ? next(d.attempts) : next })),
@@ -390,6 +396,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
           durationMinutes: minutes,
           notes: notes.trim() || undefined,
           effort,
+          exercises: toExerciseInput(extras),
           ...locationParams,
           attempts: validAttempts.map((a) => {
             const triesNum =
@@ -729,6 +736,8 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
               onChange={setEffort}
             />
           </div>
+
+          <SessionExtraSets value={extras} onChange={setExtras} sportSlug="climbing" />
 
           <label style={fieldLabel}>
             Session notes

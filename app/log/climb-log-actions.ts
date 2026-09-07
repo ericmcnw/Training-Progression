@@ -101,6 +101,11 @@ export type ClimbLogInput = {
   notes?: string;
   /** Perceived effort 1-10 (RPE) — session-level. null/omitted = unrated. */
   effort?: number | null;
+  /** Strength work done alongside the climb — the "Also did" section. */
+  exercises?: Array<{
+    exerciseId: string;
+    sets: Array<{ setNumber: number; reps?: number | null; seconds?: number | null; weightLb?: number | null }>;
+  }>;
   /** Either pick an existing location… */
   climbLocationId?: string;
   /** …or create a new one inline. Both name and type required for new.
@@ -166,6 +171,7 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
     durationSec: input.durationMinutes ? Math.round(input.durationMinutes * 60) : null,
     notes: input.notes?.trim() || undefined,
     effort: input.effort ?? null,
+    exercises: input.exercises,
     climbLocationId: input.climbLocationId,
     newClimbLocationName: input.newLocationName?.trim() || undefined,
     newClimbLocationType: input.newLocationType,
@@ -198,4 +204,75 @@ export async function logClimbAction(input: ClimbLogInput): Promise<{ logId: str
   revalidatePath("/activities/climbing/climbs");
 
   return { logId: logId ?? "" };
+}
+
+// Exercise library + recent history for the "Also did" section on sport
+// sheets. Loaded lazily when the section is first opened so the climb sheet's
+// initial render stays as light as it is today.
+//
+// `recent` is ordered by how often the exercise has been logged alongside a
+// session, falling back to overall frequency — so the chips surface the
+// finishers actually done after climbing (pull-ups) rather than the top of an
+// alphabetical list. `lastSets` prefills a tapped chip from last time, same
+// derive-don't-retype rule the workout form already follows.
+export type SessionExerciseOption = {
+  id: string;
+  name: string;
+  unit: "REPS" | "TIME";
+  supportsWeight: boolean;
+  lastSets: { reps: number | null; seconds: number | null; weightLb: number | null }[];
+};
+
+export async function loadSessionExerciseOptions(sportSlug?: string): Promise<{
+  recent: SessionExerciseOption[];
+  all: { id: string; name: string; unit: "REPS" | "TIME"; supportsWeight: boolean }[];
+}> {
+  const [all, tagged] = await Promise.all([
+    prisma.exercise.findMany({
+      where: { libraryKind: { in: ["STRENGTH", "CONDITIONING", "SKILL"] } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, unit: true, supportsWeight: true },
+    }),
+    prisma.exercise.findMany({
+      where: sportSlug ? { supportsSports: { has: sportSlug } } : { libraryKind: "STRENGTH" },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        supportsWeight: true,
+        _count: { select: { sessionExercises: true } },
+      },
+    }),
+  ]);
+
+  // Most-logged first: an exercise tagged for the sport but never done isn't
+  // a useful chip, and the ones done often are exactly the finishers.
+  const top = tagged
+    .filter((exercise) => exercise._count.sessionExercises > 0)
+    .sort((a, b) => b._count.sessionExercises - a._count.sessionExercises)
+    .slice(0, 6);
+
+  // One query for everyone's last sets, newest first — first row seen per
+  // exercise wins, so a tapped chip prefills from the last time it was done.
+  const lastByExerciseId = new Map<string, SessionExerciseOption["lastSets"]>();
+  if (top.length > 0) {
+    const history = await prisma.sessionExercise.findMany({
+      where: { exerciseId: { in: top.map((exercise) => exercise.id) } },
+      orderBy: { routineLog: { performedAt: "desc" } },
+      select: {
+        exerciseId: true,
+        sets: { orderBy: { setNumber: "asc" }, select: { reps: true, seconds: true, weightLb: true } },
+      },
+    });
+    for (const entry of history) {
+      if (!lastByExerciseId.has(entry.exerciseId)) lastByExerciseId.set(entry.exerciseId, entry.sets);
+    }
+  }
+
+  const recent: SessionExerciseOption[] = top.map(({ _count: _ignored, ...exercise }) => ({
+    ...exercise,
+    lastSets: lastByExerciseId.get(exercise.id) ?? [],
+  }));
+
+  return { recent, all };
 }
