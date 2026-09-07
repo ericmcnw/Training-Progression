@@ -2703,6 +2703,11 @@ export async function logSession(params: {
   newActivitySpotOsmId?: string | null;
   /** Perceived effort 1-10 (RPE) — session-level. null/omitted = unrated. */
   effort?: number | null;
+  /** Strength work done alongside the session — e.g. a few pull-ups after
+   *  climbing. Same shape as a workout log's exercises, but the session's
+   *  routine template is deliberately NOT synced from them: finisher sets
+   *  are not a redefinition of what the sport routine is. */
+  exercises?: WorkoutExerciseInput[];
   zoneTags?: ZoneTagInput;
   painCheck?: PainCheckInput;
 }) {
@@ -2777,6 +2782,15 @@ export async function logSession(params: {
       select: { id: true },
     });
 
+    if (params.exercises && params.exercises.length > 0) {
+      const sessionExercises = await sanitizeWorkoutExercises(tx, params.exercises);
+      await writeSessionExercisesTx(
+        tx,
+        log.id,
+        sessionExercises.filter((item) => item.loggedSets.length > 0)
+      );
+    }
+
     const metrics = sanitizeMetrics(params.metrics);
     if (metrics.length > 0) {
       await tx.routineLogMetric.createMany({
@@ -2829,7 +2843,7 @@ export async function logSession(params: {
     }
 
     return log.id;
-  });
+  }, LOG_TX_OPTIONS);
   if (logId) {
     await recalculateRoutineLogStimulus(logId);
     await createExerciseZoneActivitiesForLog(prisma, logId);
@@ -3171,6 +3185,11 @@ export async function updateSessionLog(params: {
   location?: string;
   notes?: string;
   performedAtLocal?: string;
+  /** Strength work alongside the session. Pass an array to replace what's
+   *  stored (empty array clears); omit entirely to leave it untouched —
+   *  same contract as climbAttempts, so callers that don't know about
+   *  exercises can't silently wipe them. */
+  exercises?: WorkoutExerciseInput[];
   metrics?: MetricInput[];
   sessionMetricValues?: SessionMetricValueInput[];
   preferredClimbingGrades?: string[];
@@ -3304,6 +3323,15 @@ export async function updateSessionLog(params: {
   }
 
   await prisma.$transaction(async (tx) => {
+    if (params.exercises !== undefined) {
+      await tx.sessionExercise.deleteMany({ where: { routineLogId: params.logId } });
+      const sessionExercises = await sanitizeWorkoutExercises(tx, params.exercises);
+      await writeSessionExercisesTx(
+        tx,
+        params.logId,
+        sessionExercises.filter((item) => item.loggedSets.length > 0)
+      );
+    }
     await tx.routineLog.update({
       where: { id: params.logId },
       data: {
