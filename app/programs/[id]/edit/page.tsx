@@ -40,7 +40,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const goalCount = selectedGoals.size + selectedFrequencyGoals.size;
   const steps: ProgramEditorStep[] = [
     { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `Purpose, details, goal${currentWork.length ? ", routines" : ""}`, complete: goalCount > 0 || hasNamedMeasure },
-    { id: "program-editor-step-2", number: "2", label: "Phases", meta: detail.stages.length > 1 ? `${detail.stages.length} phases` : "Optional — one continuous stretch", complete: detail.stages.length > 1 },
+    { id: "program-editor-step-2", number: "2", label: "Phases and steps", meta: phasesAndStepsMeta(detail.stages.length, definition.initial.milestones.length), complete: detail.stages.length > 1 || definition.initial.milestones.length > 0 },
     { id: "program-editor-step-3", number: "3", label: "Work and prescriptions", meta: currentWork.length ? `${currentWork.length} routines` : "Optional — add later", complete: currentWork.length > 0 },
     { id: "program-editor-step-4", number: "4", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Optional", complete: scheduledCount > 0 },
     { id: "program-editor-step-5", number: "5", label: "Named targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
@@ -82,7 +82,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
 
         <SetupPart number="2" title="Goal or target" subtitle={goalCount ? `${goalCount} goals` : hasNamedMeasure ? `${detail.targetLists.length} target lists` : "Choose at least one"}>
         <div style={builderActions}>
-          <span style={minorText}>At least one measurable destination. This is what the Program is for.</span>
+          <span style={minorText}>The number you are chasing — &ldquo;Outdoor V5&rdquo;, &ldquo;185 RDL&rdquo;. At least one, and it is what the Program is for. The rungs on the way there are steps, in stage 2.</span>
           <div style={actionGroup}><NewGoalDrawerButton style={smallCreateButton}>New goal</NewGoalDrawerButton></div>
         </div>
         <form action={saveProgramRelationships} style={{ display: "grid", gap: 14 }}>
@@ -139,20 +139,10 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         <p style={minorText}>This is measurement history only. Choose or change the Program goals above.</p>
         </SetupPart>
 
-        <SetupPart number="4" title="Outcomes and milestones" subtitle={`${definition.initial.milestones.length} defined`}>
-        <FocusForm
-          initial={definition.initial}
-          routines={definition.routines}
-          exercises={definition.exercises}
-          injuries={definition.injuries}
-          stages={definition.stages}
-          embedded
-          panel="milestones"
-        />
-        </SetupPart>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="2" title="Phases" subtitle="Optional. A phase is a stretch of the Program where the work has one purpose — add one when the work will actually change.">
+      <EditorSection openStep={openStep} number="2" title="Phases and steps" subtitle="How the Program unfolds over time. Phases are stretches; steps are the rungs you climb inside them. Both optional.">
+        <SetupPart number="1" title="Phases" subtitle={detail.stages.length > 1 ? `${detail.stages.length} phases` : "One continuous stretch"}>
         {detail.stages.length ? (
           <div style={list}>
             {detail.stages.map((stage) => (
@@ -193,6 +183,24 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
             <button type="submit" style={secondaryButton}>Create phase</button>
           </form>
         </AddPanel>
+        </SetupPart>
+
+        <SetupPart number="2" title="Steps along the way" subtitle={`${definition.initial.milestones.length} defined`}>
+        <p style={minorText}>
+          A step is one rung on the way to a goal — &ldquo;long session to 4&ndash;5mi&rdquo;, &ldquo;reintroduce
+          the hinge&rdquo; — ordered, ticked off, and optionally gated. If it is a single number you
+          are chasing, it belongs in stage 1 as a goal instead.
+        </p>
+        <FocusForm
+          initial={definition.initial}
+          routines={definition.routines}
+          exercises={definition.exercises}
+          injuries={definition.injuries}
+          stages={definition.stages}
+          embedded
+          panel="milestones"
+        />
+        </SetupPart>
       </EditorSection>
 
       <EditorSection openStep={openStep} number="3" title="Work and prescriptions" subtitle="The routines available to train now. Dates are optional and belong in stage 4.">
@@ -390,6 +398,13 @@ const setupPartSubtitle: React.CSSProperties = { margin: "2px 0 0", fontSize: 10
 const setupPartBody: React.CSSProperties = { minWidth: 0, paddingLeft: 32 };
 const actionLink: React.CSSProperties = { ...quietLink, minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 12px", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8 };
 const minorText: React.CSSProperties = { fontSize: 11, lineHeight: 1.35, color: "rgba(255,255,255,0.48)" };
+
+function phasesAndStepsMeta(phaseCount: number, stepCount: number) {
+  const parts: string[] = [];
+  if (phaseCount > 1) parts.push(`${phaseCount} phases`);
+  if (stepCount) parts.push(`${stepCount} steps`);
+  return parts.length ? parts.join(" · ") : "Optional — one continuous stretch";
+}
 
 function phaseRange(from: string | null, to: string | null) {
   if (!from && !to) return null;
