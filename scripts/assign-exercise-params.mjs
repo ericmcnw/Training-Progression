@@ -60,7 +60,11 @@ const PARAM_ASSIGNMENTS = [
       "Goblet Cossack Squat",
     ],
   },
-  { keys: ["angleDeg", "boxHeightIn"], names: ["Step-Down", "Slant Board Step-Down"] },
+  // One variable each: a plain step-down varies by box height, a slant-board
+  // one by angle. On a slant board the drop IS the board, so height is
+  // determined by the angle rather than independent of it.
+  { keys: ["boxHeightIn"], names: ["Step-Down"] },
+  { keys: ["angleDeg"], names: ["Slant Board Step-Down"] },
   {
     keys: ["boxHeightIn"],
     names: [
