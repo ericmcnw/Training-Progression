@@ -29,7 +29,10 @@ type AttemptHistoryItem = {
   movesCompleted: number | null;
   totalMoves: number | null;
   notes: string | null;
-  routineLog: { performedAt: string };
+  // Matches /api/climb-problems/[id], which selects the ClimbAttempt →
+  // sessionLog relation. The response crosses a fetch().json() boundary as
+  // `any`, so a wrong name here fails at render, not at compile time.
+  sessionLog: { performedAt: string } | null;
 };
 
 const dateLabel = (iso: string) =>
@@ -378,9 +381,11 @@ function AttemptRow({
                         <span style={{ fontSize: 11, fontWeight: 800, color: hColor, padding: "2px 7px", borderRadius: 999, background: hBg, flexShrink: 0 }}>
                           {climbOutcomeLabel(h.outcome, discipline)}
                         </span>
-                        <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
-                          {dateLabel(h.routineLog.performedAt)}
-                        </span>
+                        {h.sessionLog ? (
+                          <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>
+                            {dateLabel(h.sessionLog.performedAt)}
+                          </span>
+                        ) : null}
                         {h.movesCompleted != null && (
                           <span style={{ fontSize: 11, opacity: 0.5, flexShrink: 0 }}>
                             {h.movesCompleted}{h.totalMoves != null ? `/${h.totalMoves}` : ""} mvs
