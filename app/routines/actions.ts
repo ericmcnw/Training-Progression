@@ -165,6 +165,11 @@ type SessionTemplateConfig = {
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
+// Prisma's interactive-transaction default is a 5s timeout / 2s maxWait. A
+// workout log is a write burst against a remote database, so a routine with
+// a lot of exercises can legitimately need longer than that.
+const LOG_TX_OPTIONS = { timeout: 20_000, maxWait: 10_000 } as const;
+
 type SanitizedWorkoutExercise = {
   exerciseId: string;
   sortOrder: number;
@@ -868,8 +873,20 @@ async function sanitizeWorkoutExercises(tx: PrismaTx, exercises: WorkoutExercise
   const sanitized: (SanitizedWorkoutExercise & { rawParams: Record<string, number> | null })[] = [];
   const seenExerciseIds = new Set<string>();
 
+  // Resolve every already-known exercise in one round-trip. This loop runs
+  // inside the log transaction, and a findUnique per exercise was enough
+  // sequential latency against a remote database to blow the 5s default.
+  const knownIds = (exercises ?? []).map((e) => e.exerciseId).filter((id): id is string => Boolean(id));
+  const known = new Map(
+    (knownIds.length > 0
+      ? await tx.exercise.findMany({ where: { id: { in: knownIds } }, select: { id: true, paramKeys: true } })
+      : []
+    ).map((exercise) => [exercise.id, exerciseParamKeys(exercise.paramKeys)])
+  );
+
   for (const [index, exercise] of (exercises ?? []).entries()) {
-    const exerciseId = await ensureExerciseExists(tx, exercise);
+    if (exercise.exerciseId && !known.has(exercise.exerciseId)) throw new Error("Exercise not found.");
+    const exerciseId = exercise.exerciseId || (await ensureExerciseExists(tx, exercise));
     if (seenExerciseIds.has(exerciseId)) continue;
     seenExerciseIds.add(exerciseId);
 
@@ -901,22 +918,47 @@ async function sanitizeWorkoutExercises(tx: PrismaTx, exercises: WorkoutExercise
 
   // A client can send any keys; only ones the exercise actually declares are
   // persisted, so a stale form can't write junk into the params blob.
-  const withParams = sanitized.filter((entry) => entry.rawParams);
-  if (withParams.length > 0) {
-    const declared = new Map(
-      (
-        await tx.exercise.findMany({
-          where: { id: { in: withParams.map((entry) => entry.exerciseId) } },
-          select: { id: true, paramKeys: true },
-        })
-      ).map((exercise) => [exercise.id, exerciseParamKeys(exercise.paramKeys)])
-    );
-    for (const entry of withParams) {
-      entry.params = normalizeExerciseParamInput(declared.get(entry.exerciseId) ?? [], entry.rawParams ?? {});
-    }
+  for (const entry of sanitized) {
+    if (!entry.rawParams) continue;
+    entry.params = normalizeExerciseParamInput(known.get(entry.exerciseId) ?? [], entry.rawParams);
   }
 
   return sanitized.map(({ rawParams: _rawParams, ...entry }) => entry);
+}
+
+// One insert for the session exercises, one for every set across all of them.
+// Previously this was two sequential round-trips per exercise, which on a
+// 7-exercise routine was most of the latency budget of the whole transaction.
+// Safe to key by exerciseId: sanitizeWorkoutExercises dedupes them.
+async function writeSessionExercisesTx(
+  tx: PrismaTx,
+  routineLogId: string,
+  exercises: SanitizedWorkoutExercise[]
+) {
+  if (exercises.length === 0) return;
+
+  const created = await tx.sessionExercise.createManyAndReturn({
+    data: exercises.map((exercise) => ({
+      routineLogId,
+      exerciseId: exercise.exerciseId,
+      params: exercise.params ?? undefined,
+    })),
+    select: { id: true, exerciseId: true },
+  });
+  const idByExerciseId = new Map(created.map((row) => [row.exerciseId, row.id]));
+
+  const sets = exercises.flatMap((exercise) => {
+    const sessionExerciseId = idByExerciseId.get(exercise.exerciseId);
+    if (!sessionExerciseId) return [];
+    return exercise.loggedSets.map((set) => ({
+      sessionExerciseId,
+      setNumber: set.setNumber,
+      reps: set.reps,
+      seconds: set.seconds,
+      weightLb: set.weightLb,
+    }));
+  });
+  if (sets.length > 0) await tx.setEntry.createMany({ data: sets });
 }
 
 async function syncWorkoutTemplateTx(tx: PrismaTx, routineId: string, exercises: SanitizedWorkoutExercise[]) {
@@ -1900,26 +1942,7 @@ export async function logWorkout(params: {
       select: { id: true },
     });
 
-    for (const exercise of loggedExercises) {
-      const sessionExercise = await tx.sessionExercise.create({
-        data: {
-          routineLogId: log.id,
-          exerciseId: exercise.exerciseId,
-          params: exercise.params ?? undefined,
-        },
-        select: { id: true },
-      });
-
-      await tx.setEntry.createMany({
-        data: exercise.loggedSets.map((set) => ({
-          sessionExerciseId: sessionExercise.id,
-          setNumber: set.setNumber,
-          reps: set.reps,
-          seconds: set.seconds,
-          weightLb: set.weightLb,
-        })),
-      });
-    }
+    await writeSessionExercisesTx(tx, log.id, loggedExercises);
     if (programContext) {
       await tx.programLogContext.create({
         data: {
@@ -1939,7 +1962,7 @@ export async function logWorkout(params: {
       }
     }
     return log.id;
-  });
+  }, LOG_TX_OPTIONS);
   if (logId) {
     await recalculateRoutineLogStimulus(logId);
     await createExerciseZoneActivitiesForLog(prisma, logId);
@@ -1990,28 +2013,9 @@ export async function logAdHocWorkout(params: {
       select: { id: true },
     });
 
-    for (const exercise of loggedExercises) {
-      const sessionExercise = await tx.sessionExercise.create({
-        data: {
-          routineLogId: log.id,
-          exerciseId: exercise.exerciseId,
-          params: exercise.params ?? undefined,
-        },
-        select: { id: true },
-      });
-
-      await tx.setEntry.createMany({
-        data: exercise.loggedSets.map((set) => ({
-          sessionExerciseId: sessionExercise.id,
-          setNumber: set.setNumber,
-          reps: set.reps,
-          seconds: set.seconds,
-          weightLb: set.weightLb,
-        })),
-      });
-    }
+    await writeSessionExercisesTx(tx, log.id, loggedExercises);
     return { logId: log.id, routineId: placeholder.id };
-  });
+  }, LOG_TX_OPTIONS);
 
   if (result.logId) {
     await recalculateRoutineLogStimulus(result.logId);
@@ -3039,27 +3043,12 @@ export async function updateWorkoutLog(params: {
 
     await tx.sessionExercise.deleteMany({ where: { routineLogId: params.logId } });
 
-    for (const exercise of exercises.filter((item) => item.loggedSets.length > 0)) {
-      const sessionExercise = await tx.sessionExercise.create({
-        data: {
-          routineLogId: params.logId,
-          exerciseId: exercise.exerciseId,
-          params: exercise.params ?? undefined,
-        },
-        select: { id: true },
-      });
-
-      await tx.setEntry.createMany({
-        data: exercise.loggedSets.map((set) => ({
-          sessionExerciseId: sessionExercise.id,
-          setNumber: set.setNumber,
-          reps: set.reps,
-          seconds: set.seconds,
-          weightLb: set.weightLb,
-        })),
-      });
-    }
-  });
+    await writeSessionExercisesTx(
+      tx,
+      params.logId,
+      exercises.filter((item) => item.loggedSets.length > 0)
+    );
+  }, LOG_TX_OPTIONS);
   await recalculateRoutineLogStimulus(params.logId);
   await createExerciseZoneActivitiesForLog(prisma, params.logId);
 
