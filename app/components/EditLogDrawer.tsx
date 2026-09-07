@@ -255,6 +255,7 @@ function FormForKind({
         savedClimbLocations={data.savedClimbLocations}
         initialSpot={data.initialSpot}
         initialClimbAttempts={data.initialClimbAttempts}
+        initialExtraExercises={data.initialExtraExercises}
         climbDefaultDiscipline={data.climbDefaultDiscipline}
         initialEffort={data.initialEffort}
         onComplete={onComplete}

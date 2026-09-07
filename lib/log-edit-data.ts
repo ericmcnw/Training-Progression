@@ -225,6 +225,15 @@ export type EditSessionData = {
   climbDefaultDiscipline: ClimbingDiscipline | null;
   /** Stored perceived effort 1-10, or null if never rated. Backfillable. */
   initialEffort: number | null;
+  /** Strength work logged alongside the session — the "Also did" section. */
+  initialExtraExercises: Array<{
+    localId: string;
+    exerciseId: string;
+    name: string;
+    unit: ExerciseUnitValue;
+    supportsWeight: boolean;
+    rows: Array<{ setNumber: number; reps?: string; seconds?: string; weightLb?: string }>;
+  }>;
 };
 
 export type EditCompletionData = {
@@ -756,6 +765,19 @@ export async function getLogEditData(logId: string): Promise<LogEditData | null>
       initialClimbAttempts,
       climbDefaultDiscipline,
       initialEffort: log.effort ?? null,
+      initialExtraExercises: log.exercises.map((entry) => ({
+        localId: entry.id,
+        exerciseId: entry.exerciseId,
+        name: entry.exercise.name,
+        unit: entry.exercise.unit,
+        supportsWeight: entry.exercise.supportsWeight,
+        rows: entry.sets.map((set) => ({
+          setNumber: set.setNumber,
+          reps: set.reps === null ? undefined : String(set.reps),
+          seconds: set.seconds === null ? undefined : String(set.seconds),
+          weightLb: set.weightLb === null ? undefined : String(set.weightLb),
+        })),
+      })),
     };
   }
 

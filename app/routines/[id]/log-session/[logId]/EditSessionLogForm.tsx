@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { updateSessionLog } from "../../../actions";
+import SessionExtraSets, { toExerciseInput, type ExtraExercise } from "@/app/routines/SessionExtraSets";
 import ClimbSessionLogger from "../ClimbSessionLogger";
 import SessionMetricFields, { type SessionMetricDraftValue } from "../SessionMetricFields";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
@@ -152,6 +153,7 @@ export default function EditSessionLogForm({
   savedClimbLocations = [],
   initialSpot = null,
   initialClimbAttempts = [],
+  initialExtraExercises = [],
   climbDefaultDiscipline = null,
   initialEffort = null,
   onComplete,
@@ -173,6 +175,7 @@ export default function EditSessionLogForm({
   savedClimbLocations?: Array<{ id: string; name: string; type: "GYM" | "CRAG"; region: string | null; osmType: string | null; osmId: string | null }>;
   initialSpot?: SpotPickerValue;
   initialClimbAttempts?: ClimbAttemptDraft[];
+  initialExtraExercises?: ExtraExercise[];
   climbDefaultDiscipline?: ClimbingDiscipline | null;
   initialEffort?: number | null;
   onComplete?: () => void;
@@ -203,6 +206,7 @@ export default function EditSessionLogForm({
   // Effort is captured only on sport logs now; preserve any stored value
   // through edits rather than wiping it. The save payload still carries it.
   const [effort] = useState<number | null>(initialEffort);
+  const [extras, setExtras] = useState<ExtraExercise[]>(initialExtraExercises);
   const [performedAtLocal, setPerformedAtLocal] = useState(toLocalInputValue(initialPerformedAt));
   const [sessionMetricValues, setSessionMetricValues] = useState<Record<string, SessionMetricDraftValue>>(initialValues);
   const [spotValue, setSpotValue] = useState<SpotPickerValue>(initialSpot);
@@ -360,6 +364,7 @@ export default function EditSessionLogForm({
         climbAttempts: attemptsToPersist,
         activitySlug: activitySlug ?? undefined,
         effort,
+        exercises: toExerciseInput(extras),
         ...spotParams,
       });
       if (onComplete) onComplete();
@@ -460,6 +465,12 @@ export default function EditSessionLogForm({
           </Field>
         )}
       </FormSection>
+
+      <SessionExtraSets
+        value={extras}
+        onChange={setExtras}
+        sportSlug={isClimbing ? "climbing" : activitySlug ?? undefined}
+      />
 
       <FormError message={error} />
 
