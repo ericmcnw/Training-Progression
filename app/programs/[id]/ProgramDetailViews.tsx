@@ -3,7 +3,8 @@ import InjuryPanel from "@/app/focus/[id]/InjuryPanel";
 import type { FocusDetail, InjuryPanelData } from "@/app/focus/data";
 import type { ProgramDetailData } from "@/app/programs/detail-data";
 import { markMilestoneMet, reopenMilestone } from "@/app/focus/actions";
-import { continueProgramCycle } from "@/app/programs/actions";
+import { addProgramGoalCheckpoint, continueProgramCycle } from "@/app/programs/actions";
+import { todayAppYmd } from "@/lib/dates";
 
 type Detail = NonNullable<ProgramDetailData>;
 type SharedProps = { focus: FocusDetail; detail: Detail; accent: string };
@@ -162,6 +163,9 @@ export function ProgramRoadmap({ focus, detail, accent }: SharedProps) {
 
 export function ProgramProgress({ detail, injury, accent }: SharedProps & { injury: InjuryPanelData | null }) {
   const max = Math.max(1, ...detail.activity.weeklyCounts);
+  // A checkpoint is evidence, not plan — recorded where the numbers are read
+  // rather than inside the builder that authors the program.
+  const todayYmd = todayAppYmd();
   return (
     <div style={viewStack}>
       <Section eyebrow="Evidence" title="Goal checkpoints" action={<Link href={`/programs/${detail.id}/edit`} style={textAction}>Manage checkpoints</Link>}>
@@ -187,6 +191,14 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
                       </>
                     ) : null}
                   </div>
+                  <form action={addProgramGoalCheckpoint} style={recordForm}>
+                    <input type="hidden" name="programId" value={detail.id} />
+                    <input type="hidden" name="goalId" value={assessment.id} />
+                    <input name="measuredYmd" type="date" defaultValue={todayYmd} style={recordDate} aria-label={`${assessment.name} checkpoint date`} />
+                    <input name="value" required placeholder={assessment.unit ? `New reading (${assessment.unit})` : "New reading"} style={recordInput} aria-label={`${assessment.name} reading`} />
+                    <label style={recordToggle}><input type="checkbox" name="isBaseline" value="1" /> starting point</label>
+                    <button type="submit" style={recordButton}>Record</button>
+                  </form>
                 </div>
               );
             })}
@@ -441,6 +453,11 @@ const compactItems: React.CSSProperties = { display: "grid" };
 const compactItem: React.CSSProperties = { minHeight: 35, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, borderTopWidth: 1, borderTopStyle: "solid", borderTopColor: "rgba(255,255,255,0.055)", fontSize: 11.5 };
 const gateLine: React.CSSProperties = { padding: "7px 9px", borderLeftWidth: 2, borderLeftStyle: "solid", borderLeftColor: "rgba(251,191,36,0.55)", color: "rgba(255,255,255,0.55)", fontSize: 11 };
 const assessmentRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 14, padding: "11px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)" };
+const recordForm: React.CSSProperties = { gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, paddingTop: 9, borderTop: "1px solid rgba(255,255,255,0.07)" };
+const recordInput: React.CSSProperties = { minHeight: 44, minWidth: 0, flex: "1 1 150px", padding: "8px 10px", boxSizing: "border-box", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 8, background: "#111827", color: "white", fontSize: 16 };
+const recordDate: React.CSSProperties = { ...recordInput, flex: "0 1 150px" };
+const recordToggle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "rgba(255,255,255,0.55)" };
+const recordButton: React.CSSProperties = { minHeight: 44, padding: "0 14px", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(51,255,122,0.3)", borderRadius: 8, background: "rgba(51,255,122,0.1)", color: "#7ce8aa", fontWeight: 900, cursor: "pointer" };
 const comparison: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
 const comparisonArrow: React.CSSProperties = { color: "rgba(255,255,255,0.32)", fontSize: 10 };
 const chart: React.CSSProperties = { height: 114, display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 7, alignItems: "end", paddingTop: 8 };

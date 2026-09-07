@@ -4,7 +4,6 @@ import { getProgramDefinitionEditorData, getProgramDetailData, getProgramEditorO
 import FocusForm from "@/app/focus/FocusForm";
 import {
   addProgramPhaseRoutine,
-  addProgramGoalCheckpoint,
   addProgramTargetItem,
   createPlannedSession,
   createProgramStage,
@@ -108,35 +107,6 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
           {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them in stage 5.</p> : null}
           <button type="submit" style={primaryButton}>Save connections</button>
         </form>
-        </SetupPart>
-
-        <SetupPart number="3" title="Checkpoints" subtitle={`${detail.assessments.length} measured goal${detail.assessments.length === 1 ? "" : "s"}`}>
-        {detail.assessments.length ? (
-          <div style={list}>
-            {detail.assessments.map((goal) => {
-              const latest = goal.results.at(-1);
-              const value = latest?.numberValue ?? latest?.textValue ?? null;
-              return (
-                <div key={goal.id} style={compactRow}>
-                  <div style={{ minWidth: 0 }}>
-                    <strong>{goal.name}</strong>
-                    <div style={minorText}>{value != null ? `Latest checkpoint: ${value}${goal.unit ? ` ${goal.unit}` : ""}` : "No checkpoint recorded"}</div>
-                  </div>
-                  <Link href={`/goals/${encodeURIComponent(goal.id)}`} style={quietLink}>Open goal</Link>
-                  <form action={addProgramGoalCheckpoint} style={miniForm}>
-                    <input type="hidden" name="programId" value={id} />
-                    <input type="hidden" name="goalId" value={goal.id} />
-                    <input name="measuredYmd" type="date" defaultValue={todayAppYmd()} style={dateInput} aria-label="Checkpoint date" />
-                    <input name="value" required placeholder={goal.unit ? `Value (${goal.unit})` : "Value or grade"} style={smallInput} />
-                    <label style={minorText}><input type="checkbox" name="isBaseline" value="1" /> baseline</label>
-                    <button type="submit" style={quietActionButton}>Record</button>
-                  </form>
-                </div>
-              );
-            })}
-          </div>
-        ) : <Empty text="Connect a measured goal to keep its baseline and checkpoints with the program." />}
-        <p style={minorText}>This is measurement history only. Choose or change the Program goals above.</p>
         </SetupPart>
 
       </EditorSection>
