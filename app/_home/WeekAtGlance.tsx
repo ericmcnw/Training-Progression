@@ -630,7 +630,9 @@ function DetailPanel({
                   ) : null}
                   <span style={detailRowMeta}>
                     {item.logged > 0
-                      ? `${Math.min(item.logged, item.planned || item.logged)}/${item.planned || item.logged} done`
+                      ? item.planned > 0 && item.logged <= item.planned
+                        ? `${item.logged}/${item.planned} done`
+                        : `${item.logged} done`
                       : `${item.planned} planned`}
                     {" · "}
                     {formatRoutineTypeLabel(normalizedKind).toLowerCase()}
