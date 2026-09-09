@@ -254,11 +254,17 @@ export default function WorkoutExerciseEditor({
     draftStartedAtRef.current = draft.startedAt;
     const restored = draft.blocks.map((draftBlock) => {
       const initial = initialBlocks.find((b) => b.exerciseId === draftBlock.exerciseId);
-      // History and targets are server-owned — always take the fresh copy, or a
-      // restored draft shows a stale (or missing) target.
+      // Everything about the exercise itself is server-owned — a draft only
+      // owns what the user typed into it. Taking name/unit/supportsWeight from
+      // the draft means an exercise renamed or switched to weighted after the
+      // draft was written keeps showing the old shape, with no way to fix it
+      // short of discarding the session in progress.
       return initial
         ? {
             ...draftBlock,
+            name: initial.name,
+            unit: initial.unit,
+            supportsWeight: initial.supportsWeight,
             lastRows: initial.lastRows,
             lastDate: initial.lastDate,
             prescription: initial.prescription,
