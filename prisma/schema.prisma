@@ -1679,9 +1679,36 @@ enum FocusContributorKind {
   FREQUENCY_GOAL
 }
 
+enum ProgressionStatus {
+  ACTIVE
+  PAUSED
+  DONE
+  ARCHIVED
+}
+
+// A ladder that outlives any one program — "Front lever", "Return to jumping".
+// Its rungs are ProgressionMilestone rows with ownerKind = PROGRESSION. Identity
+// is the NAME; scopeKind/scopeRef are an optional evidence link used only to
+// count real logged sessions against the ladder.
+model Progression {
+  id         String              @id @default(cuid())
+  profileKey String
+  name       String
+  status     ProgressionStatus   @default(ACTIVE)
+  sortOrder  Int                 @default(0)
+  scopeKind  MilestoneScopeKind?
+  scopeRef   String?
+  notes      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([profileKey, status, sortOrder])
+}
+
 enum MilestoneOwnerKind {
   FOCUS
   INJURY
+  PROGRESSION
 }
 
 enum MilestoneScopeKind {
@@ -1869,6 +1896,10 @@ model ProgressionMilestone {
   scopeRef  String?
   label      String
   targetText String?
+  // How this rung is made easier or harder without changing the movement:
+  // "green band", "+25 lb", "from 12 in box". Its presence is what separates
+  // an assist/load rung from a new-variation rung — the kind is derived, not stored.
+  modifier   String?
   status     MilestoneStatus @default(ACTIVE)
   sortOrder  Int             @default(0)
   // Timeline (Phase 2). estDurationDays drives the forward projection; a
