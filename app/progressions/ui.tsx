@@ -225,6 +225,7 @@ export const rungTextCol: CSSProperties = {
   gap: 2,
   alignContent: "center",
   padding: "9px 0",
+  textAlign: "left",
   minWidth: 0,
 };
 
@@ -316,4 +317,103 @@ export const presetFoot: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   marginTop: 2,
+};
+
+// ── Edit in place ─────────────────────────────────────────────────────────
+// Only one row is ever in this state, so the rest of the ladder stays
+// readable while you work on a step.
+
+export const editGrid: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "8px 0 10px",
+  minWidth: 0,
+};
+
+export const editRowInline: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+  gap: 8,
+};
+
+export const editBar: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+};
+
+export const editBarLeft: CSSProperties = { display: "flex", alignItems: "center", gap: 6 };
+
+export const iconBtn: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 900,
+  minWidth: 44,
+  minHeight: 44,
+  padding: 0,
+  color: "rgba(255,255,255,0.62)",
+};
+
+export const doneBtn: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  color: ACCENT_SOFT,
+  padding: "10px 18px",
+  border: "1px solid rgba(51,255,122,0.4)",
+  background: "rgba(51,255,122,0.1)",
+};
+
+export const addStepBtn: CSSProperties = {
+  justifySelf: "start",
+  marginTop: 8,
+  marginLeft: 38,
+  fontSize: 13,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.62)",
+  background: "transparent",
+  border: "1px dashed rgba(255,255,255,0.2)",
+};
+
+export const untitledLabel: CSSProperties = {
+  color: "rgba(255,255,255,0.34)",
+  fontStyle: "italic",
+  fontWeight: 700,
+};
+
+export const headerRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  justifyContent: "space-between",
+  minWidth: 0,
+};
+
+export const titleButton: CSSProperties = {
+  padding: 0,
+  minHeight: 0,
+  textAlign: "left",
+  minWidth: 0,
+  flex: 1,
+};
+
+export const blankCard: CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.09)",
+  background: "rgba(255,255,255,0.022)",
+  padding: "14px 16px",
+  display: "grid",
+  gap: 8,
+};
+
+export const blankLabel: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  color: "rgba(255,255,255,0.62)",
+};
+
+export const blankRow: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
 };

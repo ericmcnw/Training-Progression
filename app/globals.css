@@ -270,6 +270,24 @@ button:hover{
   box-shadow: none !important;
 }
 
+/* A rung's text column is a button so tapping it opens the inline editor. It
+   must look like text, not a control — same reset family as .progRungNode. */
+.progRungText {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  font-weight: inherit !important;
+  width: 100%;
+}
+.progRungText:hover,
+.progRungText:focus-visible {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.progRungText:hover span {
+  opacity: 0.86;
+}
+
 .navLink{
   display: inline-flex;
   align-items: center;

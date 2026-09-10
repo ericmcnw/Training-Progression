@@ -3,9 +3,10 @@
 
 import Link from "next/link";
 import { PROGRESSION_PRESETS, PRESET_GROUPS } from "@/lib/progression-presets";
-import { applyPreset } from "../actions";
+import { applyPreset, createBlankProgression } from "../actions";
+import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import { page, topBar, backLink, title, subtitle, card, cardGrid, cardTitle, ctaLink, countTag } from "../ui";
-import { presetChain, presetGroupHeading, presetChip, presetFoot } from "../ui";
+import { presetChain, presetGroupHeading, presetChip, presetFoot, blankCard, blankLabel, blankRow } from "../ui";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,20 @@ export default function NewProgressionPage() {
           reorder them, or throw them out.
         </p>
       </header>
+
+      <form action={createBlankProgression} style={blankCard}>
+        <label style={blankLabel} htmlFor="new-progression-name">Or build your own</label>
+        <div style={blankRow}>
+          <input
+            id="new-progression-name"
+            name="name"
+            required
+            placeholder="e.g. One-arm pull-up"
+            style={inputStyle}
+          />
+          <button type="submit" style={ctaLink}>Start</button>
+        </div>
+      </form>
 
       {PRESET_GROUPS.map((group) => {
         const presets = PROGRESSION_PRESETS.filter((p) => p.group === group.key);

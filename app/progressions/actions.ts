@@ -97,3 +97,136 @@ export async function applyPreset(formData: FormData): Promise<void> {
   const { id } = await createProgressionFromPreset(key);
   redirect(`/progressions/${id}`);
 }
+
+// ── Authoring ─────────────────────────────────────────────────────────────
+
+export async function createBlankProgression(formData: FormData): Promise<void> {
+  const session = await getAppSession();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) throw new Error("Give the progression a name.");
+
+  const min = await prisma.progression.aggregate({
+    where: { profileKey: session.profileKey },
+    _min: { sortOrder: true },
+  });
+
+  const progression = await prisma.progression.create({
+    data: { profileKey: session.profileKey, name, sortOrder: (min._min.sortOrder ?? 0) - 1 },
+    select: { id: true },
+  });
+  // A blank ladder starts with one empty rung so there is somewhere to type.
+  await prisma.progressionMilestone.create({
+    data: {
+      ownerKind: "PROGRESSION",
+      ownerId: progression.id,
+      scopeKind: "CAPACITY",
+      label: "",
+      sortOrder: 0,
+    },
+  });
+
+  revalidateProgressions();
+  redirect(`/progressions/${progression.id}`);
+}
+
+export async function renameProgression(id: string, name: string): Promise<void> {
+  await requireOwnedProgression(id);
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Give the progression a name.");
+  await prisma.progression.update({ where: { id }, data: { name: trimmed } });
+  revalidateProgressions(id);
+}
+
+// Archive rather than delete — the ladder holds a real history of what was
+// ticked and when, and that survives losing interest in it.
+export async function archiveProgression(id: string): Promise<void> {
+  await requireOwnedProgression(id);
+  await prisma.progression.update({ where: { id }, data: { status: "ARCHIVED" } });
+  revalidateProgressions(id);
+  redirect("/progressions");
+}
+
+export type RungInput = {
+  label: string;
+  modifier: string | null;
+  targetText: string | null;
+};
+
+export async function updateRung(id: string, input: RungInput): Promise<void> {
+  const rung = await requireOwnedRung(id);
+  await prisma.progressionMilestone.update({
+    where: { id },
+    data: {
+      label: input.label.trim(),
+      modifier: input.modifier?.trim() || null,
+      targetText: input.targetText?.trim() || null,
+    },
+  });
+  revalidateProgressions(rung.ownerId);
+}
+
+// Insert directly below `afterId` (or at the end when null) and shift the rest
+// down, so a rung added mid-ladder lands where the cursor was.
+export async function addRung(
+  progressionId: string,
+  afterId: string | null
+): Promise<{ id: string }> {
+  await requireOwnedProgression(progressionId);
+
+  const siblings = await prisma.progressionMilestone.findMany({
+    where: { ownerKind: "PROGRESSION", ownerId: progressionId },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, sortOrder: true },
+  });
+  // Derive the slot from the neighbour's actual sortOrder, never from its
+  // index — deleting a rung leaves gaps, and an index would then insert the
+  // new rung above its neighbour instead of below it.
+  const after = afterId
+    ? siblings.find((s) => s.id === afterId)
+    : siblings[siblings.length - 1];
+  const position = after ? after.sortOrder + 1 : 0;
+
+  const created = await prisma.$transaction(async (tx) => {
+    await tx.progressionMilestone.updateMany({
+      where: { ownerKind: "PROGRESSION", ownerId: progressionId, sortOrder: { gte: position } },
+      data: { sortOrder: { increment: 1 } },
+    });
+    return tx.progressionMilestone.create({
+      data: {
+        ownerKind: "PROGRESSION",
+        ownerId: progressionId,
+        scopeKind: "CAPACITY",
+        label: "",
+        sortOrder: position,
+      },
+      select: { id: true },
+    });
+  });
+
+  revalidateProgressions(progressionId);
+  return created;
+}
+
+export async function deleteRung(id: string): Promise<void> {
+  const rung = await requireOwnedRung(id);
+  await prisma.progressionMilestone.delete({ where: { id } });
+  revalidateProgressions(rung.ownerId);
+}
+
+export async function reorderRungs(progressionId: string, orderedIds: string[]): Promise<void> {
+  await requireOwnedProgression(progressionId);
+  const owned = await prisma.progressionMilestone.findMany({
+    where: { ownerKind: "PROGRESSION", ownerId: progressionId },
+    select: { id: true },
+  });
+  const ownedIds = new Set(owned.map((r) => r.id));
+  if (orderedIds.length !== ownedIds.size || orderedIds.some((id) => !ownedIds.has(id))) {
+    throw new Error("Step list does not match this progression.");
+  }
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.progressionMilestone.update({ where: { id }, data: { sortOrder: index } })
+    )
+  );
+  revalidateProgressions(progressionId);
+}
