@@ -1,19 +1,22 @@
 "use client";
 
-// The ladder — one surface for reading, ticking, and editing. There is no
-// separate edit page: tapping a rung's text turns that row into inputs and
-// leaves every other row as plain text, so the shape of the ladder stays
-// visible while you work on it. Order is the whole content of a progression,
-// so hiding rows behind accordions (the Focus roadmap's mistake) is fatal.
+// The ladder — one surface for reading, ticking, and editing. Tapping a rung's
+// text turns that row into labelled inputs and every other row stays plain
+// text, so the order of the ladder — which is the whole content of a
+// progression — never disappears behind an accordion.
 //
 // The node ticks, the text edits. Two targets, never overlapping.
 //
-// Enter behaves the way it does in any outliner: on a rung with text it
-// commits and opens the next one, on an empty rung it ends the list.
+// Two rules keep edits safe:
+//  - Anything that leaves a row commits it first, so switching rows or adding
+//    a step can never silently discard what was typed.
+//  - Every change applies to local state immediately and the server call runs
+//    behind it. Nothing here re-reads from the server mid-edit, because that
+//    is what dismisses the keyboard and drops focus between rows.
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { inputStyle } from "@/app/routines/[id]/log/form-ui";
+import { Field, inputStyle } from "@/app/routines/[id]/log/form-ui";
 import {
   markRungMet, reopenRung, updateRung, addRung, deleteRung, reorderRungs,
 } from "@/app/progressions/actions";
@@ -21,19 +24,26 @@ import type { RungView } from "@/app/progressions/data";
 import {
   ACCENT, rungRow, railCol, node, nodeCheck, rail, rungTextCol,
   rungLabel, rungMeta, modifierChip, nowPill, rungError,
-  editGrid, editRowInline, editBar, editBarLeft, iconBtn, doneBtn,
-  addStepBtn, untitledLabel,
+  editGrid, editBar, editBarLeft, iconBtn, doneBtn, addStepBtn, untitledLabel,
 } from "@/app/progressions/ui";
 
 type Draft = { label: string; modifier: string; targetText: string };
 
-const inlineInput = { ...inputStyle, padding: "8px 10px" };
+const inlineInput = { ...inputStyle, padding: "9px 11px" };
 
 function draftFrom(rung: RungView): Draft {
   return {
     label: rung.label,
     modifier: rung.modifier ?? "",
     targetText: rung.targetText ?? "",
+  };
+}
+
+function normalize(draft: Draft) {
+  return {
+    label: draft.label.trim(),
+    modifier: draft.modifier.trim() || null,
+    targetText: draft.targetText.trim() || null,
   };
 }
 
@@ -50,80 +60,145 @@ export default function ProgressionLadder({
   const [rows, setRows] = useState(rungs);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
+
+  // Async handlers fire after the state they care about has already changed,
+  // so the live draft is read through a ref rather than a stale closure.
+  const draftRef = useRef<Draft | null>(null);
+  const editingRef = useRef<string | null>(null);
+  const rowsRef = useRef(rows);
+  draftRef.current = draft;
+  editingRef.current = editingId;
+  rowsRef.current = rows;
 
   useEffect(() => {
     setRows(rungs);
   }, [rungs]);
 
-  const beginEdit = useCallback((rung: RungView) => {
-    setEditingId(rung.id);
-    setDraft(draftFrom(rung));
-  }, []);
+  const fail = useCallback(() => {
+    setFailed("Couldn't save — refreshing");
+    router.refresh();
+  }, [router]);
 
-  // A rung with no label yet is only meaningful while you are typing in it, so
-  // open it straight away rather than leaving an "Untitled step" row sitting
-  // there. This is what makes Enter-to-add land you in the new row.
-  useEffect(() => {
-    if (editingId) return;
-    const blank = rows.find((r) => !r.label.trim());
-    if (blank) beginEdit(blank);
-  }, [rows, editingId, beginEdit]);
+  // Persist whatever row is open, if it actually changed. Everything that
+  // moves away from a row calls this first — that is the whole fix for edits
+  // vanishing when you added a step or tapped a different one.
+  const flush = useCallback(() => {
+    const id = editingRef.current;
+    const current = draftRef.current;
+    if (!id || !current) return;
+    const row = rowsRef.current.find((r) => r.id === id);
+    if (!row) return;
+    const next = normalize(current);
+    const unchanged =
+      next.label === row.label.trim() &&
+      next.modifier === (row.modifier ?? null) &&
+      next.targetText === (row.targetText ?? null);
+    if (unchanged) return;
 
-  function run(fn: () => Promise<void>) {
-    setFailed(null);
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
     startTransition(async () => {
       try {
-        await fn();
-        router.refresh();
+        await updateRung(id, next);
       } catch {
-        setFailed("Couldn't save — try again");
-        router.refresh();
+        fail();
+      }
+    });
+  }, [fail]);
+
+  function openRow(rung: RungView) {
+    flush();
+    setFailed(null);
+    setEditingId(rung.id);
+    setDraft(draftFrom(rung));
+  }
+
+  function closeRow() {
+    flush();
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  function removeRow(id: string) {
+    flush();
+    setEditingId(null);
+    setDraft(null);
+    setRows((prev) => prev.filter((r) => r.id !== id));
+    startTransition(async () => {
+      try {
+        await deleteRung(id);
+      } catch {
+        fail();
       }
     });
   }
 
-  function commit(id: string, next: Draft) {
-    return updateRung(id, {
-      label: next.label,
-      modifier: next.modifier || null,
-      targetText: next.targetText || null,
-    });
-  }
-
-  function closeEdit(id: string, next: Draft) {
-    setEditingId(null);
-    setDraft(null);
-    run(() => commit(id, next));
-  }
-
-  function removeRung(id: string) {
-    setEditingId(null);
-    setDraft(null);
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    run(() => deleteRung(id));
-  }
-
-  function addAfter(afterId: string | null, next?: Draft) {
-    setEditingId(null);
-    setDraft(null);
-    run(async () => {
-      if (afterId && next) await commit(afterId, next);
-      const created = await addRung(progressionId, afterId);
-      setAutoFocusId(created.id);
+  // Insert locally and open the new row straight away, then let the server
+  // catch up. Waiting on the round trip is what dropped the keyboard between
+  // steps when typing a ladder with Enter.
+  function addAfter(afterId: string | null) {
+    flush();
+    setFailed(null);
+    startTransition(async () => {
+      try {
+        const created = await addRung(progressionId, afterId);
+        const blank: RungView = {
+          id: created.id,
+          label: "",
+          modifier: null,
+          targetText: null,
+          status: "ACTIVE",
+          sortOrder: 0,
+        };
+        setRows((prev) => {
+          const at = afterId ? prev.findIndex((r) => r.id === afterId) + 1 : prev.length;
+          const next = [...prev];
+          next.splice(at, 0, blank);
+          return next;
+        });
+        setEditingId(created.id);
+        setDraft({ label: "", modifier: "", targetText: "" });
+      } catch {
+        fail();
+      }
     });
   }
 
   function move(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= rows.length) return;
+    flush();
     const next = [...rows];
     [next[index], next[target]] = [next[target], next[index]];
     setRows(next);
-    run(() => reorderRungs(progressionId, next.map((r) => r.id)));
+    startTransition(async () => {
+      try {
+        await reorderRungs(progressionId, next.map((r) => r.id));
+      } catch {
+        fail();
+      }
+    });
   }
+
+  function setStatus(id: string, done: boolean) {
+    flush();
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, status: done ? "ACTIVE" : "ACHIEVED" } : r))
+    );
+    startTransition(async () => {
+      try {
+        if (done) await reopenRung(id);
+        else await markRungMet(id);
+        router.refresh();
+      } catch {
+        fail();
+      }
+    });
+  }
+
+  // Derived locally so a tick moves the "now" marker without a server round trip.
+  const liveCurrentId = rows.find((r) => r.status === "ACTIVE")?.id ?? currentId;
 
   return (
     <div style={{ display: "grid", gap: 2 }}>
@@ -133,21 +208,22 @@ export default function ProgressionLadder({
           rung={rung}
           index={index}
           total={rows.length}
-          isCurrent={rung.id === currentId}
+          isCurrent={rung.id === liveCurrentId}
           isLast={index === rows.length - 1}
           isEditing={rung.id === editingId}
-          shouldFocus={rung.id === autoFocusId}
           draft={rung.id === editingId ? draft : null}
           busy={busy}
-          onBeginEdit={() => beginEdit(rung)}
+          onOpen={() => openRow(rung)}
           onDraftChange={setDraft}
-          onCommit={(next) => closeEdit(rung.id, next)}
-          onEnter={(next) =>
-            next.label.trim() ? addAfter(rung.id, next) : removeRung(rung.id)
-          }
-          onDelete={() => removeRung(rung.id)}
+          onClose={closeRow}
+          onEnter={() => {
+            const live = draftRef.current;
+            if (live && !live.label.trim()) removeRow(rung.id);
+            else addAfter(rung.id);
+          }}
+          onDelete={() => removeRow(rung.id)}
           onMove={(dir) => move(index, dir)}
-          onFocused={() => setAutoFocusId(null)}
+          onToggle={(done) => setStatus(rung.id, done)}
         />
       ))}
 
@@ -162,8 +238,8 @@ export default function ProgressionLadder({
 }
 
 function Row({
-  rung, index, total, isCurrent, isLast, isEditing, shouldFocus, draft, busy,
-  onBeginEdit, onDraftChange, onCommit, onEnter, onDelete, onMove, onFocused,
+  rung, index, total, isCurrent, isLast, isEditing, draft, busy,
+  onOpen, onDraftChange, onClose, onEnter, onDelete, onMove, onToggle,
 }: {
   rung: RungView;
   index: number;
@@ -171,43 +247,23 @@ function Row({
   isCurrent: boolean;
   isLast: boolean;
   isEditing: boolean;
-  shouldFocus: boolean;
   draft: Draft | null;
   busy: boolean;
-  onBeginEdit: () => void;
+  onOpen: () => void;
   onDraftChange: (draft: Draft) => void;
-  onCommit: (draft: Draft) => void;
-  onEnter: (draft: Draft) => void;
+  onClose: () => void;
+  onEnter: () => void;
   onDelete: () => void;
   onMove: (dir: -1 | 1) => void;
-  onFocused: () => void;
+  onToggle: (done: boolean) => void;
 }) {
-  const router = useRouter();
-  const [ticking, startTick] = useTransition();
-  const [tickFailed, setTickFailed] = useState(false);
   const labelRef = useRef<HTMLInputElement | null>(null);
   const done = rung.status === "ACHIEVED";
   const skipped = rung.status === "SKIPPED";
 
   useEffect(() => {
-    if (shouldFocus && labelRef.current) {
-      labelRef.current.focus();
-      onFocused();
-    }
-  }, [shouldFocus, onFocused]);
-
-  function toggle() {
-    setTickFailed(false);
-    startTick(async () => {
-      try {
-        if (done) await reopenRung(rung.id);
-        else await markRungMet(rung.id);
-        router.refresh();
-      } catch {
-        setTickFailed(true);
-      }
-    });
-  }
+    if (isEditing) labelRef.current?.focus();
+  }, [isEditing]);
 
   const ringColor = done || isCurrent ? ACCENT : "rgba(255,255,255,0.26)";
 
@@ -216,8 +272,8 @@ function Row({
       <button
         type="button"
         className="progRungNode"
-        onClick={toggle}
-        disabled={ticking || skipped}
+        onClick={() => onToggle(done)}
+        disabled={busy || skipped}
         style={railCol}
         aria-label={done ? `Reopen ${rung.label}` : `Mark ${rung.label} done`}
         aria-pressed={done}
@@ -227,7 +283,6 @@ function Row({
             ...node,
             borderColor: ringColor,
             background: done ? ACCENT : "transparent",
-            opacity: ticking ? 0.5 : 1,
           }}
         >
           {done ? <span style={nodeCheck}>✓</span> : null}
@@ -239,57 +294,63 @@ function Row({
 
       {isEditing && draft ? (
         <div style={editGrid}>
-          <input
-            ref={labelRef}
-            style={inlineInput}
-            value={draft.label}
-            placeholder="What is this step?"
-            aria-label="Step name"
-            onChange={(e) => onDraftChange({ ...draft, label: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onEnter(draft);
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                onCommit(draft);
-              }
-            }}
-          />
-          <div style={editRowInline}>
+          <Field label="Step" hint="The movement, or the thing you can do.">
+            <input
+              ref={labelRef}
+              style={inlineInput}
+              value={draft.label}
+              placeholder="Pull-up"
+              aria-label="Step"
+              onChange={(e) => onDraftChange({ ...draft, label: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onEnter();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  onClose();
+                }
+              }}
+            />
+          </Field>
+
+          <Field label="Easier or harder" hint="Optional. Help you are using, or weight you are adding.">
             <input
               style={inlineInput}
               value={draft.modifier}
-              placeholder="with band · plus +25 lb"
-              aria-label="Assistance or added load"
+              placeholder="with light band · plus +25 lb"
+              aria-label="Easier or harder"
               onChange={(e) => onDraftChange({ ...draft, modifier: e.target.value })}
             />
+          </Field>
+
+          <Field label="Move on when" hint="Optional. Your call — a number if you have one, a feeling if you do not.">
             <input
               style={inlineInput}
               value={draft.targetText}
-              placeholder="10s · 3x8"
-              aria-label="How you will know"
+              placeholder="3x5 · 10s hold · feels solid"
+              aria-label="Move on when"
               onChange={(e) => onDraftChange({ ...draft, targetText: e.target.value })}
             />
-          </div>
+          </Field>
+
           <div style={editBar}>
             <div style={editBarLeft}>
               <button type="button" style={iconBtn} onClick={() => onMove(-1)} disabled={index === 0 || busy} aria-label="Move up">↑</button>
               <button type="button" style={iconBtn} onClick={() => onMove(1)} disabled={index === total - 1 || busy} aria-label="Move down">↓</button>
               <button type="button" style={iconBtn} onClick={onDelete} disabled={busy} aria-label="Delete step">✕</button>
             </div>
-            <button type="button" style={doneBtn} onClick={() => onCommit(draft)} disabled={busy}>Done</button>
+            <button type="button" style={doneBtn} onClick={onClose} disabled={busy}>Done</button>
           </div>
         </div>
       ) : (
-        <button type="button" className="progRungText" style={rungTextCol} onClick={onBeginEdit}>
+        <button type="button" className="progRungText" style={rungTextCol} onClick={onOpen}>
           <span style={rungLabel(done, skipped, isCurrent)}>
-            {rung.label.trim() ? rung.label : <span style={untitledLabel}>Untitled step</span>}
+            {rung.label.trim() ? rung.label : <span style={untitledLabel}>Tap to name this step</span>}
             {rung.modifier ? <span style={modifierChip}>{rung.modifier}</span> : null}
             {isCurrent ? <span style={nowPill}>now</span> : null}
           </span>
           {rung.targetText ? <span style={rungMeta}>{rung.targetText}</span> : null}
-          {tickFailed ? <span style={rungError}>Couldn&apos;t update — tap again</span> : null}
         </button>
       )}
     </div>

@@ -417,3 +417,40 @@ export const blankRow: CSSProperties = {
   gap: 8,
   alignItems: "center",
 };
+
+export const headerActions: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
+
+export const textAction: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "8px 14px",
+  color: "rgba(255,255,255,0.7)",
+};
+
+export const dangerAction: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "8px 14px",
+  color: "#ff9b9b",
+  borderColor: "rgba(255,120,120,0.3)",
+};
+
+export const searchWrap: CSSProperties = { display: "grid" };
+
+export const buildOwnBtn: CSSProperties = {
+  width: "100%",
+  fontSize: 14,
+  fontWeight: 900,
+  color: ACCENT_SOFT,
+  padding: "14px 16px",
+  border: "1px solid rgba(51,255,122,0.4)",
+  background: "rgba(51,255,122,0.1)",
+};
+
+export const noMatch: CSSProperties = {
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: "rgba(255,255,255,0.55)",
+  margin: 0,
+  padding: "18px 4px",
+};

@@ -100,10 +100,10 @@ export async function applyPreset(formData: FormData): Promise<void> {
 
 // ── Authoring ─────────────────────────────────────────────────────────────
 
-export async function createBlankProgression(formData: FormData): Promise<void> {
+// Naming happens on the ladder itself, alongside the steps, rather than on a
+// form that has to be filled in before you can start.
+export async function createBlankProgression(): Promise<void> {
   const session = await getAppSession();
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Give the progression a name.");
 
   const min = await prisma.progression.aggregate({
     where: { profileKey: session.profileKey },
@@ -111,22 +111,16 @@ export async function createBlankProgression(formData: FormData): Promise<void> 
   });
 
   const progression = await prisma.progression.create({
-    data: { profileKey: session.profileKey, name, sortOrder: (min._min.sortOrder ?? 0) - 1 },
-    select: { id: true },
-  });
-  // A blank ladder starts with one empty rung so there is somewhere to type.
-  await prisma.progressionMilestone.create({
     data: {
-      ownerKind: "PROGRESSION",
-      ownerId: progression.id,
-      scopeKind: "CAPACITY",
-      label: "",
-      sortOrder: 0,
+      profileKey: session.profileKey,
+      name: "New progression",
+      sortOrder: (min._min.sortOrder ?? 0) - 1,
     },
+    select: { id: true },
   });
 
   revalidateProgressions();
-  redirect(`/progressions/${progression.id}`);
+  redirect(`/progressions/${progression.id}?rename=1`);
 }
 
 export async function renameProgression(id: string, name: string): Promise<void> {

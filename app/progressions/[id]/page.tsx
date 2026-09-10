@@ -9,10 +9,13 @@ export const dynamic = "force-dynamic";
 
 export default async function ProgressionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
+  const { rename } = await searchParams;
   const detail = await getProgressionDetail(id);
   if (!detail) notFound();
 
@@ -23,10 +26,14 @@ export default async function ProgressionDetailPage({
         <RungDots total={detail.total} done={detail.done} />
       </div>
 
-      <ProgressionHeader id={detail.id} name={detail.name} />
+      <ProgressionHeader id={detail.id} name={detail.name} autoRename={rename === "1"} />
 
       <p style={{ ...subtitle, margin: 0 }}>
-        <span style={countTag}>{detail.done} of {detail.total} done</span>
+        {detail.total === 0 ? (
+          "Add the steps in order — easiest first, hardest last."
+        ) : (
+          <span style={countTag}>{detail.done} of {detail.total} done</span>
+        )}
       </p>
 
       <ProgressionLadder
