@@ -49,6 +49,7 @@ export default async function PlanPage(props: { searchParams?: Promise<SearchPar
         <section style={surface}>
           <div style={surfaceHead}>
             <div><h2 style={surfaceTitle}>Program timeline</h2><p style={surfaceCopy}>Campaigns and seasons across the year. Open a program for its roadmap and progress.</p></div>
+            <Link href="/progressions" style={quietAction}>Progressions</Link>
             <Link href="/programs" style={quietAction}>All programs</Link>
           </div>
           <YearTab />

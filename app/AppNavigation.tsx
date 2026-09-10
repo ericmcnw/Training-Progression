@@ -10,7 +10,7 @@ import { useLogDraft } from "@/app/contexts/LogDraftContext";
 const desktopNavItems = [
   { href: "/", label: "Home", match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
-  { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/plan", label: "Plan", match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/progressions") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
   { href: "/activities", label: "Activities", match: (pathname: string) => pathname.startsWith("/activities") },
   { href: "/profile", label: "Profile", match: (pathname: string) => pathname.startsWith("/profile") || pathname.startsWith("/body") || pathname.startsWith("/injuries") },
 ];
@@ -18,7 +18,7 @@ const desktopNavItems = [
 const mobileNavItems = [
   { href: "/", label: "Home", icon: <HomeIcon />, match: (pathname: string) => pathname === "/" },
   { href: "/log", label: "Log", icon: <LogIcon />, match: (pathname: string) => pathname.startsWith("/log") || pathname.startsWith("/routines") },
-  { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
+  { href: "/plan", label: "Plan", icon: <ScheduleIcon />, match: (pathname: string) => pathname.startsWith("/plan") || pathname.startsWith("/programs") || pathname.startsWith("/progressions") || pathname.startsWith("/schedule") || pathname.startsWith("/goals") },
   { href: "/activities", label: "Activities", icon: <ActivitiesIcon />, match: (pathname: string) => pathname.startsWith("/activities") },
   { href: "/profile", label: "Profile", icon: <ProfileIcon />, match: (pathname: string) => pathname.startsWith("/profile") || pathname.startsWith("/body") || pathname.startsWith("/injuries") },
 ];

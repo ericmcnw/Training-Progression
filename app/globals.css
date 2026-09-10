@@ -254,6 +254,22 @@ button:hover{
   box-shadow: none !important;
 }
 
+/* Ladder rung tick targets. The 44px tap height from the global `button` rule
+   is wanted here, but its chrome is not — the visible control is the small
+   circle drawn inside, not a filled pill. Same reset family as .pyramidCell. */
+.progRungNode {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-weight: inherit !important;
+}
+.progRungNode:hover,
+.progRungNode:focus-visible {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 .navLink{
   display: inline-flex;
   align-items: center;

@@ -72,17 +72,24 @@ export async function getRoutineAims(
   for (const m of milestones) {
     if (!m.scopeRef) continue;
     let rank: number;
+    let ownerKind: RoutineAim["ownerKind"];
     if (m.ownerKind === "FOCUS") {
       const focus = focusById.get(m.ownerId);
       if (!focus || focus.status !== "ACTIVE") continue; // dropped: inactive focus
       rank = focus.sortOrder;
-    } else {
+      ownerKind = "FOCUS";
+    } else if (m.ownerKind === "INJURY") {
       rank = INJURY_PRIORITY;
+      ownerKind = "INJURY";
+    } else {
+      // Standalone progressions deliberately do not drive Week-at-a-Glance
+      // aims yet — program and injury roadmaps stay the only source.
+      continue;
     }
     const candidate: Candidate = {
       label: m.label,
       targetText: m.targetText,
-      ownerKind: m.ownerKind,
+      ownerKind,
       rank,
       order: m.sortOrder,
     };
