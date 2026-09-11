@@ -204,3 +204,30 @@ export async function updateExercise(formData: FormData) {
   revalidatePath("/exercises");
   redirect("/exercises");
 }
+
+// Create-and-return, for inline pickers that cannot navigate away to the full
+// form. Shares this file's name matching, normalization, and library-kind
+// derivation, so an inline create can never quietly fork an exercise that
+// already exists under a slightly different spelling — it returns the match.
+export async function createExerciseInline(input: {
+  name: string;
+  unit: ExerciseUnit;
+  supportsWeight: boolean;
+}): Promise<{ id: string; name: string; created: boolean }> {
+  const name = normalizeExerciseName(input.name);
+  if (!name) throw new Error("Exercise name is required.");
+  if (!["REPS", "TIME"].includes(input.unit)) throw new Error("Invalid unit.");
+
+  const existing = await prisma.exercise.findMany({ select: { id: true, name: true } });
+  const match = findExerciseNameMatch(existing, name);
+  if (match) return { id: match.id, name: match.name, created: false };
+
+  const libraryKind = deriveExerciseLibraryKind({ name, unit: input.unit, metadataSlugs: [] });
+  const created = await prisma.exercise.create({
+    data: { name, unit: input.unit, supportsWeight: input.supportsWeight, libraryKind },
+    select: { id: true, name: true },
+  });
+
+  revalidatePath("/exercises");
+  return { id: created.id, name: created.name, created: true };
+}

@@ -174,7 +174,7 @@ export function rungText(label: string, modifier: string | null, targetText: str
 export function rungRow(isCurrent: boolean): CSSProperties {
   return {
     display: "grid",
-    gridTemplateColumns: "28px minmax(0, 1fr)",
+    gridTemplateColumns: "28px minmax(0, 1fr) auto",
     gap: 10,
     alignItems: "stretch",
     padding: "2px 6px 2px 0",
@@ -589,4 +589,75 @@ export const pickerHint: CSSProperties = {
   fontWeight: 700,
   lineHeight: 1.45,
   color: "rgba(255,255,255,0.45)",
+};
+
+// ── Inline exercise create ────────────────────────────────────────────────
+
+export const createBox: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "12px",
+  borderRadius: 10,
+  border: "1px dashed rgba(255,255,255,0.18)",
+  background: "rgba(255,255,255,0.025)",
+};
+
+export const createTitle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.6)",
+};
+
+export const createLine: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.8)",
+  overflowWrap: "anywhere",
+};
+
+export const toggleGroup: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+};
+
+export function toggleChip(on: boolean): CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 800,
+    padding: "8px 12px",
+    minHeight: 40,
+    borderRadius: 9,
+    border: `1px solid ${on ? "rgba(51,255,122,0.45)" : "rgba(255,255,255,0.16)"}`,
+    background: on ? "rgba(51,255,122,0.1)" : "rgba(255,255,255,0.03)",
+    color: on ? ACCENT_SOFT : "rgba(255,255,255,0.6)",
+  };
+}
+
+export const createBtn: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  padding: "11px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(51,255,122,0.4)",
+  background: "rgba(51,255,122,0.12)",
+  color: ACCENT_SOFT,
+  textAlign: "left",
+  overflowWrap: "anywhere",
+};
+
+// Sits in the row's third column so it is a sibling of the text button, not
+// nested inside it — a link inside a button is invalid and unclickable.
+export const dataLink: CSSProperties = {
+  alignSelf: "center",
+  fontSize: 11,
+  fontWeight: 800,
+  padding: "8px 10px",
+  minHeight: 40,
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 9,
+  color: "rgba(255,255,255,0.45)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };

@@ -15,6 +15,7 @@
 //    behind it. Nothing re-reads from the server mid-edit, because that is
 //    what dismisses the keyboard and drops focus between rows.
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Field, inputStyle } from "@/app/routines/[id]/log/form-ui";
@@ -28,7 +29,7 @@ import {
   ACCENT, rungRow, railCol, node, nodeCheck, rail, rungTextCol,
   rungLabel, rungMeta, nowPill, rungError, readyPill,
   editGrid, editBar, editBarLeft, iconBtn, doneBtn, addStepBtn, untitledLabel,
-  measureRow, unitTag, bestLine,
+  measureRow, unitTag, bestLine, dataLink,
 } from "@/app/progressions/ui";
 
 const METRICS = [
@@ -93,6 +94,13 @@ export default function ProgressionLadder({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
+  // Grows when a step creates an exercise inline, so the chip can render its
+  // name before the page has been re-read.
+  const [options, setOptions] = useState(exercises);
+
+  useEffect(() => {
+    setOptions(exercises);
+  }, [exercises]);
 
   // Async handlers fire after the state they care about has changed, so the
   // live draft is read through a ref rather than a stale closure.
@@ -130,7 +138,7 @@ export default function ProgressionLadder({
     if (unchanged) return;
 
     const name = next.exerciseId
-      ? (exercises.find((o) => o.id === next.exerciseId)?.name ?? null)
+      ? (options.find((o) => o.id === next.exerciseId)?.name ?? null)
       : null;
     setRows((prev) =>
       prev.map((r) =>
@@ -144,7 +152,7 @@ export default function ProgressionLadder({
         fail();
       }
     });
-  }, [exercises, fail]);
+  }, [options, fail]);
 
   function openRow(rung: RungView) {
     flush();
@@ -254,7 +262,8 @@ export default function ProgressionLadder({
           isLast={index === rows.length - 1}
           isEditing={rung.id === editingId}
           draft={rung.id === editingId ? draft : null}
-          exercises={exercises}
+          exercises={options}
+          onCreated={(o) => setOptions((prev) => [...prev, o].sort((a, b) => a.name.localeCompare(b.name)))}
           busy={busy}
           onOpen={() => openRow(rung)}
           onDraftChange={setDraft}
@@ -290,7 +299,7 @@ function summaryOf(rung: RungView) {
 }
 
 function Row({
-  rung, index, total, isCurrent, isLast, isEditing, draft, busy, exercises,
+  rung, index, total, isCurrent, isLast, isEditing, draft, busy, exercises, onCreated,
   onOpen, onDraftChange, onClose, onEnter, onDelete, onMove, onToggle,
 }: {
   rung: RungView;
@@ -301,6 +310,7 @@ function Row({
   isEditing: boolean;
   draft: Draft | null;
   exercises: ExerciseOption[];
+  onCreated: (option: ExerciseOption) => void;
   busy: boolean;
   onOpen: () => void;
   onDraftChange: (draft: Draft) => void;
@@ -412,7 +422,9 @@ function Row({
                 <ExercisePicker
                   options={exercises}
                   value={draft.exerciseId}
+                  metric={draft.metric || null}
                   onChange={(id) => onDraftChange({ ...draft, exerciseId: id })}
+                  onCreated={onCreated}
                 />
               </Field>
             </>
@@ -450,6 +462,16 @@ function Row({
           ) : null}
         </button>
       )}
+
+      {!isEditing && rung.exerciseId ? (
+        <Link
+          href={`/exercises/${rung.exerciseId}`}
+          style={dataLink}
+          title={`History and charts for ${rung.exerciseName ?? "this exercise"}`}
+        >
+          data →
+        </Link>
+      ) : null}
     </div>
   );
 }
