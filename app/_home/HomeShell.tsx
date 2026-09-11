@@ -27,6 +27,8 @@ import LocationPingCapture from "./LocationPingCapture";
 import HomeInjuriesSection from "./HomeInjuriesSection";
 import HomeRotationSection from "./HomeRotationSection";
 import HomeFocusSection from "./HomeFocusSection";
+import HomeProgressionsSection from "./HomeProgressionsSection";
+import type { ReadyRung } from "@/app/progressions/data";
 import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
 import type { HomeRotation } from "@/lib/home-rotation";
@@ -40,6 +42,7 @@ export default function HomeShell({
   otherGoals,
   rotation,
   focuses,
+  readyRungs,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
@@ -48,6 +51,7 @@ export default function HomeShell({
   otherGoals: HomeOtherGoal[];
   rotation: HomeRotation | null;
   focuses: FocusBandItem[];
+  readyRungs: ReadyRung[];
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -65,6 +69,9 @@ export default function HomeShell({
 
       {/* Focus band — the strategic layer, full-width below the WaG. Renders
           nothing when the user has no active focuses. */}
+      {/* Steps already earned but not marked. Renders nothing when empty. */}
+      <HomeProgressionsSection ready={readyRungs} />
+
       <HomeFocusSection focuses={focuses} />
 
       {/* Two independent columns on desktop. Each column flows its cards

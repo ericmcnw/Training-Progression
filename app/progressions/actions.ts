@@ -163,6 +163,7 @@ export type RungInput = {
   metric: RungMetric | null;
   value: number | null;
   exerciseId: string | null;
+  autoTick: boolean;
 };
 
 export async function updateRung(id: string, input: RungInput): Promise<void> {
@@ -177,6 +178,8 @@ export async function updateRung(id: string, input: RungInput): Promise<void> {
       targetText: measured ? null : input.targetText?.trim() || null,
       gateMetric: measured ? input.metric : null,
       gateValue: measured ? input.value : null,
+      // Auto-tick needs something to watch: no exercise or no number, no watching.
+      autoTick: measured && input.exerciseId ? input.autoTick : false,
       scopeKind: input.exerciseId ? "EXERCISE" : "CAPACITY",
       scopeRef: input.exerciseId ?? null,
       // Superseded by the structured target; cleared as rows are edited.

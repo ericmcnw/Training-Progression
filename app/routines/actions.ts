@@ -1,5 +1,6 @@
 "use server";
 
+import { autoTickRungsForLog } from "@/lib/progression-ticks";
 import { deriveExerciseLibraryKind, isMissingExerciseLibraryKindError } from "@/lib/exercise-library";
 import { inferExerciseMetadataSlugs, parseTagNames, ROUTINE_METADATA_SELECTABLE_KINDS } from "@/lib/metadata";
 import { activitiesByFamily } from "@/lib/activity-families";
@@ -959,6 +960,10 @@ async function writeSessionExercisesTx(
     }));
   });
   if (sets.length > 0) await tx.setEntry.createMany({ data: sets });
+
+  // Every workout-logging path funnels through here, so progressions get their
+  // one hook in a single place instead of five.
+  await autoTickRungsForLog(tx, exercises);
 }
 
 async function syncWorkoutTemplateTx(tx: PrismaTx, routineId: string, exercises: SanitizedWorkoutExercise[]) {

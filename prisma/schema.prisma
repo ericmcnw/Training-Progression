@@ -1914,6 +1914,10 @@ model ProgressionMilestone {
   // you decide.
   gateMetric RungMetric?
   gateValue  Float?
+  // Opt-in: let a logged set mark this rung done on its own. Off by default —
+  // a wrong auto-tick is worse than none, because a ladder you cannot trust is
+  // worse than one that is merely stale.
+  autoTick   Boolean     @default(false)
   status     MilestoneStatus @default(ACTIVE)
   sortOrder  Int             @default(0)
   // Timeline (Phase 2). estDurationDays drives the forward projection; a

@@ -29,7 +29,7 @@ import {
   ACCENT, rungRow, railCol, node, nodeCheck, rail, rungTextCol,
   rungLabel, rungMeta, nowPill, rungError, readyPill,
   editGrid, editBar, editBarLeft, iconBtn, doneBtn, addStepBtn, untitledLabel,
-  measureRow, unitTag, bestLine, dataLink,
+  measureRow, unitTag, bestLine, dataLink, toggleChip, autoTickPill,
 } from "@/app/progressions/ui";
 
 const METRICS = [
@@ -49,6 +49,7 @@ type Draft = {
   metric: "" | RungMetric;
   value: string;
   exerciseId: string | null;
+  autoTick: boolean;
 };
 
 const inlineInput = { ...inputStyle, padding: "9px 11px" };
@@ -60,6 +61,7 @@ function draftFrom(rung: RungView): Draft {
     metric: rung.metric ?? "",
     value: rung.value != null ? String(rung.value) : "",
     exerciseId: rung.exerciseId,
+    autoTick: rung.autoTick,
   };
 }
 
@@ -74,6 +76,7 @@ function resolve(draft: Draft) {
     metric: value == null ? null : metric,
     value,
     exerciseId: draft.exerciseId,
+    autoTick: draft.autoTick,
   };
 }
 
@@ -134,7 +137,8 @@ export default function ProgressionLadder({
       next.targetText === (row.targetText ?? null) &&
       next.metric === (row.metric ?? null) &&
       next.value === (row.value ?? null) &&
-      next.exerciseId === (row.exerciseId ?? null);
+      next.exerciseId === (row.exerciseId ?? null) &&
+      next.autoTick === row.autoTick;
     if (unchanged) return;
 
     const name = next.exerciseId
@@ -201,6 +205,7 @@ export default function ProgressionLadder({
           exerciseId: null,
           exerciseName: null,
           best: null,
+          autoTick: false,
         };
         setRows((prev) => {
           const at = afterId ? prev.findIndex((r) => r.id === afterId) + 1 : prev.length;
@@ -209,7 +214,7 @@ export default function ProgressionLadder({
           return next;
         });
         setEditingId(created.id);
-        setDraft({ label: "", note: "", metric: "", value: "", exerciseId: null });
+        setDraft({ label: "", note: "", metric: "", value: "", exerciseId: null, autoTick: false });
       } catch {
         fail();
       }
@@ -427,6 +432,19 @@ function Row({
                   onCreated={onCreated}
                 />
               </Field>
+
+              {draft.exerciseId ? (
+                <button
+                  type="button"
+                  style={toggleChip(draft.autoTick)}
+                  onClick={() => onDraftChange({ ...draft, autoTick: !draft.autoTick })}
+                  aria-pressed={draft.autoTick}
+                >
+                  {draft.autoTick
+                    ? "✓ ticks itself when I log it"
+                    : "tick this for me when I log it"}
+                </button>
+              ) : null}
             </>
           ) : (
             <input
@@ -453,6 +471,7 @@ function Row({
             {rung.label.trim() ? rung.label : <span style={untitledLabel}>Tap to name this step</span>}
             {isCurrent ? <span style={nowPill}>now</span> : null}
             {ready ? <span style={readyPill}>ready</span> : null}
+            {rung.autoTick && !done ? <span style={autoTickPill}>auto</span> : null}
           </span>
           {summary ? <span style={rungMeta}>{summary}</span> : null}
           {rung.best != null && rung.value != null && !done ? (

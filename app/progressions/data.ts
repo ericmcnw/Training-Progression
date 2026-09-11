@@ -24,6 +24,7 @@ export type RungView = {
   exerciseName: string | null;
   // Your best logged result for this rung's exercise, in the rung's metric.
   best: number | null;
+  autoTick: boolean;
 };
 
 export type ProgressionListItem = {
@@ -133,6 +134,7 @@ export async function getProgressionDetail(id: string): Promise<ProgressionDetai
       sortOrder: true,
       gateMetric: true,
       gateValue: true,
+      autoTick: true,
       scopeKind: true,
       scopeRef: true,
     },
@@ -166,6 +168,7 @@ export async function getProgressionDetail(id: string): Promise<ProgressionDetai
       exerciseId,
       exerciseName: exerciseId ? (nameById.get(exerciseId) ?? null) : null,
       best: exerciseId && r.gateMetric ? (best.get(exerciseId)?.[r.gateMetric] ?? null) : null,
+      autoTick: r.autoTick,
     };
   });
 
@@ -192,4 +195,76 @@ export async function getExerciseOptions(): Promise<ExerciseOption[]> {
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
+}
+
+export type ReadyRung = {
+  id: string;
+  label: string;
+  progressionId: string;
+  progressionName: string;
+  metric: RungMetric;
+  value: number;
+  best: number;
+  exerciseName: string;
+};
+
+// Steps you have already earned but not marked. Auto-ticking ones are excluded
+// — those mark themselves, so surfacing them here would be asking twice.
+//
+// This is the answer to the real failure mode: a ladder you have to remember to
+// visit goes stale. The tick has to come to you.
+export async function getReadyRungs(): Promise<ReadyRung[]> {
+  const session = await getAppSession();
+  const progressions = await prisma.progression.findMany({
+    where: { profileKey: session.profileKey, status: "ACTIVE" },
+    select: { id: true, name: true },
+  });
+  if (progressions.length === 0) return [];
+
+  const rungs = await prisma.progressionMilestone.findMany({
+    where: {
+      ownerKind: "PROGRESSION",
+      ownerId: { in: progressions.map((p) => p.id) },
+      status: "ACTIVE",
+      autoTick: false,
+      scopeKind: "EXERCISE",
+      scopeRef: { not: null },
+      gateMetric: { not: null },
+      gateValue: { not: null },
+    },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true, label: true, ownerId: true,
+      gateMetric: true, gateValue: true, scopeRef: true,
+    },
+  });
+  if (rungs.length === 0) return [];
+
+  const exerciseIds = Array.from(new Set(rungs.map((r) => r.scopeRef!)));
+  const [best, names] = await Promise.all([
+    bestByExercise(exerciseIds),
+    prisma.exercise.findMany({
+      where: { id: { in: exerciseIds } },
+      select: { id: true, name: true },
+    }),
+  ]);
+  const nameById = new Map(names.map((e) => [e.id, e.name]));
+  const progressionById = new Map(progressions.map((p) => [p.id, p.name]));
+
+  const ready: ReadyRung[] = [];
+  for (const rung of rungs) {
+    const reached = best.get(rung.scopeRef!)?.[rung.gateMetric!];
+    if (reached == null || rung.gateValue == null || reached < rung.gateValue) continue;
+    ready.push({
+      id: rung.id,
+      label: rung.label,
+      progressionId: rung.ownerId,
+      progressionName: progressionById.get(rung.ownerId) ?? "",
+      metric: rung.gateMetric!,
+      value: rung.gateValue,
+      best: reached,
+      exerciseName: nameById.get(rung.scopeRef!) ?? "",
+    });
+  }
+  return ready;
 }

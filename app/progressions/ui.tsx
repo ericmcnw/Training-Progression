@@ -661,3 +661,83 @@ export const dataLink: CSSProperties = {
   textDecoration: "none",
   whiteSpace: "nowrap",
 };
+
+// ── "Ready to tick" prompt (home) ─────────────────────────────────────────
+
+export const readySection: CSSProperties = {
+  display: "grid",
+  gap: 10,
+  padding: "14px 16px",
+  borderRadius: 14,
+  border: "1px solid rgba(120,200,255,0.28)",
+  background: "rgba(120,200,255,0.07)",
+};
+
+export const readyHead: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+export const readyTitle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 900,
+  color: "#9ed3ff",
+};
+
+export const readyAll: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.5)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+};
+
+export const readyRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  justifyContent: "space-between",
+  minWidth: 0,
+};
+
+export const readyText: CSSProperties = { display: "grid", gap: 2, minWidth: 0 };
+
+export const readyStep: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.92)",
+  lineHeight: 1.3,
+};
+
+export const readyWhy: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.5)",
+  lineHeight: 1.4,
+};
+
+export const readyTickBtn: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 900,
+  padding: "10px 16px",
+  minHeight: 44,
+  borderRadius: 10,
+  border: "1px solid rgba(120,200,255,0.5)",
+  background: "rgba(120,200,255,0.14)",
+  color: "#9ed3ff",
+  flexShrink: 0,
+};
+
+export const autoTickPill: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  padding: "2px 7px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.2)",
+  color: "rgba(255,255,255,0.45)",
+  whiteSpace: "nowrap",
+};
