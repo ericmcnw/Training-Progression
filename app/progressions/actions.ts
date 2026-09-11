@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
 import { findPreset } from "@/lib/progression-presets";
+import type { RungMetric } from "@/generated/prisma";
 
 // Progression-owned rungs get their own guard rather than widening the Focus
 // one. requireOwnedFocusMilestone throws unless ownerKind is FOCUS, and
@@ -140,20 +141,46 @@ export async function archiveProgression(id: string): Promise<void> {
   redirect("/progressions");
 }
 
+// Same archive, driven from the list — no redirect, the list just re-renders
+// without it.
+export async function archiveProgressionFromList(formData: FormData): Promise<void> {
+  const id = String(formData.get("progressionId") ?? "");
+  await requireOwnedProgression(id);
+  await prisma.progression.update({ where: { id }, data: { status: "ARCHIVED" } });
+  revalidateProgressions(id);
+}
+
+export async function renameProgressionFromList(formData: FormData): Promise<void> {
+  const id = String(formData.get("progressionId") ?? "");
+  const name = String(formData.get("name") ?? "");
+  await renameProgression(id, name);
+}
+
 export type RungInput = {
   label: string;
-  modifier: string | null;
+  // Free-text note, only meaningful when there is no metric — "feels solid".
   targetText: string | null;
+  metric: RungMetric | null;
+  value: number | null;
+  exerciseId: string | null;
 };
 
 export async function updateRung(id: string, input: RungInput): Promise<void> {
   const rung = await requireOwnedRung(id);
+  const measured = input.metric != null && input.value != null;
   await prisma.progressionMilestone.update({
     where: { id },
     data: {
       label: input.label.trim(),
-      modifier: input.modifier?.trim() || null,
-      targetText: input.targetText?.trim() || null,
+      // A measured rung states its target as metric + number; the free-text
+      // note is only the fallback for one you judge yourself.
+      targetText: measured ? null : input.targetText?.trim() || null,
+      gateMetric: measured ? input.metric : null,
+      gateValue: measured ? input.value : null,
+      scopeKind: input.exerciseId ? "EXERCISE" : "CAPACITY",
+      scopeRef: input.exerciseId ?? null,
+      // Superseded by the structured target; cleared as rows are edited.
+      modifier: null,
     },
   });
   revalidateProgressions(rung.ownerId);

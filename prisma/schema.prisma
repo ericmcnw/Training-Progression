@@ -1679,6 +1679,15 @@ enum FocusContributorKind {
   FREQUENCY_GOAL
 }
 
+
+// What a rung counts, so "done when" can be checked against logged sets
+// instead of parsed out of free text. Maps onto SetEntry, which is the only
+// thing the app actually records: reps, seconds, weightLb.
+enum RungMetric {
+  WEIGHT
+  REPS
+  SECONDS
+}
 enum ProgressionStatus {
   ACTIVE
   PAUSED
@@ -1900,6 +1909,11 @@ model ProgressionMilestone {
   // "green band", "+25 lb", "from 12 in box". Its presence is what separates
   // an assist/load rung from a new-variation rung — the kind is derived, not stored.
   modifier   String?
+  // Structured target for this rung: metric + number, optionally scoped to an
+  // exercise via scopeKind EXERCISE. Present = the app can check it; absent =
+  // you decide.
+  gateMetric RungMetric?
+  gateValue  Float?
   status     MilestoneStatus @default(ACTIVE)
   sortOrder  Int             @default(0)
   // Timeline (Phase 2). estDurationDays drives the forward projection; a

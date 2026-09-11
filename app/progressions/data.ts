@@ -7,7 +7,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
-import type { ProgressionStatus, MilestoneStatus } from "@/generated/prisma";
+import type { ProgressionStatus, MilestoneStatus, RungMetric } from "@/generated/prisma";
+
+export type ExerciseOption = { id: string; name: string };
 
 export type RungView = {
   id: string;
@@ -16,6 +18,12 @@ export type RungView = {
   targetText: string | null;
   status: MilestoneStatus;
   sortOrder: number;
+  metric: RungMetric | null;
+  value: number | null;
+  exerciseId: string | null;
+  exerciseName: string | null;
+  // Your best logged result for this rung's exercise, in the rung's metric.
+  best: number | null;
 };
 
 export type ProgressionListItem = {
@@ -33,19 +41,12 @@ export type ProgressionDetail = {
   name: string;
   status: ProgressionStatus;
   notes: string | null;
-  scopeRef: string | null;
   createdYmd: string;
   rungs: RungView[];
   total: number;
   done: number;
   currentId: string | null;
 };
-
-function summarize(rungs: RungView[]) {
-  const done = rungs.filter((r) => r.status === "ACHIEVED").length;
-  const current = rungs.find((r) => r.status === "ACTIVE") ?? null;
-  return { done, current };
-}
 
 export async function getProgressions(): Promise<ProgressionListItem[]> {
   const session = await getAppSession();
@@ -92,18 +93,31 @@ export async function getProgressions(): Promise<ProgressionListItem[]> {
   });
 }
 
+// Best logged result per exercise, in every metric SetEntry records. One
+// aggregate per exercise — a ladder links a handful at most.
+async function bestByExercise(exerciseIds: string[]) {
+  const best = new Map<string, { WEIGHT: number | null; REPS: number | null; SECONDS: number | null }>();
+  await Promise.all(
+    exerciseIds.map(async (id) => {
+      const agg = await prisma.setEntry.aggregate({
+        where: { sessionExercise: { exerciseId: id } },
+        _max: { weightLb: true, reps: true, seconds: true },
+      });
+      best.set(id, {
+        WEIGHT: agg._max.weightLb,
+        REPS: agg._max.reps,
+        SECONDS: agg._max.seconds,
+      });
+    })
+  );
+  return best;
+}
+
 export async function getProgressionDetail(id: string): Promise<ProgressionDetail | null> {
   const session = await getAppSession();
   const row = await prisma.progression.findFirst({
     where: { id, profileKey: session.profileKey },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      notes: true,
-      scopeRef: true,
-      createdAt: true,
-    },
+    select: { id: true, name: true, status: true, notes: true, createdAt: true },
   });
   if (!row) return null;
 
@@ -117,20 +131,65 @@ export async function getProgressionDetail(id: string): Promise<ProgressionDetai
       targetText: true,
       status: true,
       sortOrder: true,
+      gateMetric: true,
+      gateValue: true,
+      scopeKind: true,
+      scopeRef: true,
     },
   });
 
-  const { done, current } = summarize(rungs);
+  const exerciseIds = Array.from(
+    new Set(rungs.filter((r) => r.scopeKind === "EXERCISE" && r.scopeRef).map((r) => r.scopeRef!))
+  );
+  const [names, best] = await Promise.all([
+    exerciseIds.length
+      ? prisma.exercise.findMany({
+          where: { id: { in: exerciseIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    exerciseIds.length ? bestByExercise(exerciseIds) : Promise.resolve(new Map()),
+  ]);
+  const nameById = new Map(names.map((e) => [e.id, e.name]));
+
+  const views: RungView[] = rungs.map((r) => {
+    const exerciseId = r.scopeKind === "EXERCISE" ? r.scopeRef : null;
+    return {
+      id: r.id,
+      label: r.label,
+      modifier: r.modifier,
+      targetText: r.targetText,
+      status: r.status,
+      sortOrder: r.sortOrder,
+      metric: r.gateMetric,
+      value: r.gateValue,
+      exerciseId,
+      exerciseName: exerciseId ? (nameById.get(exerciseId) ?? null) : null,
+      best: exerciseId && r.gateMetric ? (best.get(exerciseId)?.[r.gateMetric] ?? null) : null,
+    };
+  });
+
+  const done = views.filter((r) => r.status === "ACHIEVED").length;
+  const current = views.find((r) => r.status === "ACTIVE") ?? null;
+
   return {
     id: row.id,
     name: row.name,
     status: row.status,
     notes: row.notes,
-    scopeRef: row.scopeRef,
     createdYmd: row.createdAt.toISOString().slice(0, 10),
-    rungs,
-    total: rungs.length,
+    rungs: views,
+    total: views.length,
     done,
     currentId: current?.id ?? null,
   };
+}
+
+// Every exercise, for the "done when" picker. ~300 rows of id+name is small
+// enough to hand the client outright rather than standing up a search endpoint.
+export async function getExerciseOptions(): Promise<ExerciseOption[]> {
+  return prisma.exercise.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 }

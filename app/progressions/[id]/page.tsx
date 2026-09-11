@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProgressionDetail } from "../data";
+import { getProgressionDetail, getExerciseOptions } from "../data";
 import ProgressionLadder from "./ProgressionLadder";
 import ProgressionHeader from "./ProgressionHeader";
 import { page, topBar, backLink, subtitle, countTag, RungDots } from "../ui";
@@ -16,7 +16,10 @@ export default async function ProgressionDetailPage({
 }) {
   const { id } = await params;
   const { rename } = await searchParams;
-  const detail = await getProgressionDetail(id);
+  const [detail, exercises] = await Promise.all([
+    getProgressionDetail(id),
+    getExerciseOptions(),
+  ]);
   if (!detail) notFound();
 
   return (
@@ -40,6 +43,7 @@ export default async function ProgressionDetailPage({
         progressionId={detail.id}
         rungs={detail.rungs}
         currentId={detail.currentId}
+        exercises={exercises}
       />
     </main>
   );

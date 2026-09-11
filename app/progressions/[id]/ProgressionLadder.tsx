@@ -1,18 +1,19 @@
 "use client";
 
-// The ladder — one surface for reading, ticking, and editing. Tapping a rung's
-// text turns that row into labelled inputs and every other row stays plain
-// text, so the order of the ladder — which is the whole content of a
-// progression — never disappears behind an accordion.
+// The ladder — one surface for reading, ticking, and editing.
 //
-// The node ticks, the text edits. Two targets, never overlapping.
+// A step asks two questions and no more: what are you doing, and what tells
+// you to move on. The second is a picker rather than a text box, because free
+// text can describe a target but nothing can count it — "3x5" is a string. A
+// metric plus a number plus an exercise is something the app can check against
+// logged sets.
 //
 // Two rules keep edits safe:
 //  - Anything that leaves a row commits it first, so switching rows or adding
 //    a step can never silently discard what was typed.
 //  - Every change applies to local state immediately and the server call runs
-//    behind it. Nothing here re-reads from the server mid-edit, because that
-//    is what dismisses the keyboard and drops focus between rows.
+//    behind it. Nothing re-reads from the server mid-edit, because that is
+//    what dismisses the keyboard and drops focus between rows.
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -20,30 +21,59 @@ import { Field, inputStyle } from "@/app/routines/[id]/log/form-ui";
 import {
   markRungMet, reopenRung, updateRung, addRung, deleteRung, reorderRungs,
 } from "@/app/progressions/actions";
-import type { RungView } from "@/app/progressions/data";
+import type { RungView, ExerciseOption } from "@/app/progressions/data";
+import type { RungMetric } from "@/generated/prisma";
 import {
   ACCENT, rungRow, railCol, node, nodeCheck, rail, rungTextCol,
-  rungLabel, rungMeta, modifierChip, nowPill, rungError,
+  rungLabel, rungMeta, nowPill, rungError, readyPill,
   editGrid, editBar, editBarLeft, iconBtn, doneBtn, addStepBtn, untitledLabel,
+  measureRow, unitTag, bestLine,
 } from "@/app/progressions/ui";
 
-type Draft = { label: string; modifier: string; targetText: string };
+const METRICS = [
+  { key: "", label: "I decide when", unit: "" },
+  { key: "WEIGHT", label: "Weight reaches", unit: "lb" },
+  { key: "REPS", label: "Reps reach", unit: "reps" },
+  { key: "SECONDS", label: "Hold reaches", unit: "sec" },
+] as const;
+
+function unitFor(metric: RungMetric | null) {
+  return METRICS.find((m) => m.key === (metric ?? ""))?.unit ?? "";
+}
+
+type Draft = {
+  label: string;
+  note: string;
+  metric: "" | RungMetric;
+  value: string;
+  exerciseName: string;
+};
 
 const inlineInput = { ...inputStyle, padding: "9px 11px" };
 
 function draftFrom(rung: RungView): Draft {
   return {
     label: rung.label,
-    modifier: rung.modifier ?? "",
-    targetText: rung.targetText ?? "",
+    note: rung.targetText ?? "",
+    metric: rung.metric ?? "",
+    value: rung.value != null ? String(rung.value) : "",
+    exerciseName: rung.exerciseName ?? "",
   };
 }
 
-function normalize(draft: Draft) {
+function resolve(draft: Draft, options: ExerciseOption[]) {
+  const metric = draft.metric || null;
+  const raw = draft.value.trim();
+  const parsed = raw === "" ? null : Number(raw);
+  const value = metric && parsed != null && Number.isFinite(parsed) ? parsed : null;
+  const wanted = draft.exerciseName.trim().toLowerCase();
+  const exercise = wanted ? options.find((o) => o.name.toLowerCase() === wanted) : undefined;
   return {
     label: draft.label.trim(),
-    modifier: draft.modifier.trim() || null,
-    targetText: draft.targetText.trim() || null,
+    targetText: value == null ? draft.note.trim() || null : null,
+    metric: value == null ? null : metric,
+    value,
+    exerciseId: exercise?.id ?? null,
   };
 }
 
@@ -51,10 +81,12 @@ export default function ProgressionLadder({
   progressionId,
   rungs,
   currentId,
+  exercises,
 }: {
   progressionId: string;
   rungs: RungView[];
   currentId: string | null;
+  exercises: ExerciseOption[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState(rungs);
@@ -63,8 +95,8 @@ export default function ProgressionLadder({
   const [busy, startTransition] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
 
-  // Async handlers fire after the state they care about has already changed,
-  // so the live draft is read through a ref rather than a stale closure.
+  // Async handlers fire after the state they care about has changed, so the
+  // live draft is read through a ref rather than a stale closure.
   const draftRef = useRef<Draft | null>(null);
   const editingRef = useRef<string | null>(null);
   const rowsRef = useRef(rows);
@@ -82,22 +114,30 @@ export default function ProgressionLadder({
   }, [router]);
 
   // Persist whatever row is open, if it actually changed. Everything that
-  // moves away from a row calls this first — that is the whole fix for edits
-  // vanishing when you added a step or tapped a different one.
+  // moves away from a row calls this first.
   const flush = useCallback(() => {
     const id = editingRef.current;
-    const current = draftRef.current;
-    if (!id || !current) return;
+    const live = draftRef.current;
+    if (!id || !live) return;
     const row = rowsRef.current.find((r) => r.id === id);
     if (!row) return;
-    const next = normalize(current);
+    const next = resolve(live, exercises);
     const unchanged =
       next.label === row.label.trim() &&
-      next.modifier === (row.modifier ?? null) &&
-      next.targetText === (row.targetText ?? null);
+      next.targetText === (row.targetText ?? null) &&
+      next.metric === (row.metric ?? null) &&
+      next.value === (row.value ?? null) &&
+      next.exerciseId === (row.exerciseId ?? null);
     if (unchanged) return;
 
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
+    const name = next.exerciseId
+      ? (exercises.find((o) => o.id === next.exerciseId)?.name ?? null)
+      : null;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, ...next, modifier: null, exerciseName: name } : r
+      )
+    );
     startTransition(async () => {
       try {
         await updateRung(id, next);
@@ -105,7 +145,7 @@ export default function ProgressionLadder({
         fail();
       }
     });
-  }, [fail]);
+  }, [exercises, fail]);
 
   function openRow(rung: RungView) {
     flush();
@@ -135,8 +175,7 @@ export default function ProgressionLadder({
   }
 
   // Insert locally and open the new row straight away, then let the server
-  // catch up. Waiting on the round trip is what dropped the keyboard between
-  // steps when typing a ladder with Enter.
+  // catch up — waiting on the round trip is what dropped the keyboard.
   function addAfter(afterId: string | null) {
     flush();
     setFailed(null);
@@ -150,6 +189,11 @@ export default function ProgressionLadder({
           targetText: null,
           status: "ACTIVE",
           sortOrder: 0,
+          metric: null,
+          value: null,
+          exerciseId: null,
+          exerciseName: null,
+          best: null,
         };
         setRows((prev) => {
           const at = afterId ? prev.findIndex((r) => r.id === afterId) + 1 : prev.length;
@@ -158,7 +202,7 @@ export default function ProgressionLadder({
           return next;
         });
         setEditingId(created.id);
-        setDraft({ label: "", modifier: "", targetText: "" });
+        setDraft({ label: "", note: "", metric: "", value: "", exerciseName: "" });
       } catch {
         fail();
       }
@@ -197,11 +241,16 @@ export default function ProgressionLadder({
     });
   }
 
-  // Derived locally so a tick moves the "now" marker without a server round trip.
   const liveCurrentId = rows.find((r) => r.status === "ACTIVE")?.id ?? currentId;
 
   return (
     <div style={{ display: "grid", gap: 2 }}>
+      <datalist id="progression-exercises">
+        {exercises.map((e) => (
+          <option key={e.id} value={e.name} />
+        ))}
+      </datalist>
+
       {rows.map((rung, index) => (
         <Row
           key={rung.id}
@@ -237,6 +286,15 @@ export default function ProgressionLadder({
   );
 }
 
+// "25 lb in Weighted Pull-Up", or the free-text note, or nothing.
+function summaryOf(rung: RungView) {
+  if (rung.metric && rung.value != null) {
+    const unit = unitFor(rung.metric);
+    return [`${rung.value} ${unit}`.trim(), rung.exerciseName].filter(Boolean).join(" · ");
+  }
+  return rung.targetText || rung.modifier || "";
+}
+
 function Row({
   rung, index, total, isCurrent, isLast, isEditing, draft, busy,
   onOpen, onDraftChange, onClose, onEnter, onDelete, onMove, onToggle,
@@ -260,12 +318,15 @@ function Row({
   const labelRef = useRef<HTMLInputElement | null>(null);
   const done = rung.status === "ACHIEVED";
   const skipped = rung.status === "SKIPPED";
+  const ready =
+    !done && rung.value != null && rung.best != null && rung.best >= rung.value;
 
   useEffect(() => {
     if (isEditing) labelRef.current?.focus();
   }, [isEditing]);
 
   const ringColor = done || isCurrent ? ACCENT : "rgba(255,255,255,0.26)";
+  const summary = summaryOf(rung);
 
   return (
     <div style={rungRow(isCurrent)}>
@@ -294,12 +355,12 @@ function Row({
 
       {isEditing && draft ? (
         <div style={editGrid}>
-          <Field label="Step" hint="The movement, or the thing you can do.">
+          <Field label="Step" hint="The movement, including how you are doing it.">
             <input
               ref={labelRef}
               style={inlineInput}
               value={draft.label}
-              placeholder="Pull-up"
+              placeholder="Pull-up with a light band"
               aria-label="Step"
               onChange={(e) => onDraftChange({ ...draft, label: e.target.value })}
               onKeyDown={(e) => {
@@ -314,25 +375,64 @@ function Row({
             />
           </Field>
 
-          <Field label="Easier or harder" hint="Optional. Help you are using, or weight you are adding.">
-            <input
+          <Field
+            label="Move on when"
+            hint={
+              draft.metric
+                ? "Pick the exercise and the app can tick this for you."
+                : "Pick a number and the app can watch for it. Leave it on I decide to judge it yourself."
+            }
+          >
+            <select
               style={inlineInput}
-              value={draft.modifier}
-              placeholder="with light band · plus +25 lb"
-              aria-label="Easier or harder"
-              onChange={(e) => onDraftChange({ ...draft, modifier: e.target.value })}
-            />
+              value={draft.metric}
+              aria-label="How this step is measured"
+              onChange={(e) =>
+                onDraftChange({ ...draft, metric: e.target.value as Draft["metric"] })
+              }
+            >
+              {METRICS.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}</option>
+              ))}
+            </select>
           </Field>
 
-          <Field label="Move on when" hint="Optional. Your call — a number if you have one, a feeling if you do not.">
+          {draft.metric ? (
+            <>
+              <div style={measureRow}>
+                <input
+                  style={{ ...inlineInput, width: 110 }}
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  value={draft.value}
+                  placeholder="25"
+                  aria-label="Target number"
+                  onChange={(e) => onDraftChange({ ...draft, value: e.target.value })}
+                />
+                <span style={unitTag}>{unitFor(draft.metric || null)}</span>
+              </div>
+              <Field label="In which exercise" hint="Optional, but required for it to tick itself.">
+                <input
+                  style={inlineInput}
+                  list="progression-exercises"
+                  value={draft.exerciseName}
+                  placeholder="Start typing — Weighted Pull-Up"
+                  aria-label="Exercise"
+                  onChange={(e) => onDraftChange({ ...draft, exerciseName: e.target.value })}
+                />
+              </Field>
+            </>
+          ) : (
             <input
               style={inlineInput}
-              value={draft.targetText}
-              placeholder="3x5 · 10s hold · feels solid"
-              aria-label="Move on when"
-              onChange={(e) => onDraftChange({ ...draft, targetText: e.target.value })}
+              value={draft.note}
+              placeholder="feels solid · no pain after"
+              aria-label="Move on when, in your words"
+              onChange={(e) => onDraftChange({ ...draft, note: e.target.value })}
             />
-          </Field>
+          )}
 
           <div style={editBar}>
             <div style={editBarLeft}>
@@ -347,10 +447,15 @@ function Row({
         <button type="button" className="progRungText" style={rungTextCol} onClick={onOpen}>
           <span style={rungLabel(done, skipped, isCurrent)}>
             {rung.label.trim() ? rung.label : <span style={untitledLabel}>Tap to name this step</span>}
-            {rung.modifier ? <span style={modifierChip}>{rung.modifier}</span> : null}
             {isCurrent ? <span style={nowPill}>now</span> : null}
+            {ready ? <span style={readyPill}>ready</span> : null}
           </span>
-          {rung.targetText ? <span style={rungMeta}>{rung.targetText}</span> : null}
+          {summary ? <span style={rungMeta}>{summary}</span> : null}
+          {rung.best != null && rung.value != null && !done ? (
+            <span style={bestLine}>
+              best so far {rung.best} {unitFor(rung.metric)}
+            </span>
+          ) : null}
         </button>
       )}
     </div>

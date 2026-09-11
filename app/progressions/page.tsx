@@ -4,10 +4,11 @@
 
 import Link from "next/link";
 import { getProgressions } from "./data";
+import DeleteProgressionButton from "./DeleteProgressionButton";
 import {
   page, topBar, backLink, ctaLink, title, subtitle,
   card, cardGrid, cardTitle, nowLine, nowTag, countTag,
-  emptyCard, RungDots, rungText,
+  emptyCard, cardFoot, textAction, RungDots, rungText,
 } from "./ui";
 
 export const dynamic = "force-dynamic";
@@ -44,27 +45,34 @@ export default async function ProgressionsPage() {
       ) : (
         <div style={cardGrid}>
           {progressions.map((p) => (
-            <Link key={p.id} href={`/progressions/${p.id}`} style={card}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
-                <span style={cardTitle}>{p.name}</span>
-                <RungDots total={p.total} done={p.done} />
+            <div key={p.id} style={card}>
+              <Link href={`/progressions/${p.id}`} style={{ display: "grid", gap: 8, textDecoration: "none", color: "inherit" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
+                  <span style={cardTitle}>{p.name}</span>
+                  <RungDots total={p.total} done={p.done} />
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: "space-between" }}>
+                  <span style={nowLine}>
+                    {p.current ? (
+                      <>
+                        <span style={nowTag}>now</span>
+                        {rungText(p.current.label, p.current.modifier, p.current.targetText)}
+                      </>
+                    ) : p.total === 0 ? (
+                      "No steps yet"
+                    ) : (
+                      "Every step done"
+                    )}
+                  </span>
+                  <span style={countTag}>{p.done} of {p.total}</span>
+                </div>
+              </Link>
+
+              <div style={cardFoot}>
+                <Link href={`/progressions/${p.id}`} style={textAction}>Edit steps</Link>
+                <DeleteProgressionButton id={p.id} name={p.name} />
               </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: "space-between" }}>
-                <span style={nowLine}>
-                  {p.current ? (
-                    <>
-                      <span style={nowTag}>now</span>
-                      {rungText(p.current.label, p.current.modifier, p.current.targetText)}
-                    </>
-                  ) : p.total === 0 ? (
-                    "No steps yet"
-                  ) : (
-                    "Every step done"
-                  )}
-                </span>
-                <span style={countTag}>{p.done} of {p.total}</span>
-              </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

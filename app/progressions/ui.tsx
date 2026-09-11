@@ -420,18 +420,14 @@ export const blankRow: CSSProperties = {
 
 export const headerActions: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
 
-export const textAction: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  padding: "8px 14px",
-  color: "rgba(255,255,255,0.7)",
-};
-
 export const dangerAction: CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
   padding: "8px 14px",
+  minHeight: 40,
+  borderRadius: 10,
   color: "#ff9b9b",
+  background: "rgba(255,120,120,0.07)",
   borderColor: "rgba(255,120,120,0.3)",
 };
 
@@ -453,4 +449,76 @@ export const noMatch: CSSProperties = {
   color: "rgba(255,255,255,0.55)",
   margin: 0,
   padding: "18px 4px",
+};
+
+// The name is a field, not a heading with an edit button behind it. Borderless
+// until focused so it still reads as a title.
+export const titleInput: CSSProperties = {
+  fontSize: 22,
+  fontWeight: 900,
+  lineHeight: 1.2,
+  color: "rgba(255,255,255,0.95)",
+  background: "transparent",
+  border: "1px solid transparent",
+  borderRadius: 10,
+  padding: "6px 8px",
+  margin: "0 -8px",
+  width: "calc(100% + 16px)",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+// Shared by a Link and a button side by side, so both have to be styled
+// explicitly — the global button rule would otherwise only hit one of them.
+export const textAction: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 800,
+  padding: "8px 14px",
+  minHeight: 40,
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(255,255,255,0.72)",
+  textDecoration: "none",
+};
+
+export const cardFoot: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  paddingTop: 10,
+  marginTop: 2,
+};
+
+export const readyPill: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.7,
+  textTransform: "uppercase",
+  padding: "2px 7px",
+  borderRadius: 8,
+  border: "1px solid rgba(120,200,255,0.55)",
+  color: "#8ecbff",
+  whiteSpace: "nowrap",
+};
+
+export const measureRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+export const unitTag: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 800,
+  color: "rgba(255,255,255,0.55)",
+};
+
+export const bestLine: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 700,
+  color: "rgba(255,255,255,0.38)",
 };
