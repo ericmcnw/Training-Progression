@@ -23,6 +23,7 @@ import {
 } from "@/app/progressions/actions";
 import type { RungView, ExerciseOption } from "@/app/progressions/data";
 import type { RungMetric } from "@/generated/prisma";
+import ExercisePicker from "./ExercisePicker";
 import {
   ACCENT, rungRow, railCol, node, nodeCheck, rail, rungTextCol,
   rungLabel, rungMeta, nowPill, rungError, readyPill,
@@ -46,7 +47,7 @@ type Draft = {
   note: string;
   metric: "" | RungMetric;
   value: string;
-  exerciseName: string;
+  exerciseId: string | null;
 };
 
 const inlineInput = { ...inputStyle, padding: "9px 11px" };
@@ -57,23 +58,21 @@ function draftFrom(rung: RungView): Draft {
     note: rung.targetText ?? "",
     metric: rung.metric ?? "",
     value: rung.value != null ? String(rung.value) : "",
-    exerciseName: rung.exerciseName ?? "",
+    exerciseId: rung.exerciseId,
   };
 }
 
-function resolve(draft: Draft, options: ExerciseOption[]) {
+function resolve(draft: Draft) {
   const metric = draft.metric || null;
   const raw = draft.value.trim();
   const parsed = raw === "" ? null : Number(raw);
   const value = metric && parsed != null && Number.isFinite(parsed) ? parsed : null;
-  const wanted = draft.exerciseName.trim().toLowerCase();
-  const exercise = wanted ? options.find((o) => o.name.toLowerCase() === wanted) : undefined;
   return {
     label: draft.label.trim(),
     targetText: value == null ? draft.note.trim() || null : null,
     metric: value == null ? null : metric,
     value,
-    exerciseId: exercise?.id ?? null,
+    exerciseId: draft.exerciseId,
   };
 }
 
@@ -121,7 +120,7 @@ export default function ProgressionLadder({
     if (!id || !live) return;
     const row = rowsRef.current.find((r) => r.id === id);
     if (!row) return;
-    const next = resolve(live, exercises);
+    const next = resolve(live);
     const unchanged =
       next.label === row.label.trim() &&
       next.targetText === (row.targetText ?? null) &&
@@ -202,7 +201,7 @@ export default function ProgressionLadder({
           return next;
         });
         setEditingId(created.id);
-        setDraft({ label: "", note: "", metric: "", value: "", exerciseName: "" });
+        setDraft({ label: "", note: "", metric: "", value: "", exerciseId: null });
       } catch {
         fail();
       }
@@ -245,12 +244,6 @@ export default function ProgressionLadder({
 
   return (
     <div style={{ display: "grid", gap: 2 }}>
-      <datalist id="progression-exercises">
-        {exercises.map((e) => (
-          <option key={e.id} value={e.name} />
-        ))}
-      </datalist>
-
       {rows.map((rung, index) => (
         <Row
           key={rung.id}
@@ -261,6 +254,7 @@ export default function ProgressionLadder({
           isLast={index === rows.length - 1}
           isEditing={rung.id === editingId}
           draft={rung.id === editingId ? draft : null}
+          exercises={exercises}
           busy={busy}
           onOpen={() => openRow(rung)}
           onDraftChange={setDraft}
@@ -296,7 +290,7 @@ function summaryOf(rung: RungView) {
 }
 
 function Row({
-  rung, index, total, isCurrent, isLast, isEditing, draft, busy,
+  rung, index, total, isCurrent, isLast, isEditing, draft, busy, exercises,
   onOpen, onDraftChange, onClose, onEnter, onDelete, onMove, onToggle,
 }: {
   rung: RungView;
@@ -306,6 +300,7 @@ function Row({
   isLast: boolean;
   isEditing: boolean;
   draft: Draft | null;
+  exercises: ExerciseOption[];
   busy: boolean;
   onOpen: () => void;
   onDraftChange: (draft: Draft) => void;
@@ -414,13 +409,10 @@ function Row({
                 <span style={unitTag}>{unitFor(draft.metric || null)}</span>
               </div>
               <Field label="In which exercise" hint="Optional, but required for it to tick itself.">
-                <input
-                  style={inlineInput}
-                  list="progression-exercises"
-                  value={draft.exerciseName}
-                  placeholder="Start typing — Weighted Pull-Up"
-                  aria-label="Exercise"
-                  onChange={(e) => onDraftChange({ ...draft, exerciseName: e.target.value })}
+                <ExercisePicker
+                  options={exercises}
+                  value={draft.exerciseId}
+                  onChange={(id) => onDraftChange({ ...draft, exerciseId: id })}
                 />
               </Field>
             </>

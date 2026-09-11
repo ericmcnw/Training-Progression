@@ -522,3 +522,71 @@ export const bestLine: CSSProperties = {
   fontWeight: 700,
   color: "rgba(255,255,255,0.38)",
 };
+
+// ── Exercise picker ───────────────────────────────────────────────────────
+
+export const pickerWrap: CSSProperties = { display: "grid", gap: 6, minWidth: 0 };
+
+export const pickerResults: CSSProperties = {
+  display: "grid",
+  gap: 2,
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 10,
+  background: "rgba(12,14,16,0.9)",
+  padding: 4,
+  maxHeight: 240,
+  overflowY: "auto",
+};
+
+export const pickerRow: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  textAlign: "left",
+  padding: "10px 10px",
+  minHeight: 44,
+  borderRadius: 8,
+  border: "1px solid transparent",
+  background: "transparent",
+  color: "rgba(255,255,255,0.82)",
+  width: "100%",
+};
+
+export const pickerChip: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  justifyContent: "space-between",
+  padding: "9px 8px 9px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(51,255,122,0.35)",
+  background: "rgba(51,255,122,0.08)",
+  minWidth: 0,
+};
+
+export const pickerChipName: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 800,
+  color: ACCENT_SOFT,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+export const pickerClear: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 900,
+  minWidth: 40,
+  minHeight: 40,
+  padding: 0,
+  background: "transparent",
+  border: "none",
+  color: "rgba(255,255,255,0.55)",
+};
+
+export const pickerHint: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 700,
+  lineHeight: 1.45,
+  color: "rgba(255,255,255,0.45)",
+};
