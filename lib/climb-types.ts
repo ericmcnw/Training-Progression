@@ -44,6 +44,13 @@ export type ClimbProblemBasic = {
    *  REDPOINT > PROJECT). Drives the outcome-colored chip badge in the
    *  live logger. Null when never attempted. */
   bestOutcome?: ClimbOutcome | null;
+  /** Prior tries, summing each attempt's triesCount and falling back to 1
+   *  where it was never recorded — a six-go project session stores one
+   *  attempt row, so priorAttemptCount alone understates the work. */
+  priorTries?: number;
+  /** Distinct sessions this problem was attempted in. */
+  priorSessionCount?: number;
+  lastAttemptAt?: string | null;
   /** Area of the most recent attempt that recorded one. Lets the logger
    *  filter known-problem chips by the active area and tag chips with
    *  their area when no area filter is set. */
@@ -183,6 +190,13 @@ export function effectiveOutcome(
   if (!isRepeat) return outcome;
   if (outcome !== "FLASH" && outcome !== "ONSIGHT") return outcome;
   return discipline === "SPORT_LEAD" ? "REDPOINT" : "SEND";
+}
+
+/** FLASH and ONSIGHT assert a first-ever attempt, climbed clean. Any prior
+ *  attempt — an earlier session or earlier in this one — makes them false by
+ *  definition. A same-day flash after working it is a SEND with tries = 1. */
+export function outcomeRequiresNoPriorAttempts(outcome: ClimbOutcome): boolean {
+  return outcome === "FLASH" || outcome === "ONSIGHT";
 }
 
 export function outcomeUsesTriesCount(outcome: ClimbOutcome): boolean {

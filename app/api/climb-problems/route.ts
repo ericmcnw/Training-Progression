@@ -39,7 +39,10 @@ export async function GET(req: Request) {
           outcome: true,
           areaId: true,
           area: true,
+          triesCount: true,
+          sessionLogId: true,
           climbArea: { select: { name: true } },
+          sessionLog: { select: { performedAt: true } },
         },
       },
     },
@@ -55,6 +58,15 @@ export async function GET(req: Request) {
         ...rest,
         priorSendCount: outcomes.filter((o) => SENT_OUTCOMES.has(o)).length,
         priorAttemptCount: attempts.length,
+        priorTries: attempts.reduce((sum, at) => sum + (at.triesCount ?? 1), 0),
+        priorSessionCount: new Set(attempts.map((at) => at.sessionLogId)).size,
+        // Max by performedAt, not attempts[0] — rows are ordered by createdAt,
+        // and a backfilled session is created after one it happened before.
+        lastAttemptAt:
+          attempts.reduce<Date | null>(
+            (max, at) => (!max || at.sessionLog.performedAt > max ? at.sessionLog.performedAt : max),
+            null
+          )?.toISOString() ?? null,
         bestOutcome: bestOutcomeOf(outcomes),
         areaId: latestWithArea?.areaId ?? null,
         areaName: latestWithArea?.climbArea?.name ?? latestWithArea?.area?.trim() ?? null,

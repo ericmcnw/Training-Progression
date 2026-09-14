@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import {
   climbOutcomeLabel,
   climbOutcomesForDiscipline,
+  outcomeRequiresNoPriorAttempts,
   climbOutcomeColor,
   climbOutcomeBg,
   climbingDisciplineForTemplateKey,
@@ -20,6 +21,7 @@ import {
   type ClimbingDiscipline,
   type QuickClimbRow,
 } from "@/lib/climb-types";
+import { formatAppDate } from "@/lib/dates";
 import { climbingGradeOptionsForDiscipline } from "@/lib/session-templates";
 import MediaUploader from "@/app/components/climbing/MediaUploader";
 
@@ -647,6 +649,10 @@ export default function ClimbSessionLogger({
     return 0;
   })();
 
+  // A flash claim has to survive both halves of the history: what's already
+  // saved on this problem, and what's been logged earlier in this session.
+  const priorAttemptsHere = (activeProblem?.priorAttemptCount ?? 0) + activeAttemptCount;
+
   // ── Per-climb: add climb ────────────────────────────────────────────────────
   // Tapping an outcome COMMITS the climb (adds the row) AND auto-closes the
   // active climb panel. Discipline + area persist (likely to log another in
@@ -1083,6 +1089,8 @@ export default function ClimbSessionLogger({
                 }}
               />
 
+              {activeProblem ? <ProblemStanding problem={activeProblem} /> : null}
+
               {activeProblem?.notes && (
                 <div style={{ fontSize: 11, opacity: 0.7, padding: "6px 8px", borderRadius: 6, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)" }}>
                   Beta: {activeProblem.notes}
@@ -1093,12 +1101,20 @@ export default function ClimbSessionLogger({
                 {outcomes.map((outcome) => {
                   const color = climbOutcomeColor(outcome);
                   const bg = climbOutcomeBg(outcome);
+                  const blocked =
+                    priorAttemptsHere > 0 && outcomeRequiresNoPriorAttempts(outcome);
                   return (
                     <button
                       key={outcome}
                       type="button"
+                      disabled={blocked}
                       onClick={() => addAttempt(outcome)}
-                      style={outcomeBtnStyle(color, bg)}
+                      title={
+                        blocked
+                          ? `Already tried ${priorAttemptsHere}× — a clean go now is a send with tries = 1`
+                          : undefined
+                      }
+                      style={blocked ? outcomeBtnBlockedStyle : outcomeBtnStyle(color, bg)}
                     >
                       <span style={{ fontSize: 18 }}>{outcomeEmoji(outcome)}</span>
                       <span style={{ fontSize: 12, fontWeight: 800 }}>
@@ -1354,6 +1370,82 @@ const outcomeRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: 8,
+};
+
+// Where you stand on a saved problem, shown the moment you pick it — the
+// question at selection time is "have I been on this, and did it go", and
+// the answer used to be buried behind expanding the logged row.
+function ProblemStanding({ problem }: { problem: ClimbProblemBasic }) {
+  const tries = problem.priorTries ?? problem.priorAttemptCount ?? 0;
+  if (tries === 0) {
+    return <div style={standingFreshStyle}>First time on this one.</div>;
+  }
+  const sends = problem.priorSendCount ?? 0;
+  const sessions = problem.priorSessionCount ?? 0;
+  const outcome: ClimbOutcome = problem.bestOutcome ?? "PROJECT";
+  const parts = [
+    `${tries} ${tries === 1 ? "try" : "tries"}`,
+    sessions > 0 ? `${sessions} session${sessions === 1 ? "" : "s"}` : null,
+    problem.lastAttemptAt
+      ? `last ${formatAppDate(new Date(problem.lastAttemptAt), { month: "short", day: "numeric" })}`
+      : null,
+  ].filter(Boolean);
+  return (
+    <div style={standingStyle}>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 900,
+          letterSpacing: 0.4,
+          padding: "3px 7px",
+          borderRadius: 6,
+          flexShrink: 0,
+          background: climbOutcomeBg(outcome),
+          color: climbOutcomeColor(outcome),
+        }}
+      >
+        {sends > 0 ? "SENT" : "PROJECT"}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.75, minWidth: 0 }}>
+        {parts.join(" · ")}
+      </span>
+    </div>
+  );
+}
+
+const standingStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 8px",
+  borderRadius: 6,
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.08)",
+};
+
+const standingFreshStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.5,
+  padding: "6px 8px",
+};
+
+const outcomeBtnBlockedStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 4,
+  padding: "14px 6px",
+  borderRadius: 12,
+  border: "1px dashed rgba(255,255,255,0.14)",
+  background: "transparent",
+  color: "inherit",
+  cursor: "not-allowed",
+  opacity: 0.3,
+  fontSize: 12,
+  minWidth: 0,
+  overflow: "hidden",
+  textAlign: "center",
 };
 
 function outcomeBtnStyle(color: string, bg: string): React.CSSProperties {
