@@ -19,7 +19,9 @@ export default async function RoutineLogPage(props: {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const { id, logId, segments = [] } = params;
 
-  if (segments.length === 0) {
+  // Both the bare URL and an explicit /details render the detail page —
+  // link sites across the app and two revalidatePath calls target /details.
+  if (segments.length === 0 || (segments.length === 1 && segments[0] === "details")) {
     return <RoutineLogDetailPage params={{ id, logId }} searchParams={searchParams} />;
   }
 
