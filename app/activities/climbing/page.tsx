@@ -70,6 +70,7 @@ import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getActivityGoals, frequencyChipFor } from "@/lib/activity-goals";
 import TrainingTagsPanel from "./TrainingTagsPanel";
 import GradePyramid, { type PyramidColumnRow } from "./GradePyramid";
+import TickList from "./TickList";
 import { startOfWeekMonday } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -556,11 +557,14 @@ export default async function ClimbingHubPage(props: {
   // Named targets you starred. Whether one is *done* is derived from its
   // attempts (any clean send) rather than stored, so ticking one off happens
   // by logging the send — there's no second flag to forget.
-  const tickRollup = new Map<string, { attemptCount: number; lastAttempt: Date | null; sent: boolean }>();
+  // A six-go project session and a one-go flash both store a single attempt
+  // row, so rows are sessions, not tries — count both separately.
+  const tickRollup = new Map<string, { sessions: Set<string>; tries: number; lastAttempt: Date | null; sent: boolean }>();
   for (const a of attempts) {
     if (!a.problemId) continue;
-    const row = tickRollup.get(a.problemId) ?? { attemptCount: 0, lastAttempt: null, sent: false };
-    row.attemptCount += 1;
+    const row = tickRollup.get(a.problemId) ?? { sessions: new Set<string>(), tries: 0, lastAttempt: null, sent: false };
+    row.sessions.add(a.sessionLogId);
+    row.tries += a.triesCount ?? 1;
     const when = a.sessionLog.performedAt;
     if (!row.lastAttempt || when > row.lastAttempt) row.lastAttempt = when;
     if (SENT_OUTCOMES.has(a.outcome)) row.sent = true;
@@ -568,10 +572,16 @@ export default async function ClimbingHubPage(props: {
   }
   const tickListRows = problems
     .filter((p) => p.onTickList)
-    .map((p) => ({
-      ...p,
-      ...(tickRollup.get(p.id) ?? { attemptCount: 0, lastAttempt: null, sent: false }),
-    }))
+    .map((p) => {
+      const roll = tickRollup.get(p.id);
+      return {
+        ...p,
+        sessionCount: roll?.sessions.size ?? 0,
+        tries: roll?.tries ?? 0,
+        lastAttempt: roll?.lastAttempt ?? null,
+        sent: roll?.sent ?? false,
+      };
+    })
     .sort((a, b) => {
       if (a.sent !== b.sent) return a.sent ? 1 : -1;
       return gradeSort(b.grade, b.gradeSystem) - gradeSort(a.grade, a.gradeSystem);
@@ -801,50 +811,7 @@ export default async function ClimbingHubPage(props: {
           title="Tick List"
           subtitle={`${tickListDone} of ${tickListRows.length} ticked. Star a problem on its location page to add it.`}
         >
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={tickTrackStyle} aria-hidden>
-              <div
-                style={{
-                  ...tickFillStyle,
-                  width: `${Math.round((tickListDone / tickListRows.length) * 100)}%`,
-                }}
-              />
-            </div>
-            {tickListRows.map((p) => (
-              <Link
-                key={p.id}
-                href={p.locationId ? `/activities/climbing/locations/${p.locationId}` : "/activities/climbing/climbs"}
-                style={p.sent ? tickRowSentStyle : tickRowStyle}
-              >
-                <span style={{ fontSize: 15, lineHeight: 1, color: p.sent ? "#4ade80" : "#fbbf24" }}>
-                  {p.sent ? "✓" : "★"}
-                </span>
-                <div style={{ display: "grid", gap: 3, minWidth: 0, flex: 1 }}>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 900,
-                      lineHeight: 1.2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      opacity: p.sent ? 0.7 : 1,
-                    }}
-                  >
-                    <span style={{ color: ACCENT_TEXT, marginRight: 6 }}>{p.grade}</span>
-                    {p.name}
-                  </span>
-                  <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 700 }}>
-                    {p.location?.name ?? "No location"}
-                    {p.attemptCount > 0
-                      ? ` · ${p.attemptCount} attempt${p.attemptCount === 1 ? "" : "s"}`
-                      : " · not yet attempted"}
-                    {p.lastAttempt ? ` · last ${relativeFromNow(p.lastAttempt)}` : ""}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <TickList rows={tickListRows} done={tickListDone} />
         </SectionCard>
       ) : null}
 
@@ -1177,38 +1144,6 @@ const disciplinePillRowStyle: React.CSSProperties = {
   gap: 6,
   flexWrap: "wrap",
   marginBottom: 12,
-};
-
-const tickRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "11px 13px",
-  borderRadius: 12,
-  border: "1px solid rgba(251,191,36,0.3)",
-  background: "rgba(251,191,36,0.07)",
-  textDecoration: "none",
-  color: "inherit",
-  minHeight: 44,
-};
-
-const tickRowSentStyle: React.CSSProperties = {
-  ...tickRowStyle,
-  border: "1px solid rgba(74,222,128,0.28)",
-  background: "rgba(74,222,128,0.06)",
-};
-
-const tickTrackStyle: React.CSSProperties = {
-  height: 6,
-  borderRadius: 999,
-  background: "rgba(255,255,255,0.08)",
-  overflow: "hidden",
-};
-
-const tickFillStyle: React.CSSProperties = {
-  height: "100%",
-  borderRadius: 999,
-  background: "#4ade80",
 };
 
 const projectRowStyle: React.CSSProperties = {

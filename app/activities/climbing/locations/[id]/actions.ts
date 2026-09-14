@@ -6,7 +6,9 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import type { ClimbLocationType } from "@/lib/climb-types";
+import { SENT_OUTCOMES, type ClimbGradeSystem, type ClimbLocationType, type ClimbOutcome } from "@/lib/climb-types";
+import type { ClimbingDiscipline } from "@/generated/prisma";
+import type { GalleryMediaItem } from "@/app/components/climbing/MediaGallery";
 import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 
 function revalidateLocation(locationId: string) {
@@ -233,4 +235,106 @@ function mergeNotes(target: string | null, source: string | null, sourceLocation
   if (!s) return t;
   if (t === s) return t;
   return `${t}\n\n— merged from ${sourceLocationName} —\n${s}`;
+}
+
+// ── Problem detail (tick-list bubble + library expansion) ──────────────────
+
+export type ProblemSessionRow = {
+  attemptId: string;
+  sessionLogId: string;
+  routineId: string;
+  performedAt: Date;
+  outcome: ClimbOutcome;
+  discipline: ClimbingDiscipline;
+  triesCount: number | null;
+  isRepeat: boolean;
+};
+
+export type ClimbProblemDetail = {
+  id: string;
+  name: string;
+  grade: string;
+  gradeSystem: ClimbGradeSystem;
+  notes: string | null;
+  locationId: string | null;
+  locationName: string | null;
+  sessions: ProblemSessionRow[];
+  media: GalleryMediaItem[];
+  /** An attempt row with no tries count still represents at least one go,
+   *  so it counts as 1 — otherwise the rollup reads lower than reality. */
+  totalTries: number;
+  sentAt: Date | null;
+};
+
+export async function loadClimbProblemDetail(problemId: string): Promise<ClimbProblemDetail | null> {
+  const problem = await prisma.climbProblem.findUnique({
+    where: { id: problemId },
+    select: {
+      id: true,
+      name: true,
+      grade: true,
+      gradeSystem: true,
+      notes: true,
+      locationId: true,
+      location: { select: { name: true } },
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true, kind: true, url: true, thumbnailUrl: true, caption: true, width: true, height: true },
+      },
+      attempts: {
+        orderBy: { sessionLog: { performedAt: "asc" } },
+        select: {
+          id: true,
+          outcome: true,
+          discipline: true,
+          triesCount: true,
+          isRepeat: true,
+          sessionLogId: true,
+          sessionLog: { select: { performedAt: true, routineId: true } },
+        },
+      },
+    },
+  });
+  if (!problem) return null;
+
+  const sessions: ProblemSessionRow[] = problem.attempts.map((a) => ({
+    attemptId: a.id,
+    sessionLogId: a.sessionLogId,
+    routineId: a.sessionLog.routineId,
+    performedAt: a.sessionLog.performedAt,
+    outcome: a.outcome,
+    discipline: a.discipline,
+    triesCount: a.triesCount,
+    isRepeat: a.isRepeat,
+  }));
+
+  const sent = sessions.find((s) => SENT_OUTCOMES.has(s.outcome));
+
+  return {
+    id: problem.id,
+    name: problem.name,
+    grade: problem.grade,
+    gradeSystem: problem.gradeSystem,
+    notes: problem.notes,
+    locationId: problem.locationId,
+    locationName: problem.location?.name ?? null,
+    sessions,
+    media: problem.media,
+    totalTries: sessions.reduce((sum, s) => sum + (s.triesCount ?? 1), 0),
+    sentAt: sent?.performedAt ?? null,
+  };
+}
+
+export async function updateClimbAttemptTries(input: { attemptId: string; triesCount: number | null }) {
+  const triesCount =
+    input.triesCount != null && Number.isFinite(input.triesCount)
+      ? Math.max(1, Math.round(input.triesCount))
+      : null;
+  const updated = await prisma.climbAttempt.update({
+    where: { id: input.attemptId },
+    data: { triesCount },
+    select: { id: true, triesCount: true, problem: { select: { locationId: true } } },
+  });
+  if (updated.problem?.locationId) revalidateLocation(updated.problem.locationId);
+  return { attemptId: updated.id, triesCount: updated.triesCount };
 }

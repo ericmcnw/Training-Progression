@@ -25,6 +25,7 @@ import {
 } from "@/lib/climb-types";
 import MediaGallery, { type GalleryMediaItem } from "@/app/components/climbing/MediaGallery";
 import MediaUploader from "@/app/components/climbing/MediaUploader";
+import ProblemSessionHistory from "@/app/activities/climbing/ProblemSessionHistory";
 import { renameClimbProblem, setClimbProblemTickList, updateClimbProblemNotes } from "./actions";
 
 export type ProblemLibraryEntry = {
@@ -323,6 +324,11 @@ function ProblemRow({
           </div>
 
           {error && <div style={errorStyle}>{error}</div>}
+
+          <div style={editRow}>
+            <div style={editLabel}>Sessions</div>
+            <ProblemSessionHistory problemId={problem.id} />
+          </div>
 
           {/* Per-problem photos & links. Scoped via target.problemId so
               uploads land on this problem (not the parent location). The
