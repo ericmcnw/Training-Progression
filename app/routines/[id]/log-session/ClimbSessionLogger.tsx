@@ -282,7 +282,14 @@ function AttemptRow({
           {label}
         </span>
         {isRepeat && (
-          <span style={repeatBadgeStyle} title={`Repeat — previously sent ${linkedProblem!.priorSendCount}×`}>
+          <span
+            style={repeatBadgeStyle}
+            title={
+              (linkedProblem?.priorSendCount ?? 0) > 0
+                ? `Repeat — previously sent ${linkedProblem!.priorSendCount}×`
+                : "Repeat — marked by hand"
+            }
+          >
             ↻ Repeat
           </span>
         )}
