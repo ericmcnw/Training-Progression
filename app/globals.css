@@ -46,7 +46,12 @@
   --text: rgba(255,255,255,0.92);
   --muted: rgba(255,255,255,0.70);
   --success: #33ff7a;   /* bright green */
-  --app-max-width: 1180px;
+  /* The cap, not a fixed width — .appMain and .appHeaderInner are both
+     min(100%, cap), so wide pages stay fluid and simply stop growing here.
+     Raised from 1180 so a large monitor isn't half empty; the form and
+     content tiers deliberately did NOT move, since longer measure makes
+     reading and single-column entry worse, not better. */
+  --app-max-width: 1600px;
   /* Page width tiers. A page picks one by what it HOLDS, not by what it is
      called: form = single-column entry and reading, content = lists and
      light detail, wide = charts, maps, tables, multi-column grids. Pages
