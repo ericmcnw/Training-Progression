@@ -338,6 +338,9 @@ const shell: CSSProperties = {
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: 10,
   width: "100%",
+  // Still capped: this one is an SVG whose height follows its width, so
+  // spanning a 1180px card would render it ~470px tall. Needs a wider
+  // viewBox (and marker radii scaled to match) before the cap can go.
   maxWidth: 760,
   margin: "0 auto",
   minWidth: 0,

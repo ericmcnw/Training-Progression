@@ -214,11 +214,10 @@ export default function WeeklyBarChartWithSessions({
         gridTemplateColumns: "minmax(0, 1fr)",
         gap: 10,
         minWidth: 0,
-        // Desktop cap — keeps bars from going squat-and-wide at 1000px+
-        // column widths. Mobile sits below the cap and ignores it.
+        // Fills its card so charts line up with the pyramid / tick list rather
+        // than sitting in a narrower column. Squat-and-wide bars are prevented
+        // by a per-bar max-width (.swbcBar), not by shrinking the whole chart.
         width: "100%",
-        maxWidth: 760,
-        margin: "0 auto",
       }}
     >
       {secondarySeries != null || tertiarySeries != null ? (

@@ -7,10 +7,10 @@
 //     light-orange series, not six legend entries.
 //
 //   buildClimbingTrainingChartData → "how am I supporting my climbing?"
-//     One stacked bar per week of supporting-training sessions, colored
-//     by the canonical domain palette (strength green, mobility purple,
-//     lifestyle amber, cardio blue) so the support mix reads at a
-//     glance.
+//     One stacked bar per week of supporting-training sessions, one
+//     series per ROUTINE (Pull A, Fingers) rather than per domain —
+//     "Strength" doesn't tell you which session did the supporting.
+//     Colors come from the shared routine palette, ranked by session count.
 //
 // Both feed WeeklyBarChartWithSessions; tapping a week opens the panel
 // listing that week's logs with stripe colors matching the bar segment.
@@ -26,6 +26,7 @@ import { toAppYmd } from "@/lib/dates";
 import { domainColor, type RoutineDomain } from "@/lib/routines";
 import type { ClimbingDiscipline } from "@/lib/climb-types";
 import { sessionLoad } from "@/lib/strain";
+import { routineColorAt } from "./routine-palette";
 
 export type ClimbingSessionInput = {
   id: string;
@@ -225,15 +226,6 @@ export function buildClimbingChartData(
 
 // ─── Chart 2: supporting training, stacked by domain ────────────────────────
 
-const DOMAIN_DISPLAY: Record<string, string> = {
-  strength: "Strength",
-  cardio: "Cardio",
-  mobility: "Mobility",
-  sport: "Sport",
-  lifestyle: "Lifestyle",
-};
-const DOMAIN_ORDER = ["strength", "cardio", "mobility", "sport", "lifestyle"];
-
 export function buildClimbingTrainingChartData(
   trainingSessions: ClimbingTrainingInput[],
   options: { weeks?: ClimbingChartWeeks; now?: Date } = {}
@@ -243,30 +235,35 @@ export function buildClimbingTrainingChartData(
   const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
   const inWindow = trainingSessions.filter((t) => t.date >= cutoff);
 
-  type Bucket = { domain: string; sessionCountByWeek: Map<string, number> };
+  // Bucketed by ROUTINE, not domain: "Strength" doesn't tell you which session
+  // supported the climbing — "Pull A" does. Routines are ranked by session
+  // count so the ones actually carrying the block lead the legend.
+  type Bucket = { routineId: string; routineName: string; total: number; sessionCountByWeek: Map<string, number> };
   const buckets = new Map<string, Bucket>();
   for (const t of inWindow) {
-    const domain = String(t.domain);
-    let b = buckets.get(domain);
+    let b = buckets.get(t.routineId);
     if (!b) {
-      b = { domain, sessionCountByWeek: new Map() };
-      buckets.set(domain, b);
+      b = { routineId: t.routineId, routineName: t.routineName, total: 0, sessionCountByWeek: new Map() };
+      buckets.set(t.routineId, b);
     }
+    b.total += 1;
     incrementWeekMap(b.sessionCountByWeek, t.date, 1);
   }
 
-  const orderedDomains = [
-    ...DOMAIN_ORDER.filter((d) => buckets.has(d)),
-    ...[...buckets.keys()].filter((d) => !DOMAIN_ORDER.includes(d)),
-  ];
+  const orderedRoutines = [...buckets.values()].sort(
+    (a, b) => b.total - a.total || a.routineName.localeCompare(b.routineName)
+  );
+  const colorByRoutineId = new Map(
+    orderedRoutines.map((r, idx) => [r.routineId, routineColorAt(idx)])
+  );
 
   const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
   const weekLabels = fillWeeklySeries(new Map(), range, now).map((p) => p.label);
 
-  const series: StackedBarSeries[] = orderedDomains.map((domain) => ({
-    label: DOMAIN_DISPLAY[domain] ?? domain,
-    color: domainColor(domain),
-    weeklyValues: fillWeeklySeries(buckets.get(domain)!.sessionCountByWeek, range, now).map((p) => p.value),
+  const series: StackedBarSeries[] = orderedRoutines.map((r) => ({
+    label: r.routineName,
+    color: colorByRoutineId.get(r.routineId)!,
+    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, range, now).map((p) => p.value),
   }));
 
   const weekIndexByKey = buildWeekIndex(weeks, now);
@@ -274,7 +271,6 @@ export function buildClimbingTrainingChartData(
   for (const t of inWindow) {
     const wkIdx = weekIndexByKey.get(weekKey(t.date));
     if (wkIdx === undefined) continue;
-    const domain = String(t.domain);
     const matched = t.matchedExercises ?? [];
     const metricFormatted =
       matched.length === 0
@@ -286,8 +282,8 @@ export function buildClimbingTrainingChartData(
       id: t.id,
       performedAt: t.date,
       routineName: t.routineName,
-      seriesLabel: DOMAIN_DISPLAY[domain] ?? domain,
-      seriesColor: domainColor(domain),
+      seriesLabel: t.routineName,
+      seriesColor: colorByRoutineId.get(t.routineId) ?? domainColor(String(t.domain)),
       metricFormatted,
       load: sessionLoad(t.effort, t.durationSec),
       loadEstimated: t.effort == null,

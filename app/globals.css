@@ -157,6 +157,10 @@ body{
   font: inherit;
   flex: 1 1 0;
   min-width: 0;
+  /* The chart card spans its container so it lines up with neighbouring cards.
+     Capping the BAR instead keeps columns from going squat-and-wide on a large
+     monitor — the track just gains breathing room around them. */
+  max-width: 88px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

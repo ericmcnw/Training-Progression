@@ -508,6 +508,8 @@ const containerStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(255,255,255,0.03)",
   width: "100%",
+  // Still capped: 640x320 viewBox with height:auto, so a full-width card
+  // would render this ~565px tall. Needs a wider viewBox first.
   maxWidth: 760,
   margin: "0 auto",
 };
