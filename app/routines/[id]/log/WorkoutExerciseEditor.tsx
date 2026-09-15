@@ -806,6 +806,11 @@ export default function WorkoutExerciseEditor({
                   <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                     {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
                     {paramSummary ? ` · ${paramSummary}` : ""}
+                    {!paramSummary && paramKeys.length > 0 ? (
+                      <span style={styles.paramNudge}>
+                        {` · set ${paramKeys.map((key) => exerciseParamDef(key)?.label.toLowerCase() ?? key).join(" + ")}`}
+                      </span>
+                    ) : null}
                     {doneSets > 0
                       ? ` · ${doneSets}/${block.rows.length} done`
                       : ` · ${block.rows.length} sets`}
@@ -1401,6 +1406,14 @@ const styles = {
     cursor: "pointer",
     touchAction: "manipulation",
     WebkitTapHighlightColor: "transparent",
+  } as React.CSSProperties,
+
+  // An unset setup param is invisible until you expand the block, so the
+  // collapsed header names it. Without this the field is undiscoverable
+  // until you have already used it once.
+  paramNudge: {
+    color: "rgba(253,186,116,0.95)",
+    fontWeight: 800,
   } as React.CSSProperties,
 
   paramRow: {
