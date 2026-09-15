@@ -184,7 +184,7 @@ function EffortLines({
   }
 
   return (
-    <div style={{ display: "grid", gap: 6 }}>
+    <div style={linesLensStyle}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={lensGroup}>
           <button type="button" onClick={() => onPeakModeChange("peak")} style={mode === "peak" ? lensBtnActive : lensBtn}>Peak</button>
@@ -337,12 +337,10 @@ const shell: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: 10,
+  // Spans its card like the other charts. Only the "lines" lens needs a cap
+  // (see linesLensStyle) — the magnitude and bars lenses are ordinary bar
+  // charts and were being penalised for a sibling they don't render.
   width: "100%",
-  // Still capped: this one is an SVG whose height follows its width, so
-  // spanning a 1180px card would render it ~470px tall. Needs a wider
-  // viewBox (and marker radii scaled to match) before the cap can go.
-  maxWidth: 760,
-  margin: "0 auto",
   minWidth: 0,
   boxSizing: "border-box",
   contain: "layout paint",
@@ -354,6 +352,10 @@ const lensBtn: CSSProperties = { minHeight: 28, padding: "4px 12px", borderRadiu
 const lensBtnActive: CSSProperties = { ...lensBtn, background: "rgba(255,255,255,0.10)", opacity: 1 };
 
 const barsTrackRow: CSSProperties = { display: "flex", gap: 6, alignItems: "stretch", minWidth: 0 };
+// Only the lines lens is an SVG whose height follows its width, so it alone
+// keeps a cap — at full width on a 1600px page it would render ~640px tall.
+// Lifting this needs a wider viewBox with marker radii scaled to match.
+const linesLensStyle: CSSProperties = { display: "grid", gap: 6, width: "100%", maxWidth: 760, margin: "0 auto" };
 const yAxisCol: CSSProperties = { display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "flex-end", minWidth: 20, paddingRight: 4, borderRight: "1px dashed rgba(255,255,255,0.10)" };
 const yTick: CSSProperties = { fontSize: 9, fontWeight: 800, color: "rgba(255,255,255,0.5)", lineHeight: 1 };
 
