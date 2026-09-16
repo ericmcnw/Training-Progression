@@ -1,6 +1,7 @@
 import { routineAccessWhere } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { exerciseParamKeys, exerciseParamsToInput, readExerciseParams } from "@/lib/exercise-params";
 import { normalizeRoutineKind, isWorkoutKind, isSessionKind, isCardioKind, isGuidedKind } from "@/lib/routines";
 import {
   exerciseLibraryWhereForKinds,
@@ -44,7 +45,7 @@ export async function GET(
         select: {
           exerciseId: true,
           defaultSets: true,
-          exercise: { select: { name: true, unit: true, supportsWeight: true } },
+          exercise: { select: { name: true, unit: true, supportsWeight: true, paramKeys: true } },
         },
       },
       guidedSteps: {
@@ -96,6 +97,7 @@ export async function GET(
             orderBy: { routineLog: { performedAt: "desc" } },
             select: {
               exerciseId: true,
+              params: true,
               routineLog: { select: { performedAt: true } },
               sets: {
                 orderBy: { setNumber: "asc" },
@@ -135,6 +137,8 @@ export async function GET(
         name: exercise.exercise.name,
         unit: exercise.exercise.unit,
         supportsWeight: exercise.exercise.supportsWeight,
+        paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
+        params: exerciseParamsToInput(readExerciseParams(prev?.params)),
         rows: Array.from({ length: defaultSetCount }, (_, i) => ({ setNumber: i + 1 })),
         lastRows: lastRows.length > 0 ? lastRows : undefined,
         lastDate,

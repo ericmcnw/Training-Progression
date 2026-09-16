@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { exerciseParamKeys, exerciseParamsToInput, readExerciseParams } from "@/lib/exercise-params";
 import {
   exerciseLibraryWhereForKinds,
   isMissingExerciseLibraryKindError,
@@ -60,11 +61,13 @@ export async function GET() {
           orderBy: { createdAt: "asc" },
           select: {
             exerciseId: true,
+            params: true,
             exercise: {
               select: {
                 name: true,
                 unit: true,
                 supportsWeight: true,
+                paramKeys: true,
               },
             },
             sets: {
@@ -98,6 +101,8 @@ export async function GET() {
           name: exercise.exercise.name,
           unit: exercise.exercise.unit,
           supportsWeight: exercise.exercise.supportsWeight,
+          paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
+          params: exerciseParamsToInput(readExerciseParams(exercise.params)),
           rows: rows.length > 0 ? rows : [{ setNumber: 1 }],
         };
       })
