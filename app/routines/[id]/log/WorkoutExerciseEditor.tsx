@@ -160,6 +160,13 @@ function fillRowFromSuggestions(block: WorkoutBlock, rowIdx: number, row: SetRow
   return next;
 }
 
+function filledParams(params: WorkoutBlock["params"]) {
+  if (!params) return {};
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== "" && value != null)
+  );
+}
+
 export default function WorkoutExerciseEditor({
   routineId,
   routineName,
@@ -269,6 +276,11 @@ export default function WorkoutExerciseEditor({
             lastDate: initial.lastDate,
             prescription: initial.prescription,
             paramKeys: initial.paramKeys,
+            // A draft owns what the user typed, and a blank was never typed.
+            // Drafts written before a setup value existed would otherwise
+            // discard the prefill carried forward from the last session, so
+            // the setup silently reset to empty on every restore.
+            params: { ...initial.params, ...filledParams(draftBlock.params) },
           }
         : draftBlock;
     });
