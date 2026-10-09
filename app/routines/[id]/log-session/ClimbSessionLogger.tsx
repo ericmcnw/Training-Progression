@@ -498,7 +498,18 @@ function AttemptRow({
               ) : (
                 <button
                   type="button"
-                  onClick={() => onUpdate({ isRepeat: !attempt.isRepeat })}
+                  onClick={() => {
+                    const next = !attempt.isRepeat;
+                    // A climb you've done before cannot be a flash, whatever the
+                    // outcome buttons allowed — the add-time guard only sees a
+                    // saved problem's recorded history, and a repeat marked by
+                    // hand is exactly the case it cannot know about.
+                    onUpdate(
+                      next && outcomeRequiresNoPriorAttempts(attempt.outcome)
+                        ? { isRepeat: next, outcome: "SEND" }
+                        : { isRepeat: next }
+                    );
+                  }}
                   aria-pressed={attempt.isRepeat === true}
                   style={attempt.isRepeat ? repeatToggleOnStyle : repeatToggleOffStyle}
                 >
