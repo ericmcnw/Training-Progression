@@ -42,8 +42,9 @@ import LogSessionCTA from "@/app/activities/_shared/LogSessionCTA";
 import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import {
-  climbOutcomeColor,
-  effectiveOutcome,
+  pyramidBucket,
+  pyramidBucketColor,
+  type PyramidBucket,
   gradeSort,
   SENT_OUTCOMES,
   venueOf,
@@ -438,9 +439,9 @@ export default async function ClimbingHubPage(props: {
       // twenty different boulders would read as one climb done twenty times.
       const grouped = new Map<string, PyramidColumnRow["climbs"][number]>();
       for (const a of matching) {
-        // Same normalisation the bar used, so a repeat never shows as a
-        // flash in the bubble the bar opens.
-        const outcome = effectiveOutcome(a.outcome, a.isRepeat, a.discipline);
+        // Same bucketing the bar used, so the bubble agrees with the segment
+        // it opens — including splitting repeat sends out of SEND.
+        const outcome = pyramidBucket(a.outcome, a.isRepeat, a.discipline);
         const name = a.problemId ? problemNameById.get(a.problemId) ?? null : null;
         const locationId = a.sessionLog.climbLocation?.id ?? null;
         const dateLabel = formatAppDate(a.sessionLog.performedAt);
@@ -964,17 +965,19 @@ function HubTile({ href, label, stat, icon }: { href: string; label: string; sta
 }
 
 // Shared outcome legend — solid swatches matching the bar segments.
+// Ordered as a progression: clean first go, first send, sent again, not yet.
 function OutcomeLegend({ showOnsight }: { showOnsight: boolean }) {
-  const items: Array<{ outcome: ClimbOutcome; label: string }> = [
+  const items: Array<{ outcome: PyramidBucket; label: string }> = [
     { outcome: showOnsight ? "ONSIGHT" : "FLASH", label: showOnsight ? "Onsight" : "Flash" },
     { outcome: "SEND", label: "Send" },
+    { outcome: "REPEAT", label: "Repeat" },
     { outcome: "PROJECT", label: "Project" },
   ];
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {items.map((item) => (
         <span key={item.outcome} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.8 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: climbOutcomeColor(item.outcome), display: "inline-block" }} />
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: pyramidBucketColor(item.outcome), display: "inline-block" }} />
           {item.label}
         </span>
       ))}

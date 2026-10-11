@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import {
-  climbOutcomeColor,
-  climbOutcomeLabel,
-  PYRAMID_OUTCOMES,
+  PYRAMID_BUCKETS,
+  pyramidBucketColor,
+  pyramidBucketLabel,
   type ClimbGradeSystem,
-  type ClimbOutcome,
+  type PyramidBucket,
 } from "@/lib/climb-types";
 
 // Interactive grade pyramid. Tapping a bar segment opens a bubble under
@@ -19,7 +19,7 @@ import {
 
 export type PyramidClimb = {
   id: string;
-  outcome: ClimbOutcome;
+  outcome: PyramidBucket;
   name: string | null;
   locationId: string | null;
   locationName: string | null;
@@ -31,7 +31,7 @@ export type PyramidClimb = {
 export type PyramidColumnRow = {
   grade: string;
   system: ClimbGradeSystem;
-  counts: Partial<Record<ClimbOutcome, number>>;
+  counts: Partial<Record<PyramidBucket, number>>;
   total: number;
   climbs: PyramidClimb[];
 };
@@ -48,7 +48,7 @@ type Selection = {
   columnKey: string;
   system: ClimbGradeSystem;
   grade: string;
-  outcome: ClimbOutcome | "ALL";
+  outcome: PyramidBucket | "ALL";
   caretPct: number;
 };
 
@@ -157,13 +157,13 @@ function PyramidBar({
   row: PyramidColumnRow;
   maxTotal: number;
   columnKey: string;
-  activeOutcome: ClimbOutcome | "ALL" | null;
+  activeOutcome: PyramidBucket | "ALL" | null;
   onToggle: (s: Selection) => void;
 }) {
   const barPct = (row.total / maxTotal) * 100;
-  const segments = PYRAMID_OUTCOMES.map((o) => ({
-    outcome: o as ClimbOutcome,
-    count: row.counts[o as ClimbOutcome] ?? 0,
+  const segments = PYRAMID_BUCKETS.map((o) => ({
+    outcome: o as PyramidBucket,
+    count: row.counts[o as PyramidBucket] ?? 0,
   })).filter((s) => s.count > 0);
 
   // Cumulative offsets so the bubble's caret points at the tapped segment.
@@ -174,7 +174,7 @@ function PyramidBar({
     return { ...s, width, centerPct: before + width / 2 };
   });
 
-  function select(outcome: ClimbOutcome | "ALL", caretPct: number) {
+  function select(outcome: PyramidBucket | "ALL", caretPct: number) {
     onToggle({ columnKey, system: row.system, grade: row.grade, outcome, caretPct });
   }
 
@@ -196,11 +196,11 @@ function PyramidBar({
             type="button"
             className="pyramidCell"
             onClick={() => select(outcome, centerPct)}
-            title={`${climbOutcomeLabel(outcome, row.system)} × ${count}`}
-            aria-label={`${count} ${climbOutcomeLabel(outcome, row.system)} at ${row.grade}`}
+            title={`${pyramidBucketLabel(outcome, row.system)} × ${count}`}
+            aria-label={`${count} ${pyramidBucketLabel(outcome, row.system)} at ${row.grade}`}
             style={{
               width: `${width}%`,
-              background: climbOutcomeColor(outcome),
+              background: pyramidBucketColor(outcome),
               minWidth: 4,
               flexShrink: 0,
               // Buttons carry a UA border-radius; the track owns the rounding.
@@ -237,7 +237,7 @@ function ClimbBubble({
   onClose,
 }: {
   row: PyramidColumnRow;
-  outcome: ClimbOutcome | "ALL";
+  outcome: PyramidBucket | "ALL";
   caretPct: number;
   onClose: () => void;
 }) {
@@ -253,7 +253,7 @@ function ClimbBubble({
           <span style={{ fontSize: 10.5, fontWeight: 900, lineHeight: 1 }}>
             {row.grade}
             <span style={{ opacity: 0.55, fontWeight: 700, marginLeft: 5 }}>
-              {outcome === "ALL" ? "all" : climbOutcomeLabel(outcome, row.system).toLowerCase()} ·{" "}
+              {outcome === "ALL" ? "all" : pyramidBucketLabel(outcome, row.system).toLowerCase()} ·{" "}
               {ascents}
             </span>
           </span>
@@ -294,11 +294,16 @@ function ClimbLink({
     : `/activities/climbing/climbs?grade=${encodeURIComponent(grade)}&range=all`;
   return (
     <Link href={href} style={climbRowStyle}>
-      <span style={{ ...dotStyle, background: climbOutcomeColor(climb.outcome) }} />
+      <span style={{ ...dotStyle, background: pyramidBucketColor(climb.outcome) }} />
       <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
+      {climb.outcome === "REPEAT" ? (
+        <span style={repeatGlyphStyle} title="Repeat — sent before" aria-label="repeat">
+          ↻
+        </span>
+      ) : null}
       {climb.count > 1 ? <span style={repeatStyle}>×{climb.count}</span> : null}
       <span style={climbMetaStyle}>
-        {climbOutcomeLabel(climb.outcome, system)}
+        {pyramidBucketLabel(climb.outcome, system)}
         {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
       </span>
       <span style={chevronStyle} aria-hidden>
@@ -307,6 +312,13 @@ function ClimbLink({
     </Link>
   );
 }
+
+const repeatGlyphStyle: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  color: "rgba(45,154,106,0.95)",
+  flexShrink: 0,
+};
 
 const columnStyle: CSSProperties = {
   flex: "1 1 260px",

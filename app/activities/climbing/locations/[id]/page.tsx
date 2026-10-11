@@ -15,9 +15,10 @@ import { formatAppDate } from "@/lib/dates";
 import {
   climbOutcomeBg,
   climbOutcomeColor,
-  climbOutcomeLabel,
   gradeSort,
-  PYRAMID_OUTCOMES,
+  PYRAMID_BUCKETS,
+  pyramidBucketColor,
+  pyramidBucketLabel,
   SENT_OUTCOMES,
   type ClimbGradeSystem,
   type ClimbOutcome,
@@ -625,7 +626,7 @@ function ScopedPyramid({ rows }: { rows: { boulderRows: PyramidRow[]; yosemiteRo
 }
 
 function PyramidBar({ row, maxTotal }: { row: PyramidRow; maxTotal: number }) {
-  const segments = PYRAMID_OUTCOMES.map((o) => ({ outcome: o, count: row.counts[o] ?? 0 })).filter((s) => s.count > 0);
+  const segments = PYRAMID_BUCKETS.map((o) => ({ outcome: o, count: row.counts[o] ?? 0 })).filter((s) => s.count > 0);
   const widthPct = (row.total / maxTotal) * 100;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -644,10 +645,10 @@ function PyramidBar({ row, maxTotal }: { row: PyramidRow; maxTotal: number }) {
           {segments.map((seg) => (
             <div
               key={seg.outcome}
-              title={`${climbOutcomeLabel(seg.outcome, row.system)}: ${seg.count}`}
+              title={`${pyramidBucketLabel(seg.outcome, row.system)}: ${seg.count}`}
               style={{
                 flex: seg.count,
-                background: climbOutcomeColor(seg.outcome),
+                background: pyramidBucketColor(seg.outcome),
               }}
             />
           ))}

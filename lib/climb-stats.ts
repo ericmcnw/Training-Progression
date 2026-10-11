@@ -4,14 +4,15 @@
 // drag the whole client in.
 
 import {
-  effectiveOutcome,
   gradeSort,
+  pyramidBucket,
   isSendOutcome,
   ORDERED_OUTCOMES,
   SENT_OUTCOMES,
   type ClimbGradeSystem,
   type ClimbingDiscipline,
   type ClimbOutcome,
+  type PyramidBucket,
 } from "./climb-types";
 
 // Minimum data needed to build a pyramid row. Callers can pass any object
@@ -29,7 +30,7 @@ export type PyramidAttemptInput = {
 export type PyramidRow = {
   grade: string;
   system: ClimbGradeSystem;
-  counts: Partial<Record<ClimbOutcome, number>>;
+  counts: Partial<Record<PyramidBucket, number>>;
   total: number;
 };
 
@@ -44,7 +45,7 @@ export function buildPyramidRows(attempts: PyramidAttemptInput[]): PyramidRows {
   for (const a of attempts) {
     // Falls don't get pyramid bars — pyramid celebrates clean climbs.
     if (a.outcome === "FELL") continue;
-    const outcome = effectiveOutcome(a.outcome, a.isRepeat, a.discipline);
+    const bucket = pyramidBucket(a.outcome, a.isRepeat, a.discipline);
     const key = `${a.gradeSystem}::${a.grade}`;
     const row = map.get(key) ?? {
       grade: a.grade,
@@ -52,7 +53,7 @@ export function buildPyramidRows(attempts: PyramidAttemptInput[]): PyramidRows {
       counts: {},
       total: 0,
     };
-    row.counts[outcome] = (row.counts[outcome] ?? 0) + 1;
+    row.counts[bucket] = (row.counts[bucket] ?? 0) + 1;
     row.total += 1;
     map.set(key, row);
   }
@@ -73,7 +74,12 @@ export function hardestGrade(
   rows: PyramidRow[],
   filter: ReadonlySet<ClimbOutcome>
 ): string | null {
+  // A repeat lives in its own pyramid bucket, but it still means the grade
+  // has been sent — otherwise an ascent whose first send predates the window
+  // would drop out of "hardest sent" entirely.
+  const countsAsSend = filter.has("SEND") || filter.has("REDPOINT");
   for (let i = rows.length - 1; i >= 0; i -= 1) {
+    if (countsAsSend && (rows[i].counts.REPEAT ?? 0) > 0) return rows[i].grade;
     for (const outcome of ORDERED_OUTCOMES) {
       if (filter.has(outcome) && (rows[i].counts[outcome] ?? 0) > 0) {
         return rows[i].grade;

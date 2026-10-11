@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { climbOutcomeColor, ORDERED_OUTCOMES } from "@/lib/climb-types";
+import { PYRAMID_BUCKETS, pyramidBucketColor } from "@/lib/climb-types";
 import { formatHoursMinutes } from "@/lib/progress";
 import type { PyramidRow } from "@/lib/climb-stats";
 import type { Drilldowns } from "@/lib/reports/drilldown";
@@ -95,9 +95,9 @@ function Pyramid({ title, rows }: { title: string; rows: PyramidRow[] }) {
             <span style={pyramidGrade}>{r.grade}</span>
             <div style={pyramidBarTrack}>
               <div style={{ display: "flex", height: "100%", width: `${(r.total / max) * 100}%`, borderRadius: 4, overflow: "hidden" }}>
-                {ORDERED_OUTCOMES.map((o) =>
+                {PYRAMID_BUCKETS.map((o) =>
                   (r.counts[o] ?? 0) > 0 ? (
-                    <div key={o} title={`${o}: ${r.counts[o]}`} style={{ flex: r.counts[o], background: climbOutcomeColor(o) }} />
+                    <div key={o} title={`${o}: ${r.counts[o]}`} style={{ flex: r.counts[o], background: pyramidBucketColor(o) }} />
                   ) : null
                 )}
               </div>

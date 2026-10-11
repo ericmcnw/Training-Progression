@@ -264,6 +264,56 @@ export const PYRAMID_OUTCOMES: readonly ClimbOutcome[] = [
   "PROJECT",
 ];
 
+// ── Pyramid buckets ────────────────────────────────────────────────────────
+// A repeat send is its own tier: it says the grade is consolidated, not that
+// a new problem went down. Collapsing it into SEND (which effectiveOutcome
+// does, correctly, for everything else) overstates first ascents.
+//
+// DISPLAY ONLY. ClimbOutcome is a Prisma enum — "REPEAT" must never be
+// written to a ClimbAttempt. It is derived at render time from
+// outcome + isRepeat and exists nowhere else.
+//
+// Only sends split. A repeat project is still a project — the attempt count
+// already carries how many sessions went into it — and a repeat flash is
+// impossible by definition.
+export type PyramidBucket = ClimbOutcome | "REPEAT";
+
+export const PYRAMID_BUCKETS: readonly PyramidBucket[] = [
+  "FLASH",
+  "ONSIGHT",
+  "SEND",
+  "REDPOINT",
+  "REPEAT",
+  "PROJECT",
+];
+
+export function pyramidBucket(
+  outcome: ClimbOutcome,
+  isRepeat: boolean | null | undefined,
+  discipline?: ClimbingDiscipline | null,
+): PyramidBucket {
+  const settled = effectiveOutcome(outcome, isRepeat, discipline);
+  if (isRepeat && (settled === "SEND" || settled === "REDPOINT")) return "REPEAT";
+  return settled;
+}
+
+/** A deeper, desaturated green against SEND's bright mint — reads as the same
+ *  family (it went) a tier down (not the first time). */
+export function pyramidBucketColor(bucket: PyramidBucket): string {
+  return bucket === "REPEAT" ? "rgba(45,154,106,0.95)" : climbOutcomeColor(bucket);
+}
+
+export function pyramidBucketBg(bucket: PyramidBucket): string {
+  return bucket === "REPEAT" ? "rgba(45,154,106,0.14)" : climbOutcomeBg(bucket);
+}
+
+export function pyramidBucketLabel(
+  bucket: PyramidBucket,
+  context?: ClimbingDiscipline | ClimbGradeSystem,
+): string {
+  return bucket === "REPEAT" ? "Repeat" : climbOutcomeLabel(bucket, context);
+}
+
 // All outcomes in ascending "good to bad" order — used when searching for the
 // hardest grade meeting some criteria.
 export const ORDERED_OUTCOMES: readonly ClimbOutcome[] = [
