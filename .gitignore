@@ -16,6 +16,7 @@
 /scripts/_pain-rescale-backup.json
 /scripts/_katahdin-focus-backup.json
 /scripts/_rdl-load-correction-backup.json
+/scripts/_repeat-flash-backup.json
 
 # testing
 /coverage
