@@ -569,6 +569,7 @@ export default function ClimbSessionLogger({
   climbLocationId,
   onMarkDirty,
   onUpdateProblemNotes,
+  onPendingClimbChange,
 }: {
   /** Session template key when the routine has one; null for synthetic
    *  quick-log routines. Drives indoor/outdoor labels only —
@@ -578,6 +579,11 @@ export default function ClimbSessionLogger({
    *  discipline of what was actually climbed. */
   defaultDiscipline?: ClimbingDiscipline;
   climbMode: "quick" | "per-climb";
+  /** Fires while the active-climb panel holds a climb that has not been
+   *  committed. Picking a grade and typing a name does NOT create the
+   *  attempt — only tapping an outcome does — so without this the panel's
+   *  contents are discarded on save with no trace. */
+  onPendingClimbChange?: (pending: boolean) => void;
   onModeChange: (mode: "quick" | "per-climb") => void;
   attempts: ClimbAttemptDraft[];
   onAttemptsChange: (attempts: ClimbAttemptDraft[]) => void;
@@ -659,6 +665,13 @@ export default function ClimbSessionLogger({
     }
     return 0;
   })();
+
+  // A staged grade with nothing committed is exactly the state whose
+  // contents vanish on save.
+  const hasPendingClimb = climbMode === "per-climb" && selectedGrade !== null && activeAttemptCount === 0;
+  useEffect(() => {
+    onPendingClimbChange?.(hasPendingClimb);
+  }, [hasPendingClimb, onPendingClimbChange]);
 
   // A flash claim has to survive both halves of the history: what's already
   // saved on this problem, and what's been logged earlier in this session.
@@ -1044,7 +1057,7 @@ export default function ClimbSessionLogger({
 
           {/* Active climb panel — name, area, outcome buttons */}
           {selectedGrade && (
-            <div style={activeClimbPanelStyle}>
+            <div style={hasPendingClimb ? activeClimbPanelPendingStyle : activeClimbPanelStyle}>
               <div style={activeClimbHeaderStyle}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
                   <span style={activeClimbGradePillStyle}>{selectedGrade}</span>
@@ -1069,6 +1082,13 @@ export default function ClimbSessionLogger({
                   Done
                 </button>
               </div>
+
+              {hasPendingClimb && (
+                <div style={pendingNoticeStyle}>
+                  Not added yet — tap an outcome below. Saving or closing the
+                  session without one discards this climb.
+                </div>
+              )}
 
               {!selectedProblemId && (
                 <div style={{ display: "grid", gap: 6 }}>
@@ -1259,6 +1279,23 @@ const activeClimbPanelStyle: React.CSSProperties = {
   border: "1px solid rgba(120,190,255,0.35)",
   background: "rgba(120,190,255,0.06)",
   minWidth: 0,
+};
+
+const activeClimbPanelPendingStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(251,191,36,0.6)",
+  background: "rgba(251,191,36,0.07)",
+  minWidth: 0,
+};
+
+const pendingNoticeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  color: "rgba(251,191,36,0.95)",
 };
 
 const activeClimbHeaderStyle: React.CSSProperties = {

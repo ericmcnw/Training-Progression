@@ -213,6 +213,7 @@ export default function EditSessionLogForm({
   const [recentSpots, setRecentSpots] = useState<Array<{ ref: { kind: "activitySpot" | "climbLocation"; id: string }; name: string; region: string | null }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingClimb, setPendingClimb] = useState(false);
 
   // ── Climbing per-climb state ────────────────────────────────────────────────
   // Default to per-climb mode when attempts exist (so the user sees the real
@@ -300,6 +301,12 @@ export default function EditSessionLogForm({
     const { minutes: parsedDurationMin, valid: durationValid } = parseHoursMinutes(durationHours, durationMinutes);
     if (!durationValid) {
       setError("Enter a valid duration (under 24 hours).");
+      return;
+    }
+    // A staged climb is not an attempt until an outcome is tapped, and
+    // saving over it loses it silently.
+    if (pendingClimb) {
+      setError("You have a climb staged but not added — tap an outcome for it, or hit Done to clear it.");
       return;
     }
     const durationSec = parsedDurationMin != null ? parsedDurationMin * 60 : null;
@@ -406,6 +413,7 @@ export default function EditSessionLogForm({
       {isClimbing ? (
         <FormSection title={climbSectionTitle ?? "Climbing"}>
           <ClimbSessionLogger
+            onPendingClimbChange={setPendingClimb}
             templateKey={templateKey}
             defaultDiscipline={climbDiscipline ?? undefined}
             climbMode={climbMode}

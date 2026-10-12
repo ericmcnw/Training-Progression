@@ -113,6 +113,7 @@ export default function SessionLogForm({
   const [performedAtLocal, setPerformedAtLocal] = useState(defaultPerformedAtLocal ?? localDateTimeNow());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingClimb, setPendingClimb] = useState(false);
 
   // Inline post-log state — submitted alongside the log instead of via a
   // follow-up screen. Defaults pre-tick the template-derived zones; pain
@@ -300,6 +301,12 @@ export default function SessionLogForm({
       setError("Enter a valid duration (under 24 hours).");
       return;
     }
+    // A staged climb is not an attempt until an outcome is tapped, and
+    // saving over it loses it silently.
+    if (pendingClimb) {
+      setError("You have a climb staged but not added — tap an outcome for it, or hit Done to clear it.");
+      return;
+    }
     const durationSec = parsedDurationMin != null ? parsedDurationMin * 60 : null;
 
     // Build metric values
@@ -460,6 +467,7 @@ export default function SessionLogForm({
       {isClimbing ? (
         <FormSection title={climbSectionTitle ?? "Climbing"}>
           <ClimbSessionLogger
+            onPendingClimbChange={setPendingClimb}
             templateKey={templateKey!}
             climbMode={climbMode}
             onModeChange={(mode) => { markDirty(); setClimbMode(mode); }}
