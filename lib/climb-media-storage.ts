@@ -1,27 +1,37 @@
-// Local-filesystem storage helper for climbing media. Owns the physical file
-// lifecycle; the DB schema (ClimbMedia) only references the URL. Swapping
-// this module out for Vercel Blob or R2 later changes nothing else.
+// Blob storage for climbing media. Owns the physical file lifecycle; the DB
+// schema (ClimbMedia) only ever references the returned URL.
 //
-// Files live at public/uploads/climbing/{yyyy}/{mm}/{cuid}.{ext} and are
-// served by Next.js at /uploads/climbing/{yyyy}/{mm}/{cuid}.{ext}.
+// Files live in the Vercel Blob store under climbing/{yyyy}/{mm}/{id}.{ext}
+// and are served from the store's own CDN domain.
 //
-// SECURITY: deleteClimbPhotoFromDisk validates the URL against this exact
-// prefix before unlinking, so a malicious or buggy caller can't traverse
-// out of the uploads directory and delete arbitrary files.
+// Why not the filesystem: this wrote to public/uploads/climbing until
+// 2026-10-13. That works locally and silently does nothing in production —
+// Vercel's filesystem is read-only outside /tmp, and public/ is baked at
+// build time, so a runtime write is neither persisted nor served. The app
+// shipped with photo upload for months and stored exactly zero of them.
+//
+// Uploads are `public`: the URL carries a random suffix so it isn't
+// enumerable, and the gallery renders plain <img> tags. Private blobs would
+// mean minting and expiring signed URLs on every render to protect photos in
+// an app that has no auth on anything else.
 
-// Server-only module. Imports node:fs / node:crypto, so importing this from
-// a client component would fail the bundle. Client code should import the
-// pure helpers from ./climb-media-shared instead.
+// Server-only module. Client code should import the pure helpers from
+// ./climb-media-shared instead.
 
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { del, put } from "@vercel/blob";
 import { randomBytes } from "node:crypto";
 
 const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
 
+/** Path prefix inside the blob store. Also the marker that tells
+ *  deleteClimbPhoto a URL is ours to remove rather than someone else's link. */
+export const CLIMB_UPLOAD_PATH_PREFIX = "climbing/";
+
+/** Legacy on-disk prefix. Rows created before the blob migration still carry
+ *  URLs shaped like this; they point at files that never survived a deploy,
+ *  so deletion skips them rather than failing. */
 export const CLIMB_UPLOAD_URL_PREFIX = "/uploads/climbing/";
-const UPLOAD_DISK_ROOT = join(process.cwd(), "public", "uploads", "climbing");
 
 export type SavedClimbPhoto = {
   url: string;
@@ -37,8 +47,8 @@ export class ClimbMediaStorageError extends Error {
 function pickExtension(filename: string, mimeType: string): string {
   const fromName = filename.toLowerCase().split(".").pop() ?? "";
   if (ALLOWED_EXTENSIONS.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
-  // Fall back to MIME-based guess. Only the most common types — anything
-  // exotic fails out cleanly via BAD_EXTENSION below.
+  // Fall back to a MIME-based guess. Only the common types — anything exotic
+  // fails out cleanly via BAD_EXTENSION below.
   if (mimeType === "image/jpeg") return "jpg";
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
@@ -46,15 +56,11 @@ function pickExtension(filename: string, mimeType: string): string {
   return "";
 }
 
-// Generate a short cuid-like id without pulling in the cuid package — we
-// just need URL-safe randomness for filenames.
 function randomFileId(): string {
   return randomBytes(12).toString("base64url");
 }
 
-export async function saveClimbPhotoToDisk(
-  file: File
-): Promise<SavedClimbPhoto> {
+export async function saveClimbPhotoToDisk(file: File): Promise<SavedClimbPhoto> {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new ClimbMediaStorageError(
       `File is ${(file.size / 1024 / 1024).toFixed(1)} MB — max is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB`,
@@ -73,42 +79,31 @@ export async function saveClimbPhotoToDisk(
   const now = new Date();
   const yyyy = String(now.getUTCFullYear());
   const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const id = randomFileId();
-  const filename = `${id}.${ext}`;
-  const dir = join(UPLOAD_DISK_ROOT, yyyy, mm);
-  const fullPath = join(dir, filename);
+  const pathname = `${CLIMB_UPLOAD_PATH_PREFIX}${yyyy}/${mm}/${randomFileId()}.${ext}`;
 
   try {
-    await mkdir(dir, { recursive: true });
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(fullPath, buffer);
+    // addRandomSuffix keeps two uploads of the same name from colliding and
+    // makes the final URL unguessable.
+    const blob = await put(pathname, file, { access: "public", addRandomSuffix: true });
+    return { url: blob.url, sizeBytes: file.size };
   } catch (err) {
     throw new ClimbMediaStorageError(
       `Couldn't save file: ${err instanceof Error ? err.message : "unknown error"}`,
       "WRITE_FAILED"
     );
   }
-
-  return {
-    url: `${CLIMB_UPLOAD_URL_PREFIX}${yyyy}/${mm}/${filename}`,
-    sizeBytes: file.size,
-  };
 }
 
-// Remove the on-disk file backing a ClimbMedia.url. Silently no-ops for
-// external URLs (LINK kind) or anything outside our upload tree. Errors
-// during unlink are caught and ignored — orphan files are harmless.
+// Remove the stored blob backing a ClimbMedia.url. No-ops for external URLs
+// (LINK kind) and for legacy /uploads/climbing/ paths, whose files never
+// survived a deploy. Delete errors are swallowed — an orphaned blob is
+// harmless, and failing here would block removing the DB row.
 export async function deleteClimbPhotoFromDisk(url: string): Promise<void> {
-  if (!url.startsWith(CLIMB_UPLOAD_URL_PREFIX)) return;
-  // Strip the URL prefix; what's left is the path relative to public/uploads/climbing.
-  const relative = url.slice(CLIMB_UPLOAD_URL_PREFIX.length);
-  // Reject any traversal attempt or absolute path.
-  if (relative.includes("..") || relative.startsWith("/")) return;
-  const fullPath = join(UPLOAD_DISK_ROOT, relative);
+  if (url.startsWith(CLIMB_UPLOAD_URL_PREFIX)) return;
+  if (!url.includes(`/${CLIMB_UPLOAD_PATH_PREFIX}`)) return;
   try {
-    await unlink(fullPath);
+    await del(url);
   } catch {
-    // Already gone or never existed — fine.
+    // Already gone, or the store is unreachable — fine either way.
   }
 }
-
