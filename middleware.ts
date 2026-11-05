@@ -1,20 +1,37 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDevOnlyPath } from "@/lib/auth-paths";
+import { authModeFromEnv, buildAuthRedirectTarget, isDevOnlyPath, isEmailAllowed, isProtectedAppPath } from "@/lib/auth-paths";
 import { updateSession } from "@/lib/supabase/middleware";
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export async function middleware(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
 
   if (process.env.NODE_ENV !== "development" && isDevOnlyPath(pathname)) {
     return new NextResponse(null, { status: 404 });
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    return NextResponse.next();
+  const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+
+  if (authModeFromEnv() !== "authenticated") {
+    return hasSupabase ? (await updateSession(request)).response : NextResponse.next();
   }
 
-  return updateSession(request);
+  if (!hasSupabase) {
+    return new NextResponse("Auth is enabled but Supabase is not configured.", { status: 503 });
+  }
+
+  const { response, claims } = await updateSession(request);
+
+  if (!isProtectedAppPath(pathname) || isEmailAllowed(claims?.email as string | undefined)) {
+    return response;
+  }
+
+  const denied = pathname.startsWith("/api/")
+    ? NextResponse.json({ error: "Sign in required." }, { status: 401 })
+    : NextResponse.redirect(new URL(buildAuthRedirectTarget(pathname, search), request.url));
+
+  response.cookies.getAll().forEach((cookie) => denied.cookies.set(cookie));
+  return denied;
 }
 
 export const config = {

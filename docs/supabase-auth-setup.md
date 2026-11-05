@@ -21,7 +21,12 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 APP_URL=http://localhost:3000
 PROGRESSION_AUTH_MODE=authenticated
+AUTH_ALLOWED_EMAILS=you@example.com
 ```
+
+`AUTH_ALLOWED_EMAILS` is required: an empty list locks everyone out. It stays
+in place until owned tables carry a `userId`, because until then every
+signed-in account sees the same data.
 
 Keep `DATABASE_URL` and `DIRECT_URL` as they are for Prisma.
 

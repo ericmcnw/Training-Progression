@@ -80,7 +80,7 @@ export default async function SignInPage(props: { searchParams?: SearchParams })
                 background: "rgba(8,10,18,0.78)",
                 color: "inherit",
                 padding: "14px 16px",
-                fontSize: 15,
+                fontSize: 16,
               }}
             />
           </label>

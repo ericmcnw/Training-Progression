@@ -1,5 +1,6 @@
 "use server";
 
+import { isEmailAllowed } from "@/lib/auth-paths";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,10 @@ export async function sendMagicLink(formData: FormData) {
 
   if (!email) {
     redirect(`/signin?error=${encodeURIComponent("Email is required.")}&next=${encodeURIComponent(next)}`);
+  }
+
+  if (!isEmailAllowed(email)) {
+    redirect(`/signin?error=${encodeURIComponent("This email isn't invited yet.")}&next=${encodeURIComponent(next)}`);
   }
 
   const supabase = await createClient();

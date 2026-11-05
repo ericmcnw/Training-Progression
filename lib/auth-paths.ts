@@ -2,9 +2,7 @@ export const AUTH_MODE_VALUES = ["single-user-dev", "authenticated"] as const;
 
 export type AuthMode = (typeof AUTH_MODE_VALUES)[number];
 
-export const AUTH_SESSION_COOKIE = "progression_session";
-export const AUTH_USER_ID_COOKIE = "progression_user_id";
-export const AUTH_PUBLIC_PATHS = ["/signin"] as const;
+export const AUTH_PUBLIC_PATHS = ["/signin", "/auth", "/api/health"] as const;
 export const DEV_ONLY_PATH_PREFIXES = ["/_dev"] as const;
 
 const INTERNAL_PATH_PREFIXES = ["/_next", "/favicon.ico"] as const;
@@ -16,6 +14,17 @@ export function normalizeAuthMode(value: string | undefined | null): AuthMode {
 
 export function authModeFromEnv(envValue: string | undefined | null = process.env.PROGRESSION_AUTH_MODE): AuthMode {
   return normalizeAuthMode(envValue);
+}
+
+// Every account can read all data until owned tables carry a userId, so sign-in
+// stays invite-only until then. Empty list = nobody gets in.
+export function isEmailAllowed(email: string | null | undefined, envValue = process.env.AUTH_ALLOWED_EMAILS) {
+  const normalized = (email ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+  return (envValue ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .includes(normalized);
 }
 
 export function isPublicAssetPath(pathname: string) {

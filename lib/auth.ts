@@ -1,5 +1,4 @@
-import { cookies } from "next/headers";
-import { AUTH_SESSION_COOKIE, AUTH_USER_ID_COOKIE, authModeFromEnv, type AuthMode } from "@/lib/auth-paths";
+import { authModeFromEnv, isEmailAllowed, type AuthMode } from "@/lib/auth-paths";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 
 type AppSession = {
@@ -9,24 +8,24 @@ type AppSession = {
   mode: AuthMode;
 };
 
-function userProfileKey(userId: string) {
-  return `user:${userId}`;
-}
+// Owned data is still keyed to the single "default" profile; signed-in users
+// share it until per-user ownership lands, which is why sign-in is allowlisted.
+const SHARED_PROFILE_KEY = "default";
 
 function singleUserSession(): AppSession {
   return {
     userId: null,
-    profileKey: "default",
+    profileKey: SHARED_PROFILE_KEY,
     isAuthenticated: false,
     mode: "single-user-dev",
   };
 }
 
-function authenticatedSession(userId: string): AppSession {
+function anonymousSession(): AppSession {
   return {
-    userId,
-    profileKey: userProfileKey(userId),
-    isAuthenticated: true,
+    userId: null,
+    profileKey: "anonymous",
+    isAuthenticated: false,
     mode: "authenticated",
   };
 }
@@ -36,41 +35,24 @@ export function getConfiguredAuthMode() {
 }
 
 export async function getAppSession(): Promise<AppSession> {
-  const authMode = getConfiguredAuthMode();
-
-  // Central seam for future auth integration. Until a provider is installed,
-  // the app keeps running in single-user mode by default.
-  if (authMode !== "authenticated") {
+  if (getConfiguredAuthMode() !== "authenticated") {
     return singleUserSession();
   }
 
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  const user = data.user;
 
-    if (!error && data.user?.id) {
-      return authenticatedSession(data.user.id);
-    }
-  } catch {
-    // Fall through to the cookie-based placeholder so local setup can still
-    // boot before Supabase keys are configured.
+  if (error || !user?.id || !isEmailAllowed(user.email)) {
+    return anonymousSession();
   }
 
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(AUTH_SESSION_COOKIE)?.value?.trim();
-  const userIdCookie = cookieStore.get(AUTH_USER_ID_COOKIE)?.value?.trim();
-  const userId = userIdCookie || sessionCookie || "";
-
-  if (!userId) {
-    return {
-      userId: null,
-      profileKey: "anonymous",
-      isAuthenticated: false,
-      mode: "authenticated",
-    };
-  }
-
-  return authenticatedSession(userId);
+  return {
+    userId: user.id,
+    profileKey: SHARED_PROFILE_KEY,
+    isAuthenticated: true,
+    mode: "authenticated",
+  };
 }
 
 export async function requireAuthenticatedUser() {
@@ -81,12 +63,6 @@ export async function requireAuthenticatedUser() {
   return session;
 }
 
-export function scopeOwnedWhere<TWhere extends Record<string, unknown>>(where: TWhere, userId: string | null) {
-  return userId ? { ...where, userId } : where;
-}
-
 export async function routineAccessWhere(id: string) {
-  const session = await getAppSession();
-
-  return scopeOwnedWhere({ id }, session.userId);
+  return { id };
 }
