@@ -38,7 +38,27 @@ export async function sendMagicLink(formData: FormData) {
     redirect(`/signin?error=${encodeURIComponent(error.message)}&next=${encodeURIComponent(next)}`);
   }
 
-  redirect(`/signin?message=${encodeURIComponent("Check your email for the sign-in link.")}&next=${encodeURIComponent(next)}`);
+  redirect(`/signin?sent=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`);
+}
+
+export async function verifyCode(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const token = String(formData.get("code") ?? "").replace(/\D/g, "");
+  const next = normalizeNext(String(formData.get("next") ?? ""));
+  const back = `/signin?sent=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`;
+
+  if (!email || !token) {
+    redirect(`${back}&error=${encodeURIComponent("Enter the code from the email.")}`);
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+
+  if (error) {
+    redirect(`${back}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(next);
 }
 
 export async function signOut() {

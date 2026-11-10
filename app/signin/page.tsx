@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { sendMagicLink } from "./actions";
+import type { CSSProperties } from "react";
+import { sendMagicLink, verifyCode } from "./actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -19,6 +20,7 @@ export default async function SignInPage(props: { searchParams?: SearchParams })
   const next = normalizeNext(readFirst(searchParams.next));
   const error = readFirst(searchParams.error);
   const message = readFirst(searchParams.message);
+  const sentTo = readFirst(searchParams.sent);
 
   return (
     <main
@@ -44,11 +46,15 @@ export default async function SignInPage(props: { searchParams?: SearchParams })
       >
         <div style={{ display: "grid", gap: 8 }}>
           <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.55 }}>
-            Supabase Auth
+            Progression
           </p>
-          <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.05, fontWeight: 900 }}>Sign in to Progression</h1>
+          <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.05, fontWeight: 900 }}>
+            {sentTo ? "Check your email" : "Sign in"}
+          </h1>
           <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, opacity: 0.72 }}>
-            Start with email magic links while the app is being upgraded to a real multi-user model.
+            {sentTo
+              ? `We sent a sign-in email to ${sentTo}. Tap the link in it, or enter the code here.`
+              : "Enter your email and we'll send you a sign-in link and code. No password needed."}
           </p>
         </div>
 
@@ -64,52 +70,69 @@ export default async function SignInPage(props: { searchParams?: SearchParams })
           </div>
         ) : null}
 
-        <form action={sendMagicLink} style={{ display: "grid", gap: 14 }}>
-          <input type="hidden" name="next" value={next} />
-          <label style={{ display: "grid", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.88 }}>Email</span>
-            <input
-              type="email"
-              name="email"
-              required
-              placeholder="you@example.com"
-              style={{
-                width: "100%",
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(8,10,18,0.78)",
-                color: "inherit",
-                padding: "14px 16px",
-                fontSize: 16,
-              }}
-            />
-          </label>
+        {sentTo ? (
+          <form action={verifyCode} style={{ display: "grid", gap: 14 }}>
+            <input type="hidden" name="next" value={next} />
+            <input type="hidden" name="email" value={sentTo} />
+            <label style={{ display: "grid", gap: 8 }}>
+              <span style={labelStyle}>Code</span>
+              <input
+                type="text"
+                name="code"
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                style={{ ...inputStyle, letterSpacing: "0.3em", textAlign: "center" }}
+              />
+            </label>
+            <button type="submit" style={buttonStyle}>
+              Sign in
+            </button>
+          </form>
+        ) : (
+          <form action={sendMagicLink} style={{ display: "grid", gap: 14 }}>
+            <input type="hidden" name="next" value={next} />
+            <label style={{ display: "grid", gap: 8 }}>
+              <span style={labelStyle}>Email</span>
+              <input type="email" name="email" required autoComplete="email" placeholder="you@example.com" style={inputStyle} />
+            </label>
+            <button type="submit" style={buttonStyle}>
+              Email me a sign-in link
+            </button>
+          </form>
+        )}
 
-          <button
-            type="submit"
-            style={{
-              border: 0,
-              borderRadius: 14,
-              padding: "14px 16px",
-              fontSize: 15,
-              fontWeight: 900,
-              background: "linear-gradient(135deg, #f4d35e 0%, #ee964b 100%)",
-              color: "#111827",
-              cursor: "pointer",
-            }}
-          >
-            Email me a sign-in link
-          </button>
-        </form>
-
-        <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.62 }}>
-          After clicking the email link you will come back here, then the session cookie will be stored server-side.
-        </div>
-
-        <Link href="/" style={{ fontSize: 13, fontWeight: 700, opacity: 0.78 }}>
-          Back to app
-        </Link>
+        {sentTo ? (
+          <Link href={`/signin?next=${encodeURIComponent(next)}`} style={{ fontSize: 13, fontWeight: 700, opacity: 0.78 }}>
+            Use a different email or send again
+          </Link>
+        ) : null}
       </section>
     </main>
   );
 }
+
+const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 700, opacity: 0.88 };
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(8,10,18,0.78)",
+  color: "inherit",
+  padding: "14px 16px",
+  fontSize: 16,
+};
+
+const buttonStyle: CSSProperties = {
+  border: 0,
+  borderRadius: 14,
+  padding: "14px 16px",
+  minHeight: 44,
+  fontSize: 15,
+  fontWeight: 900,
+  background: "linear-gradient(135deg, #f4d35e 0%, #ee964b 100%)",
+  color: "#111827",
+  cursor: "pointer",
+};
