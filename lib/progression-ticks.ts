@@ -8,9 +8,10 @@
 //
 // Only rungs that opted in are touched. A wrong auto-tick is worse than none.
 
-import type { Prisma, RungMetric } from "@/generated/prisma";
+import type { RungMetric } from "@/generated/prisma";
+import type { PrismaTx } from "@/lib/prisma";
 
-type Tx = Prisma.TransactionClient;
+type Tx = PrismaTx;
 
 export type LoggedExercise = {
   exerciseId: string;

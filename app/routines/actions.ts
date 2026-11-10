@@ -37,7 +37,9 @@ import { resolveProgramWorkoutContext, type ProgramPlanRef } from "@/lib/program
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
 import { exerciseParamKeys, normalizeExerciseParamInput } from "@/lib/exercise-params";
 import { compatibleActivitySlugs, normalizeSpotName } from "@/lib/activity-spots";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { recordBarRaise } from "@/lib/goal-milestones";
 import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
 import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
@@ -472,10 +474,11 @@ async function mergeWorkoutExerciseMetadataIntoRoutineTx(tx: PrismaTx, routineId
 }
 
 async function syncRoutineTags(routineId: string, tagNames: string[]) {
+  const { profileKey } = await getAppSession();
   const tags = await Promise.all(
     tagNames.map((name) =>
       prisma.routineTag.upsert({
-        where: { name },
+        where: { profileKey_name: { profileKey, name } },
         update: {},
         create: { name },
         select: { id: true, name: true },
@@ -822,7 +825,7 @@ async function ensureExerciseExists(
   if (!name) throw new Error("Exercise name is required.");
 
   const existingExercises = await tx.exercise.findMany({
-    select: { id: true, name: true, unit: true, supportsWeight: true },
+    select: { id: true, name: true, unit: true, supportsWeight: true, profileKey: true },
   });
   const existing = findExerciseNameMatch(existingExercises, name);
   if (existing) {
@@ -831,7 +834,8 @@ async function ensureExerciseExists(
         `"${existing.name}" already exists as a ${exerciseUnitLabel(existing.unit).toLowerCase()} exercise. Rename this one or use the existing exercise instead.`
       );
     }
-    if (params.supportsWeight && !existing.supportsWeight) {
+    const { profileKey } = await getAppSession();
+    if (params.supportsWeight && !existing.supportsWeight && canEditExercise(existing.profileKey, profileKey)) {
       await tx.exercise.update({
         where: { id: existing.id },
         data: { supportsWeight: true },

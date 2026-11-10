@@ -269,7 +269,7 @@ model ActivityType {
 // multi-user lands.
 model UserActivityTypePreference {
   id             String   @id @default(cuid())
-  activityTypeId String   @unique
+  activityTypeId String
   enabled        Boolean  @default(true)
   // Optional manual reorder within the dropdown; null = use type.sortOrder.
   sortOrder      Int?
@@ -277,6 +277,12 @@ model UserActivityTypePreference {
   updatedAt      DateTime @updatedAt
 
   activityType ActivityType @relation(fields: [activityTypeId], references: [id], onDelete: Cascade)
+
+  profileKey String @default("default")
+
+  @@unique([profileKey, activityTypeId])
+  @@index([activityTypeId])
+  @@index([profileKey])
 }
 
 enum ClimbMediaKind {
@@ -389,6 +395,10 @@ model Routine {
   @@index([kind, subtype])
   @@index([isPlaceholder])
   @@index([activityTypeId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // ── Rotations ───────────────────────────────────────────────────────────────
@@ -408,6 +418,10 @@ model Rotation {
   slots RotationSlot[]
 
   @@index([isActive])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model RotationSlot {
@@ -469,6 +483,10 @@ model SchedulePlan {
 
   entries    ScheduleEntry[]
   activation SchedulePlanActivation?
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model ScheduleEntry {
@@ -522,6 +540,10 @@ model ScheduleManualEntry {
   @@index([scheduledDate, sortOrder])
   @@index([routineId])
   @@index([activityTypeId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model ClimbLocation {
@@ -553,6 +575,10 @@ model ClimbLocation {
 
   @@index([type, name])
   @@index([osmType, osmId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // Named sub-region of a ClimbLocation — sectors, walls, boulders within a
@@ -606,6 +632,10 @@ model ActivitySpot {
 
   @@index([activitySlug, name])
   @@index([osmType, osmId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model ClimbProblem {
@@ -630,6 +660,10 @@ model ClimbProblem {
   @@index([locationId, grade])
   @@index([name])
   @@index([onTickList])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // Photos and external links attached to a ClimbLocation, ClimbArea, or
@@ -665,6 +699,10 @@ model ClimbMedia {
   @@index([locationId, sortOrder])
   @@index([areaId, sortOrder])
   @@index([problemId, sortOrder])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model ClimbAttempt {
@@ -792,6 +830,10 @@ model RoutineLog {
   @@index([activitySpotId])
   @@index([activityTypeId, performedAt])
   @@index([backpackingTripId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // A multi-day backpacking trip. Parent of N day-logs (RoutineLog rows, one per
@@ -959,6 +1001,10 @@ model ZoneActivity {
 
   @@index([zoneId, performedAt])
   @@index([routineLogId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model PainLog {
@@ -977,6 +1023,10 @@ model PainLog {
 
   @@index([zoneId, loggedAt])
   @@index([loggedAt])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model ActiveInjury {
@@ -1000,6 +1050,10 @@ model ActiveInjury {
   updatedAt  DateTime     @updatedAt
 
   @@index([status])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model InjuryZone {
@@ -1177,6 +1231,11 @@ model Exercise {
   triggeredGoals   FrequencyGoalTriggerExercise[]
 
   @@index([libraryKind, name])
+
+  // Null = shared catalog; set = a private exercise created by that profile.
+  profileKey String?
+
+  @@index([profileKey])
 }
 
 model MetadataGroup {
@@ -1221,6 +1280,8 @@ model StimulusCategory {
 model AppProfile {
   id                         String   @id @default(cuid())
   key                        String   @unique @default("default")
+  email      String? @unique
+  authUserId String? @unique
   selectedStimulusPresetKeys String[] @default([])
   // Lightweight identity (single-user today; migrates to the real user record
   // when auth lands). All null until set in profile settings.
@@ -1353,11 +1414,16 @@ model GuidedStepMetadataGroup {
 
 model RoutineTag {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   routines RoutineTagAssignment[]
+
+  profileKey String @default("default")
+
+  @@unique([profileKey, name])
+  @@index([profileKey])
 }
 
 model RoutineTagAssignment {
@@ -1494,6 +1560,10 @@ model Goal {
   @@index([metricKey])
   @@index([targetType, targetId])
   @@index([timeframe, startDate, endDate])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model FrequencyGoal {
@@ -1547,6 +1617,10 @@ model FrequencyGoal {
   programLinks ProgramFrequencyGoal[]
 
   @@index([isActive])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model FrequencyGoalRoutine {
@@ -1612,6 +1686,10 @@ model GoalMilestone {
   @@unique([goalId, kind, value])
   @@index([lineageId, achievedAt])
   @@index([goalId])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 enum GoalMilestoneKind {
@@ -1633,6 +1711,10 @@ model DayTodo {
 
   @@index([ymd, done])
   @@index([done, ymd])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // ── Focus + Progression roadmap (Phase 1) ────────────────────────────────
@@ -1946,6 +2028,10 @@ model ProgressionMilestone {
   @@index([ownerKind, ownerId, sortOrder])
   @@index([scopeKind, scopeRef, status])
   @@index([stageId, sortOrder])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 // ── AI coach (Slice 3) ─────────────────────────────────────────────────────
@@ -2272,6 +2358,10 @@ model CoachThread {
   messages        CoachMessage[]
 
   @@index([updatedAt])
+
+  profileKey String @default("default")
+
+  @@index([profileKey])
 }
 
 model CoachMessage {

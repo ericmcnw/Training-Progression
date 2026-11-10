@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient, RoutineKind } from "@/generated/prisma";
+import type { RoutineKind } from "@/generated/prisma";
+import type { PrismaTx } from "@/lib/prisma";
 import {
   ROUTINE_DOMAIN_OPTIONS,
   ROUTINE_SUBTYPE_OPTIONS,
@@ -54,7 +55,7 @@ function placeholderName(kind: RoutineKind, domain: QuickLogDomain, subtype: str
 // the structural type. Safe to call repeatedly; a tiny race could create
 // duplicates (no unique constraint) but the cost is just an extra hidden row.
 export async function findOrCreateQuickLogPlaceholder(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: PrismaTx,
   params: {
     kind: RoutineKind;
     domain: QuickLogDomain;

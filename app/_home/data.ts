@@ -255,9 +255,10 @@ export async function getHomeData(): Promise<HomeData> {
       orderBy: [{ done: "asc" }, { createdAt: "asc" }],
       select: { id: true, ymd: true, label: true, done: true },
     }),
-    prisma.$queryRawUnsafe<Array<{ routineId: string; activityTypeId: string | null; scheduledDate: string; sortOrder: number }>>(
-      'SELECT "routineId","activityTypeId","scheduledDate","sortOrder" FROM "ScheduleManualEntry"'
-    ),
+    prisma.scheduleManualEntry.findMany({
+      orderBy: [{ scheduledDate: "asc" }, { sortOrder: "asc" }],
+      select: { routineId: true, activityTypeId: true, scheduledDate: true, sortOrder: true },
+    }),
     prisma.plannedSession.findMany({
       where: { program: { profileKey: session.profileKey }, status: "PLANNED", currentYmd: { gte: wagStart, lte: wagEnd }, routineId: { not: null } },
       orderBy: [{ currentYmd: "asc" }, { sortOrder: "asc" }],

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@/generated/prisma";
+import type { PrismaTx } from "@/lib/prisma";
 import { inferExerciseMetadataSlugs } from "@/lib/metadata";
 import {
   clearsFloor,
@@ -11,7 +11,7 @@ import {
 import { sportSlugFromRoutineId } from "@/lib/synthetic-sport-routines";
 import { TYPE_SLUG_TO_REGISTRY_SLUG } from "@/lib/activities/endurance-palette";
 
-type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
+type Tx = PrismaTx;
 
 // Coarse muscle/training tags used on exercises don't match the granular body-
 // zone group slugs, so they'd light up nothing on the map. Expand them to the

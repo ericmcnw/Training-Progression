@@ -213,6 +213,7 @@ type GoalChartCandidate = {
 // normalizeRoutineFrequencyTarget keep working unchanged.
 type RoutineFrequencyGoalRow = {
   id: string;
+  profileKey: string;
   name: string;
   kind: string;
   subtype: string | null;
@@ -227,6 +228,7 @@ type RoutineFrequencyGoalRow = {
 
 type GroupFrequencyGoalRow = {
   id: string;
+  profileKey: string;
   name: string;
   isActive: boolean;
   createdAt: Date;
@@ -1380,6 +1382,7 @@ function buildRoutineFrequencyGoalInsightCore(routine: RoutineFrequencyGoalRow, 
       isActive: routine.frequencyGoalEnabled,
       notes: null,
       config: null,
+      profileKey: routine.profileKey,
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
     },
@@ -1526,6 +1529,7 @@ function buildGroupFrequencyGoalInsightCore(goal: GroupFrequencyGoalRow, logs: G
       isActive: goal.isActive,
       notes: null,
       config: null,
+      profileKey: goal.profileKey,
       createdAt: goal.createdAt,
       updatedAt: goal.updatedAt,
     },
@@ -2003,6 +2007,7 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
       return [
         {
           id: link.routine.id,
+          profileKey: fg.profileKey,
           name: link.routine.name,
           kind: link.routine.kind,
           subtype: link.routine.subtype,
@@ -2020,6 +2025,7 @@ export async function getGoalsOverview(filters: GoalListFilters = {}) {
   // input matches the GroupFrequencyGoalRow shape it expects.
   const groupFrequencyRows: GroupFrequencyGoalRow[] = groupFrequencyGoals.map((g) => ({
     id: g.id,
+    profileKey: g.profileKey,
     name: g.name,
     isActive: g.isActive,
     createdAt: g.createdAt,
@@ -2131,6 +2137,7 @@ export async function getGoalInsight(goalId: string) {
     if (goal.routines.length === 0 && !isTagTargeted) return null;
     const shape: GroupFrequencyGoalRow = {
       id: goal.id,
+      profileKey: goal.profileKey,
       name: goal.name,
       isActive: goal.isActive,
       createdAt: goal.createdAt,
@@ -2170,6 +2177,7 @@ export async function getGoalInsight(goalId: string) {
     if (!fg || !link?.routine || link.routine.isDeleted) return null;
     const row: RoutineFrequencyGoalRow = {
       id: link.routine.id,
+      profileKey: fg.profileKey,
       name: link.routine.name,
       kind: link.routine.kind,
       subtype: link.routine.subtype,

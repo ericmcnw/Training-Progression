@@ -9,6 +9,7 @@
 // support.
 
 import { revalidatePath } from "next/cache";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 
@@ -17,8 +18,9 @@ import { revalidateActivityWorlds } from "@/lib/revalidate-helpers";
 // still display with their type name. Re-enable by calling again with
 // enabled=true.
 export async function setActivityTypeEnabled(input: { activityTypeId: string; enabled: boolean }) {
+  const { profileKey } = await getAppSession();
   await prisma.userActivityTypePreference.upsert({
-    where: { activityTypeId: input.activityTypeId },
+    where: { profileKey_activityTypeId: { profileKey, activityTypeId: input.activityTypeId } },
     create: { activityTypeId: input.activityTypeId, enabled: input.enabled },
     update: { enabled: input.enabled },
   });

@@ -24,9 +24,19 @@ PROGRESSION_AUTH_MODE=authenticated
 AUTH_ALLOWED_EMAILS=you@example.com
 ```
 
-`AUTH_ALLOWED_EMAILS` is required: an empty list locks everyone out. It stays
-in place until owned tables carry a `userId`, because until then every
-signed-in account sees the same data.
+`AUTH_ALLOWED_EMAILS` is required: an empty list locks everyone out.
+
+Before the first sign-in, claim the existing `default` profile for the owner's
+email, or that sign-in creates a fresh empty profile:
+
+```sh
+node scripts/link-profile.mjs you@example.com            # dry run
+node scripts/link-profile.mjs you@example.com --commit
+```
+
+Ownership is enforced by the `profile-scope` extension in `lib/prisma.ts`
+(rules in `lib/profile-scope.ts`). Every new model must be added there as
+owned, child, or deliberately global.
 
 Keep `DATABASE_URL` and `DIRECT_URL` as they are for Prisma.
 

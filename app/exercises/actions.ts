@@ -6,7 +6,9 @@ import {
   withDerivedExerciseLibraryKind,
 } from "@/lib/exercise-library";
 import { exerciseUnitLabel, findExerciseNameMatch, normalizeExerciseName } from "@/lib/exercises";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -77,13 +79,13 @@ export async function createExercise(formData: FormData) {
   const existing = await (async () => {
     try {
       return await prisma.exercise.findMany({
-        select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true },
+        select: { id: true, name: true, unit: true, supportsWeight: true, libraryKind: true, profileKey: true },
       });
     } catch (error) {
       if (!isMissingExerciseLibraryKindError(error)) throw error;
       return withDerivedExerciseLibraryKind(
         await prisma.exercise.findMany({
-          select: { id: true, name: true, unit: true, supportsWeight: true },
+          select: { id: true, name: true, unit: true, supportsWeight: true, profileKey: true },
         })
       );
     }
@@ -96,7 +98,9 @@ export async function createExercise(formData: FormData) {
         `"${match.name}" already exists as a ${exerciseUnitLabel(match.unit).toLowerCase()} exercise. Edit that exercise instead of creating a duplicate.`
       );
     }
-    if (supportsWeight && !match.supportsWeight) {
+    // A shared catalog exercise is reused as-is; only its owner edits it.
+    const editable = canEditExercise(match.profileKey, (await getAppSession()).profileKey);
+    if (editable && supportsWeight && !match.supportsWeight) {
       try {
         await prisma.exercise.update({
           where: { id: match.id },
@@ -109,7 +113,7 @@ export async function createExercise(formData: FormData) {
           data: { supportsWeight: true },
         });
       }
-    } else if (match.libraryKind !== libraryKind) {
+    } else if (editable && match.libraryKind !== libraryKind) {
       try {
         await prisma.exercise.update({
           where: { id: match.id },
@@ -119,7 +123,7 @@ export async function createExercise(formData: FormData) {
         if (!isMissingExerciseLibraryKindError(error)) throw error;
       }
     }
-    await syncExerciseMetadataGroups(match.id, metadataGroupIds);
+    if (editable) await syncExerciseMetadataGroups(match.id, metadataGroupIds);
   } else {
     const created = await (async () => {
       try {
