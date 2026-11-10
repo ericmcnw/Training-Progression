@@ -35,7 +35,9 @@
 //   - Area aggregation rollup (most-climbed areas per location).
 
 import Link from "next/link";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { formatAppDate, relativeFromNow } from "@/lib/dates";
 import { SectionCard, EmptyState } from "@/app/progress/ui";
 import LogSessionCTA from "@/app/activities/_shared/LogSessionCTA";
@@ -383,7 +385,7 @@ export default async function ClimbingHubPage(props: {
   const trainingChartHasData = trainingChartData.series.some((sr) => sr.weeklyValues.some((v) => v > 0));
 
   // Tagged routines + exercises for the "what counts" management panel.
-  const [taggedRoutines, taggedExercises, allExerciseNames] = await Promise.all([
+  const [taggedRoutines, taggedExerciseRows, exerciseNameRows, { profileKey }] = await Promise.all([
     prisma.routine.findMany({
       where: {
         isDeleted: false,
@@ -399,14 +401,23 @@ export default async function ClimbingHubPage(props: {
     }),
     prisma.exercise.findMany({
       where: { supportsSports: { has: "climbing" } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, profileKey: true },
       orderBy: { name: "asc" },
     }),
     prisma.exercise.findMany({
-      select: { name: true },
+      select: { name: true, profileKey: true },
       orderBy: { name: "asc" },
     }),
+    getAppSession(),
   ]);
+  const taggedExercises = taggedExerciseRows.map((e) => ({
+    id: e.id,
+    name: e.name,
+    editable: canEditExercise(e.profileKey, profileKey),
+  }));
+  const taggableExerciseNames = exerciseNameRows
+    .filter((e) => canEditExercise(e.profileKey, profileKey))
+    .map((e) => e.name);
 
   // ── Pyramid (discipline pill + time range, split indoor/outdoor) ────────
   const pyramidCutoff =
@@ -803,7 +814,7 @@ export default async function ClimbingHubPage(props: {
       <TrainingTagsPanel
         taggedRoutines={taggedRoutines}
         taggedExercises={taggedExercises}
-        allExerciseNames={allExerciseNames.map((e) => e.name)}
+        allExerciseNames={taggableExerciseNames}
       />
 
       {/* ── Tick list ─────────────────────────────────────────────── */}

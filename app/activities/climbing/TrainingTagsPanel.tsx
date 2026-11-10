@@ -18,7 +18,7 @@ export default function TrainingTagsPanel({
   allExerciseNames,
 }: {
   taggedRoutines: Array<{ id: string; name: string }>;
-  taggedExercises: Array<{ id: string; name: string }>;
+  taggedExercises: Array<{ id: string; name: string; editable: boolean }>;
   allExerciseNames: string[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -89,15 +89,17 @@ export default function TrainingTagsPanel({
               {taggedExercises.map((e) => (
                 <span key={e.id} style={exerciseChipStyle}>
                   {e.name}
-                  <button
-                    type="button"
-                    onClick={() => removeExercise(e.id)}
-                    disabled={isPending}
-                    style={untagBtnStyle}
-                    aria-label={`Stop counting ${e.name} as climbing training`}
-                  >
-                    ✕
-                  </button>
+                  {e.editable ? (
+                    <button
+                      type="button"
+                      onClick={() => removeExercise(e.id)}
+                      disabled={isPending}
+                      style={untagBtnStyle}
+                      aria-label={`Stop counting ${e.name} as climbing training`}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
                 </span>
               ))}
             </div>

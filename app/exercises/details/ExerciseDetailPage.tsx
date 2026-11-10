@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { formatAppDate } from "@/lib/dates";
 import { exerciseUnitLabel } from "@/lib/exercises";
 import {
@@ -32,7 +34,7 @@ export const dynamic = "force-dynamic";
 //   - Routines that train this exercise: linked rows.
 
 export default async function ExerciseDetailPage({ id }: { id: string }) {
-  const [exercise, sessionExercises, routineMemberships] = await Promise.all([
+  const [exercise, sessionExercises, routineMemberships, { profileKey }] = await Promise.all([
     prisma.exercise.findUnique({
       where: { id },
       select: {
@@ -42,6 +44,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
         supportsWeight: true,
         libraryKind: true,
         paramKeys: true,
+        profileKey: true,
       },
     }),
     prisma.sessionExercise.findMany({
@@ -72,6 +75,7 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
         },
       },
     }),
+    getAppSession(),
   ]);
 
   if (!exercise) return notFound();
@@ -185,11 +189,13 @@ export default async function ExerciseDetailPage({ id }: { id: string }) {
           </div>
           <h1 style={titleStyle}>{exercise.name}</h1>
         </div>
-        <div style={headerActionsStyle}>
-          <Link href={`/exercises/${exercise.id}/edit`} style={editBtnStyle}>
-            Edit
-          </Link>
-        </div>
+        {canEditExercise(exercise.profileKey, profileKey) ? (
+          <div style={headerActionsStyle}>
+            <Link href={`/exercises/${exercise.id}/edit`} style={editBtnStyle}>
+              Edit
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       {/* ── Stats row ───────────────────────────────────────────────── */}

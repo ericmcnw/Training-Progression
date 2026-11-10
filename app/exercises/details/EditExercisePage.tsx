@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { isMissingExerciseLibraryKindError, withDerivedExerciseLibraryKind } from "@/lib/exercise-library";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { updateExercise } from "../actions";
 import ExerciseForm from "../ExerciseForm";
 
@@ -14,7 +16,7 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
 
   if (!id) return <div style={{ padding: 20 }}>Missing exercise id.</div>;
 
-  const [exercise, metadataGroups] = await Promise.all([
+  const [exercise, metadataGroups, { profileKey }] = await Promise.all([
     (async () => {
       try {
         return await prisma.exercise.findUnique({
@@ -34,6 +36,7 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
             name: true,
             unit: true,
             supportsWeight: true,
+            profileKey: true,
             metadataGroups: {
               select: { groupId: true },
             },
@@ -47,9 +50,13 @@ export default async function EditExercisePage(props: { params: Promise<Params> 
       select: { id: true, slug: true, label: true, kind: true },
       orderBy: [{ kind: "asc" }, { label: "asc" }],
     }),
+    getAppSession(),
   ]);
 
   if (!exercise) return <div style={{ padding: 20 }}>Exercise not found.</div>;
+  if (!canEditExercise(exercise.profileKey, profileKey)) {
+    return <div style={{ padding: 20 }}>This exercise is part of the shared library and can&apos;t be edited.</div>;
+  }
 
   return (
     <div className="mobileExercisesPage mobilePageShell" style={styles.container}>

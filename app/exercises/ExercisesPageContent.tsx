@@ -6,7 +6,9 @@ import {
   withDerivedExerciseLibraryKind,
 } from "@/lib/exercise-library";
 import { canonicalizeExerciseName, compareExerciseNames, exerciseMatchesQuery, exerciseUnitLabel } from "@/lib/exercises";
+import { getAppSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canEditExercise } from "@/lib/profile-scope";
 import { createExercise } from "./actions";
 import ExerciseForm from "./ExerciseForm";
 
@@ -25,7 +27,7 @@ export default async function ExercisesPage({
 }: {
   searchParams?: SearchParams;
 }) {
-  const [exercises, metadataGroups] = await Promise.all([
+  const [exercises, metadataGroups, { profileKey }] = await Promise.all([
     (async () => {
       try {
         return await prisma.exercise.findMany({
@@ -50,6 +52,7 @@ export default async function ExercisesPage({
               name: true,
               unit: true,
               supportsWeight: true,
+              profileKey: true,
               metadataGroups: {
                 include: {
                   group: {
@@ -67,6 +70,7 @@ export default async function ExercisesPage({
       select: { id: true, slug: true, label: true, kind: true },
       orderBy: [{ kind: "asc" }, { label: "asc" }],
     }),
+    getAppSession(),
   ]);
 
   const searchQuery = getSearchParamValue(searchParams, "q").trim();
@@ -189,9 +193,11 @@ export default async function ExercisesPage({
           <div key={exercise.id} className="mobileCard" style={styles.card}>
             <div className="mobileExercisesCardHeader" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div style={{ fontWeight: 900 }}>{exercise.name}</div>
-              <Link href={`/exercises/${exercise.id}/edit`} style={styles.smallLink}>
-                Edit
-              </Link>
+              {canEditExercise(exercise.profileKey, profileKey) ? (
+                <Link href={`/exercises/${exercise.id}/edit`} style={styles.smallLink}>
+                  Edit
+                </Link>
+              ) : null}
             </div>
             <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>
               Style: <b>{exerciseUnitLabel(exercise.unit)}</b> | Weight: <b>{exercise.supportsWeight ? "Yes" : "No"}</b> | Library: <b>{EXERCISE_LIBRARY_KIND_LABELS[exercise.libraryKind]}</b>
