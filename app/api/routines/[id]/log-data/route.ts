@@ -20,6 +20,8 @@ import {
   resolveRoutineActivitySlug,
 } from "@/lib/activity-spots";
 import type { Prisma } from "@/generated/prisma";
+import { todayAppYmd } from "@/lib/dates";
+import { loadPlansForExercises, loadPlansForLog, logPlanLines, planNoteFor, planTargetToPrescription } from "@/lib/program-plan";
 
 // TODO: accept userId from session when auth is added — add `where: { id: routineId, userId }` to each query
 export async function GET(
@@ -85,7 +87,7 @@ export async function GET(
 
   if (isWorkoutKind(kind)) {
     const exerciseIds = routine.exercises.map((e) => e.exerciseId);
-    const [availableExercises, lastExerciseEntries, activePainZones] = await Promise.all([
+    const [availableExercises, lastExerciseEntries, activePainZones, plans] = await Promise.all([
       fetchAvailableExercises(),
       Promise.all(
         exerciseIds.map((eid) =>
@@ -108,6 +110,7 @@ export async function GET(
         )
       ),
       getRoutinePainCheckZones(routineId),
+      loadPlansForExercises(exerciseIds, todayAppYmd()),
     ]);
 
     const lastExerciseMap = new Map(
@@ -127,7 +130,10 @@ export async function GET(
             seconds: s.seconds !== null ? String(s.seconds) : undefined,
             weightLb: s.weightLb !== null ? String(s.weightLb) : undefined,
           })) ?? [];
-      const defaultSetCount = lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3);
+      const plan = plans.get(exercise.exerciseId);
+      const planTarget = plan?.evaluation.target ?? null;
+      const defaultSetCount =
+        planTarget?.sets ?? (lastRows.length > 0 ? lastRows.length : Math.max(1, exercise.defaultSets ?? 3));
       const lastDate = prev?.routineLog?.performedAt
         ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(prev.routineLog.performedAt)
         : undefined;
@@ -138,10 +144,12 @@ export async function GET(
         unit: exercise.exercise.unit,
         supportsWeight: exercise.exercise.supportsWeight,
         paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
-        params: exerciseParamsToInput(readExerciseParams(prev?.params)),
+        params: exerciseParamsToInput({ ...readExerciseParams(prev?.params), ...(planTarget?.params ?? {}) }),
         rows: Array.from({ length: defaultSetCount }, (_, i) => ({ setNumber: i + 1 })),
         lastRows: lastRows.length > 0 ? lastRows : undefined,
         lastDate,
+        prescription: planTarget ? planTargetToPrescription(planTarget) : undefined,
+        plan: plan ? planNoteFor(plan) : undefined,
       };
     });
 
@@ -240,7 +248,7 @@ export async function GET(
     const includeClimbingSpots = compatibleSlugs.includes("climbing");
     const routineIsSynthetic = routine.id === SYNTHETIC_ENDURANCE_ROUTINE_ID;
 
-    const [activePainZones, activitySpotRows, climbingCrossRows, activityTypeRows] = await Promise.all([
+    const [activePainZones, activitySpotRows, climbingCrossRows, activityTypeRows, activityPlans] = await Promise.all([
       getRoutinePainCheckZones(routineId),
       activitySlug && activitySpotConfig?.supportsMap && compatibleSlugs.length > 0
         ? prisma.activitySpot.findMany({
@@ -266,6 +274,7 @@ export async function GET(
         },
         orderBy: [{ family: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       }),
+      loadPlansForLog({ kind: "ACTIVITY" }, todayAppYmd()),
     ]);
 
     const savedSpots = activitySlug
@@ -304,6 +313,7 @@ export async function GET(
       activityTypes,
       initialActivityTypeId: routine.activityTypeId ?? null,
       routineIsSynthetic,
+      planLines: logPlanLines(activityPlans),
     });
   }
 

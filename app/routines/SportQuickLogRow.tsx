@@ -186,6 +186,7 @@ function LogSheet({ sport, onClose }: { sport: SportRowData; onClose: () => void
   return (
     <SportLogModal
       title={`Log ${sport.label}`}
+      sportSlug={sport.slug}
       onClose={onClose}
       footer={
         <>

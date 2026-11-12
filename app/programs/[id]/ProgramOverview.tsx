@@ -9,6 +9,7 @@ import type { FocusDetail } from "@/app/focus/data";
 import type { ProgramDetailData } from "@/app/programs/detail-data";
 import type { OverviewPhase, OverviewStep, PainSignal, ProgramOverviewData, Readout } from "@/app/programs/overview-data";
 import { BlockSummary, GoalRow, NamedOutcomes, ProjectionLine } from "@/app/programs/[id]/ProgramDetailViews";
+import type { WeekPlanLine } from "@/lib/program-plan";
 
 type Detail = NonNullable<ProgramDetailData>;
 
@@ -49,12 +50,12 @@ export default function ProgramOverview({
         {overview.week.plan.length ? (
           <div style={list}>
             {overview.week.plan.map((line) => (
-              <div key={line.name} style={row}>
+              <div key={line.itemId} style={row}>
                 <span style={rowMain}>
                   <strong style={rowTitle}>{line.name}</strong>
-                  <span style={rowMeta}>{line.done ? "done this week" : "target this week"}</span>
+                  <span style={{ ...rowMeta, color: PLAN_TONE[line.tone] }}>{planStatus(line)}</span>
                 </span>
-                <span style={{ ...planValue, color: line.change === "up" ? "#7ce8aa" : "rgba(255,255,255,0.85)" }}>
+                <span style={{ ...planValue, color: line.tone === "up" ? "#7ce8aa" : "rgba(255,255,255,0.85)" }}>
                   {line.target}{line.change === "up" ? " ↑" : ""}
                 </span>
               </div>
@@ -180,6 +181,17 @@ function NextPhaseCard({ programId, next }: { programId: string; next: NonNullab
   const met = next.entry?.met === true;
   const start = startNextPhase.bind(null, programId);
   const carry = next.openSteps ? ` ${next.openSteps} open step${next.openSteps === 1 ? "" : "s"} come with you.` : "";
+  const planChoices = next.askItems.length || next.dropItems.length ? (
+    <div style={{ display: "grid", gap: 6 }}>
+      {next.askItems.map((item) => (
+        <label key={item.id} style={keepRow}>
+          <input type="checkbox" name="keepPlanItem" value={item.id} defaultChecked style={{ width: 20, height: 20 }} />
+          Keep planning {item.name}
+        </label>
+      ))}
+      {next.dropItems.length ? <span style={rowMeta}>Stops at the phase change: {next.dropItems.join(", ")}</span> : null}
+    </div>
+  ) : null;
   return (
     <section style={{ ...gateCard, ...(met ? gateCardMet : null) }}>
       <span style={{ ...eyebrow, color: met ? "#7ce8aa" : "rgba(255,255,255,0.55)" }}>{met ? "Ready to move on" : "Next phase"}</span>
@@ -192,7 +204,8 @@ function NextPhaseCard({ programId, next }: { programId: string; next: NonNullab
       {met || !next.entry ? (
         <>
           {carry ? <span style={rowMeta}>{carry.trim()}</span> : null}
-          <form action={start}>
+          <form action={start} style={{ display: "grid", gap: 8 }}>
+            {planChoices}
             <button type="submit" style={met ? startButton : startButtonQuiet}>Start {next.name}</button>
           </form>
         </>
@@ -201,6 +214,7 @@ function NextPhaseCard({ programId, next }: { programId: string; next: NonNullab
           <summary style={{ ...rowMeta, cursor: "pointer", minHeight: 36, display: "flex", alignItems: "center" }}>Start anyway</summary>
           <form action={start} style={{ display: "grid", gap: 6, paddingTop: 4 }}>
             <span style={rowMeta}>The condition stays open.{carry}</span>
+            {planChoices}
             <button type="submit" style={startButtonQuiet}>Start {next.name} now</button>
           </form>
         </details>
@@ -388,6 +402,23 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <div style={emptyBox}>{children}</div>;
 }
 
+const PLAN_TONE: Record<WeekPlanLine["tone"], string> = {
+  up: "#7ce8aa",
+  held: "#f5c46a",
+  away: "#f5c46a",
+  done: "rgba(255,255,255,0.5)",
+  same: "rgba(255,255,255,0.58)",
+};
+
+function planStatus(line: WeekPlanLine) {
+  const progress = line.progress ? ` · ${line.progress} this week` : "";
+  if (line.tone === "done") return `done this week${progress}`;
+  if (line.tone === "away") return `been a while · the log offers last week first${progress}`;
+  if (line.tone === "held") return `held: last week fell short${progress}`;
+  if (line.tone === "up") return `up this week${progress}`;
+  return `this week${progress}`;
+}
+
 function stepCount(steps: OverviewStep[]) {
   if (!steps.length) return undefined;
   return `${steps.filter((s) => s.done).length} of ${steps.length} done`;
@@ -412,6 +443,7 @@ const gateCard: React.CSSProperties = { display: "grid", gap: 8, padding: 14, bo
 const gateCardMet: React.CSSProperties = { borderColor: "rgba(51,255,122,0.45)", background: "rgba(51,255,122,0.07)" };
 const startButton: React.CSSProperties = { minHeight: 44, width: "100%", borderRadius: 10, border: "1px solid rgba(51,255,122,0.6)", background: "rgba(51,255,122,0.16)", color: "#c9ffdc", fontSize: 14, fontWeight: 800 };
 const startButtonQuiet: React.CSSProperties = { ...startButton, borderColor: "rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.85)" };
+const keepRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: 14, fontWeight: 700 };
 const stepButton: React.CSSProperties = { width: "100%", minHeight: 52, padding: "10px 12px", display: "flex", gap: 12, alignItems: "flex-start", textAlign: "left", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.025)", color: "inherit", fontWeight: 400 };
 const checkbox: React.CSSProperties = { flexShrink: 0, width: 20, height: 20, marginTop: 1, borderRadius: 6, borderWidth: 1, borderStyle: "solid", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 900, color: "#0b1220" };
 const stepLabel: React.CSSProperties = { fontSize: 14, fontWeight: 700, lineHeight: 1.35 };

@@ -471,6 +471,7 @@ export default function ClimbLogSheet({ onClose }: { onClose: () => void }) {
   return (
     <SportLogModal
       title="Log Climbing"
+      sportSlug="climbing"
       onClose={onClose}
       footer={
         <>

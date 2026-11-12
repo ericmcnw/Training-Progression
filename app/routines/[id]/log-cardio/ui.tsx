@@ -48,6 +48,7 @@ import PoolSwimSets, {
 } from "./PoolSwimSets";
 import { loadSportLogContext, type SportLogContext } from "@/app/log/sport-actions";
 import type { ActivityTypeOption } from "@/app/components/LogDrawer";
+import type { LogPlanLine } from "@/lib/program-plan";
 
 export default function LogRunForm({
   routineId,
@@ -58,6 +59,7 @@ export default function LogRunForm({
   activityTypes = [],
   initialActivityTypeId = null,
   routineIsSynthetic = false,
+  planLines = [],
   onComplete,
   onBack,
   defaultPerformedAtLocal,
@@ -80,6 +82,8 @@ export default function LogRunForm({
   /** True when logging through the synthetic Endurance routine — the
    *  type picker is required (no default). Legacy routines preselect. */
   routineIsSynthetic?: boolean;
+  /** This week's plan targets for endurance lanes in active programs. */
+  planLines?: LogPlanLine[];
   onComplete?: () => void;
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
@@ -121,6 +125,9 @@ export default function LogRunForm({
   // the log row on save.
   const [activityTypeId, setActivityTypeId] = useState<string | null>(initialActivityTypeId);
   const activeType = activityTypes.find((t) => t.id === activityTypeId) ?? null;
+  const shownPlanLines = activeType
+    ? planLines.filter((line) => line.activityTypeId === activeType.id || line.enduranceFamilyId === activeType.familyId)
+    : planLines;
   const isPoolSwim = isPoolSwimType(activeType?.slug);
   // Interval-style structured input — surfaced when the active type sets
   // usesIntervals (currently Interval Run + Sprint). Values held as
@@ -462,6 +469,11 @@ export default function LogRunForm({
               onChange={(next) => { markDirty(); setActivityTypeId(next); }}
             />
           </Field>
+          {shownPlanLines.map((line) => (
+            <div key={line.text} style={{ fontSize: 12, fontWeight: 800, color: PLAN_LINE_COLOR[line.tone] }}>
+              Plan · {line.text}
+            </div>
+          ))}
         </FormSection>
       )}
 
@@ -821,3 +833,11 @@ const paceBadgeStyle: React.CSSProperties = {
   borderRadius: 12,
   background: "rgba(115,220,152,0.07)",
 };
+
+const PLAN_LINE_COLOR: Record<LogPlanLine["tone"], string> = {
+  up: "#7ce8aa",
+  held: "#f5c46a",
+  same: "rgba(255,255,255,0.65)",
+  done: "rgba(255,255,255,0.5)",
+};
+

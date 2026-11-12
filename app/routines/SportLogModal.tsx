@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import SportPlanLine from "./SportPlanLine";
 
 // Shared chrome for all sport-log sheets (Climb, Golf, generic).
 // Matches the existing LogDrawer look: full-screen modal, dark
@@ -18,9 +19,12 @@ export default function SportLogModal({
   onClose,
   children,
   footer,
+  sportSlug,
 }: {
   title: string;
   onClose: () => void;
+  /** When set, this week's plan for the sport shows above the form. */
+  sportSlug?: string;
   children: ReactNode;
   /** Optional sticky footer — typically the Save/Cancel button row.
    *  Floats above the body's scroll so the save action stays in
@@ -75,7 +79,10 @@ export default function SportLogModal({
           Minimize
         </button>
       </div>
-        <div style={drawerBody}>{children}</div>
+        <div style={drawerBody}>
+          {sportSlug ? <SportPlanLine sportSlug={sportSlug} /> : null}
+          {children}
+        </div>
         {footer ? <div style={drawerFooter}>{footer}</div> : null}
       </div>
     </>

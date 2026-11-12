@@ -125,7 +125,7 @@ export async function setProgramStageStatus(formData: FormData) {
 
 // Phases never advance on their own; this runs only from the user's tap. The
 // next phase's entry step is ticked only when its logged condition is met now.
-export async function startNextPhase(programId: string) {
+export async function startNextPhase(programId: string, formData?: FormData) {
   await requireProgram(programId);
   const stages = await prisma.programStage.findMany({
     where: { programId },
@@ -151,8 +151,18 @@ export async function startNextPhase(programId: string) {
     entryMet = buildMilestoneGate(entry, readings, activity, today).met === true;
   }
 
+  // Plan items set to ASK arrive as checked "keep" boxes; unchecked ones stop
+  // along with the DROP items. KEEP items carry on untouched.
+  const kept = new Set((formData?.getAll("keepPlanItem") ?? []).map(String));
+  const endingItems = await prisma.programPlanItem.findMany({
+    where: { programId, isActive: true, phaseEnd: { in: ["ASK", "DROP"] } },
+    select: { id: true, phaseEnd: true },
+  });
+  const stopIds = endingItems.filter((item) => item.phaseEnd === "DROP" || !kept.has(item.id)).map((item) => item.id);
+
   const now = new Date();
   await prisma.$transaction([
+    ...(stopIds.length ? [prisma.programPlanItem.updateMany({ where: { id: { in: stopIds } }, data: { isActive: false } })] : []),
     ...(currentIdx >= 0
       ? [prisma.programStage.update({ where: { id: stages[currentIdx].id }, data: { status: "COMPLETED", completedAt: now } })]
       : []),

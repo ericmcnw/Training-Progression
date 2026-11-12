@@ -6,13 +6,7 @@ import {
   loadTrackActivity,
   type MilestoneGateView,
 } from "@/app/focus/data";
-import {
-  evaluatePlan,
-  formatPlanTarget,
-  loadPlanSessions,
-  mondayOfYmd,
-  readAdjustments,
-} from "@/lib/program-plan";
+import { mondayOfYmd, planItemName, weekPlanLines, PLAN_ITEM_SELECT, type WeekPlanLine } from "@/lib/program-plan";
 import { evaluateFrequencyGate, evaluatePainGate } from "@/lib/focus-gates";
 import { gradeSort, isSendOutcome } from "@/lib/climb-types";
 
@@ -76,13 +70,20 @@ export type Readout =
   | { kind: "stat"; key: string; title: string; headline: string; meta: string | null };
 
 export type WeekRoutine = { id: string; name: string; thisWeek: number; lastYmd: string | null };
-export type WeekPlanLine = { name: string; target: string; change: "up" | "down" | "same" | "new"; done: boolean };
 
 export type ProgramOverviewData = {
   phases: OverviewPhase[];
   currentIndex: number | null;
   currentSteps: OverviewStep[];
-  next: { phaseId: string; name: string; entry: OverviewPhase["entry"]; openSteps: number } | null;
+  next: {
+    phaseId: string;
+    name: string;
+    entry: OverviewPhase["entry"];
+    openSteps: number;
+    /** Plan items set to ask at phase end, and the ones set to stop. */
+    askItems: Array<{ id: string; name: string }>;
+    dropItems: string[];
+  } | null;
   pain: PainSignal | null;
   limiters: Limiter[];
   readouts: Readout[];
@@ -125,17 +126,7 @@ export async function getProgramOverview(programId: string): Promise<ProgramOver
         select: { id: true, name: true, description: true, status: true },
       },
       routineLinks: { orderBy: { sortOrder: "asc" }, select: { routine: { select: { id: true, name: true, isActive: true } } } },
-      planItems: {
-        where: { isActive: true },
-        orderBy: { sortOrder: "asc" },
-        select: {
-          exerciseId: true,
-          startYmd: true,
-          adjustments: true,
-          exercise: { select: { name: true } },
-          targets: { select: { week: true, sets: true, reps: true, seconds: true, weightLb: true } },
-        },
-      },
+      planItems: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: PLAN_ITEM_SELECT },
     },
   });
   if (!program) return null;
@@ -207,6 +198,8 @@ export async function getProgramOverview(programId: string): Promise<ProgramOver
         name: upcoming.name,
         entry: upcoming.entry,
         openSteps: currentSteps.filter((s) => !s.done).length,
+        askItems: program.planItems.filter((i) => i.phaseEnd === "ASK").map((i) => ({ id: i.id, name: planItemName(i) })),
+        dropItems: program.planItems.filter((i) => i.phaseEnd === "DROP").map((i) => planItemName(i)),
       }
     : null;
 
@@ -319,13 +312,7 @@ async function loadLimiters(linkedInjuryId: string | null, today: string): Promi
 async function loadWeek(
   program: {
     routineLinks: Array<{ routine: { id: string; name: string; isActive: boolean } }>;
-    planItems: Array<{
-      exerciseId: string;
-      startYmd: string;
-      adjustments: unknown;
-      exercise: { name: string };
-      targets: Array<{ week: number; sets: number | null; reps: number | null; seconds: number | null; weightLb: number | null }>;
-    }>;
+    planItems: Parameters<typeof weekPlanLines>[0];
   },
   today: string,
 ) {
@@ -347,25 +334,7 @@ async function loadWeek(
     };
   });
 
-  const earliest = program.planItems.reduce((min, item) => (item.startYmd < min ? item.startYmd : min), today);
-  const sessions = await loadPlanSessions(program.planItems.map((i) => i.exerciseId), mondayOfYmd(earliest));
-  const plan: WeekPlanLine[] = program.planItems.map((item) => {
-    const evaluation = evaluatePlan({
-      startYmd: item.startYmd,
-      todayYmd: today,
-      targets: item.targets,
-      sessions: sessions.get(item.exerciseId) ?? [],
-      adjustments: readAdjustments(item.adjustments),
-    });
-    return {
-      name: item.exercise.name,
-      target: formatPlanTarget(evaluation.target),
-      change: evaluation.change,
-      done: evaluation.doneThisWeek,
-    };
-  });
-
-  return { routines: weekRoutines, plan };
+  return { routines: weekRoutines, plan: await weekPlanLines(program.planItems, today) };
 }
 
 const READOUT_WEEKS = 8;

@@ -412,7 +412,7 @@ export default async function LogRoutinePage(props: {
       unit: exercise.exercise.unit,
       supportsWeight: exercise.exercise.supportsWeight,
       paramKeys: exerciseParamKeys(exercise.exercise.paramKeys),
-      params: exerciseParamsToInput(readExerciseParams(prev?.params)),
+      params: exerciseParamsToInput({ ...readExerciseParams(prev?.params), ...(planTarget?.params ?? {}) }),
       rows: Array.from({ length: defaultSetCount }, (_, index) => ({ setNumber: index + 1 })),
       lastRows: lastRows.length > 0 ? lastRows : undefined,
       lastDate,

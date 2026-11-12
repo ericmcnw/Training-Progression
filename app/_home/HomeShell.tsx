@@ -33,6 +33,8 @@ import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
 import type { HomeRotation } from "@/lib/home-rotation";
 import type { FocusBandItem } from "@/app/focus/shared";
+import HomePlanSection from "./HomePlanSection";
+import type { HomePlanGroup } from "./plan-data";
 
 export default function HomeShell({
   data,
@@ -43,6 +45,7 @@ export default function HomeShell({
   rotation,
   focuses,
   readyRungs,
+  planGroups,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
@@ -52,6 +55,7 @@ export default function HomeShell({
   rotation: HomeRotation | null;
   focuses: FocusBandItem[];
   readyRungs: ReadyRung[];
+  planGroups: HomePlanGroup[];
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -70,6 +74,8 @@ export default function HomeShell({
       {/* Focus band — the strategic layer, full-width below the WaG. Renders
           nothing when the user has no active focuses. */}
       {/* Steps already earned but not marked. Renders nothing when empty. */}
+      <HomePlanSection groups={planGroups} />
+
       <HomeProgressionsSection ready={readyRungs} />
 
       <HomeFocusSection focuses={focuses} />

@@ -232,6 +232,7 @@ export default function GolfLogSheet({ onClose }: { onClose: () => void }) {
   return (
     <SportLogModal
       title="Log Golf"
+      sportSlug="golf"
       onClose={onClose}
       footer={
         <>

@@ -223,7 +223,8 @@ model EnduranceFamily {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  types ActivityType[]
+  types            ActivityType[]
+  programPlanItems ProgramPlanItem[]
 
   @@index([sortOrder])
 }
@@ -257,6 +258,7 @@ model ActivityType {
   userPreferences       UserActivityTypePreference[]
   programBlockItems     ProgramBlockItem[]
   plannedSessions       PlannedSession[]
+  programPlanItems      ProgramPlanItem[]
 
   @@index([familyId, sortOrder])
   @@index([slug])
@@ -2314,14 +2316,34 @@ model ProgramLogContext {
   @@index([blockItemId])
 }
 
-// One exercise a program pushes week by week. A plan week counts weeks the
-// exercise was trained with its target met, not calendar weeks, so a missed,
-// failed or skipped week holds the plan instead of jumping ahead.
+enum ProgramPlanKind {
+  EXERCISE
+  ACTIVITY
+  SPORT
+}
+
+enum ProgramPlanPhaseEnd {
+  ASK
+  KEEP
+  DROP
+}
+
+// One thing a program pushes week by week: an exercise, an endurance activity
+// (a type or a whole family), or a sport. A plan week counts weeks the item
+// was trained with its target met, not calendar weeks, so a missed, failed or
+// skipped week holds the plan instead of jumping ahead.
 model ProgramPlanItem {
-  id          String   @id @default(cuid())
-  profileKey  String   @default("default")
-  programId   String
-  exerciseId  String
+  id                String              @id @default(cuid())
+  profileKey        String              @default("default")
+  programId         String
+  kind              ProgramPlanKind     @default(EXERCISE)
+  exerciseId        String?
+  activityTypeId    String?
+  enduranceFamilyId String?
+  sportSlug         String?
+  // Names an activity or sport lane ("Long run"); exercises use their own name.
+  label             String?
+  phaseEnd          ProgramPlanPhaseEnd @default(KEEP)
   // The routine it is planned under; logs of the exercise from any routine count.
   routineId   String?
   startYmd    String
@@ -2332,14 +2354,18 @@ model ProgramPlanItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  program  Focus               @relation(fields: [programId], references: [id], onDelete: Cascade)
-  exercise Exercise            @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  routine  Routine?            @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  targets  ProgramPlanTarget[]
+  program         Focus               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  exercise        Exercise?           @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  activityType    ActivityType?       @relation(fields: [activityTypeId], references: [id], onDelete: Cascade)
+  enduranceFamily EnduranceFamily?    @relation(fields: [enduranceFamilyId], references: [id], onDelete: Cascade)
+  routine         Routine?            @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  targets         ProgramPlanTarget[]
 
   @@index([profileKey, isActive])
   @@index([programId, sortOrder])
   @@index([exerciseId, isActive])
+  @@index([activityTypeId])
+  @@index([enduranceFamilyId])
 }
 
 // The target from plan week `week` onward, until a later row replaces it.
@@ -2351,6 +2377,14 @@ model ProgramPlanTarget {
   reps      Int?
   seconds   Int?
   weightLb  Float?
+  // Activity lanes: what one qualifying session must reach.
+  distanceMi  Float?
+  durationSec Int?
+  // Activity and sport lanes: qualifying sessions needed that week.
+  sessions    Int?
+  note        String?
+  // Exercise setup to use, keyed like SessionExercise.params ({ "edgeMm": 18 }).
+  params      Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

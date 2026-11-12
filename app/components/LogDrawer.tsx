@@ -15,6 +15,7 @@ import type { GuidedStepKind } from "@/generated/prisma";
 import type { ClimbLocationBasic } from "@/lib/climb-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
 import type { QuickLogDomain } from "@/lib/quick-log";
+import type { LogPlanLine } from "@/lib/program-plan";
 
 // Sentinel routine id for the ad-hoc quick-workout flow. No real routine
 // exists until the user saves — the placeholder is find-or-created server-
@@ -60,6 +61,7 @@ type CardioLogData = {
   activityTypes?: ActivityTypeOption[];
   initialActivityTypeId?: string | null;
   routineIsSynthetic?: boolean;
+  planLines?: LogPlanLine[];
 };
 
 export type ActivityTypeOption = {
@@ -323,6 +325,7 @@ export default function LogDrawer() {
                   activityTypes={logData.activityTypes ?? []}
                   initialActivityTypeId={presetTypeId ?? logData.initialActivityTypeId ?? null}
                   routineIsSynthetic={logData.routineIsSynthetic ?? false}
+                  planLines={logData.planLines ?? []}
                   defaultPerformedAtLocal={defaultPerformedAtLocal}
                   onComplete={handleComplete}
                   onBack={closeDrawer}

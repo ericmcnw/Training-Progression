@@ -74,7 +74,7 @@ export default async function ProgramDetailPage({
       </nav>
 
       {view === "overview" && overview ? <ProgramOverview focus={focus} detail={detail} overview={overview} accent={accent} /> : null}
-      {view === "weekly" && planBoard ? <ProgramPlanBoard programId={id} groups={planBoard} /> : null}
+      {view === "weekly" && planBoard ? <ProgramPlanBoard programId={id} board={planBoard} /> : null}
       {view === "progress" ? <ProgramProgress focus={focus} detail={detail} injury={injury} accent={accent} /> : null}
     </main>
   );

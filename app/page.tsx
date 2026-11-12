@@ -9,13 +9,14 @@ import { getHomeOtherGoals } from "@/lib/home-goals";
 import { getHomeRotation } from "@/lib/home-rotation";
 import { getFocusBandData } from "@/app/focus/data";
 import { getReadyRungs } from "@/app/progressions/data";
+import { getHomePlanGroups } from "./_home/plan-data";
 import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [data, injuries, factorSuggestions, zones, otherGoals, rotation, focuses, readyRungs] = await Promise.all([
+  const [data, injuries, factorSuggestions, zones, otherGoals, rotation, focuses, readyRungs, planGroups] = await Promise.all([
     getHomeData(),
     getHomeInjuries(),
     getAggravatingFactorSuggestions(),
@@ -24,6 +25,7 @@ export default async function HomePage() {
     getHomeRotation(),
     getFocusBandData(),
     getReadyRungs(),
+    getHomePlanGroups(),
   ]);
   return (
     <HomeShell
@@ -35,6 +37,7 @@ export default async function HomePage() {
       rotation={rotation}
       focuses={focuses}
       readyRungs={readyRungs}
+      planGroups={planGroups}
     />
   );
 }
