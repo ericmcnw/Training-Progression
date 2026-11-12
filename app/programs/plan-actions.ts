@@ -384,3 +384,29 @@ export async function endPlanItem(itemId: string): Promise<PlanActionResult> {
     revalidateProgram(item.programId);
   });
 }
+
+export async function linkProgramRoutine(programId: string, routineId: string): Promise<PlanActionResult> {
+  return guard(async () => {
+    await requireOwnedProgram(programId);
+    const routine = await prisma.routine.findFirst({ where: { id: routineId, isActive: true }, select: { id: true } });
+    if (!routine) throw new PlanError("Routine not found.");
+    const last = await prisma.programRoutine.aggregate({ where: { programId }, _max: { sortOrder: true } });
+    await prisma.programRoutine.upsert({
+      where: { programId_routineId: { programId, routineId } },
+      create: { programId, routineId, sortOrder: (last._max.sortOrder ?? -1) + 1 },
+      update: {},
+    });
+    revalidateProgram(programId);
+  });
+}
+
+/** Unlinking is refused while the routine still holds planned exercises, so no plan is orphaned. */
+export async function unlinkProgramRoutine(programId: string, routineId: string): Promise<PlanActionResult> {
+  return guard(async () => {
+    await requireOwnedProgram(programId);
+    const planned = await prisma.programPlanItem.count({ where: { programId, routineId, isActive: true } });
+    if (planned) throw new PlanError("Stop planning its exercises first.");
+    await prisma.programRoutine.deleteMany({ where: { programId, routineId } });
+    revalidateProgram(programId);
+  });
+}

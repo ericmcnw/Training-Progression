@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isWorkoutKind } from "@/lib/routines";
 import { addDaysYmd, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { activitiesByFamily, getActivityEntry } from "@/lib/activity-families";
 import { getSyntheticSportRoutineId } from "@/lib/synthetic-sport-routines";
@@ -71,6 +72,8 @@ export type PlanBoardGroup = {
 
 export type PlanBoard = {
   groups: PlanBoardGroup[];
+  /** Strength routines not yet linked to this program. */
+  linkableRoutines: Array<{ id: string; name: string }>;
   /** The exercise library, for adding something new to a routine. */
   library: Array<{ id: string; name: string }>;
 };
@@ -126,7 +129,7 @@ export async function getProgramPlanBoard(programId: string): Promise<PlanBoard 
   const routineExerciseIds = routines.flatMap((r) => r.exercises.map((e) => e.exercise.id));
   const since = addDaysYmd(today, -LOOKBACK_DAYS);
 
-  const [itemSessions, routineSessions, elsewhere, library, activityTypes, families, sportLogs, stepRows] = await Promise.all([
+  const [itemSessions, routineSessions, elsewhere, library, activityTypes, families, sportLogs, stepRows, allRoutines] = await Promise.all([
     loadItemSessions(program.planItems, lookbackStart(program.planItems, today)),
     loadPlanSessions(routineExerciseIds, since),
     prisma.programPlanItem.findMany({
@@ -147,6 +150,11 @@ export async function getProgramPlanBoard(programId: string): Promise<PlanBoard 
       where: { status: "ACTIVE", scopeKind: "EXERCISE", scopeRef: { in: program.planItems.map((i) => i.exerciseId).filter((id): id is string => Boolean(id)) } },
       orderBy: { sortOrder: "asc" },
       select: { scopeRef: true, label: true },
+    }),
+    prisma.routine.findMany({
+      where: { isActive: true, isDeleted: false, isPlaceholder: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, kind: true },
     }),
   ]);
   const exerciseElsewhere = new Map(elsewhere.filter((r) => r.exerciseId).map((r) => [r.exerciseId!, r.program.name]));
@@ -324,5 +332,10 @@ export async function getProgramPlanBoard(programId: string): Promise<PlanBoard 
     groups.push({ key: "sport", kind: "SPORT", routineId: null, title: "Sports", items: sportItems, candidates: sportCandidates });
   }
 
-  return { groups, library };
+  const linkedIds = new Set(routines.map((r) => r.id));
+  const linkableRoutines = allRoutines
+    .filter((r) => isWorkoutKind(r.kind) && !linkedIds.has(r.id))
+    .map((r) => ({ id: r.id, name: r.name }));
+
+  return { groups, library, linkableRoutines };
 }

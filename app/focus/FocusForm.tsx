@@ -233,7 +233,7 @@ export default function FocusForm({
             gateFreqWeeks: r.gateFreqWeeks,
           })),
         });
-        router.push(embedded || !initial.id ? `/programs/${id}/edit` : `/programs/${id}`);
+        router.push(!initial.id ? `/programs/${id}?view=weekly` : embedded ? `/programs/${id}/edit` : `/programs/${id}`);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save. Try again.");

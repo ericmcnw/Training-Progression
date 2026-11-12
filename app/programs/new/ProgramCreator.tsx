@@ -49,7 +49,7 @@ export default function ProgramCreator({
   // than the browser's.
   todayYmd: string;
 }) {
-  const [mode, setMode] = useState<"choose" | "guided" | "manual">("choose");
+  const [mode, setMode] = useState<"guided" | "manual">("guided");
   const [path, setPath] = useState<Path>("sport");
   const [name, setName] = useState("");
   const [pursuitKey, setPursuitKey] = useState("");
@@ -85,25 +85,10 @@ export default function ProgramCreator({
     return () => observer.disconnect();
   }, [mode]);
 
-  if (mode === "choose") {
-    return (
-      <div style={choiceGrid}>
-        <button type="button" style={primaryChoice} onClick={() => setMode("guided")}>
-          <span style={choiceTitle}>Guided setup</span>
-          <span style={choiceMeta}>Four short steps: purpose, details, one goal, and optional current work. Recommended.</span>
-        </button>
-        <button type="button" style={secondaryChoice} onClick={() => setMode("manual")}>
-          <span style={choiceTitle}>Blank form</span>
-          <span style={choiceMeta}>Name and milestones only. Skips the work and the measure — you add those afterward.</span>
-        </button>
-      </div>
-    );
-  }
-
   if (mode === "manual") {
     return (
       <div style={{ display: "grid", gap: 12 }}>
-        <button type="button" style={backButton} onClick={() => setMode("choose")}>Back</button>
+        <button type="button" style={backButton} onClick={() => setMode("guided")}>Back to guided setup</button>
         <FocusForm initial={blankInitial()} routines={routines} exercises={exercises} injuries={injuries} panel="all" />
       </div>
     );
@@ -120,7 +105,7 @@ export default function ProgramCreator({
     { number: "1", id: "setup-purpose", label: "Purpose", complete: Boolean(path), meta: PATHS.find((option) => option.id === path)?.label ?? "Choose a direction" },
     { number: "2", id: "setup-details", label: "Program details", complete: hasIdentity, meta: name.trim() || "Name and optional timeline" },
     { number: "3", id: "setup-goal", label: "Goal or target", complete: hasMeasure, meta: hasMeasure ? `${measureCount} selected` : "Choose or create one" },
-    { number: "4", id: "setup-work", label: "Current work", complete: routineIds.length > 0, meta: routineIds.length ? `${routineIds.length} routines` : "Optional — add later" },
+    { number: "4", id: "setup-work", label: "What you'll train", complete: routineIds.length > 0, meta: routineIds.length ? `${routineIds.length} routines` : "Optional — add later" },
   ];
 
   function selectPath(nextPath: Path) {
@@ -303,7 +288,7 @@ export default function ProgramCreator({
           </div>
 
           <div id="setup-work" style={miniSection}>
-          <CreatorPanel eyebrow="4 · Current work" title="What will you do now?" copy="Optional. Pick the routines you expect to use now. You can change them, add phases, or schedule dates after creation.">
+          <CreatorPanel eyebrow="4 · What you'll train" title="Which routines carry this program?" copy="Optional. Next you land on the weekly plan, where you pick the exercises, runs or sport sessions to push week by week. Phases and steps come after, from Edit.">
             <TrainingPicker
               title="Current routines"
               empty="No routines yet. Create the Program now and add a routine later."
@@ -328,10 +313,10 @@ export default function ProgramCreator({
               panel="submit"
               embedded
               guidedOutcomes
-              onBack={() => setMode("choose")}
               submitDisabled={!canCreate}
             />
             {!hasMeasure ? <p style={dateNote}>Choose or create at least one goal or target in step 3 to create this Program.</p> : null}
+            <button type="button" style={blankFormLink} onClick={() => setMode("manual")}>Prefer a blank form with milestones?</button>
           </CreatorPanel>
           </div>
         </section>
@@ -522,10 +507,7 @@ const newTargetRow: CSSProperties = { display: "grid", gridTemplateColumns: "min
 const removeTargetButton: CSSProperties = { minHeight: 40, padding: "0 9px", border: 0, background: "transparent", color: "rgba(255,255,255,0.45)", fontSize: 10.5, cursor: "pointer" };
 const pickerLabel: CSSProperties = { display: "block", fontSize: 12.5, color: "rgba(255,255,255,0.85)" };
 const pickerMeta: CSSProperties = { fontSize: 10.5, color: "rgba(255,255,255,0.42)" };
-const choiceGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 };
-const primaryChoice: CSSProperties = { minHeight: 108, display: "grid", alignContent: "center", justifyItems: "start", gap: 4, padding: 15, textAlign: "left", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(51,255,122,0.36)", borderRadius: 9, background: "rgba(51,255,122,0.09)", color: "white", cursor: "pointer" };
-const secondaryChoice: CSSProperties = { ...primaryChoice, borderColor: "rgba(255,255,255,0.13)", background: "rgba(255,255,255,0.03)" };
-const choiceTitle: CSSProperties = { fontSize: 14, fontWeight: 900 };
+const blankFormLink: CSSProperties = { justifySelf: "start", minHeight: 40, padding: "0 4px", border: 0, background: "transparent", color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: 700, textDecoration: "underline", cursor: "pointer" };
 const choiceMeta: CSSProperties = { fontSize: 10.5, lineHeight: 1.4, color: "rgba(255,255,255,0.5)" };
 const workspace: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18, alignItems: "start" };
 const sidebar: CSSProperties = { display: "none", position: "sticky", top: 82, alignSelf: "start", minWidth: 0, padding: "10px 14px 14px 0", borderRight: "1px solid rgba(255,255,255,0.08)" };

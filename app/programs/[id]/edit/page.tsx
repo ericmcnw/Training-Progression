@@ -37,17 +37,26 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
     phaseName: detail.stages.find((stage) => stage.id === block.stageId)?.name ?? "Current phase",
   })));
   const goalCount = selectedGoals.size + selectedFrequencyGoals.size;
+  // Weekly work now lives on the Weekly plan; these two stages only appear
+  // while a program still holds older block work or dated sessions.
+  const showWork = currentWork.length > 0;
+  const showSchedule = scheduledCount > 0;
+  const sectionNumbers = (() => {
+    let n = 2;
+    const work = showWork ? String(++n) : null;
+    const schedule = showSchedule ? String(++n) : null;
+    return { work, schedule, targets: String(++n) };
+  })();
   const steps: ProgramEditorStep[] = [
-    { id: "program-editor-step-1", number: "1", label: "Program setup", meta: `Purpose, details, goal${currentWork.length ? ", routines" : ""}`, complete: goalCount > 0 || hasNamedMeasure },
+    { id: "program-editor-step-1", number: "1", label: "Details and goals", meta: "Purpose, timeline, goal", complete: goalCount > 0 || hasNamedMeasure },
     { id: "program-editor-step-2", number: "2", label: "Phases and steps", meta: phasesAndStepsMeta(detail.stages.length, definition.initial.milestones.length), complete: detail.stages.length > 1 || definition.initial.milestones.length > 0 },
-    { id: "program-editor-step-3", number: "3", label: "Work and prescriptions", meta: currentWork.length ? `${currentWork.length} routines` : "Optional — add later", complete: currentWork.length > 0 },
-    { id: "program-editor-step-4", number: "4", label: "Schedule", meta: scheduledCount ? `${scheduledCount} placed` : "Optional", complete: scheduledCount > 0 },
-    { id: "program-editor-step-5", number: "5", label: "Named targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
+    ...(sectionNumbers.work ? [{ id: `program-editor-step-${sectionNumbers.work}`, number: sectionNumbers.work, label: "Older work items", meta: `${currentWork.length} routines`, complete: true }] : []),
+    ...(sectionNumbers.schedule ? [{ id: `program-editor-step-${sectionNumbers.schedule}`, number: sectionNumbers.schedule, label: "Dated sessions", meta: `${scheduledCount} placed`, complete: true }] : []),
+    { id: `program-editor-step-${sectionNumbers.targets}`, number: sectionNumbers.targets, label: "Named targets", meta: targetCount ? `${targetCount} targets` : "Optional", complete: targetCount > 0 },
   ];
-  // Optional dates and targets are never treated as setup debt. Once the
-  // required foundation is sound, open current work only when it is absent.
+  // Optional dates and targets are never treated as setup debt.
   const requiredGap = steps.slice(0, 2).find((step) => !step.complete);
-  const openStep = requiredGap?.number ?? (currentWork.length ? "1" : "3");
+  const openStep = requiredGap?.number ?? "1";
 
   return (
     <main style={page} className="programEditor">
@@ -61,12 +70,17 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         <p style={subtitle}>Each section saves on its own. Ticked steps are done — this opens on the first one that still needs you.</p>
       </header>
 
+      <Link href={`/programs/${id}?view=weekly`} style={weeklyPointer}>
+        <strong>Weekly plan</strong>
+        <span style={minorText}>What you train each week (exercises, runs, sport sessions) and how it increases is planned there.</span>
+      </Link>
+
       <div className="programEditorWorkspace" style={workspace}>
         <aside className="programEditorSidebar" style={sidebar}>
           <ProgramEditorNav steps={steps} openStepId={`program-editor-step-${openStep}`} />
         </aside>
         <div className="programEditorCanvas" style={canvas}>
-      <EditorSection openStep={openStep} number="1" title="Program setup" subtitle="Objective, timeline, starting point, and outcomes live together here.">
+      <EditorSection openStep={openStep} number="1" title="Details and goals" subtitle="Objective, timeline, and the goal this program is for.">
         <SetupPart number="1" title="Direction and timeline" subtitle={`${humanize(definition.initial.objectiveKind)} · ${humanize(definition.initial.timelineMode)}`}>
         <FocusForm
           initial={definition.initial}
@@ -104,7 +118,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
               />
             ))}
           </PickerGroup>
-          {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them in stage 5.</p> : null}
+          {hasNamedMeasure ? <p style={minorText}>This Program also uses {detail.targetLists.length} named target list{detail.targetLists.length === 1 ? "" : "s"} ({targetCount} current items). Manage them under Named targets.</p> : null}
           <button type="submit" style={primaryButton}>Save connections</button>
         </form>
         </SetupPart>
@@ -173,7 +187,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </SetupPart>
       </EditorSection>
 
-      <EditorSection openStep={openStep} number="3" title="Work and prescriptions" subtitle="The routines available to train now. Dates are optional and belong in stage 4.">
+      {sectionNumbers.work ? <EditorSection openStep={openStep} number={sectionNumbers.work} title="Older work items" subtitle="Work added before the weekly plan existed. Plan new work on the Weekly plan instead.">
         {currentWork.length ? (
           <div style={list}>
             {currentWork.map((item) => (
@@ -196,9 +210,9 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
           <button type="submit" style={secondaryButton}>Add work</button>
         </form>
         {detail.stages.length > 1 ? <p style={minorText}>Work is added to a phase. Manage the phases themselves in stage 2.</p> : null}
-      </EditorSection>
+      </EditorSection> : null}
 
-      <EditorSection openStep={openStep} number="4" title="Put work on dates" subtitle="Optional. This does not add new training—it only gives current work a date in the next two weeks.">
+      {sectionNumbers.schedule ? <EditorSection openStep={openStep} number={sectionNumbers.schedule} title="Dated sessions" subtitle="Sessions dated before the weekly plan existed. Your calendar on Plan is where new days go.">
         {detail.schedule.missed.length ? (
           <div style={scheduleGroup}>
             <div style={scheduleLabel}>Needs a decision</div>
@@ -242,9 +256,9 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
           </AddPanel>
         ) : <p style={scheduleNote}>Add current work in step 3 before putting anything on the calendar.</p>}
         <p style={scheduleNote}>Flexible sessions can slide together after a miss. Fixed sessions stay on their date. Nothing is moved without your choice.</p>
-      </EditorSection>
+      </EditorSection> : null}
 
-      <EditorSection openStep={openStep} number="5" title="Named targets" subtitle="Optional activity targets such as climbs or skills.">
+      <EditorSection openStep={openStep} number={sectionNumbers.targets} title="Named targets" subtitle="Optional activity targets such as climbs or skills.">
         {detail.targetLists.map((targetList) => (
           <div key={targetList.id} style={blockCard}>
             <div style={cardHead}><div><strong>{targetList.name}</strong>{targetList.membershipSource === "CLIMB_TICK_LIST" ? <div style={minorText}>Synced from starred climbing problems</div> : null}</div><span style={typeChip}>{targetList.kind.toLowerCase()}</span></div>
@@ -367,6 +381,7 @@ const setupPartTitle: React.CSSProperties = { margin: 0, fontSize: 14, lineHeigh
 const setupPartSubtitle: React.CSSProperties = { margin: "2px 0 0", fontSize: 10.5, color: "rgba(255,255,255,0.42)" };
 const setupPartBody: React.CSSProperties = { minWidth: 0, paddingLeft: 32 };
 const actionLink: React.CSSProperties = { ...quietLink, minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 12px", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8 };
+const weeklyPointer: React.CSSProperties = { display: "grid", gap: 3, padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(51,255,122,0.32)", background: "rgba(51,255,122,0.06)", color: "#c9ffdc", textDecoration: "none" };
 const minorText: React.CSSProperties = { fontSize: 11, lineHeight: 1.35, color: "rgba(255,255,255,0.48)" };
 
 function phasesAndStepsMeta(phaseCount: number, stepCount: number) {

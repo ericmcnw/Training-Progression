@@ -9,7 +9,9 @@ import {
   clearPlanTarget,
   endPlanItem,
   fillPlan,
+  linkProgramRoutine,
   nudgePlanWeek,
+  unlinkProgramRoutine,
   setPlanTarget,
   updatePlanItem,
   type PlanActionResult,
@@ -41,10 +43,6 @@ export default function ProgramPlanBoard({ programId, board }: { programId: stri
     });
   };
 
-  if (board.groups.length === 0) {
-    return <p style={introText}>Link a routine to this program, then plan the exercises you want to push.</p>;
-  }
-
   return (
     <div style={stack}>
       <p style={introText}>
@@ -57,11 +55,27 @@ export default function ProgramPlanBoard({ programId, board }: { programId: stri
         <section key={group.key} style={groupSection}>
           <div style={groupHead}>
             <h2 style={groupTitle}>{group.title}</h2>
-            {group.candidates.length || group.routineId ? (
-              <button type="button" onClick={() => setAdding(adding === group.key ? null : group.key)} style={pillButtonStyle} aria-expanded={adding === group.key}>
-                {adding === group.key ? "Done" : addLabel(group)}
-              </button>
-            ) : null}
+            <div style={optionRow}>
+              {group.routineId && group.items.length === 0 ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    if (window.confirm(`Remove ${group.title} from this program? The routine and its logs stay.`)) {
+                      run(() => unlinkProgramRoutine(programId, group.routineId!));
+                    }
+                  }}
+                  style={{ ...pillButtonStyle, color: "rgba(255,255,255,0.6)" }}
+                >
+                  Remove
+                </button>
+              ) : null}
+              {group.candidates.length || group.routineId ? (
+                <button type="button" onClick={() => setAdding(adding === group.key ? null : group.key)} style={pillButtonStyle} aria-expanded={adding === group.key}>
+                  {adding === group.key ? "Done" : addLabel(group)}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {adding === group.key ? (
@@ -82,6 +96,25 @@ export default function ProgramPlanBoard({ programId, board }: { programId: stri
           ))}
         </section>
       ))}
+
+      {board.linkableRoutines.length ? (
+        <form
+          style={linkForm}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const routineId = new FormData(e.currentTarget).get("routineId");
+            if (typeof routineId === "string" && routineId) run(() => linkProgramRoutine(programId, routineId));
+          }}
+        >
+          <Field label="Train a routine in this program" hint="Its exercises become plannable here.">
+            <select name="routineId" defaultValue="" style={inputStyle}>
+              <option value="" disabled>Choose a routine</option>
+              {board.linkableRoutines.map((routine) => <option key={routine.id} value={routine.id}>{routine.name}</option>)}
+            </select>
+          </Field>
+          <button type="submit" disabled={pending} style={pillButtonStyle}>Add routine</button>
+        </form>
+      ) : null}
     </div>
   );
 }
@@ -552,4 +585,5 @@ const optionsBody: React.CSSProperties = { display: "grid", gap: 10, paddingTop:
 const phaseEndRow: React.CSSProperties = { display: "grid", gap: 6 };
 const segmented: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)" };
 const segment: React.CSSProperties = { minHeight: 40, padding: "6px 8px", borderRadius: 8, border: "1px solid transparent", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 800 };
+const linkForm: React.CSSProperties = { display: "grid", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" };
 const segmentOn: React.CSSProperties = { background: "rgba(196,160,255,0.16)", borderColor: "rgba(196,160,255,0.55)", color: "#e8dcff" };
