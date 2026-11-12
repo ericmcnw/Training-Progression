@@ -19,6 +19,8 @@ import ActivityQuickLogRow from "./ActivityLogSheet";
 import { listSelectedSports, listUnselectedSports } from "@/lib/synthetic-sport-routines";
 import { getActivityEntry } from "@/lib/activity-families";
 import { sportAccent } from "@/lib/sport-accent";
+import { isRetiredRoutine, routineDayKey } from "@/lib/routine-grouping";
+import RoutineListControls, { type RoutineListItem } from "./RoutineListControls";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,10 @@ const styles = {
 
 // Only these domains have a preset flow in the routine creator; others
 // (skill/general/recovery/habit) fall through to the generic picker.
+// Sort + retired fold only earn their chrome once a section is long enough
+// to actually bury something.
+const SORTABLE_SECTION_MIN = 4;
+
 const PRESET_DOMAINS = new Set(["strength", "cardio", "mobility", "sport", "lifestyle"]);
 function presetDomainFor(domain: string) {
   return PRESET_DOMAINS.has(domain)
@@ -203,6 +209,7 @@ export default async function RoutinesPageContent(props: {
     prisma.routineLog.groupBy({
       by: ["routineId"],
       _max: { performedAt: true },
+      _count: { _all: true },
     }),
     maxFrequencyWindowDays > 0
       ? prisma.routineLog.findMany({
@@ -213,6 +220,7 @@ export default async function RoutinesPageContent(props: {
   ]);
 
   const lastCompletedMap = new Map(latestLogs.map((row) => [row.routineId, row._max.performedAt]));
+  const logCountMap = new Map(latestLogs.map((row) => [row.routineId, row._count._all]));
   const frequencyStatusByRoutineId = getRoutineFrequencyStatuses({
     routines,
     logs: frequencyLogs,
@@ -288,6 +296,44 @@ export default async function RoutinesPageContent(props: {
   }
 
   const orderedDomains = domainOrder.filter((d) => groups.has(d));
+
+  const renderRoutineCard = (routine: (typeof active)[number]) => (
+    <RoutineCard
+      key={routine.id}
+      routine={routine}
+      lastCompletedMap={lastCompletedMap}
+      allowLogging={true}
+      frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
+      goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
+      habitStats={habitStatsByRoutineId.get(routine.id)}
+    />
+  );
+
+  // "Push A" and "Push B" are successive revisions of one Push day, never two
+  // live days — so a retired routine whose day still has a live member is
+  // superseded, and saying which one makes archiving it an obvious call.
+  const buildListItems = (list: typeof active): RoutineListItem[] => {
+    const liveDays = new Map<string, string>();
+    for (const routine of list) {
+      const lastAt = lastCompletedMap.get(routine.id) ?? null;
+      if (isRetiredRoutine(lastAt, routine.createdAt, now)) continue;
+      liveDays.set(routineDayKey(routine.name), routine.name);
+    }
+    return list.map((routine) => {
+      const lastAt = lastCompletedMap.get(routine.id) ?? null;
+      const retired = isRetiredRoutine(lastAt, routine.createdAt, now);
+      const sameDay = liveDays.get(routineDayKey(routine.name)) ?? null;
+      return {
+        id: routine.id,
+        name: routine.name,
+        lastAt: lastAt ? lastAt.toISOString() : null,
+        logCount: logCountMap.get(routine.id) ?? 0,
+        retired,
+        supersededBy: retired && sameDay && sameDay !== routine.name ? sameDay : null,
+        node: renderRoutineCard(routine),
+      };
+    });
+  };
 
   return (
     <div className="mobileRoutinesPage mobilePageShell" style={styles.container}>
@@ -444,17 +490,14 @@ export default async function RoutinesPageContent(props: {
               {/* Backpacking — endurance pursuit with its own multi-day trip
                   sheet. Sits right under the generic endurance entry. */}
               {isCardio ? <BackpackingQuickLogRow /> : null}
-              {list.map((routine) => (
-                <RoutineCard
-                  key={routine.id}
-                  routine={routine}
-                  lastCompletedMap={lastCompletedMap}
-                  allowLogging={true}
-                  frequencySummary={frequencyStatusByRoutineId.get(routine.id)!}
-                  goalContributions={goalContributionsByRoutineId.get(routine.id) ?? []}
-                  habitStats={habitStatsByRoutineId.get(routine.id)}
+              {list.length >= SORTABLE_SECTION_MIN ? (
+                <RoutineListControls
+                  accentColor={accent}
+                  items={buildListItems(list)}
                 />
-              ))}
+              ) : (
+                list.map((routine) => renderRoutineCard(routine))
+              )}
               {/* First-run nudge: a domain with no routines (and no pinned
                   quick-log rows, i.e. not endurance) gets a create CTA rather
                   than a blank section. */}
