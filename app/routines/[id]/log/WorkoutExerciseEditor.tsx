@@ -10,6 +10,7 @@ import {
   saveDraftToStorage,
 } from "@/lib/log-draft";
 import { formatPrescription, prescriptionHints, type PrescriptionShape } from "@/lib/prescription";
+import type { PlanNote } from "@/lib/program-plan";
 import {
   exerciseParamDef,
   formatExerciseParams,
@@ -58,6 +59,10 @@ export type WorkoutBlock = {
   /** This session's values, prefilled from the last session so an unchanged
    *  setup costs no input. Strings while editing, like the set cells. */
   params?: Partial<Record<ExerciseParamKey, string>>;
+  /** A program's week-by-week target for this exercise. Server-owned. */
+  plan?: PlanNote;
+  /** Client-only: the user took the plan's offer to repeat last week. */
+  planRepeating?: boolean;
 };
 
 type SavePayload = {
@@ -274,7 +279,10 @@ export default function WorkoutExerciseEditor({
             supportsWeight: initial.supportsWeight,
             lastRows: initial.lastRows,
             lastDate: initial.lastDate,
-            prescription: initial.prescription,
+            prescription:
+              draftBlock.planRepeating && initial.plan?.repeat ? initial.plan.repeat.prescription : initial.prescription,
+            plan: initial.plan,
+            planRepeating: Boolean(draftBlock.planRepeating && initial.plan?.repeat),
             paramKeys: initial.paramKeys,
             // A draft owns what the user typed, and a blank was never typed.
             // Drafts written before a setup value existed would otherwise
@@ -539,6 +547,21 @@ export default function WorkoutExerciseEditor({
       if (expandedId === exerciseId) setExpandedId(next[0]?.exerciseId ?? null);
       return next;
     });
+  }
+
+  function togglePlanRepeat(exerciseId: string) {
+    setBlocks((prev) =>
+      prev.map((b) => {
+        if (b.exerciseId !== exerciseId || !b.plan?.repeat) return b;
+        const repeating = !b.planRepeating;
+        return {
+          ...b,
+          planRepeating: repeating,
+          prescription: repeating ? b.plan.repeat.prescription : b.plan.planned ?? b.prescription,
+        };
+      })
+    );
+    markDirty();
   }
 
   function addRow(exerciseId: string) {
@@ -815,6 +838,11 @@ export default function WorkoutExerciseEditor({
                       {targetLine}
                     </div>
                   )}
+                  {block.plan ? (
+                    <div style={{ fontSize: 11, fontWeight: 800, marginTop: 2, color: block.planRepeating ? PLAN_TONE_COLOR.held : PLAN_TONE_COLOR[block.plan.tone] }}>
+                      {block.planRepeating ? `Repeating last week · ${block.plan.text}` : block.plan.text}
+                    </div>
+                  ) : null}
                   <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                     {exerciseUnitLabel(block.unit)}{block.supportsWeight ? " · Weighted" : ""}
                     {paramSummary ? ` · ${paramSummary}` : ""}
@@ -866,6 +894,17 @@ export default function WorkoutExerciseEditor({
               {/* Expanded content */}
               {isExpanded && (
                 <div style={{ padding: "4px 14px 14px" }}>
+
+                  {block.plan?.repeat ? (
+                    <div style={styles.planRepeatBox}>
+                      <div style={{ fontSize: 13, fontWeight: 800 }}>
+                        {block.planRepeating ? `Repeating ${block.plan.repeat.text} this week.` : block.plan.repeat.reason}
+                      </div>
+                      <button type="button" onClick={() => togglePlanRepeat(block.exerciseId)} style={styles.planRepeatBtn}>
+                        {block.planRepeating ? "Use this week's plan" : `Repeat last week (${block.plan.repeat.text})`}
+                      </button>
+                    </div>
+                  ) : null}
 
                   {cue && (
                     <details style={{ marginBottom: 10 }}>
@@ -1284,6 +1323,12 @@ function SwipeableRow({ onDelete, children }: { onDelete: () => void; children: 
   );
 }
 
+const PLAN_TONE_COLOR: Record<PlanNote["tone"], string> = {
+  up: "#7ce8aa",
+  held: "#f5c46a",
+  same: "rgba(255,255,255,0.62)",
+};
+
 const styles = {
   draftBannerGreen: {
     display: "flex",
@@ -1388,6 +1433,19 @@ const styles = {
     opacity: 0.96,
   } as React.CSSProperties,
 
+  planRepeatBox: {
+    display: "grid",
+    gap: 8,
+    marginBottom: 10,
+    padding: 10,
+    borderRadius: 10,
+    border: "1px solid rgba(245,185,74,0.5)",
+    background: "rgba(245,185,74,0.08)",
+  } as React.CSSProperties,
+  planRepeatBtn: {
+    justifySelf: "start",
+    fontSize: 13,
+  } as React.CSSProperties,
   headerRemoveBtn: {
     alignSelf: "center",
     flexShrink: 0,

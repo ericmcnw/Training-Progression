@@ -388,6 +388,7 @@ model Routine {
   programLinks          ProgramRoutine[]
   programBlockItems     ProgramBlockItem[]
   plannedSessions       PlannedSession[]
+  programPlanItems      ProgramPlanItem[]
   activityType          ActivityType? @relation(fields: [activityTypeId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
@@ -1229,6 +1230,7 @@ model Exercise {
   guidedSteps      GuidedStep[]
   guidedStepLogs   GuidedStepLog[]
   triggeredGoals   FrequencyGoalTriggerExercise[]
+  programPlanItems ProgramPlanItem[]
 
   @@index([libraryKind, name])
 
@@ -1952,6 +1954,7 @@ model Focus {
   targetLists        ProgramTargetList[]
   plannedSessions    PlannedSession[]
   logContexts        ProgramLogContext[]
+  planItems          ProgramPlanItem[]
 
   @@index([status, sortOrder])
   @@index([profileKey, status, sortOrder])
@@ -2309,6 +2312,51 @@ model ProgramLogContext {
   @@index([programId, createdAt])
   @@index([stageId])
   @@index([blockItemId])
+}
+
+// One exercise a program pushes week by week. A plan week counts weeks the
+// exercise was trained with its target met, not calendar weeks, so a missed,
+// failed or skipped week holds the plan instead of jumping ahead.
+model ProgramPlanItem {
+  id          String   @id @default(cuid())
+  profileKey  String   @default("default")
+  programId   String
+  exerciseId  String
+  // The routine it is planned under; logs of the exercise from any routine count.
+  routineId   String?
+  startYmd    String
+  // Manual nudges to the derived week: [{ "ymd": "2026-11-10", "delta": 1 }].
+  adjustments Json?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program  Focus               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  exercise Exercise            @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  routine  Routine?            @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  targets  ProgramPlanTarget[]
+
+  @@index([profileKey, isActive])
+  @@index([programId, sortOrder])
+  @@index([exerciseId, isActive])
+}
+
+// The target from plan week `week` onward, until a later row replaces it.
+model ProgramPlanTarget {
+  id        String   @id @default(cuid())
+  itemId    String
+  week      Int
+  sets      Int?
+  reps      Int?
+  seconds   Int?
+  weightLb  Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item ProgramPlanItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, week])
 }
 
 model BodyMeasurement {

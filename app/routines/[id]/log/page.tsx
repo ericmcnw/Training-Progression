@@ -43,6 +43,7 @@ import { todayAppYmd, formatUtcDateLabel, diffYmdDays } from "@/lib/dates";
 import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
 import ContributesToStrip from "./ContributesToStrip";
 import { resolveProgramWorkoutContext } from "@/lib/program-prescriptions";
+import { loadPlansForExercises, planNoteFor, planTargetToPrescription } from "@/lib/program-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -232,6 +233,7 @@ export default async function LogRoutinePage(props: {
       })()
     : [];
   const exerciseIds = isWorkoutKind(kind) ? routine.exercises.map((e) => e.exerciseId) : [];
+  const plans = await loadPlansForExercises(exerciseIds, backDateYmd ?? todayAppYmd());
   const lastExerciseEntries = exerciseIds.length > 0
     ? await Promise.all(
         exerciseIds.map((eid) =>
@@ -389,7 +391,12 @@ export default async function LogRoutinePage(props: {
           cue: rx.cue,
         }
       : undefined;
-    const prescription = programContext?.prescriptionsByExerciseId.get(exercise.exerciseId) ?? routinePrescription;
+    const plan = plans.get(exercise.exerciseId);
+    const planTarget = plan?.evaluation.target;
+    const prescription =
+      (planTarget ? planTargetToPrescription(planTarget) : undefined) ??
+      programContext?.prescriptionsByExerciseId.get(exercise.exerciseId) ??
+      routinePrescription;
 
     // A prescribed set count is what you're supposed to do, so it outranks the
     // "however many rows you did last time" memory.
@@ -410,6 +417,7 @@ export default async function LogRoutinePage(props: {
       lastRows: lastRows.length > 0 ? lastRows : undefined,
       lastDate,
       prescription,
+      plan: plan ? planNoteFor(plan) : undefined,
     };
   });
 

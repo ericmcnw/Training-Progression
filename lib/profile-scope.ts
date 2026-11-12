@@ -3,7 +3,7 @@ const OWNED_MODELS = new Set([
   "ActiveInjury", "ActivitySpot", "BackpackingTrip", "BodyMeasurement", "ClimbLocation",
   "ClimbMedia", "ClimbProblem", "CoachThread", "DailyMetric", "DaySpan", "DayTodo",
   "Focus", "FrequencyGoal", "Gear", "GearList", "Goal", "GoalMilestone", "LocationPing",
-  "PainLog", "Progression", "ProgressionMilestone", "Rotation", "Routine", "RoutineLog",
+  "PainLog", "ProgramPlanItem", "Progression", "ProgressionMilestone", "Rotation", "Routine", "RoutineLog",
   "RoutineTag", "ScheduleManualEntry", "SchedulePlan", "UserActivityTypePreference", "ZoneActivity",
 ]);
 
@@ -32,6 +32,7 @@ const CHILD_PATHS: Record<string, string[]> = {
   ProgramFrequencyGoal: ["program"],
   ProgramGoal: ["program"],
   ProgramLogContext: ["routineLog"],
+  ProgramPlanTarget: ["item"],
   ProgramRoutine: ["program"],
   ProgramStage: ["program"],
   ProgramStageGate: ["stage", "program"],
