@@ -8,6 +8,7 @@ import ViewLogDrawer from "./components/ViewLogDrawer";
 import EditLogDrawer from "./components/EditLogDrawer";
 import CoachWidget from "./coach/CoachWidget";
 import ClientProviders from "./ClientProviders";
+import ViewingAsBanner from "./ViewingAsBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="appBody">
         <ClientProviders>
+          <ViewingAsBanner />
           <header className="appHeader">
             <div className="appHeaderInner">
               <Link href="/" className="appBrand">

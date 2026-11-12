@@ -16,9 +16,7 @@ export function authModeFromEnv(envValue: string | undefined | null = process.en
   return normalizeAuthMode(envValue);
 }
 
-// Every account can read all data until owned tables carry a userId, so sign-in
-// stays invite-only until then. Empty list = nobody gets in.
-export function isEmailAllowed(email: string | null | undefined, envValue = process.env.AUTH_ALLOWED_EMAILS) {
+function emailListIncludes(email: string | null | undefined, envValue: string | undefined) {
   const normalized = (email ?? "").trim().toLowerCase();
   if (!normalized) return false;
   return (envValue ?? "")
@@ -26,6 +24,17 @@ export function isEmailAllowed(email: string | null | undefined, envValue = proc
     .map((entry) => entry.trim().toLowerCase())
     .includes(normalized);
 }
+
+// Sign-in is invite-only. Empty list = nobody gets in.
+export function isEmailAllowed(email: string | null | undefined, envValue = process.env.AUTH_ALLOWED_EMAILS) {
+  return emailListIncludes(email, envValue);
+}
+
+export function isAdminEmail(email: string | null | undefined, envValue = process.env.ADMIN_EMAILS) {
+  return emailListIncludes(email, envValue);
+}
+
+export const VIEW_AS_COOKIE = "pt_view_as";
 
 export function isPublicAssetPath(pathname: string) {
   return PUBLIC_FILE_PATTERN.test(pathname);

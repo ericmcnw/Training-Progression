@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { authModeFromEnv, isEmailAllowed, type AuthMode } from "@/lib/auth-paths";
+import { authModeFromEnv, isAdminEmail, isEmailAllowed, VIEW_AS_COOKIE, type AuthMode } from "@/lib/auth-paths";
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import { basePrisma as prisma } from "@/lib/prisma-base";
 import { physicalSyntheticId } from "@/lib/profile-scope";
@@ -11,6 +11,9 @@ type AppSession = {
   profileKey: string;
   isAuthenticated: boolean;
   mode: AuthMode;
+  isAdmin?: boolean;
+  // Set while an admin is viewing someone else's profile; profileKey is then theirs.
+  ownProfileKey?: string;
 };
 
 const DEFAULT_PROFILE_KEY = "default";
@@ -109,11 +112,21 @@ async function resolveSession(): Promise<AppSession> {
     return anonymousSession();
   }
 
+  const ownProfileKey = await resolveProfileKey(userId, email);
+  const isAdmin = isAdminEmail(email);
+  const viewAs = isAdmin ? (await cookies()).get(VIEW_AS_COOKIE)?.value : undefined;
+  const viewedProfile =
+    viewAs && viewAs !== ownProfileKey
+      ? await prisma.appProfile.findUnique({ where: { key: viewAs }, select: { key: true } })
+      : null;
+
   return {
     userId,
-    profileKey: await resolveProfileKey(userId, email),
+    profileKey: viewedProfile?.key ?? ownProfileKey,
     isAuthenticated: true,
     mode: "authenticated",
+    isAdmin,
+    ownProfileKey: viewedProfile ? ownProfileKey : undefined,
   };
 }
 

@@ -41,6 +41,7 @@ export default async function SettingsPage() {
         availableSports={availableSports}
         authMode={session?.mode ?? "single-user-dev"}
         isAuthenticated={session?.isAuthenticated ?? false}
+        isAdmin={session?.isAdmin ?? false}
         homeLocation={homeLocation}
       />
 

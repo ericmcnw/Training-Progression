@@ -19,12 +19,14 @@ export default function ProfileSettings({
   availableSports,
   authMode,
   isAuthenticated,
+  isAdmin,
   homeLocation,
 }: {
   selectedSports: SelectedSportLite[];
   availableSports: AvailableSport[];
   authMode: string;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   homeLocation: HomeLocation | null;
 }) {
   const authProviderConfigured = authMode === "authenticated";
@@ -60,6 +62,18 @@ export default function ProfileSettings({
           )}
         </div>
       </div>
+
+      {isAdmin ? (
+        <div style={rowStyle}>
+          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <div style={rowTitleStyle}>Other accounts</div>
+            <div style={rowMetaStyle}>See the app as another user sees it</div>
+          </div>
+          <Link href="/profile/view-as" style={neutralBtnStyle}>
+            View as…
+          </Link>
+        </div>
+      ) : null}
 
       <HomeLocationSetting initial={homeLocation} />
 

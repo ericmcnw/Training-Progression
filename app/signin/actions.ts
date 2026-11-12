@@ -1,7 +1,8 @@
 "use server";
 
-import { isEmailAllowed } from "@/lib/auth-paths";
+import { isEmailAllowed, VIEW_AS_COOKIE } from "@/lib/auth-paths";
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 function normalizeNext(next: string | null) {
@@ -82,5 +83,6 @@ export async function verifyCode(formData: FormData) {
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  (await cookies()).delete(VIEW_AS_COOKIE);
   redirect("/signin?message=Signed%20out");
 }
