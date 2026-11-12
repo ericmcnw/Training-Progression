@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { sendMagicLink, verifyCode } from "./actions";
+import { enterCode, sendMagicLink, verifyCode } from "./actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -100,6 +100,9 @@ export default async function SignInPage(props: { searchParams?: SearchParams })
             <button type="submit" style={buttonStyle}>
               Email me a sign-in link
             </button>
+            <button type="submit" formAction={enterCode} formNoValidate style={secondaryButtonStyle}>
+              I already have a code
+            </button>
           </form>
         )}
 
@@ -134,5 +137,17 @@ const buttonStyle: CSSProperties = {
   fontWeight: 900,
   background: "linear-gradient(135deg, #f4d35e 0%, #ee964b 100%)",
   color: "#111827",
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  minHeight: 44,
+  fontSize: 14,
+  fontWeight: 700,
+  background: "transparent",
+  color: "inherit",
   cursor: "pointer",
 };

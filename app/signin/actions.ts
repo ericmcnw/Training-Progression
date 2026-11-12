@@ -34,8 +34,26 @@ export async function sendMagicLink(formData: FormData) {
     },
   });
 
+  const sent = `/signin?sent=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`;
+
+  // A 429 means an email already went out moments ago, so its code is still good.
+  if (error?.status === 429) {
+    redirect(`${sent}&error=${encodeURIComponent("We just sent you an email. Use the code from it, or wait a minute to send another.")}`);
+  }
+
   if (error) {
     redirect(`/signin?error=${encodeURIComponent(error.message)}&next=${encodeURIComponent(next)}`);
+  }
+
+  redirect(sent);
+}
+
+export async function enterCode(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const next = normalizeNext(String(formData.get("next") ?? ""));
+
+  if (!email) {
+    redirect(`/signin?error=${encodeURIComponent("Enter your email first.")}&next=${encodeURIComponent(next)}`);
   }
 
   redirect(`/signin?sent=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`);
