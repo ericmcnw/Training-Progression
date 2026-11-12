@@ -10,7 +10,12 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import CollapsibleSection from "./CollapsibleSection";
 import { COLOR, withAlpha } from "./tokens";
-import { seasonPhaseLabel, type FocusBandItem } from "@/app/focus/shared";
+import {
+  seasonPhaseLabel,
+  type FocusBandItem,
+  type ProgramPhaseView,
+  type ProgramNextPhaseView,
+} from "@/app/focus/shared";
 
 export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[] }) {
   if (focuses.length === 0) return null;
@@ -67,7 +72,9 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
         </div>
       ) : null}
 
-      {focus.currentAims.length > 0 ? (
+      {focus.currentPhase ? (
+        <PhasePanel phase={focus.currentPhase} next={focus.nextPhase} accent={accent} />
+      ) : focus.currentAims.length > 0 ? (
         <div style={aimsWrap}>
           {focus.currentAims.slice(0, 3).map((aim, i) => (
             <span key={i} style={aimChip}>
@@ -97,7 +104,173 @@ function FocusCard({ focus }: { focus: FocusBandItem }) {
   );
 }
 
+// The phase a program is in, the steps inside it, and the condition that
+// unlocks the next one. The gate line is the point of the whole panel — it is
+// the only place in the app that says *why* you aren't moving on yet.
+function PhasePanel({
+  phase,
+  next,
+  accent,
+}: {
+  phase: ProgramPhaseView;
+  next: ProgramNextPhaseView | null;
+  accent: string;
+}) {
+  const remaining = phase.steps.filter((s) => !s.done);
+  const shown = remaining.length > 0 ? remaining : phase.steps;
+
+  return (
+    <div style={phaseWrap}>
+      <div style={phaseHead}>
+        <span style={{ ...phaseName, color: accent }}>{phase.name}</span>
+        <span style={phaseCount}>
+          Phase {phase.index}/{phase.total}
+          {phase.targetEndYmd ? ` · thru ${shortYmd(phase.targetEndYmd)}` : ""}
+        </span>
+      </div>
+
+      <div style={stepList}>
+        {shown.slice(0, 4).map((step) => (
+          <div key={step.id} style={stepRow}>
+            <span aria-hidden style={step.done ? { ...stepMark, color: accent } : stepMarkOpen}>
+              {step.done ? "✓" : "○"}
+            </span>
+            <span style={stepBody}>
+              <span style={step.done ? stepLabelDone : stepLabel}>{step.label}</span>
+              {step.targetText && !step.done ? (
+                <span style={stepTarget}>{step.targetText}</span>
+              ) : null}
+            </span>
+          </div>
+        ))}
+        {shown.length > 4 ? <span style={moreSteps}>+{shown.length - 4} more</span> : null}
+      </div>
+
+      {next ? (
+        <div
+          style={{
+            ...gateWrap,
+            borderColor: next.gateMet ? withAlpha(COLOR.green, 0.35) : COLOR.border,
+            background: next.gateMet ? COLOR.greenSoft : "rgba(255,255,255,0.025)",
+          }}
+        >
+          <span style={gateHead}>
+            {next.gateMet ? "Ready for" : "Next"} · {next.name}
+          </span>
+          {next.gateSummary ? (
+            <span style={{ ...gateSummary, color: next.gateMet ? COLOR.green : COLOR.amber }}>
+              {next.gateLabel ? `${next.gateLabel} — ` : ""}
+              {next.gateSummary}
+            </span>
+          ) : (
+            <span style={gateSummaryMuted}>Advance when you decide</span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// "2026-11-15" → "Nov 15". Parsed by parts rather than through Date so the
+// label can't shift a day from a timezone offset.
+function shortYmd(ymd: string): string {
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const [, m, d] = ymd.split("-");
+  const month = MONTHS[Number(m) - 1];
+  if (!month) return ymd;
+  return `${month} ${Number(d)}`;
+}
+
 // ── styles ────────────────────────────────────────────────────────────────
+
+const phaseWrap: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  padding: "9px 10px",
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.03)",
+  border: `1px solid ${COLOR.border}`,
+};
+
+const phaseHead: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const phaseName: CSSProperties = { fontSize: 12.5, fontWeight: 900 };
+
+const phaseCount: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+  whiteSpace: "nowrap",
+};
+
+const stepList: CSSProperties = { display: "grid", gap: 6 };
+
+const stepRow: CSSProperties = { display: "flex", gap: 7, alignItems: "flex-start" };
+
+const stepMark: CSSProperties = { fontSize: 11, fontWeight: 900, lineHeight: 1.45, flexShrink: 0 };
+const stepMarkOpen: CSSProperties = { ...stepMark, color: COLOR.textFaint };
+
+const stepBody: CSSProperties = { display: "grid", gap: 1, minWidth: 0 };
+
+const stepLabel: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: COLOR.textDim,
+  lineHeight: 1.35,
+};
+
+const stepLabelDone: CSSProperties = {
+  ...stepLabel,
+  color: COLOR.textFaint,
+  textDecoration: "line-through",
+};
+
+const stepTarget: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: COLOR.textFaint,
+  lineHeight: 1.3,
+};
+
+const moreSteps: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 800,
+  color: COLOR.textFaint,
+  paddingLeft: 18,
+};
+
+const gateWrap: CSSProperties = {
+  display: "grid",
+  gap: 2,
+  padding: "7px 9px",
+  borderRadius: 9,
+  border: "1px solid",
+};
+
+const gateHead: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 900,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: COLOR.textFaint,
+};
+
+const gateSummary: CSSProperties = { fontSize: 11.5, fontWeight: 800, lineHeight: 1.35 };
+
+const gateSummaryMuted: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 700,
+  color: COLOR.textFaint,
+  fontStyle: "italic",
+};
 
 // Auto-fit grid: single column on phones, two columns once there's room.
 const grid: CSSProperties = {

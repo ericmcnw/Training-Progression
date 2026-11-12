@@ -9,9 +9,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { markRungMet } from "@/app/progressions/actions";
+import { markMilestoneMet } from "@/app/focus/actions";
 import type { ReadyRung } from "@/app/progressions/data";
 import {
-  readySection, readyHead, readyTitle, readyAll, readyRow, readyText,
+  readySection, readyHead, readyTitle, readyRow, readyText,
   readyStep, readyWhy, readyTickBtn, rungError,
 } from "@/app/progressions/ui";
 
@@ -26,15 +27,18 @@ export default function HomeProgressionsSection({ ready }: { ready: ReadyRung[] 
   const shown = ready.filter((r) => !dismissed.includes(r.id));
   if (shown.length === 0) return null;
 
-  function tick(id: string) {
-    setDismissed((prev) => [...prev, id]);
+  // The two ladder surfaces keep separate ownership guards on purpose, so the
+  // tick goes to whichever one owns this step.
+  function tick(rung: ReadyRung) {
+    setDismissed((prev) => [...prev, rung.id]);
     setFailed(false);
     startTransition(async () => {
       try {
-        await markRungMet(id);
+        if (rung.ownerKind === "FOCUS") await markMilestoneMet(rung.id);
+        else await markRungMet(rung.id);
         router.refresh();
       } catch {
-        setDismissed((prev) => prev.filter((x) => x !== id));
+        setDismissed((prev) => prev.filter((x) => x !== rung.id));
         setFailed(true);
       }
     });
@@ -46,19 +50,18 @@ export default function HomeProgressionsSection({ ready }: { ready: ReadyRung[] 
         <span style={readyTitle}>
           {shown.length === 1 ? "A step looks done" : `${shown.length} steps look done`}
         </span>
-        <Link href="/progressions" style={readyAll}>Progressions →</Link>
       </div>
 
       {shown.map((rung) => (
         <div key={rung.id} style={readyRow}>
           <span style={readyText}>
             <span style={readyStep}>{rung.label || "Untitled step"}</span>
-            <span style={readyWhy}>
-              {rung.progressionName} · you hit {rung.best} {UNITS[rung.metric]} in{" "}
+            <Link href={rung.ownerHref} style={{ ...readyWhy, textDecoration: "none" }}>
+              {rung.ownerName} · you hit {rung.best} {UNITS[rung.metric]} in{" "}
               {rung.exerciseName}, target was {rung.value}
-            </span>
+            </Link>
           </span>
-          <button type="button" style={readyTickBtn} onClick={() => tick(rung.id)} disabled={pending}>
+          <button type="button" style={readyTickBtn} onClick={() => tick(rung)} disabled={pending}>
             Tick it
           </button>
         </div>

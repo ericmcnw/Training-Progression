@@ -200,8 +200,10 @@ export async function getExerciseOptions(): Promise<ExerciseOption[]> {
 export type ReadyRung = {
   id: string;
   label: string;
-  progressionId: string;
-  progressionName: string;
+  ownerKind: "PROGRESSION" | "FOCUS";
+  ownerId: string;
+  ownerName: string;
+  ownerHref: string;
   metric: RungMetric;
   value: number;
   best: number;
@@ -215,16 +217,33 @@ export type ReadyRung = {
 // visit goes stale. The tick has to come to you.
 export async function getReadyRungs(): Promise<ReadyRung[]> {
   const session = await getAppSession();
-  const progressions = await prisma.progression.findMany({
-    where: { profileKey: session.profileKey, status: "ACTIVE" },
-    select: { id: true, name: true },
-  });
-  if (progressions.length === 0) return [];
+
+  // Both ladder surfaces feed this prompt. Program steps are FOCUS-owned and
+  // are where the real planning happens, so leaving them out meant the prompt
+  // watched the surface with nothing in it.
+  const [progressions, programs] = await Promise.all([
+    prisma.progression.findMany({
+      where: { profileKey: session.profileKey, status: "ACTIVE" },
+      select: { id: true, name: true },
+    }),
+    prisma.focus.findMany({
+      where: { profileKey: session.profileKey, status: "ACTIVE" },
+      select: { id: true, name: true },
+    }),
+  ]);
+  const owners = new Map<string, { kind: "PROGRESSION" | "FOCUS"; name: string; href: string }>();
+  for (const row of progressions) {
+    owners.set(row.id, { kind: "PROGRESSION", name: row.name, href: `/progressions/${row.id}` });
+  }
+  for (const row of programs) {
+    owners.set(row.id, { kind: "FOCUS", name: row.name, href: `/programs/${row.id}` });
+  }
+  if (owners.size === 0) return [];
 
   const rungs = await prisma.progressionMilestone.findMany({
     where: {
-      ownerKind: "PROGRESSION",
-      ownerId: { in: progressions.map((p) => p.id) },
+      ownerKind: { in: ["PROGRESSION", "FOCUS"] },
+      ownerId: { in: Array.from(owners.keys()) },
       status: "ACTIVE",
       autoTick: false,
       scopeKind: "EXERCISE",
@@ -249,17 +268,20 @@ export async function getReadyRungs(): Promise<ReadyRung[]> {
     }),
   ]);
   const nameById = new Map(names.map((e) => [e.id, e.name]));
-  const progressionById = new Map(progressions.map((p) => [p.id, p.name]));
 
   const ready: ReadyRung[] = [];
   for (const rung of rungs) {
     const reached = best.get(rung.scopeRef!)?.[rung.gateMetric!];
     if (reached == null || rung.gateValue == null || reached < rung.gateValue) continue;
+    const owner = owners.get(rung.ownerId);
+    if (!owner) continue;
     ready.push({
       id: rung.id,
       label: rung.label,
-      progressionId: rung.ownerId,
-      progressionName: progressionById.get(rung.ownerId) ?? "",
+      ownerKind: owner.kind,
+      ownerId: rung.ownerId,
+      ownerName: owner.name,
+      ownerHref: owner.href,
       metric: rung.gateMetric!,
       value: rung.gateValue,
       best: reached,

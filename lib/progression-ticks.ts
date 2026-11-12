@@ -38,9 +38,19 @@ export async function autoTickRungsForLog(
   const exerciseIds = exercises.map((e) => e.exerciseId);
   if (exerciseIds.length === 0) return [];
 
+  // Program steps are FOCUS-owned and are the ladder that actually gets
+  // planned against, so they tick too — but only while their program is
+  // running. ownerId isn't a real FK (it points at two tables), so the
+  // active-program set is resolved first and filtered in memory.
+  const activePrograms = await tx.focus.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true },
+  });
+  const activeProgramIds = new Set(activePrograms.map((f) => f.id));
+
   const candidates = await tx.progressionMilestone.findMany({
     where: {
-      ownerKind: "PROGRESSION",
+      ownerKind: { in: ["PROGRESSION", "FOCUS"] },
       status: "ACTIVE",
       autoTick: true,
       scopeKind: "EXERCISE",
@@ -48,13 +58,16 @@ export async function autoTickRungsForLog(
       gateMetric: { not: null },
       gateValue: { not: null },
     },
-    select: { id: true, scopeRef: true, gateMetric: true, gateValue: true },
+    select: { id: true, ownerKind: true, ownerId: true, scopeRef: true, gateMetric: true, gateValue: true },
   });
-  if (candidates.length === 0) return [];
+  const inScope = candidates.filter(
+    (rung) => rung.ownerKind === "PROGRESSION" || activeProgramIds.has(rung.ownerId)
+  );
+  if (inScope.length === 0) return [];
 
   const bestByExercise = new Map(exercises.map((e) => [e.exerciseId, bestOf(e.loggedSets)]));
 
-  const earned = candidates.filter((rung) => {
+  const earned = inScope.filter((rung) => {
     const best = rung.scopeRef ? bestByExercise.get(rung.scopeRef) : undefined;
     if (!best || rung.gateMetric == null || rung.gateValue == null) return false;
     const reached = best[rung.gateMetric];
