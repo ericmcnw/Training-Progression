@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
 import { todayAppYmd } from "@/lib/dates";
+import { buildMilestoneGate, loadPainGateReadings, loadTrackActivity } from "@/app/focus/data";
 import type { ProgramBlockStatus, ProgramStageStatus, ProgramTargetItemStatus } from "@/generated/prisma";
 
 async function requireProgram(programId: string) {
@@ -119,6 +120,47 @@ export async function setProgramStageStatus(formData: FormData) {
       },
     });
   }
+  revalidateProgram(programId);
+}
+
+// Phases never advance on their own; this runs only from the user's tap. The
+// next phase's entry step is ticked only when its logged condition is met now.
+export async function startNextPhase(programId: string) {
+  await requireProgram(programId);
+  const stages = await prisma.programStage.findMany({
+    where: { programId },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, status: true, startedAt: true },
+  });
+  const currentIdx = stages.findIndex((stage) => stage.status === "ACTIVE");
+  const next = stages[currentIdx + 1];
+  if (!next) throw new Error("There is no phase after this one.");
+
+  const entry = await prisma.progressionMilestone.findFirst({
+    where: { ownerKind: "FOCUS", ownerId: programId, stageId: next.id, status: { not: "SKIPPED" } },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true, status: true, scopeKind: true, scopeRef: true, gateKind: true, gateNote: true,
+      gatePainZoneId: true, gatePainThreshold: true, gatePainDays: true, gateFreqPerWeek: true, gateFreqWeeks: true,
+    },
+  });
+  let entryMet = false;
+  if (entry && entry.status === "ACTIVE" && (entry.gateKind === "PAIN" || entry.gateKind === "FREQUENCY")) {
+    const today = todayAppYmd();
+    const [readings, activity] = await Promise.all([loadPainGateReadings([entry]), loadTrackActivity([entry], today)]);
+    entryMet = buildMilestoneGate(entry, readings, activity, today).met === true;
+  }
+
+  const now = new Date();
+  await prisma.$transaction([
+    ...(currentIdx >= 0
+      ? [prisma.programStage.update({ where: { id: stages[currentIdx].id }, data: { status: "COMPLETED", completedAt: now } })]
+      : []),
+    prisma.programStage.update({ where: { id: next.id }, data: { status: "ACTIVE", startedAt: next.startedAt ?? now, completedAt: null } }),
+    ...(entryMet && entry
+      ? [prisma.progressionMilestone.update({ where: { id: entry.id }, data: { status: "ACHIEVED", achievedAt: now } })]
+      : []),
+  ]);
   revalidateProgram(programId);
 }
 

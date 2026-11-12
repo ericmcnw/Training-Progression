@@ -2,164 +2,11 @@ import Link from "next/link";
 import InjuryPanel from "@/app/focus/[id]/InjuryPanel";
 import type { FocusDetail, InjuryPanelData } from "@/app/focus/data";
 import type { ProgramDetailData } from "@/app/programs/detail-data";
-import { markMilestoneMet, reopenMilestone } from "@/app/focus/actions";
 import { addProgramGoalCheckpoint, continueProgramCycle } from "@/app/programs/actions";
 import { todayAppYmd } from "@/lib/dates";
 
 type Detail = NonNullable<ProgramDetailData>;
 type SharedProps = { focus: FocusDetail; detail: Detail; accent: string };
-
-export function ProgramOverview({ focus, detail, injury, accent }: SharedProps & { injury: InjuryPanelData | null }) {
-  const activeStage = detail.stages.find((stage) => stage.status === "ACTIVE") ?? detail.stages.find((stage) => stage.status === "PLANNED") ?? null;
-  const activeBlock = detail.blocks.find((block) => block.status === "ACTIVE") ?? detail.blocks.find((block) => block.status === "DRAFT") ?? null;
-  const activeMilestones = detail.milestones.filter((milestone) => milestone.status === "ACTIVE").slice(0, 3);
-  const nextItems = activeBlock?.items.slice(0, 4) ?? [];
-
-  return (
-    <div style={viewStack}>
-      <Section
-        eyebrow="Next"
-        title={activeBlock?.name ?? activeStage?.name ?? "Keep the program moving"}
-        action={<Link href={`/programs/${focus.id}?view=roadmap`} style={textAction}>Roadmap</Link>}
-      >
-        {detail.schedule.missed.length ? (
-          <Notice tone="warn" title={`${detail.schedule.missed.length} planned session${detail.schedule.missed.length === 1 ? "" : "s"} need attention`}>
-            Nothing moves automatically. Keep, move, or skip them when scheduling controls land.
-          </Notice>
-        ) : null}
-
-        {detail.schedule.next.length ? (
-          <div style={rowList}>
-            {detail.schedule.next.slice(0, 6).map((session) => (
-              <ActionRow
-                key={session.id}
-                title={session.label}
-                meta={dateLabel(session.currentYmd)}
-                href={session.routineId ? `/routines/${session.routineId}/log?plannedSessionId=${encodeURIComponent(session.id)}` : "/log"}
-                action="Log"
-              />
-            ))}
-          </div>
-        ) : nextItems.length ? (
-          <div style={rowList}>
-            {nextItems.map((item) => (
-              <ActionRow
-                key={item.id}
-                title={item.label}
-                meta={frequencyLabel(item.minPerWeek, item.targetPerWeek, item.maxPerWeek)}
-                href={item.routine?.id ? `/routines/${item.routine.id}/log?programId=${encodeURIComponent(detail.id)}&blockItemId=${encodeURIComponent(item.id)}` : detail.activityLink.href}
-                action={item.routine?.id ? "Log" : "Open"}
-              />
-            ))}
-          </div>
-        ) : detail.routines.length ? (
-          <div style={rowList}>
-            {detail.routines.slice(0, 4).map((routine) => (
-              <ActionRow key={routine.id} title={routine.name} meta={routine.role.toLowerCase()} href={`/routines/${routine.id}/log?programId=${encodeURIComponent(detail.id)}`} action="Log" />
-            ))}
-          </div>
-        ) : (
-          <Empty message="Connect routines or add a training block so the program can show a useful next step." actionHref={`/programs/${focus.id}/edit`} actionLabel="Build program" />
-        )}
-
-        <div style={primaryActions}>
-          <Link href={detail.activityLink.href} style={{ ...primaryAction, borderColor: `${accent}66`, color: accent }}>
-            Open {titleCase(detail.activityLink.label)}
-          </Link>
-          <Link href="/log" style={secondaryAction}>Log something else</Link>
-        </div>
-      </Section>
-
-      <Section eyebrow="Current phase" title={activeStage?.name ?? "Whole program"}>
-        {activeStage?.description ? <p style={bodyCopy}>{activeStage.description}</p> : null}
-        {activeBlock ? (
-          <KeyLine label="Training block" value={activeBlock.name} meta={[activeBlock.lengthWeeks ? `${activeBlock.lengthWeeks} weeks` : null, sentenceCase(activeBlock.scheduleMode)].filter(Boolean).join(" / ")} accent={accent} />
-        ) : null}
-        {activeMilestones.length ? (
-          <div style={plainList}>
-            {activeMilestones.map((milestone) => (
-              <div key={milestone.id} style={plainRow}>
-                <span style={{ ...statusMark, background: accent }} />
-                <div style={{ minWidth: 0 }}>
-                  <strong style={rowTitle}>{milestone.label}</strong>
-                  {milestone.targetText ? <div style={rowMeta}>{milestone.targetText}</div> : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : !activeBlock ? <Empty message="No active milestone or block has been selected." /> : null}
-      </Section>
-
-      <Section eyebrow="Snapshot" title="Is it working?" action={<Link href={`/programs/${focus.id}?view=progress`} style={textAction}>Full progress</Link>}>
-        <div style={metricGrid}>
-          <Metric value={detail.activity.total8Weeks} label="sessions / 8 weeks" />
-          <Metric value={detail.activity.lastYmd ? shortDate(detail.activity.lastYmd) : "None"} label="last session" />
-          <Metric value={`${focus.milestonesDone}/${focus.milestonesTotal}`} label="milestones" />
-        </div>
-        <AssessmentPreview detail={detail} />
-        <OutcomePreview detail={detail} accent={accent} />
-      </Section>
-
-      {injury ? <Section eyebrow="Health context" title="Injury status" action={<Link href="/profile/health" style={textAction}>Health</Link>}><InjuryPanel injury={injury} /></Section> : <ProjectionLine focus={focus} />}
-    </div>
-  );
-}
-
-export function ProgramRoadmap({ focus, detail, accent }: SharedProps) {
-  const stageIds = new Set(detail.stages.map((stage) => stage.id));
-  const unassignedMilestones = detail.milestones.filter((milestone) => !milestone.stageId || !stageIds.has(milestone.stageId));
-  const unassignedBlocks = detail.blocks.filter((block) => !block.stageId || !stageIds.has(block.stageId));
-
-  return (
-    <div style={viewStack}>
-      <Section
-        eyebrow="Progression"
-        title="How the program moves forward"
-        subtitle="Stages describe the large phases. Blocks describe repeatable training. Milestones describe the evidence that earns progress."
-        action={<Link href={`/programs/${focus.id}/edit`} style={textAction}>Edit roadmap</Link>}
-      >
-        {detail.stages.length ? (
-          <ol style={timelineList}>
-            {detail.stages.map((stage, index) => {
-              const blocks = detail.blocks.filter((block) => block.stageId === stage.id);
-              const milestones = detail.milestones.filter((milestone) => milestone.stageId === stage.id);
-              const active = stage.status === "ACTIVE";
-              return (
-                <li key={stage.id} style={timelineItem}>
-                  <div style={{ ...timelineMarker, borderColor: active ? accent : "rgba(255,255,255,0.22)", color: active ? accent : "rgba(255,255,255,0.55)" }}>{index + 1}</div>
-                  <div style={timelineBody}>
-                    <div style={rowBetween}>
-                      <div>
-                        <h3 style={stageTitle}>{stage.name}</h3>
-                        <div style={rowMeta}>{sentenceCase(stage.status)}{stage.notBeforeYmd ? ` / after ${shortDate(stage.notBeforeYmd)}` : ""}{stage.targetEndYmd ? ` / aim ${shortDate(stage.targetEndYmd)}` : ""}</div>
-                      </div>
-                      {active ? <span style={{ ...stateChip, borderColor: `${accent}66`, color: accent }}>Current</span> : null}
-                    </div>
-                    {stage.description ? <p style={bodyCopy}>{stage.description}</p> : null}
-                    {blocks.map((block) => <BlockSummary key={block.id} block={block} accent={accent} />)}
-                    {milestones.length ? <MilestoneList milestones={milestones} accent={accent} /> : null}
-                    {stage.gates.length ? <div style={gateLine}>Advance when: {stage.gates.map((gate) => gate.label).join(" + ")}</div> : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          <Empty message="This program currently uses milestones without stages. Add stages only when distinct phases make the plan easier to understand." actionHref={`/programs/${focus.id}/edit`} actionLabel="Add stages" />
-        )}
-      </Section>
-
-      {unassignedBlocks.length || unassignedMilestones.length ? (
-        <Section eyebrow="Across the program" title="Ongoing work">
-          {unassignedBlocks.map((block) => <BlockSummary key={block.id} block={block} accent={accent} />)}
-          {unassignedMilestones.length ? <MilestoneList milestones={unassignedMilestones} accent={accent} /> : null}
-        </Section>
-      ) : null}
-
-      <NamedOutcomes detail={detail} accent={accent} />
-    </div>
-  );
-}
 
 export function ProgramProgress({ detail, injury, accent }: SharedProps & { injury: InjuryPanelData | null }) {
   const max = Math.max(1, ...detail.activity.weeklyCounts);
@@ -267,7 +114,7 @@ export function ProgramProgress({ detail, injury, accent }: SharedProps & { inju
   );
 }
 
-function NamedOutcomes({ detail, accent }: { detail: Detail; accent: string }) {
+export function NamedOutcomes({ detail, accent }: { detail: Detail; accent: string }) {
   if (!detail.targetLists.length) return null;
   return (
     <Section eyebrow="Named targets" title="Specific things to complete">
@@ -300,23 +147,7 @@ function NamedOutcomes({ detail, accent }: { detail: Detail; accent: string }) {
   );
 }
 
-function OutcomePreview({ detail, accent }: { detail: Detail; accent: string }) {
-  const list = detail.targetLists[0];
-  if (!list) return null;
-  const items = list.items.filter((item) => item.status !== "DROPPED");
-  const done = items.filter((item) => item.completed).length;
-  return <KeyLine label="Named targets" value={list.name} meta={`${done} of ${items.length} complete`} accent={accent} />;
-}
-
-function AssessmentPreview({ detail }: { detail: Detail }) {
-  const assessment = detail.assessments.find((candidate) => candidate.results.length > 0);
-  if (!assessment) return null;
-  const baseline = assessment.results.find((result) => result.isBaseline) ?? assessment.results[0] ?? null;
-  const latest = assessment.results.at(-1) ?? null;
-  return <KeyLine label="Checkpoint" value={assessment.name} meta={`${formatAssessment(baseline, assessment.unit)} to ${formatAssessment(latest, assessment.unit)}`} accent="rgba(255,255,255,0.65)" />;
-}
-
-function BlockSummary({ block, accent }: { block: Detail["blocks"][number]; accent: string }) {
+export function BlockSummary({ block, accent }: { block: Detail["blocks"][number]; accent: string }) {
   return (
     <div style={blockSummary}>
       <div style={rowBetween}>
@@ -330,25 +161,7 @@ function BlockSummary({ block, accent }: { block: Detail["blocks"][number]; acce
   );
 }
 
-function MilestoneList({ milestones, accent }: { milestones: Detail["milestones"]; accent: string }) {
-  return (
-    <div style={plainList}>
-      {milestones.map((milestone) => (
-        <div key={milestone.id} style={plainRow}>
-          <span style={{ ...milestoneDot, borderColor: milestone.status === "ACHIEVED" ? accent : "rgba(255,255,255,0.24)", background: milestone.status === "ACHIEVED" ? accent : "transparent" }} />
-          <div style={{ minWidth: 0, flex: 1 }}><strong style={rowTitle}>{milestone.label}</strong>{milestone.targetText ? <div style={rowMeta}>{milestone.targetText}</div> : null}</div>
-          {milestone.status === "ACHIEVED" ? (
-            <form action={reopenMilestone.bind(null, milestone.id)}><button type="submit" style={milestoneAction}>Reopen</button></form>
-          ) : milestone.status === "ACTIVE" ? (
-            <form action={markMilestoneMet.bind(null, milestone.id)}><button type="submit" style={milestoneAction}>Complete</button></form>
-          ) : <span style={rowMeta}>{sentenceCase(milestone.status)}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function GoalRow({ name, role, href, progress, accent }: { name: string; role: string; href?: string | null; progress: Detail["goalLinks"][number]["progress"]; accent: string }) {
+export function GoalRow({ name, role, href, progress, accent }: { name: string; role: string; href?: string | null; progress: Detail["goalLinks"][number]["progress"]; accent: string }) {
   const content = (
     <>
       <div style={rowBetween}><div style={{ minWidth: 0 }}><strong style={rowTitle}>{name}</strong><div style={rowMeta}>{progress?.summaryLabel ?? "Waiting for matching logs"}</div></div><span style={rowMeta}>{role.toLowerCase()}</span></div>
@@ -358,7 +171,7 @@ function GoalRow({ name, role, href, progress, accent }: { name: string; role: s
   return href ? <Link href={href} style={goalRow}>{content}</Link> : <div style={goalRow}>{content}</div>;
 }
 
-function ProjectionLine({ focus }: { focus: FocusDetail }) {
+export function ProjectionLine({ focus }: { focus: FocusDetail }) {
   const projection = focus.projection;
   if (!projection.targetYmd && !projection.projectedCompletionYmd) return null;
   const headline = projection.status === "behind" ? `${projection.driftDays ?? 0} days behind the current estimate` : projection.status === "ahead" ? `${Math.abs(projection.driftDays ?? 0)} days ahead of the estimate` : projection.status === "on_track" ? "The roadmap is on track" : projection.status === "done" ? "Roadmap complete" : "Projected from milestone durations";
@@ -373,11 +186,6 @@ function ActionRow({ title, meta, href, action, quiet = false }: { title: string
   return <Link href={href} style={{ ...actionRow, background: quiet ? "transparent" : "rgba(255,255,255,0.025)" }}><div style={{ minWidth: 0 }}><strong style={rowTitle}>{title}</strong>{meta ? <div style={rowMeta}>{meta}</div> : null}</div><span style={rowAction}>{action}</span></Link>;
 }
 
-function KeyLine({ label, value, meta, accent }: { label: string; value: string; meta?: string | null; accent: string }) {
-  return <div style={keyLine}><span style={{ ...keyLabel, color: accent }}>{label}</span><div style={{ minWidth: 0 }}><strong style={rowTitle}>{value}</strong>{meta ? <div style={rowMeta}>{meta}</div> : null}</div></div>;
-}
-
-function Metric({ value, label }: { value: string | number; label: string }) { return <div style={metric}><strong>{value}</strong><span>{label}</span></div>; }
 function ProgressBar({ value, accent }: { value: number; accent: string }) { return <div style={progressTrack}><div style={{ ...progressFill, width: `${Math.min(100, Math.max(0, value))}%`, background: accent }} /></div>; }
 
 function Empty({ message, actionHref, actionLabel }: { message: string; actionHref?: string; actionLabel?: string }) {
@@ -411,9 +219,7 @@ function directionArrow(direction: Detail["assessments"][number]["direction"]) {
 function frequencyLabel(min: number | null, target: number | null, max: number | null) { if (min != null && max != null) return `${min}-${max}x/week`; if (target != null) return `${target}x/week`; if (min != null) return `${min}+x/week`; return "Flexible"; }
 function frequencyBlockLabel(block: Detail["blocks"][number]) { return [block.lengthWeeks ? `${block.lengthWeeks} weeks` : null, sentenceCase(block.scheduleMode)].filter(Boolean).join(" / "); }
 function sentenceCase(value: string) { const text = value.toLowerCase().replaceAll("_", " "); return text.charAt(0).toUpperCase() + text.slice(1); }
-function titleCase(value: string) { return value.split(/[- ]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "); }
 function shortDate(ymd: string) { const [year, month, day] = ymd.split("-").map(Number); if (!year || !month || !day) return ymd; return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: year === new Date().getFullYear() ? undefined : "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day))); }
-function dateLabel(ymd: string) { return shortDate(ymd); }
 
 const viewStack: React.CSSProperties = { display: "grid", gap: 0 };
 const section: React.CSSProperties = { display: "grid", gap: 14, padding: "22px 0", borderTopWidth: 1, borderTopStyle: "solid", borderTopColor: "rgba(255,255,255,0.1)" };
@@ -425,33 +231,15 @@ const textAction: React.CSSProperties = { color: "rgba(255,255,255,0.7)", textDe
 const rowList: React.CSSProperties = { display: "grid", gap: 7 };
 const actionRow: React.CSSProperties = { minHeight: 54, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 11px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", color: "inherit", textDecoration: "none" };
 const rowAction: React.CSSProperties = { color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: 900, flexShrink: 0 };
-const primaryActions: React.CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
-const primaryAction: React.CSSProperties = { minHeight: 42, display: "inline-flex", alignItems: "center", padding: "0 13px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", background: "rgba(255,255,255,0.035)", textDecoration: "none", fontSize: 12, fontWeight: 900 };
-const secondaryAction: React.CSSProperties = { ...primaryAction, color: "rgba(255,255,255,0.64)", borderColor: "rgba(255,255,255,0.13)" };
-const bodyCopy: React.CSSProperties = { margin: 0, color: "rgba(255,255,255,0.62)", fontSize: 12.5, lineHeight: 1.55 };
-const plainList: React.CSSProperties = { display: "grid" };
-const plainRow: React.CSSProperties = { minHeight: 48, display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "rgba(255,255,255,0.06)" };
-const statusMark: React.CSSProperties = { width: 6, height: 24, borderRadius: 3, flexShrink: 0 };
-const milestoneDot: React.CSSProperties = { width: 10, height: 10, borderRadius: 99, borderWidth: 2, borderStyle: "solid", flexShrink: 0 };
-const keyLine: React.CSSProperties = { display: "grid", gridTemplateColumns: "94px minmax(0, 1fr)", gap: 12, padding: "9px 0", borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "rgba(255,255,255,0.06)" };
-const keyLabel: React.CSSProperties = { paddingTop: 2, fontSize: 9.5, fontWeight: 900, textTransform: "uppercase" };
 const rowTitle: React.CSSProperties = { display: "block", fontSize: 12.5, lineHeight: 1.35, fontWeight: 850 };
 const rowMeta: React.CSSProperties = { color: "rgba(255,255,255,0.5)", fontSize: 10.5, lineHeight: 1.45 };
-const metricGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 };
-const metric: React.CSSProperties = { display: "grid", gap: 3, padding: "10px 0", borderRightWidth: 1, borderRightStyle: "solid", borderRightColor: "rgba(255,255,255,0.08)", fontSize: 11, color: "rgba(255,255,255,0.48)" };
 const empty: React.CSSProperties = { minHeight: 50, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 7, borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.5)", fontSize: 11.5, lineHeight: 1.45 };
 const notice: React.CSSProperties = { display: "grid", gap: 2, padding: "10px 12px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", color: "rgba(255,255,255,0.7)", fontSize: 11.5, lineHeight: 1.45 };
-const timelineList: React.CSSProperties = { listStyle: "none", margin: 0, padding: 0, display: "grid" };
-const timelineItem: React.CSSProperties = { display: "grid", gridTemplateColumns: "34px minmax(0, 1fr)", gap: 12, padding: "0 0 22px", position: "relative" };
-const timelineMarker: React.CSSProperties = { width: 30, height: 30, display: "grid", placeItems: "center", borderRadius: 7, borderWidth: 1, borderStyle: "solid", fontSize: 11, fontWeight: 900 };
-const timelineBody: React.CSSProperties = { display: "grid", gap: 10, minWidth: 0 };
-const stageTitle: React.CSSProperties = { margin: 0, fontSize: 14, fontWeight: 900 };
 const rowBetween: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
 const stateChip: React.CSSProperties = { padding: "3px 7px", borderRadius: 99, borderWidth: 1, borderStyle: "solid", fontSize: 9.5, fontWeight: 900, flexShrink: 0 };
 const blockSummary: React.CSSProperties = { display: "grid", gap: 7, padding: "10px 11px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.02)" };
 const compactItems: React.CSSProperties = { display: "grid" };
 const compactItem: React.CSSProperties = { minHeight: 35, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, borderTopWidth: 1, borderTopStyle: "solid", borderTopColor: "rgba(255,255,255,0.055)", fontSize: 11.5 };
-const gateLine: React.CSSProperties = { padding: "7px 9px", borderLeftWidth: 2, borderLeftStyle: "solid", borderLeftColor: "rgba(251,191,36,0.55)", color: "rgba(255,255,255,0.55)", fontSize: 11 };
 const assessmentRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 14, padding: "11px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)" };
 const recordForm: React.CSSProperties = { gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, paddingTop: 9, borderTop: "1px solid rgba(255,255,255,0.07)" };
 const recordInput: React.CSSProperties = { minHeight: 44, minWidth: 0, flex: "1 1 150px", padding: "8px 10px", boxSizing: "border-box", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", borderRadius: 8, background: "#111827", color: "white", fontSize: 16 };
@@ -473,7 +261,6 @@ const progressTrack: React.CSSProperties = { height: 5, borderRadius: 99, backgr
 const progressFill: React.CSSProperties = { height: "100%", borderRadius: 99 };
 const outcomeGroup: React.CSSProperties = { display: "grid", gap: 9, padding: "11px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.09)" };
 const checkMark: React.CSSProperties = { width: 16, height: 16, display: "grid", placeItems: "center", borderRadius: 4, borderWidth: 1, borderStyle: "solid", fontSize: 9, flexShrink: 0 };
-const milestoneAction: React.CSSProperties = { minHeight: 32, padding: "0 9px", borderRadius: 6, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.13)", background: "transparent", color: "rgba(255,255,255,0.58)", fontSize: 10.5, fontWeight: 850, cursor: "pointer" };
 const targetLink: React.CSSProperties = { flex: 1, minWidth: 0, color: "inherit", textDecoration: "none" };
 const cycleForm: React.CSSProperties = { display: "grid", gap: 10 };
 const cycleNameInput: React.CSSProperties = { minHeight: 42, minWidth: 0, width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 7, borderWidth: 1, borderStyle: "solid", borderColor: "rgba(255,255,255,0.14)", background: "#111827", color: "white", fontSize: 16 };

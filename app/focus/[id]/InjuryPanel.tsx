@@ -9,7 +9,7 @@ import type { InjuryPanelData } from "@/app/focus/data";
 import TodayReadingControl from "../TodayReadingControl";
 
 // 0–10 pain → color. Green low, amber mid, red high.
-function levelColor(level: number): string {
+export function levelColor(level: number): string {
   if (level <= 2) return "#4ade80";
   if (level <= 4) return "#fbbf24";
   if (level <= 6) return "#fb923c";
