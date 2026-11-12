@@ -99,7 +99,7 @@ export default function RoutineSection({
             gap: 8,
           }}
         >
-          <span style={{ fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>{count} routines</span>
+          <span style={{ fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>{count} {count === 1 ? "routine" : "routines"}</span>
         </div>
       </div>
 

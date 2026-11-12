@@ -11,6 +11,7 @@ import RoutineSection from "./RoutineSection";
 import QuickLogDrawerButton from "./QuickLogDrawerButton";
 import EnduranceQuickLogButton from "./EnduranceQuickLogButton";
 import EnduranceQuickLogRow from "./EnduranceQuickLogRow";
+import StrengthQuickLogRow from "./StrengthQuickLogRow";
 import BackpackingQuickLogRow from "./BackpackingQuickLogRow";
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import SportsAddButton from "./SportsAddButton";
@@ -295,6 +296,20 @@ export default async function RoutinesPageContent(props: {
     groups.set("cardio", []);
   }
 
+  // Every domain section is an entry point (quick-log rows, the sport picker,
+  // the create-first-routine nudge), so an empty domain still renders —
+  // otherwise a new user only ever sees Endurance. Search narrows to matches.
+  if (!searchQuery) {
+    for (const d of domainOrder) {
+      if (domainFilter && d !== domainFilter) continue;
+      if (!groups.has(d)) groups.set(d, []);
+    }
+  }
+
+  // Nothing set up yet: open the sections so their log/add entry points are
+  // visible instead of hiding behind five collapsed "0 routines" headers.
+  const isFirstRun = rawRoutines.length === 0 && sportRows.length === 0;
+
   const orderedDomains = domainOrder.filter((d) => groups.has(d));
 
   const renderRoutineCard = (routine: (typeof active)[number]) => (
@@ -443,12 +458,21 @@ export default async function RoutinesPageContent(props: {
                     available={availableSports}
                   />
                 }
-                defaultOpen={!!domainFilter}
+                defaultOpen={!!domainFilter || isFirstRun}
               >
                 <ActivityQuickLogRow />
                 {sportRows.map((sport) => (
                   <SportQuickLogRow key={sport.slug} sport={sport} />
                 ))}
+                {sportRows.length === 0 ? (
+                  <SportsAddButton
+                    selected={sportPickerSelected}
+                    available={availableSports}
+                    style={styles.emptyCta}
+                  >
+                    + Add a sport — climbing, surfing, golf, tennis…
+                  </SportsAddButton>
+                ) : null}
                 {list.map((routine) => (
                   <RoutineCard
                     key={routine.id}
@@ -482,11 +506,12 @@ export default async function RoutinesPageContent(props: {
                   <EnduranceQuickLogButton style={styles.quickLogPill} />
                 ) : undefined
               }
-              defaultOpen={!!domainFilter}
+              defaultOpen={!!domainFilter || isFirstRun}
             >
               {/* Always-present endurance entry — opens the type-picker log
                   form. Sits above any user-created cardio routines. */}
               {isCardio ? <EnduranceQuickLogRow /> : null}
+              {domain === "strength" && list.length === 0 ? <StrengthQuickLogRow /> : null}
               {/* Backpacking — endurance pursuit with its own multi-day trip
                   sheet. Sits right under the generic endurance entry. */}
               {isCardio ? <BackpackingQuickLogRow /> : null}

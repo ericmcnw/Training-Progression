@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ACTIVITY_FAMILY_META, activitiesByFamily, getActivityEntry } from "@/lib/activity-families";
 import { loadSportsChartData } from "@/lib/activities/sports-chart";
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
-import { SectionCard, EmptyState } from "@/app/progress/ui";
+import { SectionCard, EmptyState, SectionLinkButton } from "@/app/progress/ui";
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import { formatHoursMinutes } from "@/lib/progress";
 import { prisma } from "@/lib/prisma";
@@ -79,8 +79,12 @@ export default async function SportsDashboardPage() {
             defaultLens="bars"
           />
         ) : (
-          <SectionCard title="No sport sessions yet" subtitle="Log a sport routine to start populating this view.">
-            <EmptyState message="Tag a routine with a sport activity (climbing, surfing, basketball, etc.) and log it to see this dashboard fill in." />
+          <SectionCard
+            title="No sport sessions yet"
+            subtitle="Log a sport session to start populating this view."
+            actions={<SectionLinkButton href="/log?domain=sport" label="Add a sport" />}
+          >
+            <EmptyState message="Add the sports you play (climbing, surfing, golf, basketball, etc.) in the Sport section of the Log tab, then log a session to see this dashboard fill in." />
           </SectionCard>
         )}
 

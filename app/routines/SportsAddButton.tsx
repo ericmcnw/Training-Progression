@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type CSSProperties } from "react";
+import { useState, useTransition, type CSSProperties, type ReactNode } from "react";
 import { addSportAction, removeSportAction } from "@/app/log/sport-actions";
 import SportLogModal from "./SportLogModal";
 
@@ -15,9 +15,14 @@ export type SelectedSportLite = { slug: string; label: string; eyebrow: string }
 export default function SportsAddButton({
   selected,
   available,
+  children,
+  style,
 }: {
   selected: SelectedSportLite[];
   available: AvailableSport[];
+  /** Replaces the bare `+` pill with a labeled button (empty-section CTA). */
+  children?: ReactNode;
+  style?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -25,7 +30,7 @@ export default function SportsAddButton({
     <>
       <button
         type="button"
-        aria-label="Add a sport"
+        aria-label={children ? undefined : "Add a sport"}
         onClick={(e) => {
           // The button sits visually on top of RoutineSection's
           // collapsible header (which is itself a <button>). On mobile
@@ -36,9 +41,9 @@ export default function SportsAddButton({
           setOpen(true);
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        style={plusBtnStyle}
+        style={style ?? plusBtnStyle}
       >
-        +
+        {children ?? "+"}
       </button>
       {open ? (
         <PickerSheet

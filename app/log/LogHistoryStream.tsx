@@ -54,7 +54,10 @@ export default function LogHistoryStream({ rows }: { rows: LogHistoryRow[] }) {
   if (rows.length === 0) {
     return (
       <div className="logHistoryStream" style={{ opacity: 0.7, padding: 8 }}>
-        No logs yet. Sessions you log will show up here.
+        No logs yet. Sessions you log will show up here.{" "}
+        <Link href="/log" style={{ color: "inherit", fontWeight: 800 }}>
+          Log something →
+        </Link>
       </div>
     );
   }
