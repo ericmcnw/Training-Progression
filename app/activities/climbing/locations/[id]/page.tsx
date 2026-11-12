@@ -27,6 +27,7 @@ import {
   buildPyramidRows,
   buildProjectRollup,
   hardestGrade,
+  resolveProjectArcs,
   summarizeAttempts,
   type PyramidRow,
 } from "@/lib/climb-stats";
@@ -79,6 +80,7 @@ export default async function ClimbLocationDetailPage(props: {
         notes: true,
         movesCompleted: true,
         totalMoves: true,
+        triesCount: true,
         sessionLogId: true,
         problemId: true,
         problem: { select: { id: true, name: true } },
@@ -171,7 +173,18 @@ export default async function ClimbLocationDetailPage(props: {
   const summary = summarizeAttempts(attempts);
   const lastVisit =
     attempts.length > 0 ? attempts[0].sessionLog.performedAt : null;
-  const pyramidRows = buildPyramidRows(attempts);
+  const projectArcs = resolveProjectArcs(
+    attempts.map((a) => ({
+      id: a.id,
+      problemId: a.problemId,
+      sessionLogId: a.sessionLogId,
+      outcome: a.outcome,
+      isRepeat: a.isRepeat,
+      triesCount: a.triesCount,
+      performedAt: a.sessionLog.performedAt,
+    })),
+  );
+  const pyramidRows = buildPyramidRows(attempts, projectArcs);
   const hardestBoulderSend = hardestGrade(pyramidRows.boulderRows, SENT_OUTCOMES);
   const hardestYosemiteSend = hardestGrade(pyramidRows.yosemiteRows, SENT_OUTCOMES);
   const hardestBoulderFlash = hardestGrade(pyramidRows.boulderRows, FLASH_OUTCOMES);

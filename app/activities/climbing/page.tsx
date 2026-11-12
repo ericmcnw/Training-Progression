@@ -55,8 +55,10 @@ import {
   type ClimbingDiscipline,
 } from "@/lib/climb-types";
 import {
+  absorbedProjectIdsWithin,
   buildPyramidRows,
   buildProjectRollup,
+  resolveProjectArcs,
   type PyramidRow,
 } from "@/lib/climb-stats";
 import {
@@ -429,7 +431,22 @@ export default async function ClimbingHubPage(props: {
     if (pyramidCutoff && a.sessionLog.performedAt < pyramidCutoff) return false;
     return true;
   });
-  const pyramidRows = buildPyramidRows(pyramidAttempts);
+  // Arcs come from every attempt ever, not the windowed slice: whether a send
+  // closed a project is a fact about the climb, so it must not flip when the
+  // range pill changes. Ranges are always "last N days", so a project inside
+  // the window always has its send inside it too.
+  const projectArcs = resolveProjectArcs(
+    attempts.map((a) => ({
+      id: a.id,
+      problemId: a.problemId,
+      sessionLogId: a.sessionLogId,
+      outcome: a.outcome,
+      isRepeat: a.isRepeat,
+      triesCount: a.triesCount,
+      performedAt: a.sessionLog.performedAt,
+    })),
+  );
+  const pyramidRows = buildPyramidRows(pyramidAttempts, projectArcs);
   const hasBoulder = pyramidRows.boulderRows.length > 0;
   const hasYosemite = pyramidRows.yosemiteRows.length > 0;
 
@@ -438,10 +455,17 @@ export default async function ClimbingHubPage(props: {
   // Attach the climbs behind each bar so tapping a segment can name them.
   // FELL is skipped to match buildPyramidRows — otherwise the bubble would
   // list climbs the bar never counted.
-  const toColumnRows = (rows: PyramidRow[], source: typeof attempts): PyramidColumnRow[] =>
-    rows.map((r) => {
+  const toColumnRows = (rows: PyramidRow[], source: typeof attempts): PyramidColumnRow[] => {
+    const hiddenProjectIds = absorbedProjectIdsWithin(projectArcs, source);
+    return rows.map((r) => {
       const matching = source
-        .filter((a) => a.gradeSystem === r.system && a.grade === r.grade && a.outcome !== "FELL")
+        .filter(
+          (a) =>
+            a.gradeSystem === r.system &&
+            a.grade === r.grade &&
+            a.outcome !== "FELL" &&
+            !hiddenProjectIds.has(a.id),
+        )
         .sort((a, b) => b.sessionLog.performedAt.getTime() - a.sessionLog.performedAt.getTime());
 
       // Collapse repeats into one row with a ×N. A named problem has an
@@ -452,7 +476,8 @@ export default async function ClimbingHubPage(props: {
       for (const a of matching) {
         // Same bucketing the bar used, so the bubble agrees with the segment
         // it opens — including splitting repeat sends out of SEND.
-        const outcome = pyramidBucket(a.outcome, a.isRepeat, a.discipline);
+        const history = projectArcs.historyBySendId.get(a.id) ?? null;
+        const outcome = pyramidBucket(a.outcome, a.isRepeat, a.discipline, history !== null);
         const name = a.problemId ? problemNameById.get(a.problemId) ?? null : null;
         const locationId = a.sessionLog.climbLocation?.id ?? null;
         const dateLabel = formatAppDate(a.sessionLog.performedAt);
@@ -472,10 +497,18 @@ export default async function ClimbingHubPage(props: {
           locationName: a.sessionLog.climbLocation?.name ?? null,
           dateLabel,
           count: 1,
+          projectHistory: history
+            ? {
+                sessions: history.sessions,
+                tries: history.tries,
+                firstDateLabel: formatAppDate(history.firstAt),
+              }
+            : null,
         });
       }
       return { ...r, climbs: [...grouped.values()] };
     });
+  };
 
   // Indoor/outdoor pyramid split — venue resolves per session, so map the
   // session's venue onto each attempt. The venue stat (session count + %)
@@ -484,8 +517,8 @@ export default async function ClimbingHubPage(props: {
   const venueBySessionId = new Map(sessions.map((s) => [s.id, s.venue]));
   const gymAttempts = pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "GYM");
   const cragAttempts = pyramidAttempts.filter((a) => venueBySessionId.get(a.sessionLogId) === "CRAG");
-  const gymPyramidRows = buildPyramidRows(gymAttempts);
-  const cragPyramidRows = buildPyramidRows(cragAttempts);
+  const gymPyramidRows = buildPyramidRows(gymAttempts, projectArcs);
+  const cragPyramidRows = buildPyramidRows(cragAttempts, projectArcs);
 
   // Send rate — quiet stat folded into the pyramid subtitle. Gated behind
   // a minimum attempt count so it doesn't show a meaningless "100%" after
@@ -981,6 +1014,7 @@ function OutcomeLegend({ showOnsight }: { showOnsight: boolean }) {
   const items: Array<{ outcome: PyramidBucket; label: string }> = [
     { outcome: showOnsight ? "ONSIGHT" : "FLASH", label: showOnsight ? "Onsight" : "Flash" },
     { outcome: "SEND", label: "Send" },
+    { outcome: "SENT_PROJECT", label: "Sent project" },
     { outcome: "REPEAT", label: "Repeat" },
     { outcome: "PROJECT", label: "Project" },
   ];

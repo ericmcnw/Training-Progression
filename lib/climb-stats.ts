@@ -25,7 +25,117 @@ export type PyramidAttemptInput = {
    *  that don't select it keep their existing behaviour. */
   isRepeat?: boolean | null;
   discipline?: ClimbingDiscipline | null;
+  /** Needed only to consult a ProjectArcs resolution; callers without one
+   *  can leave it off. */
+  id?: string;
 };
+
+// ── Project arcs ───────────────────────────────────────────────────────────
+// "I worked this for three sessions and then it went" is a different result
+// from "I sent it", but no single attempt row can say so — it is a property of
+// the climb's history. Resolve it once over the full history, then the pyramid
+// consults the answer.
+//
+// Identity comes from problemId, so this only works for climbs saved as a
+// ClimbProblem. An unnamed gym boulder has nothing to link sessions by, so its
+// projects and sends stay separate — there is no signal to do better.
+
+export type ArcAttemptInput = {
+  id: string;
+  problemId?: string | null;
+  sessionLogId?: string | null;
+  outcome: ClimbOutcome;
+  isRepeat?: boolean | null;
+  triesCount?: number | null;
+  performedAt: Date;
+};
+
+export type ProjectHistory = {
+  /** Distinct sessions spent on the climb, counting the one it fell on. */
+  sessions: number;
+  /** Total goes. Unrecorded triesCount counts as 1 — a six-go project session
+   *  stores one row, so counting rows alone understates the work. */
+  tries: number;
+  firstAt: Date;
+};
+
+export type ProjectArcs = {
+  /** Absorbed project attempt id → the send attempt that absorbed it. Keyed by
+   *  send rather than a flat set because a project may only be hidden where
+   *  its send is also on screen — see absorbedProjectIdsWithin. */
+  sendIdByAbsorbedProjectId: ReadonlyMap<string, string>;
+  /** Sends that closed an arc, with the work that went into them. */
+  historyBySendId: ReadonlyMap<string, ProjectHistory>;
+};
+
+export const EMPTY_PROJECT_ARCS: ProjectArcs = {
+  sendIdByAbsorbedProjectId: new Map(),
+  historyBySendId: new Map(),
+};
+
+// A project is only hidden when the send that absorbed it is in the same view.
+// Otherwise a report for a past month would drop the three sessions you spent
+// projecting just because the climb went down in a later month — the work
+// would vanish with nothing on screen reporting it.
+export function absorbedProjectIdsWithin(
+  arcs: ProjectArcs,
+  attempts: ReadonlyArray<{ id?: string }>,
+): Set<string> {
+  const present = new Set<string>();
+  for (const a of attempts) if (a.id) present.add(a.id);
+  const hidden = new Set<string>();
+  for (const [projectId, sendId] of arcs.sendIdByAbsorbedProjectId) {
+    if (present.has(projectId) && present.has(sendId)) hidden.add(projectId);
+  }
+  return hidden;
+}
+
+export function resolveProjectArcs(attempts: ArcAttemptInput[]): ProjectArcs {
+  const byProblem = new Map<string, ArcAttemptInput[]>();
+  for (const a of attempts) {
+    if (!a.problemId) continue;
+    const list = byProblem.get(a.problemId);
+    if (list) list.push(a);
+    else byProblem.set(a.problemId, [a]);
+  }
+
+  const sendIdByAbsorbedProjectId = new Map<string, string>();
+  const historyBySendId = new Map<string, ProjectHistory>();
+
+  for (const list of byProblem.values()) {
+    const ordered = [...list].sort(
+      (a, b) => a.performedAt.getTime() - b.performedAt.getTime() || a.id.localeCompare(b.id),
+    );
+    let open: ArcAttemptInput[] = [];
+    for (const a of ordered) {
+      if (a.outcome === "PROJECT") {
+        open.push(a);
+        continue;
+      }
+      // A repeat cannot close an arc: the climb was already sent once, so the
+      // arc that mattered closed earlier. Falls neither open nor close one.
+      if (open.length === 0 || a.isRepeat || !isSendOutcome(a.outcome)) continue;
+
+      const sessions = new Set<string>();
+      let tries = 0;
+      for (const work of [...open, a]) {
+        if (work.sessionLogId) sessions.add(work.sessionLogId);
+        tries += Math.max(1, work.triesCount ?? 1);
+      }
+      historyBySendId.set(a.id, {
+        sessions: sessions.size || open.length + 1,
+        tries,
+        firstAt: open[0].performedAt,
+      });
+      for (const work of open) sendIdByAbsorbedProjectId.set(work.id, a.id);
+      // Projects logged after this send start a fresh arc rather than folding
+      // into the one already closed.
+      open = [];
+    }
+  }
+
+  return { sendIdByAbsorbedProjectId, historyBySendId };
+}
 
 export type PyramidRow = {
   grade: string;
@@ -40,12 +150,23 @@ export type PyramidRows = {
   allRows: PyramidRow[];
 };
 
-export function buildPyramidRows(attempts: PyramidAttemptInput[]): PyramidRows {
+export function buildPyramidRows(
+  attempts: PyramidAttemptInput[],
+  arcs: ProjectArcs = EMPTY_PROJECT_ARCS,
+): PyramidRows {
   const map = new Map<string, PyramidRow>();
+  const absorbed = absorbedProjectIdsWithin(arcs, attempts);
   for (const a of attempts) {
     // Falls don't get pyramid bars — pyramid celebrates clean climbs.
     if (a.outcome === "FELL") continue;
-    const bucket = pyramidBucket(a.outcome, a.isRepeat, a.discipline);
+    // An absorbed project is reported on the send that closed it, not twice.
+    if (a.id && absorbed.has(a.id)) continue;
+    const bucket = pyramidBucket(
+      a.outcome,
+      a.isRepeat,
+      a.discipline,
+      a.id ? arcs.historyBySendId.has(a.id) : false,
+    );
     const key = `${a.gradeSystem}::${a.grade}`;
     const row = map.get(key) ?? {
       grade: a.grade,
@@ -80,6 +201,7 @@ export function hardestGrade(
   const countsAsSend = filter.has("SEND") || filter.has("REDPOINT");
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     if (countsAsSend && (rows[i].counts.REPEAT ?? 0) > 0) return rows[i].grade;
+    if (countsAsSend && (rows[i].counts.SENT_PROJECT ?? 0) > 0) return rows[i].grade;
     for (const outcome of ORDERED_OUTCOMES) {
       if (filter.has(outcome) && (rows[i].counts[outcome] ?? 0) > 0) {
         return rows[i].grade;

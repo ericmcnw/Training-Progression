@@ -209,18 +209,20 @@ export function climbOutcomesForSystem(gradeSystem: ClimbGradeSystem): ClimbOutc
 }
 
 export function climbOutcomeColor(outcome: ClimbOutcome): string {
-  if (outcome === "FLASH" || outcome === "ONSIGHT") return "rgba(251,191,36,0.9)";
+  if (outcome === "FLASH" || outcome === "ONSIGHT") return "rgba(167,139,250,0.9)";
   if (outcome === "SEND" || outcome === "REDPOINT") return "rgba(74,222,128,0.9)";
+  // Legacy FELL keeps the lighter red it always had so it stays distinct from
+  // PROJECT's deeper one — both are red, but they are different states.
   if (outcome === "FELL") return "rgba(248,113,113,0.9)";
-  if (outcome === "PROJECT") return "rgba(167,139,250,0.9)";
+  if (outcome === "PROJECT") return "rgba(239,68,68,0.95)";
   return "rgba(255,255,255,0.6)";
 }
 
 export function climbOutcomeBg(outcome: ClimbOutcome): string {
-  if (outcome === "FLASH" || outcome === "ONSIGHT") return "rgba(251,191,36,0.12)";
+  if (outcome === "FLASH" || outcome === "ONSIGHT") return "rgba(167,139,250,0.12)";
   if (outcome === "SEND" || outcome === "REDPOINT") return "rgba(74,222,128,0.12)";
   if (outcome === "FELL") return "rgba(248,113,113,0.1)";
-  if (outcome === "PROJECT") return "rgba(167,139,250,0.12)";
+  if (outcome === "PROJECT") return "rgba(239,68,68,0.14)";
   return "rgba(255,255,255,0.06)";
 }
 
@@ -276,13 +278,19 @@ export const PYRAMID_OUTCOMES: readonly ClimbOutcome[] = [
 // Only sends split. A repeat project is still a project — the attempt count
 // already carries how many sessions went into it — and a repeat flash is
 // impossible by definition.
-export type PyramidBucket = ClimbOutcome | "REPEAT";
+// SENT_PROJECT is the send that closed a project arc — you worked it over one
+// or more sessions and then it went. It outranks a plain send, so it gets its
+// own tier and the projects it absorbed leave the pyramid entirely (their work
+// is reported on the send instead). Resolved from history by
+// resolveProjectArcs(); a single attempt row cannot know it.
+export type PyramidBucket = ClimbOutcome | "REPEAT" | "SENT_PROJECT";
 
 export const PYRAMID_BUCKETS: readonly PyramidBucket[] = [
   "FLASH",
   "ONSIGHT",
   "SEND",
   "REDPOINT",
+  "SENT_PROJECT",
   "REPEAT",
   "PROJECT",
 ];
@@ -291,27 +299,36 @@ export function pyramidBucket(
   outcome: ClimbOutcome,
   isRepeat: boolean | null | undefined,
   discipline?: ClimbingDiscipline | null,
+  isSentProject?: boolean,
 ): PyramidBucket {
   const settled = effectiveOutcome(outcome, isRepeat, discipline);
   if (isRepeat && (settled === "SEND" || settled === "REDPOINT")) return "REPEAT";
+  if (isSentProject && isSendOutcome(settled)) return "SENT_PROJECT";
   return settled;
 }
 
-/** A deeper, desaturated green against SEND's bright mint — reads as the same
- *  family (it went) a tier down (not the first time). */
+/** REPEAT is a deeper, desaturated green against SEND's bright mint — the same
+ *  family (it went) a tier down (not the first time). SENT_PROJECT is gold:
+ *  the one bar segment that marks a grade you had to earn twice over. */
 export function pyramidBucketColor(bucket: PyramidBucket): string {
-  return bucket === "REPEAT" ? "rgba(45,154,106,0.95)" : climbOutcomeColor(bucket);
+  if (bucket === "REPEAT") return "rgba(45,154,106,0.95)";
+  if (bucket === "SENT_PROJECT") return "rgba(251,191,36,0.95)";
+  return climbOutcomeColor(bucket);
 }
 
 export function pyramidBucketBg(bucket: PyramidBucket): string {
-  return bucket === "REPEAT" ? "rgba(45,154,106,0.14)" : climbOutcomeBg(bucket);
+  if (bucket === "REPEAT") return "rgba(45,154,106,0.14)";
+  if (bucket === "SENT_PROJECT") return "rgba(251,191,36,0.14)";
+  return climbOutcomeBg(bucket);
 }
 
 export function pyramidBucketLabel(
   bucket: PyramidBucket,
   context?: ClimbingDiscipline | ClimbGradeSystem,
 ): string {
-  return bucket === "REPEAT" ? "Repeat" : climbOutcomeLabel(bucket, context);
+  if (bucket === "REPEAT") return "Repeat";
+  if (bucket === "SENT_PROJECT") return "Sent project";
+  return climbOutcomeLabel(bucket, context);
 }
 
 // All outcomes in ascending "good to bad" order — used when searching for the

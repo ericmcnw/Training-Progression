@@ -26,6 +26,14 @@ export type PyramidClimb = {
   dateLabel: string;
   /** Repeats collapsed into this row; 1 means a single ascent. */
   count: number;
+  /** Set on a SENT_PROJECT — the work the send absorbed. The projects it came
+   *  from are gone from the pyramid, so this is the only place that work is
+   *  still reported. */
+  projectHistory?: {
+    sessions: number;
+    tries: number;
+    firstDateLabel: string;
+  } | null;
 };
 
 export type PyramidColumnRow = {
@@ -292,26 +300,46 @@ function ClimbLink({
   const href = climb.locationId
     ? `/activities/climbing/locations/${climb.locationId}`
     : `/activities/climbing/climbs?grade=${encodeURIComponent(grade)}&range=all`;
+  const history = climb.projectHistory ?? null;
   return (
     <Link href={href} style={climbRowStyle}>
-      <span style={{ ...dotStyle, background: pyramidBucketColor(climb.outcome) }} />
-      <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
-      {climb.outcome === "REPEAT" ? (
-        <span style={repeatGlyphStyle} title="Repeat — sent before" aria-label="repeat">
-          ↻
+      <span style={climbRowMainStyle}>
+        <span style={{ ...dotStyle, background: pyramidBucketColor(climb.outcome) }} />
+        <span style={climbNameStyle}>{climb.name ?? "Unnamed climb"}</span>
+        {climb.outcome === "REPEAT" ? (
+          <span style={repeatGlyphStyle} title="Repeat — sent before" aria-label="repeat">
+            ↻
+          </span>
+        ) : null}
+        {climb.count > 1 ? <span style={repeatStyle}>×{climb.count}</span> : null}
+        <span style={climbMetaStyle}>
+          {pyramidBucketLabel(climb.outcome, system)}
+          {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
+        </span>
+        <span style={chevronStyle} aria-hidden>
+          ›
+        </span>
+      </span>
+      {history ? (
+        <span style={projectHistoryStyle}>
+          Worked {history.sessions} {history.sessions === 1 ? "session" : "sessions"} ·{" "}
+          {history.tries} {history.tries === 1 ? "try" : "tries"} · first tried{" "}
+          {history.firstDateLabel}
         </span>
       ) : null}
-      {climb.count > 1 ? <span style={repeatStyle}>×{climb.count}</span> : null}
-      <span style={climbMetaStyle}>
-        {pyramidBucketLabel(climb.outcome, system)}
-        {climb.locationName ? ` · ${climb.locationName}` : ""} · {climb.dateLabel}
-      </span>
-      <span style={chevronStyle} aria-hidden>
-        ›
-      </span>
     </Link>
   );
 }
+
+// Gold to match the bar segment, and indented past the dot so it reads as a
+// footnote on the climb above rather than a row of its own.
+const projectHistoryStyle: CSSProperties = {
+  paddingLeft: 12,
+  fontSize: 10,
+  fontWeight: 700,
+  lineHeight: 1.3,
+  color: "rgba(251,191,36,0.8)",
+};
 
 const repeatGlyphStyle: CSSProperties = {
   fontSize: 10,
@@ -451,14 +479,19 @@ const dotStyle: CSSProperties = {
   display: "inline-block",
 };
 const climbRowStyle: CSSProperties = {
-  display: "flex",
-  gap: 6,
-  alignItems: "baseline",
+  display: "grid",
+  gap: 1,
   padding: "3px 0",
   borderTop: "1px solid rgba(255,255,255,0.06)",
   color: "inherit",
   textDecoration: "none",
   touchAction: "manipulation",
+};
+const climbRowMainStyle: CSSProperties = {
+  display: "flex",
+  gap: 6,
+  alignItems: "baseline",
+  minWidth: 0,
 };
 // Name takes the leftover width and ellipsizes; the meta keeps its own
 // line-end but shrinks rather than pushing the chevron off the row.

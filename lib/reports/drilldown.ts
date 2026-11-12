@@ -5,7 +5,7 @@
 // domain actually appears in the window.
 
 import { prisma } from "@/lib/prisma";
-import { buildPyramidRows, hardestGrade, type PyramidRows } from "@/lib/climb-stats";
+import { buildPyramidRows, hardestGrade, resolveProjectArcs, type PyramidRows } from "@/lib/climb-stats";
 import { SENT_OUTCOMES, type ClimbGradeSystem, type ClimbOutcome } from "@/lib/climb-types";
 import type { ReportLog } from "./load";
 
@@ -43,17 +43,45 @@ export async function loadDrilldowns(
       (async () => {
         const attempts = await prisma.climbAttempt.findMany({
           where: { sessionLogId: { in: logIds } },
-          select: { grade: true, gradeSystem: true, outcome: true, isRepeat: true, discipline: true, sessionLogId: true },
+          select: { id: true, grade: true, gradeSystem: true, outcome: true, isRepeat: true, discipline: true, sessionLogId: true, problemId: true },
         });
         if (attempts.length > 0) {
+          // Arcs need the whole life of each problem, not just this window —
+          // the projecting sessions usually sit in earlier reports. Projects
+          // whose send falls outside this window stay visible; that is handled
+          // inside buildPyramidRows.
+          const problemIds = [...new Set(attempts.map((a) => a.problemId).filter((v): v is string => !!v))];
+          const arcAttempts = problemIds.length > 0
+            ? await prisma.climbAttempt.findMany({
+                where: { problemId: { in: problemIds } },
+                select: {
+                  id: true, problemId: true, sessionLogId: true, outcome: true,
+                  isRepeat: true, triesCount: true,
+                  sessionLog: { select: { performedAt: true } },
+                },
+              })
+            : [];
+          const arcs = resolveProjectArcs(
+            arcAttempts.map((a) => ({
+              id: a.id,
+              problemId: a.problemId,
+              sessionLogId: a.sessionLogId,
+              outcome: a.outcome as ClimbOutcome,
+              isRepeat: a.isRepeat,
+              triesCount: a.triesCount,
+              performedAt: a.sessionLog.performedAt,
+            })),
+          );
           const pyramid = buildPyramidRows(
             attempts.map((a) => ({
+              id: a.id,
               grade: a.grade,
               gradeSystem: a.gradeSystem as ClimbGradeSystem,
               outcome: a.outcome as ClimbOutcome,
               isRepeat: a.isRepeat,
               discipline: a.discipline,
-            }))
+            })),
+            arcs,
           );
           out.climb = {
             pyramid,
