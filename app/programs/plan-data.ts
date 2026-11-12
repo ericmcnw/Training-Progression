@@ -111,6 +111,7 @@ export async function getProgramPlanBoard(programId: string): Promise<PlanBoard 
             select: {
               id: true,
               name: true,
+              kind: true,
               isActive: true,
               exercises: {
                 orderBy: { sortOrder: "asc" },
@@ -125,7 +126,7 @@ export async function getProgramPlanBoard(programId: string): Promise<PlanBoard 
   });
   if (!program) return null;
 
-  const routines = program.routineLinks.map((link) => link.routine).filter((r) => r.isActive);
+  const routines = program.routineLinks.map((link) => link.routine).filter((r) => r.isActive && isWorkoutKind(r.kind));
   const routineExerciseIds = routines.flatMap((r) => r.exercises.map((e) => e.exercise.id));
   const since = addDaysYmd(today, -LOOKBACK_DAYS);
 
