@@ -15,6 +15,7 @@ import { getHabitRowsOnly } from "@/app/_home/data";
 import type { HabitRow } from "@/app/_home/types";
 import { subtleTextStyle } from "@/app/goals/ui";
 import GoalRow from "./GoalRow";
+import { goalStatusKey } from "./goal-status";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -86,15 +87,7 @@ export default async function GoalsTab({ searchParams }: { searchParams: SearchP
     const habitRow = insight.goal.goalType === "FREQUENCY"
       ? habitByGoalId.get(insight.goal.id)
       : undefined;
-    const statusKey = habitRow
-      ? habitRow.status
-      : insight.isAchieved
-        ? "complete"
-        : insight.fractionComplete >= 0.6
-          ? "on_track"
-          : insight.fractionComplete >= 0.3
-            ? "behind"
-            : "at_risk";
+    const statusKey = goalStatusKey(insight, habitRow, habitData.today);
     return {
       insight,
       habitRow,

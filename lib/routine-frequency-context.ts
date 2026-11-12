@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { computeFrequencyState, type FrequencyTarget } from "@/lib/frequency-state";
 import { buildFrequencyGoalMembership, classifyLogAgainstFrequencyGoal } from "@/lib/frequency-goals";
 import { effectiveRoutineDomain } from "@/lib/routines";
+import { toAppYmd } from "@/lib/dates";
 
 export type RoutineGoalContribution = {
   goalId: string;
@@ -281,6 +282,7 @@ export async function getRoutineGoalContributions(
         logs: stateLogs,
         today,
         trailingDays: WINDOW_DAYS,
+        startYmd: toAppYmd(goal.createdAt),
       });
 
       const isGroup = primaryLinks.length > 1;

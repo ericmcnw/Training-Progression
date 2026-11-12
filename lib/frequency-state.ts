@@ -15,7 +15,7 @@
 // per-day state from the same primitive.
 
 import type { RoutineFrequencyUnit } from "@/generated/prisma";
-import { addDaysYmd, toAppYmd, todayAppYmd } from "@/lib/dates";
+import { addDaysYmd, diffYmdDays, toAppYmd, todayAppYmd } from "@/lib/dates";
 
 export type FrequencyTarget = {
   targetCount: number;
@@ -129,19 +129,38 @@ function computeWindowStatus(params: {
   daysElapsed: number;
   daysRemaining: number;
   expectedByNow: number;
+  isFirstDay?: boolean;
 }): FrequencyWindowStatus {
-  const { progress, target, daysRemaining, expectedByNow } = params;
+  const { progress, target, daysRemaining, expectedByNow, isFirstDay } = params;
   if (progress >= target) return "complete";
+  // Day one of a daily target is the whole window, so the pro-rated pace
+  // below can't rescue it — nothing is at risk on the day it was created.
+  if (isFirstDay) return "on_track";
   if (daysRemaining <= 1 && progress < target) return "at_risk";
   if (progress >= expectedByNow + 0.5) return "ahead";
   if (progress >= expectedByNow - 0.5) return "on_track";
   return "behind";
 }
 
+// How many days of the current window the goal has actually existed for. A
+// target set today can't owe sessions for the days before it existed.
+function daysLivedInWindow(params: {
+  goalStartYmd: string | null | undefined;
+  windowStartYmd: string;
+  today: string;
+  windowDays: number;
+}): number {
+  const { goalStartYmd, windowStartYmd, today, windowDays } = params;
+  if (!goalStartYmd || goalStartYmd <= windowStartYmd) return windowDays;
+  if (goalStartYmd >= today) return 1;
+  return Math.min(windowDays, diffYmdDays(today, goalStartYmd) + 1);
+}
+
 function computeCurrentWindow(params: {
   target: FrequencyTarget;
   logYmds: Set<string>;
   today: string;
+  goalStartYmd?: string | null;
 }): FrequencyWindow {
   const { target, logYmds, today } = params;
   const windowDays = getWindowDays(target);
@@ -154,10 +173,17 @@ function computeCurrentWindow(params: {
   }
 
   // For an open window we treat "today" as fully elapsed for pace purposes —
-  // the user has had a chance to log today already.
-  const daysElapsed = windowDays;
-  const daysRemaining = 0;
-  const expectedByNow = target.targetCount;
+  // the user has had a chance to log today already. A goal younger than its
+  // own window is the exception: it's only judged on the days it has lived,
+  // so a brand-new target reads on-pace instead of instantly at-risk.
+  const daysElapsed = daysLivedInWindow({
+    goalStartYmd: params.goalStartYmd,
+    windowStartYmd: startYmd,
+    today,
+    windowDays,
+  });
+  const daysRemaining = windowDays - daysElapsed;
+  const expectedByNow = (target.targetCount * daysElapsed) / windowDays;
 
   return {
     startYmd,
@@ -174,6 +200,7 @@ function computeCurrentWindow(params: {
       daysElapsed,
       daysRemaining,
       expectedByNow,
+      isFirstDay: !!params.goalStartYmd && params.goalStartYmd >= today,
     }),
   };
 }
@@ -370,8 +397,9 @@ function computeDailyStateMap(params: {
   today: string;
   trailingDays: number;
   currentWindow: FrequencyWindow | null;
+  goalStartYmd?: string | null;
 }): Record<string, DailyState> {
-  const { target, logYmds, primaryYmds, today, trailingDays, currentWindow } = params;
+  const { target, logYmds, primaryYmds, today, trailingDays, currentWindow, goalStartYmd } = params;
   const startYmd = addDaysYmd(today, -(trailingDays - 1));
   const result: Record<string, DailyState> = {};
 
@@ -382,6 +410,10 @@ function computeDailyStateMap(params: {
       result[ymd] = primaryYmds.has(ymd) ? "done" : "covered";
       continue;
     }
+
+    // Days before the goal existed were never its days to hit — leaving them
+    // "missed" paints a new habit's whole strip red on day one.
+    if (goalStartYmd && ymd < goalStartYmd) { result[ymd] = "rest"; continue; }
 
     if (isDailyEveryDay(target) || (target && hasMask(target))) {
       // Per-day expectation: missed if the day was expected, rest otherwise.
@@ -414,6 +446,10 @@ export function computeFrequencyState(params: {
   logs: Array<{ performedAt: Date; isPrimary?: boolean }>;
   today?: string;
   trailingDays?: number;
+  /** YMD the target started existing (goal/routine creation). Days before it
+   *  are neither expected nor missed, and the first window is judged only on
+   *  the days the goal has lived. */
+  startYmd?: string | null;
 }): FrequencyState {
   const today = params.today ?? todayAppYmd();
   const trailingDays = Math.max(7, params.trailingDays ?? 30);
@@ -428,7 +464,12 @@ export function computeFrequencyState(params: {
     targetUnit: "DAY",
   };
 
-  const currentWindow = computeCurrentWindow({ target: effectiveTarget, logYmds, today });
+  const currentWindow = computeCurrentWindow({
+    target: effectiveTarget,
+    logYmds,
+    today,
+    goalStartYmd: params.startYmd,
+  });
   const dailyState = computeDailyStateMap({
     target: params.target,
     logYmds,
@@ -436,6 +477,7 @@ export function computeFrequencyState(params: {
     today,
     trailingDays,
     currentWindow,
+    goalStartYmd: params.startYmd,
   });
 
   const windowStreak = params.target

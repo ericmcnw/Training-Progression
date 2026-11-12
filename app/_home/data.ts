@@ -806,7 +806,13 @@ export async function getHomeData(): Promise<HomeData> {
       }
       const matchedList = Array.from(matched.values());
       const logs = matchedList.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary }));
-      const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
+      const state = computeFrequencyState({
+        target,
+        logs,
+        today,
+        trailingDays: FREQUENCY_STATE_DAYS,
+        startYmd: toAppYmd(goal.createdAt),
+      });
 
       // 8-week contribution rollup, Sunday-anchored, oldest → newest. Mirrors
       // the WeeklyFrequencyBars layout so each bar lines up with its entry.
@@ -1154,7 +1160,13 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
       }
       const matchedList = Array.from(matched.values());
       const logs = matchedList.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary }));
-      const state = computeFrequencyState({ target, logs, today, trailingDays: FREQUENCY_STATE_DAYS });
+      const state = computeFrequencyState({
+        target,
+        logs,
+        today,
+        trailingDays: FREQUENCY_STATE_DAYS,
+        startYmd: toAppYmd(goal.createdAt),
+      });
 
       const weeklyContributions: HabitRow["weeklyContributions"] = [];
       for (let w = 0; w < DOMAIN_WEEKS; w++) {

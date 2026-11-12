@@ -15,6 +15,7 @@ import type { CSSProperties } from "react";
 import type { GoalInsight } from "@/lib/goals";
 import type { HabitRow } from "@/app/_home/types";
 import { TYPE_ACCENT, TYPE_ICON } from "./goal-type-accent";
+import { goalStatusKey } from "./goal-status";
 import { diffYmdDays, toAppYmd } from "@/lib/dates";
 
 // Status colors are intentionally muted — see feedback_habit_lens.
@@ -56,16 +57,8 @@ export default function GoalRow({
 
   // Status for the left-edge accent. Frequency goals use their habit-row
   // status (the same calculation home page does); non-frequency goals
-  // derive from achieved + fractionComplete with a "on pace" middle band.
-  const statusKey: HabitRow["status"] = habitRow
-    ? habitRow.status
-    : insight.isAchieved
-      ? "complete"
-      : insight.fractionComplete >= 0.6
-        ? "on_track"
-        : insight.fractionComplete >= 0.3
-          ? "behind"
-          : "at_risk";
+  // derive from achieved + fractionComplete against elapsed window.
+  const statusKey: HabitRow["status"] = goalStatusKey(insight, habitRow, today);
 
   const detailHref = insight.detailHref ?? `/plan/goals/${encodeURIComponent(insight.goal.id)}`;
 

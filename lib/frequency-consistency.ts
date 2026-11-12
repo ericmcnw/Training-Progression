@@ -73,6 +73,7 @@ export async function getFrequencyConsistency(
         .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
       windowDays,
+      goalStartYmd: toAppYmd(goal.createdAt),
       triggerSubtypes: goal.triggerSubtypes,
       triggerExerciseIds: goal.triggerExercises.map((e) => e.exerciseId),
       triggerMinSets: goal.triggerMinSets,
@@ -104,6 +105,7 @@ export async function getFrequencyConsistency(
         .map((rel) => ({ ...rel.routine!, role: rel.role })),
       today,
       windowDays,
+      goalStartYmd: toAppYmd(goal.createdAt),
     });
   }
 
@@ -127,6 +129,7 @@ export async function getFrequencyConsistency(
         targetInterval: true,
         targetUnit: true,
         weekdayMask: true,
+        createdAt: true,
         routines: {
           include: { routine: { select: { id: true, name: true, isDeleted: true, activityTypeId: true } } },
         },
@@ -148,6 +151,7 @@ export async function getFrequencyConsistency(
       .map((rel) => ({ ...rel.routine!, role: rel.role })),
     today,
     windowDays,
+    goalStartYmd: toAppYmd(fg.createdAt),
   });
 }
 
@@ -155,6 +159,9 @@ async function loadAndCompute(params: {
   target: FrequencyTarget;
   routines: Array<{ id: string; name: string; role: "PRIMARY" | "SUBSTITUTE"; activityTypeId?: string | null }>;
   today: string;
+  /** YMD the goal was created — days before it aren't counted against the
+   *  target, so a goal made today doesn't open "at risk". */
+  goalStartYmd?: string | null;
   /** Heatmap window in days. The detail-page time-range filter passes this
    *  in to widen / narrow the consistency view; falls back to the default
    *  (~9 weeks) when omitted. */
@@ -348,6 +355,7 @@ async function loadAndCompute(params: {
     logs: matched.map((m) => ({ performedAt: m.performedAt, isPrimary: m.isPrimary })),
     today,
     trailingDays: Math.max(8 * 7, windowDays - 7),
+    startYmd: params.goalStartYmd,
   });
 
   const contributingLogs: FrequencyContributionLog[] = matched.map((m) => ({
