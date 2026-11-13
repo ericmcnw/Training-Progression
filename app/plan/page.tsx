@@ -12,15 +12,15 @@ type SearchParams = Record<string, string | string[] | undefined>;
 type PlanView = "programs" | "calendar" | "goals";
 
 const VIEWS: Array<{ value: PlanView; label: string }> = [
-  { value: "programs", label: "Programs" },
   { value: "calendar", label: "Calendar" },
+  { value: "programs", label: "Programs" },
   { value: "goals", label: "Goals" },
 ];
 
 export default async function PlanPage(props: { searchParams?: Promise<SearchParams> | SearchParams }) {
   const searchParams = await Promise.resolve(props.searchParams ?? {});
   const requested = Array.isArray(searchParams.view) ? searchParams.view[0] : searchParams.view;
-  const view: PlanView = requested === "calendar" || requested === "goals" ? requested : "programs";
+  const view: PlanView = requested === "programs" || requested === "goals" ? requested : "calendar";
 
   return (
     <main className="mobilePageShell" style={page}>
@@ -78,9 +78,9 @@ function ViewAction({ view }: { view: PlanView }) {
 }
 
 function viewDescription(view: PlanView) {
-  if (view === "calendar") return "What is planned and what actually happened.";
+  if (view === "programs") return "Longer-term direction, stages, and progression.";
   if (view === "goals") return "Measured targets that can contribute to programs.";
-  return "Longer-term direction, stages, and progression.";
+  return "What is planned and what actually happened.";
 }
 
 const page: React.CSSProperties = { maxWidth: "var(--app-width-wide)", margin: "0 auto", padding: 4, display: "grid", gap: 16 };

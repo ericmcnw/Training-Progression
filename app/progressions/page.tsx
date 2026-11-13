@@ -19,7 +19,7 @@ export default async function ProgressionsPage() {
   return (
     <main style={page}>
       <div style={topBar}>
-        <Link href="/plan" style={backLink}>← Plan</Link>
+        <Link href="/plan?view=programs" style={backLink}>← Plan</Link>
         {progressions.length > 0 ? (
           <Link href="/progressions/new" style={ctaLink}>+ New progression</Link>
         ) : null}
