@@ -13,6 +13,7 @@ import {
   type RoutineForRanking,
 } from "@/lib/activities/family-rankings";
 import { formatHoursMinutes } from "@/lib/progress";
+import { listSelectedSports } from "@/lib/synthetic-sport-routines";
 import FamilySection from "./_shared/FamilySection";
 import Row from "./_shared/Row";
 import SectionStrip from "./_shared/SectionStrip";
@@ -32,9 +33,10 @@ const FAMILY_DASHBOARD_HREF: Record<ActivityFamily, string> = {
 export default async function ActivitiesPage() {
   // Single roundtrip for the page — same data fed to every section helper.
   // No DB calls happen inside the ranking helpers themselves.
-  const [routinesRaw, logs4wRaw] = await Promise.all([
+  const [routinesRaw, logs4wRaw, selectedSports] = await Promise.all([
     getRoutineIndex(),
     getRoutineLogs("4w"),
+    listSelectedSports(),
   ]);
 
   // Narrow to the shape the rankings need. The wider Prisma row keeps
@@ -67,6 +69,18 @@ export default async function ActivitiesPage() {
       : null,
   }));
 
+  // A family is "yours" once it has an active routine, a recent session, or
+  // (sports) a selected sport. The rest stay one tap away at the bottom.
+  const statsByFamily = Object.fromEntries(
+    ACTIVITY_FAMILY_ORDER.map((family) => [family, getFamilyStats(routines, logs4w, family)])
+  ) as Record<ActivityFamily, ReturnType<typeof getFamilyStats>>;
+  const isTracked = (family: ActivityFamily) =>
+    statsByFamily[family].activeRoutines > 0 ||
+    statsByFamily[family].sessions4w > 0 ||
+    (family === "sports" && selectedSports.length > 0);
+  const trackedFamilies = ACTIVITY_FAMILY_ORDER.filter(isTracked);
+  const untrackedFamilies = ACTIVITY_FAMILY_ORDER.filter((family) => !isTracked(family));
+
   return (
     <div style={pageStyle}>
       <header style={headerStyle}>
@@ -84,10 +98,14 @@ export default async function ActivitiesPage() {
         </div>
       </header>
 
+      {trackedFamilies.length === 0 ? (
+        <EmptyState message="Nothing here yet. Log a session or build a routine and its dashboard shows up on this page." />
+      ) : null}
+
       <div style={{ display: "grid", gap: 10 }}>
-        {ACTIVITY_FAMILY_ORDER.map((family) => {
+        {trackedFamilies.map((family) => {
           const meta = ACTIVITY_FAMILY_META[family];
-          const stats = getFamilyStats(routines, logs4w, family);
+          const stats = statsByFamily[family];
           const topRoutines = getTopRoutinesForFamily(routines, logs4w, family, 6);
 
           // Endurance + Sports show "Top activities" stripe. Strength +
@@ -146,6 +164,19 @@ export default async function ActivitiesPage() {
           );
         })}
       </div>
+
+      {untrackedFamilies.length > 0 ? (
+        <section style={{ display: "grid", gap: 8 }}>
+          <h2 style={untrackedTitleStyle}>Not tracking yet</h2>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {untrackedFamilies.map((family) => (
+              <Link key={family} href={FAMILY_DASHBOARD_HREF[family]} style={untrackedLinkStyle}>
+                {ACTIVITY_FAMILY_META[family].label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -241,6 +272,29 @@ const titleStyle: React.CSSProperties = {
   fontSize: 26,
   fontWeight: 900,
   letterSpacing: -0.4,
+};
+
+const untrackedTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.42)",
+};
+
+const untrackedLinkStyle: React.CSSProperties = {
+  minHeight: 44,
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0 14px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.03)",
+  color: "rgba(255,255,255,0.7)",
+  fontSize: 12,
+  fontWeight: 800,
+  textDecoration: "none",
 };
 
 const mapLinkStyle: React.CSSProperties = {
