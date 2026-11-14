@@ -6,6 +6,7 @@ import LogDrawer from "./components/LogDrawer";
 import FormDrawer from "./components/FormDrawer";
 import ViewLogDrawer from "./components/ViewLogDrawer";
 import EditLogDrawer from "./components/EditLogDrawer";
+import QuickLogFab from "./components/QuickLogFab";
 import CoachWidget from "./coach/CoachWidget";
 import ClientProviders from "./ClientProviders";
 import ViewingAsBanner from "./ViewingAsBanner";
@@ -59,6 +60,7 @@ export default async function RootLayout({
           <ViewLogDrawer />
           <EditLogDrawer />
           <FormDrawer />
+          <QuickLogFab />
           {/* Floating coach — global, only when the deployment is configured. */}
           {process.env.ANTHROPIC_API_KEY && process.env.COACH_SECRET ? <CoachWidget /> : null}
           <MobileBottomNavigation />

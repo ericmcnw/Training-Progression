@@ -22,7 +22,6 @@ import { COLOR, SECTION_GAP } from "./tokens";
 import HomeGoalsSection from "./HomeGoalsSection";
 import DomainSparklines from "./DomainSparklines";
 import MovementPatternsCard from "./MovementPatternsCard";
-import Fab from "./Fab";
 import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
 import LocationPingCapture from "./LocationPingCapture";
@@ -121,7 +120,6 @@ export default function HomeShell({
         </div>
       </div>
 
-      <Fab />
 
       <style>{`
         .homeRoot {
