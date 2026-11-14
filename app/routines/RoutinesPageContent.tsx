@@ -104,6 +104,10 @@ const styles = {
 // to actually bury something.
 const SORTABLE_SECTION_MIN = 4;
 
+// Below this many active routines the page is short enough to read whole,
+// so search + filter are hidden.
+const SEARCHABLE_ROUTINE_MIN = 8;
+
 const PRESET_DOMAINS = new Set(["strength", "cardio", "mobility", "sport", "lifestyle"]);
 function presetDomainFor(domain: string) {
   return PRESET_DOMAINS.has(domain)
@@ -309,6 +313,8 @@ export default async function RoutinesPageContent(props: {
   // Nothing set up yet: open the sections so their log/add entry points are
   // visible instead of hiding behind five collapsed "0 routines" headers.
   const isFirstRun = rawRoutines.length === 0 && sportRows.length === 0;
+  const isCompact = routines.filter((routine) => routine.isActive).length < SEARCHABLE_ROUTINE_MIN;
+  const showSearch = !isCompact || !!searchQuery || !!domainFilter;
 
   const orderedDomains = domainOrder.filter((d) => groups.has(d));
 
@@ -352,27 +358,21 @@ export default async function RoutinesPageContent(props: {
 
   return (
     <div className="mobileRoutinesPage mobilePageShell" style={styles.container}>
-      <div className="mobileRoutinesTopRow mobilePageHeader" style={styles.topRow}>
-        <div>
-          <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Routines</h1>
+      <div style={{ ...styles.topRow, alignItems: "center", flexWrap: "nowrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 className="mobilePageTitle" style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Log</h1>
           <div className="mobilePageSubtitle" style={styles.subText}>
             Week (Sun-Sat): {formatAppDate(start)} - {formatAppDate(new Date(end.getTime() - 1))}
           </div>
         </div>
 
-        <div className="mobileActionRow" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href="/log?mode=starter" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
-            Starter Pack
-          </Link>
-          <Link href="/exercises" className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
-            Manage Exercises
-          </Link>
-          <NewRoutineDrawerButton className="mobileRoutinesPrimaryCta" style={styles.primaryLink}>
-            + New Routine
-          </NewRoutineDrawerButton>
-        </div>
+        <NewRoutineDrawerButton style={{ ...styles.primaryLink, flexShrink: 0, whiteSpace: "nowrap" }}>
+          + New Routine
+        </NewRoutineDrawerButton>
       </div>
 
+      {showSearch ? (
+      <>
       <form method="get" className="mobileActionStack" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
         <label style={{ flex: "1 1 280px", display: "grid", gap: 6 }}>
           <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>Search</span>
@@ -425,6 +425,8 @@ export default async function RoutinesPageContent(props: {
           );
         })}
       </div>
+      </>
+      ) : null}
 
       <div className="mobileListStack" style={{ display: "grid", gap: 18 }}>
         {(searchQuery || domainFilter) && filteredRoutines.length === 0 ? (
@@ -561,7 +563,16 @@ export default async function RoutinesPageContent(props: {
         )}
       </div>
 
-      <div style={{ marginTop: 16, opacity: 0.7, fontSize: 12 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Link href="/exercises" style={styles.btnLink}>
+          Manage Exercises
+        </Link>
+        <Link href="/log?mode=starter" style={styles.btnLink}>
+          Starter Pack
+        </Link>
+      </div>
+
+      <div style={{ opacity: 0.7, fontSize: 12 }}>
         Archived routines show at the bottom. Deleted routines are hidden but logs remain for Progress.
       </div>
     </div>
