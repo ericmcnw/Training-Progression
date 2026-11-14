@@ -12,8 +12,10 @@
 // the calendar. They live in the day-detail popover (tap a day) and on the
 // Home heatmap, which are built for "did I keep my dailies."
 
-import { useState, type CSSProperties } from "react";
-import type { MonthData, MonthDayCell, DayEntry, DayEntryStatus } from "./data";
+import { useEffect, useState, useTransition, type CSSProperties } from "react";
+import type { MonthData, MonthDayCell, DayEntry, DayEntryStatus, PlanSource } from "./data";
+import { movePlannedEntry } from "./move-actions";
+import { DragGhost, draggableStyle, useEntryDrag, type EntryDrag } from "./useEntryDrag";
 import { domainRgb } from "@/lib/routines";
 import DayDetailPopover from "./DayDetailPopover";
 import type { QuickPickRoutine } from "@/app/_home/types";
@@ -35,18 +37,42 @@ const MAX_CHIPS_DESKTOP = 4;
 export default function MonthCalendar({ data, schedulableRoutines, scheduleActivityTypes, scheduleSports }: Props) {
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
   const [editSpan, setEditSpan] = useState<TripEditorTarget | null>(null);
-  const selectedDay = selectedYmd ? data.days.find((d) => d.ymd === selectedYmd) ?? null : null;
+  const [moves, setMoves] = useState<PendingMove[]>([]);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [, startMove] = useTransition();
+
+  useEffect(() => setMoves([]), [data]);
+
+  const { drag, bind, justDropped } = useEntryDrag((entry, fromYmd, toYmd) => {
+    const source = entry.sources[entry.sources.length - 1];
+    if (!source) return;
+    const move: PendingMove = { key: entry.key, source, fromYmd, toYmd };
+    setMoveError(null);
+    setMoves((prev) => [...prev, move]);
+    startMove(async () => {
+      try {
+        await movePlannedEntry({ source, toYmd });
+      } catch (e) {
+        setMoves((prev) => prev.filter((m) => m !== move));
+        setMoveError(e instanceof Error ? e.message : "Couldn't move that. Try again.");
+      }
+    });
+  });
+
+  const days = applyMoves(data.days, moves);
+  const selectedDay = selectedYmd ? days.find((d) => d.ymd === selectedYmd) ?? null : null;
 
   // Pad leading + trailing cells so the calendar always starts on Sun and
   // fills out a 7-column grid cleanly.
   const cells: Array<MonthDayCell | null> = [
     ...Array.from({ length: data.leadingEmpty }, () => null),
-    ...data.days,
+    ...days,
     ...Array.from({ length: data.trailingEmpty }, () => null),
   ];
 
   return (
     <div className="planMonthCalendarWrap">
+      {moveError ? <div role="alert" style={moveErrorStyle}>{moveError}</div> : null}
       <div style={weekdayRow}>
         {WEEKDAYS.map((wd) => (
           <div key={wd} style={weekdayHeader}>
@@ -62,9 +88,13 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
             <DayCell
               key={cell.ymd}
               cell={cell}
-              onSelect={() => setSelectedYmd(cell.ymd)}
+              onSelect={() => {
+                if (!justDropped()) setSelectedYmd(cell.ymd);
+              }}
               onEditSpan={setEditSpan}
               isSelected={cell.ymd === selectedYmd}
+              drag={drag}
+              bind={bind}
             />
           );
         })}
@@ -84,6 +114,8 @@ export default function MonthCalendar({ data, schedulableRoutines, scheduleActiv
       {editSpan ? (
         <TripEditorPopover key={editSpan.id} open existing={editSpan} onClose={() => setEditSpan(null)} />
       ) : null}
+
+      {drag ? <DragGhost drag={drag} /> : null}
 
       <style>{`
         .planMonthCalendarWrap {
@@ -108,17 +140,89 @@ function capWithOverflow<T>(items: T[], max: number): { shown: T[]; overflow: nu
   return { shown, overflow: items.length - shown.length };
 }
 
+type PendingMove = { key: string; source: PlanSource; fromYmd: string; toYmd: string };
+
+function canMove(entry: DayEntry) {
+  return entry.sources.length > 0 && entry.logged < entry.planned;
+}
+
+function statusFor(cell: MonthDayCell, planned: number, logged: number): DayEntryStatus {
+  if (planned === 0 && logged > 0) return "loggedExtra";
+  if (logged >= planned && logged > 0) return "done";
+  if (logged > 0) return "partial";
+  if (cell.isFuture) return "future";
+  if (cell.isPast) return "missed";
+  return "planned";
+}
+
+function applyMoves(days: MonthDayCell[], moves: PendingMove[]): MonthDayCell[] {
+  if (moves.length === 0) return days;
+  const byYmd = new Map(days.map((d) => [d.ymd, { ...d, entries: [...d.entries] }]));
+  for (const move of moves) {
+    const from = byYmd.get(move.fromYmd);
+    const to = byYmd.get(move.toYmd);
+    if (!from || !to) continue;
+    const idx = from.entries.findIndex((e) => e.key === move.key);
+    if (idx < 0) continue;
+    const entry = from.entries[idx];
+    if (entry.planned <= 1 && entry.logged === 0) {
+      from.entries.splice(idx, 1);
+    } else {
+      const planned = entry.planned - 1;
+      from.entries[idx] = {
+        ...entry,
+        planned,
+        sources: entry.sources.filter((s) => s.id !== move.source.id),
+        status: statusFor(from, planned, entry.logged),
+      };
+    }
+    const existingIdx = to.entries.findIndex((e) => e.key === move.key);
+    if (existingIdx >= 0) {
+      const existing = to.entries[existingIdx];
+      const planned = existing.planned + 1;
+      to.entries[existingIdx] = {
+        ...existing,
+        planned,
+        sources: [...existing.sources, move.source],
+        status: statusFor(to, planned, existing.logged),
+      };
+    } else {
+      to.entries.push({
+        ...entry,
+        planned: 1,
+        logged: 0,
+        latestLogId: null,
+        sources: [move.source],
+        status: statusFor(to, 1, 0),
+      });
+    }
+  }
+  return days.map((d) => byYmd.get(d.ymd)!);
+}
+
+type BindEntry = ReturnType<typeof useEntryDrag>["bind"];
+
 function DayCell({
   cell,
   onSelect,
   onEditSpan,
   isSelected,
+  drag,
+  bind,
 }: {
   cell: MonthDayCell;
   onSelect: () => void;
   onEditSpan: (target: TripEditorTarget) => void;
   isSelected: boolean;
+  drag: EntryDrag | null;
+  bind: BindEntry;
 }) {
+  const isDropTarget = drag !== null && drag.overYmd === cell.ymd && drag.fromYmd !== cell.ymd;
+  const dragProps = (entry: DayEntry): EntryDragProps => {
+    if (!canMove(entry)) return undefined;
+    const lifted = drag?.fromYmd === cell.ymd && drag.entry.key === entry.key;
+    return { handlers: bind(entry, cell.ymd), lifted };
+  };
   // Only workouts get dots on the grid; habits are surfaced in the popover.
   const workouts = cell.entries.filter((e) => !e.isHabit);
   const habitsTotal = cell.entries.filter((e) => e.isHabit).length;
@@ -140,8 +244,9 @@ function DayCell({
       onClick={onSelect}
       aria-label={`${cell.dayNumber}${cell.isToday ? " (today)" : ""} — ${ariaSummary}`}
       aria-pressed={isSelected}
-      style={cellShell(cell, isSelected)}
+      style={{ ...cellShell(cell, isSelected), ...(isDropTarget ? dropTargetStyle : null) }}
       className="planMonthCell"
+      data-plan-ymd={cell.ymd}
     >
       <span style={dayNumber(cell.isToday)}>{cell.dayNumber}</span>
 
@@ -182,13 +287,13 @@ function DayCell({
           <>
             <div className="planMonthLane planMonthLaneMobile" style={dotsRowBase}>
               {mobileWorkouts.map((entry) => (
-                <GlyphDot key={entry.key} entry={entry} />
+                <GlyphDot key={entry.key} entry={entry} drag={dragProps(entry)} />
               ))}
               {mobileWorkoutOverflow > 0 ? <Overflow count={mobileWorkoutOverflow} /> : null}
             </div>
             <div className="planMonthLane planMonthLaneDesktop" style={chipsColBase}>
               {desktopWorkouts.map((entry) => (
-                <WordChip key={entry.key} entry={entry} />
+                <WordChip key={entry.key} entry={entry} drag={dragProps(entry)} />
               ))}
               {desktopWorkoutOverflow > 0 ? <Overflow count={desktopWorkoutOverflow} /> : null}
             </div>
@@ -215,11 +320,20 @@ function DayCell({
 // training entry renders as a compact domain-tinted letter monogram. Sized
 // so two fit side by side in a cell. Status shown by opacity (icons) or
 // fill (letters).
-function GlyphDot({ entry }: { entry: DayEntry }) {
+type EntryDragProps = { handlers: ReturnType<BindEntry>; lifted: boolean } | undefined;
+
+function dragSpread(drag: EntryDragProps): { props: Partial<ReturnType<BindEntry>>; style: CSSProperties } {
+  if (!drag) return { props: {}, style: {} };
+  return { props: drag.handlers, style: { ...draggableStyle, ...(drag.lifted ? { opacity: 0.3 } : null) } };
+}
+
+function GlyphDot({ entry, drag }: { entry: DayEntry; drag: EntryDragProps }) {
+  const d = dragSpread(drag);
   if (entry.isIcon) {
     return (
       <span
-        style={{ ...glyphIconBase, opacity: iconOpacity(entry.status) }}
+        {...d.props}
+        style={{ ...glyphIconBase, opacity: iconOpacity(entry.status), ...d.style }}
         title={`${entry.routineName} — ${entry.status}`}
       >
         {entry.glyph}
@@ -229,7 +343,8 @@ function GlyphDot({ entry }: { entry: DayEntry }) {
   const tone = entryTone(entry.status, entry.domain);
   return (
     <span
-      style={{ ...glyphLetterBase, background: tone.bg, borderColor: tone.border, color: tone.glyph }}
+      {...d.props}
+      style={{ ...glyphLetterBase, background: tone.bg, borderColor: tone.border, color: tone.glyph, ...d.style }}
       title={`${entry.routineName} — ${entry.status}`}
     >
       {entry.glyph}
@@ -239,11 +354,13 @@ function GlyphDot({ entry }: { entry: DayEntry }) {
 
 // Desktop: a full word chip — leading emoji (sport/endurance) or a domain-
 // color dot (training), then the truncated routine name.
-function WordChip({ entry }: { entry: DayEntry }) {
+function WordChip({ entry, drag }: { entry: DayEntry; drag: EntryDragProps }) {
   const tone = entryTone(entry.status, entry.domain);
+  const d = dragSpread(drag);
   return (
     <span
-      style={{ ...wordChipBase, background: tone.bg, borderColor: tone.border }}
+      {...d.props}
+      style={{ ...wordChipBase, background: tone.bg, borderColor: tone.border, ...d.style }}
       title={`${entry.routineName} — ${entry.status}`}
     >
       {entry.isIcon ? (
@@ -267,6 +384,22 @@ function Overflow({ count }: { count: number }) {
 // ─────────────────────── styles
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const dropTargetStyle: CSSProperties = {
+  border: "1px solid rgba(51,255,122,0.85)",
+  background: "rgba(51,255,122,0.14)",
+};
+
+const moveErrorStyle: CSSProperties = {
+  marginBottom: 8,
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(248,113,113,0.32)",
+  background: "rgba(248,113,113,0.1)",
+  color: "rgba(252,165,165,0.98)",
+  fontSize: 13,
+  fontWeight: 700,
+};
 
 const weekdayRow: CSSProperties = {
   display: "grid",

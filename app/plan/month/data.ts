@@ -48,7 +48,12 @@ export type DayEntry = {
   status: DayEntryStatus;
   latestLogId: string | null;
   isHabit: boolean;
+  /** The one-off schedule rows and program sessions behind `planned`. Empty
+   *  for frequency-goal auto-scheduling, which has no row to move. */
+  sources: PlanSource[];
 };
+
+export type PlanSource = { kind: "manual" | "program"; id: string };
 
 // A multi-day away/travel span covering this cell. `isStart` marks the first
 // covered day within the visible month — the only cell that shows the label;
@@ -264,7 +269,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     return activityTypeId ? `${routineId}::${activityTypeId}` : routineId;
   }
 
-  type ScheduledSlot = { routineId: string; activityTypeId: string | null };
+  type ScheduledSlot = { routineId: string; activityTypeId: string | null; source: PlanSource };
   const manualByDay = new Map<string, ScheduledSlot[]>();
   for (const entry of manualRaw) {
     const ymd = toAppYmd(entry.scheduledDate);
@@ -272,6 +277,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     manualByDay.get(ymd)!.push({
       routineId: entry.routineId,
       activityTypeId: entry.activityTypeId,
+      source: { kind: "manual", id: entry.id },
     });
   }
   for (const entry of programPlannedRaw) {
@@ -280,6 +286,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     manualByDay.get(entry.currentYmd)!.push({
       routineId: entry.routineId,
       activityTypeId: entry.activityTypeId,
+      source: { kind: "program", id: entry.id },
     });
   }
 
@@ -341,26 +348,27 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
     // (e.g., a "Trail Run on Tuesday" scheduled against the synthetic
     // endurance routine) stay distinct from a "Hike" scheduled the same
     // day.
-    type Slot = { routineId: string; activityTypeId: string | null; planned: number };
+    type Slot = { routineId: string; activityTypeId: string | null; planned: number; sources: PlanSource[] };
     const plannedSlots = new Map<string, Slot>();
-    const bumpSlot = (routineId: string, activityTypeId: string | null, inc: number) => {
+    const bumpSlot = (routineId: string, activityTypeId: string | null, source: PlanSource) => {
       const key = entryKey(routineId, activityTypeId);
       const existing = plannedSlots.get(key);
       if (existing) {
-        existing.planned = Math.max(existing.planned, existing.planned + inc);
+        existing.planned += 1;
+        existing.sources.push(source);
       } else {
-        plannedSlots.set(key, { routineId, activityTypeId, planned: inc });
+        plannedSlots.set(key, { routineId, activityTypeId, planned: 1, sources: [source] });
       }
     };
 
     for (const slot of manualByDay.get(ymd) ?? []) {
-      bumpSlot(slot.routineId, slot.activityTypeId, 1);
+      bumpSlot(slot.routineId, slot.activityTypeId, slot.source);
     }
     for (const r of autoScheduledRoutines) {
       if (isRoutineAutoScheduledOnDay(r, ymd, null)) {
         const key = entryKey(r.id, null);
         if (!plannedSlots.has(key)) {
-          plannedSlots.set(key, { routineId: r.id, activityTypeId: null, planned: 1 });
+          plannedSlots.set(key, { routineId: r.id, activityTypeId: null, planned: 1, sources: [] });
         }
       }
     }
@@ -375,6 +383,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
             routineId: bucket.routineId,
             activityTypeId: bucket.activityTypeId,
             planned: 0,
+            sources: [],
           });
         }
       }
@@ -418,6 +427,7 @@ export async function getMonthData(rawMonth: string | undefined): Promise<MonthD
         status,
         latestLogId,
         isHabit: shouldAutoScheduleRoutine(r),
+        sources: slot.sources,
       });
     }
 
