@@ -29,12 +29,14 @@ export default function InjuryForm({
   submitLabel,
   action,
   factorSuggestions = [],
+  onSaved,
 }: {
   zones: ZoneOption[];
   initial?: InitialInjury;
   submitLabel: string;
   action: (data: InjuryInput) => Promise<string | void>;
   factorSuggestions?: string[];
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
@@ -67,7 +69,8 @@ export default function InjuryForm({
           zoneSlugs: selected,
           aggravatingFactors,
         });
-        router.push(id ? `/injuries/${id}` : "/profile/health");
+        if (onSaved) onSaved();
+        else router.push(id ? `/injuries/${id}` : "/profile/health");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Unable to save injury.");
       }

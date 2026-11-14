@@ -12,10 +12,19 @@ import { getReadyRungs } from "@/app/progressions/data";
 import { getHomePlanGroups } from "./_home/plan-data";
 import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import { prisma } from "@/lib/prisma";
+import { getAppSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const session = await getAppSession();
+  const profile = await prisma.appProfile.findUnique({
+    where: { key: session.profileKey },
+    select: { onboardedAt: true },
+  });
+  if (profile && !profile.onboardedAt) redirect("/welcome");
+
   const [data, injuries, factorSuggestions, zones, otherGoals, rotation, focuses, readyRungs, planGroups] = await Promise.all([
     getHomeData(),
     getHomeInjuries(),

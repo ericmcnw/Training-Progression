@@ -53,6 +53,10 @@ export default async function SettingsPage() {
             <span style={linkRowTitle}>Endurance activity types</span>
             <span style={linkRowMeta}>Which run/bike/swim types show & their order →</span>
           </Link>
+          <Link href="/welcome" style={linkRow}>
+            <span style={linkRowTitle}>Run setup again</span>
+            <span style={linkRowMeta}>Name, what you do, home, injuries →</span>
+          </Link>
         </div>
       </section>
     </div>

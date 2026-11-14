@@ -1298,6 +1298,9 @@ model AppProfile {
   homeLat                    Float?
   homeLng                    Float?
   homeLabel                  String?
+  // Null until the first-run setup is finished or skipped; Home sends a
+  // profile without it to /welcome.
+  onboardedAt                DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
