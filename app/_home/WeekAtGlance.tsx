@@ -200,8 +200,14 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
       // Compute day width so exactly `visible` cards fit the viewport width.
       // This keeps the user from needing to scroll on desktop while the rail
       // still gracefully shrinks inside the 2x2 grid cell on wide screens.
-      const visible = isMobile ? VISIBLE_ON_MOBILE : VISIBLE_ON_DESKTOP;
-      const target = Math.floor((w - DAY_GAP * (visible - 1)) / visible);
+      // Wide rails show as many whole days as fit at the max width, so the
+      // last card is never cut in half.
+      const visible = isMobile
+        ? VISIBLE_ON_MOBILE
+        : Math.max(VISIBLE_ON_DESKTOP, Math.ceil((w + DAY_GAP) / (DAY_WIDTH_DESKTOP_MAX + DAY_GAP)));
+      // Unfloored, minus the rail's 2px side padding, so the cards fill the
+      // viewport exactly instead of leaving a sliver of the next day.
+      const target = (w - 4 - DAY_GAP * (visible - 1)) / visible;
       const dw = isMobile
         ? Math.max(DAY_WIDTH_MOBILE_MIN, Math.min(DAY_WIDTH_MOBILE_MAX, target))
         : Math.max(DAY_WIDTH_DESKTOP_MIN, Math.min(DAY_WIDTH_DESKTOP_MAX, target));
@@ -369,6 +375,9 @@ export default function WeekAtGlance({ days, today, currentWeekStart: _currentWe
         }
         .homeV2WagViewport::-webkit-scrollbar-track {
           background: transparent;
+        }
+        @media (min-width: 760px) {
+          .homeWagDetailList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
       `}</style>
     </section>
@@ -604,7 +613,7 @@ function DetailPanel({
       {isEmpty ? (
         <div style={emptyHint}>No routines planned. Add a to-do or log something ad-hoc.</div>
       ) : (
-        <div style={detailList}>
+        <div style={detailList} className="homeWagDetailList">
           {planned.map((item) => {
             const normalizedKind = normalizeRoutineKind(item.kind);
             const isCompletion = normalizedKind === "COMPLETION";

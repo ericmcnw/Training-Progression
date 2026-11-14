@@ -126,9 +126,7 @@ export default function DayTodoList({
         ) : null}
       </div>
 
-      {todos.length === 0 ? (
-        <div style={emptyHint}>Nothing yet — add a quick task below.</div>
-      ) : (
+      {todos.length === 0 ? null : (
         <div style={list}>
           {undone.map((todo) => (
             <TodoRow key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} pending={pending} />
@@ -268,13 +266,6 @@ const panelCount: CSSProperties = {
   background: SKY + "0.10)",
 };
 
-const emptyHint: CSSProperties = {
-  fontSize: 11,
-  opacity: 0.5,
-  fontStyle: "italic",
-  paddingLeft: 2,
-  marginTop: 2,
-};
 
 const list: CSSProperties = {
   display: "grid",

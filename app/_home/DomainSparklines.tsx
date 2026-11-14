@@ -78,6 +78,7 @@ export default function DomainSparklines({ series }: Props) {
               return (
                 <span
                   key={w.start}
+                  className={(weekStarts.length - 1 - i) % 2 === 1 ? "weekLabelAlt" : undefined}
                   style={{ ...weekLabelText, ...(i === weekStarts.length - 1 ? weekLabelTextCurrent : null) }}
                 >
                   {startLabel}
@@ -239,6 +240,12 @@ export default function DomainSparklines({ series }: Props) {
           /* Drop the "–end" half so labels stop colliding; start-date alone
              reads cleanly across the 8 columns. */
           .weekLabelEnd { display: none; }
+        }
+        @container (max-width: 520px) {
+          .weekLabelEnd { display: none; }
+        }
+        @container (max-width: 240px) {
+          .weekLabelAlt { visibility: hidden; }
         }
         @keyframes homeV2Pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -634,6 +641,7 @@ const weekLabelStrip: CSSProperties = {
   display: "flex",
   gap: 3,
   minWidth: 0,
+  containerType: "inline-size",
 };
 
 const weekLabelText: CSSProperties = {

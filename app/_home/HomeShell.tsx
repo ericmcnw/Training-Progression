@@ -1,14 +1,14 @@
 // Server component that lays out the home dashboard.
 //
-// Layout (top → bottom):
-//   • Last 7 days strip — full width
-//   • Week at a Glance — full width (the scrollable rail wants the room)
-//   • Two independent columns on desktop:
-//       left:  Injuries → Frequency goals (HabitGrid)
-//       right: Domain volume → Movement patterns
+// Layout (top → bottom), wide desktop (≥1180px):
+//   • Week at a Glance beside a side column of Last 7 days → Injuries
+//   • Plan / Progressions / Programs bands — full width
+//   • Three independent columns: Goals | Rotation → Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
-//     one column never shifts the other column — only pushes its own
-//     column's cards down. On mobile the columns flatten to one stream.
+//     one column never shifts the others.
+// Below 1180px the top split flattens; below 980px every wrapper flattens to
+// one stream, and `order` keeps the mobile sequence: Last 7 days, WaG, bands,
+// Injuries, Goals, Rotation, Domain volume, Movement.
 //
 // The Ambient status row was removed (2026-06-16): its Body chip is now the
 // Injuries section, its Habits chip lives in the frequency rows, and its
@@ -60,16 +60,26 @@ export default function HomeShell({
   return (
     <div style={pageRoot} className="homeRoot">
       <LocationPingCapture />
-      <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
-
-      <WeekAtGlance
-        days={data.legacyGlanceDays}
-        today={data.today}
-        currentWeekStart={data.currentWeekStart}
-        schedulableRoutines={data.quickPickRoutines}
-        scheduleActivityTypes={data.scheduleActivityTypes}
-        scheduleSports={data.scheduleSports}
-      />
+      <div className="homeTop">
+        <div className="homeTopMain">
+          <WeekAtGlance
+            days={data.legacyGlanceDays}
+            today={data.today}
+            currentWeekStart={data.currentWeekStart}
+            schedulableRoutines={data.quickPickRoutines}
+            scheduleActivityTypes={data.scheduleActivityTypes}
+            scheduleSports={data.scheduleSports}
+          />
+        </div>
+        <div className="homeTopSide">
+          <div className="homeLast7">
+            <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
+          </div>
+          <div className="homeInjuries">
+            <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
+          </div>
+        </div>
+      </div>
 
       {/* Focus band — the strategic layer, full-width below the WaG. Renders
           nothing when the user has no active focuses. */}
@@ -80,13 +90,8 @@ export default function HomeShell({
 
       <HomeFocusSection focuses={focuses} />
 
-      {/* Two independent columns on desktop. Each column flows its cards
-          top-to-bottom with align-content:start, so expanding a collapsible
-          in one column pushes only that column's lower cards down — the
-          other column stays put. */}
       <div className="homeCols">
         <div className="homeCol">
-          <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
           {/* Phase 2: Goals section (frequency + other goals). To revert to
               the plain frequency grid, swap this back to:
               <HabitGrid rows={data.habitRows} today={data.today} /> */}
@@ -101,9 +106,9 @@ export default function HomeShell({
               user has no active rotation. */}
           {rotation ? <HomeRotationSection rotation={rotation} /> : null}
           <DomainSparklines series={data.domainSeries} />
-          <div className="homeMovementPatterns">
-            <MovementPatternsCard data={data.movementPatterns} />
-          </div>
+        </div>
+        <div className="homeCol homeMovementPatterns">
+          <MovementPatternsCard data={data.movementPatterns} />
         </div>
       </div>
 
@@ -113,32 +118,43 @@ export default function HomeShell({
         .homeRoot {
           --home-edge: clamp(12px, 3vw, 22px);
         }
-        .homeCols {
+        .homeTop, .homeCols {
           display: grid;
           grid-template-columns: 1fr;
           gap: ${SECTION_GAP}px;
           align-items: start;
         }
-        .homeCol {
+        .homeInjuries:empty { display: none; }
+        .homeTopMain, .homeTopSide, .homeCol {
           display: grid;
           gap: ${SECTION_GAP}px;
           align-content: start;
           min-width: 0;
         }
-        @media (min-width: 980px) {
+        @media (min-width: 1180px) {
+          .homeTop {
+            grid-template-columns: minmax(0, 1.65fr) minmax(360px, 1fr);
+          }
+          .homeCols {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 1179px) {
+          .homeTop, .homeTopMain, .homeTopSide { display: contents; }
+          .homeLast7 { order: -2; }
+          .homeTopMain > * { order: -1; }
+          .homeInjuries { order: 1; }
+          .homeCols { order: 2; }
+        }
+        @media (min-width: 980px) and (max-width: 1179px) {
           .homeCols {
             grid-template-columns: 1fr 1fr;
           }
         }
         @media (max-width: 979px) {
-          /* Single-column mobile/tablet — flatten the column wrappers so
-             every card becomes a direct grid item of .homeCols. That lets
-             us reorder Movement Patterns to the very bottom without
-             changing desktop's left-column grouping. */
-          .homeCol {
-            display: contents;
-          }
-          .homeMovementPatterns {
+          .homeCols, .homeCol { display: contents; }
+          .homeCol > * { order: 2; }
+          .homeMovementPatterns > * {
             order: 99;
           }
         }
