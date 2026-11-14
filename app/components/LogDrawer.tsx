@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLogDrawer } from "@/app/contexts/LogDrawerContext";
+import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import LogWorkoutForm from "@/app/routines/[id]/log/ui";
 import SessionLogForm from "@/app/routines/[id]/log-session/SessionLogForm";
 import LogRunForm from "@/app/routines/[id]/log-cardio/ui";
@@ -16,6 +17,8 @@ import type { ClimbLocationBasic } from "@/lib/climb-types";
 import type { SpotPickerItem } from "@/lib/activity-spots";
 import type { QuickLogDomain } from "@/lib/quick-log";
 import type { LogPlanLine } from "@/lib/program-plan";
+
+class RoutineGoneError extends Error {}
 
 // Sentinel routine id for the ad-hoc quick-workout flow. No real routine
 // exists until the user saves — the placeholder is find-or-created server-
@@ -137,8 +140,13 @@ export default function LogDrawer() {
     clearDrawerState,
     getDefaultDate,
   } = useLogDrawer();
+  const { clearDraft } = useLogDraft();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A 404 is a different problem from a failed request: the routine isn't on
+  // this account (or was deleted) and retrying can only fail again, so the
+  // only way out is discarding whatever draft pointed here.
+  const [missing, setMissing] = useState(false);
   const [logData, setLogData] = useState<LogData | null>(null);
   // Bumped via the Retry button — re-running the load effect by invalidating
   // its dep list is simpler than refactoring into an imperative loader.
@@ -153,6 +161,7 @@ export default function LogDrawer() {
     }
     setLoading(true);
     setError(null);
+    setMissing(false);
 
     const requestedRoutineId = activeRoutineId;
     const controller = new AbortController();
@@ -167,6 +176,7 @@ export default function LogDrawer() {
 
     fetch(url, { signal: controller.signal })
       .then((res) => {
+        if (res.status === 404) throw new RoutineGoneError();
         if (!res.ok) throw new Error("Failed to load");
         return res.json() as Promise<LogData>;
       })
@@ -178,7 +188,8 @@ export default function LogDrawer() {
       })
       .catch((err) => {
         if (cancelled || (err instanceof DOMException && err.name === "AbortError")) return;
-        setError("Could not load session.");
+        if (err instanceof RoutineGoneError) setMissing(true);
+        else setError("Could not load session.");
         setLoading(false);
       });
 
@@ -189,6 +200,16 @@ export default function LogDrawer() {
   }, [isOpen, activeRoutineId, retryNonce]);
 
   const retry = useCallback(() => setRetryNonce((n) => n + 1), []);
+
+  function discardMissing() {
+    if (activeRoutineId) {
+      clearDraft(activeRoutineId);
+      cache.current.delete(activeRoutineId);
+      clearDrawerState(activeRoutineId);
+    }
+    clearDirty();
+    closeDrawer();
+  }
 
   if (!isOpen || !activeRoutineId) return null;
 
@@ -235,6 +256,20 @@ export default function LogDrawer() {
 
         <div style={drawerBodyStyle}>
           {loading && <LoadingSkeleton />}
+          {missing && (
+            <div style={errorBlockStyle}>
+              <div style={{ color: "rgba(255,200,140,0.95)", fontSize: 14, fontWeight: 700 }}>
+                This routine isn&apos;t on your account.
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, lineHeight: 1.45 }}>
+                It was deleted, or the session was started while viewing someone
+                else&apos;s profile. Nothing was logged.
+              </div>
+              <button type="button" onClick={discardMissing} style={retryBtnStyle}>
+                Discard it
+              </button>
+            </div>
+          )}
           {error && (
             <div style={errorBlockStyle}>
               <div style={{ color: "rgba(255,140,140,0.95)", fontSize: 14, fontWeight: 700 }}>
@@ -245,7 +280,7 @@ export default function LogDrawer() {
               </button>
             </div>
           )}
-          {!loading && !error && logData && (() => {
+          {!loading && !error && !missing && logData && (() => {
             if (logData.kind === "QUICK") {
               return (
                 <QuickWorkoutLogForm

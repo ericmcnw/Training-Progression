@@ -20,9 +20,6 @@ import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
 import { useOptionalLogDraft } from "@/app/contexts/LogDraftContext";
 import {
   type CardioDraft,
-  clearDraftFromStorage,
-  loadDraftFromStorage,
-  saveDraftToStorage,
 } from "@/lib/log-draft";
 import SpotPicker, { type SpotPickerValue } from "@/app/components/log/SpotPicker";
 import GearPicker from "@/app/components/log/GearPicker";
@@ -207,7 +204,7 @@ export default function LogRunForm({
   const draftStartedAtRef = useRef<string>(new Date().toISOString());
 
   useEffect(() => {
-    const stored = loadDraftFromStorage(routineId);
+    const stored = draftCtx?.loadStoredDraft(routineId) ?? null;
     if (!stored || stored.kind !== "CARDIO") return;
     setDistanceMi(stored.distanceMi);
     setElevationGainFt(stored.elevationGainFt);
@@ -267,7 +264,6 @@ export default function LogRunForm({
       poolSwim: isPoolSwim ? poolSwim : undefined,
     };
     const timer = setTimeout(() => {
-      saveDraftToStorage(draft);
       draftCtx?.saveDraft(draft);
     }, 600);
     return () => clearTimeout(timer);
@@ -435,7 +431,6 @@ export default function LogRunForm({
               }
             : undefined,
       });
-      clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
       drawer?.clearDirty();
       finish();

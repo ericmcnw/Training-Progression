@@ -9,6 +9,7 @@ import EditLogDrawer from "./components/EditLogDrawer";
 import CoachWidget from "./coach/CoachWidget";
 import ClientProviders from "./ClientProviders";
 import ViewingAsBanner from "./ViewingAsBanner";
+import { getAppSession } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,15 +29,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Log drafts live in localStorage, which is per-browser rather than per
+  // account — the providers need to know whose drafts to read and write.
+  const { profileKey } = await getAppSession();
+
   return (
     <html lang="en">
       <body className="appBody">
-        <ClientProviders>
+        <ClientProviders profileKey={profileKey}>
           <ViewingAsBanner />
           <header className="appHeader">
             <div className="appHeaderInner">

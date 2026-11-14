@@ -6,9 +6,15 @@ import { FormDrawerProvider } from "./contexts/FormDrawerContext";
 import { ViewLogDrawerProvider } from "./contexts/ViewLogDrawerContext";
 import { EditLogDrawerProvider } from "./contexts/EditLogDrawerContext";
 
-export default function ClientProviders({ children }: { children: React.ReactNode }) {
+export default function ClientProviders({
+  profileKey,
+  children,
+}: {
+  profileKey: string;
+  children: React.ReactNode;
+}) {
   return (
-    <LogDraftProvider>
+    <LogDraftProvider profileKey={profileKey}>
       <LogDrawerProvider>
         <ViewLogDrawerProvider>
           <EditLogDrawerProvider>

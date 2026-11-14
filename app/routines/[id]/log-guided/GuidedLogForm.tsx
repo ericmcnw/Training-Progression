@@ -11,9 +11,6 @@ import type { ReviewSaveData } from "./GuidedReviewForm";
 import { useOptionalLogDraft } from "@/app/contexts/LogDraftContext";
 import {
   type GuidedDraft,
-  clearDraftFromStorage,
-  loadDraftFromStorage,
-  saveDraftToStorage,
 } from "@/lib/log-draft";
 import { localDateTimeNow } from "../log/form-ui";
 
@@ -82,7 +79,7 @@ export default function GuidedLogForm({
   // — needed for refresh-survival across page loads.
   const restoredDraft = useMemo(() => {
     if (typeof window === "undefined") return null;
-    const stored = loadDraftFromStorage(routineId);
+    const stored = draftCtx?.loadStoredDraft(routineId) ?? null;
     return stored && stored.kind === "GUIDED" ? stored : null;
   }, [routineId]);
 
@@ -142,7 +139,6 @@ export default function GuidedLogForm({
       reviewMode,
     };
     const timer = setTimeout(() => {
-      saveDraftToStorage(draft);
       draftCtx?.saveDraft(draft);
     }, 600);
     return () => clearTimeout(timer);
@@ -263,7 +259,6 @@ export default function GuidedLogForm({
               }
             : undefined,
       });
-      clearDraftFromStorage(routineId);
       draftCtx?.clearDraft(routineId);
       finish();
     } catch (err) {

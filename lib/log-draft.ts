@@ -114,19 +114,31 @@ export type GuidedDraft = {
 
 export type LogDraft = WorkoutDraft | SessionDraft | CardioDraft | GuidedDraft;
 
-function draftKey(routineId: string) {
-  return `${DRAFT_KEY_PREFIX}${routineId}`;
+// localStorage is per-browser but a draft belongs to one profile. Without the
+// profile in the key, an admin who logs through view-as leaves drafts that
+// resume on their own account (and the synthetic routine ids every profile
+// shares collide outright).
+function draftKey(profileKey: string, routineId: string) {
+  return `${DRAFT_KEY_PREFIX}${profileKey}:${routineId}`;
 }
 
-export function loadDraftFromStorage(routineId: string): LogDraft | null {
+function indexKey(profileKey: string) {
+  return `${DRAFT_INDEX_KEY}:${profileKey}`;
+}
+
+function readIndex(profileKey: string): string[] {
+  return JSON.parse(localStorage.getItem(indexKey(profileKey)) ?? "[]");
+}
+
+export function loadDraftFromStorage(profileKey: string, routineId: string): LogDraft | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(draftKey(routineId));
+    const raw = localStorage.getItem(draftKey(profileKey, routineId));
     if (!raw) return null;
     const draft = JSON.parse(raw) as LogDraft;
     // Auto-expire drafts older than 7 days
     if (Date.now() - new Date(draft.startedAt).getTime() > DRAFT_MAX_AGE_MS) {
-      clearDraftFromStorage(routineId);
+      clearDraftFromStorage(profileKey, routineId);
       return null;
     }
     return draft;
@@ -135,37 +147,57 @@ export function loadDraftFromStorage(routineId: string): LogDraft | null {
   }
 }
 
-export function loadAllDraftsFromStorage(): LogDraft[] {
+export function loadAllDraftsFromStorage(profileKey: string): LogDraft[] {
   if (typeof window === "undefined") return [];
   try {
-    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
-    return index
-      .map((id) => loadDraftFromStorage(id))
+    return readIndex(profileKey)
+      .map((id) => loadDraftFromStorage(profileKey, id))
       .filter((d): d is LogDraft => d !== null);
   } catch {
     return [];
   }
 }
 
-export function saveDraftToStorage(draft: LogDraft): void {
+export function saveDraftToStorage(profileKey: string, draft: LogDraft): void {
   if (typeof window === "undefined") return;
   try {
-    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
+    const index = readIndex(profileKey);
     if (!index.includes(draft.routineId)) {
-      localStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify([...index, draft.routineId]));
+      localStorage.setItem(indexKey(profileKey), JSON.stringify([...index, draft.routineId]));
     }
-    localStorage.setItem(draftKey(draft.routineId), JSON.stringify(draft));
+    localStorage.setItem(draftKey(profileKey, draft.routineId), JSON.stringify(draft));
   } catch {
     // Ignore quota / private-mode errors
   }
 }
 
-export function clearDraftFromStorage(routineId: string): void {
+export function clearDraftFromStorage(profileKey: string, routineId: string): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(draftKey(routineId));
-    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) ?? "[]");
-    localStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify(index.filter((id) => id !== routineId)));
+    localStorage.removeItem(draftKey(profileKey, routineId));
+    const index = readIndex(profileKey);
+    localStorage.setItem(indexKey(profileKey), JSON.stringify(index.filter((id) => id !== routineId)));
+  } catch {
+    // Ignore errors
+  }
+}
+
+// Drafts written before the key carried a profile can't be attributed to one,
+// so they're dropped rather than handed to whoever signs in next. A routine id
+// never contains a colon, so an un-namespaced key is identifiable.
+export function purgeUnscopedDrafts(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const stale: string[] = [];
+    // Collected before removing — deleting mid-scan shifts the indices.
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const isLegacyDraft =
+        key.startsWith(DRAFT_KEY_PREFIX) && !key.slice(DRAFT_KEY_PREFIX.length).includes(":");
+      if (key === DRAFT_INDEX_KEY || isLegacyDraft) stale.push(key);
+    }
+    for (const key of stale) localStorage.removeItem(key);
   } catch {
     // Ignore errors
   }

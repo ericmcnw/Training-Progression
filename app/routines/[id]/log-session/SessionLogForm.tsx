@@ -38,11 +38,8 @@ import BasketballSessionStats from "./BasketballSessionStats";
 import { climbingDisciplineLabel, climbingDisciplineForTemplateKey } from "@/lib/climb-types";
 import {
   type SessionDraft,
-  clearDraftFromStorage,
   draftAgeLabel,
   draftIsRecent,
-  loadDraftFromStorage,
-  saveDraftToStorage,
 } from "@/lib/log-draft";
 import { useLogDraft } from "@/app/contexts/LogDraftContext";
 import { useOptionalLogDrawer } from "@/app/contexts/LogDrawerContext";
@@ -85,7 +82,7 @@ export default function SessionLogForm({
   onBack?: () => void;
   defaultPerformedAtLocal?: string;
 }) {
-  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft, loadStoredDraft } = useLogDraft();
   const drawer = useOptionalLogDrawer();
   const finish = onComplete ?? (() => { window.location.href = "/log"; });
 
@@ -204,7 +201,7 @@ export default function SessionLogForm({
 
   // Restore draft on mount
   useEffect(() => {
-    const draft = loadDraftFromStorage(routineId);
+    const draft = loadStoredDraft(routineId);
     if (!draft || draft.kind !== "SESSION") return;
 
     draftStartedAtRef.current = draft.startedAt;
@@ -262,7 +259,6 @@ export default function SessionLogForm({
       spotValue: spotValue ?? undefined,
     };
     const timer = setTimeout(() => {
-      saveDraftToStorage(draft);
       contextSaveDraft(draft);
     }, 600);
     return () => clearTimeout(timer);
@@ -276,7 +272,6 @@ export default function SessionLogForm({
   }
 
   function handleStartFresh() {
-    clearDraftFromStorage(routineId);
     contextClearDraft(routineId);
     setDurationHours("");
     setDurationMinutes("");
@@ -400,7 +395,6 @@ export default function SessionLogForm({
               }
             : undefined,
       });
-      clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
       drawer?.clearDirty();
       finish();

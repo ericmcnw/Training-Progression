@@ -3,11 +3,8 @@
 import { compareExerciseNames, condensedExerciseName, exerciseMatchesQuery, exerciseUnitFieldLabel, exerciseUnitLabel, normalizeExerciseName } from "@/lib/exercises";
 import {
   type WorkoutDraft,
-  clearDraftFromStorage,
   draftAgeLabel,
   draftIsRecent,
-  loadDraftFromStorage,
-  saveDraftToStorage,
 } from "@/lib/log-draft";
 import { formatPrescription, prescriptionHints, type PrescriptionShape } from "@/lib/prescription";
 import type { PlanNote } from "@/lib/program-plan";
@@ -223,7 +220,7 @@ export default function WorkoutExerciseEditor({
   onBlocksChange?: (blocks: WorkoutBlock[]) => void;
   bottomSlot?: ReactNode;
 }) {
-  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft } = useLogDraft();
+  const { saveDraft: contextSaveDraft, clearDraft: contextClearDraft, loadStoredDraft } = useLogDraft();
   const drawer = useOptionalLogDrawer();
 
   const [notes, setNotes] = useState(initialNotes);
@@ -260,7 +257,7 @@ export default function WorkoutExerciseEditor({
   // Restore draft on mount
   useEffect(() => {
     if (!draftEnabled || !routineId) return;
-    const draft = loadDraftFromStorage(routineId);
+    const draft = loadStoredDraft(routineId);
     if (!draft || draft.kind !== "WORKOUT") return;
 
     draftStartedAtRef.current = draft.startedAt;
@@ -316,7 +313,6 @@ export default function WorkoutExerciseEditor({
       effort,
     };
     const timer = setTimeout(() => {
-      saveDraftToStorage(draft);
       contextSaveDraft(draft);
     }, 600);
     return () => clearTimeout(timer);
@@ -631,7 +627,6 @@ export default function WorkoutExerciseEditor({
 
   function handleStartFresh() {
     if (routineId) {
-      clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
     }
     setBlocks(initialBlocks);
@@ -649,7 +644,6 @@ export default function WorkoutExerciseEditor({
     );
     if (hasData && !window.confirm("Discard this session? All entered sets will be lost.")) return;
     if (routineId) {
-      clearDraftFromStorage(routineId);
       contextClearDraft(routineId);
     }
     if (onBack) onBack();
@@ -688,7 +682,6 @@ export default function WorkoutExerciseEditor({
         })),
       });
       if (draftEnabled && routineId) {
-        clearDraftFromStorage(routineId);
         contextClearDraft(routineId);
       }
     } catch (err) {
