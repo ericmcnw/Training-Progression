@@ -1,5 +1,8 @@
 // Server component that lays out the home dashboard.
 //
+// With nothing logged in the last 8 weeks a Getting started card leads the
+// page and the cards that would render empty are omitted.
+//
 // Layout (top → bottom), wide desktop (≥1180px):
 //   • Week at a Glance → Programs (cards stacked) beside a side column of
 //     Last 7 days → Clients (admin's own account only) → Injuries
@@ -38,6 +41,7 @@ import HomePlanSection from "./HomePlanSection";
 import type { HomePlanGroup } from "./plan-data";
 import HomeClientsSection from "./HomeClientsSection";
 import type { HomeClient } from "./clients-data";
+import HomeGettingStarted from "./HomeGettingStarted";
 
 export default function HomeShell({
   data,
@@ -62,9 +66,20 @@ export default function HomeShell({
   planGroups: HomePlanGroup[];
   clients: HomeClient[];
 }) {
+  const noRecentSessions = data.domainSeries.length === 0;
+  const hasGoals = data.habitRows.length + otherGoals.length > 0;
+  const showGoals = hasGoals || !noRecentSessions;
+  const showMovement = data.movementPatterns.patterns.length > 0;
+  const showCols = showGoals || !!rotation || !noRecentSessions || showMovement;
+
   return (
     <div style={pageRoot} className="homeRoot">
       <LocationPingCapture />
+      {noRecentSessions ? (
+        <div className="homeStart">
+          <HomeGettingStarted hasGoals={hasGoals} />
+        </div>
+      ) : null}
       <div className="homeTop">
         <div className="homeTopMain">
           <WeekAtGlance
@@ -98,28 +113,31 @@ export default function HomeShell({
 
       <HomeProgressionsSection ready={readyRungs} />
 
-      <div className="homeCols">
-        <div className="homeCol">
-          {/* Phase 2: Goals section (frequency + other goals). To revert to
-              the plain frequency grid, swap this back to:
-              <HabitGrid rows={data.habitRows} today={data.today} /> */}
-          <HomeGoalsSection
-            habitRows={data.habitRows}
-            today={data.today}
-            otherGoals={otherGoals}
-          />
+      {showCols ? (
+        <div className="homeCols">
+          <div className="homeCol">
+            {/* Phase 2: Goals section (frequency + other goals). To revert to
+                the plain frequency grid, swap this back to:
+                <HabitGrid rows={data.habitRows} today={data.today} /> */}
+            {showGoals ? (
+              <HomeGoalsSection
+                habitRows={data.habitRows}
+                today={data.today}
+                otherGoals={otherGoals}
+              />
+            ) : null}
+          </div>
+          <div className="homeCol">
+            {/* Rotation sits atop the right column — omitted entirely when the
+                user has no active rotation. */}
+            {rotation ? <HomeRotationSection rotation={rotation} /> : null}
+            {noRecentSessions ? null : <DomainSparklines series={data.domainSeries} />}
+          </div>
+          <div className="homeCol homeMovementPatterns">
+            {showMovement ? <MovementPatternsCard data={data.movementPatterns} /> : null}
+          </div>
         </div>
-        <div className="homeCol">
-          {/* Rotation sits atop the right column — omitted entirely when the
-              user has no active rotation. */}
-          {rotation ? <HomeRotationSection rotation={rotation} /> : null}
-          <DomainSparklines series={data.domainSeries} />
-        </div>
-        <div className="homeCol homeMovementPatterns">
-          <MovementPatternsCard data={data.movementPatterns} />
-        </div>
-      </div>
-
+      ) : null}
 
       <style>{`
         .homeRoot {
@@ -149,6 +167,7 @@ export default function HomeShell({
         }
         @media (max-width: 1179px) {
           .homeTop, .homeTopMain, .homeTopSide { display: contents; }
+          .homeStart { order: -5; }
           .homeLast7 { order: -4; }
           .homeTopMain > :first-child { order: -3; }
           .homeClients { order: -2; }
