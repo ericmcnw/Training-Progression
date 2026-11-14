@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition, type CSSProperties } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import { Field, FormError, FormSection, FormStack, inputStyle } from "@/app/routines/[id]/log/form-ui";
 import HomeLocationSetting from "@/app/profile/HomeLocationSetting";
 import { setProfileIdentity } from "@/app/profile/identity-actions";
@@ -50,10 +50,6 @@ export default function WelcomeWizard({
 
   const stepIndex = STEPS.indexOf(step);
 
-  useEffect(() => {
-    if (step === "done") void finishWelcome();
-  }, [step]);
-
   function run(work: () => Promise<void>, next: Step) {
     setError(null);
     startTransition(async () => {
@@ -67,9 +63,14 @@ export default function WelcomeWizard({
   }
 
   function skipAll() {
+    setError(null);
     startTransition(async () => {
-      await finishWelcome();
-      router.push("/");
+      try {
+        await finishWelcome();
+        router.push("/");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't save that. Try again.");
+      }
     });
   }
 
@@ -179,12 +180,12 @@ export default function WelcomeWizard({
                   factorSuggestions={factorSuggestions}
                   submitLabel="Add injury"
                   action={createInjury}
-                  onSaved={() => setStep("done")}
+                  onSaved={() => run(finishWelcome, "done")}
                 />
               </FormSection>
             ) : (
               <div style={choiceRow}>
-                <button type="button" onClick={() => setStep("done")} style={primaryButton}>
+                <button type="button" onClick={() => run(finishWelcome, "done")} disabled={pending} style={primaryButton}>
                   No, all good
                 </button>
                 <button type="button" onClick={() => setAddingInjury(true)} style={secondaryButton}>

@@ -41,7 +41,11 @@ export default async function WelcomePage() {
     <WelcomeWizard
       identity={identity}
       homeLocation={homeLocation}
-      endurance={families.map((f) => ({ slug: f.slug, label: f.name, icon: ENDURANCE_ICONS[f.slug] ?? "🏃" }))}
+      endurance={families.map((f) => ({
+        slug: f.slug,
+        label: f.slug === "walking" ? "Walking · hiking" : f.name,
+        icon: ENDURANCE_ICONS[f.slug] ?? "🏃",
+      }))}
       sports={activitiesByFamily("sports").map((s) => ({ slug: s.slug, label: s.label, icon: s.icon }))}
       initialEndurance={pickedEndurance}
       initialSports={selectedSports.map((s) => s.slug)}
