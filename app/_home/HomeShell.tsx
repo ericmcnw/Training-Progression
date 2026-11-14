@@ -1,15 +1,16 @@
 // Server component that lays out the home dashboard.
 //
 // Layout (top → bottom), wide desktop (≥1180px):
-//   • Week at a Glance beside a side column of Last 7 days → Clients (admin's
-//     own account only) → Injuries
-//   • Plan / Progressions / Programs bands — full width
+//   • Week at a Glance → Programs (cards stacked) beside a side column of
+//     Last 7 days → Clients (admin's own account only) → Injuries
+//   • Plan / Progressions bands — full width
 //   • Three independent columns: Goals | Rotation → Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
 //     one column never shifts the others.
 // Below 1180px the top split flattens; below 980px every wrapper flattens to
 // one stream, and `order` keeps the mobile sequence: Last 7 days, WaG,
-// Clients, bands, Injuries, Goals, Rotation, Domain volume, Movement.
+// Clients, Plan, Progressions, Programs, Injuries, Goals, Rotation, Domain
+// volume, Movement.
 //
 // The Ambient status row was removed (2026-06-16): its Body chip is now the
 // Injuries section, its Habits chip lives in the frequency rows, and its
@@ -75,6 +76,9 @@ export default function HomeShell({
             scheduleActivityTypes={data.scheduleActivityTypes}
             scheduleSports={data.scheduleSports}
           />
+          <div className="homeFocus">
+            <HomeFocusSection focuses={focuses} />
+          </div>
         </div>
         <div className="homeTopSide">
           <div className="homeLast7">
@@ -91,14 +95,9 @@ export default function HomeShell({
         </div>
       </div>
 
-      {/* Focus band — the strategic layer, full-width below the WaG. Renders
-          nothing when the user has no active focuses. */}
-      {/* Steps already earned but not marked. Renders nothing when empty. */}
       <HomePlanSection groups={planGroups} />
 
       <HomeProgressionsSection ready={readyRungs} />
-
-      <HomeFocusSection focuses={focuses} />
 
       <div className="homeCols">
         <div className="homeCol">
@@ -134,7 +133,7 @@ export default function HomeShell({
           gap: ${SECTION_GAP}px;
           align-items: start;
         }
-        .homeInjuries:empty { display: none; }
+        .homeInjuries:empty, .homeFocus:empty { display: none; }
         .homeTopMain, .homeTopSide, .homeCol {
           display: grid;
           gap: ${SECTION_GAP}px;
@@ -148,13 +147,16 @@ export default function HomeShell({
           .homeCols {
             grid-template-columns: repeat(3, minmax(0, 1fr));
           }
+          .homeFocusGrid { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 1179px) {
           .homeTop, .homeTopMain, .homeTopSide { display: contents; }
-          .homeLast7 { order: -2; }
-          .homeTopMain > *, .homeClients { order: -1; }
-          .homeInjuries { order: 1; }
-          .homeCols { order: 2; }
+          .homeLast7 { order: -4; }
+          .homeTopMain > :first-child { order: -3; }
+          .homeClients { order: -2; }
+          .homeFocus { order: 1; }
+          .homeInjuries { order: 2; }
+          .homeCols { order: 3; }
         }
         @media (min-width: 980px) and (max-width: 1179px) {
           .homeCols {
@@ -163,7 +165,7 @@ export default function HomeShell({
         }
         @media (max-width: 979px) {
           .homeCols, .homeCol { display: contents; }
-          .homeCol > * { order: 2; }
+          .homeCol > * { order: 3; }
           .homeMovementPatterns > * {
             order: 99;
           }

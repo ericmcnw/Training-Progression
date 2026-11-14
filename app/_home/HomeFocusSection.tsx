@@ -29,7 +29,7 @@ export default function HomeFocusSection({ focuses }: { focuses: FocusBandItem[]
       storageKey="home:focus:open"
       defaultOpen
     >
-      <div style={grid}>
+      <div style={grid} className="homeFocusGrid">
         {focuses.map((f) => (
           <FocusCard key={f.id} focus={f} />
         ))}
