@@ -10,6 +10,7 @@ import { getHomeRotation } from "@/lib/home-rotation";
 import { getFocusBandData } from "@/app/focus/data";
 import { getReadyRungs } from "@/app/progressions/data";
 import { getHomePlanGroups } from "./_home/plan-data";
+import { getHomeClients } from "./_home/clients-data";
 import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
@@ -25,7 +26,7 @@ export default async function HomePage() {
   });
   if (profile && !profile.onboardedAt) redirect("/welcome");
 
-  const [data, injuries, factorSuggestions, zones, otherGoals, rotation, focuses, readyRungs, planGroups] = await Promise.all([
+  const [data, injuries, factorSuggestions, zones, otherGoals, rotation, focuses, readyRungs, planGroups, clients] = await Promise.all([
     getHomeData(),
     getHomeInjuries(),
     getAggravatingFactorSuggestions(),
@@ -35,6 +36,7 @@ export default async function HomePage() {
     getFocusBandData(),
     getReadyRungs(),
     getHomePlanGroups(),
+    getHomeClients(),
   ]);
   return (
     <HomeShell
@@ -47,6 +49,7 @@ export default async function HomePage() {
       focuses={focuses}
       readyRungs={readyRungs}
       planGroups={planGroups}
+      clients={clients}
     />
   );
 }

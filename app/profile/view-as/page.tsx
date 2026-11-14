@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { getAppSession } from "@/lib/auth";
 import { basePrisma } from "@/lib/prisma-base";
-import { startViewingAs } from "./actions";
+import { setClient, startViewingAs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function ViewAsPage() {
   const [profiles, logCounts] = await Promise.all([
     basePrisma.appProfile.findMany({
       orderBy: { createdAt: "asc" },
-      select: { key: true, email: true, displayName: true, createdAt: true },
+      select: { key: true, email: true, displayName: true, createdAt: true, managedByKey: true },
     }),
     basePrisma.routineLog.groupBy({ by: ["profileKey"], _count: { _all: true } }),
   ]);
@@ -37,9 +37,9 @@ export default async function ViewAsPage() {
           const isOwn = profile.key === ownProfileKey;
           const isCurrent = profile.key === session.profileKey;
           const logs = logsByProfile.get(profile.key) ?? 0;
+          const isClient = profile.managedByKey === ownProfileKey;
           return (
-            <form key={profile.key} action={startViewingAs} style={row}>
-              <input type="hidden" name="profileKey" value={profile.key} />
+            <div key={profile.key} style={row}>
               <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 900 }}>
                   {profile.displayName ?? profile.email ?? profile.key}
@@ -50,10 +50,24 @@ export default async function ViewAsPage() {
                   {profile.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </div>
               </div>
-              <button type="submit" disabled={isCurrent} style={isCurrent ? currentBtn : viewBtn}>
-                {isCurrent ? "Viewing" : isOwn ? "Back to me" : "View as"}
-              </button>
-            </form>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {isOwn ? null : (
+                  <form action={setClient}>
+                    <input type="hidden" name="profileKey" value={profile.key} />
+                    <input type="hidden" name="client" value={isClient ? "off" : "on"} />
+                    <button type="submit" style={isClient ? clientOnBtn : clientBtn}>
+                      {isClient ? "Client ✓" : "Add as client"}
+                    </button>
+                  </form>
+                )}
+                <form action={startViewingAs}>
+                  <input type="hidden" name="profileKey" value={profile.key} />
+                  <button type="submit" disabled={isCurrent} style={isCurrent ? currentBtn : viewBtn}>
+                    {isCurrent ? "Viewing" : isOwn ? "Back to me" : "View as"}
+                  </button>
+                </form>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -113,6 +127,21 @@ const viewBtn: CSSProperties = {
   minHeight: 44,
   flexShrink: 0,
   cursor: "pointer",
+};
+
+const clientBtn: CSSProperties = {
+  ...viewBtn,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "transparent",
+  color: "inherit",
+  opacity: 0.75,
+};
+
+const clientOnBtn: CSSProperties = {
+  ...viewBtn,
+  border: "1px solid rgba(96,165,250,0.45)",
+  background: "rgba(96,165,250,0.14)",
+  color: "rgba(191,219,254,0.98)",
 };
 
 const currentBtn: CSSProperties = {

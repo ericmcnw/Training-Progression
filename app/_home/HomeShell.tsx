@@ -1,14 +1,15 @@
 // Server component that lays out the home dashboard.
 //
 // Layout (top → bottom), wide desktop (≥1180px):
-//   • Week at a Glance beside a side column of Last 7 days → Injuries
+//   • Week at a Glance beside a side column of Last 7 days → Clients (admin's
+//     own account only) → Injuries
 //   • Plan / Progressions / Programs bands — full width
 //   • Three independent columns: Goals | Rotation → Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
 //     one column never shifts the others.
 // Below 1180px the top split flattens; below 980px every wrapper flattens to
-// one stream, and `order` keeps the mobile sequence: Last 7 days, WaG, bands,
-// Injuries, Goals, Rotation, Domain volume, Movement.
+// one stream, and `order` keeps the mobile sequence: Last 7 days, WaG,
+// Clients, bands, Injuries, Goals, Rotation, Domain volume, Movement.
 //
 // The Ambient status row was removed (2026-06-16): its Body chip is now the
 // Injuries section, its Habits chip lives in the frequency rows, and its
@@ -35,6 +36,8 @@ import type { HomeRotation } from "@/lib/home-rotation";
 import type { FocusBandItem } from "@/app/focus/shared";
 import HomePlanSection from "./HomePlanSection";
 import type { HomePlanGroup } from "./plan-data";
+import HomeClientsSection from "./HomeClientsSection";
+import type { HomeClient } from "./clients-data";
 
 export default function HomeShell({
   data,
@@ -46,6 +49,7 @@ export default function HomeShell({
   focuses,
   readyRungs,
   planGroups,
+  clients,
 }: {
   data: HomeData;
   injuries: HomeInjury[];
@@ -56,6 +60,7 @@ export default function HomeShell({
   focuses: FocusBandItem[];
   readyRungs: ReadyRung[];
   planGroups: HomePlanGroup[];
+  clients: HomeClient[];
 }) {
   return (
     <div style={pageRoot} className="homeRoot">
@@ -75,6 +80,11 @@ export default function HomeShell({
           <div className="homeLast7">
             <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
           </div>
+          {clients.length > 0 ? (
+            <div className="homeClients">
+              <HomeClientsSection clients={clients} today={data.today} />
+            </div>
+          ) : null}
           <div className="homeInjuries">
             <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
           </div>
@@ -142,7 +152,7 @@ export default function HomeShell({
         @media (max-width: 1179px) {
           .homeTop, .homeTopMain, .homeTopSide { display: contents; }
           .homeLast7 { order: -2; }
-          .homeTopMain > * { order: -1; }
+          .homeTopMain > *, .homeClients { order: -1; }
           .homeInjuries { order: 1; }
           .homeCols { order: 2; }
         }

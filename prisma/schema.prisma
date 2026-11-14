@@ -1301,10 +1301,15 @@ model AppProfile {
   // Null until the first-run setup is finished or skipped; Home sends a
   // profile without it to /welcome.
   onboardedAt                DateTime?
+  // The profile that manages this one's schedule and programs; it lists
+  // this profile on its home as a client. Null for self-managed accounts.
+  managedByKey               String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
   stimulusPreferences UserStimulusPreference[]
+
+  @@index([managedByKey])
 }
 
 // Passive location breadcrumbs captured when the app is opened (web can't track

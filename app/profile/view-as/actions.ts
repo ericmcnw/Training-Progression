@@ -1,8 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/auth";
+import { basePrisma } from "@/lib/prisma-base";
 import { VIEW_AS_COOKIE } from "@/lib/auth-paths";
 
 export async function startViewingAs(formData: FormData) {
@@ -27,5 +29,20 @@ export async function startViewingAs(formData: FormData) {
 
 export async function stopViewingAs() {
   (await cookies()).delete(VIEW_AS_COOKIE);
-  redirect("/profile/view-as");
+  redirect("/");
+}
+
+export async function setClient(formData: FormData) {
+  const session = await getAppSession();
+  if (!session.isAdmin) throw new Error("Only admins can manage clients.");
+
+  const ownProfileKey = session.ownProfileKey ?? session.profileKey;
+  const profileKey = String(formData.get("profileKey") ?? "");
+  if (!profileKey || profileKey === ownProfileKey) return;
+  await basePrisma.appProfile.update({
+    where: { key: profileKey },
+    data: { managedByKey: formData.get("client") === "on" ? ownProfileKey : null },
+  });
+  revalidatePath("/profile/view-as");
+  revalidatePath("/");
 }
