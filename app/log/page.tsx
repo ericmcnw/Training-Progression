@@ -59,7 +59,7 @@ function LogTabs({ current }: { current: string }) {
     },
     {
       key: "exercises",
-      label: "Exercises",
+      label: "Exercise library",
       href: "/log?view=exercises",
       description: "Exercise library",
     },

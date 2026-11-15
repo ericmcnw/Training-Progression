@@ -67,20 +67,31 @@ const styles = {
     background: "#111827",
     color: "#ffffff",
   },
-  quickLogPill: {
-    minHeight: 28,
-    padding: "4px 8px",
+  sectionAction: {
+    minHeight: 32,
+    padding: "5px 10px",
     border: "1px solid rgba(128,128,128,0.7)",
     borderRadius: 8,
     color: "inherit",
     background: "rgba(255,255,255,0.06)",
     fontWeight: 800,
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 1.2,
     display: "inline-flex",
     alignItems: "center",
     whiteSpace: "nowrap" as const,
     cursor: "pointer",
+  },
+  footLink: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "inherit",
+    opacity: 0.7,
+    textDecoration: "underline",
+    textUnderlineOffset: 3,
   },
   emptyCta: {
     width: "100%",
@@ -444,7 +455,7 @@ export default async function RoutinesPageContent(props: {
           if (domain === "sport") {
             // SPORT section combines (a) synthetic per-sport rows that
             // tap to a quick-log sheet and (b) any legacy sport-domain
-            // routines the user already has. The "+" button in the
+            // routines the user already has. "Add sport" in the
             // section header opens the add/remove sport picker.
             // +1 for the pinned freeform "Activity" catch-all tile.
             const totalCount = list.length + sportRows.length + 1;
@@ -454,11 +465,14 @@ export default async function RoutinesPageContent(props: {
                 title={label.toUpperCase()}
                 count={totalCount}
                 accentColor={accent}
-                quickLogSlot={
+                action={
                   <SportsAddButton
                     selected={sportPickerSelected}
                     available={availableSports}
-                  />
+                    style={styles.sectionAction}
+                  >
+                    Add sport
+                  </SportsAddButton>
                 }
                 defaultOpen={!!domainFilter || isFirstRun}
               >
@@ -497,16 +511,20 @@ export default async function RoutinesPageContent(props: {
               title={label.toUpperCase()}
               count={isCardio ? list.length + 2 : list.length}
               accentColor={accent}
-              quickLogSlot={
+              action={
                 domain === "strength" ? (
-                  <QuickLogDrawerButton style={styles.quickLogPill} />
+                  <QuickLogDrawerButton label="Quick log" style={styles.sectionAction} />
                 ) : isCardio ? (
                   // Endurance section uses domain="cardio" under the hood
                   // (see ROUTINE_DOMAIN_OPTIONS in lib/routines). The
                   // section header still reads "Endurance" via that
                   // label map.
-                  <EnduranceQuickLogButton style={styles.quickLogPill} />
-                ) : undefined
+                  <EnduranceQuickLogButton label="Quick log" style={styles.sectionAction} />
+                ) : (
+                  <NewRoutineDrawerButton presetDomain={presetDomainFor(domain)} style={styles.sectionAction}>
+                    New routine
+                  </NewRoutineDrawerButton>
+                )
               }
               defaultOpen={!!domainFilter || isFirstRun}
             >
@@ -563,11 +581,11 @@ export default async function RoutinesPageContent(props: {
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href="/exercises" style={styles.btnLink}>
-          Manage Exercises
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+        <Link href="/exercises" style={styles.footLink}>
+          Exercise library
         </Link>
-        <Link href="/log?mode=starter" style={styles.btnLink}>
+        <Link href="/log?mode=starter" style={styles.footLink}>
           Starter Pack
         </Link>
       </div>

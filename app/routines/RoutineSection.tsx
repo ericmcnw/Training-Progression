@@ -2,18 +2,21 @@
 
 import { useState, type ReactNode } from "react";
 
+// Same header layout as the Activities page's FamilySection: toggle on the
+// left (chevron, title, count), one action on the right. The action sits
+// outside the toggle button so its taps never reach the toggle.
 export default function RoutineSection({
   title,
   count,
-  quickLogSlot,
+  action,
   accentColor,
   defaultOpen,
   children,
 }: {
   title: string;
   count: number;
-  /** Optional small button shown in the section header (e.g. "Quick Log"). */
-  quickLogSlot?: ReactNode;
+  /** Optional single button shown at the right of the header. */
+  action?: ReactNode;
   accentColor?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -30,77 +33,49 @@ export default function RoutineSection({
         overflow: "hidden",
       }}
     >
-      <div style={{ position: "relative" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          background: "rgba(128,128,128,0.14)",
+          borderBottom: open ? "1px solid rgba(128,128,128,0.25)" : "0",
+        }}
+      >
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="mobileRoutinesHeader mobileSectionHeader"
+          aria-expanded={open}
           style={{
-            width: "100%",
-            minHeight: 0,
-            padding: "10px 14px",
+            flex: 1,
+            minWidth: 0,
+            minHeight: 48,
+            padding: "8px 12px 8px 14px",
             border: 0,
-            borderBottom: open ? "1px solid rgba(128,128,128,0.25)" : "0",
             borderRadius: 0,
-            background: "rgba(128,128,128,0.14)",
+            background: "transparent",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            gap: 10,
             color: "inherit",
             cursor: "pointer",
             boxShadow: "none",
-            position: "relative",
+            textAlign: "left",
           }}
         >
-          <span
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: 14,
-              top: "50%",
-              transform: "translateY(-50%)",
-              fontSize: 12,
-              opacity: 0.78,
-            }}
-          >
+          <span aria-hidden="true" style={{ fontSize: 12, opacity: 0.78, width: 12 }}>
             {open ? "▴" : "▾"}
           </span>
           <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 0.5, color: accentColor ?? "inherit" }}>{title}</span>
+          <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>
+            {count} {count === 1 ? "routine" : "routines"}
+          </span>
         </button>
 
-        {quickLogSlot ? (
-          <div
-            style={{
-              position: "absolute",
-              left: 34,
-              top: "50%",
-              transform: "translateY(-50%)",
-              // The slot sits on top of the section header button.
-              // Without explicit z-index, mobile Safari can route the
-              // tap to the header button underneath even though the
-              // slot is later in DOM order. zIndex + auto pointer
-              // events lock the tap to the slot.
-              zIndex: 5,
-              pointerEvents: "auto",
-            }}
-          >
-            {quickLogSlot}
+        {action ? (
+          <div style={{ display: "flex", alignItems: "center", padding: "0 10px 0 0", flexShrink: 0 }}>
+            {action}
           </div>
         ) : null}
-
-        <div
-          style={{
-            position: "absolute",
-            right: 14,
-            top: "50%",
-            transform: "translateY(-50%)",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>{count} {count === 1 ? "routine" : "routines"}</span>
-        </div>
       </div>
 
       {open ? <div className="mobileSectionBody" style={{ padding: 10, display: "grid", gap: 8 }}>{children}</div> : null}
