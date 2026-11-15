@@ -1,7 +1,8 @@
 "use client";
 
-// Global floating "+" — opens a picker of what this account logs (quick
-// workout, endurance, its sports, the freeform activity, recent routines).
+// Global floating "+" — a mini log page: search over the account's routines,
+// up to three suggestions (planned today, then recent), and one chip per
+// type-based log (workout, endurance, its sports, freeform activity).
 // Options load on open so pages don't pay for them on every render.
 
 import Link from "next/link";
@@ -13,6 +14,7 @@ import { QUICK_LOG_ROUTINE_ID } from "@/app/components/LogDrawer";
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import { domainColor } from "@/lib/routines";
 import { loadQuickLogOptions, type QuickLogOptions } from "@/app/log/quick-log-actions";
+import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import SportLogModal from "@/app/routines/SportLogModal";
 import ClimbLogSheet from "@/app/routines/ClimbLogSheet";
 import GolfLogSheet from "@/app/routines/GolfLogSheet";
@@ -30,20 +32,30 @@ export default function QuickLogFab() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [options, setOptions] = useState<QuickLogOptions | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [query, setQuery] = useState("");
 
   if (HIDDEN_PATH.test(pathname)) return null;
 
   function openPicker() {
+    setQuery("");
     setPickerOpen(true);
     loadQuickLogOptions()
       .then(setOptions)
-      .catch(() => setOptions({ sports: [], routines: [] }));
+      .catch(() => setOptions({ sports: [], suggestions: [], routines: [] }));
   }
 
+  // A planned sport session points at the sport's placeholder routine, which
+  // logs through its own sheet rather than the drawer.
   function pickRoutine(routineId: string) {
     setPickerOpen(false);
-    openDrawer(routineId);
+    const sportSlug = /^sports-(.+)-synthetic$/.exec(routineId)?.[1];
+    const sport = sportSlug ? options?.sports.find((s) => s.slug === sportSlug) : undefined;
+    if (sport) setSheet({ kind: "sport", sport });
+    else openDrawer(routineId);
   }
+
+  const needle = query.trim().toLowerCase();
+  const matches = needle && options ? options.routines.filter((routine) => routine.name.toLowerCase().includes(needle)) : null;
 
   function pickSheet(next: Sheet) {
     setPickerOpen(false);
@@ -67,28 +79,51 @@ export default function QuickLogFab() {
 
       {pickerOpen ? (
         <SportLogModal title="Log" onClose={() => setPickerOpen(false)}>
-          <div style={group}>
-            <Row label="Quick workout" eyebrow="Sets and reps, no routine needed" color={domainColor("strength")} onClick={() => pickRoutine(QUICK_LOG_ROUTINE_ID)} />
-            <Row label="Endurance" eyebrow="Run · Walk · Bike · Swim · Row · Hike" color={domainColor("cardio")} onClick={() => pickRoutine(SYNTHETIC_ENDURANCE_ROUTINE_ID)} />
-            {options?.sports.map((sport) => (
-              <Row key={sport.slug} label={sport.label} eyebrow={sport.eyebrow} color={sport.color} onClick={() => pickSheet({ kind: "sport", sport })} />
-            ))}
-            <Row label="Activity" eyebrow="Anything you did — counts as active" color={domainColor("sport")} onClick={() => pickSheet({ kind: "activity" })} />
-          </div>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search your routines"
+            aria-label="Search your routines"
+            style={inputStyle}
+          />
 
-          {options === null ? <div style={loading}>Loading your sports and routines…</div> : null}
-
-          {options && options.routines.length > 0 ? (
+          {matches ? (
             <div style={group}>
-              <span style={groupLabel}>Recent routines</span>
-              {options.routines.map((routine) => (
+              {matches.map((routine) => (
                 <Row key={routine.id} label={routine.name} color={routine.color} onClick={() => pickRoutine(routine.id)} />
               ))}
+              {matches.length === 0 ? <div style={loading}>No routine by that name.</div> : null}
             </div>
-          ) : null}
+          ) : (
+            <>
+              {options === null ? <div style={loading}>Loading…</div> : null}
+
+              {options && options.suggestions.length > 0 ? (
+                <div style={group}>
+                  <span style={groupLabel}>Suggested</span>
+                  {options.suggestions.map((routine) => (
+                    <Row key={routine.id} label={routine.name} eyebrow={routine.reason} color={routine.color} onClick={() => pickRoutine(routine.id)} />
+                  ))}
+                </div>
+              ) : null}
+
+              <div style={group}>
+                <span style={groupLabel}>Something else</span>
+                <div style={chipGrid}>
+                  <Chip label="Workout" color={domainColor("strength")} onClick={() => pickRoutine(QUICK_LOG_ROUTINE_ID)} />
+                  <Chip label="Endurance" color={domainColor("cardio")} onClick={() => pickRoutine(SYNTHETIC_ENDURANCE_ROUTINE_ID)} />
+                  {options?.sports.map((sport) => (
+                    <Chip key={sport.slug} label={sport.label} color={sport.color} onClick={() => pickSheet({ kind: "sport", sport })} />
+                  ))}
+                  <Chip label="Activity" color={domainColor("sport")} onClick={() => pickSheet({ kind: "activity" })} />
+                </div>
+              </div>
+            </>
+          )}
 
           <Link href="/log" onClick={() => setPickerOpen(false)} style={allLink}>
-            All routines and sports →
+            Open the Log tab →
           </Link>
         </SportLogModal>
       ) : null}
@@ -136,6 +171,37 @@ function Row({ label, eyebrow, color, onClick }: { label: string; eyebrow?: stri
     </button>
   );
 }
+
+function Chip({ label, color, onClick }: { label: string; color: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={chipStyle}>
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0 }} />
+      {label}
+    </button>
+  );
+}
+
+const chipGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))",
+  gap: 8,
+};
+
+const chipStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 44,
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.28)",
+  background: "rgba(128,128,128,0.05)",
+  color: "inherit",
+  fontSize: 13,
+  fontWeight: 800,
+  textAlign: "left",
+  cursor: "pointer",
+};
 
 const fabButton: CSSProperties = {
   width: 56,
