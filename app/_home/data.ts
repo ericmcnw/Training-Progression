@@ -863,6 +863,7 @@ export async function getHomeData(): Promise<HomeData> {
 
       return {
         goalId: goal.id,
+        goalStartYmd: toAppYmd(goal.createdAt),
         goalName: displayName,
         isGroup,
         routineId: primaryRoutines[0]?.id ?? "",
@@ -1212,6 +1213,7 @@ export async function getHabitRowsOnly(): Promise<{ today: string; currentWeekSt
 
       return {
         goalId: goal.id,
+        goalStartYmd: toAppYmd(goal.createdAt),
         goalName: displayName,
         isGroup,
         routineId: primaryRoutines[0]?.id ?? "",

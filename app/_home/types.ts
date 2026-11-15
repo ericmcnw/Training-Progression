@@ -112,6 +112,7 @@ export type HabitRow = {
   // per-routine, or a cuid for group). `routineId` is included for back-compat
   // with the existing log button routing.
   goalId: string;
+  goalStartYmd: string;
   goalName: string;
   isGroup: boolean;
   routineId: string;          // primary's id (or first primary for groups)

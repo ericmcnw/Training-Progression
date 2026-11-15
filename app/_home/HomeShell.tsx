@@ -5,14 +5,14 @@
 //
 // Layout (top → bottom), wide desktop (≥1180px):
 //   • Week at a Glance → Programs (cards stacked) beside a side column of
-//     Last 7 days → Clients (admin's own account only) → Injuries
+//     Last 7 days → Check-in → Clients (admin's own account only) → Injuries
 //   • Plan / Progressions bands — full width
 //   • Three independent columns: Goals | Rotation → Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
 //     one column never shifts the others.
 // Below 1180px the top split flattens; below 980px every wrapper flattens to
 // one stream, and `order` keeps the mobile sequence: Last 7 days, WaG,
-// Clients, Plan, Progressions, Programs, Injuries, Goals, Rotation, Domain
+// Check-in, Clients, Plan, Progressions, Programs, Injuries, Goals, Rotation, Domain
 // volume, Movement.
 //
 // The Ambient status row was removed (2026-06-16): its Body chip is now the
@@ -42,6 +42,7 @@ import type { HomePlanGroup } from "./plan-data";
 import HomeClientsSection from "./HomeClientsSection";
 import type { HomeClient } from "./clients-data";
 import HomeGettingStarted from "./HomeGettingStarted";
+import HomeCheckIn from "./HomeCheckIn";
 
 export default function HomeShell({
   data,
@@ -98,6 +99,9 @@ export default function HomeShell({
           <div className="homeLast7">
             <Last7DaysStrip stats={data.last7Days} homeWeather={data.homeWeather} />
           </div>
+          <div className="homeCheckIn">
+            <HomeCheckIn habitRows={data.habitRows} domainSeries={data.domainSeries} />
+          </div>
           {clients.length > 0 ? (
             <div className="homeClients">
               <HomeClientsSection clients={clients} today={data.today} />
@@ -149,7 +153,7 @@ export default function HomeShell({
           gap: ${SECTION_GAP}px;
           align-items: start;
         }
-        .homeInjuries:empty, .homeFocus:empty { display: none; }
+        .homeInjuries:empty, .homeFocus:empty, .homeCheckIn:empty { display: none; }
         .homeTopMain, .homeTopSide, .homeCol {
           display: grid;
           gap: ${SECTION_GAP}px;
@@ -170,6 +174,7 @@ export default function HomeShell({
           .homeStart { order: -5; }
           .homeLast7 { order: -4; }
           .homeTopMain > :first-child { order: -3; }
+          .homeCheckIn { order: -2; }
           .homeClients { order: -2; }
           .homeFocus { order: 1; }
           .homeInjuries { order: 2; }
