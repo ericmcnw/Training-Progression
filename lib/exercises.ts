@@ -43,8 +43,11 @@ export function exerciseMatchesQuery(name: string, query: string) {
   return queryTokens.every((queryToken) => nameTokens.some((nameToken) => nameToken.startsWith(queryToken)));
 }
 
-export function findExerciseNameMatch<T extends { name: string }>(items: T[], incomingName: string) {
-  return items.find((item) => exerciseNamesMatch(item.name, incomingName)) ?? null;
+// A private exercise wins over a catalog one of the same name, so a person's
+// history stays on their own row if the catalog later gains that name.
+export function findExerciseNameMatch<T extends { name: string; profileKey?: string | null }>(items: T[], incomingName: string) {
+  const matches = items.filter((item) => exerciseNamesMatch(item.name, incomingName));
+  return matches.find((item) => item.profileKey) ?? matches[0] ?? null;
 }
 
 export function compareExerciseNames(left: string, right: string) {

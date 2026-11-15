@@ -873,23 +873,19 @@ async function seedMetadataGroups() {
 
 async function seedExercises(groupMap) {
   for (const exercise of starterExercises) {
-    const record = await prisma.exercise.upsert({
-      where: { name: exercise.name },
-      update: {
-        unit: exercise.unit,
-        supportsWeight: exercise.supportsWeight,
-        libraryKind: deriveExerciseLibraryKind(exercise),
-        isUnilateral: Boolean(exercise.isUnilateral),
-      },
-      create: {
-        name: exercise.name,
-        unit: exercise.unit,
-        supportsWeight: exercise.supportsWeight,
-        libraryKind: deriveExerciseLibraryKind(exercise),
-        isUnilateral: Boolean(exercise.isUnilateral),
-      },
+    const data = {
+      unit: exercise.unit,
+      supportsWeight: exercise.supportsWeight,
+      libraryKind: deriveExerciseLibraryKind(exercise),
+      isUnilateral: Boolean(exercise.isUnilateral),
+    };
+    const catalogRow = await prisma.exercise.findFirst({
+      where: { name: exercise.name, profileKey: null },
       select: { id: true },
     });
+    const record = catalogRow
+      ? await prisma.exercise.update({ where: { id: catalogRow.id }, data, select: { id: true } })
+      : await prisma.exercise.create({ data: { name: exercise.name, ...data }, select: { id: true } });
 
     const groupIds = exercise.metadata.map((slug) => groupMap.get(slug)).filter(Boolean);
     await prisma.exerciseMetadataGroup.deleteMany({ where: { exerciseId: record.id } });

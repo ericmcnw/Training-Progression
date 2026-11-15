@@ -26,8 +26,9 @@ async function ensureMetricVariant(
   supportsWeight: boolean
 ) {
   const name = metricVariantName(baseName, unit);
-  const existing = await tx.exercise.findUnique({
+  const existing = await tx.exercise.findFirst({
     where: { name },
+    orderBy: { profileKey: { sort: "desc", nulls: "last" } },
     select: { id: true },
   });
   if (existing) return existing;

@@ -1209,7 +1209,11 @@ model SessionTemplateMetadataGroup {
 
 model Exercise {
   id             String              @id @default(cuid())
-  name           String              @unique
+  // Unique per owner, not globally: one partial unique index for the catalog
+  // (profileKey IS NULL) and one on (profileKey, name) for private rows. Prisma
+  // can't declare partial indexes, so they live only in migration
+  // 20261114100000_exercise_name_per_owner.
+  name           String
   unit           ExerciseUnit        @default(REPS)
   supportsWeight Boolean             @default(false)
   libraryKind    ExerciseLibraryKind @default(STRENGTH)
