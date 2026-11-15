@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { authModeFromEnv, buildAuthRedirectTarget, isDevOnlyPath, isEmailAllowed, isProtectedAppPath } from "@/lib/auth-paths";
+import { authModeFromEnv, buildAuthRedirectTarget, isDevOnlyPath, isProtectedAppPath, isSessionAllowed } from "@/lib/auth-paths";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
 
   const { response, claims } = await updateSession(request);
 
-  if (!isProtectedAppPath(pathname) || isEmailAllowed(claims?.email as string | undefined)) {
+  if (!isProtectedAppPath(pathname) || isSessionAllowed(claims)) {
     return response;
   }
 

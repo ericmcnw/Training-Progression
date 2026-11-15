@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { getAppSession } from "@/lib/auth";
 import { basePrisma } from "@/lib/prisma-base";
-import { setClient, startViewingAs } from "./actions";
+import { invitesConfigured, listInvitedUsers, type InvitedUser } from "@/lib/supabase/admin";
+import { setClient, setInvite, startViewingAs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,14 @@ export default async function ViewAsPage() {
     basePrisma.routineLog.groupBy({ by: ["profileKey"], _count: { _all: true } }),
   ]);
   const logsByProfile = new Map(logCounts.map((row) => [row.profileKey, row._count._all]));
+
+  let invited: InvitedUser[] = [];
+  let inviteError: string | null = null;
+  try {
+    invited = await listInvitedUsers();
+  } catch (error) {
+    inviteError = error instanceof Error ? error.message : "Couldn't load invites.";
+  }
 
   return (
     <div style={shell}>
@@ -71,6 +80,48 @@ export default async function ViewAsPage() {
           );
         })}
       </div>
+
+      <h2 style={{ fontSize: 17, fontWeight: 900, margin: "8px 0 0" }}>Invite someone</h2>
+      {invitesConfigured() ? (
+        <>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.72 }}>
+            An invited email can sign in at {process.env.APP_URL?.trim() || "this site"}. Nothing is sent to them, so tell
+            them they are in. Their account appears above after their first sign-in.
+          </p>
+          <form action={setInvite} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="friend@example.com"
+              autoComplete="off"
+              style={emailInput}
+            />
+            <button type="submit" style={viewBtn}>Invite</button>
+          </form>
+          {inviteError ? <div style={{ ...meta, whiteSpace: "normal", color: "rgba(248,113,113,0.95)" }}>{inviteError}</div> : null}
+          <div style={{ display: "grid", gap: 10 }}>
+            {invited.map((user) => (
+              <div key={user.id} style={row}>
+                <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+                  <div style={meta}>{user.lastSignInAt ? "Has signed in" : "Not signed in yet"}</div>
+                </div>
+                <form action={setInvite}>
+                  <input type="hidden" name="email" value={user.email} />
+                  <input type="hidden" name="invited" value="off" />
+                  <button type="submit" style={clientBtn}>Remove</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.72 }}>
+          Add SUPABASE_SERVICE_ROLE_KEY to this deployment&apos;s environment to invite people from here. Until then,
+          access is the AUTH_ALLOWED_EMAILS list.
+        </p>
+      )}
     </div>
   );
 }
@@ -113,6 +164,19 @@ const meta: CSSProperties = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+};
+
+// form-ui's inputStyle lives in a client module, which a server page can't
+// read values from; this mirrors it.
+const emailInput: CSSProperties = {
+  flex: "1 1 220px",
+  minWidth: 0,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(128,128,128,0.45)",
+  background: "#111827",
+  color: "#ffffff",
+  fontSize: 16,
 };
 
 const viewBtn: CSSProperties = {

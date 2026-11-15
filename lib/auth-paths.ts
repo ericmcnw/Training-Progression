@@ -30,6 +30,17 @@ export function isEmailAllowed(email: string | null | undefined, envValue = proc
   return emailListIncludes(email, envValue);
 }
 
+// In-app invites mark the Supabase user's app_metadata, which only the
+// service role can write, so the flag in a session's claims can be trusted.
+export const INVITED_FLAG = "invited";
+
+export function isSessionAllowed(claims: { email?: unknown; app_metadata?: unknown } | null | undefined) {
+  if (!claims) return false;
+  if (isEmailAllowed(typeof claims.email === "string" ? claims.email : null)) return true;
+  const meta = claims.app_metadata;
+  return !!meta && typeof meta === "object" && (meta as Record<string, unknown>)[INVITED_FLAG] === true;
+}
+
 export function isAdminEmail(email: string | null | undefined, envValue = process.env.ADMIN_EMAILS) {
   return emailListIncludes(email, envValue);
 }

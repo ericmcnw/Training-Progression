@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { authModeFromEnv, isAdminEmail, isEmailAllowed, VIEW_AS_COOKIE, type AuthMode } from "@/lib/auth-paths";
+import { authModeFromEnv, isAdminEmail, isSessionAllowed, VIEW_AS_COOKIE, type AuthMode } from "@/lib/auth-paths";
 import { SYNTHETIC_ENDURANCE_ROUTINE_ID } from "@/lib/activity-types";
 import { basePrisma as prisma } from "@/lib/prisma-base";
 import { physicalSyntheticId } from "@/lib/profile-scope";
@@ -108,7 +108,7 @@ async function resolveSession(): Promise<AppSession> {
   const userId = data?.claims.sub;
   const email = typeof data?.claims.email === "string" ? data.claims.email.toLowerCase() : null;
 
-  if (error || !userId || !email || !isEmailAllowed(email)) {
+  if (error || !userId || !email || !isSessionAllowed(data?.claims)) {
     return anonymousSession();
   }
 

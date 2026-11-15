@@ -1,6 +1,7 @@
 "use server";
 
 import { isEmailAllowed, VIEW_AS_COOKIE } from "@/lib/auth-paths";
+import { isEmailInvited } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -20,7 +21,7 @@ export async function sendMagicLink(formData: FormData) {
     redirect(`/signin?error=${encodeURIComponent("Email is required.")}&next=${encodeURIComponent(next)}`);
   }
 
-  if (!isEmailAllowed(email)) {
+  if (!isEmailAllowed(email) && !(await isEmailInvited(email))) {
     redirect(`/signin?error=${encodeURIComponent("This email isn't invited yet.")}&next=${encodeURIComponent(next)}`);
   }
 

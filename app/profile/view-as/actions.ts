@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/auth";
 import { basePrisma } from "@/lib/prisma-base";
 import { VIEW_AS_COOKIE } from "@/lib/auth-paths";
+import { setInvited } from "@/lib/supabase/admin";
 
 export async function startViewingAs(formData: FormData) {
   const session = await getAppSession();
@@ -30,6 +31,16 @@ export async function startViewingAs(formData: FormData) {
 export async function stopViewingAs() {
   (await cookies()).delete(VIEW_AS_COOKIE);
   redirect("/");
+}
+
+export async function setInvite(formData: FormData) {
+  const session = await getAppSession();
+  if (!session.isAdmin) throw new Error("Only admins can invite people.");
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  await setInvited(email, formData.get("invited") !== "off");
+  revalidatePath("/profile/view-as");
 }
 
 export async function setClient(formData: FormData) {
