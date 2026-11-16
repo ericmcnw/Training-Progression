@@ -6,8 +6,9 @@
 // Layout (top → bottom), wide desktop (≥1180px):
 //   • Week at a Glance → Programs (cards stacked) beside a side column of
 //     Last 7 days → Check-in → Clients (admin's own account only) → Injuries
+//     → Goals
 //   • Plan / Progressions bands — full width
-//   • Three independent columns: Goals | Rotation → Domain volume | Movement
+//   • Two independent columns: Rotation → Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
 //     one column never shifts the others.
 // Below 1180px the top split flattens; below 980px every wrapper flattens to
@@ -71,7 +72,7 @@ export default function HomeShell({
   const hasGoals = data.habitRows.length + otherGoals.length > 0;
   const showGoals = hasGoals || !noRecentSessions;
   const showMovement = data.movementPatterns.patterns.length > 0;
-  const showCols = showGoals || !!rotation || !noRecentSessions || showMovement;
+  const showCols = !!rotation || !noRecentSessions || showMovement;
 
   return (
     <div style={pageRoot} className="homeRoot">
@@ -110,6 +111,11 @@ export default function HomeShell({
           <div className="homeInjuries">
             <HomeInjuriesSection injuries={injuries} factorSuggestions={factorSuggestions} zones={zones} />
           </div>
+          {showGoals ? (
+            <div className="homeGoals">
+              <HomeGoalsSection habitRows={data.habitRows} today={data.today} otherGoals={otherGoals} />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -119,18 +125,6 @@ export default function HomeShell({
 
       {showCols ? (
         <div className="homeCols">
-          <div className="homeCol">
-            {/* Phase 2: Goals section (frequency + other goals). To revert to
-                the plain frequency grid, swap this back to:
-                <HabitGrid rows={data.habitRows} today={data.today} /> */}
-            {showGoals ? (
-              <HomeGoalsSection
-                habitRows={data.habitRows}
-                today={data.today}
-                otherGoals={otherGoals}
-              />
-            ) : null}
-          </div>
           <div className="homeCol">
             {/* Rotation sits atop the right column — omitted entirely when the
                 user has no active rotation. */}
@@ -165,7 +159,7 @@ export default function HomeShell({
             grid-template-columns: minmax(0, 1.65fr) minmax(360px, 1fr);
           }
           .homeCols {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: minmax(0, 1.65fr) minmax(360px, 1fr);
           }
           .homeFocusGrid { grid-template-columns: 1fr !important; }
         }
@@ -178,7 +172,7 @@ export default function HomeShell({
           .homeClients { order: -2; }
           .homeFocus { order: 1; }
           .homeInjuries { order: 2; }
-          .homeCols { order: 3; }
+          .homeGoals, .homeCols { order: 3; }
         }
         @media (min-width: 980px) and (max-width: 1179px) {
           .homeCols {
