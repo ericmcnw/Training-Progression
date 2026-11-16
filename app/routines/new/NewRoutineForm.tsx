@@ -233,6 +233,12 @@ export default function NewRoutineForm({
     : [];
 
   // ─── STEP 1: Kind picker ──────────────────────────────────────────────────────
+  const packsLink = (
+    <Link href="/log?mode=packs" onClick={() => onSuccess?.()} style={packsLinkStyle}>
+      Or start from a ready-made routine pack →
+    </Link>
+  );
+
   // Asks "how does this routine get logged?" since the kind dictates the
   // log form's shape. Domain (dashboard bucket) is derived from the preset
   // pick on the next step.
@@ -244,6 +250,7 @@ export default function NewRoutineForm({
           <div style={s.pageSubtitle}>
             Pick how this routine gets logged. The dashboard category is set automatically after you pick a starting point.
           </div>
+          {packsLink}
         </div>
 
         <div style={s.kindGrid}>
@@ -288,6 +295,7 @@ export default function NewRoutineForm({
         </div>
         <div style={s.pageTitle}>Choose an activity</div>
         <div style={s.pageSubtitle}>{domainMeta.description}</div>
+        {selectedDomain === "strength" || selectedDomain === "mobility" ? packsLink : null}
 
         {/* Cardio domain redirect — endurance is logged by activity type,
             not via a saved routine. Legacy presets stay reachable in a
@@ -949,6 +957,16 @@ function ActivityCard({
 // domains are "redirect tiles" — the routine builder isn't the right entry
 // point for them. Accent color matches the domain (cardio = blue,
 // sport = orange) so the redirect feels on-theme.
+const packsLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 44,
+  fontSize: 13,
+  fontWeight: 800,
+  color: "rgba(51,255,122,0.95)",
+  textDecoration: "none",
+};
+
 const enduranceNudgeStyle: React.CSSProperties = {
   padding: "14px 16px",
   borderRadius: 14,

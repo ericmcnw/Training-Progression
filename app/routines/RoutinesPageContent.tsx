@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatAppDate, toAppYmd, todayAppYmd } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
-import StarterPackPageContent from "./StarterPackPageContent";
+import RoutinePacksPageContent from "./RoutinePacksPageContent";
 import { formatRoutineTypeLabel, normalizeRoutineKind, effectiveRoutineDomain, domainColor, ROUTINE_DOMAIN_OPTIONS } from "@/lib/routines";
 import { getMaxRoutineFrequencyWindowDays, getRoutineFrequencyStatuses, routineWithFrequencyTarget } from "@/lib/routine-frequency";
 import { getWeekBoundsSunday } from "@/lib/week";
@@ -131,8 +131,8 @@ export default async function RoutinesPageContent(props: {
 }) {
   const searchParams = props.searchParams ? await props.searchParams : {};
   const mode = getParam(searchParams, "mode");
-  if (mode === "starter") {
-    return <StarterPackPageContent />;
+  if (mode === "packs" || mode === "starter") {
+    return <RoutinePacksPageContent />;
   }
 
   const searchQuery = (getParam(searchParams, "q") ?? "").trim();
@@ -585,8 +585,8 @@ export default async function RoutinesPageContent(props: {
         <Link href="/exercises" style={styles.footLink}>
           Exercise library
         </Link>
-        <Link href="/log?mode=starter" style={styles.footLink}>
-          Starter Pack
+        <Link href="/log?mode=packs" style={styles.footLink}>
+          Routine packs
         </Link>
       </div>
 

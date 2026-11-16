@@ -42,7 +42,6 @@ import { prisma } from "@/lib/prisma";
 import { canEditExercise } from "@/lib/profile-scope";
 import { recordBarRaise } from "@/lib/goal-milestones";
 import { suggestedTimesPerWeekForRoutineTarget } from "@/lib/routine-frequency";
-import { buildStarterPackPlan, getStarterPackDefinition, getStarterStructureDefinition, type StarterPackFocus, type StarterPackStructure } from "@/lib/starter-packs";
 import {
   normalizeRoutineKind,
   normalizeRoutineSubtype,
@@ -1232,68 +1231,6 @@ export async function createRoutine(formData: FormData) {
     redirect(`/routines/${created.id}/template`);
   }
   if (formData.get("noRedirect") === "1") return;
-  redirect("/log");
-}
-
-export async function createStarterPack(formData: FormData) {
-  const focus = String(formData.get("focus") || "MIXED").trim().toUpperCase() as StarterPackFocus;
-  const structure = String(formData.get("structure") || "BALANCED").trim().toUpperCase() as StarterPackStructure;
-  const pack = getStarterPackDefinition(focus);
-  const structureDef = getStarterStructureDefinition(structure);
-  const plan = buildStarterPackPlan(pack.key, structureDef.key);
-
-  if (plan.length === 0) {
-    throw new Error("Starter pack is empty.");
-  }
-
-  const sessionTemplateKeys = Array.from(
-    new Set(plan.map((item) => item.sessionTemplateKey).filter((value): value is string => Boolean(value)))
-  );
-  const sessionTemplates = sessionTemplateKeys.length > 0
-    ? await prisma.sessionTemplate.findMany({
-        where: { key: { in: sessionTemplateKeys } },
-        select: { id: true, key: true },
-      })
-    : [];
-  const sessionTemplateIdByKey = new Map(sessionTemplates.map((template) => [template.key, template.id]));
-
-  for (const routine of plan) {
-    const created = await prisma.routine.create({
-      data: {
-        name: routine.name,
-        domain: "general",
-        kind: routine.kind,
-        subtype: normalizeRoutineSubtype(routine.kind, routine.subtype),
-        timesPerWeek: routine.timesPerWeek,
-        isActive: true,
-        isDeleted: false,
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-
-    if (routine.timesPerWeek && routine.timesPerWeek > 0) {
-      await syncRoutineFrequencyGoal(created.id, routine.name, {
-        frequencyGoalEnabled: true,
-        targetFrequencyCount: routine.timesPerWeek,
-        targetFrequencyUnit: "WEEK",
-        targetFrequencyInterval: 1,
-      });
-    }
-
-    await syncRoutineTypeDetails(
-      created.id,
-      routine.kind,
-      routine.sessionTemplateKey ? sessionTemplateIdByKey.get(routine.sessionTemplateKey) ?? null : null
-    );
-    await syncRoutineClassificationMetadata({
-      routineId: created.id,
-      selectedGroupIds: [],
-      tags: [],
-    });
-  }
-
-  revalidateRoutineSurfaces();
   redirect("/log");
 }
 

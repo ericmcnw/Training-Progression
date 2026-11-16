@@ -212,6 +212,11 @@ export default function WelcomeWizard({
                 Log something from this week
               </Link>
               {lifting ? (
+                <Link href="/log?mode=packs" style={secondaryButton}>
+                  Start from a ready-made routine pack
+                </Link>
+              ) : null}
+              {lifting ? (
                 <NewRoutineDrawerButton presetDomain="strength" style={secondaryButton}>
                   Build a lifting routine
                 </NewRoutineDrawerButton>
