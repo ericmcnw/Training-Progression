@@ -5,7 +5,7 @@
 // surfaces volume; if a future domain ever wants the same plain shape,
 // route it through here.
 
-import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
+import { fillWeeks, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { getWeekBoundsSunday } from "@/lib/week";
@@ -49,7 +49,7 @@ const ROUTINE_PALETTE = [
   "rgba(217,70,239,0.92)",   // magenta
 ];
 
-export type SessionChartWeeks = 4 | 12;
+export type SessionChartWeeks = number;
 
 export function buildSessionsChartData(
   sessions: SessionChartInput[],
@@ -100,13 +100,12 @@ export function buildSessionsChartData(
     colorByKey.set(r.key, palette[idx % palette.length]);
   });
 
-  const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
-  const weekLabels = fillWeeklySeries(new Map(), range, now).map((p) => p.label);
+  const weekLabels = fillWeeks(new Map(), weeks, now).map((p) => p.label);
 
   const series: StackedBarSeries[] = rankedRoutines.map((r) => ({
     label: r.routineName,
     color: colorByKey.get(r.key)!,
-    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, range, now).map((p) => p.value),
+    weeklyValues: fillWeeks(r.sessionCountByWeek, weeks, now).map((p) => p.value),
   }));
 
   const weekKeys: string[] = [];

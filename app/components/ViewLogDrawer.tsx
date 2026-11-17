@@ -12,7 +12,7 @@
 // behavior comes for free.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import RoutineLogSummary from "@/app/components/RoutineLogSummary";
 import { useViewLogDrawer } from "@/app/contexts/ViewLogDrawerContext";
 import { useEditLogDrawer } from "@/app/contexts/EditLogDrawerContext";
@@ -28,7 +28,16 @@ type FetchState =
 export default function ViewLogDrawer() {
   const { isOpen, activeLogIds, title, closeViewer, notifyDeleted } = useViewLogDrawer();
   const { openEditDrawer } = useEditLogDrawer();
+  // The viewer stays open in state but hides while another page is showing,
+  // so following a link out of it and pressing Back lands on the same log.
+  const pathname = usePathname();
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  useEffect(() => {
+    setOpenedAt(isOpen ? (prev) => prev ?? pathname : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
   if (!isOpen) return null;
+  if (openedAt !== null && openedAt !== pathname) return null;
   // Key the inner shell on the active id set. Switching routines while the
   // modal is open (or reopening after a delete) remounts with fresh state —
   // no lingering deletedIds, flash, or in-flight fetch.

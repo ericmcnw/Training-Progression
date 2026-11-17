@@ -123,6 +123,18 @@ export function fillWeeklySeries(
   return weeks.map((key) => ({ label: formatWeekLabel(key), value: totals.get(key) ?? 0 }));
 }
 
+export function fillWeeks(totals: Map<string, number>, count: number, now = new Date()): Array<{ label: string; value: number }> {
+  const cursor = getWeekBoundsSunday(now).start;
+  const out: Array<{ label: string; value: number }> = [];
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const date = new Date(cursor);
+    date.setDate(date.getDate() - index * 7);
+    const key = weekKey(date);
+    out.push({ label: formatWeekLabel(key), value: totals.get(key) ?? 0 });
+  }
+  return out;
+}
+
 export function incrementWeekMap(map: Map<string, number>, date: Date, value = 1) {
   const key = weekKey(date);
   map.set(key, (map.get(key) ?? 0) + value);

@@ -22,6 +22,7 @@ import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
 import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
+import { CHART_RANGE_KEYS, CHART_RANGE_LABEL, resolveChartRange } from "@/lib/activities/chart-range";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +51,6 @@ function getParam(params: SearchParams, key: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseChartWeeks(value: string | undefined): SessionChartWeeks {
-  return value === "4w" ? 4 : 12;
-}
-
 function buildHref(searchParams: SearchParams, overrides: Record<string, string | undefined>): string {
   const next: Record<string, string> = {};
   for (const [k, v] of Object.entries(searchParams)) {
@@ -71,7 +68,7 @@ export default async function MobilityWorldPage(props: {
   searchParams?: Promise<SearchParams>;
 }) {
   const searchParams = (await props.searchParams) ?? {};
-  const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
+  const { range: chartRange, weeks: chartWeeks, title: chartRangeTitle } = await resolveChartRange(getParam(searchParams, "chart"));
   const recentExpanded = getParam(searchParams, "recent") === "all";
 
   const now = new Date();
@@ -199,20 +196,20 @@ export default async function MobilityWorldPage(props: {
       {/* Per-chart range pill — only this chart responds to it. */}
       <div style={chartPillRowStyle}>
         <span style={chartPillLabelStyle}>Chart range</span>
-        {(["4w", "12w"] as const).map((w) => (
+        {CHART_RANGE_KEYS.map((w) => (
           <Link
             key={w}
             href={buildHref(searchParams, { chart: w === "12w" ? undefined : w })}
-            style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
+            style={chartRange === w ? pillSelectStyle : pillStyle}
           >
-            {w}
+            {CHART_RANGE_LABEL[w]}
           </Link>
         ))}
       </div>
 
       {chartHasData ? (
         <WeeklyBarChartWithSessions
-          title={`Sessions per Week — Last ${chartWeeks} Weeks`}
+          title={`Sessions per Week — ${chartRangeTitle}`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}

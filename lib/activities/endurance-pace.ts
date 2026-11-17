@@ -69,12 +69,12 @@ export async function loadEndurancePaceChart(input: {
   weeks?: number;
 }): Promise<PaceChartData> {
   const now = input.now ?? new Date();
-  const weeks = input.weeks === 4 ? 4 : 12;
+  const weeks = Math.max(1, Math.round(input.weeks ?? 12));
 
   // Always a 12-week window so the weekly view stays comparable across
   // visits. Session mode uses the same window so a typed log retyped
   // two months ago doesn't disappear from the view.
-  const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
 
   // Same dual-source rule as the bar chart: typed logs OR logs against
   // metadata-tagged endurance routines.
@@ -197,7 +197,7 @@ export async function loadEndurancePaceChart(input: {
   // the miles bar chart so the two charts line up visually.
   const weekKeys: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
-  for (let i = 11; i >= 0; i -= 1) {
+  for (let i = weeks - 1; i >= 0; i -= 1) {
     const date = new Date(cursor);
     date.setDate(date.getDate() - i * 7);
     weekKeys.push(toAppYmd(date));
@@ -238,8 +238,8 @@ export async function loadEndurancePaceChart(input: {
       acc = {
         label,
         typeSlug,
-        weekSec: new Array(12).fill(0),
-        weekMi: new Array(12).fill(0),
+        weekSec: new Array(weeks).fill(0),
+        weekMi: new Array(weeks).fill(0),
       };
       accumulators.set(label, acc);
     }

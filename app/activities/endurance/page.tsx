@@ -24,6 +24,7 @@ import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
 import EnduranceQuickLogButton from "@/app/routines/EnduranceQuickLogButton";
 import EnduranceFilterBar from "./EnduranceFilterBar";
+import { resolveChartRange } from "@/lib/activities/chart-range";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function EnduranceWorldPage(props: {
 
   const cutoff = cutoffForRange(range);
   // Charts follow the range: 4w → 4-week charts; 12w/all → the 12-week max.
-  const chartWeeks = range === "4w" ? 4 : 12;
+  const chartWeeks = range === "4w" ? 4 : range === "12w" ? 12 : (await resolveChartRange("all")).weeks;
 
   const [families, logs, chartData, paceData, domainGoals, prPool] = await Promise.all([
     prisma.enduranceFamily.findMany({

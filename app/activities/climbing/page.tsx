@@ -20,7 +20,6 @@
 //   - Active projects (top 3, with "view all" link)
 //   - Recent locations (top 5)
 //   - Recent sessions (10 default + expand via ?recent=all)
-//   - Activity coverage heatmap (52 weeks)
 //   - Quick links
 //
 // Shipped in session 2: send rate folded into the pyramid subtitle (gated
@@ -77,6 +76,7 @@ import TrainingTagsPanel from "./TrainingTagsPanel";
 import GradePyramid, { type PyramidColumnRow } from "./GradePyramid";
 import TickList from "./TickList";
 import { startOfWeekMonday } from "@/lib/week";
+import { CHART_RANGE_KEYS, CHART_RANGE_LABEL, resolveChartRange } from "@/lib/activities/chart-range";
 
 export const dynamic = "force-dynamic";
 
@@ -101,10 +101,6 @@ type DisciplineFilter = "all" | ClimbingDiscipline;
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
-}
-
-function parseChartWeeks(value: string | undefined): ClimbingChartWeeks {
-  return value === "4w" ? 4 : 12;
 }
 
 // Pyramid time range. Defaults to all-time — a pyramid reads as lifetime
@@ -145,7 +141,7 @@ export default async function ClimbingHubPage(props: {
   searchParams?: Promise<SearchParams>;
 }) {
   const searchParams = (await props.searchParams) ?? {};
-  const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
+  const { range: chartRange, weeks: chartWeeks, title: chartRangeTitle } = await resolveChartRange(getParam(searchParams, "chart"));
   const recentExpanded = getParam(searchParams, "recent") === "all";
   const disciplineFilterParam = getParam(searchParams, "discipline");
   const pyramidRange = parsePyramidRange(getParam(searchParams, "pyramid"));
@@ -803,13 +799,13 @@ export default async function ClimbingHubPage(props: {
       {/* ── Chart range — applies to both weekly charts below ──────── */}
       <div style={chartPillRowStyle}>
         <span style={chartPillLabelStyle}>Chart range</span>
-        {(["4w", "12w"] as const).map((w) => (
+        {CHART_RANGE_KEYS.map((w) => (
           <Link
             key={w}
             href={buildHref(searchParams, { chart: w === "12w" ? undefined : w })}
-            style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
+            style={chartRange === w ? pillSelectStyle : pillStyle}
           >
-            {w}
+            {CHART_RANGE_LABEL[w]}
           </Link>
         ))}
       </div>
@@ -819,7 +815,7 @@ export default async function ClimbingHubPage(props: {
           outdoor deep). Only combos with data render. */}
       {chartHasData ? (
         <WeeklyEffortChart
-          title={`Climbing Sessions per Week — Last ${chartWeeks} Weeks`}
+          title={`Climbing Sessions per Week — ${chartRangeTitle}`}
           weekLabels={chartData.weekLabels}
           series={chartData.series}
           sessionsByWeek={chartData.sessionsByWeek}
@@ -831,7 +827,7 @@ export default async function ClimbingHubPage(props: {
           …) stacked by domain so the support mix reads at a glance. */}
       {trainingChartHasData ? (
         <WeeklyBarChartWithSessions
-          title={`Climbing Training per Week — Last ${chartWeeks} Weeks`}
+          title={`Climbing Training per Week — ${chartRangeTitle}`}
           weekLabels={trainingChartData.weekLabels}
           series={trainingChartData.series}
           sessionsByWeek={trainingChartData.sessionsByWeek}

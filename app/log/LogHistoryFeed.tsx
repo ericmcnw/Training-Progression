@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { domainColor } from "@/lib/routines";
 import DeleteLogButton from "@/app/manual-log/DeleteLogButton";
@@ -31,6 +31,7 @@ type DetailState =
   | { status: "ready"; data: LogSummaryData };
 
 const PAGE_SIZE = 100;
+const OPEN_KEY = "logHistory.open";
 
 export default function LogHistoryFeed({
   rows,
@@ -65,22 +66,43 @@ export default function LogHistoryFeed({
 
   const isFiltering = q !== "" || domain !== "";
 
-  function toggle(row: HistoryRow) {
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(row.id)) next.delete(row.id);
-      else next.add(row.id);
-      return next;
-    });
-    if (details[row.id]) return;
-    setDetails((prev) => ({ ...prev, [row.id]: { status: "loading" } }));
-    loadLogSummary(row.id)
+  function loadDetail(id: string) {
+    setDetails((prev) => ({ ...prev, [id]: { status: "loading" } }));
+    loadLogSummary(id)
       .then((data) => {
-        setDetails((prev) => ({ ...prev, [row.id]: data ? { status: "ready", data } : { status: "error" } }));
+        setDetails((prev) => ({ ...prev, [id]: data ? { status: "ready", data } : { status: "error" } }));
       })
       .catch(() => {
-        setDetails((prev) => ({ ...prev, [row.id]: { status: "error" } }));
+        setDetails((prev) => ({ ...prev, [id]: { status: "error" } }));
       });
+  }
+
+  // Rows left open are restored after following a link out and coming back.
+  useEffect(() => {
+    let saved: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(sessionStorage.getItem(OPEN_KEY) ?? "[]");
+      if (Array.isArray(parsed)) saved = parsed.filter((id): id is string => typeof id === "string");
+    } catch {
+      saved = [];
+    }
+    const known = new Set(rows.map((r) => r.id));
+    const ids = saved.filter((id) => known.has(id));
+    if (ids.length === 0) return;
+    setOpen(new Set(ids));
+    ids.forEach(loadDetail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggle(row: HistoryRow) {
+    const next = new Set(open);
+    if (next.has(row.id)) next.delete(row.id);
+    else next.add(row.id);
+    setOpen(next);
+    try {
+      sessionStorage.setItem(OPEN_KEY, JSON.stringify([...next]));
+    } catch {}
+    if (!details[row.id]) loadDetail(row.id);
   }
 
   if (rows.length === 0) {

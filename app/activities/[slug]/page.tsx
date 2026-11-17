@@ -40,6 +40,7 @@ import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities
 import { formatRoutineSubtype } from "@/lib/routines";
 import { SPORT_LOG_CONFIG } from "@/app/routines/sportLogConfig";
 import { fuzzyDuplicateKey } from "@/lib/activity-spots";
+import { CHART_RANGE_KEYS, CHART_RANGE_LABEL, resolveChartRange } from "@/lib/activities/chart-range";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +53,6 @@ type SearchParams = Record<string, string | string[] | undefined>;
 function getParam(params: SearchParams, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
-}
-
-function parseChartWeeks(value: string | undefined): SessionChartWeeks {
-  return value === "4w" ? 4 : 12;
 }
 
 function buildHref(slug: string, searchParams: SearchParams, overrides: Record<string, string | undefined>): string {
@@ -77,7 +74,7 @@ export default async function SportWorldPage(props: {
 }) {
   const params = await Promise.resolve(props.params);
   const searchParams = await Promise.resolve(props.searchParams ?? {});
-  const chartWeeks = parseChartWeeks(getParam(searchParams, "chart"));
+  const { range: chartRange, weeks: chartWeeks, title: chartRangeTitle } = await resolveChartRange(getParam(searchParams, "chart"));
   const recentExpanded = getParam(searchParams, "recent") === "all";
   const now = new Date();
 
@@ -231,18 +228,18 @@ export default async function SportWorldPage(props: {
         <>
           <div style={chartPillRowStyle}>
             <span style={chartPillLabelStyle}>Chart range</span>
-            {(["4w", "12w"] as const).map((w) => (
+            {CHART_RANGE_KEYS.map((w) => (
               <Link
                 key={w}
                 href={buildHref(params.slug, searchParams, { chart: w === "12w" ? undefined : w })}
-                style={chartWeeks === (w === "4w" ? 4 : 12) ? pillSelectStyle : pillStyle}
+                style={chartRange === w ? pillSelectStyle : pillStyle}
               >
-                {w}
+                {CHART_RANGE_LABEL[w]}
               </Link>
             ))}
           </div>
           <WeeklyEffortChart
-            title={`${title} Sessions per Week — Last ${chartWeeks} Weeks`}
+            title={`${title} Sessions per Week — ${chartRangeTitle}`}
             weekLabels={chartData.weekLabels}
             series={chartData.series}
             sessionsByWeek={chartData.sessionsByWeek}

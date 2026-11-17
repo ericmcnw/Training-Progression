@@ -87,6 +87,7 @@ export type LogSummarySet = {
 
 export type LogSummaryExercise = {
   id: string;
+  exerciseId: string;
   name: string;
   unit: ExerciseUnitValue;
   supportsWeight: boolean;
@@ -483,6 +484,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
+          exerciseId: true,
           exercise: { select: { name: true, unit: true, supportsWeight: true } },
           sets: {
             orderBy: { setNumber: "asc" },
@@ -561,6 +563,7 @@ export async function getLogSummaryData(logId: string): Promise<LogSummaryData |
     })),
     exercises: log.exercises.map((e) => ({
       id: e.id,
+      exerciseId: e.exerciseId,
       name: e.exercise.name,
       unit: e.exercise.unit as ExerciseUnitValue,
       supportsWeight: e.exercise.supportsWeight,

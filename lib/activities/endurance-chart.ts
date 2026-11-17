@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
+import { fillWeeks, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import {
   activitiesByFamily,
   getActivityEntry,
@@ -45,8 +45,8 @@ export async function loadEnduranceChartData(input?: {
   const now = input?.now ?? new Date();
   const familySlug = input?.familySlug ?? "overview";
   const typeSlug = input?.typeSlug ?? null;
-  const weeks = input?.weeks === 4 ? 4 : 12;
-  const cutoff = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+  const weeks = Math.max(1, Math.round(input?.weeks ?? 12));
+  const cutoff = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
 
   // Resolve the endurance-tagged routine ids in a small first round-trip
   // so the log query can filter on them.
@@ -134,7 +134,7 @@ export async function loadEnduranceChartData(input?: {
   // index for the sessions panel.
   const weekKeys: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
-  for (let i = 11; i >= 0; i -= 1) {
+  for (let i = weeks - 1; i >= 0; i -= 1) {
     const date = new Date(cursor);
     date.setDate(date.getDate() - i * 7);
     weekKeys.push(toAppYmd(date));
@@ -232,7 +232,7 @@ export async function loadEnduranceChartData(input?: {
     }
   }
 
-  const weekLabels = fillWeeklySeries(new Map(), "12w", now).map((p) => p.label);
+  const weekLabels = fillWeeks(new Map(), weeks, now).map((p) => p.label);
 
   let fallbackIdx = 0;
   const series: StackedBarSeries[] = Array.from(weeklyMilesPerActivity.entries())
@@ -253,8 +253,8 @@ export async function loadEnduranceChartData(input?: {
       return {
         label: e.label,
         color,
-        weeklyValues: fillWeeklySeries(e.weekMap, "12w", now).map((p) => p.value),
-        weeklyMinutes: fillWeeklySeries(weeklyMinutesPerActivity.get(e.label) ?? new Map(), "12w", now).map((p) => p.value),
+        weeklyValues: fillWeeks(e.weekMap, weeks, now).map((p) => p.value),
+        weeklyMinutes: fillWeeks(weeklyMinutesPerActivity.get(e.label) ?? new Map(), weeks, now).map((p) => p.value),
       };
     });
 

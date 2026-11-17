@@ -27,6 +27,7 @@ import {
 } from "@/lib/pool-swim";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BackpackingLogSheet from "@/app/routines/BackpackingLogSheet";
 import {
   getBackpackingTripForEdit,
@@ -288,7 +289,13 @@ export default function RoutineLogSummary({ data }: { data: LogSummaryData }) {
             <div style={{ display: "grid", gap: 10 }}>
               {data.exercises.map((exercise) => (
                 <div key={exercise.id} style={itemCard}>
-                  <div style={{ fontWeight: 900 }}>{exercise.name}</div>
+                  <Link
+                    href={`/exercises/${exercise.exerciseId}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32, fontWeight: 900, color: "inherit", textDecoration: "none" }}
+                  >
+                    {exercise.name}
+                    <span aria-hidden style={{ fontSize: 12, fontWeight: 700, opacity: 0.55 }}>progress ›</span>
+                  </Link>
                   <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
                     {exerciseUnitLabel(exercise.unit)} | Weight: {exercise.supportsWeight ? "Yes" : "No"}
                   </div>

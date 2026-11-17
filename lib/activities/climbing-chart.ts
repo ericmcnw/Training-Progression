@@ -18,7 +18,7 @@
 // Sessions with mixed disciplines get attributed to their dominant
 // discipline (most attempts in that session).
 
-import { fillWeeklySeries, incrementWeekMap, weekKey } from "@/lib/progress-v2";
+import { fillWeeks, incrementWeekMap, weekKey } from "@/lib/progress-v2";
 import type { StackedBarSeries } from "@/app/progress/StackedWeeklyBarChart";
 import type { SessionsByWeek, WeekSession } from "@/app/activities/_shared/WeeklyBarChartWithSessions";
 import { getWeekBoundsSunday } from "@/lib/week";
@@ -61,7 +61,7 @@ export type ClimbingTrainingInput = {
   durationSec?: number | null;
 };
 
-export type ClimbingChartWeeks = 4 | 12;
+export type ClimbingChartWeeks = number;
 
 export type ClimbingChartData = {
   weekLabels: string[];
@@ -181,15 +181,14 @@ export function buildClimbingChartData(
     }
   }
 
-  const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
-  const weekLabels = fillWeeklySeries(new Map(), range, now).map((p) => p.label);
+  const weekLabels = fillWeeks(new Map(), weeks, now).map((p) => p.label);
 
   const series: StackedBarSeries[] = orderedKeys.map((key) => {
     const b = buckets.get(key)!;
     return {
       label: b.label,
       color: b.color,
-      weeklyValues: fillWeeklySeries(b.sessionCountByWeek, range, now).map((p) => p.value),
+      weeklyValues: fillWeeks(b.sessionCountByWeek, weeks, now).map((p) => p.value),
     };
   });
 
@@ -257,13 +256,12 @@ export function buildClimbingTrainingChartData(
     orderedRoutines.map((r, idx) => [r.routineId, routineColorAt(idx)])
   );
 
-  const range = weeks === 4 ? ("4w" as const) : ("12w" as const);
-  const weekLabels = fillWeeklySeries(new Map(), range, now).map((p) => p.label);
+  const weekLabels = fillWeeks(new Map(), weeks, now).map((p) => p.label);
 
   const series: StackedBarSeries[] = orderedRoutines.map((r) => ({
     label: r.routineName,
     color: colorByRoutineId.get(r.routineId)!,
-    weeklyValues: fillWeeklySeries(r.sessionCountByWeek, range, now).map((p) => p.value),
+    weeklyValues: fillWeeks(r.sessionCountByWeek, weeks, now).map((p) => p.value),
   }));
 
   const weekIndexByKey = buildWeekIndex(weeks, now);

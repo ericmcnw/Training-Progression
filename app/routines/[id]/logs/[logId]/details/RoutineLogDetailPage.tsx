@@ -2,6 +2,8 @@ import Link from "next/link";
 import RoutineLogSummary from "@/app/components/RoutineLogSummary";
 import { formatAppDateTime } from "@/lib/dates";
 import { getLogSummaryData } from "@/lib/log-summary";
+import HistoryBackButton from "@/app/components/HistoryBackButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -41,15 +43,13 @@ export default async function RoutineLogDetailPage(props: {
 
   return (
     <div style={container}>
+      <HistoryBackButton fallbackHref={returnTo} label="← Back" style={sharedBackLink} />
       <div style={topRow}>
         <div>
           <h1 style={title}>{data.routine.name} Log</h1>
           <div style={subText}>{formatAppDateTime(data.performedAt)}</div>
         </div>
         <div style={actionRow}>
-          <Link href={returnTo} style={linkBtn}>
-            Back
-          </Link>
           <Link href={editHref} style={editBtn}>
             Edit Log
           </Link>

@@ -7,6 +7,7 @@ import { formatDuration, formatPace, getWorkoutSessionMetrics } from "@/lib/prog
 import { getRoutineGoalContributions } from "@/lib/routine-frequency-context";
 import InteractiveSparkline from "@/app/activities/_shared/InteractiveSparkline";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 // Bare /routines/[id] content. The directory's [[...segments]]/page.tsx
 // dispatches the empty-segments case to this component (Next.js doesn't
@@ -480,13 +481,7 @@ function headerStyle(accent: string): React.CSSProperties {
   };
 }
 
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  opacity: 0.6,
-  textDecoration: "none",
-  color: "inherit",
-};
+const backLinkStyle: React.CSSProperties = sharedBackLink;
 
 const eyebrowStyle: React.CSSProperties = {
   fontSize: 10,
