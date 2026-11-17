@@ -8,12 +8,12 @@
 //     Last 7 days → Check-in → Clients (admin's own account only) → Injuries
 //     → Goals
 //   • Plan / Progressions bands — full width
-//   • Two independent columns: Rotation → Domain volume | Movement
+//   • Two independent columns: Domain volume | Movement
 //     Each column stacks with align-content:start so expanding a card in
 //     one column never shifts the others.
 // Below 1180px the top split flattens; below 980px every wrapper flattens to
 // one stream, and `order` keeps the mobile sequence: Last 7 days, WaG,
-// Check-in, Clients, Plan, Progressions, Programs, Injuries, Goals, Rotation, Domain
+// Check-in, Clients, Plan, Progressions, Programs, Injuries, Goals, Domain
 // volume, Movement.
 //
 // The Ambient status row was removed (2026-06-16): its Body chip is now the
@@ -30,13 +30,11 @@ import WeekAtGlance from "./WeekAtGlance";
 import Last7DaysStrip from "./Last7DaysStrip";
 import LocationPingCapture from "./LocationPingCapture";
 import HomeInjuriesSection from "./HomeInjuriesSection";
-import HomeRotationSection from "./HomeRotationSection";
 import HomeFocusSection from "./HomeFocusSection";
 import HomeProgressionsSection from "./HomeProgressionsSection";
 import type { ReadyRung } from "@/app/progressions/data";
 import type { HomeInjury } from "@/lib/home-injuries";
 import type { HomeOtherGoal } from "@/lib/home-goals";
-import type { HomeRotation } from "@/lib/home-rotation";
 import type { FocusBandItem } from "@/app/focus/shared";
 import HomePlanSection from "./HomePlanSection";
 import type { HomePlanGroup } from "./plan-data";
@@ -51,7 +49,6 @@ export default function HomeShell({
   factorSuggestions,
   zones,
   otherGoals,
-  rotation,
   focuses,
   readyRungs,
   planGroups,
@@ -62,7 +59,6 @@ export default function HomeShell({
   factorSuggestions: string[];
   zones: { slug: string; label: string }[];
   otherGoals: HomeOtherGoal[];
-  rotation: HomeRotation | null;
   focuses: FocusBandItem[];
   readyRungs: ReadyRung[];
   planGroups: HomePlanGroup[];
@@ -72,7 +68,7 @@ export default function HomeShell({
   const hasGoals = data.habitRows.length + otherGoals.length > 0;
   const showGoals = hasGoals || !noRecentSessions;
   const showMovement = data.movementPatterns.patterns.length > 0;
-  const showCols = !!rotation || !noRecentSessions || showMovement;
+  const showCols = !noRecentSessions || showMovement;
 
   return (
     <div style={pageRoot} className="homeRoot">
@@ -126,9 +122,6 @@ export default function HomeShell({
       {showCols ? (
         <div className="homeCols">
           <div className="homeCol">
-            {/* Rotation sits atop the right column — omitted entirely when the
-                user has no active rotation. */}
-            {rotation ? <HomeRotationSection rotation={rotation} /> : null}
             {noRecentSessions ? null : <DomainSparklines series={data.domainSeries} />}
           </div>
           <div className="homeCol homeMovementPatterns">

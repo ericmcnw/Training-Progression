@@ -20,7 +20,7 @@ export default function Last7DaysStrip({
   return (
     <section style={shellStyle} aria-label="Last 7 days summary">
       <div style={eyebrowRowStyle}>
-        <div style={eyebrowStyle}>Last 7 days</div>
+        <div style={eyebrowStyle}>Last 7 days{isEmpty ? "" : " · report →"}</div>
         <HomeWeatherControl
           current={homeWeather.current}
           label={homeWeather.label}
@@ -32,7 +32,7 @@ export default function Last7DaysStrip({
           Nothing logged yet — <span style={emptyCtaAccent}>log your first activity →</span>
         </Link>
       ) : (
-        <div style={gridStyle}>
+        <Link href="/reports/week" style={gridStyle} aria-label="Open this week's report">
           <Stat
             value={String(stats.sessions)}
             label={stats.sessions === 1 ? "session" : "sessions"}
@@ -47,7 +47,7 @@ export default function Last7DaysStrip({
             label="mi cardio"
             dim={stats.totalCardioMi === 0}
           />
-        </div>
+        </Link>
       )}
     </section>
   );
@@ -108,6 +108,8 @@ const gridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",
   gap: 10,
+  color: "inherit",
+  textDecoration: "none",
 };
 
 const cellStyle: CSSProperties = {

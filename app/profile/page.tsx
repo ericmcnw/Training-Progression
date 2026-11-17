@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ProfileHeader from "@/app/profile/ProfileHeader";
+import ProfileMilestones from "@/app/profile/ProfileMilestones";
 import { loadProfileStats } from "@/lib/profile-stats";
 import { getProfileIdentity } from "@/lib/profile-identity";
 import { getHomeInjuries } from "@/lib/home-injuries";
@@ -50,10 +51,15 @@ export default async function ProfilePage({ searchParams }: { searchParams?: Pro
     <section style={group}>
       <h2 style={groupTitle}>Training</h2>
       <div style={navGrid}>
-        <HubLink href="/profile/history" title="Training history" meta={`${stats.totalSessions} sessions · search and review logs`} />
+        <HubLink href="/log?view=history" title="Training history" meta={`${stats.totalSessions} sessions · search and review logs`} />
         <HubLink href="/reports" title="Reports" meta="Weekly review and longer trends" />
       </div>
     </section>
+
+    {stats.milestones.length > 0 ? <section style={group}>
+      <h2 style={groupTitle}>Personal bests</h2>
+      <ProfileMilestones milestones={stats.milestones} />
+    </section> : null}
 
     <section style={group}>
       <h2 style={groupTitle}>Health and data</h2>

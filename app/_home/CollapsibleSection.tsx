@@ -1,7 +1,7 @@
 "use client";
 
 // Shared collapsible card chrome for home dashboard sections (Goals,
-// Rotation, and — eventually — a retrofit of Injuries). Header mirrors the
+// and — eventually — a retrofit of Injuries). Header mirrors the
 // pattern HomeInjuriesSection established: title + optional count pill +
 // a toggle with a rotating chevron. Open/closed state persists in
 // localStorage per `storageKey` so the user's choice sticks across visits.

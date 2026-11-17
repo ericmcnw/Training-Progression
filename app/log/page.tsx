@@ -35,7 +35,7 @@ export default async function LogPage(props: {
     <div style={{ display: "grid", gap: 12 }}>
       <LogTabs current={view} />
       {view === "history" ? (
-        <LogHistory />
+        <LogHistory domain={getParam(searchParams, "domain")} />
       ) : (
         <RoutinesPageContent searchParams={Promise.resolve(searchParams)} />
       )}

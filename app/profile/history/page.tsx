@@ -1,8 +1,6 @@
-import ManualLogPageContent from "@/app/manual-log/ManualLogPageContent";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function ProfileHistoryPage({ searchParams }: { searchParams?: Promise<{ domain?: string }> }) {
-  const forwarded = (async () => ({ ...(await searchParams), view: "history" }))();
-  return <ManualLogPageContent searchParams={forwarded} />;
+export default async function ProfileHistoryRedirect({ searchParams }: { searchParams?: Promise<{ domain?: string }> }) {
+  const domain = (await searchParams)?.domain;
+  redirect(domain ? `/log?view=history&domain=${encodeURIComponent(domain)}` : "/log?view=history");
 }

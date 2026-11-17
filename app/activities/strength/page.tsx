@@ -363,7 +363,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
                 <SessionCard key={s.id} session={s} />
               ))}
             </div>
-            <Link href="/profile/history?domain=strength" style={viewAllLinkStyle}>
+            <Link href="/log?view=history&domain=strength" style={viewAllLinkStyle}>
               View all {strength.totalSessions} strength sessions →
             </Link>
           </SectionCard>
