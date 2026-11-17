@@ -10,9 +10,9 @@ import { toAppYmd } from "@/lib/dates";
 // routine each week) so the user can see at a glance which routine is
 // driving their volume that week.
 
-export type StrengthChartRange = "12w" | "26w" | "52w";
+export type StrengthChartRange = "12w" | "26w" | "52w" | "all";
 
-export const STRENGTH_RANGE_WEEKS: Record<StrengthChartRange, number> = {
+export const STRENGTH_RANGE_WEEKS: Record<Exclude<StrengthChartRange, "all">, number> = {
   "12w": 12,
   "26w": 26,
   "52w": 52,
@@ -22,6 +22,7 @@ export const STRENGTH_RANGE_LABEL: Record<StrengthChartRange, string> = {
   "12w": "12w",
   "26w": "6mo",
   "52w": "1y",
+  all: "All",
 };
 
 export type StrengthChartData = {
@@ -49,7 +50,11 @@ export function buildStrengthChartData(
   // stacked segments stay index-aligned. (fillWeeklySeries' "all"/"ytd"
   // modes return only the weeks present in each series' own map, which
   // would give each routine a different-length array.)
-  const weeks = STRENGTH_RANGE_WEEKS[range];
+  const earliest = sessionStats.reduce((min, s) => Math.min(min, s.date.getTime()), now.getTime());
+  const weeks =
+    range === "all"
+      ? Math.max(12, Math.ceil((now.getTime() - earliest) / (7 * 24 * 60 * 60 * 1000)) + 1)
+      : STRENGTH_RANGE_WEEKS[range];
   const weekKeys: string[] = [];
   const cursor = getWeekBoundsSunday(now).start;
   for (let i = weeks - 1; i >= 0; i -= 1) {

@@ -83,6 +83,29 @@ export type StrengthSessionStat = {
   loadEstimated?: boolean;
 };
 
+export type StrengthTrendUnit = "lb" | "reps" | "sec";
+
+export type StrengthRoutineExerciseTrend = {
+  exerciseId: string;
+  name: string;
+  sessions: number;
+  unit: StrengthTrendUnit;
+  /** Oldest → newest, capped to the most recent 12 sessions in this routine. */
+  points: Array<{ date: Date; value: number; reps: number }>;
+};
+
+export type StrengthRoutineDetail = {
+  routineId: string;
+  name: string;
+  totalSessions: number;
+  totalSets: number;
+  totalVolume: number;
+  firstDate: Date | null;
+  lastDate: Date | null;
+  sessionsLast4Weeks: number;
+  exercises: StrengthRoutineExerciseTrend[];
+};
+
 export type StrengthWorldData = {
   totalSessions: number;
   totalSets: number;
@@ -98,6 +121,8 @@ export type StrengthWorldData = {
   /** Per-session set totals across the entire history — for accurate
    *  week-over-week aggregates without a slice cap. */
   sessionStats: StrengthSessionStat[];
+  /** Per-routine exercise trends, most recently trained routine first. */
+  routineDetails: StrengthRoutineDetail[];
 };
 
 // ── Loader ──────────────────────────────────────────────────────────────────
@@ -134,7 +159,7 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
         select: {
           exerciseId: true,
           exercise: { select: { id: true, name: true } },
-          sets: { select: { reps: true, weightLb: true } },
+          sets: { select: { reps: true, weightLb: true, seconds: true } },
         },
       },
     },
@@ -153,6 +178,10 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
   }>();
   const routineMap = new Map<string, StrengthRoutineSummary>();
   const recentSessionList: StrengthRecentSession[] = [];
+  const routineExercises = new Map<string, Map<string, {
+    name: string;
+    sessions: Array<{ date: Date; weight: number; weightReps: number; reps: number; seconds: number }>;
+  }>>();
 
   let totalSessions = 0;
   let totalSets = 0;
@@ -194,6 +223,25 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
       }
       entry.sessions.set(sessionKey, session);
       exerciseMap.set(exId, entry);
+
+      const best = { date: log.performedAt, weight: 0, weightReps: 0, reps: 0, seconds: 0 };
+      for (const set of ex.sets) {
+        const weight = set.weightLb ?? 0;
+        const reps = set.reps ?? 0;
+        if (weight > best.weight || (weight === best.weight && weight > 0 && reps > best.weightReps)) {
+          best.weight = weight;
+          best.weightReps = reps;
+        }
+        best.reps = Math.max(best.reps, reps);
+        best.seconds = Math.max(best.seconds, set.seconds ?? 0);
+      }
+      if (best.weight > 0 || best.reps > 0 || best.seconds > 0) {
+        const byExercise = routineExercises.get(log.routineId) ?? new Map();
+        const trend = byExercise.get(exId) ?? { name: ex.exercise.name, sessions: [] };
+        trend.sessions.push(best);
+        byExercise.set(exId, trend);
+        routineExercises.set(log.routineId, byExercise);
+      }
     }
 
     totalSets += logSets;
@@ -314,6 +362,42 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     .sort((a, b) => b.date.getTime() - a.date.getTime())
     .slice(0, 8);
 
+  const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+  const routineDetails: StrengthRoutineDetail[] = routines
+    .map((routine) => {
+      const dates = recentSessionList.filter((s) => s.routineId === routine.routineId).map((s) => s.date);
+      const exercises: StrengthRoutineExerciseTrend[] = [...(routineExercises.get(routine.routineId) ?? new Map()).entries()]
+        .map(([exerciseId, trend]) => {
+          const sessions = [...trend.sessions].sort((a, b) => a.date.getTime() - b.date.getTime());
+          const weighted = sessions.filter((x) => x.weight > 0).length;
+          const timed = sessions.filter((x) => x.seconds > 0).length;
+          const unit: StrengthTrendUnit = weighted * 2 >= sessions.length ? "lb" : timed * 2 >= sessions.length ? "sec" : "reps";
+          const points = sessions
+            .map((x) => ({
+              date: x.date,
+              value: unit === "lb" ? x.weight : unit === "sec" ? x.seconds : x.reps,
+              reps: unit === "lb" ? x.weightReps : 0,
+            }))
+            .filter((p) => p.value > 0)
+            .slice(-12);
+          return { exerciseId, name: trend.name as string, sessions: sessions.length, unit, points };
+        })
+        .filter((ex) => ex.points.length > 0)
+        .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
+      return {
+        routineId: routine.routineId,
+        name: routine.name,
+        totalSessions: routine.totalSessions,
+        totalSets: routine.totalSets,
+        totalVolume: routine.totalVolume,
+        firstDate: dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null,
+        lastDate: routine.lastDate,
+        sessionsLast4Weeks: dates.filter((d) => d >= fourWeeksAgo).length,
+        exercises,
+      };
+    })
+    .sort((a, b) => (b.lastDate?.getTime() ?? 0) - (a.lastDate?.getTime() ?? 0));
+
   // ── Heatmap: single-row strength sessions over the last 52 weeks ──────────
   const heatmapSessionEvents = strengthLogs.map((log) => ({
     id: log.id,
@@ -334,5 +418,6 @@ export const loadStrengthWorld = cache(async function loadStrengthWorld(): Promi
     recentSessions,
     allExercises,
     sessionStats,
+    routineDetails,
   };
 });

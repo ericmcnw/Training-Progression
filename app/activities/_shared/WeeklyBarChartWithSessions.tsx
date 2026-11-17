@@ -435,7 +435,7 @@ const panelHeaderStyle: CSSProperties = {
 };
 
 const panelEyebrowStyle: CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 900,
   letterSpacing: 0.7,
   textTransform: "uppercase",
@@ -566,7 +566,7 @@ const weekTotalRow: CSSProperties = {
 };
 
 const weekTotalLabel: CSSProperties = {
-  fontSize: 9.5,
+  fontSize: 11,
   fontWeight: 900,
   letterSpacing: 0.5,
   textTransform: "uppercase",
@@ -631,7 +631,7 @@ const toggleBtnActive: CSSProperties = {
 // Per-session load chip — orange to tie back to the load accent.
 const rowLoadBadge: CSSProperties = {
   flexShrink: 0,
-  fontSize: 10.5,
+  fontSize: 11,
   fontWeight: 900,
   padding: "2px 7px",
   borderRadius: 999,

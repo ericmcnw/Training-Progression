@@ -2,72 +2,85 @@
 
 import { useMemo, useState } from "react";
 
-// One session's aggregated metrics — produced server-side by
-// ExerciseDetailPage from the exercise's SessionExercise + SetEntry
-// rows.
 export type ExerciseSessionPoint = {
-  /** RoutineLog id — used to link out from a clicked tooltip. */
   logId: string;
   routineId: string;
   routineName: string;
   performedAt: Date;
   /** Heaviest weight × any reps in the session. 0 if none recorded. */
   topWeightLb: number;
-  /** Reps for the top-weight set (the heaviest single set). */
+  /** Reps for the top-weight set. */
   topWeightReps: number;
   /** Highest single-set rep count regardless of weight. */
   topReps: number;
-  /** Total sets in the session. */
   totalSets: number;
   /** Longest single-set seconds (for timed exercises). 0 if none. */
   maxTimeSec: number;
-  /** Total reps across all sets — useful for the "reps" line when the
-   *  user cares about volume-of-reps rather than top single-set reps. */
   totalReps: number;
 };
 
-type MetricKey = "weight" | "reps" | "sets" | "time";
-type ViewKey = "all" | MetricKey;
+type MetricKey = "weight" | "estMax" | "reps" | "sets" | "time";
 
-// Per-metric configuration: label, color, accessor, unit suffix, format.
+// Epley. A single is its own max; past ~12 reps the estimate drifts, but the
+// trend is still comparable session to session.
+function estimatedMax(p: ExerciseSessionPoint): number {
+  if (p.topWeightLb <= 0 || p.topWeightReps <= 0) return 0;
+  if (p.topWeightReps === 1) return p.topWeightLb;
+  return p.topWeightLb * (1 + p.topWeightReps / 30);
+}
+
 const METRIC_CONFIG: Record<MetricKey, {
   label: string;
   color: string;
-  unit: string;
+  hint: string;
   accessor: (p: ExerciseSessionPoint) => number;
   format: (v: number) => string;
 }> = {
   weight: {
-    label: "Weight",
+    label: "Top weight",
     color: "rgba(251,191,36,0.95)",
-    unit: "lb",
+    hint: "Heaviest set each session",
     accessor: (p) => p.topWeightLb,
+    format: (v) => `${Math.round(v)} lb`,
+  },
+  estMax: {
+    label: "Est. max",
+    color: "rgba(248,113,113,0.95)",
+    hint: "Estimated one-rep max from the heaviest set, so 5 heavy reps and 8 lighter reps compare",
+    accessor: estimatedMax,
     format: (v) => `${Math.round(v)} lb`,
   },
   reps: {
     label: "Reps",
     color: "rgba(132,204,255,0.95)",
-    unit: "reps",
-    // Top single-set reps reads more like "best rep effort"; total reps
-    // would conflate volume with effort. Default to single-set max.
+    hint: "Most reps in one set each session",
     accessor: (p) => p.topReps,
     format: (v) => `${Math.round(v)} reps`,
   },
   sets: {
     label: "Sets",
     color: "rgba(84,203,130,0.95)",
-    unit: "sets",
+    hint: "Sets done each session",
     accessor: (p) => p.totalSets,
     format: (v) => `${Math.round(v)} sets`,
   },
   time: {
     label: "Time",
     color: "rgba(192,132,252,0.95)",
-    unit: "sec",
+    hint: "Longest hold each session",
     accessor: (p) => p.maxTimeSec,
     format: (v) => `${Math.round(v)}s`,
   },
 };
+
+const W = 360;
+const H = 210;
+const PAD_LEFT = 40;
+const PAD_RIGHT = 10;
+const PAD_TOP = 14;
+const PAD_BOTTOM = 30;
+const PLOT_W = W - PAD_LEFT - PAD_RIGHT;
+const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 
 export default function ExerciseMetricChart({
   sessions,
@@ -78,116 +91,66 @@ export default function ExerciseMetricChart({
   supportsWeight: boolean;
   isTimeBased: boolean;
 }) {
-  // Filter the available metric set down based on the exercise's
-  // capabilities. Weight only shows for weighted exercises; time only
-  // for timed (unit=TIME). Sets + reps always available.
-  const availableMetrics = useMemo<MetricKey[]>(() => {
-    const m: MetricKey[] = ["sets"];
-    if (!isTimeBased) m.push("reps");
-    if (supportsWeight) m.push("weight");
-    if (isTimeBased) m.push("time");
-    return m;
-  }, [supportsWeight, isTimeBased]);
-
-  const [view, setView] = useState<ViewKey>("all");
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
-  const activeIdx = hoverIdx ?? pinnedIdx;
-
-  // Sort sessions oldest → newest for chart rendering. Chart x position
-  // is the index in this sorted list (evenly spaced — no calendar
-  // scale, so sparse periods don't open big gaps).
   const sortedSessions = useMemo(
     () => [...sessions].sort((a, b) => a.performedAt.getTime() - b.performedAt.getTime()),
     [sessions]
   );
 
+  const hasWeight = supportsWeight && sortedSessions.some((s) => s.topWeightLb > 0);
+
+  // Ordered by what "progress" means for this exercise; the first is the default.
+  const availableMetrics = useMemo<MetricKey[]>(() => {
+    if (isTimeBased) return hasWeight ? ["time", "weight", "sets"] : ["time", "sets"];
+    if (hasWeight) return ["weight", "estMax", "reps", "sets"];
+    return ["reps", "sets"];
+  }, [hasWeight, isTimeBased]);
+
+  const [picked, setPicked] = useState<MetricKey | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
+  const activeIdx = hoverIdx ?? pinnedIdx;
+  const metric = picked && availableMetrics.includes(picked) ? picked : availableMetrics[0];
+  const config = METRIC_CONFIG[metric];
+
   if (sortedSessions.length === 0) {
-    return (
-      <div style={emptyStyle}>
-        No logged sessions for this exercise yet.
-      </div>
-    );
+    return <div style={emptyStyle}>No logged sessions for this exercise yet.</div>;
   }
 
-  // Chart dimensions. Aspect ratio chosen to read well on both mobile
-  // (~360 wide) and desktop. SVG renders responsively via width="100%"
-  // with default xMidYMid meet (uniform scaling) — preserveAspectRatio
-  // was previously "none" which stretched text + dots horizontally on
-  // mobile, making the chart look distorted.
-  const W = 360;
-  const H = 200;
-  const PAD_LEFT = view === "all" ? 8 : 36;
-  const PAD_RIGHT = 8;
-  const PAD_TOP = 12;
-  const PAD_BOTTOM = 28;
-  const plotW = W - PAD_LEFT - PAD_RIGHT;
-  const plotH = H - PAD_TOP - PAD_BOTTOM;
-
+  const values = sortedSessions.map(config.accessor);
+  const positive = values.filter((v) => v > 0);
   const lastIdx = sortedSessions.length - 1;
-  const xOf = (i: number) => PAD_LEFT + (lastIdx === 0 ? plotW / 2 : (i / lastIdx) * plotW);
+  const xOf = (i: number) => PAD_LEFT + (lastIdx === 0 ? PLOT_W / 2 : (i / lastIdx) * PLOT_W);
 
-  // Build per-metric (min, max, normalized + actual values) maps.
-  // In "all" view each line is normalized to its own 0..1 (over the
-  // plot's vertical range) so all the trends fit on one canvas. In
-  // single-metric view, that one metric gets the actual axis.
-  type Series = { key: MetricKey; min: number; max: number; values: number[] };
-  const series: Series[] = availableMetrics.map((key) => {
-    const values = sortedSessions.map(METRIC_CONFIG[key].accessor);
-    const positive = values.filter((v) => v > 0);
-    const min = positive.length > 0 ? Math.min(...positive) : 0;
-    const max = positive.length > 0 ? Math.max(...positive) : 1;
-    return { key, min, max, values };
-  });
+  // The axis hugs the data (it does not start at zero) so a 100 → 115 lb
+  // climb reads as a climb instead of a flat line near the top.
+  const dataMin = positive.length > 0 ? Math.min(...positive) : 0;
+  const dataMax = positive.length > 0 ? Math.max(...positive) : 1;
+  const step = niceStep(Math.max(dataMax - dataMin, dataMax * 0.1, 1) / 3);
+  const axisMin = Math.max(0, Math.floor((dataMin - step * 0.5) / step) * step);
+  const axisMax = Math.max(axisMin + step, Math.ceil((dataMax + step * 0.25) / step) * step);
+  const yOf = (v: number) => PAD_TOP + PLOT_H - ((v - axisMin) / (axisMax - axisMin)) * PLOT_H;
+  const ticks: number[] = [];
+  for (let v = axisMin; v <= axisMax + step * 0.01; v += step) ticks.push(v);
 
-  const singleSeries = view !== "all" ? series.find((s) => s.key === view) ?? null : null;
+  const points = values
+    .map((v, i) => ({ v, i }))
+    .filter((p) => p.v > 0);
+  const path = points.map((p, n) => `${n === 0 ? "M" : "L"} ${xOf(p.i).toFixed(1)} ${yOf(p.v).toFixed(1)}`).join(" ");
 
-  function yAll(key: MetricKey, val: number): number {
-    const s = series.find((sr) => sr.key === key);
-    if (!s) return PAD_TOP + plotH;
-    if (s.max === s.min) return PAD_TOP + plotH * 0.5;
-    // Zero values pin to the baseline so they're visually distinct
-    // (the only time a line should touch the x axis).
-    if (val <= 0) return PAD_TOP + plotH;
-    // Normalize within a [0.15, 0.9] vertical band of the plot so the
-    // min real value sits comfortably above the x-axis (was bottoming
-    // out at the axis, which read as "zero" even when it wasn't). Top
-    // headroom keeps the max from kissing the chart frame.
-    const norm = (val - s.min) / (s.max - s.min);
-    const Y_BOTTOM = 0.15;
-    const Y_TOP = 0.90;
-    const banded = Y_BOTTOM + norm * (Y_TOP - Y_BOTTOM);
-    return PAD_TOP + plotH - banded * plotH;
-  }
-  function ySingle(s: Series, val: number): number {
-    if (s.max === 0) return PAD_TOP + plotH;
-    const yMaxAxis = niceAxisMax(s.max);
-    const norm = val / yMaxAxis;
-    return PAD_TOP + plotH - norm * plotH;
+  // A point is a best when it beats everything before it.
+  const bestIdx = new Set<number>();
+  let running = 0;
+  for (const p of points) {
+    if (p.v > running) {
+      if (running > 0) bestIdx.add(p.i);
+      running = p.v;
+    }
   }
 
-  // Build the polylines per metric.
-  function makePath(s: Series, view: ViewKey): string {
-    return s.values
-      .map((v, i) => {
-        const x = xOf(i);
-        const y = view === "all" ? yAll(s.key, v) : ySingle(s, v);
-        return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }
+  const first = points[0];
+  const latest = points[points.length - 1];
+  const change = first && latest && first.i !== latest.i ? latest.v - first.v : null;
 
-  // Y-axis ticks for single-metric view.
-  const yTicks: Array<{ value: number; y: number }> = [];
-  if (singleSeries) {
-    const yMax = niceAxisMax(singleSeries.max);
-    [0, yMax / 2, yMax].forEach((v) => {
-      yTicks.push({ value: v, y: PAD_TOP + plotH - (v / Math.max(1, yMax)) * plotH });
-    });
-  }
-
-  // X labels: show first, middle, last session date when there's > 4
-  // sessions; otherwise label each.
   const xLabels: Array<{ i: number; label: string }> = [];
   if (sortedSessions.length <= 4) {
     sortedSessions.forEach((s, i) => xLabels.push({ i, label: shortDate(s.performedAt) }));
@@ -204,215 +167,125 @@ export default function ExerciseMetricChart({
 
   return (
     <div style={shellStyle}>
-      {/* Filter pills */}
       <div style={pillRowStyle}>
-        <FilterPill label="All" active={view === "all"} onClick={() => setView("all")} />
         {availableMetrics.map((key) => (
           <FilterPill
             key={key}
             label={METRIC_CONFIG[key].label}
             color={METRIC_CONFIG[key].color}
-            active={view === key}
-            onClick={() => setView(key)}
+            active={metric === key}
+            onClick={() => {
+              setPicked(key);
+              setPinnedIdx(null);
+            }}
           />
         ))}
-        {view === "all" ? (
-          <span style={hintTextStyle}>Trend overlay · units hidden</span>
+      </div>
+
+      <div style={takeawayStyle}>
+        {latest ? (
+          <>
+            <span style={{ fontSize: 20, fontWeight: 900, color: config.color }}>{config.format(latest.v)}</span>
+            <span style={takeawayMeta}>
+              latest · best {config.format(dataMax)}
+              {change !== null && first
+                ? ` · ${change > 0 ? "+" : change < 0 ? "−" : "±"}${config.format(Math.abs(change))} since ${shortDate(sortedSessions[first.i].performedAt)}`
+                : ""}
+            </span>
+          </>
         ) : (
-          <span style={hintTextStyle}>{METRIC_CONFIG[view as MetricKey].unit}</span>
+          <span style={takeawayMeta}>Nothing logged for this measure yet.</span>
         )}
       </div>
 
-      {/* Chart — SVG is the visual layer only. HTML <button> overlay
-          below handles all click/hover so iOS doesn't double-tap-zoom
-          (the issue the DomainSparklines pattern avoids). Wrapper
-          uses aspect-ratio so the SVG fills proportionally — no
-          letterboxing that would break the overlay's alignment. */}
+      {points.length === 1 ? (
+        <div style={{ fontSize: 12, opacity: 0.6 }}>One session so far. Log it again to see a trend.</div>
+      ) : null}
+
+      {/* SVG is the visual layer only; the HTML buttons over it take taps so
+          iOS doesn't double-tap-zoom. */}
       <div style={{ position: "relative", aspectRatio: `${W} / ${H}`, touchAction: "manipulation" }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        height="100%"
-        style={{
-          display: "block",
-          overflow: "visible",
-          touchAction: "manipulation",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-        }}
-      >
-        {/* Baseline */}
-        <line x1={PAD_LEFT} y1={PAD_TOP + plotH} x2={W - PAD_RIGHT} y2={PAD_TOP + plotH} stroke="rgba(255,255,255,0.14)" />
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          width="100%"
+          height="100%"
+          style={{ display: "block", overflow: "visible", touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none" }}
+        >
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={PAD_LEFT} y1={yOf(t)} x2={W - PAD_RIGHT} y2={yOf(t)} stroke="rgba(255,255,255,0.07)" />
+              <text x={PAD_LEFT - 6} y={yOf(t) + 4} fontSize="11" textAnchor="end" fill="rgba(255,255,255,0.55)" fontWeight="700">
+                {formatTick(t)}
+              </text>
+            </g>
+          ))}
 
-        {/* Y axis ticks (single mode only) */}
-        {singleSeries
-          ? yTicks.map((t, i) => (
-              <g key={i}>
-                <line
-                  x1={PAD_LEFT}
-                  y1={t.y}
-                  x2={W - PAD_RIGHT}
-                  y2={t.y}
-                  stroke="rgba(255,255,255,0.04)"
-                  strokeDasharray="2 6"
-                />
-                <text
-                  x={PAD_LEFT - 6}
-                  y={t.y + 3}
-                  fontSize="9"
-                  textAnchor="end"
-                  fill="rgba(255,255,255,0.45)"
-                  fontWeight="800"
-                >
-                  {Math.round(t.value)}
-                </text>
-              </g>
-            ))
-          : null}
+          {path ? (
+            <path d={path} stroke={config.color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          ) : null}
+          {points.map((p) => (
+            <g key={p.i}>
+              {bestIdx.has(p.i) ? (
+                <circle cx={xOf(p.i)} cy={yOf(p.v)} r="6.5" fill="none" stroke={config.color} strokeWidth="1.2" opacity="0.6" />
+              ) : null}
+              <circle cx={xOf(p.i)} cy={yOf(p.v)} r={activeIdx === p.i ? 4.5 : 3} fill={config.color} />
+            </g>
+          ))}
 
-        {/* Series lines */}
-        {view === "all"
-          ? series.map((s) => {
-              const path = makePath(s, "all");
-              return (
-                <path
-                  key={s.key}
-                  d={path}
-                  stroke={METRIC_CONFIG[s.key].color}
-                  strokeWidth="1.5"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  opacity={0.85}
-                />
-              );
-            })
-          : singleSeries
-          ? (() => {
-              const c = METRIC_CONFIG[singleSeries.key].color;
-              const path = makePath(singleSeries, view);
-              const areaPath = `${path} L ${xOf(lastIdx).toFixed(1)} ${(PAD_TOP + plotH).toFixed(1)} L ${xOf(0).toFixed(1)} ${(PAD_TOP + plotH).toFixed(1)} Z`;
-              return (
-                <g>
-                  <path d={areaPath} fill={c.replace("0.95)", "0.10)")} stroke="none" />
-                  <path
-                    d={path}
-                    stroke={c}
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  {/* Points dots */}
-                  {singleSeries.values.map((v, i) => {
-                    if (v <= 0) return null;
-                    return (
-                      <circle
-                        key={i}
-                        cx={xOf(i)}
-                        cy={ySingle(singleSeries, v)}
-                        r={activeIdx === i ? 4 : 2.5}
-                        fill={c}
-                      />
-                    );
-                  })}
-                </g>
-              );
-            })()
-          : null}
+          {activeIdx !== null ? (
+            <line x1={xOf(activeIdx)} y1={PAD_TOP} x2={xOf(activeIdx)} y2={PAD_TOP + PLOT_H} stroke="rgba(255,255,255,0.22)" strokeWidth="1" strokeDasharray="3 5" />
+          ) : null}
 
-        {/* Crosshair on active index */}
-        {activeIdx !== null ? (
-          <line
-            x1={xOf(activeIdx)}
-            y1={PAD_TOP}
-            x2={xOf(activeIdx)}
-            y2={PAD_TOP + plotH}
-            stroke="rgba(255,255,255,0.18)"
-            strokeWidth="1"
-            strokeDasharray="3 5"
-          />
-        ) : null}
+          {xLabels.map(({ i, label }) => (
+            <text
+              key={i}
+              x={xOf(i)}
+              y={H - 9}
+              fontSize="11"
+              textAnchor={i === 0 && lastIdx > 0 ? "start" : i === lastIdx && lastIdx > 0 ? "end" : "middle"}
+              fill="rgba(255,255,255,0.55)"
+              fontWeight="700"
+            >
+              {label}
+            </text>
+          ))}
+        </svg>
 
-        {/* Active-point dots in 'all' mode */}
-        {view === "all" && activeIdx !== null
-          ? series.map((s) => {
-              const v = s.values[activeIdx];
-              if (v <= 0) return null;
-              return (
-                <circle
-                  key={s.key}
-                  cx={xOf(activeIdx)}
-                  cy={yAll(s.key, v)}
-                  r="3.5"
-                  fill={METRIC_CONFIG[s.key].color}
-                />
-              );
-            })
-          : null}
-
-        {/* X labels */}
-        {xLabels.map(({ i, label }) => (
-          <text
-            key={i}
-            x={xOf(i)}
-            y={H - 10}
-            fontSize="9"
-            textAnchor="middle"
-            fill="rgba(255,255,255,0.45)"
-            fontWeight="700"
-          >
-            {label}
-          </text>
-        ))}
-
-        {/* SVG hit rects removed — replaced by the HTML <button>
-            overlay below the </svg>. Native buttons don't trigger
-            iOS double-tap-zoom the way SVG rects do. */}
-      </svg>
-
-      {/* HTML <button> overlay — one button per session, evenly
-          distributed across the plot area. Buttons handle click +
-          hover (mouse / touch) so the chart's SVG never has to
-          receive interactive events. */}
-      <div
-        style={{
-          position: "absolute",
-          top: `${(PAD_TOP / H) * 100}%`,
-          bottom: `${(PAD_BOTTOM / H) * 100}%`,
-          left: `${(PAD_LEFT / W) * 100}%`,
-          right: `${(PAD_RIGHT / W) * 100}%`,
-          display: "flex",
-          gap: 0,
-        }}
-        onPointerLeave={() => setHoverIdx(null)}
-      >
-        {sortedSessions.map((s, i) => (
-          <button
-            key={s.logId}
-            type="button"
-            aria-label={`Session ${i + 1} of ${sortedSessions.length}`}
-            aria-pressed={pinnedIdx === i}
-            onPointerEnter={() => setHoverIdx(i)}
-            onClick={(e) => {
-              e.stopPropagation();
-              setPinnedIdx((p) => (p === i ? null : i));
-            }}
-            style={hitBtnStyle}
-          />
-        ))}
-      </div>
+        <div
+          style={{
+            position: "absolute",
+            top: `${(PAD_TOP / H) * 100}%`,
+            bottom: `${(PAD_BOTTOM / H) * 100}%`,
+            left: `${(PAD_LEFT / W) * 100}%`,
+            right: `${(PAD_RIGHT / W) * 100}%`,
+            display: "flex",
+          }}
+          onPointerLeave={() => setHoverIdx(null)}
+        >
+          {sortedSessions.map((s, i) => (
+            <button
+              key={s.logId}
+              type="button"
+              className="pyramidCell"
+              aria-label={`${shortDate(s.performedAt)}: ${config.format(values[i])}`}
+              aria-pressed={pinnedIdx === i}
+              onPointerEnter={() => setHoverIdx(i)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPinnedIdx((p) => (p === i ? null : i));
+              }}
+              style={hitBtnStyle}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Tooltip / detail row beneath the chart */}
       <div style={tooltipRowStyle}>
         {activePoint ? (
-          <ActiveSessionDetail point={activePoint} availableMetrics={availableMetrics} pinned={pinnedIdx === activeIdx} />
+          <ActiveSessionDetail point={activePoint} availableMetrics={availableMetrics} isBest={activeIdx !== null && bestIdx.has(activeIdx)} />
         ) : (
           <span style={hintTextStyle}>
-            {sortedSessions.length} session{sortedSessions.length === 1 ? "" : "s"} · hover a point to see detail
+            {config.hint}. Tap a point for that session{bestIdx.size > 0 ? "; ringed points were a new best" : ""}.
           </span>
         )}
       </div>
@@ -420,35 +293,24 @@ export default function ExerciseMetricChart({
   );
 }
 
-// ─── Filter pill ─────────────────────────────────────────────────────────────
-
-function FilterPill({
-  label,
-  active,
-  color,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  color?: string;
-  onClick: () => void;
-}) {
+function FilterPill({ label, active, color, onClick }: { label: string; active: boolean; color: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       style={{
-        padding: "5px 11px",
+        padding: "7px 13px",
         borderRadius: 999,
         borderWidth: 1,
         borderStyle: "solid",
-        borderColor: active && color ? color.replace("0.95)", "0.5)") : active ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.12)",
-        background: active && color ? color.replace("0.95)", "0.12)") : active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
-        color: active && color ? color : "inherit",
-        fontSize: 11,
+        borderColor: active ? color.replace("0.95)", "0.5)") : "rgba(255,255,255,0.12)",
+        background: active ? color.replace("0.95)", "0.12)") : "rgba(255,255,255,0.03)",
+        color: active ? color : "inherit",
+        fontSize: 12,
         fontWeight: 800,
         cursor: "pointer",
-        minHeight: 30,
+        minHeight: 36,
       }}
     >
       {label}
@@ -456,34 +318,33 @@ function FilterPill({
   );
 }
 
-// ─── Active session detail line (below chart) ────────────────────────────────
-
 function ActiveSessionDetail({
   point,
   availableMetrics,
-  pinned,
+  isBest,
 }: {
   point: ExerciseSessionPoint;
   availableMetrics: MetricKey[];
-  pinned: boolean;
+  isBest: boolean;
 }) {
   return (
-    <div style={{ display: "grid", gap: 2, fontSize: 12 }}>
+    <div style={{ display: "grid", gap: 3, fontSize: 12 }}>
       <div style={{ fontWeight: 800, opacity: 0.85 }}>
         {shortDate(point.performedAt)} · {point.routineName}
-        {pinned ? <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.55, fontWeight: 800 }}>PINNED · tap chart to unpin</span> : null}
+        {isBest ? <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 900, color: "rgba(134,239,172,0.95)" }}>New best</span> : null}
       </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", opacity: 0.88 }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", opacity: 0.9 }}>
         {availableMetrics.map((key) => {
           const value = METRIC_CONFIG[key].accessor(point);
           if (value <= 0) return null;
           return (
-            <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: METRIC_CONFIG[key].color, display: "inline-block" }} />
-              <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                {METRIC_CONFIG[key].label}
+              <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 800 }}>{METRIC_CONFIG[key].label}</span>
+              <span style={{ fontWeight: 800 }}>
+                {METRIC_CONFIG[key].format(value)}
+                {key === "weight" && point.topWeightReps > 0 ? ` × ${point.topWeightReps}` : ""}
               </span>
-              <span style={{ fontWeight: 800 }}>{METRIC_CONFIG[key].format(value)}</span>
             </span>
           );
         })}
@@ -492,37 +353,31 @@ function ActiveSessionDetail({
   );
 }
 
-// ─── Formatters / helpers ────────────────────────────────────────────────────
-
 function shortDate(d: Date): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
 }
 
-function niceAxisMax(value: number): number {
-  if (value <= 0) return 1;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-  const normalized = value / magnitude;
-  if (normalized <= 1) return magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 2.5) return 2.5 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
-  if (normalized <= 7.5) return 7.5 * magnitude;
-  return 10 * magnitude;
+function formatTick(v: number): string {
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+function niceStep(raw: number): number {
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 0.0001))));
+  const n = raw / magnitude;
+  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  return Math.max(nice * magnitude, 1);
+}
 
-// Transparent HTML <button> used as the click/hover target per
-// session point. Native button element so iOS treats it as a proper
-// interactive surface (no double-tap-zoom delay).
 const hitBtnStyle: React.CSSProperties = {
   flex: 1,
   appearance: "none",
   WebkitAppearance: "none",
   padding: 0,
   margin: 0,
+  minHeight: 0,
   background: "transparent",
   border: "none",
+  borderRadius: 0,
   color: "inherit",
   font: "inherit",
   cursor: "pointer",
@@ -538,33 +393,22 @@ const shellStyle: React.CSSProperties = {
   borderStyle: "solid",
   borderColor: "rgba(255,255,255,0.08)",
   background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
-  // Belt-and-suspenders for iOS — block double-tap zoom + text
-  // selection at the container level too, in case the SVG-level
-  // touch-action doesn't cascade.
   touchAction: "manipulation",
   userSelect: "none",
   WebkitUserSelect: "none",
 };
 
-const pillRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  alignItems: "center",
-  flexWrap: "wrap",
-};
+const pillRowStyle: React.CSSProperties = { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" };
 
-const hintTextStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  opacity: 0.5,
-  marginLeft: "auto",
-};
+const takeawayStyle: React.CSSProperties = { display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" };
+
+const takeawayMeta: React.CSSProperties = { fontSize: 12, fontWeight: 700, opacity: 0.65 };
+
+const hintTextStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, opacity: 0.55, lineHeight: 1.4 };
 
 const tooltipRowStyle: React.CSSProperties = {
-  minHeight: 38,
-  paddingTop: 4,
+  minHeight: 40,
+  paddingTop: 6,
   borderTopWidth: 1,
   borderTopStyle: "solid",
   borderTopColor: "rgba(255,255,255,0.06)",

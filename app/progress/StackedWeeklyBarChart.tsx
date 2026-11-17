@@ -135,12 +135,29 @@ export default function StackedWeeklyBarChart({
   // Thin out week labels when there's no room — show every Nth label
   // and the last one, always. With ~24px per bar slot, labels like
   // "3/15-3/21" are too wide to show under every bar.
-  const labelStride = weekLabels.length > 10 ? 3 : weekLabels.length > 6 ? 2 : 1;
+  const labelStride =
+    weekLabels.length > 16 ? Math.ceil(weekLabels.length / 5) : weekLabels.length > 10 ? 3 : weekLabels.length > 6 ? 2 : 1;
+
+  // The in-progress week is left out of the comparison so a Monday doesn't
+  // read as a collapse.
+  const n = weekTotals.length;
+  const weeksWithData = weekTotals.filter((v) => v > 0).length;
+  let takeaway: string | null = null;
+  if (weeksWithData < 3) {
+    takeaway = "A trend shows up here after about three weeks of logs.";
+  } else if (n >= 9) {
+    const recent = weekTotals.slice(n - 5, n - 1).reduce((a, b) => a + b, 0) / 4;
+    const prior = weekTotals.slice(n - 9, n - 5).reduce((a, b) => a + b, 0) / 4;
+    const per = (v: number) => `${v.toFixed(v >= 100 ? 0 : 1)}${unit ? ` ${unit}` : ""} a week`;
+    const shift = prior === 0 ? (recent > 0 ? "up from nothing" : null) : Math.abs(recent - prior) / prior < 0.08 ? "about the same as" : recent > prior ? "up from" : "down from";
+    takeaway = shift === null ? null : `Last 4 full weeks: ${per(recent)}, ${shift}${shift === "up from nothing" ? "" : ` ${per(prior)}`} the 4 before.`;
+  }
 
   return (
     <div style={chartShell}>
       <div style={headerStack}>
         <div style={titleStyle}>{title}</div>
+        {takeaway ? <div style={takeawayStyle}>{takeaway}</div> : null}
         <div style={chipRow}>
           <Chip label="Total" value={fmtValue(totalAll, decimals, unit)} />
           <Chip label="Best wk" value={fmtValue(bestWeek, decimals, unit)} />
@@ -313,6 +330,8 @@ const titleStyle: CSSProperties = {
   textOverflow: "ellipsis",
 };
 
+const takeawayStyle: CSSProperties = { fontSize: 13, fontWeight: 700, opacity: 0.8, lineHeight: 1.4 };
+
 const chipRow: CSSProperties = {
   display: "flex",
   gap: 6,
@@ -336,7 +355,7 @@ const chipLabel: CSSProperties = {
   opacity: 0.48,
   fontWeight: 800,
   textTransform: "uppercase",
-  fontSize: 9,
+  fontSize: 11,
   letterSpacing: 0.5,
 };
 
@@ -370,7 +389,7 @@ const yAxis: CSSProperties = {
 };
 
 const yAxisTick: CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 800,
   color: "rgba(255,255,255,0.5)",
   lineHeight: 1,
@@ -431,7 +450,7 @@ const xAxisLabelSlot: CSSProperties = {
 };
 
 const xAxisLabelText: CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
   color: "rgba(255,255,255,0.55)",
@@ -476,7 +495,7 @@ const legendSwatch: CSSProperties = {
 const legendLabel: CSSProperties = { opacity: 0.7, fontWeight: 800 };
 const legendCount: CSSProperties = { opacity: 0.45, fontWeight: 800, fontVariantNumeric: "tabular-nums" };
 const segLabel: CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 900,
   lineHeight: 1,
   color: "rgba(10,12,16,0.82)",

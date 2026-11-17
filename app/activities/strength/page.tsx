@@ -20,6 +20,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import { NewRoutineDrawerButton } from "@/app/components/FormDrawerButtons";
 import QuickLogDrawerButton from "@/app/routines/QuickLogDrawerButton";
 import StrengthSearch from "./StrengthSearch";
+import RoutineExplorer from "./RoutineExplorer";
 import { domainRgb } from "@/lib/routines";
 import { getCoverageOverviewModel, type CoverageLens, type CoverageRange, type CoverageOverviewModel } from "@/app/progress/coverage";
 import CoverageGroupedBarChart from "@/app/progress/CoverageGroupedBarChart";
@@ -51,16 +52,11 @@ const strengthCtaStyle: React.CSSProperties = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatNumber(n: number) {
-  if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
-  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
-  return n.toLocaleString("en-US");
-}
-
 const CHART_RANGE_TITLE: Record<StrengthChartRange, string> = {
   "12w": "Last 12 Weeks",
   "26w": "Last 6 Months",
   "52w": "Last Year",
+  all: "All Time",
 };
 
 function buildStrengthHref(
@@ -126,7 +122,7 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
   const coverageRange: CoverageRange = COVERAGE_RANGES.includes(rawRange as CoverageRange) ? rawRange as CoverageRange : "4w";
   const rawChart = Array.isArray(searchParams.chart) ? searchParams.chart[0] : searchParams.chart;
   const chartRange: StrengthChartRange =
-    rawChart === "26w" || rawChart === "52w" ? rawChart : "12w";
+    rawChart === "26w" || rawChart === "52w" || rawChart === "all" ? rawChart : "12w";
   const [strength, strengthGoals, coverage] = await Promise.all([
     loadStrengthWorld(),
     getStrengthGoals(),
@@ -233,13 +229,12 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
         {/* Pulse strip */}
         <ActivityPulseStrip slots={pulseSlots} />
 
-        {/* Interactive 12w sessions + volume charts. Both fall back to
-            being hidden when there's no strength data yet — the
-            EmptyState branch above already handles that case. */}
+        <RoutineExplorer routines={strength.routineDetails} accentRgb={STRENGTH_RGB} />
+
         {hasChartData ? (
           <>
             <div style={chartRangeRow}>
-              {(["12w", "26w", "52w"] as const).map((r) => (
+              {(["12w", "26w", "52w", "all"] as const).map((r) => (
                 <Link
                   key={r}
                   href={buildStrengthHref(searchParams, { chart: r === "12w" ? undefined : r })}
@@ -270,26 +265,19 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
           </>
         ) : null}
 
-        {/* Active goals */}
-        <ActivityGoalsSection
-          goals={strengthGoals}
-          activitySlug="strength"
-          activityLabel="Strength"
-          collapsible
-        />
+        {strength.topExercises.length > 0 ? (
+          <SectionCard
+            title="Most done exercises"
+            subtitle="The lifts you log most, with your top set and recent trend. Tap one for its full chart."
+          >
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+              {strength.topExercises.slice(0, 6).map((ex) => (
+                <ExerciseCard key={ex.exerciseId} exercise={ex} />
+              ))}
+            </div>
+          </SectionCard>
+        ) : null}
 
-        <StrengthCoverage
-          overview={coverage}
-          lens={coverageLens}
-          range={coverageRange}
-        />
-
-        {/* Top exercises — with an inline finder so ANY lift's progression
-            (not just the top-8) is reachable without leaving for /exercises.
-            Rehab lifts rarely crack the top-8 by session count. */}
-        {/* Search leads: it reaches all logged exercises, not just the top
-            eight below it. Buried inside the Top Exercises card it read as
-            if it only searched those. */}
         <SectionCard
           title="Find an exercise"
           subtitle={`Search any of your ${strength.allExercises.length} logged exercises or ${strength.routines.length} routines — jump straight to its progression.`}
@@ -316,32 +304,19 @@ export default async function StrengthWorldPage({ searchParams: searchParamsProm
           />
         </SectionCard>
 
-        {strength.topExercises.length > 0 ? (
-          <SectionCard
-            title="Top Exercises"
-            subtitle="Your most-trained lifts, with all-time top weight and recent progression."
-          >
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-              {strength.topExercises.slice(0, 8).map((ex) => (
-                <ExerciseCard key={ex.exerciseId} exercise={ex} />
-              ))}
-            </div>
-          </SectionCard>
-        ) : null}
+        {/* Active goals */}
+        <ActivityGoalsSection
+          goals={strengthGoals}
+          activitySlug="strength"
+          activityLabel="Strength"
+          collapsible
+        />
 
-        {/* Strength routines */}
-        {strength.routines.length > 0 ? (
-          <SectionCard
-            title="Strength Routines"
-            subtitle="Click a routine to dive into per-exercise progression and recent sessions."
-          >
-            <div style={{ display: "grid", gap: 8 }}>
-              {strength.routines.map((r) => (
-                <RoutineRow key={r.routineId} routine={r} />
-              ))}
-            </div>
-          </SectionCard>
-        ) : null}
+        <StrengthCoverage
+          overview={coverage}
+          lens={coverageLens}
+          range={coverageRange}
+        />
 
         {/* Recent sessions */}
         {strength.recentSessions.length > 0 ? (
@@ -513,37 +488,6 @@ function Sparkline({
       <path d={path} stroke={`rgba(${STRENGTH_RGB},0.85)`} strokeWidth={1.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={lastX} cy={lastY} r={2.4} fill={`rgba(${STRENGTH_RGB},1)`} />
     </svg>
-  );
-}
-
-function RoutineRow({ routine }: { routine: import("@/app/progress/details/strength-world-loader").StrengthRoutineSummary }) {
-  return (
-    <Link
-      href={`/routines/${routine.routineId}`}
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 12,
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: "1px solid rgba(255,255,255,0.07)",
-        background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
-        textDecoration: "none",
-        color: "inherit",
-        transition: "border-color 120ms ease",
-      }}
-    >
-      <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
-        <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2 }}>{routine.name}</span>
-        <span style={{ fontSize: 11, opacity: 0.6, fontWeight: 700 }}>
-          {routine.totalSessions} session{routine.totalSessions !== 1 ? "s" : ""} · {routine.totalSets} sets · {formatNumber(Math.round(routine.totalVolume))} lb volume
-        </span>
-      </div>
-      <span style={{ fontSize: 11, opacity: 0.55, fontWeight: 700, whiteSpace: "nowrap" }}>
-        {routine.lastDate ? `Last ${formatAppDate(routine.lastDate, { month: "short", day: "numeric" })}` : "—"}
-      </span>
-    </Link>
   );
 }
 
