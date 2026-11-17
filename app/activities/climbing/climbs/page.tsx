@@ -13,6 +13,7 @@ import ClimbsBrowser, {
   type BrowserAttempt,
   type ClimbsBrowserInitial,
 } from "./ClimbsBrowser";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -137,13 +138,7 @@ const pageStyle: React.CSSProperties = {
   gap: 16,
 };
 
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-};
+const backLinkStyle: React.CSSProperties = sharedBackLink;
 
 const eyebrowStyle: React.CSSProperties = {
   fontSize: 11,

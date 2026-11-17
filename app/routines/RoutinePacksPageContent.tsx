@@ -79,7 +79,7 @@ export default async function RoutinePacksPageContent() {
   );
 }
 
-const container: CSSProperties = { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 };
+const container: CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 4, display: "grid", gap: 18 };
 const topRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 };
 const sub: CSSProperties = { marginTop: 6, opacity: 0.75, fontSize: 13, lineHeight: 1.45, maxWidth: 560 };
 const backLink: CSSProperties = {

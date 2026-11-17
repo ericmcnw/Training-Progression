@@ -34,7 +34,7 @@ function getParam(params: SearchParams, key: string) {
 }
 
 const styles = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  container: { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 4, display: "grid", gap: 18 },
   topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" as const },
   subText: { marginTop: 6, opacity: 0.75, fontSize: 13 },
   primaryLink: {

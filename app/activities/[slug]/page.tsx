@@ -365,7 +365,6 @@ export default async function SportWorldPage(props: {
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/log" style={quickLinkStyle}>Log a session →</Link>
-        <Link href="/activities" style={quickLinkStyle}>Back to Activities</Link>
       </div>
     </div>
   );

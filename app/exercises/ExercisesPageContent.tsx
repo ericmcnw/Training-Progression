@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { canEditExercise } from "@/lib/profile-scope";
 import { createExercise } from "./actions";
 import ExerciseForm from "./ExerciseForm";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -101,16 +102,11 @@ export default async function ExercisesPage({
 
   return (
     <div className="mobileExercisesPage mobilePageShell" style={styles.container}>
+      <Link href="/log" style={sharedBackLink}>← Log</Link>
       <div className="mobileExercisesTopRow mobilePageHeader" style={styles.topRow}>
         <div>
-          <h1 className="mobilePageTitle" style={styles.h1}>Exercises</h1>
+          <h1 className="mobilePageTitle" style={styles.h1}>Exercise library</h1>
           <div className="mobilePageSubtitle" style={styles.sub}>Library of movements with cleaner search, cleaner unit labels, and metadata only when it helps.</div>
-        </div>
-
-        <div className="mobileActionRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href="/log" style={styles.linkBtn}>
-            Back to Routines
-          </Link>
         </div>
       </div>
 
@@ -235,7 +231,7 @@ const border = "1px solid rgba(128,128,128,0.35)";
 const bgBar = "rgba(128,128,128,0.14)";
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 980, margin: "0 auto", padding: 4, display: "grid", gap: 18 },
+  container: { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 4, display: "grid", gap: 18 },
   topRow: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" },
   h1: { fontSize: 26, fontWeight: 900 as const, margin: 0 },
   sub: { marginTop: 6, opacity: 0.75, fontSize: 13 },

@@ -17,6 +17,7 @@ import InjuryStatusButtons from "./InjuryStatusButtons";
 import { prisma } from "@/lib/prisma";
 import { addDaysYmd, formatAppDate, formatAppDateTime, toAppYmd, todayAppYmd, diffYmdDays } from "@/lib/dates";
 import type { CoverageDetailLog } from "@/app/progress/coverage";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -312,7 +313,7 @@ export default async function InjuryDetailPage(props: { params: Promise<Params> 
     <PageShell
       eyebrow="Injury"
       title={injury.name}
-      toolbar={<HistoryBackButton fallbackHref="/profile/health" label="← Back" style={linkStyle} />}
+      toolbar={<HistoryBackButton fallbackHref="/profile/health" label="← Back" style={sharedBackLink} />}
     >
       {/* ── Hero: slim daily strip. A returning user needs "how is it +
           log today's reading" first — the identity block (map, factors,

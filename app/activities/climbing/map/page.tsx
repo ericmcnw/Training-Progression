@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { gradeSort, SENT_OUTCOMES } from "@/lib/climb-types";
 import { sportAccent } from "@/lib/sport-accent";
 import ClimbingMapView, { type MapLocation } from "./ClimbingMapView";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -135,14 +136,7 @@ const headerRowStyle: React.CSSProperties = {
   minHeight: 34,
 };
 
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-  whiteSpace: "nowrap",
-};
+const backLinkStyle: React.CSSProperties = sharedBackLink;
 
 const titleStyle: React.CSSProperties = {
   margin: 0,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAppSession } from "@/lib/auth";
 import { todayAppYmd } from "@/lib/dates";
 import { addBodyMeasurement, deleteBodyMeasurement } from "./actions";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function MeasurementsPage() {
   const span = Math.max(1, max - min);
 
   return <main style={page}>
-    <div style={topBar}><Link href="/profile" style={backLink}>Profile</Link></div>
+    <div style={topBar}><Link href="/profile" style={backLink}>← Profile</Link></div>
     <header style={{ display: "grid", gap: 5 }}><h1 style={title}>Measurements</h1><p style={subtitle}>Bodyweight and optional composition measurements. Trends matter more than single readings.</p></header>
 
     {latest ? <section style={summary}>
@@ -52,8 +53,8 @@ export default async function MeasurementsPage() {
 
 const page: React.CSSProperties = { maxWidth: "var(--app-width-form)", margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", display: "grid", gap: 16 };
 const topBar: React.CSSProperties = { display: "flex" };
-const backLink: React.CSSProperties = { color: "rgba(255,255,255,0.62)", textDecoration: "none", fontSize: 13, fontWeight: 800 };
-const title: React.CSSProperties = { margin: 0, fontSize: 24, fontWeight: 900 };
+const backLink: React.CSSProperties = sharedBackLink;
+const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900 };
 const subtitle: React.CSSProperties = { margin: 0, color: "rgba(255,255,255,0.58)", fontSize: 13, lineHeight: 1.45 };
 const summary: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.09)", borderBottom: "1px solid rgba(255,255,255,0.09)" };
 const summaryValue: React.CSSProperties = { fontSize: 27, fontWeight: 900 };

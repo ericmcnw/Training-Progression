@@ -4,6 +4,7 @@
 // form-ui (CLAUDE.md rule 3); this covers only page shell and ladder rows.
 
 import type { CSSProperties } from "react";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const ACCENT = "#33ff7a";
 export const ACCENT_SOFT = "#7ce8aa";
@@ -27,15 +28,7 @@ export const topBar: CSSProperties = {
   gap: 12,
 };
 
-export const backLink: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(255,255,255,0.6)",
-  textDecoration: "none",
-  minHeight: 44,
-  display: "inline-flex",
-  alignItems: "center",
-};
+export const backLink: CSSProperties = sharedBackLink;
 
 export const ctaLink: CSSProperties = {
   fontSize: 12,

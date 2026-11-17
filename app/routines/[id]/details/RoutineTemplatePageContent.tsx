@@ -73,11 +73,11 @@ export default async function RoutineTemplatePage(props: { params: Promise<Param
   const injuryWarning = await getRoutineInjuryLoadWarning(routineId);
 
   return (
-    <div className="mobileRoutineTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+    <div className="mobileRoutineTemplatePage" style={{ maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 20 }}>
       {/* Header */}
       <div className="mobileRoutineTemplateTopRow" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Template: {routine.name}</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Template: {routine.name}</h1>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
             Attach exercises and set default sets per exercise.
           </div>

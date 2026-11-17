@@ -457,7 +457,7 @@ function formatVolume(lb: number): string {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 760,
+  maxWidth: "var(--app-width-form)",
   margin: "0 auto",
   padding: "16px 14px 60px",
   display: "grid",

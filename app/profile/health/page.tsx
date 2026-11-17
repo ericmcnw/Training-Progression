@@ -5,6 +5,7 @@ import { getAggravatingFactorSuggestions } from "@/app/injuries/actions";
 import HomeInjuriesSection from "@/app/_home/HomeInjuriesSection";
 import LogPainButton from "@/app/components/injuries/LogPainButton";
 import { formatAppDate } from "@/lib/dates";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function HealthPage() {
   ]);
 
   return <main style={page}>
-    <div style={topBar}><Link href="/profile" style={backLink}>Profile</Link><LogPainButton zones={zones} injuries={injuries.map((injury) => ({ id: injury.id, name: injury.name, zones: injury.zones }))} factorSuggestions={factorSuggestions} /></div>
+    <div style={topBar}><Link href="/profile" style={backLink}>← Profile</Link><LogPainButton zones={zones} injuries={injuries.map((injury) => ({ id: injury.id, name: injury.name, zones: injury.zones }))} factorSuggestions={factorSuggestions} /></div>
     <header style={{ display: "grid", gap: 5 }}><h1 style={title}>Health</h1><p style={subtitle}>Pain, active injuries, and recovery context. This is kept separate from training coverage.</p></header>
 
     <section style={section}>
@@ -43,8 +44,8 @@ export default async function HealthPage() {
 
 const page: React.CSSProperties = { maxWidth: "var(--app-width-content)", margin: "0 auto", padding: "16px clamp(14px, 4vw, 28px) 96px", display: "grid", gap: 16 };
 const topBar: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
-const backLink: React.CSSProperties = { color: "rgba(255,255,255,0.62)", textDecoration: "none", fontSize: 13, fontWeight: 800 };
-const title: React.CSSProperties = { margin: 0, fontSize: 24, fontWeight: 900 };
+const backLink: React.CSSProperties = sharedBackLink;
+const title: React.CSSProperties = { margin: 0, fontSize: 26, fontWeight: 900 };
 const subtitle: React.CSSProperties = { margin: 0, color: "rgba(255,255,255,0.58)", fontSize: 13, lineHeight: 1.45 };
 const section: React.CSSProperties = { display: "grid", gap: 11, padding: 14, border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, background: "rgba(255,255,255,0.025)" };
 const sectionHead: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };

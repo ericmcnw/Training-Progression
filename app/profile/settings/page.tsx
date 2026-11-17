@@ -7,6 +7,7 @@ import { getActivityEntry } from "@/lib/activity-families";
 import { getProfileIdentity } from "@/lib/profile-identity";
 import ProfileSettings from "@/app/profile/ProfileSettings";
 import IdentitySetting from "@/app/profile/IdentitySetting";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function SettingsPage() {
       <div>
         <Link href="/profile" style={backLink}>← Profile</Link>
       </div>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Settings</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Settings</h1>
 
       <IdentitySetting initial={identity} />
 
@@ -71,17 +72,7 @@ const shell: CSSProperties = {
   gap: 16,
 };
 
-const backLink: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-  padding: "4px 10px",
-  borderRadius: 8,
-  border: "1px solid rgba(128,128,128,0.2)",
-  background: "rgba(128,128,128,0.06)",
-};
+const backLink: CSSProperties = sharedBackLink;
 
 const panel: CSSProperties = {
   border: "1px solid rgba(128,128,128,0.28)",

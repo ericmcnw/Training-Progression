@@ -4,6 +4,7 @@ import { getGearUsage, type GearUsage } from "@/lib/gear-usage";
 import { getGearLists, type GearListSummary } from "@/lib/gear-lists";
 import { gearTypeMeta } from "@/lib/gear-types";
 import { getActivityEntry } from "@/lib/activity-families";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export default async function GearPage() {
 
   return (
     <div style={page}>
+      <Link href="/profile" style={backLink}>← Profile</Link>
       <header style={header}>
         <h1 style={title}>Gear</h1>
         <span style={countPill}>{active.length} item{active.length === 1 ? "" : "s"}</span>
@@ -107,10 +109,6 @@ export default async function GearPage() {
           </section>
         ) : null}
       </div>
-
-      <Link href="/activities" style={backLink}>
-        ← Activities
-      </Link>
     </div>
   );
 }
@@ -224,11 +222,4 @@ const cardSub: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, opacity:
 const cardUsage: React.CSSProperties = { marginLeft: "auto", textAlign: "right", flexShrink: 0 };
 const cardUsageValue: React.CSSProperties = { fontWeight: 900, fontSize: 16, letterSpacing: -0.3 };
 const cardUsageSub: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.55, whiteSpace: "nowrap" };
-const backLink: React.CSSProperties = {
-  justifySelf: "start",
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(147,197,253,0.9)",
-  textDecoration: "none",
-  padding: "6px 2px",
-};
+const backLink: React.CSSProperties = sharedBackLink;

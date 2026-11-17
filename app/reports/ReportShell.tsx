@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { PERIOD_KINDS, type Period, type PeriodKind } from "@/lib/reports/period";
 import PrintButton from "./PrintButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 // Scoped print rules: drop nav chrome, force every drawer open, reveal the
 // print-only period header, and keep the dark theme's colors faithful so the
@@ -58,12 +59,11 @@ export default function ReportShell({
       <div className="reportNoPrint" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/profile" style={backLink}>← Profile</Link>
-          <Link href="/" style={backLink}>Dashboard</Link>
         </div>
         <PrintButton />
       </div>
 
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>Reports</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Reports</h1>
       <div className="reportPrintOnly" style={{ fontSize: 14, fontWeight: 800, opacity: 0.8 }}>{period.label}</div>
 
       {/* Period-kind tabs */}
@@ -121,17 +121,7 @@ const shell: CSSProperties = {
   gap: 16,
 };
 
-const backLink: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-  padding: "4px 10px",
-  borderRadius: 8,
-  border: "1px solid rgba(128,128,128,0.2)",
-  background: "rgba(128,128,128,0.06)",
-};
+const backLink: CSSProperties = sharedBackLink;
 
 const tabRow: CSSProperties = {
   display: "inline-flex",

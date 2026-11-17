@@ -8,6 +8,7 @@ import { GEAR_TYPES, gearTypeMeta, isWornGearType, resolveGearTypeSlug } from "@
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
 import type { GearUsage } from "@/lib/gear-usage";
 import { deleteGear, retireGear, unretireGear, updateGear } from "../actions";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 const GRAMS_PER_OZ = 28.349523125;
 const ACTIVITY_OPTIONS = ACTIVITY_REGISTRY.filter((a) => !a.pinnedCatchAll).sort((a, b) => a.label.localeCompare(b.label));
@@ -243,11 +244,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 // ── styles ──
 const page: CSSProperties = { maxWidth: 640, margin: "0 auto", padding: "16px 14px 60px", display: "grid", gap: 16 };
-const backLink: CSSProperties = { fontSize: 13, fontWeight: 800, color: "rgba(147,197,253,0.9)", textDecoration: "none", justifySelf: "start" };
+const backLink: CSSProperties = sharedBackLink;
 const headerRow: CSSProperties = { display: "flex", alignItems: "center", gap: 12 };
 const bigIcon: CSSProperties = { fontSize: 34, flexShrink: 0, width: 44, textAlign: "center" };
 const eyebrow: CSSProperties = { fontSize: 11, fontWeight: 900, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.55 };
-const title: CSSProperties = { margin: "2px 0 0", fontSize: 24, fontWeight: 900, letterSpacing: -0.4, overflow: "hidden", textOverflow: "ellipsis" };
+const title: CSSProperties = { margin: "2px 0 0", fontSize: 26, fontWeight: 900, letterSpacing: -0.4, overflow: "hidden", textOverflow: "ellipsis" };
 const usageCard: CSSProperties = {
   display: "grid",
   gap: 12,

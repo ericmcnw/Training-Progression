@@ -981,7 +981,6 @@ export default async function ClimbingHubPage(props: {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/plan?view=goals#goals" style={quickLinkStyle}>Climbing goals →</Link>
         <Link href="/profile/health" style={quickLinkStyle}>Health status →</Link>
-        <Link href="/activities" style={quickLinkStyle}>Back to Activities</Link>
       </div>
     </div>
   );

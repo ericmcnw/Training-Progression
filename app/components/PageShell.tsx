@@ -48,7 +48,7 @@ export default function PageShell({
               {eyebrow}
             </div>
           ) : null}
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, letterSpacing: -0.2, lineHeight: 1.08 }}>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: -0.2, lineHeight: 1.08 }}>
             {title}
           </h1>
           {subtitle ? (

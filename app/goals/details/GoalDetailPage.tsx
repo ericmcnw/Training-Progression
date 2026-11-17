@@ -704,7 +704,7 @@ function InfoList({ items }: { items: Array<InfoItem | null | false> }) {
 // ── Styles ────────────────────────────────────────────────────────────────
 
 const pageStyle: CSSProperties = {
-  maxWidth: 1080,
+  maxWidth: "var(--app-width-content)",
   margin: "0 auto",
   padding: 20,
   display: "grid",

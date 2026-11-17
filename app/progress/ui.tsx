@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ProgressRange, ProgressSection, ProgressTab } from "@/lib/progress-v2";
 import { progressRanges, progressSections, progressTabDescription, progressTabs, rangeChipLabel } from "@/lib/progress-v2";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export function TargetHeader({
   section,
@@ -237,7 +238,7 @@ export function SectionLinkButton({ href, label }: { href: string; label: string
 // where they came from), falls back to `fallbackHref` otherwise.
 // Use this anywhere a page is reachable from multiple entry points.
 export function SectionBackButton({ fallbackHref, label }: { fallbackHref: string; label: string }) {
-  return <HistoryBackButton fallbackHref={fallbackHref} label={label} style={styles.linkBtn} />;
+  return <HistoryBackButton fallbackHref={fallbackHref} label={label} style={sharedBackLink} />;
 }
 
 export function RangeBadge({ range }: { range: ProgressRange }) {

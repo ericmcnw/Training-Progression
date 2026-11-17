@@ -64,7 +64,7 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
   if (!isGuidedKind(routine.kind)) return <div style={{ padding: 20 }}>This page is only for guided routines.</div>;
 
   return (
-    <div className="mobileGuidedTemplatePage" style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
+    <div className="mobileGuidedTemplatePage" style={{ maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 20 }}>
       <div
         className="mobileGuidedTemplateTopRow"
         style={{
@@ -83,7 +83,7 @@ export default async function GuidedTemplatePage(props: { params: Promise<Params
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", opacity: 0.65 }}>
             Guided Flow Builder
           </div>
-          <h1 style={{ fontSize: 30, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>Step Template: {routine.name}</h1>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <span style={metaPill}>{formatRoutineTypeLabel(routine.kind)}</span>
             <span style={metaPill}>{routine.guidedSteps.length} items</span>

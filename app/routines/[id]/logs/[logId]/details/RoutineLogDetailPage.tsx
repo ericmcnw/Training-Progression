@@ -62,7 +62,7 @@ export default async function RoutineLogDetailPage(props: {
 }
 
 const container: React.CSSProperties = {
-  maxWidth: 980,
+  maxWidth: "var(--app-width-content)",
   margin: "0 auto",
   padding: 20,
   display: "grid",

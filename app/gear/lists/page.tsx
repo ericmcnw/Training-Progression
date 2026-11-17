@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getGearLists, type GearListSummary } from "@/lib/gear-lists";
 import { getActivityEntry } from "@/lib/activity-families";
 import NewListButton from "./NewListButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -105,4 +106,4 @@ const cardIcon: React.CSSProperties = { fontSize: 24, flexShrink: 0, width: 32, 
 const cardName: React.CSSProperties = { fontWeight: 900, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const cardSub: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, opacity: 0.58, whiteSpace: "nowrap" };
 const cardWeight: React.CSSProperties = { fontWeight: 900, fontSize: 16, letterSpacing: -0.3 };
-const backLink: React.CSSProperties = { justifySelf: "start", fontSize: 13, fontWeight: 800, color: "rgba(147,197,253,0.9)", textDecoration: "none", padding: "6px 2px" };
+const backLink: React.CSSProperties = sharedBackLink;

@@ -64,8 +64,8 @@ export default async function EditRoutineLogPage(props: {
     : "Completion";
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>
+    <div style={{ maxWidth: "var(--app-width-content)", margin: "0 auto", padding: 20 }}>
+      <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>
         {data.routineName} - Edit {kindLabel} Log
       </h1>
       <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{data.routineName}</div>

@@ -16,6 +16,7 @@ import {
   reorderGearListItems,
   updateGearListItem,
 } from "../actions";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 const GRAMS_PER_OZ = 28.349523125;
 const GRAMS_PER_LB = 453.59237;
@@ -408,7 +409,7 @@ function AdhocForm({ listId, onDone }: { listId: string; onDone: () => void }) {
 
 // ── styles ──
 const page: CSSProperties = { maxWidth: 720, margin: "0 auto", padding: "16px 14px 60px", display: "grid", gap: 16 };
-const backLink: CSSProperties = { fontSize: 13, fontWeight: 800, color: "rgba(147,197,253,0.9)", textDecoration: "none", justifySelf: "start" };
+const backLink: CSSProperties = sharedBackLink;
 const fieldLabelBlock: CSSProperties = { display: "grid", gap: 4 };
 const fieldLabel: CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.72 };
 const summaryCard: CSSProperties = {

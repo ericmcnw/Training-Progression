@@ -14,6 +14,7 @@ import {
 } from "@/lib/exercise-params";
 import ExerciseMetricChart, { type ExerciseSessionPoint } from "./ExerciseMetricChart";
 import HistoryBackButton from "@/app/components/HistoryBackButton";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -426,7 +427,7 @@ function setupShiftStyle(shift: ParamShift): React.CSSProperties {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 760,
+  maxWidth: "var(--app-width-form)",
   margin: "0 auto",
   padding: "16px 14px 60px",
   display: "grid",
@@ -447,13 +448,7 @@ const headerStyle: React.CSSProperties = {
   background: "linear-gradient(135deg, rgba(132,204,255,0.10), rgba(255,255,255,0.025))",
 };
 
-const backLinkStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  opacity: 0.6,
-  textDecoration: "none",
-  color: "inherit",
-};
+const backLinkStyle: React.CSSProperties = sharedBackLink;
 
 const eyebrowStyle: React.CSSProperties = {
   fontSize: 10,

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 // Slim shared header for activity-world pages. Two rows (~60px total)
 // instead of the old five-row hero (back link, eyebrow, 26px title,
@@ -57,14 +58,7 @@ const shellStyle: React.CSSProperties = {
   gap: 4,
 };
 
-const backStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-  justifySelf: "start",
-};
+const backStyle: React.CSSProperties = sharedBackLink;
 
 const mainRowStyle: React.CSSProperties = {
   display: "flex",

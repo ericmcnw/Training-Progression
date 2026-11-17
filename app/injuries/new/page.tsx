@@ -40,7 +40,7 @@ export default async function NewInjuryPage(props: { searchParams?: Promise<Sear
 }
 
 const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 900, letterSpacing: 1.2, opacity: 0.55, textTransform: "uppercase" };
-const h1: React.CSSProperties = { margin: "5px 0 0", fontSize: 32, lineHeight: 1.08 };
+const h1: React.CSSProperties = { margin: "5px 0 0", fontSize: 26, lineHeight: 1.08 };
 const panel: React.CSSProperties = { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, background: "rgba(255,255,255,0.04)", padding: 14 };
 const linkStyle: React.CSSProperties = {
   display: "inline-flex",

@@ -5,6 +5,7 @@ import { getAppSession } from "@/lib/auth";
 import { basePrisma } from "@/lib/prisma-base";
 import { invitesConfigured, listInvitedUsers, type InvitedUser } from "@/lib/supabase/admin";
 import { setClient, setInvite, startViewingAs } from "./actions";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function ViewAsPage() {
       <div>
         <Link href="/profile/settings" style={backLink}>← Settings</Link>
       </div>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>View another account</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>View another account</h1>
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.72 }}>
         The whole app switches to their data until you go back. Anything you log or change while viewing goes into their
         account.
@@ -134,17 +135,7 @@ const shell: CSSProperties = {
   gap: 16,
 };
 
-const backLink: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-  padding: "4px 10px",
-  borderRadius: 8,
-  border: "1px solid rgba(128,128,128,0.2)",
-  background: "rgba(128,128,128,0.06)",
-};
+const backLink: CSSProperties = sharedBackLink;
 
 const row: CSSProperties = {
   display: "flex",

@@ -39,6 +39,7 @@ import LocationDangerZone from "./LocationDangerZone";
 import MiniLocationMap from "./MiniLocationMap";
 import ProblemLibrary, { type ProblemLibraryEntry } from "./ProblemLibrary";
 import AreaLibrary, { type AreaLibraryEntry } from "./AreaLibrary";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -768,13 +769,7 @@ const slimHeaderShellStyle: React.CSSProperties = {
   gap: 8,
 };
 
-const slimBackLinkStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  opacity: 0.65,
-  textDecoration: "none",
-  color: "inherit",
-};
+const slimBackLinkStyle: React.CSSProperties = sharedBackLink;
 
 const slimEyebrowStyle: React.CSSProperties = {
   fontSize: 11,

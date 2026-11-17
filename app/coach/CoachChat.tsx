@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { inputStyle } from "@/app/routines/[id]/log/form-ui";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 const KEY_STORAGE = "coachPassphrase";
 
@@ -320,7 +321,7 @@ function Header() {
   return (
     <div style={headerStyle}>
       <Link href="/" style={backLinkStyle}>
-        ‹ Home
+        ← Home
       </Link>
       <div style={{ fontWeight: 800, fontSize: 17 }}>🧠 Coach</div>
       <div style={{ width: 52 }} aria-hidden />
@@ -343,7 +344,7 @@ const panelStyle: CSSProperties = {
 const pageStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  maxWidth: 760,
+  maxWidth: "var(--app-width-form)",
   margin: "0 auto",
   height: "calc(100dvh - var(--app-mobile-bottom-offset, 0px) - 70px)",
   minHeight: 420,
@@ -364,14 +365,7 @@ const headerStyle: CSSProperties = {
   padding: "10px 4px",
 };
 
-const backLinkStyle: CSSProperties = {
-  color: "var(--muted)",
-  textDecoration: "none",
-  fontSize: 14,
-  minHeight: 44,
-  display: "inline-flex",
-  alignItems: "center",
-};
+const backLinkStyle: CSSProperties = sharedBackLink;
 
 const threadStyle: CSSProperties = {
   flex: 1,

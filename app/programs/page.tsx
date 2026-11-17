@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getProgramCards, type ProgramCard } from "./data";
 import { seasonPhaseLabel } from "@/app/focus/shared";
 import { formatUtcDateLabel } from "@/lib/dates";
+import { backLinkStyle as sharedBackLink } from "@/lib/page-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -214,12 +215,7 @@ const page = {
 
 const topBar = { display: "flex", alignItems: "center", justifyContent: "space-between" } as const;
 
-const backLink = {
-  fontSize: 13,
-  fontWeight: 800,
-  color: "rgba(255,255,255,0.6)",
-  textDecoration: "none",
-} as const;
+const backLink = sharedBackLink;
 
 const newLink = {
   fontSize: 12,
