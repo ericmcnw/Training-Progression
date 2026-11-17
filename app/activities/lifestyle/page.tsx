@@ -20,7 +20,7 @@ import WeeklyBarChartWithSessions from "@/app/activities/_shared/WeeklyBarChartW
 import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import ActivityGoalsSection from "@/app/progress/details/ActivityGoalsSection";
 import { getDomainGoals, frequencyChipFor } from "@/lib/activity-goals";
-import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
+import { buildSessionsChartData } from "@/lib/activities/sessions-chart";
 import { CHART_RANGE_KEYS, CHART_RANGE_LABEL, resolveChartRange } from "@/lib/activities/chart-range";
 
 export const dynamic = "force-dynamic";

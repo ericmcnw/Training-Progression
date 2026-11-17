@@ -36,7 +36,7 @@ import ActivityHeader from "@/app/activities/_shared/ActivityHeader";
 import LogSessionCTA from "@/app/activities/_shared/LogSessionCTA";
 import WeeklyEffortChart from "@/app/activities/_shared/WeeklyEffortChart";
 import SportPeopleStats from "./SportPeopleStats";
-import { buildSessionsChartData, type SessionChartWeeks } from "@/lib/activities/sessions-chart";
+import { buildSessionsChartData } from "@/lib/activities/sessions-chart";
 import { formatRoutineSubtype } from "@/lib/routines";
 import { SPORT_LOG_CONFIG } from "@/app/routines/sportLogConfig";
 import { fuzzyDuplicateKey } from "@/lib/activity-spots";

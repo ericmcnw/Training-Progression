@@ -144,7 +144,10 @@ export default function StackedWeeklyBarChart({
   const weeksWithData = weekTotals.filter((v) => v > 0).length;
   let takeaway: string | null = null;
   if (weeksWithData < 3) {
-    takeaway = "A trend shows up here after about three weeks of logs.";
+    takeaway =
+      weeksWithData === 0
+        ? null
+        : `Only ${weeksWithData} week${weeksWithData === 1 ? "" : "s"} with logs in this range, too few to show a trend.`;
   } else if (n >= 9) {
     const recent = weekTotals.slice(n - 5, n - 1).reduce((a, b) => a + b, 0) / 4;
     const prior = weekTotals.slice(n - 9, n - 5).reduce((a, b) => a + b, 0) / 4;

@@ -26,18 +26,36 @@ type FetchState =
   | { kind: "ready"; logs: LogSummaryData[] };
 
 export default function ViewLogDrawer() {
-  const { isOpen, activeLogIds, title, closeViewer, notifyDeleted } = useViewLogDrawer();
+  const { isOpen, activeLogIds, title, openViewer, closeViewer, notifyDeleted } = useViewLogDrawer();
   const { openEditDrawer } = useEditLogDrawer();
-  // The viewer stays open in state but hides while another page is showing,
-  // so following a link out of it and pressing Back lands on the same log.
+  // Following a link out of the viewer parks it; coming straight back to the
+  // page it was opened on reopens the same log. Going anywhere else drops it.
   const pathname = usePathname();
-  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const openedPath = useRef<string | null>(null);
+  const parked = useRef<{ ids: string[]; title: string | null; path: string; away: string } | null>(null);
   useEffect(() => {
-    setOpenedAt(isOpen ? (prev) => prev ?? pathname : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+    if (isOpen) {
+      if (openedPath.current === null) {
+        openedPath.current = pathname;
+        parked.current = null;
+      } else if (openedPath.current !== pathname) {
+        parked.current = { ids: activeLogIds, title: title ?? null, path: openedPath.current, away: pathname };
+        openedPath.current = null;
+        closeViewer();
+      }
+      return;
+    }
+    openedPath.current = null;
+    const p = parked.current;
+    if (!p) return;
+    if (pathname === p.path) {
+      parked.current = null;
+      openViewer(p.ids, { title: p.title ?? undefined });
+    } else if (pathname !== p.away) {
+      parked.current = null;
+    }
+  }, [isOpen, pathname, activeLogIds, title, openViewer, closeViewer]);
   if (!isOpen) return null;
-  if (openedAt !== null && openedAt !== pathname) return null;
   // Key the inner shell on the active id set. Switching routines while the
   // modal is open (or reopening after a delete) remounts with fresh state —
   // no lingering deletedIds, flash, or in-flight fetch.

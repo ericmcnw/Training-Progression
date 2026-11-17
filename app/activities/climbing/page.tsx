@@ -65,7 +65,6 @@ import {
   buildClimbingTrainingChartData,
   DISCIPLINE_LABEL,
   DISCIPLINE_ORDER,
-  type ClimbingChartWeeks,
 } from "@/lib/activities/climbing-chart";
 import { effectiveRoutineDomain } from "@/lib/routines";
 import { sportAccent } from "@/lib/sport-accent";
